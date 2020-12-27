@@ -1,0 +1,78 @@
+use pest_consume::{Parser, Error};
+use pest_consume::match_nodes;
+
+type Result<T> = std::result::Result<T, Error<Rule>>;
+type Node<'i> = pest_consume::Node<'i, Rule, ()>;
+
+use crate::ast::expression_node::{ExpressionNode, BinaryOperation};
+use crate::ast::int_node::IntNode;
+use crate::ast::ast_node::ASTNode;
+
+#[derive(Parser, Debug)]
+#[grammar = "mathstack.pest"]
+pub struct MathstackParser;
+
+#[pest_consume::parser]
+impl MathstackParser {
+    fn EOI(_input: Node) -> Result<()> {
+        Ok(())
+    }
+    fn program(input: Node) -> Result<Vec<ExpressionNode>> {
+        Ok(match_nodes!(input.into_children();
+            [expression(exps).., _] => exps.collect(),
+        ))
+    }
+    fn expression(input: Node) -> Result<ExpressionNode> {
+        Ok(match_nodes!(input.into_children();
+            [term(a), binary_op(op), expression(b)] => ExpressionNode {
+                l: a,
+                r: Box::new(b),
+                op
+            },
+            [term(a)] => ExpressionNode {
+                l: a,
+                r: Box::new(IntNode { value: 0 }),
+                op: BinaryOperation::Add
+            }
+        ))
+    }
+    fn term(input: Node) -> Result<Box<dyn ASTNode>> {
+        Ok(match_nodes!(input.into_children();
+            [int(a)] => Box::new(a),
+            [expression(e)] => Box::new(e)
+        ))
+    }
+    fn binary_op(input: Node) -> Result<BinaryOperation> {
+        Ok(match_nodes!(input.into_children();
+            [add_op(a)] => BinaryOperation::Add,
+            [sub_op(a)] => BinaryOperation::Sub,
+            [mul_op(a)] => BinaryOperation::Mul,
+            [div_op(a)] => BinaryOperation::Div,
+        ))
+    }
+    fn add_op(input: Node) -> Result<BinaryOperation> {
+        Ok(BinaryOperation::Add)
+    }
+    fn sub_op(input: Node) -> Result<BinaryOperation> {
+        Ok(BinaryOperation::Sub)
+    }
+    fn mul_op(input: Node) -> Result<BinaryOperation> {
+        Ok(BinaryOperation::Mul)
+    }
+    fn div_op(input: Node) -> Result<BinaryOperation> {
+        Ok(BinaryOperation::Div)
+    }
+    fn int(input: Node) -> Result<IntNode> {
+        match input.as_str().parse::<i64>() {
+            Ok(value) => Ok(IntNode { value }),
+            Err(e) => Err(input.error(e))
+        }
+    }
+}
+
+pub fn parse_program(input_str: &str) -> Result<Vec<ExpressionNode>> {
+    let inputs = MathstackParser::parse(Rule::program, input_str)?;
+    let input = inputs.single()?;
+    // Consume the `Node` recursively into the final value
+    MathstackParser::program(input)
+}

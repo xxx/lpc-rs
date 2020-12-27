@@ -1,0 +1,12 @@
+WHITESPACE = _{ " " | "\n" | "\t" | "\r" }
+COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
+
+program = { SOI ~ expression* ~ EOI }
+expression = { term ~ (binary_op ~ expression)? }
+term = { int | "(" ~ expression ~ ")" }
+binary_op = { add_op | sub_op | mul_op | div_op }
+add_op = { "+" }
+sub_op = { "-" }
+mul_op = { "*" }
+div_op = { "/" }
+int = @{ "-"? ~ ASCII_DIGIT+ }
