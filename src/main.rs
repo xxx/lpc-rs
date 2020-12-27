@@ -14,7 +14,7 @@ fn main() {
         DEFAULT_FILE
     };
     let file_content = fs::read_to_string(file)
-        .expect(&format!("cannot read file: {}", file));
+        .unwrap_or_else(|_| panic!("cannot read file: {}", file));
     let program = mathstack_parser::parse_program(&file_content)
         .expect("unsuccessful parse"); // unwrap the parse result
 
