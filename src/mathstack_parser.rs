@@ -7,6 +7,7 @@ type Node<'i> = pest_consume::Node<'i, Rule, ()>;
 use crate::ast::expression_node::{ExpressionNode, BinaryOperation};
 use crate::ast::int_node::IntNode;
 use crate::ast::ast_node::ASTNode;
+use crate::ast::program_node::ProgramNode;
 
 #[derive(Parser, Debug)]
 #[grammar = "mathstack.pest"]
@@ -17,9 +18,11 @@ impl MathstackParser {
     fn EOI(_input: Node) -> Result<()> {
         Ok(())
     }
-    fn program(input: Node) -> Result<Vec<ExpressionNode>> {
+    fn program(input: Node) -> Result<ProgramNode> {
         Ok(match_nodes!(input.into_children();
-            [expression(exps).., _] => exps.collect(),
+            [expression(exps).., _] => ProgramNode {
+                expressions: exps.collect(),
+            }
         ))
     }
     fn expression(input: Node) -> Result<ExpressionNode> {
@@ -70,7 +73,7 @@ impl MathstackParser {
     }
 }
 
-pub fn parse_program(input_str: &str) -> Result<Vec<ExpressionNode>> {
+pub fn parse_program(input_str: &str) -> Result<ProgramNode> {
     let inputs = MathstackParser::parse(Rule::program, input_str)?;
     let input = inputs.single()?;
     // Consume the `Node` recursively into the final value
