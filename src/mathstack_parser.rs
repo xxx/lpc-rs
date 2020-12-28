@@ -47,10 +47,10 @@ impl MathstackParser {
     }
     fn binary_op(input: Node) -> Result<BinaryOperation> {
         Ok(match_nodes!(input.into_children();
-            [add_op(a)] => BinaryOperation::Add,
-            [sub_op(a)] => BinaryOperation::Sub,
-            [mul_op(a)] => BinaryOperation::Mul,
-            [div_op(a)] => BinaryOperation::Div,
+            [add_op(a)] => a,
+            [sub_op(a)] => a,
+            [mul_op(a)] => a,
+            [div_op(a)] => a,
         ))
     }
     fn add_op(input: Node) -> Result<BinaryOperation> {

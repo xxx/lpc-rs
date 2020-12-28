@@ -8,6 +8,6 @@ pub struct ProgramNode {
 
 impl ASTNode for ProgramNode {
     fn to_str(&self) -> String {
-        format!("ProgramNode[{:?}]", self.expressions)
+        format!("ProgramNode[{:?}]", self)
     }
 }
