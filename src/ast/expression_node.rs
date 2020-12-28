@@ -1,4 +1,4 @@
-use crate::ast::ast_node::ASTNode;
+use crate::ast::ast_node::{ASTNode, ASTNodeType};
 
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperation {
@@ -10,8 +10,8 @@ pub enum BinaryOperation {
 
 #[derive(Debug)]
 pub struct ExpressionNode {
-    pub l: Box<dyn ASTNode>,
-    pub r: Box<dyn ASTNode>,
+    pub l: Box<ASTNodeType>,
+    pub r: Box<ASTNodeType>,
     pub op: BinaryOperation
 }
 
