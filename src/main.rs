@@ -3,6 +3,7 @@ mod mathstack_parser;
 use std::{fs, env};
 
 mod ast;
+mod asm;
 
 const DEFAULT_FILE: &str = "mathfile";
 

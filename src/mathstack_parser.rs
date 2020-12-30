@@ -6,7 +6,7 @@ type Node<'i> = pest_consume::Node<'i, Rule, ()>;
 
 use crate::ast::expression_node::{ExpressionNode, BinaryOperation};
 use crate::ast::int_node::IntNode;
-use crate::ast::ast_node::{ASTNode, ASTNodeType};
+use crate::ast::ast_node::ASTNodeType;
 use crate::ast::program_node::ProgramNode;
 
 #[derive(Parser, Debug)]
