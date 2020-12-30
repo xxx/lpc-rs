@@ -1,9 +1,10 @@
 use crate::asm::register::Register;
-use crate::asm::instruction::Instruction;
+use crate::asm::instruction::InstructionTrait;
 
-struct IAdd(Register, Register, Register);
+#[derive(Debug, Clone)]
+pub struct IAdd(pub Register, pub Register, pub Register);
 
-impl Instruction for IAdd {
+impl InstructionTrait for IAdd {
     fn to_str(&self) -> String {
         format!("iadd {}, {}, {}", &self.0, &self.1, &self.2)
     }

@@ -1,6 +1,7 @@
 mod mathstack_parser;
 
 use std::{fs, env};
+use crate::ast::ast_node::ASTNode;
 
 mod ast;
 mod asm;
@@ -20,6 +21,7 @@ fn main() {
         .expect("unsuccessful parse"); // unwrap the parse result
 
     println!("{:?}", program);
+    println!("{:?}", program.to_asm());
 }
 
 

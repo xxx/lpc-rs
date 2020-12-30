@@ -1,9 +1,10 @@
 use crate::asm::register::Register;
-use crate::asm::instruction::Instruction;
+use crate::asm::instruction::InstructionTrait;
 
-struct ILoad(Register, Register, i64);
+#[derive(Debug, Clone)]
+pub struct ILoad(pub Register, pub Register, pub i64);
 
-impl Instruction for ILoad {
+impl InstructionTrait for ILoad {
     fn to_str(&self) -> String {
         format!("iload {}, {}, {}", &self.0, &self.1, &self.2)
     }

@@ -1,9 +1,10 @@
 use crate::asm::register::Register;
-use crate::asm::instruction::Instruction;
+use crate::asm::instruction::InstructionTrait;
 
-struct IDiv(Register, Register, Register);
+#[derive(Debug, Clone)]
+pub struct IDiv(pub Register, pub Register, pub Register);
 
-impl Instruction for IDiv {
+impl InstructionTrait for IDiv {
     fn to_str(&self) -> String {
         format!("idiv {}, {}, {}", &self.0, &self.1, &self.2)
     }

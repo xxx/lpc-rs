@@ -1,9 +1,10 @@
 use crate::asm::register::Register;
-use crate::asm::instruction::Instruction;
+use crate::asm::instruction::InstructionTrait;
 
-struct IConst(Register, i64);
+#[derive(Debug, Clone)]
+pub struct IConst(pub Register, pub i64);
 
-impl Instruction for IConst {
+impl InstructionTrait for IConst {
     fn to_str(&self) -> String {
         format!("iconst {}, {}", &self.0, &self.1)
     }

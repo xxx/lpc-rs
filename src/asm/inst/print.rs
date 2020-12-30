@@ -1,9 +1,10 @@
 use crate::asm::register::Register;
-use crate::asm::instruction::Instruction;
+use crate::asm::instruction::InstructionTrait;
 
-struct Print(Register);
+#[derive(Debug, Clone)]
+pub struct Print(pub Register);
 
-impl Instruction for Print {
+impl InstructionTrait for Print {
     fn to_str(&self) -> String {
         format!("print {}", &self.0)
     }
