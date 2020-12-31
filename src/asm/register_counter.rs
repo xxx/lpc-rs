@@ -11,6 +11,11 @@ impl RegisterCounter {
         REGISTER_COUNTER.store(0, Ordering::SeqCst);
     }
 
+    pub fn value() -> Register {
+        let counter = REGISTER_COUNTER.load(Ordering::SeqCst);
+        Register(format!("r{}", counter))
+    }
+
     pub fn next() -> Register {
         let counter = REGISTER_COUNTER.fetch_add(1, Ordering::SeqCst);
         Register(format!("r{}", counter + 1))
