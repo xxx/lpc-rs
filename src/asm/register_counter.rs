@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static REGISTER_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+#[derive(Debug)]
 pub struct RegisterCounter;
 
 impl RegisterCounter {
