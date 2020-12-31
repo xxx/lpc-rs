@@ -1,22 +1,17 @@
-use lazy_static::lazy_static;
 use crate::asm::register::Register;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static REGISTER_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 pub struct RegisterCounter;
 
-lazy_static! {
-    static ref REGISTER_COUNTER: Mutex<u128> = Mutex::new(0);
-}
-
 impl RegisterCounter {
     pub fn reset() {
-        let mut counter = REGISTER_COUNTER.lock().unwrap();
-        *counter = 0;
+        REGISTER_COUNTER.store(0, Ordering::SeqCst);
     }
 
     pub fn next() -> Register {
-        let mut counter = REGISTER_COUNTER.lock().unwrap();
-        *counter += 1;
-        Register(format!("r{}", *counter))
+        let counter = REGISTER_COUNTER.fetch_add(1, Ordering::SeqCst);
+        Register(format!("r{}", counter + 1))
     }
 }
