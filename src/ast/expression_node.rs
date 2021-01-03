@@ -1,10 +1,4 @@
 use crate::ast::ast_node::{ASTNodeTrait, ASTNode};
-use crate::asm::instruction::Instruction;
-use crate::asm::inst::iadd::IAdd;
-use crate::asm::register_counter::RegisterCounter;
-use crate::asm::inst::isub::ISub;
-use crate::asm::inst::imul::IMul;
-use crate::asm::inst::idiv::IDiv;
 use crate::codegen::tree_walker::TreeWalkerTrait;
 
 #[derive(Debug, Copy, Clone)]
@@ -27,5 +21,5 @@ impl ASTNodeTrait for ExpressionNode {
         format!("ExpressionNode[{:?}]", self)
     }
 
-    fn visit(&self, tree_walker: &impl TreeWalkerTrait) { tree_walker.visit_expression(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait) { tree_walker.visit_expression(self); }
 }

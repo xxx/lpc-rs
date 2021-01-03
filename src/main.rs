@@ -1,9 +1,9 @@
 mod mathstack_parser;
 
 use std::{fs, env};
-use crate::ast::ast_node::ASTNodeTrait;
 use crate::codegen::asm_tree_walker::AsmTreeWalker;
 use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_printer::TreePrinter;
 
 mod ast;
 mod asm;
@@ -25,7 +25,7 @@ fn main() {
 
     println!("{:?}", program);
 
-    let walker = AsmTreeWalker;
+    let mut walker = TreePrinter::new();
 
     walker.walk_tree(&program);
 }

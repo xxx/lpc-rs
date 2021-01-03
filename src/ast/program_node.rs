@@ -1,6 +1,5 @@
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::expression_node::ExpressionNode;
-use crate::asm::instruction::Instruction;
 use crate::codegen::tree_walker::TreeWalkerTrait;
 
 #[derive(Debug)]
@@ -13,5 +12,7 @@ impl ASTNodeTrait for ProgramNode {
         format!("ProgramNode[{:?}]", self)
     }
 
-    fn visit(&self, tree_walker: &impl TreeWalkerTrait) { tree_walker.visit_program(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait) {
+        tree_walker.visit_program(self);
+    }
 }

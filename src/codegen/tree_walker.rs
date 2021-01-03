@@ -13,9 +13,9 @@ pub enum TreeWalker {
 
 #[enum_dispatch(TreeWalker)]
 pub trait TreeWalkerTrait {
-    fn walk_tree(&self, root: &impl ASTNodeTrait);
+    fn walk_tree(&mut self, root: &impl ASTNodeTrait);
 
-    fn visit_program(&self, program: &ProgramNode);
-    fn visit_int(&self, program: &IntNode);
-    fn visit_expression(&self, program: &ExpressionNode);
+    fn visit_program(&mut self, program: &ProgramNode);
+    fn visit_int(&mut self, program: &IntNode);
+    fn visit_expression(&mut self, program: &ExpressionNode);
 }

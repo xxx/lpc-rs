@@ -1,9 +1,4 @@
 use crate::ast::ast_node::ASTNodeTrait;
-use crate::asm::instruction::Instruction;
-use crate::asm::register_counter::RegisterCounter;
-use crate::asm::inst::iconst0::IConst0;
-use crate::asm::inst::iconst::IConst;
-use crate::asm::inst::iconst1::IConst1;
 use crate::codegen::tree_walker::TreeWalkerTrait;
 
 #[derive(Debug, Copy, Clone)]
@@ -16,5 +11,5 @@ impl ASTNodeTrait for IntNode {
         format!("IntNode[{}]", self.value)
     }
 
-    fn visit(&self, tree_walker: &impl TreeWalkerTrait) { tree_walker.visit_int(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait) { tree_walker.visit_int(self); }
 }

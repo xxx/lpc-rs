@@ -4,7 +4,6 @@ use crate::ast::{expression_node, int_node, program_node};
 use expression_node::ExpressionNode;
 use int_node::IntNode;
 use program_node::ProgramNode;
-use crate::asm::instruction::Instruction;
 use crate::codegen::tree_walker::TreeWalkerTrait;
 use auto_impl::auto_impl;
 
@@ -20,5 +19,5 @@ pub enum ASTNode {
 #[enum_dispatch(ASTNode)]
 pub trait ASTNodeTrait {
     fn to_str(&self) -> String;
-    fn visit(&self, tree_walker: &impl TreeWalkerTrait);
+    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait);
 }

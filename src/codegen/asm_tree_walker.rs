@@ -8,21 +8,21 @@ use crate::ast::ast_node::ASTNodeTrait;
 pub struct AsmTreeWalker;
 
 impl TreeWalkerTrait for AsmTreeWalker {
-    fn walk_tree(&self, root: &impl ASTNodeTrait) {
+    fn walk_tree(&mut self, root: &impl ASTNodeTrait) {
         root.visit(self);
     }
 
-    fn visit_program(&self, program: &ProgramNode) {
+    fn visit_program(&mut self, program: &ProgramNode) {
         for expr in &program.expressions {
             self.walk_tree(&expr);
         }
     }
 
-    fn visit_int(&self, int: &IntNode) {
+    fn visit_int(&mut self, int: &IntNode) {
         println!("int node: {}", int.value);
     }
 
-    fn visit_expression(&self, expression: &ExpressionNode) {
+    fn visit_expression(&mut self, expression: &ExpressionNode) {
         println!("Expression node");
         print!("  l:");
         self.walk_tree(&(*expression.l));
