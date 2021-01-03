@@ -1,10 +1,13 @@
 mod mathstack_parser;
 
 use std::{fs, env};
-use crate::ast::ast_node::ASTNode;
+use crate::ast::ast_node::ASTNodeTrait;
+use crate::codegen::asm_tree_walker::AsmTreeWalker;
+use crate::codegen::tree_walker::TreeWalkerTrait;
 
 mod ast;
 mod asm;
+mod codegen;
 
 const DEFAULT_FILE: &str = "mathfile";
 
@@ -21,7 +24,10 @@ fn main() {
         .expect("unsuccessful parse"); // unwrap the parse result
 
     println!("{:?}", program);
-    println!("{:?}", program.to_asm());
+
+    let walker = AsmTreeWalker;
+
+    walker.walk_tree(&program);
 }
 
 

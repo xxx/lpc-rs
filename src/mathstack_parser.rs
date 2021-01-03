@@ -6,7 +6,7 @@ type Node<'i> = pest_consume::Node<'i, Rule, ()>;
 
 use crate::ast::expression_node::{ExpressionNode, BinaryOperation};
 use crate::ast::int_node::IntNode;
-use crate::ast::ast_node::ASTNodeType;
+use crate::ast::ast_node::ASTNode;
 use crate::ast::program_node::ProgramNode;
 
 #[derive(Parser, Debug)]
@@ -39,7 +39,7 @@ impl MathstackParser {
             }
         ))
     }
-    fn term(input: Node) -> Result<Box<ASTNodeType>> {
+    fn term(input: Node) -> Result<Box<ASTNode>> {
         Ok(match_nodes!(input.into_children();
             [int(a)] => Box::new(a.into()),
             [expression(e)] => Box::new(e.into())
