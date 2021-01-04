@@ -19,10 +19,6 @@ impl TreePrinter {
     fn println_indented(&self, output: String) {
         println!("{:width$}{}", "", output, width = self.indent);
     }
-
-    fn print_indented(&self, output: String) {
-        print!("{:width$}{}", "", output, width = self.indent);
-    }
 }
 
 impl TreeWalkerTrait for TreePrinter {
