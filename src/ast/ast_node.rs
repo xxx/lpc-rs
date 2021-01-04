@@ -27,13 +27,13 @@ impl From<ExpressionNode> for ASTNode {
 
 impl From<IntNode> for ASTNode {
     fn from(node: IntNode) -> Self {
-        ASTNode::Expression(ExpressionNode::Int(Box::new(node)))
+        ASTNode::Expression(ExpressionNode::Int(node))
     }
 }
 
 impl From<BinaryOpNode> for ASTNode {
     fn from(node: BinaryOpNode) -> Self {
-        ASTNode::Expression(ExpressionNode::BinaryOp(Box::new(node)))
+        ASTNode::Expression(ExpressionNode::BinaryOp(node))
     }
 }
 

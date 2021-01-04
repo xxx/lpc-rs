@@ -5,8 +5,8 @@ use crate::ast::int_node::IntNode;
 
 #[derive(Debug)]
 pub enum ExpressionNode {
-    BinaryOp(Box<BinaryOpNode>),
-    Int(Box<IntNode>)
+    BinaryOp(BinaryOpNode),
+    Int(IntNode)
 }
 
 impl ASTNodeTrait for ExpressionNode {
@@ -27,13 +27,13 @@ impl ASTNodeTrait for ExpressionNode {
 
 impl From<BinaryOpNode> for ExpressionNode {
     fn from(node: BinaryOpNode) -> Self {
-        Self::BinaryOp(Box::new(node))
+        Self::BinaryOp(node)
     }
 }
 
 impl From<IntNode> for ExpressionNode {
     fn from(node: IntNode) -> Self {
-        Self::Int(Box::new(node))
+        Self::Int(node)
     }
 }
 
