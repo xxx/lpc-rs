@@ -1,13 +1,13 @@
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
-use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::BinaryOpNode;
 
 #[derive(Debug)]
 pub struct AsmTreeWalker;
 
-impl TreeWalkerTrait for AsmTreeWalker {
+impl TreeWalker for AsmTreeWalker {
     fn walk_tree(&mut self, root: &impl ASTNodeTrait) {
         root.visit(self);
     }

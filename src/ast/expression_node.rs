@@ -1,5 +1,5 @@
 use crate::ast::ast_node::{ASTNodeTrait, ASTNode};
-use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::int_node::IntNode;
 
@@ -17,7 +17,7 @@ impl ASTNodeTrait for ExpressionNode {
         }
     }
 
-    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait) {
+    fn visit(&self, tree_walker: &mut impl TreeWalker) {
         match self {
             ExpressionNode::BinaryOp(x) => x.visit(tree_walker),
             ExpressionNode::Int(x) => x.visit(tree_walker)

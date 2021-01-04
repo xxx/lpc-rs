@@ -1,6 +1,6 @@
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
-use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::BinaryOpNode;
 
@@ -21,7 +21,7 @@ impl TreePrinter {
     }
 }
 
-impl TreeWalkerTrait for TreePrinter {
+impl TreeWalker for TreePrinter {
     fn walk_tree(&mut self, root: &impl ASTNodeTrait) {
         root.visit(self);
     }

@@ -1,7 +1,7 @@
 mod mathstack_parser;
 
 use std::{fs, env};
-use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_walker::TreeWalker;
 use crate::codegen::tree_printer::TreePrinter;
 
 mod ast;

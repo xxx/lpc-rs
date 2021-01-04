@@ -1,5 +1,5 @@
 use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::expression_node::ExpressionNode;
 
 #[derive(Debug, Copy, Clone)]
@@ -22,5 +22,5 @@ impl ASTNodeTrait for BinaryOpNode {
         format!("BinaryOpNode[{:?}]", self)
     }
 
-    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait) { tree_walker.visit_binary_op(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_binary_op(self); }
 }

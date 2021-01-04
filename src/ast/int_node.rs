@@ -1,5 +1,5 @@
 use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalkerTrait;
+use crate::codegen::tree_walker::TreeWalker;
 
 #[derive(Debug, Copy, Clone)]
 pub struct IntNode {
@@ -11,5 +11,5 @@ impl ASTNodeTrait for IntNode {
         format!("IntNode[{}]", self.value)
     }
 
-    fn visit(&self, tree_walker: &mut impl TreeWalkerTrait) { tree_walker.visit_int(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_int(self); }
 }
