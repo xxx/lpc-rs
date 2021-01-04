@@ -9,8 +9,8 @@ use crate::ast::binary_op_node::BinaryOpNode;
 
 #[derive(Debug)]
 pub enum ASTNode {
-    Expression(Box<ExpressionNode>),
-    Program(Box<ProgramNode>)
+    Expression(ExpressionNode),
+    Program(ProgramNode)
 }
 
 #[auto_impl(&, &mut)]
@@ -21,24 +21,24 @@ pub trait ASTNodeTrait {
 
 impl From<ExpressionNode> for ASTNode {
     fn from(node: ExpressionNode) -> Self {
-        ASTNode::Expression(Box::new(node))
+        ASTNode::Expression(node)
     }
 }
 
 impl From<IntNode> for ASTNode {
     fn from(node: IntNode) -> Self {
-        ASTNode::Expression(Box::new(ExpressionNode::Int(Box::new(node))))
+        ASTNode::Expression(ExpressionNode::Int(Box::new(node)))
     }
 }
 
 impl From<BinaryOpNode> for ASTNode {
     fn from(node: BinaryOpNode) -> Self {
-        ASTNode::Expression(Box::new(ExpressionNode::BinaryOp(Box::new(node))))
+        ASTNode::Expression(ExpressionNode::BinaryOp(Box::new(node)))
     }
 }
 
 impl From<ProgramNode> for ASTNode {
     fn from(node: ProgramNode) -> Self {
-        ASTNode::Program(Box::new(node))
+        ASTNode::Program(node)
     }
 }

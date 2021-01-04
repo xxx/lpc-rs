@@ -40,7 +40,7 @@ impl From<IntNode> for ExpressionNode {
 impl From<ASTNode> for ExpressionNode {
     fn from(node: ASTNode) -> Self {
         match node {
-            ASTNode::Expression(x) => *x,
+            ASTNode::Expression(x) => x,
             x => panic!("unimplemented From<ASTNode> for ExpressionNode arm: {:?}", x)
         }
     }
