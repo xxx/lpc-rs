@@ -1,8 +1,8 @@
 use crate::ast::program_node::ProgramNode;
-use crate::ast::expression_node::ExpressionNode;
 use crate::ast::int_node::IntNode;
 use crate::codegen::tree_walker::TreeWalkerTrait;
 use crate::ast::ast_node::ASTNodeTrait;
+use crate::ast::binary_op_node::BinaryOpNode;
 
 #[derive(Debug)]
 pub struct TreePrinter {
@@ -43,8 +43,8 @@ impl TreeWalkerTrait for TreePrinter {
         self.println_indented(format!("Int Node: {}", int.value));
     }
 
-    fn visit_expression(&mut self, expression: &ExpressionNode) {
-        self.println_indented(String::from("Expression node"));
+    fn visit_binary_op(&mut self, expression: &BinaryOpNode) {
+        self.println_indented(String::from("Binary Op Node"));
         self.println_indented(format!("operation: {:?}", expression.op));
         self.println_indented(String::from("l: "));
         self.indent += 2;

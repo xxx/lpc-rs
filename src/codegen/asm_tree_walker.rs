@@ -1,8 +1,8 @@
 use crate::ast::program_node::ProgramNode;
-use crate::ast::expression_node::ExpressionNode;
 use crate::ast::int_node::IntNode;
 use crate::codegen::tree_walker::TreeWalkerTrait;
 use crate::ast::ast_node::ASTNodeTrait;
+use crate::ast::binary_op_node::BinaryOpNode;
 
 #[derive(Debug)]
 pub struct AsmTreeWalker;
@@ -22,8 +22,8 @@ impl TreeWalkerTrait for AsmTreeWalker {
         println!("int node: {}", int.value);
     }
 
-    fn visit_expression(&mut self, expression: &ExpressionNode) {
-        println!("Expression node");
+    fn visit_binary_op(&mut self, expression: &BinaryOpNode) {
+        println!("Binary op node");
         print!("  l:");
         self.walk_tree(&(*expression.l));
         print!("  r:");
