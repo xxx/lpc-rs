@@ -33,11 +33,7 @@ impl MathstackParser {
                 r: Box::new(b.into()),
                 op
             }.into(),
-            [term(a)] => BinaryOpNode {
-                l: Box::new(a.into()),
-                r: Box::new(IntNode { value: 0 }.into()),
-                op: BinaryOperation::Add
-            }.into()
+            [term(a)] => a.into()
         ))
     }
     fn term(input: Node) -> Result<ASTNode> {
