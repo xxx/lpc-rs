@@ -1,0 +1,44 @@
+use std::str::FromStr;
+
+use crate::ast::program_node::ProgramNode;
+use crate::ast::binary_op_node::{BinaryOperation, BinaryOpNode};
+use crate::ast::expression_node::ExpressionNode;
+use crate::ast::int_node::IntNode;
+
+grammar;
+
+//SemiSeq<T>: Vec<T> = {
+//    <v:(<T> ";")*> <e:T?> => match e {
+//        None=> v,
+//        Some(e) => {
+//            let mut v = v;
+//            v.push(e);
+//            v
+//        }
+//    }
+//};
+
+pub Program: ProgramNode = <expressions:Expression*> => ProgramNode {
+    expressions
+};
+
+BinaryOp: BinaryOperation = {
+    "+" => BinaryOperation::Add,
+    "-" => BinaryOperation::Sub,
+    "*" => BinaryOperation::Mul,
+    "/" => BinaryOperation::Div
+}
+
+Term: ExpressionNode = {
+    <Int>,
+    "(" <Expression> ")",
+};
+
+pub Expression: ExpressionNode = {
+    <l:Term> <op:BinaryOp> <r:Expression> => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op }),
+    <Term>
+}
+
+Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(IntNode {
+    value: i64::from_str(s).unwrap()
+});

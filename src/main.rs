@@ -1,8 +1,9 @@
-mod mathstack_parser;
-
 use std::{fs, env};
 use crate::codegen::tree_walker::TreeWalker;
 use crate::codegen::tree_printer::TreePrinter;
+
+#[macro_use] extern crate lalrpop_util;
+lalrpop_mod!(pub mathstack); // synthesized by LALRPOP
 
 mod ast;
 mod asm;
@@ -19,8 +20,9 @@ fn main() {
     };
     let file_content = fs::read_to_string(file)
         .unwrap_or_else(|_| panic!("cannot read file: {}", file));
-    let program = mathstack_parser::parse_program(&file_content)
-        .expect("unsuccessful parse"); // unwrap the parse result
+    let program = mathstack::ProgramParser::new()
+        .parse(&file_content)
+        .expect("unsuccessful parse");
 
     println!("{:?}", program);
 

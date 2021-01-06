@@ -1,4 +1,3 @@
-use crate::codegen::asm_tree_walker::AsmTreeWalker;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::ast_node::ASTNodeTrait;
