@@ -3,7 +3,7 @@ use crate::codegen::tree_walker::TreeWalker;
 use crate::codegen::tree_printer::TreePrinter;
 
 #[macro_use] extern crate lalrpop_util;
-lalrpop_mod!(pub mathstack); // synthesized by LALRPOP
+lalrpop_mod!(#[allow(clippy::all)] pub mathstack); // synthesized by LALRPOP
 
 mod ast;
 mod asm;

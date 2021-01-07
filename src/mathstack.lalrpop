@@ -7,19 +7,26 @@ use crate::ast::int_node::IntNode;
 
 grammar;
 
-//SemiSeq<T>: Vec<T> = {
-//    <v:(<T> ";")*> <e:T?> => match e {
-//        None=> v,
-//        Some(e) => {
-//            let mut v = v;
-//            v.push(e);
-//            v
-//        }
-//    }
-//};
+SemiSeq<T>: Vec<T> = {
+    <v:(<T> ";")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
 
-pub Program: ProgramNode = <expressions:Expression*> => ProgramNode {
+pub Program: ProgramNode = <expressions:SemiSeq<Statement>> => ProgramNode {
     expressions
+};
+
+pub Statement = <Expression>;
+
+pub Expression: ExpressionNode = {
+    <l:Term> <op:BinaryOp> <r:Expression> => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op }),
+    <Term>
 };
 
 BinaryOp: BinaryOperation = {
@@ -27,17 +34,12 @@ BinaryOp: BinaryOperation = {
     "-" => BinaryOperation::Sub,
     "*" => BinaryOperation::Mul,
     "/" => BinaryOperation::Div
-}
+};
 
 Term: ExpressionNode = {
     <Int>,
     "(" <Expression> ")",
 };
-
-pub Expression: ExpressionNode = {
-    <l:Term> <op:BinaryOp> <r:Expression> => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op }),
-    <Term>
-}
 
 Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(IntNode {
     value: i64::from_str(s).unwrap()
