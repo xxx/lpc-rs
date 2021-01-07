@@ -7,8 +7,8 @@ use crate::ast::ast_node::ASTNodeTrait;
 pub trait TreeWalker {
     fn walk_tree(&mut self, root: &impl ASTNodeTrait);
 
-    fn visit_program(&mut self, program: &ProgramNode) {}
-    fn visit_call(&mut self, program: &CallNode) {}
-    fn visit_int(&mut self, program: &IntNode) {}
-    fn visit_binary_op(&mut self, program: &BinaryOpNode) {}
+    fn visit_program(&mut self, _program: &ProgramNode) {}
+    fn visit_call(&mut self, _program: &CallNode) {}
+    fn visit_int(&mut self, _program: &IntNode) {}
+    fn visit_binary_op(&mut self, _program: &BinaryOpNode) {}
 }
