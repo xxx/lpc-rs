@@ -3,6 +3,7 @@ use crate::ast::int_node::IntNode;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::BinaryOpNode;
+use crate::ast::call_node::CallNode;
 
 #[derive(Debug)]
 pub struct TreePrinter {
@@ -16,7 +17,7 @@ impl TreePrinter {
         }
     }
 
-    fn println_indented(&self, output: String) {
+    fn println_indented(&self, output: &str) {
         println!("{:width$}{}", "", output, width = self.indent);
     }
 }
@@ -27,28 +28,41 @@ impl TreeWalker for TreePrinter {
     }
 
     fn visit_program(&mut self, program: &ProgramNode) {
-        println!("Program node");
+        println!("Program");
         self.indent += 2;
         for expr in &program.expressions {
-            self.walk_tree(&expr);
+            expr.visit(self);
         }
         self.indent -= 2;
     }
 
+    fn visit_call(&mut self, node: &CallNode) {
+        self.println_indented("Call");
+        self.indent += 2;
+        self.println_indented(&format!("id: {}", node.id));
+        self.println_indented("args:");
+        self.indent += 2;
+        for arg in &node.arguments {
+            arg.visit(self);
+        }
+        self.indent -= 4;
+    }
+
     fn visit_int(&mut self, int: &IntNode) {
-        self.println_indented(format!("Int Node: {}", int.value));
+        self.println_indented(&format!("Int: {}", int.value));
     }
 
     fn visit_binary_op(&mut self, expression: &BinaryOpNode) {
-        self.println_indented(String::from("Binary Op Node"));
-        self.println_indented(format!("operation: {:?}", expression.op));
-        self.println_indented(String::from("l: "));
+        self.println_indented("Binary Op");
+        self.indent += 2;
+        self.println_indented(&format!("operation: {:?}", expression.op));
+        self.println_indented("l: ");
         self.indent += 2;
         self.walk_tree(&(*expression.l));
         self.indent -= 2;
-        self.println_indented(String::from("r: "));
+        self.println_indented("r: ");
         self.indent += 2;
         self.walk_tree(&(*expression.r));
-        self.indent -= 2;
+        self.indent -= 4;
     }
 }

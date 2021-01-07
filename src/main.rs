@@ -24,8 +24,6 @@ fn main() {
         .parse(&file_content)
         .expect("unsuccessful parse");
 
-    println!("{:?}", program);
-
     let mut walker = TreePrinter::new();
 
     walker.walk_tree(&program);

@@ -4,6 +4,7 @@ use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::{BinaryOperation, BinaryOpNode};
 use crate::ast::expression_node::ExpressionNode;
 use crate::ast::int_node::IntNode;
+use crate::ast::call_node::CallNode;
 
 grammar;
 
@@ -26,7 +27,15 @@ pub Statement = <Expression>;
 
 pub Expression: ExpressionNode = {
     <l:Term> <op:BinaryOp> <r:Expression> => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op }),
-    <Term>
+    <Term>,
+    <c:Call> => ExpressionNode::Call(c)
+};
+
+pub Call: CallNode = {
+    <id:ID> "(" <e:Expression> ")" => CallNode {
+        arguments: vec![e],
+        id
+    }
 };
 
 BinaryOp: BinaryOperation = {
@@ -44,3 +53,5 @@ Term: ExpressionNode = {
 Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(IntNode {
     value: i64::from_str(s).unwrap()
 });
+
+ID: String = <i:r"[\p{Alphabetic}_]\w+"> => String::from(i);
