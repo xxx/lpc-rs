@@ -33,6 +33,7 @@ impl AsmTreeWalker {
 
     pub fn listing(&self) -> Vec<String> {
         let mut v = vec![];
+
         for instruction in &self.instructions {
             v.push(format!("{}", instruction));
         }
