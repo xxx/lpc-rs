@@ -1,10 +1,10 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone)]
-pub struct Register(pub String);
+#[derive(Debug, Copy, Clone)]
+pub struct Register(pub usize);
 
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "r{}", self.0)
     }
 }
