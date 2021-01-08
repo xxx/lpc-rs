@@ -15,29 +15,20 @@ use std::fmt;
 
 pub trait InstructionTrait: Display {}
 
-#[derive(Debug, Clone)]
-pub enum Instruction {
-    Call(Call),
-    IAdd(IAdd),
-    IConst(IConst),
-    IConst0(IConst0),
-    IConst1(IConst1),
-    IDiv(IDiv),
-    ILoad(ILoad),
-    IMul(IMul),
-    IStore(IStore),
-    ISub(ISub),
-    Print(Print),
-    RegCopy(RegCopy)
-}
-
-macro_rules! display_trait {
-    ( $( $x:path ),+ ) => {
+macro_rules! build_instructions {
+    ( $( $x:ident ),+ ) => {
+        #[derive(Debug, Clone)]
+        pub enum Instruction {
+            $(
+                $x($x),
+            )*
+        }
+        
         impl Display for Instruction {
             fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 match self {
                 $(
-                    $x(y) => write!(f, "{}", y),
+                    Instruction::$x(y) => write!(f, "{}", y),
                 )*
                 }
             }
@@ -45,17 +36,17 @@ macro_rules! display_trait {
     };
 }
 
-display_trait!(
-    Instruction::Call,
-    Instruction::IAdd,
-    Instruction::IConst,
-    Instruction::IConst0,
-    Instruction::IConst1,
-    Instruction::IDiv,
-    Instruction::ILoad,
-    Instruction::IMul,
-    Instruction::IStore,
-    Instruction::ISub,
-    Instruction::Print,
-    Instruction::RegCopy
+build_instructions!(
+    Call,
+    IAdd,
+    IConst,
+    IConst0,
+    IConst1,
+    IDiv,
+    ILoad,
+    IMul,
+    IStore,
+    ISub,
+    Print,
+    RegCopy
 );
