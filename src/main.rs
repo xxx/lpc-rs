@@ -32,7 +32,8 @@ fn main() {
 
     let mut asm_walker = AsmTreeWalker::new();
     asm_walker.walk_tree(&program);
-    print!("{:?}", asm_walker.instructions);
+    // print!("{:?}", asm_walker.instructions);
+    print!("{:?}", asm_walker.listing());
 }
 
 

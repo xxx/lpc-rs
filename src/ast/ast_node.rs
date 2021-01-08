@@ -6,11 +6,13 @@ use program_node::ProgramNode;
 use crate::codegen::tree_walker::TreeWalker;
 use auto_impl::auto_impl;
 use crate::ast::binary_op_node::BinaryOpNode;
+use crate::ast::call_node::CallNode;
 
 #[derive(Debug)]
 pub enum ASTNode {
+    Program(ProgramNode),
     Expression(ExpressionNode),
-    Program(ProgramNode)
+    Call(CallNode)
 }
 
 #[auto_impl(&, &mut)]

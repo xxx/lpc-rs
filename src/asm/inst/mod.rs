@@ -1,3 +1,4 @@
+pub mod call;
 pub mod iconst0;
 pub mod iconst1;
 pub mod iconst;
@@ -8,3 +9,4 @@ pub mod isub;
 pub mod imul;
 pub mod idiv;
 pub mod print;
+pub mod regcopy;

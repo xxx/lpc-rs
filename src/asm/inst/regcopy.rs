@@ -4,12 +4,12 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct IConst1(pub Register);
+pub struct RegCopy(pub Register, pub Register);
 
-impl InstructionTrait for IConst1 {}
+impl InstructionTrait for RegCopy {}
 
-impl Display for IConst1 {
+impl Display for RegCopy {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "iconst1 {}", &self.0)
+        write!(f, "regcopy {}, {}", self.0, self.1)
     }
 }

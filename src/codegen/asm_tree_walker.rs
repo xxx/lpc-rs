@@ -13,6 +13,9 @@ use crate::asm::inst::iadd::IAdd;
 use crate::asm::inst::isub::ISub;
 use crate::asm::inst::imul::IMul;
 use crate::asm::inst::idiv::IDiv;
+use crate::ast::call_node::CallNode;
+use crate::asm::inst::call::Call;
+use crate::asm::inst::regcopy::RegCopy;
 
 #[derive(Debug)]
 pub struct AsmTreeWalker {
@@ -26,6 +29,15 @@ impl AsmTreeWalker {
             instructions: vec![],
             current_result: Register(0)
         }
+    }
+
+    pub fn listing(&self) -> Vec<String> {
+        let mut v = vec![];
+        for instruction in &self.instructions {
+            v.push(format!("{}", instruction));
+        }
+
+        v
     }
 }
 
@@ -64,6 +76,35 @@ impl TreeWalker for AsmTreeWalker {
             BinaryOperation::Mul => Instruction::IMul(IMul(reg_left, reg_right, reg_result)),
             BinaryOperation::Div => Instruction::IDiv(IDiv(reg_left, reg_right, reg_result))
         };
+        self.instructions.push(instruction);
+    }
+
+    fn visit_call(&mut self, node: &CallNode) {
+        let mut arg_results: Vec<Register> = vec![];
+
+        // eval args, then save each result register
+        for argument in &node.arguments {
+            self.walk_tree(argument);
+            arg_results.push(self.current_result);
+        }
+
+        let start_register = register_counter::next();
+        let mut register = start_register;
+
+        // copy each result to the start of the arg register
+        for result in arg_results {
+            self.instructions.push(
+                Instruction::RegCopy(RegCopy(result, register))
+            );
+            register = register_counter::next();
+        }
+
+        let instruction = Instruction::Call(Call {
+            name: node.id.clone(),
+            num_args: node.arguments.len(),
+            initial_arg: start_register
+        });
+
         self.instructions.push(instruction);
     }
 }
