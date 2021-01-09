@@ -2,7 +2,7 @@ use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::expression_node::ExpressionNode;
 use crate::codegen::tree_walker::TreeWalker;
 
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct ProgramNode {
     pub expressions: Vec<ExpressionNode>
 }

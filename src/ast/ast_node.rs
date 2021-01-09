@@ -8,7 +8,7 @@ use auto_impl::auto_impl;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ASTNode {
     Program(ProgramNode),
     Expression(ExpressionNode),
@@ -42,5 +42,47 @@ impl From<BinaryOpNode> for ASTNode {
 impl From<ProgramNode> for ASTNode {
     fn from(node: ProgramNode) -> Self {
         ASTNode::Program(node)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::binary_op_node::BinaryOperation;
+
+    #[test]
+    fn test_from_expression_node() {
+        let node = ExpressionNode::Int(IntNode::new(123));
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::Expression(clone));
+    }
+
+    #[test]
+    fn test_from_int_node() {
+        let node = IntNode::new(123);
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::Expression(ExpressionNode::Int(clone)));
+    }
+
+    #[test]
+    fn test_from_binary_op_node() {
+        let node: BinaryOpNode = BinaryOpNode {
+            l: Box::new(ExpressionNode::Int(IntNode::new(123))),
+            r: Box::new(ExpressionNode::Int(IntNode::new(1233))),
+            op: BinaryOperation::Add
+        };
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::Expression(ExpressionNode::BinaryOp(clone)));
+    }
+
+    #[test]
+    fn test_from_program_node() {
+        let node: ProgramNode = Default::default();
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::Program(clone));
     }
 }
