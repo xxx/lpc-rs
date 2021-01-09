@@ -14,3 +14,19 @@ impl PartialEq for Register {
         self.0 == other.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display() {
+        assert_eq!(format!("{}", Register(666)), "r666");
+    }
+
+    #[test]
+    fn test_eq() {
+        assert_eq!(Register(0), Register(0));
+        assert_ne!(Register(0), Register(1));
+    }
+}
