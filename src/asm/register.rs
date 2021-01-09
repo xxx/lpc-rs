@@ -8,3 +8,9 @@ impl Display for Register {
         write!(f, "r{}", self.0)
     }
 }
+
+impl PartialEq for Register {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}

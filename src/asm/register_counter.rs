@@ -21,3 +21,36 @@ pub fn value() -> Register {
     let counter = REGISTER_COUNTER.load(Ordering::SeqCst);
     Register(counter)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next() {
+        assert_eq!(next(), Register(1));
+        assert_eq!(next(), Register(2));
+        assert_eq!(next(), Register(3));
+    }
+
+    #[test]
+    fn test_value() {
+        assert_eq!(value(), Register(0));
+        next();
+        next();
+        next();
+        assert_eq!(value(), Register(3));
+    }
+
+    #[test]
+    fn test_reset() {
+        assert_eq!(value(), Register(0));
+        next();
+        next();
+        next();
+
+        reset();
+
+        assert_eq!(value(), Register(0));
+    }
+}
