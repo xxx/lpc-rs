@@ -3,7 +3,7 @@ use crate::asm::instruction::InstructionTrait;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct IConst0(pub Register);
 
 impl InstructionTrait for IConst0 {}

@@ -4,63 +4,65 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 // initialize to 0, so the first register is 1. r0 is reserved for function return values.
 static REGISTER_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-/// Reset the counter to 0.
-pub fn reset() {
-    REGISTER_COUNTER.store(0, Ordering::SeqCst);
+#[derive(Debug, Copy, Clone, Default)]
+pub struct RegisterCounter {
+    count: usize
 }
 
-/// Increment the counter, and return the next register.
-pub fn next() -> Register {
-    let counter = REGISTER_COUNTER.fetch_add(1, Ordering::SeqCst);
-    Register(counter + 1)
-}
+impl RegisterCounter {
+    /// Reset the counter to 0.
+    pub fn reset(&mut self) {
+        self.count = 0;
+    }
 
-/// Return the current register. This is intended for testing and debugging.
-/// Typical use should always use next().
-pub fn value() -> Register {
-    let counter = REGISTER_COUNTER.load(Ordering::SeqCst);
-    Register(counter)
+    /// Increment the counter, and return the next register.
+    pub fn next(&mut self) -> Register {
+        self.count += 1;
+        Register(self.count)
+    }
+
+    /// Return the current register. This is intended for testing and debugging.
+    /// Typical use should always use next().
+    pub fn value(&self) -> Register {
+        Register(self.count)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn setup() {
-        reset();
-    }
-
     #[test]
     fn test_next_increments_and_returns() {
-        setup();
+        let mut counter: RegisterCounter = Default::default();
 
-        assert_eq!(next(), Register(1));
-        assert_eq!(next(), Register(2));
-        assert_eq!(next(), Register(3));
+        assert_eq!(counter.next(), Register(1));
+        assert_eq!(counter.next(), Register(2));
+        assert_eq!(counter.next(), Register(3));
     }
 
     #[test]
     fn test_value_returns_without_increment() {
-        setup();
+        let mut counter: RegisterCounter = Default::default();
 
-        assert_eq!(value(), Register(0));
-        next();
-        next();
-        next();
-        assert_eq!(value(), Register(3));
+        assert_eq!(counter.value(), Register(0));
+        counter.next();
+        counter.next();
+        counter.next();
+        assert_eq!(counter.value(), Register(3));
     }
 
     #[test]
     fn test_reset_resets_the_value() {
-        setup();
+        let mut counter: RegisterCounter = Default::default();
 
-        assert_eq!(value(), Register(0));
-        next();
-        next();
-        next();
+        assert_eq!(counter.value(), Register(0));
+        counter.next();
+        counter.next();
+        counter.next();
 
-        reset();
+        counter.reset();
 
-        assert_eq!(value(), Register(0));
+        assert_eq!(counter.value(), Register(0));
     }
 }

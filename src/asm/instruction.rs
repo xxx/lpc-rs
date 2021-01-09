@@ -8,7 +8,6 @@ use crate::asm::inst::iload::ILoad;
 use crate::asm::inst::imul::IMul;
 use crate::asm::inst::istore::IStore;
 use crate::asm::inst::isub::ISub;
-use crate::asm::inst::print::Print;
 use crate::asm::inst::regcopy::RegCopy;
 use std::fmt::{Formatter,Display};
 use std::fmt;
@@ -17,7 +16,7 @@ pub trait InstructionTrait: Display {}
 
 macro_rules! build_instructions {
     ( $( $x:ident ),+ ) => {
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Eq, PartialEq)]
         pub enum Instruction {
             $(
                 $x($x),
@@ -47,6 +46,5 @@ build_instructions!(
     IMul,
     IStore,
     ISub,
-    Print,
     RegCopy
 );

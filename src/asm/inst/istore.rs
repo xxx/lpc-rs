@@ -3,7 +3,7 @@ use crate::asm::instruction::InstructionTrait;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct IStore(pub Register, pub Register, pub i64);
 
 impl InstructionTrait for IStore {}

@@ -30,7 +30,7 @@ fn main() {
 
     walker.walk_tree(&program);
 
-    let mut asm_walker = AsmTreeWalker::new();
+    let mut asm_walker: AsmTreeWalker = Default::default();
     asm_walker.walk_tree(&program);
     // print!("{:?}", asm_walker.instructions);
     print!("{:?}", asm_walker.listing());

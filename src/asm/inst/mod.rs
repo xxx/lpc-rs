@@ -8,5 +8,4 @@ pub mod iadd;
 pub mod isub;
 pub mod imul;
 pub mod idiv;
-pub mod print;
 pub mod regcopy;

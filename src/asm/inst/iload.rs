@@ -3,7 +3,7 @@ use crate::asm::instruction::InstructionTrait;
 use std::fmt;
 use std::fmt::{Formatter, Display};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ILoad(pub Register, pub Register, pub i64);
 
 impl InstructionTrait for ILoad {}
