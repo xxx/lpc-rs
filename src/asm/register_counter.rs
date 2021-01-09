@@ -26,15 +26,23 @@ pub fn value() -> Register {
 mod tests {
     use super::*;
 
+    fn setup() {
+        reset();
+    }
+
     #[test]
-    fn test_next() {
+    fn test_next_increments_and_returns() {
+        setup();
+
         assert_eq!(next(), Register(1));
         assert_eq!(next(), Register(2));
         assert_eq!(next(), Register(3));
     }
 
     #[test]
-    fn test_value() {
+    fn test_value_returns_without_increment() {
+        setup();
+
         assert_eq!(value(), Register(0));
         next();
         next();
@@ -43,7 +51,9 @@ mod tests {
     }
 
     #[test]
-    fn test_reset() {
+    fn test_reset_resets_the_value() {
+        setup();
+
         assert_eq!(value(), Register(0));
         next();
         next();

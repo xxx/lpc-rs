@@ -20,7 +20,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_display() {
+    fn test_display_displays_with_the_prefix() {
         assert_eq!(format!("{}", Register(666)), "r666");
     }
 
