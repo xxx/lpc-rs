@@ -16,7 +16,7 @@ pub enum ASTNode {
 }
 
 #[auto_impl(&, &mut)]
-pub trait ASTNodeTrait {
+pub trait ASTNodeTrait: PartialEq {
     fn to_str(&self) -> String;
     fn visit(&self, tree_walker: &mut impl TreeWalker);
 }

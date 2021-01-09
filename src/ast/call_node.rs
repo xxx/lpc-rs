@@ -2,7 +2,7 @@ use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::expression_node::ExpressionNode;
 use crate::codegen::tree_walker::TreeWalker;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CallNode {
     pub arguments: Vec<ExpressionNode>,
     pub id: String

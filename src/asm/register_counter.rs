@@ -1,8 +1,4 @@
 use crate::asm::register::Register;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-// initialize to 0, so the first register is 1. r0 is reserved for function return values.
-static REGISTER_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct RegisterCounter {

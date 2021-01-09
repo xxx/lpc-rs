@@ -1,7 +1,7 @@
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::codegen::tree_walker::TreeWalker;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct IntNode {
     pub value: i64,
 }
