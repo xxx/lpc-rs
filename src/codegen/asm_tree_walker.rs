@@ -107,7 +107,7 @@ impl TreeWalker for AsmTreeWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mathstack;
+    use crate::mathstack_parser;
     use crate::ast::expression_node::ExpressionNode;
 
     #[test]
@@ -117,7 +117,7 @@ mod tests {
             1 + 3 - 5;
             print(4 + 5);
         ";
-        let tree = mathstack::ProgramParser::new()
+        let tree = mathstack_parser::ProgramParser::new()
             .parse(program)
             .unwrap();
 
@@ -126,9 +126,9 @@ mod tests {
         let expected = vec![
             Instruction::IConst1(IConst1(Register(1))),
             Instruction::IConst(IConst(Register(2), 3)),
-            Instruction::IConst(IConst(Register(3), 5)),
-            Instruction::ISub(ISub(Register(2), Register(3),Register(4))),
-            Instruction::IAdd(IAdd(Register(1), Register(4), Register(5))),
+            Instruction::IAdd(IAdd(Register(1), Register(2), Register(3))),
+            Instruction::IConst(IConst(Register(4), 5)),
+            Instruction::ISub(ISub(Register(3), Register(4),Register(5))),
             Instruction::IConst(IConst(Register(6), 4)),
             Instruction::IConst(IConst(Register(7), 5)),
             Instruction::IAdd(IAdd(Register(6), Register(7), Register(8))),
@@ -149,7 +149,7 @@ mod tests {
     fn test_visit_call_populates_the_instructions() {
         let mut walker: AsmTreeWalker = Default::default();
         let call = "print(4 + 5)";
-        let tree = mathstack::CallParser::new()
+        let tree = mathstack_parser::CallParser::new()
             .parse(call)
             .unwrap();
 

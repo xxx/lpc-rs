@@ -33,12 +33,27 @@ pub Program: ProgramNode = <expressions:SemiSeq<Statement>> => ProgramNode {
 pub Statement = <Expression>;
 
 pub Expression: ExpressionNode = {
-    <l:Term> <op:BinaryOp> <r:Expression> => {
+    <c:Call> => ExpressionNode::Call(c),
+    <AdditiveBinaryExpression>,
+    <Factor>
+};
+
+pub Factor: ExpressionNode = {
+    <MultiplicitiveBinaryExpression>,
+    <Term>
+}
+
+pub AdditiveBinaryExpression: ExpressionNode = {
+    <l:Expression> <op:AdditiveBinaryOp> <r:Factor> => {
+        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+    }
+}
+
+pub MultiplicitiveBinaryExpression: ExpressionNode = {
+    <l:Factor> <op:MultiplicitiveBinaryOp> <r:Term> => {
         ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
     },
-    <Term>,
-    <c:Call> => ExpressionNode::Call(c)
-};
+}
 
 pub Call: CallNode = {
     <id:ID> "(" <e:Expression> ")" => CallNode {
@@ -47,9 +62,12 @@ pub Call: CallNode = {
     }
 };
 
-BinaryOp: BinaryOperation = {
+AdditiveBinaryOp: BinaryOperation = {
     "+" => BinaryOperation::Add,
-    "-" => BinaryOperation::Sub,
+    "-" => BinaryOperation::Sub
+};
+
+MultiplicitiveBinaryOp: BinaryOperation = {
     "*" => BinaryOperation::Mul,
     "/" => BinaryOperation::Div
 };

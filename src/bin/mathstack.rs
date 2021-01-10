@@ -1,16 +1,9 @@
 use std::{fs, env};
-use crate::codegen::tree_walker::TreeWalker;
-use crate::codegen::tree_printer::TreePrinter;
-use crate::codegen::asm_tree_walker::AsmTreeWalker;
-use crate::interpreter::asm_interpreter::AsmInterpreter;
-
-#[macro_use] extern crate lalrpop_util;
-lalrpop_mod!(#[allow(clippy::all)] pub mathstack); // synthesized by LALRPOP
-
-mod ast;
-mod asm;
-mod codegen;
-mod interpreter;
+use mathstack::mathstack_parser;
+use mathstack::codegen::tree_walker::TreeWalker;
+use mathstack::codegen::tree_printer::TreePrinter;
+use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
+use mathstack::interpreter::asm_interpreter::AsmInterpreter;
 
 const DEFAULT_FILE: &str = "mathfile";
 
@@ -24,7 +17,7 @@ fn main() {
     let file_content = fs::read_to_string(file)
         .unwrap_or_else(|_| panic!("cannot read file: {}", file));
 
-    let program = mathstack::ProgramParser::new()
+    let program = mathstack_parser::ProgramParser::new()
         .parse(&file_content)
         .expect("unsuccessful parse");
 
