@@ -1,6 +1,8 @@
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::expression_node::ExpressionNode;
+use std::fmt::{Display, Formatter};
+use std::fmt;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BinaryOperation {
@@ -18,11 +20,13 @@ pub struct BinaryOpNode {
 }
 
 impl ASTNodeTrait for BinaryOpNode {
-    fn to_str(&self) -> String {
-        format!("BinaryOpNode[{:?}]", self)
-    }
-
     fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_binary_op(self); }
+}
+
+impl Display for BinaryOpNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "BinaryOpNode[{:?}]", self)
+    }
 }
 
 impl Clone for BinaryOpNode {

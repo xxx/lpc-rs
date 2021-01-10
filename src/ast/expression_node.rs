@@ -3,6 +3,8 @@ use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::call_node::CallNode;
+use std::fmt::{Display, Formatter};
+use std::fmt;
 
 
 #[derive(Debug, Eq, PartialEq)]
@@ -15,14 +17,6 @@ pub enum ExpressionNode {
 macro_rules! destructured_traits {
     ( $( $x:path ),+ ) => {
         impl ASTNodeTrait for ExpressionNode {
-            fn to_str(&self) -> String {
-                match self {
-                $(
-                    $x(y) => y.to_str(),
-                )*
-                }
-            }
-
             fn visit(&self, tree_walker: &mut impl TreeWalker) {
                 match self {
                 $(
@@ -64,6 +58,12 @@ impl From<ASTNode> for ExpressionNode {
             ASTNode::Expression(x) => x,
             x => panic!("unimplemented From<ASTNode> for ExpressionNode arm: {:?}", x)
         }
+    }
+}
+
+impl Display for ExpressionNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 

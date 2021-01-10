@@ -7,6 +7,7 @@ use crate::codegen::tree_walker::TreeWalker;
 use auto_impl::auto_impl;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
+use std::fmt::Display;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ASTNode {
@@ -16,8 +17,7 @@ pub enum ASTNode {
 }
 
 #[auto_impl(&, &mut)]
-pub trait ASTNodeTrait: PartialEq {
-    fn to_str(&self) -> String;
+pub trait ASTNodeTrait: PartialEq + Display {
     fn visit(&self, tree_walker: &mut impl TreeWalker);
 }
 
