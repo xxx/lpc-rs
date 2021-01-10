@@ -33,7 +33,7 @@ pub Program: ProgramNode = <expressions:SemiSeq<Statement>> => ProgramNode {
 pub Statement = <Expression>;
 
 pub Expression: ExpressionNode = {
-    <c:Call> => ExpressionNode::Call(c),
+    Call => ExpressionNode::Call(<>),
     <AdditiveBinaryExpression>,
     <Factor>
 };
@@ -83,4 +83,4 @@ Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
     }
 );
 
-ID: String = <i:r"[\p{Alphabetic}_]\w+"> => String::from(i);
+ID: String = r"[\p{Alphabetic}_]\w+" => String::from(<>);
