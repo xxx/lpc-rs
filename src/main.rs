@@ -2,6 +2,7 @@ use std::{fs, env};
 use crate::codegen::tree_walker::TreeWalker;
 use crate::codegen::tree_printer::TreePrinter;
 use crate::codegen::asm_tree_walker::AsmTreeWalker;
+use crate::interpreter::asm_interpreter::AsmInterpreter;
 
 #[macro_use] extern crate lalrpop_util;
 lalrpop_mod!(#[allow(clippy::all)] pub mathstack); // synthesized by LALRPOP
@@ -9,6 +10,7 @@ lalrpop_mod!(#[allow(clippy::all)] pub mathstack); // synthesized by LALRPOP
 mod ast;
 mod asm;
 mod codegen;
+mod interpreter;
 
 const DEFAULT_FILE: &str = "mathfile";
 
@@ -34,6 +36,11 @@ fn main() {
     asm_walker.walk_tree(&program);
     // print!("{:?}", asm_walker.instructions);
     print!("{:?}", asm_walker.listing());
+
+    let mut interpreter: AsmInterpreter = Default::default();
+    interpreter.load(&asm_walker.instructions);
+
+    interpreter.eval();
 }
 
 
