@@ -8,6 +8,13 @@ use crate::ast::call_node::CallNode;
 
 grammar;
 
+match {
+    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*([^*]*\*+[^*/])*([^*]*\*+|[^*])*\*/" => { },  // Skip `/* comments */`
+    _
+}
+
 SemiSeq<T>: Vec<T> = {
     <v:(<T> ";")*> <e:T?> => match e {
         None => v,
