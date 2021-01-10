@@ -59,8 +59,10 @@ Term: ExpressionNode = {
     "(" <Expression> ")",
 };
 
-Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(IntNode {
-    value: i64::from_str(s).unwrap()
-});
+Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
+    IntNode {
+        value: i64::from_str(s).unwrap()
+    }
+);
 
 ID: String = <i:r"[\p{Alphabetic}_]\w+"> => String::from(i);
