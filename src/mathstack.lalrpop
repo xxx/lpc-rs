@@ -33,7 +33,9 @@ pub Program: ProgramNode = <expressions:SemiSeq<Statement>> => ProgramNode {
 pub Statement = <Expression>;
 
 pub Expression: ExpressionNode = {
-    <l:Term> <op:BinaryOp> <r:Expression> => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op }),
+    <l:Term> <op:BinaryOp> <r:Expression> => {
+        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+    },
     <Term>,
     <c:Call> => ExpressionNode::Call(c)
 };
