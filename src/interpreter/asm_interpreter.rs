@@ -1,16 +1,12 @@
 use crate::asm::instruction::Instruction;
-use std::collections::HashMap;
-use crate::asm::inst::call::Call;
+use crate::interpreter::efun::EFUNS;
 
 const MAX_REGISTERS: usize = 1000;
 
-type Efun = fn(&AsmInterpreter, &Call);
-
 pub struct AsmInterpreter {
     instructions: Vec<Instruction>,
-    registers: Vec<i64>,
-    pc: usize,
-    functions: HashMap<String, Efun>
+    pub registers: Vec<i64>,
+    pc: usize
 }
 
 impl AsmInterpreter {
@@ -26,7 +22,7 @@ impl AsmInterpreter {
             match instruction {
                 Instruction::Call(i) => {
                     // TODO: do this correctly
-                    match self.functions.get(&i.name) {
+                    match EFUNS.get(&i.name) {
                         Some(efun) => {
                             efun(self, i);
                         },
@@ -70,22 +66,12 @@ impl AsmInterpreter {
     }
 }
 
-fn print(interpreter: &AsmInterpreter, call: &Call) {
-    let value = interpreter.registers.get(call.initial_arg.value());
-
-    println!("{}", value.unwrap());
-}
-
 impl Default for AsmInterpreter {
     fn default() -> Self {
-        let mut functions: HashMap<String, Efun> = HashMap::new();
-        functions.insert(String::from("print"), print);
-
         Self {
             instructions: vec![],
             registers: vec![0; MAX_REGISTERS],
-            pc: 0,
-            functions
+            pc: 0
         }
     }
 }
