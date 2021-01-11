@@ -42,7 +42,7 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_program(&mut self, program: &ProgramNode) {
-        for expr in &program.expressions {
+        for expr in &program.functions {
             self.walk_tree(&expr);
         }
     }
@@ -222,5 +222,10 @@ mod tests {
         for (idx, instruction) in walker.instructions.iter().enumerate() {
             assert_eq!(instruction, &expected[idx]);
         }
+    }
+
+    #[test]
+    fn test_visit_function_def_populates_the_instructions() {
+        assert!(false);
     }
 }

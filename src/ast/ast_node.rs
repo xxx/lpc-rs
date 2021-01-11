@@ -8,10 +8,12 @@ use auto_impl::auto_impl;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
 use std::fmt::Display;
+use crate::ast::function_def_node::FunctionDefNode;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ASTNode {
     Program(ProgramNode),
+    FunctionDef(FunctionDefNode),
     Expression(ExpressionNode),
     Call(CallNode)
 }

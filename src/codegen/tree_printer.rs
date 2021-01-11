@@ -4,6 +4,7 @@ use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
+use crate::ast::function_def_node::FunctionDefNode;
 
 #[derive(Debug)]
 pub struct TreePrinter {
@@ -30,7 +31,7 @@ impl TreeWalker for TreePrinter {
     fn visit_program(&mut self, program: &ProgramNode) {
         println!("Program");
         self.indent += 2;
-        for expr in &program.expressions {
+        for expr in &program.functions {
             expr.visit(self);
         }
         self.indent -= 2;
@@ -63,6 +64,19 @@ impl TreeWalker for TreePrinter {
         self.println_indented("r: ");
         self.indent += 2;
         self.walk_tree(&(*expression.r));
+        self.indent -= 4;
+    }
+
+    fn visit_function_def(&mut self, node: &FunctionDefNode) {
+        self.println_indented("Function Def");
+        self.indent += 2;
+        self.println_indented(&format!("name: {}", node.name));
+        self.println_indented(&format!("return type: {:?}", node.return_type));
+        self.println_indented("body:");
+        self.indent += 2;
+        for expression in &node.body {
+            self.walk_tree(expression);
+        }
         self.indent -= 4;
     }
 }

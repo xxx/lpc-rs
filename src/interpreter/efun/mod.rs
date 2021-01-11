@@ -3,11 +3,11 @@ mod print;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
-use crate::interpreter::asm_interpreter::AsmInterpreter;
 use crate::asm::inst::call::Call;
 use print::print;
+use crate::interpreter::stack_frame::StackFrame;
 
-pub type Efun = fn(&AsmInterpreter, &Call);
+pub type Efun = fn(&StackFrame, &Call);
 
 lazy_static! {
     pub static ref EFUNS: HashMap<String, Efun> = {

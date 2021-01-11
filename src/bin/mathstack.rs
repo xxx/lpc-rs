@@ -30,10 +30,10 @@ fn main() {
     // print!("{:?}", asm_walker.instructions);
     print!("{:?}", asm_walker.listing());
 
-    let mut interpreter: AsmInterpreter = Default::default();
-    interpreter.load(&asm_walker.instructions);
-
-    interpreter.eval();
+    // let mut interpreter: AsmInterpreter = Default::default();
+    // interpreter.load(&asm_walker.instructions);
+    //
+    // interpreter.eval();
 }
 
 

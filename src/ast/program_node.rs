@@ -1,12 +1,12 @@
 use crate::ast::ast_node::ASTNodeTrait;
-use crate::ast::expression_node::ExpressionNode;
+use crate::ast::function_def_node::FunctionDefNode;
 use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct ProgramNode {
-    pub expressions: Vec<ExpressionNode>
+    pub functions: Vec<FunctionDefNode>
 }
 
 impl ASTNodeTrait for ProgramNode {

@@ -3,8 +3,10 @@ use std::str::FromStr;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::{BinaryOperation, BinaryOpNode};
 use crate::ast::expression_node::ExpressionNode;
+use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::call_node::CallNode;
+use crate::semantic::lpc_type::LPCReturnType;
 
 grammar;
 
@@ -26,9 +28,32 @@ SemiSeq<T>: Vec<T> = {
     }
 };
 
-pub Program: ProgramNode = <expressions:SemiSeq<Statement>> => ProgramNode {
-    expressions
+pub Program: ProgramNode = <functions:FunctionDef*> => ProgramNode {
+    functions
 };
+
+pub FunctionDef: FunctionDefNode = {
+    <r_type:ReturnType?> <star:"*"?> <name:ID> "(" ")" "{" <body:SemiSeq<Statement>> "}" => {
+        let star = if let Some(_) = star { true } else { false };
+
+        let return_type = if let Some(this_type) = r_type {
+            match this_type.as_str() {
+                "int" => LPCReturnType::Int(star),
+                _ => unimplemented!()
+            }
+        } else {
+            LPCReturnType::Int(star)
+        };
+
+        FunctionDefNode {
+            name,
+            body,
+            return_type
+        }
+    }
+};
+
+ReturnType: String = "int" => String::from(<>);
 
 pub Statement = <Expression>;
 
@@ -41,19 +66,19 @@ pub Expression: ExpressionNode = {
 pub Factor: ExpressionNode = {
     <MultiplicitiveBinaryExpression>,
     <Term>
-}
+};
 
 pub AdditiveBinaryExpression: ExpressionNode = {
     <l:Expression> <op:AdditiveBinaryOp> <r:Factor> => {
         ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
     }
-}
+};
 
 pub MultiplicitiveBinaryExpression: ExpressionNode = {
     <l:Factor> <op:MultiplicitiveBinaryOp> <r:Term> => {
         ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
     },
-}
+};
 
 pub Call: CallNode = {
     <id:ID> "(" <e:Expression> ")" => CallNode {
