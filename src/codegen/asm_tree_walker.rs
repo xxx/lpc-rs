@@ -16,12 +16,16 @@ use crate::ast::call_node::CallNode;
 use crate::asm::inst::call::Call;
 use crate::asm::inst::regcopy::RegCopy;
 use crate::asm::register_counter::RegisterCounter;
+use crate::ast::function_def_node::FunctionDefNode;
+use std::collections::HashMap;
+use crate::asm::inst::ret::Ret;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
     pub instructions: Vec<Instruction>,
     current_result: Register, // Tracks where the result of a child branch is
-    register_counter: RegisterCounter
+    register_counter: RegisterCounter,
+    labels: HashMap<String, usize>
 }
 
 impl AsmTreeWalker {
@@ -101,6 +105,21 @@ impl TreeWalker for AsmTreeWalker {
             BinaryOperation::Div => Instruction::IDiv(IDiv(reg_left, reg_right, reg_result))
         };
         self.instructions.push(instruction);
+    }
+
+    fn visit_function_def(&mut self, node: &FunctionDefNode) {
+        let address = self.instructions.len();
+
+        self.labels.insert(node.name.clone(), address);
+
+        for expression in &node.body {
+            self.walk_tree(expression);
+        }
+
+        // ensure a return 0 happens.
+        // TODO: Potential size optimization down the road to do this conditionally.
+        self.instructions.push(Instruction::IConst0(IConst0(Register(0))));
+        self.instructions.push(Instruction::Ret(Ret));
     }
 }
 

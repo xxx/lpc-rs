@@ -84,6 +84,13 @@ impl AsmInterpreter {
                 },
                 Instruction::RegCopy(i) => {
                     registers[i.1.value()] = registers[i.0.value()]
+                },
+                Instruction::Ret(_) => {
+                    // pop stack frame, jump to return address
+                    let frame = &self.stack[self.sp];
+                    self.sp -= 1;
+                    self.pc = frame.return_address;
+                    continue;
                 }
             }
 

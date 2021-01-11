@@ -9,6 +9,7 @@ use crate::asm::inst::imul::IMul;
 use crate::asm::inst::istore::IStore;
 use crate::asm::inst::isub::ISub;
 use crate::asm::inst::regcopy::RegCopy;
+use crate::asm::inst::ret::Ret;
 use std::fmt::{Formatter,Display};
 use std::fmt;
 
@@ -46,5 +47,6 @@ build_instructions!(
     IMul,
     IStore,
     ISub,
-    RegCopy
+    RegCopy,
+    Ret
 );
