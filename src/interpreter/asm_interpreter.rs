@@ -46,46 +46,44 @@ impl AsmInterpreter {
             let registers = self.current_registers();
 
             match instruction {
-                Instruction::Call(i) => {
+                Instruction::Call { name, num_args: _, initial_arg } => {
                     // TODO: do this correctly
-                    match EFUNS.get(&i.name) {
+                    match EFUNS.get(name) {
                         Some(efun) => {
-                            efun(&self.stack[self.sp], i);
+                            efun(&self.stack[self.sp], initial_arg);
                         },
                         None => unimplemented!()
                     }
                 },
-                Instruction::IAdd(i) => {
-                    registers[i.2.value()] =
-                        registers[i.0.value()] + registers[i.1.value()]
+                Instruction::IAdd(r1, r2, r3) => {
+                    registers[r3.value()] =
+                        registers[r1.value()] + registers[r2.value()]
                 },
-                Instruction::IConst(i) => {
-                    registers[i.0.value()] = i.1;
+                Instruction::IConst(r, i) => {
+                    registers[r.value()] = *i;
                 },
-                Instruction::IConst0(i) => {
-                    registers[i.0.value()] = 0;
+                Instruction::IConst0(r) => {
+                    registers[r.value()] = 0;
                 },
-                Instruction::IConst1(i) => {
-                    registers[i.0.value()] = 1;
+                Instruction::IConst1(r) => {
+                    registers[r.value()] = 1;
                 },
-                Instruction::IDiv(i) => {
-                    registers[i.2.value()] =
-                        registers[i.0.value()] / registers[i.1.value()]
+                Instruction::IDiv(r1, r2, r3) => {
+                    registers[r3.value()] =
+                        registers[r1.value()] / registers[r2.value()]
                 },
-                Instruction::ILoad(i) => println!("{}", i),
-                Instruction::IMul(i) => {
-                    registers[i.2.value()] =
-                        registers[i.0.value()] * registers[i.1.value()]
+                Instruction::IMul(r1, r2, r3) => {
+                    registers[r3.value()] =
+                        registers[r1.value()] * registers[r2.value()]
                 },
-                Instruction::IStore(i) => println!("{}", i),
-                Instruction::ISub(i) => {
-                    registers[i.2.value()] =
-                        registers[i.0.value()] - registers[i.1.value()]
+                Instruction::ISub(r1, r2, r3) => {
+                    registers[r3.value()] =
+                        registers[r1.value()] - registers[r2.value()]
                 },
-                Instruction::RegCopy(i) => {
-                    registers[i.1.value()] = registers[i.0.value()]
+                Instruction::RegCopy(r1, r2) => {
+                    registers[r2.value()] = registers[r1.value()]
                 },
-                Instruction::Ret(_) => {
+                Instruction::Ret => {
                     // pop stack frame, jump to return address
                     let frame = &self.stack[self.sp];
                     self.sp -= 1;
