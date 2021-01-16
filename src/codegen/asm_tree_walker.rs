@@ -105,11 +105,6 @@ impl TreeWalker for AsmTreeWalker {
         for expression in &node.body {
             self.walk_tree(expression);
         }
-
-        // ensure a return 0 happens.
-        // TODO: Potential size optimization down the road to do this conditionally.
-        self.instructions.push(Instruction::IConst0(Register(0)));
-        self.instructions.push(Instruction::Ret);
     }
 }
 

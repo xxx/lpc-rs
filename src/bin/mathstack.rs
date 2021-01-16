@@ -3,7 +3,7 @@ use mathstack::mathstack_parser;
 use mathstack::codegen::tree_walker::TreeWalker;
 use mathstack::codegen::tree_printer::TreePrinter;
 use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
-// use mathstack::interpreter::asm_interpreter::AsmInterpreter;
+use mathstack::interpreter::asm_interpreter::AsmInterpreter;
 
 const DEFAULT_FILE: &str = "mathfile";
 
@@ -28,12 +28,12 @@ fn main() {
     let mut asm_walker: AsmTreeWalker = Default::default();
     asm_walker.walk_tree(&program);
     // print!("{:?}", asm_walker.instructions);
-    print!("{:?}", asm_walker.listing());
+    println!("{:?}", asm_walker.listing());
 
-    // let mut interpreter: AsmInterpreter = Default::default();
-    // interpreter.load(&asm_walker.instructions);
-    //
-    // interpreter.eval();
+    let mut interpreter: AsmInterpreter = Default::default();
+    interpreter.load(&asm_walker.instructions);
+
+    interpreter.eval();
 }
 
 

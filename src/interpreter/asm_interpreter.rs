@@ -15,7 +15,7 @@ pub struct AsmInterpreter {
 
 impl AsmInterpreter {
     /// load instructions for evaluation
-    pub fn load(&mut self, instructions: &Vec<Instruction>) {
+    pub fn load(&mut self, instructions: &[Instruction]) {
         let mut cloned = instructions.to_vec();
 
         if self.stack.is_empty() {
@@ -23,26 +23,36 @@ impl AsmInterpreter {
                FunctionSymbol {
                     name: "main".to_string(),
                     num_args: 0,
-                    num_locals: 0,
+                    num_locals: 200,
                     address: 0
                 },
                 0
             );
-            self.stack.push(main);
-            self.fp = 0;
+            self.push_frame(main);
         };
 
         self.instructions.append(&mut cloned);
     }
 
+    fn push_frame(&mut self, frame: StackFrame) {
+        self.stack.push(frame);
+    }
+
+    fn pop_frame(&mut self) -> Option<StackFrame> {
+        self.stack.pop()
+    }
+
+    /// this has undefined behavior if called with an empty stack
     fn current_registers(&mut self) -> &mut Vec<i64> {
-        self.stack[self.fp].registers.as_mut()
+        let len = self.stack.len();
+        self.stack[len - 1].registers.as_mut()
     }
 
     /// evaluate loaded instructions, starting from the current value of the PC
     pub fn eval(&mut self) {
         let instructions = self.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
+            println!("{:?}", instruction);
             let registers = self.current_registers();
 
             match instruction {
@@ -50,7 +60,7 @@ impl AsmInterpreter {
                     // TODO: do this correctly
                     match EFUNS.get(name) {
                         Some(efun) => {
-                            efun(&self.stack[self.fp], initial_arg);
+                            efun(&self.stack[self.stack.len() - 1], initial_arg);
                         },
                         None => unimplemented!()
                     }
@@ -84,10 +94,9 @@ impl AsmInterpreter {
                     registers[r2.value()] = registers[r1.value()]
                 },
                 Instruction::Ret => {
-                    // pop stack frame, jump to return address
-                    let frame = &self.stack[self.fp];
-                    self.fp -= 1;
-                    self.pc = frame.return_address;
+                    if let Some(frame) = self.pop_frame() {
+                        self.pc = frame.return_address;
+                    }
                     continue;
                 }
             }
