@@ -3,7 +3,7 @@ use mathstack::mathstack_parser;
 use mathstack::codegen::tree_walker::TreeWalker;
 use mathstack::codegen::tree_printer::TreePrinter;
 use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
-use mathstack::interpreter::asm_interpreter::AsmInterpreter;
+// use mathstack::interpreter::asm_interpreter::AsmInterpreter;
 
 const DEFAULT_FILE: &str = "mathfile";
 
