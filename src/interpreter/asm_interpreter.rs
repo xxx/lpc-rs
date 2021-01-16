@@ -9,7 +9,7 @@ const MAX_STACK: usize = 1000;
 pub struct AsmInterpreter {
     instructions: Vec<Instruction>,
     stack: Vec<StackFrame>,
-    sp: usize,
+    fp: usize,
     pc: usize
 }
 
@@ -29,14 +29,14 @@ impl AsmInterpreter {
                 0
             );
             self.stack.push(main);
-            self.sp = 0;
+            self.fp = 0;
         };
 
         self.instructions.append(&mut cloned);
     }
 
     fn current_registers(&mut self) -> &mut Vec<i64> {
-        self.stack[self.sp].registers.as_mut()
+        self.stack[self.fp].registers.as_mut()
     }
 
     /// evaluate loaded instructions, starting from the current value of the PC
@@ -50,7 +50,7 @@ impl AsmInterpreter {
                     // TODO: do this correctly
                     match EFUNS.get(name) {
                         Some(efun) => {
-                            efun(&self.stack[self.sp], initial_arg);
+                            efun(&self.stack[self.fp], initial_arg);
                         },
                         None => unimplemented!()
                     }
@@ -85,8 +85,8 @@ impl AsmInterpreter {
                 },
                 Instruction::Ret => {
                     // pop stack frame, jump to return address
-                    let frame = &self.stack[self.sp];
-                    self.sp -= 1;
+                    let frame = &self.stack[self.fp];
+                    self.fp -= 1;
                     self.pc = frame.return_address;
                     continue;
                 }
@@ -102,7 +102,7 @@ impl Default for AsmInterpreter {
         Self {
             instructions: vec![],
             stack: Vec::with_capacity(MAX_STACK),
-            sp: 0,
+            fp: 0,
             pc: 0
         }
     }
