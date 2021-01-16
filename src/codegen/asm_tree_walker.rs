@@ -22,8 +22,19 @@ impl AsmTreeWalker {
     pub fn listing(&self) -> Vec<String> {
         let mut v = vec![];
 
+        // TODO: this will fail if there is ever a case of multiple labels in the same place
+        let labels_by_pc =
+            self.labels.values().zip(self.labels.keys()).collect::<HashMap<_, _>>();
+
+        println!("{:?}", labels_by_pc);
+
+        let mut counter: usize = 0;
         for instruction in &self.instructions {
-            v.push(format!("{}", instruction));
+            if labels_by_pc.contains_key(&counter) {
+                v.push(format!("{}:", labels_by_pc.get(&counter).unwrap()));
+            }
+            v.push(format!("    {}", instruction));
+            counter += 1;
         }
 
         v
