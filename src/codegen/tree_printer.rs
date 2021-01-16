@@ -23,6 +23,12 @@ impl TreePrinter {
     }
 }
 
+impl Default for TreePrinter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TreeWalker for TreePrinter {
     fn walk_tree(&mut self, root: &impl ASTNodeTrait) {
         root.visit(self);
