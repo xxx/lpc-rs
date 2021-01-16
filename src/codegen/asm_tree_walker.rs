@@ -56,7 +56,7 @@ impl TreeWalker for AsmTreeWalker {
         // copy each result to the start of the arg register
         for result in arg_results {
             self.instructions.push(
-                Instruction::RegCopy(result, register)
+                Instruction::RegCopy(result, register.unwrap())
             );
             register = self.register_counter.next();
         }
@@ -64,7 +64,7 @@ impl TreeWalker for AsmTreeWalker {
         let instruction = Instruction::Call {
             name: node.id.clone(),
             num_args: node.arguments.len(),
-            initial_arg: start_register
+            initial_arg: start_register.unwrap()
         };
 
         self.instructions.push(instruction);
@@ -72,11 +72,11 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_int(&mut self, int: &IntNode) {
         let register = self.register_counter.next();
-        self.current_result = register;
+        self.current_result = register.unwrap();
         let instruction = match int.value {
-            0 => Instruction::IConst0(register),
-            1 => Instruction::IConst1(register),
-            v => Instruction::IConst(register, v)
+            0 => Instruction::IConst0(register.unwrap()),
+            1 => Instruction::IConst1(register.unwrap()),
+            v => Instruction::IConst(register.unwrap(), v)
         };
         self.instructions.push(instruction);
     }
@@ -87,12 +87,12 @@ impl TreeWalker for AsmTreeWalker {
         self.walk_tree(&(*node.r));
         let reg_right = self.current_result;
         let reg_result = self.register_counter.next();
-        self.current_result = reg_result;
+        self.current_result = reg_result.unwrap();
         let instruction = match node.op {
-            BinaryOperation::Add => Instruction::IAdd(reg_left, reg_right, reg_result),
-            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result),
-            BinaryOperation::Mul => Instruction::IMul(reg_left, reg_right, reg_result),
-            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result)
+            BinaryOperation::Add => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Mul => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap())
         };
         self.instructions.push(instruction);
     }
@@ -118,8 +118,10 @@ mod tests {
     fn test_walk_tree_populates_the_instructions() {
         let mut walker: AsmTreeWalker = Default::default();
         let program = "
-            1 + 3 - 5;
-            print(4 + 5);
+            int main() {
+                1 + 3 - 5;
+                print(4 + 5);
+            }
         ";
         let tree = mathstack_parser::ProgramParser::new()
             .parse(program)
