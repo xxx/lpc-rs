@@ -289,6 +289,7 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "lazy_static",
+ "multimap",
  "regex",
 ]
 
@@ -297,6 +298,15 @@ name = "memchr"
 version = "2.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
+
+[[package]]
+name = "multimap"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1255076139a83bb467426e7f8d0134968a8118844faa755985e077cf31850333"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "new_debug_unreachable"
@@ -429,6 +439,12 @@ dependencies = [
  "constant_time_eq",
  "crossbeam-utils",
 ]
+
+[[package]]
+name = "serde"
+version = "1.0.119"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bdd36f49e35b61d49efd8aa7fc068fd295961fd2286d0b2ee9a4c7a14e99cc3"
 
 [[package]]
 name = "siphasher"

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use multimap::MultiMap;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
 use crate::codegen::tree_walker::TreeWalker;
@@ -8,30 +10,46 @@ use crate::asm::register::Register;
 use crate::ast::call_node::CallNode;
 use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
-use std::collections::HashMap;
+use crate::interpreter::function_symbol::FunctionSymbol;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
     pub instructions: Vec<Instruction>,
-    current_result: Register, // Tracks where the result of a child branch is
+    pub labels: HashMap<String, usize>,
+    pub functions: HashMap<FunctionSymbol, usize>,
+    current_result: Register, // Track where the result of a child branch is
     register_counter: RegisterCounter,
-    labels: HashMap<String, usize>
 }
 
 impl AsmTreeWalker {
     pub fn listing(&self) -> Vec<String> {
         let mut v = vec![];
 
-        // TODO: this will fail if there is ever a case of multiple labels in the same place
-        let labels_by_pc =
-            self.labels.values().zip(self.labels.keys()).collect::<HashMap<_, _>>();
+        // invert these maps for by-address lookup
+        let functions_by_pc =
+            self.functions.values().zip(self.functions.keys()).collect::<HashMap<_, _>>();
 
-        println!("{:?}", labels_by_pc);
+        // use MultiMap as multiple labels can be at the same address
+        let labels_by_pc =
+            self.labels.values().zip(self.labels.keys()).collect::<MultiMap<_, _>>();
 
         let mut counter: usize = 0;
         for instruction in &self.instructions {
+            if functions_by_pc.contains_key(&counter) {
+                let sym = functions_by_pc.get(&counter).unwrap();
+                v.push(
+                    format!(
+                        "fn {} num_args={} num_locals={}:",
+                        sym.name,
+                        sym.num_args,
+                        sym.num_locals
+                    )
+                );
+            }
             if labels_by_pc.contains_key(&counter) {
-                v.push(format!("{}:", labels_by_pc.get(&counter).unwrap()));
+                for label in labels_by_pc.get_vec(&counter).unwrap() {
+                    v.push(format!("{}:", label));
+                }
             }
             v.push(format!("    {}", instruction));
             counter += 1;
@@ -111,7 +129,12 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_function_def(&mut self, node: &FunctionDefNode) {
         let address = self.instructions.len();
 
-        self.labels.insert(node.name.clone(), address);
+        self.functions.insert(FunctionSymbol {
+            name: node.name.clone(),
+            num_args: 0, // node.num_args
+            num_locals: 0, // TODO: this.
+            address
+        }, address);
 
         for expression in &node.body {
             self.walk_tree(expression);

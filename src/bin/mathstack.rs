@@ -21,19 +21,21 @@ fn main() {
         .parse(&file_content)
         .expect("unsuccessful parse");
 
-    let mut walker = TreePrinter::new();
-
-    walker.walk_tree(&program);
+    // let mut walker = TreePrinter::new();
+    //
+    // walker.walk_tree(&program);
 
     let mut asm_walker: AsmTreeWalker = Default::default();
     asm_walker.walk_tree(&program);
     // print!("{:?}", asm_walker.instructions);
-    println!("{:?}", asm_walker.listing());
+    for s in asm_walker.listing() {
+        println!("{}", s);
+    }
 
-    let mut interpreter: AsmInterpreter = Default::default();
-    interpreter.load(&asm_walker.instructions);
-
-    interpreter.eval();
+    // let mut interpreter: AsmInterpreter = Default::default();
+    // interpreter.load(&asm_walker.instructions);
+    //
+    // interpreter.eval();
 }
 
 
