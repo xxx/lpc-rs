@@ -264,7 +264,38 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_function_def_populates_the_instructions() {
-        assert!(false);
+    fn test_visit_function_def_populates_the_data() {
+        let mut walker: AsmTreeWalker = Default::default();
+        let call = "int main() { 4 + 2 - 5 * 2; }";
+        let tree = mathstack_parser::FunctionDefParser::new()
+            .parse(call)
+            .unwrap();
+
+        walker.visit_function_def(&tree);
+
+        let expected = vec![
+            Instruction::IConst(Register(1), 4),
+            Instruction::IConst(Register(2), 2),
+            Instruction::IAdd(Register(1), Register(2), Register(3)),
+            Instruction::IConst(Register(4), 5),
+            Instruction::IConst(Register(5), 2),
+            Instruction::IMul(Register(4), Register(5), Register(6)),
+            Instruction::ISub(Register(3), Register(6), Register(7))
+        ];
+
+        for (idx, instruction) in walker.instructions.iter().enumerate() {
+            assert_eq!(instruction, &expected[idx]);
+        }
+
+        let address: usize = 0;
+
+        let sym = FunctionSymbol {
+            name: "main".to_string(),
+            num_args: 0,
+            num_locals: 7,
+            address
+        };
+
+        assert_eq!(walker.functions.get(&sym).unwrap(), &address);
     }
 }
