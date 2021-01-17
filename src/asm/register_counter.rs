@@ -2,7 +2,7 @@ use crate::asm::register::Register;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct RegisterCounter {
-    pub count: usize
+    count: usize
 }
 
 impl RegisterCounter {
@@ -19,6 +19,11 @@ impl RegisterCounter {
     /// move the counter back by one, for use after loops where next() is called.
     pub fn go_back(&mut self) {
         self.count -= 1;
+    }
+
+    /// Return the current internal count
+    pub fn get_count(&self) -> usize {
+        self.count
     }
 }
 

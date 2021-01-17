@@ -12,7 +12,6 @@ use crate::ast::call_node::CallNode;
 use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::interpreter::function_symbol::FunctionSymbol;
-use crate::codegen::local_counter_walker::LocalCounterWalker;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -127,21 +126,18 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_function_def(&mut self, node: &FunctionDefNode) {
         let address = self.instructions.len();
 
-        let mut counter: LocalCounterWalker = Default::default();
-        counter.visit_function_def(node);
-
-        self.functions.insert(FunctionSymbol {
-            name: node.name.clone(),
-            num_args: 0, // node.num_args
-            num_locals: counter.count,
-            address
-        }, address);
-
         self.register_counter.reset();
 
         for expression in &node.body {
             expression.visit(self);
         }
+
+        self.functions.insert(FunctionSymbol {
+            name: node.name.clone(),
+            num_args: 0, // node.num_args
+            num_locals: self.register_counter.get_count(),
+            address
+        }, address);
     }
 }
 
