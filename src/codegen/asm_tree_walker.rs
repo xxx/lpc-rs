@@ -35,8 +35,7 @@ impl AsmTreeWalker {
         let labels_by_pc =
             self.labels.values().zip(self.labels.keys()).collect::<MultiMap<_, _>>();
 
-        let mut counter: usize = 0;
-        for instruction in &self.instructions {
+        for (counter, instruction) in self.instructions.iter().enumerate() {
             if let Some(sym) = functions_by_pc.get(&counter) {
                 v.push(
                     format!(
@@ -53,7 +52,6 @@ impl AsmTreeWalker {
                 }
             }
             v.push(format!("    {}", instruction));
-            counter += 1;
         }
 
         v
@@ -87,7 +85,7 @@ impl TreeWalker for AsmTreeWalker {
             register = self.register_counter.next();
         }
 
-        // Undo the final call to .next()
+        // Undo the final call to .next() to avoid skipping a register
         self.register_counter.go_back();
 
         let instruction = Instruction::Call {
@@ -140,8 +138,6 @@ impl TreeWalker for AsmTreeWalker {
         }, address);
 
         self.register_counter.reset();
-
-        // TODO: copy args
 
         for expression in &node.body {
             expression.visit(self);
