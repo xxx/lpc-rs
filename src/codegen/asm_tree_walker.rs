@@ -166,7 +166,7 @@ mod tests {
             .parse(program)
             .unwrap();
 
-        tree.visit(walker);
+        tree.visit(&mut walker);
 
         let expected = vec![
             Instruction::IConst1(Register(1)),

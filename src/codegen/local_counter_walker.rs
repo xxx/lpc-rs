@@ -1,7 +1,6 @@
 use crate::codegen::tree_walker;
 use tree_walker::TreeWalker;
 use crate::ast::int_node::IntNode;
-use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::call_node::CallNode;
@@ -19,7 +18,7 @@ impl TreeWalker for LocalCounterWalker {
         }
     }
 
-    fn visit_int(&mut self, node: &IntNode) {
+    fn visit_int(&mut self, _node: &IntNode) {
         self.count += 1;
     }
 
