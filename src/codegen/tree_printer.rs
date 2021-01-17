@@ -1,6 +1,7 @@
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
-use crate::codegen::tree_walker::TreeWalker;
+use crate::codegen::tree_walker;
+use tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
@@ -30,10 +31,6 @@ impl Default for TreePrinter {
 }
 
 impl TreeWalker for TreePrinter {
-    fn walk_tree(&mut self, root: &impl ASTNodeTrait) {
-        root.visit(self);
-    }
-
     fn visit_program(&mut self, program: &ProgramNode) {
         println!("Program");
         self.indent += 2;
@@ -65,11 +62,11 @@ impl TreeWalker for TreePrinter {
         self.println_indented(&format!("operation: {:?}", expression.op));
         self.println_indented("l: ");
         self.indent += 2;
-        self.walk_tree(&(*expression.l));
+        tree_walker::walk_tree(&(*expression.l), self);
         self.indent -= 2;
         self.println_indented("r: ");
         self.indent += 2;
-        self.walk_tree(&(*expression.r));
+        tree_walker::walk_tree(&(*expression.r), self);
         self.indent -= 4;
     }
 
@@ -81,7 +78,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented("body:");
         self.indent += 2;
         for expression in &node.body {
-            self.walk_tree(expression);
+            tree_walker::walk_tree(expression, self);
         }
         self.indent -= 4;
     }

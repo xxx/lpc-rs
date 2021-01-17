@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use multimap::MultiMap;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
-use crate::codegen::tree_walker::TreeWalker;
+use crate::codegen::tree_walker;
+use tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::asm::instruction::Instruction;
@@ -60,13 +61,9 @@ impl AsmTreeWalker {
 }
 
 impl TreeWalker for AsmTreeWalker {
-    fn walk_tree(&mut self, root: &impl ASTNodeTrait) {
-        root.visit(self);
-    }
-
     fn visit_program(&mut self, program: &ProgramNode) {
         for expr in &program.functions {
-            self.walk_tree(&expr);
+            tree_walker::walk_tree(&expr, self);
         }
     }
 
@@ -75,7 +72,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // eval args, then save each result register
         for argument in &node.arguments {
-            self.walk_tree(argument);
+            tree_walker::walk_tree(argument, self);
             arg_results.push(self.current_result);
         }
 
@@ -111,9 +108,9 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) {
-        self.walk_tree(&(*node.l));
+        tree_walker::walk_tree(&(*node.l), self);
         let reg_left = self.current_result;
-        self.walk_tree(&(*node.r));
+        tree_walker::walk_tree(&(*node.r), self);
         let reg_right = self.current_result;
         let reg_result = self.register_counter.next();
         self.current_result = reg_result.unwrap();
@@ -136,8 +133,12 @@ impl TreeWalker for AsmTreeWalker {
             address
         }, address);
 
+        self.register_counter.reset();
+
+        // TODO: copy args
+
         for expression in &node.body {
-            self.walk_tree(expression);
+            tree_walker::walk_tree(expression, self);
         }
     }
 }
