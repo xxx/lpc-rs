@@ -12,6 +12,7 @@ use crate::ast::call_node::CallNode;
 use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::codegen::local_counter_walker::LocalCounterWalker;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -63,7 +64,7 @@ impl AsmTreeWalker {
 impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &ProgramNode) {
         for expr in &program.functions {
-            tree_walker::walk_tree(&expr, self);
+            expr.visit(self);
         }
     }
 
@@ -72,7 +73,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // eval args, then save each result register
         for argument in &node.arguments {
-            tree_walker::walk_tree(argument, self);
+            argument.visit(self);
             arg_results.push(self.current_result);
         }
 
@@ -108,9 +109,9 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) {
-        tree_walker::walk_tree(&(*node.l), self);
+        node.l.visit(self);
         let reg_left = self.current_result;
-        tree_walker::walk_tree(&(*node.r), self);
+        node.r.visit(self);
         let reg_right = self.current_result;
         let reg_result = self.register_counter.next();
         self.current_result = reg_result.unwrap();
@@ -126,10 +127,13 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_function_def(&mut self, node: &FunctionDefNode) {
         let address = self.instructions.len();
 
+        let mut counter: LocalCounterWalker = Default::default();
+        counter.visit_function_def(node);
+
         self.functions.insert(FunctionSymbol {
             name: node.name.clone(),
             num_args: 0, // node.num_args
-            num_locals: 0, // TODO: this.
+            num_locals: counter.count,
             address
         }, address);
 
@@ -138,7 +142,7 @@ impl TreeWalker for AsmTreeWalker {
         // TODO: copy args
 
         for expression in &node.body {
-            tree_walker::walk_tree(expression, self);
+            expression.visit(self);
         }
     }
 }
@@ -162,7 +166,7 @@ mod tests {
             .parse(program)
             .unwrap();
 
-        walker.walk_tree(&tree);
+        tree.visit(walker);
 
         let expected = vec![
             Instruction::IConst1(Register(1)),

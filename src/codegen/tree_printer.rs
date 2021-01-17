@@ -62,11 +62,11 @@ impl TreeWalker for TreePrinter {
         self.println_indented(&format!("operation: {:?}", expression.op));
         self.println_indented("l: ");
         self.indent += 2;
-        tree_walker::walk_tree(&(*expression.l), self);
+        expression.l.visit(self);
         self.indent -= 2;
         self.println_indented("r: ");
         self.indent += 2;
-        tree_walker::walk_tree(&(*expression.r), self);
+        expression.r.visit(self);
         self.indent -= 4;
     }
 
@@ -78,7 +78,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented("body:");
         self.indent += 2;
         for expression in &node.body {
-            tree_walker::walk_tree(expression, self);
+            expression.visit(self);
         }
         self.indent -= 4;
     }

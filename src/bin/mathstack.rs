@@ -5,7 +5,7 @@ use tree_walker::TreeWalker;
 use mathstack::codegen::tree_printer::TreePrinter;
 use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
 use mathstack::interpreter::asm_interpreter::AsmInterpreter;
-use std::borrow::BorrowMut;
+use mathstack::ast::ast_node::ASTNodeTrait;
 
 const DEFAULT_FILE: &str = "mathfile";
 
@@ -23,20 +23,20 @@ fn main() {
         .parse(&file_content)
         .expect("unsuccessful parse");
 
-    // let mut walker = TreePrinter::new();
-    // tree_walker::walk_tree(&program, walker.borrow_mut());
+    let mut walker = TreePrinter::new();
+    program.visit(&mut walker);
 
     let mut asm_walker: AsmTreeWalker = Default::default();
-    tree_walker::walk_tree(&program, asm_walker.borrow_mut());
+    program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {
         println!("{}", s);
     }
 
-    // let mut interpreter: AsmInterpreter = Default::default();
-    // interpreter.load(&asm_walker.instructions);
-    //
-    // interpreter.eval();
+    let mut interpreter: AsmInterpreter = Default::default();
+    interpreter.load(&asm_walker.instructions);
+
+    interpreter.eval();
 }
 
 
