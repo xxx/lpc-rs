@@ -37,8 +37,7 @@ impl AsmTreeWalker {
 
         let mut counter: usize = 0;
         for instruction in &self.instructions {
-            if functions_by_pc.contains_key(&counter) {
-                let sym = functions_by_pc.get(&counter).unwrap();
+            if let Some(sym) = functions_by_pc.get(&counter) {
                 v.push(
                     format!(
                         "fn {} num_args={} num_locals={}:",
@@ -48,8 +47,8 @@ impl AsmTreeWalker {
                     )
                 );
             }
-            if labels_by_pc.contains_key(&counter) {
-                for label in labels_by_pc.get_vec(&counter).unwrap() {
+            if let Some(vec) = labels_by_pc.get_vec(&counter) {
+                for label in vec {
                     v.push(format!("{}:", label));
                 }
             }
