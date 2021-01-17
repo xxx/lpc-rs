@@ -50,7 +50,6 @@ impl AsmInterpreter {
         self.stack.pop()
     }
 
-    /// this has undefined behavior if called with an empty stack
     fn current_registers(&mut self) -> &mut Vec<i64> {
         let len = self.stack.len();
         self.stack[len - 1].registers.as_mut()
@@ -142,6 +141,12 @@ impl AsmInterpreter {
                         // TODO: store return value in current frame
                         self.pc = frame.return_address;
                     }
+
+                    // halt at the end of all input
+                    if self.stack.is_empty() {
+                        break;
+                    }
+
                     continue;
                 }
             }
