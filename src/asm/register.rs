@@ -29,10 +29,4 @@ mod tests {
     fn test_display_displays_with_the_prefix() {
         assert_eq!(format!("{}", Register(666)), "r666");
     }
-
-    #[test]
-    fn test_eq() {
-        assert_eq!(Register(0), Register(0));
-        assert_ne!(Register(0), Register(1));
-    }
 }
