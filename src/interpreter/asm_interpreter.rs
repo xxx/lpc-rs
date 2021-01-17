@@ -70,7 +70,7 @@ impl AsmInterpreter {
                             func.clone(),
                             self.pc + 1
                         )
-                    } else if let Some(func) = EFUNS.get(name) {
+                    } else if EFUNS.contains_key(name) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
                             num_args: *num_args, // TODO: look this up server-side
@@ -88,7 +88,7 @@ impl AsmInterpreter {
 
                     // copy argument registers from old frame to new
                     if *num_args > 0 as usize {
-                        let index = initial_arg.value();
+                        let index = initial_arg.index();
                         let current_frame = &self.stack[self.stack.len() - 1];
                         new_frame.registers[1..=*num_args].copy_from_slice(
                             &current_frame.registers[index..(index + num_args)]
@@ -100,45 +100,42 @@ impl AsmInterpreter {
                     if let Some(address) = self.labels.get(name) {
                         self.pc = *address;
                         continue;
+                    } else if let Some(efun) = EFUNS.get(name) {
+                        // the efun is responsible for populating the return value
+                        efun(&self.stack[self.stack.len() - 1]);
+                        // TODO: store return value in current frame
+                        self.pop_frame();
                     } else {
-                        match EFUNS.get(name) {
-                            Some(efun) => {
-                                // the efun is responsible for populating the return value
-                                efun(&self.stack[self.stack.len() - 1]);
-                                // TODO: store return value in current frame
-                                self.pop_frame();
-                            },
-                            None => unimplemented!()
-                        }
+                        unimplemented!()
                     }
                 },
                 Instruction::IAdd(r1, r2, r3) => {
-                    registers[r3.value()] =
-                        registers[r1.value()] + registers[r2.value()]
+                    registers[r3.index()] =
+                        registers[r1.index()] + registers[r2.index()]
                 },
                 Instruction::IConst(r, i) => {
-                    registers[r.value()] = *i;
+                    registers[r.index()] = *i;
                 },
                 Instruction::IConst0(r) => {
-                    registers[r.value()] = 0;
+                    registers[r.index()] = 0;
                 },
                 Instruction::IConst1(r) => {
-                    registers[r.value()] = 1;
+                    registers[r.index()] = 1;
                 },
                 Instruction::IDiv(r1, r2, r3) => {
-                    registers[r3.value()] =
-                        registers[r1.value()] / registers[r2.value()]
+                    registers[r3.index()] =
+                        registers[r1.index()] / registers[r2.index()]
                 },
                 Instruction::IMul(r1, r2, r3) => {
-                    registers[r3.value()] =
-                        registers[r1.value()] * registers[r2.value()]
+                    registers[r3.index()] =
+                        registers[r1.index()] * registers[r2.index()]
                 },
                 Instruction::ISub(r1, r2, r3) => {
-                    registers[r3.value()] =
-                        registers[r1.value()] - registers[r2.value()]
+                    registers[r3.index()] =
+                        registers[r1.index()] - registers[r2.index()]
                 },
                 Instruction::RegCopy(r1, r2) => {
-                    registers[r2.value()] = registers[r1.value()]
+                    registers[r2.index()] = registers[r1.index()]
                 },
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {

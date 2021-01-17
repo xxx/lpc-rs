@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 pub struct Register(pub usize);
 
 impl Register {
-    pub fn value(&self) -> usize {
+    pub fn index(&self) -> usize {
         self.0
     }
 }
@@ -20,9 +20,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_value_is_correct() {
+    fn test_index_is_correct() {
         let register = Register(666);
-        assert_eq!(register.value(), register.0);
+        assert_eq!(register.index(), register.0);
     }
 
     #[test]
