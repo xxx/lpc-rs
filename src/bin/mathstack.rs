@@ -31,10 +31,11 @@ fn main() {
         println!("{}", s);
     }
 
-    // let mut interpreter: AsmInterpreter = Default::default();
-    // interpreter.load(&asm_walker.instructions);
-    //
-    // interpreter.eval();
+    let mut interpreter: AsmInterpreter = Default::default();
+
+    interpreter.load(&asm_walker.instructions, &asm_walker.combined_labels(), &asm_walker.function_map());
+
+    interpreter.exec();
 }
 
 

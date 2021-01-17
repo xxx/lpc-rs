@@ -55,6 +55,27 @@ impl AsmTreeWalker {
 
         v
     }
+
+    /// Return a map of all labels to addresses, both "normal" and function defs
+    pub fn combined_labels(&self) -> HashMap<String, usize> {
+        let mut map = self.labels.clone();
+
+        for (sym, address) in &self.functions {
+            map.insert(sym.name.clone(), *address);
+        }
+
+        map
+    }
+
+    pub fn function_map(&self) -> HashMap<String, FunctionSymbol> {
+        let mut map = HashMap::new();
+
+        for sym in self.functions.keys() {
+            map.insert(sym.name.clone(), sym.clone());
+        }
+
+        map
+    }
 }
 
 impl TreeWalker for AsmTreeWalker {

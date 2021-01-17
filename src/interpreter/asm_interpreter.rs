@@ -2,6 +2,7 @@ use crate::asm::instruction::Instruction;
 use crate::interpreter::efun::EFUNS;
 use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::function_symbol::FunctionSymbol;
+use std::collections::HashMap;
 
 const MAX_STACK: usize = 1000;
 
@@ -9,29 +10,36 @@ const MAX_STACK: usize = 1000;
 pub struct AsmInterpreter {
     instructions: Vec<Instruction>,
     stack: Vec<StackFrame>,
+    labels: HashMap<String, usize>,
+    functions: HashMap<String, FunctionSymbol>,
     fp: usize,
     pc: usize
 }
 
 impl AsmInterpreter {
     /// load instructions for evaluation
-    pub fn load(&mut self, instructions: &[Instruction]) {
-        let mut cloned = instructions.to_vec();
+    pub fn load(&mut self, instructions: &[Instruction],
+                labels: &HashMap<String, usize>,
+                functions: &HashMap<String, FunctionSymbol>) {
+        self.instructions = instructions.to_vec();
+        self.labels = labels.clone();
+        self.functions = functions.clone();
+    }
 
-        if self.stack.is_empty() {
-            let main = StackFrame::new(
-               FunctionSymbol {
-                    name: "main".to_string(),
-                    num_args: 0,
-                    num_locals: 200,
-                    address: 0
-                },
-                0
-            );
-            self.push_frame(main);
-        };
+    /// Dummy starter for the interpreter, to get the "main" stack frame setup
+    pub fn exec(&mut self) {
+        let main = StackFrame::new(
+            FunctionSymbol {
+                name: "main".to_string(),
+                num_args: 0,
+                num_locals: 200,
+                address: 0
+            },
+            0
+        );
+        self.push_frame(main);
 
-        self.instructions.append(&mut cloned);
+        self.eval()
     }
 
     fn push_frame(&mut self, frame: StackFrame) {
@@ -52,17 +60,56 @@ impl AsmInterpreter {
     pub fn eval(&mut self) {
         let instructions = self.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
-            println!("{:?}", instruction);
+            // println!("{:?}", instruction);
             let registers = self.current_registers();
 
             match instruction {
-                Instruction::Call { name, num_args: _, initial_arg } => {
-                    // TODO: do this correctly
-                    match EFUNS.get(name) {
-                        Some(efun) => {
-                            efun(&self.stack[self.stack.len() - 1], initial_arg);
-                        },
-                        None => unimplemented!()
+                Instruction::Call { name, num_args, initial_arg } => {
+                    let mut new_frame = if let Some(func) = self.functions.get(name) {
+                        StackFrame::new(
+                            func.clone(),
+                            self.pc + 1
+                        )
+                    } else if let Some(func) = EFUNS.get(name) {
+                        let sym = FunctionSymbol {
+                            name: name.clone(),
+                            num_args: *num_args, // TODO: look this up server-side
+                            num_locals: 0,
+                            address: 0
+                        };
+
+                        StackFrame::new(
+                            sym,
+                            self.pc + 1
+                        )
+                    } else {
+                        panic!("Unable to find function: {}", name);
+                    };
+
+                    // copy argument registers from old frame to new
+                    if *num_args > 0 as usize {
+                        let index = initial_arg.value();
+                        let current_frame = &self.stack[self.stack.len() - 1];
+                        new_frame.registers[1..=*num_args].copy_from_slice(
+                            &current_frame.registers[index..(index + num_args)]
+                        );
+                    }
+
+                    self.stack.push(new_frame);
+
+                    if let Some(address) = self.labels.get(name) {
+                        self.pc = *address;
+                        continue;
+                    } else {
+                        match EFUNS.get(name) {
+                            Some(efun) => {
+                                // the efun is responsible for populating the return value
+                                efun(&self.stack[self.stack.len() - 1]);
+                                // TODO: store return value in current frame
+                                self.pop_frame();
+                            },
+                            None => unimplemented!()
+                        }
                     }
                 },
                 Instruction::IAdd(r1, r2, r3) => {
@@ -95,6 +142,7 @@ impl AsmInterpreter {
                 },
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
+                        // TODO: store return value in current frame
                         self.pc = frame.return_address;
                     }
                     continue;
@@ -110,6 +158,8 @@ impl Default for AsmInterpreter {
     fn default() -> Self {
         Self {
             instructions: vec![],
+            labels: HashMap::new(),
+            functions: HashMap::new(),
             stack: Vec::with_capacity(MAX_STACK),
             fp: 0,
             pc: 0
