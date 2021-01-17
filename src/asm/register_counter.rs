@@ -16,6 +16,11 @@ impl RegisterCounter {
     pub fn value(&self) -> Register {
         Register(self.count)
     }
+
+    /// move the counter back by one, for use after loops where next() is called.
+    pub fn go_back(&mut self) {
+        self.count -= 1;
+    }
 }
 
 impl Iterator for RegisterCounter {
@@ -63,5 +68,19 @@ mod tests {
         counter.reset();
 
         assert_eq!(counter.value(), Register(0));
+    }
+
+    #[test]
+    fn test_go_back_decrements_the_count() {
+        let mut counter: RegisterCounter = Default::default();
+
+        assert_eq!(counter.value(), Register(0));
+        counter.next();
+        counter.next();
+        counter.next();
+
+        counter.go_back();
+
+        assert_eq!(counter.value(), Register(2));
     }
 }

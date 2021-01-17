@@ -88,6 +88,9 @@ impl TreeWalker for AsmTreeWalker {
             register = self.register_counter.next();
         }
 
+        // Undo the final call to .next()
+        self.register_counter.go_back();
+
         let instruction = Instruction::Call {
             name: node.id.clone(),
             num_args: node.arguments.len(),
