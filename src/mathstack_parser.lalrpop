@@ -6,7 +6,9 @@ use crate::ast::expression_node::ExpressionNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::call_node::CallNode;
+use crate::ast::return_node::ReturnNode;
 use crate::semantic::lpc_type::LPCReturnType;
+use crate::ast::ast_node::ASTNode;
 
 grammar;
 
@@ -55,13 +57,21 @@ pub FunctionDef: FunctionDefNode = {
 
 ReturnType: String = "int" => String::from(<>);
 
-pub Statement = <Expression>;
+pub Statement: ASTNode = {
+    <Expression> => ASTNode::from(<>),
+    <Return> => ASTNode::from(<>)
+};
 
 pub Expression: ExpressionNode = {
     Call => ExpressionNode::Call(<>),
     <AdditiveBinaryExpression>,
     <Factor>
 };
+
+pub Return: ReturnNode = {
+    "return" => ReturnNode::new(None),
+    "return" <Expression> => ReturnNode::new(Some(<>))
+}
 
 pub Factor: ExpressionNode = {
     <MultiplicitiveBinaryExpression>,

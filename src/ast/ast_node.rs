@@ -7,20 +7,45 @@ use crate::codegen::tree_walker::TreeWalker;
 use auto_impl::auto_impl;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use crate::ast::function_def_node::FunctionDefNode;
+use crate::ast::return_node::ReturnNode;
+use std::fmt;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ASTNode {
-    Program(ProgramNode),
-    FunctionDef(FunctionDefNode),
+    Call(CallNode),
     Expression(ExpressionNode),
-    Call(CallNode)
+    FunctionDef(FunctionDefNode),
+    Program(ProgramNode),
+    Return(ReturnNode)
 }
 
 #[auto_impl(&, &mut)]
 pub trait ASTNodeTrait: PartialEq + Display {
     fn visit(&self, tree_walker: &mut impl TreeWalker);
+}
+
+macro_rules! node_defs {
+    ( $( $x:ident ),+ ) => {
+        impl ASTNodeTrait for ASTNode {
+            fn visit(&self, tree_walker: &mut impl TreeWalker) {
+                match self {
+                 $(
+                    ASTNode::$x(y) => y.visit(tree_walker),
+                 )*
+                }
+            }
+        }
+    };
+}
+
+node_defs!(Call, Expression, FunctionDef, Program, Return);
+
+impl Display for ASTNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 impl From<ExpressionNode> for ASTNode {
@@ -44,6 +69,12 @@ impl From<BinaryOpNode> for ASTNode {
 impl From<ProgramNode> for ASTNode {
     fn from(node: ProgramNode) -> Self {
         ASTNode::Program(node)
+    }
+}
+
+impl From<ReturnNode> for ASTNode {
+    fn from(node: ReturnNode) -> Self {
+        ASTNode::Return(node)
     }
 }
 

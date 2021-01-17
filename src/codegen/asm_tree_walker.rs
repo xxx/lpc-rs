@@ -12,6 +12,7 @@ use crate::ast::call_node::CallNode;
 use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::ast::return_node::ReturnNode;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -159,6 +160,16 @@ impl TreeWalker for AsmTreeWalker {
             num_locals: self.register_counter.get_count(),
             address
         }, address);
+    }
+
+    fn visit_return(&mut self, node: &ReturnNode) {
+        if let Some(expression) = &node.value {
+            expression.visit(self);
+            let copy = Instruction::RegCopy(self.current_result, Register(0));
+            self.instructions.push(copy);
+        }
+
+        self.instructions.push(Instruction::Ret);
     }
 }
 
@@ -318,5 +329,37 @@ mod tests {
         };
 
         assert_eq!(walker.functions.get(&sym).unwrap(), &address);
+    }
+
+    #[test]
+    fn visit_return_populates_the_instructions() {
+        let mut walker: AsmTreeWalker = Default::default();
+
+        let node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
+        walker.visit_return(&node);
+
+        let expected = vec![
+            Instruction::IConst(Register(1), 666),
+            Instruction::RegCopy(Register(1), Register(0)),
+            Instruction::Ret,
+        ];
+
+        for (idx, instruction) in walker.instructions.iter().enumerate() {
+            assert_eq!(instruction, &expected[idx]);
+        }
+
+        /* === */
+
+        let mut walker: AsmTreeWalker = Default::default();
+        let node = ReturnNode::new(None);
+        walker.visit_return(&node);
+
+        let expected = vec![
+            Instruction::Ret,
+        ];
+
+        for (idx, instruction) in walker.instructions.iter().enumerate() {
+            assert_eq!(instruction, &expected[idx]);
+        }
     }
 }

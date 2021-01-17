@@ -4,6 +4,7 @@ use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::function_def_node::FunctionDefNode;
+use crate::ast::return_node::ReturnNode;
 
 pub trait TreeWalker {
     fn visit_program(&mut self, node: &ProgramNode) where Self: Sized {
@@ -27,6 +28,12 @@ pub trait TreeWalker {
 
     fn visit_function_def(&mut self, node: &FunctionDefNode) where Self: Sized {
         for expression in &node.body {
+            expression.visit(self);
+        }
+    }
+
+    fn visit_return(&mut self, node: &ReturnNode) where Self: Sized {
+        if let Some(expression) = &node.value {
             expression.visit(self);
         }
     }

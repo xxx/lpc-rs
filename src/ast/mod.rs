@@ -5,3 +5,4 @@ pub mod call_node;
 pub mod expression_node;
 pub mod int_node;
 pub mod program_node;
+pub mod return_node;
