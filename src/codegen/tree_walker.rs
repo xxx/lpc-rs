@@ -52,7 +52,5 @@ pub trait TreeWalker {
         if let Some(expr) = &node.value {
             expr.visit(self);
         }
-
-        // set register in symbol table
     }
 }

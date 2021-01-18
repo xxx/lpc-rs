@@ -6,6 +6,8 @@ use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::function_def_node::FunctionDefNode;
+use crate::ast::decl_node::DeclNode;
+use crate::ast::var_init_node::VarInitNode;
 
 #[derive(Debug)]
 pub struct TreePrinter {
@@ -81,5 +83,26 @@ impl TreeWalker for TreePrinter {
             expression.visit(self);
         }
         self.indent -= 4;
+    }
+
+    fn visit_decl(&mut self, node: &DeclNode) {
+        self.println_indented("Decl");
+        self.indent += 2;
+        self.println_indented(&format!("type: {}", node.var_type));
+        self.println_indented("initializations:");
+        self.indent += 2;
+        for init in &node.initializations {
+            init.visit(self);
+        }
+        self.indent -= 4;
+    }
+
+    fn visit_var_init(&mut self, node: &VarInitNode) {
+        self.println_indented("VarInit");
+        self.indent += 2;
+        self.println_indented(&format!("name: {}", node.name));
+        self.println_indented(&format!("value: {:?}", node.value));
+        self.println_indented(&format!("mixed: {:?}", node.mixed));
+        self.println_indented(&format!("array: {:?}", node.array));
     }
 }
