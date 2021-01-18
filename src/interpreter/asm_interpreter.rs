@@ -109,8 +109,9 @@ impl AsmInterpreter {
                     } else if let Some(efun) = EFUNS.get(name) {
                         // the efun is responsible for populating the return value
                         efun(&self.stack[self.stack.len() - 1]);
-                        // TODO: store return value in current frame
-                        self.pop_frame();
+                        if let Some(frame) = self.pop_frame() {
+                            self.copy_call_result(&frame);
+                        }
                     } else {
                         unimplemented!()
                     }
@@ -145,7 +146,7 @@ impl AsmInterpreter {
                 },
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
-                        // TODO: store return value in current frame
+                        self.copy_call_result(&frame);
                         self.pc = frame.return_address;
                     }
 
@@ -164,6 +165,12 @@ impl AsmInterpreter {
 
     fn halt(&mut self) {
         self.is_halted = true;
+    }
+
+    fn copy_call_result(&mut self, from: &StackFrame) {
+        if !self.stack.is_empty() {
+            self.current_registers()[0] = from.registers[0];
+        }
     }
 }
 
