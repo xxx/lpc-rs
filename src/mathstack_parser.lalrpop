@@ -91,9 +91,16 @@ pub MultiplicitiveBinaryExpression: ExpressionNode = {
 };
 
 pub Call: CallNode = {
-    <id:ID> "(" <e:Expression> ")" => CallNode {
-        arguments: vec![e],
-        id
+    <id:ID> "(" <e:Expression?> ")" => {
+        let arguments = match e {
+            Some(expr) => vec![expr],
+            None => vec![]
+        };
+
+        CallNode {
+            arguments,
+            id
+        }
     }
 };
 
