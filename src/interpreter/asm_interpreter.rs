@@ -13,7 +13,8 @@ pub struct AsmInterpreter {
     labels: HashMap<String, usize>,
     functions: HashMap<String, FunctionSymbol>,
     fp: usize,
-    pc: usize
+    pc: usize,
+    is_halted: bool
 }
 
 impl AsmInterpreter {
@@ -39,6 +40,8 @@ impl AsmInterpreter {
         );
         self.push_frame(main);
 
+        self.is_halted = false;
+
         self.eval()
     }
 
@@ -56,9 +59,13 @@ impl AsmInterpreter {
     }
 
     /// evaluate loaded instructions, starting from the current value of the PC
-    pub fn eval(&mut self) {
+    fn eval(&mut self) {
         let instructions = self.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
+            if self.is_halted {
+                break;
+            }
+
             // println!("{:?}", instruction);
             let registers = self.current_registers();
 
@@ -144,7 +151,7 @@ impl AsmInterpreter {
 
                     // halt at the end of all input
                     if self.stack.is_empty() {
-                        break;
+                        self.halt();
                     }
 
                     continue;
@@ -153,6 +160,10 @@ impl AsmInterpreter {
 
             self.pc += 1;
         }
+    }
+
+    fn halt(&mut self) {
+        self.is_halted = true;
     }
 }
 
@@ -163,6 +174,7 @@ impl Default for AsmInterpreter {
             labels: HashMap::new(),
             functions: HashMap::new(),
             stack: Vec::with_capacity(MAX_STACK),
+            is_halted: true,
             fp: 0,
             pc: 0
         }
