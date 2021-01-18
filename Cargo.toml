@@ -5,12 +5,12 @@ authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2018"
 
 [build-dependencies]
-lalrpop = "0.19.2"
+lalrpop = "0.19.4"
 
 [dependencies]
 auto_impl = "0.4.1"
 enum_dispatch = "0.3.4"
-lalrpop-util = "0.19.2"
+lalrpop-util = "0.19.4"
 lazy_static = "1.4.0"
 multimap = "0.8.2"
 regex = "1"
