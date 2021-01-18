@@ -5,7 +5,7 @@ use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
 use mathstack::interpreter::asm_interpreter::AsmInterpreter;
 use mathstack::ast::ast_node::ASTNodeTrait;
 
-const DEFAULT_FILE: &str = "mathfile";
+const DEFAULT_FILE: &str = "mathfile.c";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
