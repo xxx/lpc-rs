@@ -11,14 +11,18 @@ use std::fmt::{Display, Formatter};
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::return_node::ReturnNode;
 use std::fmt;
+use crate::ast::decl_node::DeclNode;
+use crate::ast::var_init_node::VarInitNode;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ASTNode {
     Call(CallNode),
+    Decl(DeclNode),
     Expression(ExpressionNode),
     FunctionDef(FunctionDefNode),
     Program(ProgramNode),
-    Return(ReturnNode)
+    Return(ReturnNode),
+    VarInit(VarInitNode)
 }
 
 #[auto_impl(&, &mut)]
@@ -40,7 +44,7 @@ macro_rules! node_defs {
     };
 }
 
-node_defs!(Call, Expression, FunctionDef, Program, Return);
+node_defs!(Call, Decl, Expression, FunctionDef, Program, Return, VarInit);
 
 impl Display for ASTNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -75,6 +79,12 @@ impl From<ProgramNode> for ASTNode {
 impl From<ReturnNode> for ASTNode {
     fn from(node: ReturnNode) -> Self {
         ASTNode::Return(node)
+    }
+}
+
+impl From<DeclNode> for ASTNode {
+    fn from(node: DeclNode) -> Self {
+        ASTNode::Decl(node)
     }
 }
 

@@ -7,7 +7,9 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::return_node::ReturnNode;
-use crate::semantic::lpc_type::LPCReturnType;
+use crate::ast::decl_node::DeclNode;
+use crate::ast::var_init_node::VarInitNode;
+use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::ast::ast_node::ASTNode;
 
 grammar;
@@ -56,11 +58,37 @@ pub FunctionDef: FunctionDefNode = {
 };
 
 ReturnType: String = "int" => String::from(<>);
+VarType: String = "int" => String::from(<>);
 
 pub Statement: ASTNode = {
     <Expression> => ASTNode::from(<>),
-    <Return> => ASTNode::from(<>)
+    <Return> => ASTNode::from(<>),
+    <Decl> => ASTNode::from(<>)
 };
+
+VarInit: VarInitNode = {
+    <array:"*"?> <name:ID> <value:("=" <Expression>)?> => {
+        VarInitNode {
+            name,
+            value,
+            mixed: false,
+            array: array.is_some()
+        }
+    }
+}
+
+Decl: DeclNode = {
+    <var_type:VarType> <init:VarInit> <optional:("," <VarInit>)*> => {
+        let mut initializations = vec![init];
+
+        initializations.append(optional.to_vec().as_mut());
+
+        DeclNode {
+            var_type: LPCVarType::from(var_type),
+            initializations
+        }
+    }
+}
 
 pub Expression: ExpressionNode = {
     Call => ExpressionNode::Call(<>),
@@ -125,4 +153,4 @@ Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
     }
 );
 
-ID: String = r"[\p{Alphabetic}_]\w+" => String::from(<>);
+ID: String = r"[\p{Alphabetic}_]\w*" => String::from(<>);
