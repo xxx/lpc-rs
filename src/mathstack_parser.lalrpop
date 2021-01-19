@@ -72,7 +72,6 @@ VarInit: VarInitNode = {
             var_type: LPCVarType::Int, // placeholder. Corrected in Decl.
             name,
             value,
-            mixed: false,
             array: array.is_some()
         }
     }

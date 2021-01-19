@@ -10,7 +10,6 @@ pub struct VarInitNode {
     pub var_type: LPCVarType,
     pub name: String,
     pub value: Option<ExpressionNode>,
-    pub mixed: bool,
     pub array: bool,
 }
 

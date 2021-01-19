@@ -103,7 +103,6 @@ impl TreeWalker for TreePrinter {
         self.println_indented(&format!("name: {}", node.name));
         self.println_indented(&format!("type: {}", node.var_type));
         self.println_indented(&format!("value: {:?}", node.value));
-        self.println_indented(&format!("mixed: {:?}", node.mixed));
         self.println_indented(&format!("array: {:?}", node.array));
     }
 }
