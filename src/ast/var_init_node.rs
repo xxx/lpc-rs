@@ -3,19 +3,15 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
+use crate::semantic::lpc_type::LPCVarType;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarInitNode {
+    pub var_type: LPCVarType,
     pub name: String,
     pub value: Option<ExpressionNode>,
     pub mixed: bool,
     pub array: bool,
-}
-
-impl VarInitNode {
-    pub fn new(name: String, value: Option<ExpressionNode>, mixed: bool, array: bool) -> Self {
-        Self { name, value, mixed, array }
-    }
 }
 
 impl ASTNodeTrait for VarInitNode {
@@ -24,6 +20,6 @@ impl ASTNodeTrait for VarInitNode {
 
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "VarInitNode[{} {:?}]", self.name, self.value)
+        write!(f, "VarInitNode[{} {} {:?}]", self.var_type, self.name, self.value)
     }
 }

@@ -69,6 +69,7 @@ pub Statement: ASTNode = {
 VarInit: VarInitNode = {
     <array:"*"?> <name:ID> <value:("=" <Expression>)?> => {
         VarInitNode {
+            var_type: LPCVarType::Int, // placeholder. Corrected in Decl.
             name,
             value,
             mixed: false,
@@ -83,8 +84,15 @@ Decl: DeclNode = {
 
         initializations.append(optional.to_vec().as_mut());
 
+        let new_type = LPCVarType::from(var_type);
+
+        // Update each VarInitNode with the correct type.
+        for init in &mut initializations {
+            init.var_type = new_type
+        }
+
         DeclNode {
-            var_type: LPCVarType::from(var_type),
+            var_type: new_type,
             initializations
         }
     }
