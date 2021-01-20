@@ -38,15 +38,15 @@ pub Program: ProgramNode = <functions:FunctionDef*> => ProgramNode {
 
 pub FunctionDef: FunctionDefNode = {
     <r_type:ReturnType?> <star:"*"?> <name:ID> "(" ")" "{" <body:SemiSeq<Statement>> "}" => {
-        let star = if let Some(_) = star { true } else { false };
+        let array = star.is_some();
 
         let return_type = if let Some(this_type) = r_type {
             match this_type.as_str() {
-                "int" => LPCReturnType::Int(star),
+                "int" => LPCReturnType::Int(array),
                 _ => unimplemented!()
             }
         } else {
-            LPCReturnType::Int(star)
+            LPCReturnType::Int(array)
         };
 
         FunctionDefNode {
