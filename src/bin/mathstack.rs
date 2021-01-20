@@ -32,14 +32,14 @@ fn main() {
     let mut walker = TreePrinter::new();
     program.visit(&mut walker);
 
-    let mut asm_walker: AsmTreeWalker = Default::default();
+    let mut asm_walker = AsmTreeWalker::default();
     program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {
         println!("{}", s);
     }
 
-    let mut interpreter: AsmInterpreter = Default::default();
+    let mut interpreter = AsmInterpreter::default();
 
     interpreter.load(&asm_walker.instructions, &asm_walker.combined_labels(), &asm_walker.function_map());
 

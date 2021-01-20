@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
         let program = "
             int main() {
                 1 + 3 - 5;
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_visit_call_populates_the_instructions() {
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
         let call = "print(4 + 5)";
         let tree = mathstack_parser::CallParser::new()
             .parse(call)
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_visit_int_populates_the_instructions() {
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
 
         let tree = IntNode::new(666);
         let tree0 = IntNode::new(0);
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_visit_binary_op_populates_the_instructions() {
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
 
         let node = BinaryOpNode {
             l: Box::new(ExpressionNode::Int(IntNode::new(666))),
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_def_populates_the_data() {
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
         let call = "int main() { 4 + 2 - 5 * 2; }";
         let tree = mathstack_parser::FunctionDefParser::new()
             .parse(call)
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn visit_return_populates_the_instructions() {
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
 
         let node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
         walker.visit_return(&node);
@@ -350,7 +350,7 @@ mod tests {
 
         /* === */
 
-        let mut walker: AsmTreeWalker = Default::default();
+        let mut walker = AsmTreeWalker::default();
         let node = ReturnNode::new(None);
         walker.visit_return(&node);
 

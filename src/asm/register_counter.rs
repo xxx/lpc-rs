@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn test_next_increments_and_returns() {
-        let mut counter: RegisterCounter = Default::default();
+        let mut counter = RegisterCounter::default();
 
         assert_eq!(counter.next(), Some(Register(1)));
         assert_eq!(counter.next(), Some(Register(2)));
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_value_returns_without_increment() {
-        let mut counter: RegisterCounter = Default::default();
+        let mut counter = RegisterCounter::default();
 
         assert_eq!(counter.value(), Register(0));
         counter.next();
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_reset_resets_the_value() {
-        let mut counter: RegisterCounter = Default::default();
+        let mut counter = RegisterCounter::default();
 
         assert_eq!(counter.value(), Register(0));
         counter.next();
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn test_go_back_decrements_the_count() {
-        let mut counter: RegisterCounter = Default::default();
+        let mut counter = RegisterCounter::default();
 
         assert_eq!(counter.value(), Register(0));
         counter.next();

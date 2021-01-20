@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_from_program_node() {
-        let node: ProgramNode = Default::default();
+        let node = ProgramNode::default();
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Program(clone));

@@ -112,7 +112,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn test_from_ast_node_is_panics_for_non_expressions() {
-            let node: ProgramNode = Default::default();
+            let node = ProgramNode::default();
             let ast_node = ASTNode::Program(node);
 
             ExpressionNode::from(ast_node);
