@@ -9,24 +9,27 @@ pub struct ScopeCollection {
 }
 
 impl ScopeCollection {
-    pub fn insert(&mut self, scope: Scope) -> usize {
+    pub fn push_new(&mut self) -> &mut Scope {
+        let parent_id = if let Some(scope) = self.scopes.last() {
+            Some(scope.id)
+        } else {
+            None
+        };
+
         let id = self.scopes.len();
 
-        self.scopes.push(scope);
-        id
-    }
-
-    pub fn insert_with_parent(&mut self, parent_id: Option<usize>) -> &mut Scope {
-        let id = self.scopes.len();
-
-        let object = Scope {
+        let scope = Scope {
             id,
             parent_id,
             symbols: HashMap::new()
         };
-        self.scopes.push(object);
+        self.scopes.push(scope);
 
         self.scopes[id].borrow_mut()
+    }
+
+    pub fn pop(&mut self) {
+        self.scopes.pop();
     }
 
     pub fn lookup(&self, name: &str, start_id: usize) -> Option<&Symbol> {
@@ -59,11 +62,11 @@ mod tests {
     use crate::semantic::lpc_type::LPCVarType;
 
     #[test]
-    fn test_insert_with_parent() {
+    fn test_push_new() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.insert_with_parent(None);
+        let scope1 = collection.push_new();
         let scope1_id = scope1.id;
-        let scope2 = collection.insert_with_parent(Some(scope1_id));
+        let scope2 = collection.push_new();
         let scope2_id = scope2.id;
 
         assert_eq!(collection.scopes.first().unwrap().id, scope1_id);
@@ -76,7 +79,7 @@ mod tests {
     #[test]
     fn test_lookup_finds_the_symbol() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.insert_with_parent(None);
+        let scope1 = collection.push_new();
         let scope1_id = scope1.id;
         let sym = Symbol::new("foo", LPCVarType::String);
         scope1.insert(sym);
@@ -91,13 +94,13 @@ mod tests {
     #[test]
     fn test_lookup_checks_parent_recursively() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.insert_with_parent(None);
+        let scope1 = collection.push_new();
         let scope1_id = scope1.id;
 
         let sym = Symbol::new("foo", LPCVarType::String);
         scope1.insert(sym);
 
-        let scope2 = collection.insert_with_parent(Some(scope1_id));
+        let scope2 = collection.push_new();
         let scope2_id = scope2.id;
 
         if let Some(scope_ref) = collection.lookup("foo", scope2_id) {
@@ -110,7 +113,7 @@ mod tests {
     #[test]
     fn test_lookup_returns_none_when_not_found() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.insert_with_parent(None);
+        let scope1 = collection.push_new();
         let scope1_id = scope1.id;
 
         let result = collection.lookup("asdf", scope1_id);

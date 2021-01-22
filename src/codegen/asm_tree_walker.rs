@@ -13,6 +13,7 @@ use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::interpreter::function_symbol::FunctionSymbol;
 use crate::ast::return_node::ReturnNode;
+use crate::semantic::scope_collection::ScopeCollection;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -21,6 +22,7 @@ pub struct AsmTreeWalker {
     pub functions: HashMap<FunctionSymbol, usize>,
     current_result: Register, // Track where the result of a child branch is
     register_counter: RegisterCounter,
+    scopes: ScopeCollection
 }
 
 impl AsmTreeWalker {
@@ -81,9 +83,11 @@ impl AsmTreeWalker {
 
 impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &ProgramNode) {
+        let _global_scope = self.scopes.push_new();
         for expr in &program.functions {
             expr.visit(self);
         }
+        self.scopes.pop();
     }
 
     fn visit_call(&mut self, node: &CallNode) {
@@ -146,20 +150,23 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_function_def(&mut self, node: &FunctionDefNode) {
-        let address = self.instructions.len();
+        let return_address = self.instructions.len();
 
+        let _scope = self.scopes.push_new();
         self.register_counter.reset();
 
         for expression in &node.body {
             expression.visit(self);
         }
 
+        self.scopes.pop();
+
         self.functions.insert(FunctionSymbol {
             name: node.name.clone(),
             num_args: 0, // node.num_args
             num_locals: self.register_counter.get_count(),
-            address
-        }, address);
+            address: return_address
+        }, return_address);
     }
 
     fn visit_return(&mut self, node: &ReturnNode) {
