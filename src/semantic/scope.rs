@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use delegate::delegate;
 use crate::semantic::symbol::Symbol;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -14,12 +15,14 @@ impl Scope {
         self.symbols.insert(symbol.name.clone(), symbol);
     }
 
-    pub fn lookup(&self, name: &str) -> Option<&Symbol> {
-        self.symbols.get(name)
-    }
+    delegate! {
+        to self.symbols {
+            #[call(get)]
+            pub fn lookup(&self, name: &str) -> Option<&Symbol>;
 
-    pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        self.symbols.get_mut(name)
+            #[call(get_mut)]
+            pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol>;
+        }
     }
 }
 

@@ -143,6 +143,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
+name = "delegate"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9521a61c2b177e0515b69dd1bd0f396a6b322832c54b4ba03cd33030ff6014b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -296,6 +307,7 @@ version = "0.1.0"
 dependencies = [
  "auto_impl",
  "codespan-reporting",
+ "delegate",
  "enum_dispatch",
  "lalrpop",
  "lalrpop-util",
