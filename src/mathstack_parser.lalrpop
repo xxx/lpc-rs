@@ -77,7 +77,7 @@ VarInit: VarInitNode = {
     }
 }
 
-Decl: DeclNode = {
+pub Decl: DeclNode = {
     <var_type:VarType> <init:VarInit> <optional:("," <VarInit>)*> => {
         let mut initializations = vec![init];
 

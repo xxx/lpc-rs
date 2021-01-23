@@ -229,6 +229,8 @@ mod tests {
     use super::*;
     use crate::mathstack_parser;
     use crate::ast::expression_node::ExpressionNode;
+    use crate::asm::instruction::Instruction::{IConst1, IConst};
+    use crate::semantic::lpc_type::LPCVarType;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -412,5 +414,44 @@ mod tests {
         for (idx, instruction) in walker.instructions.iter().enumerate() {
             assert_eq!(instruction, &expected[idx]);
         }
+    }
+
+    #[test]
+    fn test_decl_sets_scope_and_instructions() {
+        let mut walker = AsmTreeWalker::default();
+        walker.scopes.push_new(); // we need a scope to test vars are set correctly
+        let call = "int foo = 1, *bar = 56";
+        let tree = mathstack_parser::DeclParser::new()
+            .parse(call)
+            .unwrap();
+
+        walker.visit_decl(&tree);
+
+        let expected = vec![
+            IConst1(Register(1)),
+            IConst(Register(2), 56)
+        ];
+
+        for (idx, instruction) in walker.instructions.iter().enumerate() {
+            assert_eq!(instruction, &expected[idx]);
+        }
+
+        let scope = walker.scopes.last().unwrap();
+        assert_eq!(scope.lookup("foo").unwrap(), Symbol {
+            name: String::from("foo"),
+            type_: LPCVarType::Int,
+            array: false,
+            static_: false,
+            location: Some(Register(1)),
+            scope_id: 0
+        });
+        assert_eq!(scope.lookup("bar").unwrap(), Symbol {
+            name: String::from("bar"),
+            type_: LPCVarType::Int,
+            array: true,
+            static_: false,
+            location: Some(Register(2)),
+            scope_id: 0
+        });
     }
 }

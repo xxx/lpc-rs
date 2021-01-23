@@ -34,3 +34,9 @@ impl From<&VarInitNode> for Symbol {
         Self::new(&node.name, node.type_, node.array)
     }
 }
+
+impl PartialEq<Symbol> for &Symbol {
+    fn eq(&self, other: &Symbol) -> bool {
+        *self == other
+    }
+}
