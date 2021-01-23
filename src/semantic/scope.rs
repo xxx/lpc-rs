@@ -17,6 +17,10 @@ impl Scope {
     pub fn lookup(&self, name: &str) -> Option<&Symbol> {
         self.symbols.get(name)
     }
+
+    pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol> {
+        self.symbols.get_mut(name)
+    }
 }
 
 #[cfg(test)]
@@ -34,15 +38,18 @@ mod tests {
 
         let sym = Symbol {
             name: "foo".to_string(),
-            var_type: LPCVarType::Int,
-            scope_id: 0
+            type_: LPCVarType::Int,
+            array: false,
+            scope_id: 0,
+            static_: false,
+            location: None
         };
 
         scope.insert(sym);
 
         if let Some(symbol) = scope.lookup("foo") {
             assert_eq!(symbol.name, "foo");
-            assert_eq!(symbol.var_type, LPCVarType::Int);
+            assert_eq!(symbol.type_, LPCVarType::Int);
         } else {
             panic!("symbol not found");
         }

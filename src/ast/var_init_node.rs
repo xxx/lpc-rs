@@ -7,7 +7,7 @@ use crate::semantic::lpc_type::LPCVarType;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarInitNode {
-    pub var_type: LPCVarType,
+    pub type_: LPCVarType,
     pub name: String,
     pub value: Option<ExpressionNode>,
     pub array: bool,
@@ -19,6 +19,6 @@ impl ASTNodeTrait for VarInitNode {
 
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "VarInitNode[{} {} {:?}]", self.var_type, self.name, self.value)
+        write!(f, "VarInitNode[{} {} {:?}]", self.type_, self.name, self.value)
     }
 }

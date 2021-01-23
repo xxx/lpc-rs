@@ -32,6 +32,14 @@ impl ScopeCollection {
         self.scopes.pop();
     }
 
+    pub fn last(&self) -> Option<&Scope> {
+        self.scopes.last()
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut Scope> {
+        self.scopes.last_mut()
+    }
+
     pub fn lookup(&self, name: &str, start_id: usize) -> Option<&Symbol> {
         if let Some(scope) = self.scopes.get(start_id) {
             let sym = scope.lookup(name);
@@ -81,11 +89,11 @@ mod tests {
         let mut collection = ScopeCollection::default();
         let scope1 = collection.push_new();
         let scope1_id = scope1.id;
-        let sym = Symbol::new("foo", LPCVarType::String);
+        let sym = Symbol::new("foo", LPCVarType::String, false);
         scope1.insert(sym);
 
         if let Some(scope_ref) = collection.lookup("foo", scope1_id) {
-            assert_eq!(scope_ref.var_type, LPCVarType::String);
+            assert_eq!(scope_ref.type_, LPCVarType::String);
         } else {
             panic!("symbol not found.");
         }
@@ -95,16 +103,15 @@ mod tests {
     fn test_lookup_checks_parent_recursively() {
         let mut collection = ScopeCollection::default();
         let scope1 = collection.push_new();
-        let scope1_id = scope1.id;
 
-        let sym = Symbol::new("foo", LPCVarType::String);
+        let sym = Symbol::new("foo", LPCVarType::String, false);
         scope1.insert(sym);
 
         let scope2 = collection.push_new();
         let scope2_id = scope2.id;
 
         if let Some(scope_ref) = collection.lookup("foo", scope2_id) {
-            assert_eq!(scope_ref.var_type, LPCVarType::String);
+            assert_eq!(scope_ref.type_, LPCVarType::String);
         } else {
             panic!("symbol not found.");
         }

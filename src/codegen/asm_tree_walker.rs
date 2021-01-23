@@ -14,6 +14,9 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::interpreter::function_symbol::FunctionSymbol;
 use crate::ast::return_node::ReturnNode;
 use crate::semantic::scope_collection::ScopeCollection;
+use crate::ast::decl_node::DeclNode;
+use crate::semantic::symbol::Symbol;
+use crate::ast::var_init_node::VarInitNode;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -78,6 +81,28 @@ impl AsmTreeWalker {
         }
 
         map
+    }
+
+    fn insert_symbol(&mut self, symbol: Symbol) {
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(symbol)
+        }
+    }
+
+    fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
+        if let Some(scope) = self.scopes.last() {
+            scope.lookup(name)
+        } else {
+            None
+        }
+    }
+
+    fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.lookup_mut(name)
+        } else {
+            None
+        }
     }
 }
 
@@ -177,6 +202,25 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         self.instructions.push(Instruction::Ret);
+    }
+
+    fn visit_decl(&mut self, node: &DeclNode) {
+        for init in &node.initializations {
+            self.visit_var_init(&init);
+        }
+    }
+
+    fn visit_var_init(&mut self, node: &VarInitNode) {
+        self.insert_symbol(Symbol::from(node));
+
+        if let Some(expression) = &node.value {
+            expression.visit(self);
+            let current_register = self.register_counter.value();
+            let symbol = self.lookup_symbol_mut(&node.name);
+            if let Some(sym) = symbol {
+                sym.location = Some(current_register);
+            }
+        }
     }
 }
 

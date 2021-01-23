@@ -88,7 +88,7 @@ impl TreeWalker for TreePrinter {
     fn visit_decl(&mut self, node: &DeclNode) {
         self.println_indented("Decl");
         self.indent += 2;
-        self.println_indented(&format!("type: {}", node.var_type));
+        self.println_indented(&format!("type: {}", node.type_));
         self.println_indented("initializations:");
         self.indent += 2;
         for init in &node.initializations {
@@ -101,7 +101,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented("VarInit");
         self.indent += 2;
         self.println_indented(&format!("name: {}", node.name));
-        self.println_indented(&format!("type: {}", node.var_type));
+        self.println_indented(&format!("type: {}", node.type_));
         self.println_indented(&format!("value: {:?}", node.value));
         self.println_indented(&format!("array: {:?}", node.array));
     }

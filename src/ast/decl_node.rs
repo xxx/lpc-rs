@@ -7,13 +7,13 @@ use crate::semantic::lpc_type::LPCVarType;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DeclNode {
-    pub var_type: LPCVarType,
+    pub type_: LPCVarType,
     pub initializations: Vec<VarInitNode>,
 }
 
 impl DeclNode {
-    pub fn new(var_type: LPCVarType, initializations: Vec<VarInitNode>) -> Self {
-        Self { var_type, initializations }
+    pub fn new(type_: LPCVarType, initializations: Vec<VarInitNode>) -> Self {
+        Self { type_, initializations }
     }
 }
 
@@ -23,6 +23,6 @@ impl ASTNodeTrait for DeclNode {
 
 impl Display for DeclNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DeclNode[{} {:?}]", self.var_type, self.initializations)
+        write!(f, "DeclNode[{} {:?}]", self.type_, self.initializations)
     }
 }

@@ -69,7 +69,7 @@ pub Statement: ASTNode = {
 VarInit: VarInitNode = {
     <array:"*"?> <name:ID> <value:("=" <Expression>)?> => {
         VarInitNode {
-            var_type: LPCVarType::Int, // placeholder. Corrected in Decl.
+            type_: LPCVarType::Int, // placeholder. Corrected in Decl.
             name,
             value,
             array: array.is_some()
@@ -87,11 +87,11 @@ Decl: DeclNode = {
 
         // Update each VarInitNode with the correct type.
         for init in &mut initializations {
-            init.var_type = new_type
+            init.type_ = new_type
         }
 
         DeclNode {
-            var_type: new_type,
+            type_: new_type,
             initializations
         }
     }
