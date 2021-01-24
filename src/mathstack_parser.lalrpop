@@ -107,6 +107,7 @@ pub PrimaryExpression: ExpressionNode = {
 
 pub PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
+    Call => ExpressionNode::Call(<>)
 };
 
 pub UnaryExpression: ExpressionNode = {
@@ -181,7 +182,6 @@ AssignmentExpression: ExpressionNode = {
 };
 
 pub Expression: ExpressionNode = {
-    Call => ExpressionNode::Call(<>),
     <AssignmentExpression>
 };
 
@@ -190,10 +190,19 @@ pub Return: ReturnNode = {
     "return" <Expression> => ReturnNode::new(Some(<>))
 }
 
+ArgumentExpressionList: Vec<ExpressionNode> = {
+    <AssignmentExpression> => vec![<>],
+    <list:ArgumentExpressionList> "," <arg:AssignmentExpression> => {
+        let mut v = list;
+        v.push(arg);
+        v
+    }
+};
+
 pub Call: CallNode = {
-    <id:ID> "(" <e:Expression?> ")" => {
-        let arguments = match e {
-            Some(expr) => vec![expr],
+    <id:ID> "(" <list:ArgumentExpressionList?> ")" => {
+        let arguments = match list {
+            Some(args) => args,
             None => vec![]
         };
 
