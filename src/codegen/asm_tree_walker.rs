@@ -18,6 +18,7 @@ use crate::ast::decl_node::DeclNode;
 use crate::semantic::symbol::Symbol;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
+use crate::ast::assignment_node::AssignmentNode;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -233,6 +234,16 @@ impl TreeWalker for AsmTreeWalker {
         let sym = self.lookup_symbol(&node.value);
         self.current_result = sym.unwrap().location.unwrap();
     }
+
+    fn visit_assignment(&mut self, node: &AssignmentNode) where Self: Sized {
+        node.lhs.visit(self);
+        let dest = self.current_result;
+        node.rhs.visit(self);
+
+        let assign = Instruction::RegCopy(self.current_result, dest);
+        self.instructions.push(assign);
+        self.current_result = dest;
+    }
 }
 
 #[cfg(test)]
@@ -240,8 +251,9 @@ mod tests {
     use super::*;
     use crate::mathstack_parser;
     use crate::ast::expression_node::ExpressionNode;
-    use crate::asm::instruction::Instruction::{IConst1, IConst};
+    use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy};
     use crate::semantic::lpc_type::LPCVarType;
+    use crate::ast::assignment_node::AssignmentOperation;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -485,5 +497,35 @@ mod tests {
 
         walker.visit_var(&node);
         assert_eq!(walker.current_result, Register(666));
+    }
+
+    #[test]
+    fn test_visit_assignment_populates_the_instructions() {
+        let mut walker = AsmTreeWalker::default();
+        walker.scopes.push_new();
+        walker.insert_symbol(Symbol {
+            name: "marf".to_string(),
+            type_: LPCVarType::Int,
+            array: false,
+            static_: false,
+            location: Some(Register(666)),
+            scope_id: 0
+        });
+
+        let node = AssignmentNode {
+            lhs: Box::new(ExpressionNode::Var(VarNode {
+                value: "marf".to_string()
+            })),
+            rhs: Box::new(ExpressionNode::Int(IntNode {
+                value: -12
+            })),
+            op: AssignmentOperation::Simple
+        };
+
+        walker.visit_assignment(&node);
+        assert_eq!(walker.instructions, [
+            IConst(Register(1), -12),
+            RegCopy(Register(1), Register(666))
+        ]);
     }
 }

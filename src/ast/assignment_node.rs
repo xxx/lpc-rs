@@ -1,7 +1,6 @@
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::expression_node::ExpressionNode;
-use crate::ast::var_node::VarNode;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
