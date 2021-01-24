@@ -147,6 +147,7 @@ impl TreeWalker for AsmTreeWalker {
         };
 
         self.instructions.push(instruction);
+        self.current_result = Register(0); // returned results are in r0
     }
 
     fn visit_int(&mut self, int: &IntNode) {
