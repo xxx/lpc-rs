@@ -8,6 +8,7 @@ use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
+use crate::ast::assignment_node::AssignmentNode;
 
 pub trait TreeWalker {
     fn visit_program(&mut self, node: &ProgramNode) where Self: Sized {
@@ -54,4 +55,9 @@ pub trait TreeWalker {
     }
 
     fn visit_var(&mut self, _node: &VarNode) where Self: Sized {}
+
+    fn visit_assignment(&mut self, node: &AssignmentNode) where Self: Sized {
+        node.lhs.visit(self);
+        node.rhs.visit(self);
+    }
 }

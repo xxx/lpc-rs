@@ -10,6 +10,7 @@ use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
+use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::ast::ast_node::ASTNode;
 
@@ -98,33 +99,96 @@ pub Decl: DeclNode = {
     }
 }
 
+pub PrimaryExpression: ExpressionNode = {
+    <Int>,
+    <value:ID> => ExpressionNode::Var(VarNode { value }),
+    "(" <Expression> ")"
+};
+
+pub PostfixExpression: ExpressionNode = {
+    <PrimaryExpression>,
+};
+
+pub UnaryExpression: ExpressionNode = {
+    <PostfixExpression>,
+};
+
+pub CastExpression: ExpressionNode = {
+    <UnaryExpression>,
+}
+
+pub MultiplicitiveExpression: ExpressionNode = {
+    <CastExpression>,
+    <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> => {
+        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+    },
+};
+
+pub AdditiveExpression: ExpressionNode = {
+    <MultiplicitiveExpression>,
+    <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
+        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+    }
+};
+
+pub ShiftExpression: ExpressionNode = {
+    <AdditiveExpression>,
+};
+
+pub RelationalExpression: ExpressionNode = {
+    <ShiftExpression>
+};
+
+pub EqualityExpression: ExpressionNode = {
+    <RelationalExpression>
+};
+
+pub AndExpression: ExpressionNode = {
+    <EqualityExpression>
+};
+
+pub ExclusiveOrExpression: ExpressionNode = {
+    <AndExpression>
+};
+
+pub OrExpression: ExpressionNode = {
+    <ExclusiveOrExpression>
+};
+
+pub LogicalAndExpression: ExpressionNode = {
+    <OrExpression>
+};
+
+pub LogicalOrExpression: ExpressionNode = {
+    <LogicalAndExpression>
+};
+
+pub ConditionalExpression: ExpressionNode = {
+    <LogicalOrExpression>
+};
+
+LValue: ExpressionNode = {
+    <Var>
+};
+
+AssignmentExpression: ExpressionNode = {
+    <ConditionalExpression>,
+    <lhs:LValue> <op:AssignmentOp> <rhs:AssignmentExpression> => ExpressionNode::Assignment(AssignmentNode {
+        lhs: Box::new(lhs),
+        rhs: Box::new(rhs),
+        op
+    })
+};
+
 pub Expression: ExpressionNode = {
     Call => ExpressionNode::Call(<>),
-    <AdditiveBinaryExpression>,
-    <Factor>
+    <AssignmentExpression>
 };
 
 pub Return: ReturnNode = {
     "return" => ReturnNode::new(None),
     "return" <Expression> => ReturnNode::new(Some(<>))
 }
-
-pub Factor: ExpressionNode = {
-    <MultiplicitiveBinaryExpression>,
-    <Term>
-};
-
-pub AdditiveBinaryExpression: ExpressionNode = {
-    <l:Expression> <op:AdditiveBinaryOp> <r:Factor> => {
-        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
-    }
-};
-
-pub MultiplicitiveBinaryExpression: ExpressionNode = {
-    <l:Factor> <op:MultiplicitiveBinaryOp> <r:Term> => {
-        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
-    },
-};
 
 pub Call: CallNode = {
     <id:ID> "(" <e:Expression?> ")" => {
@@ -140,6 +204,10 @@ pub Call: CallNode = {
     }
 };
 
+AssignmentOp: AssignmentOperation = {
+    "=" => AssignmentOperation::Simple
+};
+
 AdditiveBinaryOp: BinaryOperation = {
     "+" => BinaryOperation::Add,
     "-" => BinaryOperation::Sub
@@ -148,12 +216,6 @@ AdditiveBinaryOp: BinaryOperation = {
 MultiplicitiveBinaryOp: BinaryOperation = {
     "*" => BinaryOperation::Mul,
     "/" => BinaryOperation::Div
-};
-
-Term: ExpressionNode = {
-    <Int>,
-    <Var>,
-    "(" <Expression> ")",
 };
 
 Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(

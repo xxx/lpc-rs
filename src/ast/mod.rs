@@ -1,4 +1,5 @@
 pub mod ast_node;
+pub mod assignment_node;
 pub mod decl_node;
 pub mod function_def_node;
 pub mod binary_op_node;

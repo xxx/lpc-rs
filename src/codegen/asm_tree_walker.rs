@@ -213,14 +213,19 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_var_init(&mut self, node: &VarInitNode) {
         self.insert_symbol(Symbol::from(node));
+        let current_register;
 
         if let Some(expression) = &node.value {
             expression.visit(self);
-            let current_register = self.register_counter.value();
-            let symbol = self.lookup_symbol_mut(&node.name);
-            if let Some(sym) = symbol {
-                sym.location = Some(current_register);
-            }
+            current_register = self.register_counter.value();
+        } else {
+            // Default value to 0 when uninitialized.
+            current_register = self.register_counter.next().unwrap();
+        }
+
+        let symbol = self.lookup_symbol_mut(&node.name);
+        if let Some(sym) = symbol {
+            sym.location = Some(current_register);
         }
     }
 

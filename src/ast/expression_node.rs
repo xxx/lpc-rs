@@ -6,10 +6,12 @@ use crate::ast::call_node::CallNode;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::var_node::VarNode;
+use crate::ast::assignment_node::AssignmentNode;
 
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExpressionNode {
+    Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
     Int(IntNode),
     Call(CallNode),
@@ -41,6 +43,7 @@ macro_rules! destructured_traits {
 }
 
 destructured_traits!(
+    ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Int,
     ExpressionNode::Call,
