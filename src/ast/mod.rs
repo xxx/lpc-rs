@@ -8,3 +8,4 @@ pub mod int_node;
 pub mod program_node;
 pub mod return_node;
 pub mod var_init_node;
+pub mod var_node;

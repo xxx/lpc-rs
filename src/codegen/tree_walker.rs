@@ -7,6 +7,7 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
+use crate::ast::var_node::VarNode;
 
 pub trait TreeWalker {
     fn visit_program(&mut self, node: &ProgramNode) where Self: Sized {
@@ -41,8 +42,6 @@ pub trait TreeWalker {
     }
 
     fn visit_decl(&mut self, node: &DeclNode) where Self: Sized {
-        // assign name to symbol table
-
         for init in &node.initializations {
             init.visit(self);
         }
@@ -53,4 +52,6 @@ pub trait TreeWalker {
             expr.visit(self);
         }
     }
+
+    fn visit_var(&mut self, _node: &VarNode) where Self: Sized {}
 }

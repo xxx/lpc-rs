@@ -9,6 +9,7 @@ use crate::ast::call_node::CallNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
+use crate::ast::var_node::VarNode;
 use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::ast::ast_node::ASTNode;
 
@@ -151,12 +152,19 @@ MultiplicitiveBinaryOp: BinaryOperation = {
 
 Term: ExpressionNode = {
     <Int>,
+    <Var>,
     "(" <Expression> ")",
 };
 
 Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
     IntNode {
         value: i64::from_str(s).unwrap()
+    }
+);
+
+Var: ExpressionNode = <value:ID> => ExpressionNode::Var(
+    VarNode {
+        value
     }
 );
 

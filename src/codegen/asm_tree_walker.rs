@@ -17,6 +17,7 @@ use crate::semantic::scope_collection::ScopeCollection;
 use crate::ast::decl_node::DeclNode;
 use crate::semantic::symbol::Symbol;
 use crate::ast::var_init_node::VarInitNode;
+use crate::ast::var_node::VarNode;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -221,6 +222,11 @@ impl TreeWalker for AsmTreeWalker {
                 sym.location = Some(current_register);
             }
         }
+    }
+
+    fn visit_var(&mut self, node: &VarNode) {
+        let sym = self.lookup_symbol(&node.value);
+        self.current_result = sym.unwrap().location.unwrap();
     }
 }
 
@@ -453,5 +459,26 @@ mod tests {
             location: Some(Register(2)),
             scope_id: 0
         });
+    }
+
+    #[test]
+    fn test_visit_var_sets_the_result() {
+        let mut walker = AsmTreeWalker::default();
+        walker.scopes.push_new();
+        walker.insert_symbol(Symbol {
+            name: "marf".to_string(),
+            type_: LPCVarType::Int,
+            array: false,
+            static_: false,
+            location: Some(Register(666)),
+            scope_id: 0
+        });
+
+        let node = VarNode {
+            value: "marf".to_string()
+        };
+
+        walker.visit_var(&node);
+        assert_eq!(walker.current_result, Register(666));
     }
 }
