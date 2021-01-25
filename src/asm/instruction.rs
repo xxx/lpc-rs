@@ -15,6 +15,7 @@ pub enum Instruction {
     IConst(Register, i64),
     IConst0(Register),
     IConst1(Register),
+    SConst(Register, String),
     IDiv(Register, Register, Register),
     IMul(Register, Register, Register),
     ISub(Register, Register, Register),
@@ -36,6 +37,9 @@ impl Display for Instruction {
             },
             Instruction::IConst0(r) => {
                 write!(f, "iconst0 {}", r)
+            },
+            Instruction::SConst(r, s) => {
+                write!(f, "sconst {}, \"{}\"", r, s)
             },
             Instruction::IConst1(r) => {
                 write!(f, "iconst1 {}", r)

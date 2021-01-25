@@ -9,6 +9,7 @@ use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
+use crate::ast::string_node::StringNode;
 
 pub trait TreeWalker {
     fn visit_program(&mut self, node: &ProgramNode) where Self: Sized {
@@ -24,6 +25,8 @@ pub trait TreeWalker {
     }
 
     fn visit_int(&mut self, _node: &IntNode) {}
+
+    fn visit_string(&mut self, _node: &StringNode) {}
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) where Self: Sized {
         node.l.visit(self);

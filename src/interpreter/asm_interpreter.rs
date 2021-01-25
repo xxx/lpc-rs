@@ -1,19 +1,46 @@
+use std::collections::HashMap;
+use std::convert::TryInto;
 use crate::asm::instruction::Instruction;
 use crate::interpreter::efun::EFUNS;
 use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::function_symbol::FunctionSymbol;
-use std::collections::HashMap;
+use crate::interpreter::lpc_var::LPCVar;
+use crate::interpreter::constant_pool::ConstantPool;
+use crate::interpreter::lpc_constant::LPCConstant;
 
 const MAX_STACK: usize = 1000;
 
+macro_rules! int {
+    ($x:expr) => {
+        LPCVar::Int($x)
+    };
+}
+
+macro_rules! string {
+    ($x:expr) => {
+        LPCVar::String($x)
+    };
+}
+
 #[derive(Debug)]
 pub struct AsmInterpreter {
+    /// Out program to execute
     instructions: Vec<Instruction>,
+
+    /// The call stack
     stack: Vec<StackFrame>,
+
+    /// jump labels
     labels: HashMap<String, usize>,
+
+    /// function data
     functions: HashMap<String, FunctionSymbol>,
-    fp: usize,
+
+    constants: ConstantPool,
+
+    /// program counter
     pc: usize,
+
     is_halted: bool
 }
 
@@ -45,17 +72,33 @@ impl AsmInterpreter {
         self.eval()
     }
 
+    /// Push a new stack frame onto the call stack
     fn push_frame(&mut self, frame: StackFrame) {
         self.stack.push(frame);
     }
 
+    /// Pop the current stack frame off the stack
     fn pop_frame(&mut self) -> Option<StackFrame> {
         self.stack.pop()
     }
 
-    fn current_registers(&mut self) -> &mut Vec<i64> {
+    /// Get a mutable reference to the current stack frame's registers
+    fn current_registers(&mut self) -> &mut Vec<LPCVar> {
         let len = self.stack.len();
         self.stack[len - 1].registers.as_mut()
+    }
+
+    /// Resolve the passed index within the current stack frame's registers
+    pub fn resolve_register(&self, index: usize) -> LPCConstant {
+        let len = self.stack.len();
+        let registers = &self.stack[len - 1].registers;
+
+        match registers.get(index).unwrap() {
+            LPCVar::Int(v) => LPCConstant::Int(*v),
+            LPCVar::String(i) => {
+                self.constants.get((*i).try_into().unwrap()).unwrap().clone()
+            }
+        }
     }
 
     /// evaluate loaded instructions, starting from the current value of the PC
@@ -67,7 +110,9 @@ impl AsmInterpreter {
             }
 
             // println!("{:?}", instruction);
-            let registers = self.current_registers();
+
+            let len = self.stack.len();
+            let registers: &mut Vec<LPCVar> = self.stack[len - 1].registers.as_mut();
 
             match instruction {
                 Instruction::Call { name, num_args, initial_arg } => {
@@ -108,7 +153,7 @@ impl AsmInterpreter {
                         continue;
                     } else if let Some(efun) = EFUNS.get(name) {
                         // the efun is responsible for populating the return value
-                        efun(&self.stack[self.stack.len() - 1]);
+                        efun(&self.stack[self.stack.len() - 1], &self);
                         if let Some(frame) = self.pop_frame() {
                             self.copy_call_result(&frame);
                         }
@@ -121,13 +166,17 @@ impl AsmInterpreter {
                         registers[r1.index()] + registers[r2.index()]
                 },
                 Instruction::IConst(r, i) => {
-                    registers[r.index()] = *i;
+                    registers[r.index()] = int!(*i);
                 },
                 Instruction::IConst0(r) => {
-                    registers[r.index()] = 0;
+                    registers[r.index()] = int!(0);
                 },
                 Instruction::IConst1(r) => {
-                    registers[r.index()] = 1;
+                    registers[r.index()] = int!(1);
+                },
+                Instruction::SConst(r, s) => {
+                    let index = self.constants.insert(LPCConstant::from(s));
+                    registers[r.index()] = string!(index.try_into().unwrap());
                 },
                 Instruction::IDiv(r1, r2, r3) => {
                     registers[r3.index()] =
@@ -181,8 +230,8 @@ impl Default for AsmInterpreter {
             labels: HashMap::new(),
             functions: HashMap::new(),
             stack: Vec::with_capacity(MAX_STACK),
+            constants: ConstantPool::default(),
             is_halted: true,
-            fp: 0,
             pc: 0
         }
     }

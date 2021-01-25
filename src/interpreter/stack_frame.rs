@@ -1,10 +1,11 @@
 use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::interpreter::lpc_var::LPCVar;
 
 #[derive(Debug, Clone)]
 pub struct StackFrame {
     pub symbol: FunctionSymbol,
     pub return_address: usize,
-    pub registers: Vec<i64>
+    pub registers: Vec<LPCVar>
 }
 
 impl StackFrame {
@@ -14,7 +15,7 @@ impl StackFrame {
         Self {
             symbol,
             return_address,
-            registers: vec![0; reg_len]
+            registers: vec![LPCVar::Int(0); reg_len]
         }
     }
 }

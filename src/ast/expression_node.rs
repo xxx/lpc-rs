@@ -7,6 +7,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
+use crate::ast::string_node::StringNode;
 
 
 #[derive(Debug, Eq, PartialEq)]
@@ -15,7 +16,8 @@ pub enum ExpressionNode {
     BinaryOp(BinaryOpNode),
     Int(IntNode),
     Call(CallNode),
-    Var(VarNode)
+    Var(VarNode),
+    String(StringNode)
 }
 
 macro_rules! destructured_traits {
@@ -47,7 +49,8 @@ destructured_traits!(
     ExpressionNode::BinaryOp,
     ExpressionNode::Int,
     ExpressionNode::Call,
-    ExpressionNode::Var
+    ExpressionNode::Var,
+    ExpressionNode::String
 );
 
 impl From<BinaryOpNode> for ExpressionNode {

@@ -19,6 +19,7 @@ use crate::semantic::symbol::Symbol;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
+use crate::ast::string_node::StringNode;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -150,15 +151,21 @@ impl TreeWalker for AsmTreeWalker {
         self.current_result = Register(0); // returned results are in r0
     }
 
-    fn visit_int(&mut self, int: &IntNode) {
+    fn visit_int(&mut self, node: &IntNode) {
         let register = self.register_counter.next();
         self.current_result = register.unwrap();
-        let instruction = match int.value {
+        let instruction = match node.value {
             0 => Instruction::IConst0(register.unwrap()),
             1 => Instruction::IConst1(register.unwrap()),
             v => Instruction::IConst(register.unwrap(), v)
         };
         self.instructions.push(instruction);
+    }
+
+    fn visit_string(&mut self, node: &StringNode) {
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+        self.instructions.push(Instruction::SConst(register, node.value.clone()));
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) {

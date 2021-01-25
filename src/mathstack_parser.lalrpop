@@ -10,6 +10,7 @@ use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
+use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::ast::ast_node::ASTNode;
@@ -45,6 +46,7 @@ pub FunctionDef: FunctionDefNode = {
         let return_type = if let Some(this_type) = r_type {
             match this_type.as_str() {
                 "int" => LPCReturnType::Int(array),
+                "string" => LPCReturnType::String(array),
                 _ => unimplemented!()
             }
         } else {
@@ -54,7 +56,6 @@ pub FunctionDef: FunctionDefNode = {
         FunctionDefNode {
             name,
             parameters,
-            // parameters: vec![],
             body,
             return_type
         }
@@ -92,9 +93,15 @@ ArgName: VarInitNode = {
     }
 };
 
-ReturnType: String = "int" => String::from(<>);
+ReturnType: String = {
+    "int" => String::from(<>),
+    "string" => String::from(<>)
+};
 
-VarType: String = "int" => String::from(<>);
+VarType: String = {
+    "int" => String::from(<>),
+    "string" => String::from(<>)
+};
 
 pub Statement: ASTNode = {
     <Expression> => ASTNode::from(<>),
@@ -135,6 +142,7 @@ pub Decl: DeclNode = {
 
 pub PrimaryExpression: ExpressionNode = {
     <Int>,
+    <String>,
     <Var>,
     "(" <Expression> ")"
 };
@@ -257,16 +265,27 @@ MultiplicitiveBinaryOp: BinaryOperation = {
     "/" => BinaryOperation::Div
 };
 
+Var: ExpressionNode = <value:ID> => ExpressionNode::Var(
+    VarNode {
+        value
+    }
+);
+
 Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
     IntNode {
         value: i64::from_str(s).unwrap()
     }
 );
 
-Var: ExpressionNode = <value:ID> => ExpressionNode::Var(
-    VarNode {
-        value
-    }
-);
+String: ExpressionNode = <s:r#""(\\.|[^"])*""#> => {
+    // Strip the quotes at each end.
+    let value = if s.len() < 3 { "" } else { &s[1..=(s.len() - 2)] };
+
+    ExpressionNode::String(
+        StringNode {
+            value: value.to_string()
+        }
+    )
+};
 
 ID: String = r"[\p{Alphabetic}_]\w*" => String::from(<>);

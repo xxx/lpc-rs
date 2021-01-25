@@ -5,8 +5,9 @@ use lazy_static::lazy_static;
 
 use print::print;
 use crate::interpreter::stack_frame::StackFrame;
+use crate::interpreter::asm_interpreter::AsmInterpreter;
 
-pub type Efun = fn(&StackFrame);
+pub type Efun = fn(&StackFrame, &AsmInterpreter);
 
 lazy_static! {
     pub static ref EFUNS: HashMap<String, Efun> = {
