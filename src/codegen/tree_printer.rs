@@ -76,7 +76,13 @@ impl TreeWalker for TreePrinter {
         self.println_indented("Function Def");
         self.indent += 2;
         self.println_indented(&format!("name: {}", node.name));
-        self.println_indented(&format!("return type: {:?}", node.return_type));
+        self.println_indented(&format!("return type: {}", node.return_type));
+        self.println_indented("parameters:");
+        self.indent += 2;
+        for parameter in &node.parameters {
+            parameter.visit(self);
+        }
+        self.indent -= 2;
         self.println_indented("body:");
         self.indent += 2;
         for expression in &node.body {

@@ -45,3 +45,20 @@ pub enum LPCReturnType {
     Mapping(bool),
     Mixed(bool)
 }
+
+impl Display for LPCReturnType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let to_star = |array: &bool| -> &str { if *array { " *" } else { "" } };
+
+        let type_ = match self {
+            LPCReturnType::Void => String::from("void"),
+            LPCReturnType::Int(array) => format!("int{}", to_star(array)),
+            LPCReturnType::Float(array) =>  format!("float{}", to_star(array)),
+            LPCReturnType::String(array) =>  format!("string{}", to_star(array)),
+            LPCReturnType::Mapping(array) =>  format!("mapping{}", to_star(array)),
+            LPCReturnType::Mixed(array) =>  format!("mixed{}", to_star(array)),
+        };
+
+        write!(f, "{}", type_)
+    }
+}

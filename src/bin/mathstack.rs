@@ -29,6 +29,8 @@ fn main() {
         }
     };
 
+    println!("{:?}", program);
+
     let mut walker = TreePrinter::new();
     program.visit(&mut walker);
 
@@ -43,5 +45,6 @@ fn main() {
 
     interpreter.load(&asm_walker.instructions, &asm_walker.combined_labels(), &asm_walker.function_map());
 
+    // println!("{:?}", asm_walker.instructions);
     interpreter.exec();
 }

@@ -183,16 +183,21 @@ impl TreeWalker for AsmTreeWalker {
         let _scope = self.scopes.push_new();
         self.register_counter.reset();
 
+        for parameter in &node.parameters {
+            parameter.visit(self);
+        }
+
         for expression in &node.body {
             expression.visit(self);
         }
 
         self.scopes.pop();
 
+        let num_args = node.parameters.len();
         self.functions.insert(FunctionSymbol {
             name: node.name.clone(),
-            num_args: 0, // node.num_args
-            num_locals: self.register_counter.get_count(),
+            num_args,
+            num_locals: self.register_counter.get_count() - num_args,
             address: return_address
         }, return_address);
     }

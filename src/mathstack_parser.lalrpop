@@ -39,7 +39,7 @@ pub Program: ProgramNode = <functions:FunctionDef*> => ProgramNode {
 };
 
 pub FunctionDef: FunctionDefNode = {
-    <r_type:ReturnType?> <star:"*"?> <name:ID> "(" ")" "{" <body:SemiSeq<Statement>> "}" => {
+    <r_type:ReturnType?> <star:"*"?> <name:ID> <parameters:Parameters> "{" <body:SemiSeq<Statement>> "}" => {
         let array = star.is_some();
 
         let return_type = if let Some(this_type) = r_type {
@@ -53,13 +53,47 @@ pub FunctionDef: FunctionDefNode = {
 
         FunctionDefNode {
             name,
+            parameters,
+            // parameters: vec![],
             body,
             return_type
         }
     }
 };
 
+Parameters: Vec<VarInitNode> = {
+    "(" <parm:Parameter?> ")" => {
+        parm.unwrap_or(vec![])
+    }
+};
+
+Parameter: Vec<VarInitNode> = {
+    <parms:ParameterList> <ellipsis:("," "...")?> => {
+        parms
+    }
+};
+
+ParameterList: Vec<VarInitNode> = {
+    <list:(<ParameterList> ",")?> <name:ArgName> => {
+        println!("parmlist {:?}", list);
+        let mut v = list.unwrap_or(vec![]);
+        v.push(name);
+        v
+    }
+};
+
+ArgName: VarInitNode = {
+    <var_type:VarType> <mut init:VarInit> => {
+        let new_type = LPCVarType::from(var_type);
+
+        init.type_ = new_type;
+
+        init
+    }
+};
+
 ReturnType: String = "int" => String::from(<>);
+
 VarType: String = "int" => String::from(<>);
 
 pub Statement: ASTNode = {
@@ -69,7 +103,7 @@ pub Statement: ASTNode = {
 };
 
 VarInit: VarInitNode = {
-    <array:"*"?> <name:ID> <value:("=" <Expression>)?> => {
+    <array:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> => {
         VarInitNode {
             type_: LPCVarType::Int, // placeholder. Corrected in Decl.
             name,
@@ -101,7 +135,7 @@ pub Decl: DeclNode = {
 
 pub PrimaryExpression: ExpressionNode = {
     <Int>,
-    <value:ID> => ExpressionNode::Var(VarNode { value }),
+    <Var>,
     "(" <Expression> ")"
 };
 
@@ -168,13 +202,9 @@ pub ConditionalExpression: ExpressionNode = {
     <LogicalOrExpression>
 };
 
-LValue: ExpressionNode = {
-    <Var>
-};
-
 AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
-    <lhs:LValue> <op:AssignmentOp> <rhs:AssignmentExpression> => ExpressionNode::Assignment(AssignmentNode {
+    <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => ExpressionNode::Assignment(AssignmentNode {
         lhs: Box::new(lhs),
         rhs: Box::new(rhs),
         op
