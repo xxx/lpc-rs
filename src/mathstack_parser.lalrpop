@@ -277,15 +277,31 @@ Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
     }
 );
 
-String: ExpressionNode = <s:r#""(\\.|[^"])*""#> => {
-    // Strip the quotes at each end.
-    let value = if s.len() < 3 { "" } else { &s[1..=(s.len() - 2)] };
-
-    ExpressionNode::String(
-        StringNode {
-            value: value.to_string()
+String: ExpressionNode = {
+    <StringLiteral> => {
+        ExpressionNode::String(
+            StringNode {
+                value: <>
+            }
+        )
+    },
+    <s1:StringLiteral> <s2:String> => {
+        match s2 {
+            ExpressionNode::String(node) => {
+                ExpressionNode::String(StringNode {
+                    value: s1 + &node.value
+                })
+            }
+            _ => unimplemented!()
         }
-    )
+    },
+};
+
+StringLiteral: String = <s:r#""(\\.|[^"])*""#> => {
+        // Strip the quotes at each end.
+        let value = if s.len() < 3 { "" } else { &s[1..=(s.len() - 2)] };
+
+        value.to_string()
 };
 
 ID: String = r"[\p{Alphabetic}_]\w*" => String::from(<>);
