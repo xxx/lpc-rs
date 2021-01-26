@@ -170,7 +170,34 @@ pub MultiplicitiveExpression: ExpressionNode = {
 pub AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
     <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
-        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+        if op == BinaryOperation::Add {
+            match &l {
+                ExpressionNode::Int(node) => {
+                    match r {
+                        ExpressionNode::Int(node2) => {
+                            ExpressionNode::Int(IntNode { value: node.value + node2.value })
+                        },
+                        _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                    }
+                }
+                ExpressionNode::String(node) => {
+                    match r {
+                        /// "string" + 123 == "string123"
+                        ExpressionNode::Int(node2) => {
+                            ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value.to_string() })
+                        },
+                        /// concat string literals
+                        ExpressionNode::String(node2) => {
+                            ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value })
+                        },
+                        _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                    }
+                },
+                _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+            }
+        } else {
+            ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+        }
     }
 };
 
