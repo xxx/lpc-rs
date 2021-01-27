@@ -4,8 +4,8 @@ use crate::asm::register::Register;
 
 pub trait InstructionTrait: Display {}
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 /// Representation of an assembly language instruction.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Instruction {
     /// Function calls
     Call {

@@ -1,8 +1,8 @@
 use crate::interpreter::function_symbol::FunctionSymbol;
 use crate::interpreter::lpc_var::LPCVar;
 
-#[derive(Debug, Clone)]
 /// A representation of a function call's context.
+#[derive(Debug, Clone)]
 pub struct StackFrame {
     /// The function symbol that this frame represents a call to
     pub symbol: FunctionSymbol,

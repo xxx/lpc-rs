@@ -5,8 +5,8 @@ use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::lpc_type::LPCVarType;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 /// A node representing a variable definition, with optional initialization
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarInitNode {
     /// The LPC type. This is the "true" type, even for mixed vars.
     pub type_: LPCVarType,

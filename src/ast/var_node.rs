@@ -3,8 +3,8 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 /// A node representing the use of a variable.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarNode {
     /// The name of the variable.
     pub name: String,

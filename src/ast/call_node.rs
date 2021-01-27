@@ -4,8 +4,8 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
 /// Representation of a function call.
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CallNode {
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,

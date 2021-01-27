@@ -1,8 +1,8 @@
 use delegate::delegate;
 use crate::interpreter::lpc_constant::LPCConstant;
 
-#[derive(Debug)]
 /// Hold constant values, to allow for re-use without copying.
+#[derive(Debug)]
 pub struct ConstantPool {
     constants: Vec<LPCConstant>
 }

@@ -3,8 +3,8 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 /// A node representing a string literal
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StringNode {
     pub value: String,
 }

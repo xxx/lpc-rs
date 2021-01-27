@@ -14,8 +14,8 @@ use std::fmt;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
 /// Representation of a top-level node in the AST.
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ASTNode {
     Call(CallNode),
     Decl(DeclNode),

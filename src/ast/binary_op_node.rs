@@ -4,8 +4,8 @@ use crate::ast::expression_node::ExpressionNode;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// All possible binary operations
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BinaryOperation {
     Add,
     Sub,
@@ -13,8 +13,8 @@ pub enum BinaryOperation {
     Div
 }
 
-#[derive(Debug, Eq, PartialEq)]
 /// Representation of a binary operation
+#[derive(Debug, Eq, PartialEq)]
 pub struct BinaryOpNode {
     /// Left-hand side
     pub l: Box<ExpressionNode>,

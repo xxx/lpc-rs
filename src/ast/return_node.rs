@@ -4,8 +4,8 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 /// A node representing a function return call.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ReturnNode {
     /// The value to return from the function.
     pub value: Option<ExpressionNode>,

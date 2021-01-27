@@ -4,15 +4,15 @@ use crate::ast::expression_node::ExpressionNode;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// All possible assignment operations
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AssignmentOperation {
     /// Simple assignment - `var = 2;`
     Simple,
 }
 
-#[derive(Debug, Eq, PartialEq)]
 /// A node representing an assignment.
+#[derive(Debug, Eq, PartialEq)]
 pub struct AssignmentNode {
     /// left-hand side
     pub lhs: Box<ExpressionNode>,

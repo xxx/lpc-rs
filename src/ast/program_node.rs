@@ -4,8 +4,8 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, Eq, PartialEq, Clone, Default)]
 /// A node representing a full object. This is the top-level translation unit.
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct ProgramNode {
     pub functions: Vec<FunctionDefNode>
 }

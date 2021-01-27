@@ -1,7 +1,7 @@
 use crate::asm::register::Register;
 
-#[derive(Debug, Copy, Clone, Default)]
 /// A `Register`-aware counter, used during code generation.
+#[derive(Debug, Copy, Clone, Default)]
 pub struct RegisterCounter {
     count: usize
 }

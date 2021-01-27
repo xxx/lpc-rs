@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 /// A thin wrapper around a usize representing a Register numbered with its value, `x.0`.
 /// This type exists to allow us to attach the Display trait.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub struct Register(pub usize);
 
 impl Register {

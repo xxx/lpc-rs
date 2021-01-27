@@ -9,10 +9,9 @@ use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 
-
-#[derive(Debug, Eq, PartialEq)]
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
+#[derive(Debug, Eq, PartialEq)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),

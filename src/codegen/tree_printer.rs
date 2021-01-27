@@ -9,7 +9,6 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 
-#[derive(Debug)]
 /// A tree walker for pretty-printing an AST
 ///
 /// # Examples
@@ -22,6 +21,7 @@ use crate::ast::var_init_node::VarInitNode;
 /// let mut walker = TreePrinter::new();
 /// walker.visit_program(&program_node);
 /// ```
+#[derive(Debug)]
 pub struct TreePrinter {
     indent: usize
 }

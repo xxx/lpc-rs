@@ -5,8 +5,8 @@ use std::fmt;
 use crate::semantic::lpc_type::LPCReturnType;
 use crate::ast::var_init_node::VarInitNode;
 
-#[derive(Debug, Eq, PartialEq)]
 /// A node representation a function definition
+#[derive(Debug, Eq, PartialEq)]
 pub struct FunctionDefNode {
     pub return_type: LPCReturnType,
     pub name: String,

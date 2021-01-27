@@ -25,7 +25,6 @@ macro_rules! string {
     };
 }
 
-#[derive(Debug)]
 /// An interpreter that executes instructions
 ///
 /// # Examples
@@ -51,6 +50,7 @@ macro_rules! string {
 ///
 /// interpreter.exec();
 /// ```
+#[derive(Debug)]
 pub struct AsmInterpreter {
     /// The actual program to execute
     instructions: Vec<Instruction>,
