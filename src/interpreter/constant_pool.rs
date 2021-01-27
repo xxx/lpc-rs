@@ -1,15 +1,15 @@
 use delegate::delegate;
-use crate::interpreter::lpc_constant::LPCConstant;
+use crate::interpreter::lpc_value::LPCValue;
 
 /// Hold constant values, to allow for re-use without copying.
 #[derive(Debug)]
 pub struct ConstantPool {
-    constants: Vec<LPCConstant>
+    constants: Vec<LPCValue>
 }
 
 impl ConstantPool {
     /// An insert that checks for duplicates
-    pub fn insert(&mut self, constant: LPCConstant) -> usize {
+    pub fn insert(&mut self, constant: LPCValue) -> usize {
         if let Some(idx) = self.constants.iter().position(|x| *x == constant) {
             return idx;
         }
@@ -22,7 +22,7 @@ impl ConstantPool {
     delegate! {
         to self.constants {
             #[call(get)]
-            pub fn get(&self, index: usize) -> Option<&LPCConstant>;
+            pub fn get(&self, index: usize) -> Option<&LPCValue>;
         }
     }
 }

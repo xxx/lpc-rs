@@ -32,11 +32,11 @@ impl Add for LPCVar {
                     LPCVar::Int(y) => LPCVar::Int(x + y),
                     _ => panic!("Unable to add these LPCVars directly, as they only \
                                 contain indices into a ConstantPool. \
-                                Resolve them to LPCConstants first.")
+                                Resolve them to LPCValues first.")
                 }
             },
             _ => panic!("Unable to add these LPCVars directly, as they only \
-                        contain indices into a ConstantPool. Resolve them to LPCConstants first.")
+                        contain indices into a ConstantPool. Resolve them to LPCValues first.")
         }
     }
 }
@@ -53,12 +53,12 @@ impl Sub for LPCVar {
                     LPCVar::Int(y) => LPCVar::Int(x - y),
                     _ => panic!("Unable to subtract these LPCVars directly, as they only \
                                 contain indices into a ConstantPool. \
-                                Resolve them to LPCConstants first.")
+                                Resolve them to LPCValues first.")
                 }
             },
             _ => panic!("Unable to subtract these LPCVars directly, as they only \
                         contain indices into a ConstantPool. \
-                        Resolve them to LPCConstants first.")
+                        Resolve them to LPCValues first.")
         }
     }
 }
@@ -75,12 +75,12 @@ impl Mul for LPCVar {
                     LPCVar::Int(y) => LPCVar::Int(x * y),
                     _ => panic!("Unable to multiply these LPCVars directly, as they only \
                                 contain indices into a ConstantPool. \
-                                Resolve them to LPCConstants first.")
+                                Resolve them to LPCValues first.")
                 }
             },
             _ => panic!("Unable to multiply these LPCVars directly, as they only \
                         contain indices into a ConstantPool. \
-                        Resolve them to LPCConstants first.")
+                        Resolve them to LPCValues first.")
         }
     }
 }
@@ -97,12 +97,12 @@ impl Div for LPCVar {
                     LPCVar::Int(y) => LPCVar::Int(x / y),
                     _ => panic!("Unable to divide these LPCVars directly, as they only \
                                 contain indices into a ConstantPool. \
-                                Resolve them to LPCConstants first.")
+                                Resolve them to LPCValues first.")
                 }
             },
             _ => panic!("Unable to divide these LPCVars directly, as they only \
                         contain indices into a ConstantPool. \
-                        Resolve them to LPCConstants first.")
+                        Resolve them to LPCValues first.")
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::function_symbol::FunctionSymbol;
 use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::constant_pool::ConstantPool;
-use crate::interpreter::lpc_constant::LPCConstant;
+use crate::interpreter::lpc_value::LPCValue;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
@@ -124,12 +124,12 @@ impl AsmInterpreter {
     }
 
     /// Resolve the passed index within the current stack frame's registers
-    pub fn resolve_register(&self, index: usize) -> LPCConstant {
+    pub fn resolve_register(&self, index: usize) -> LPCValue {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
 
         match registers.get(index).unwrap() {
-            LPCVar::Int(v) => LPCConstant::Int(*v),
+            LPCVar::Int(v) => LPCValue::Int(*v),
             LPCVar::String(i) => {
                 self.constants.get(*i).unwrap().clone()
             }
@@ -211,7 +211,7 @@ impl AsmInterpreter {
                     registers[r.index()] = int!(1);
                 },
                 Instruction::SConst(r, s) => {
-                    let index = self.constants.insert(LPCConstant::from(s));
+                    let index = self.constants.insert(LPCValue::from(s));
                     let registers = self.current_registers();
                     registers[r.index()] = string!(index.try_into().unwrap());
                 },

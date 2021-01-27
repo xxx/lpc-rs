@@ -1,7 +1,7 @@
 use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::asm_interpreter::AsmInterpreter;
-use crate::interpreter::lpc_constant::LPCConstant;
+use crate::interpreter::lpc_value::LPCValue;
 
 pub fn print(frame: &StackFrame, interpreter: &AsmInterpreter) {
     match frame.registers.get(1).unwrap() {
@@ -9,7 +9,7 @@ pub fn print(frame: &StackFrame, interpreter: &AsmInterpreter) {
         LPCVar::String(_) => {
             // arguments always start in register 1
             let s = interpreter.resolve_register(1);
-            if let LPCConstant::String(str) = s {
+            if let LPCValue::String(str) = s {
                 println!("{}", str);
             } else {
                 unimplemented!()
