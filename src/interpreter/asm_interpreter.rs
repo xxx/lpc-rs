@@ -8,6 +8,7 @@ use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::interpreter::lpc_constant::LPCConstant;
 
+
 const MAX_STACK: usize = 1000;
 
 macro_rules! int {
@@ -84,8 +85,7 @@ impl AsmInterpreter {
 
     /// Get a mutable reference to the current stack frame's registers
     fn current_registers(&mut self) -> &mut Vec<LPCVar> {
-        let len = self.stack.len();
-        self.stack[len - 1].registers.as_mut()
+        self.stack.last_mut().unwrap().registers.as_mut()
     }
 
     /// Resolve the passed index within the current stack frame's registers
@@ -110,9 +110,6 @@ impl AsmInterpreter {
             }
 
             // println!("{:?}", instruction);
-
-            let len = self.stack.len();
-            let registers: &mut Vec<LPCVar> = self.stack[len - 1].registers.as_mut();
 
             match instruction {
                 Instruction::Call { name, num_args, initial_arg } => {
@@ -162,36 +159,57 @@ impl AsmInterpreter {
                     }
                 },
                 Instruction::IAdd(r1, r2, r3) => {
+                    let registers = self.current_registers();
                     registers[r3.index()] =
                         registers[r1.index()] + registers[r2.index()]
                 },
                 Instruction::IConst(r, i) => {
+                    let registers = self.current_registers();
                     registers[r.index()] = int!(*i);
                 },
                 Instruction::IConst0(r) => {
+                    let registers = self.current_registers();
                     registers[r.index()] = int!(0);
                 },
                 Instruction::IConst1(r) => {
+                    let registers = self.current_registers();
                     registers[r.index()] = int!(1);
                 },
                 Instruction::SConst(r, s) => {
                     let index = self.constants.insert(LPCConstant::from(s));
+                    let registers = self.current_registers();
                     registers[r.index()] = string!(index.try_into().unwrap());
                 },
                 Instruction::IDiv(r1, r2, r3) => {
+                    let registers = self.current_registers();
                     registers[r3.index()] =
                         registers[r1.index()] / registers[r2.index()]
                 },
                 Instruction::IMul(r1, r2, r3) => {
+                    let registers = self.current_registers();
                     registers[r3.index()] =
                         registers[r1.index()] * registers[r2.index()]
                 },
                 Instruction::ISub(r1, r2, r3) => {
+                    let registers = self.current_registers();
                     registers[r3.index()] =
                         registers[r1.index()] - registers[r2.index()]
                 },
                 Instruction::RegCopy(r1, r2) => {
+                    let registers = self.current_registers();
                     registers[r2.index()] = registers[r1.index()]
+                },
+                Instruction::SAdd(r1, r2, r3) => {
+                    // look up strings, concat, add to constant pool,
+                    let string1 = &self.resolve_register(r1.index());
+                    let string2 = &self.resolve_register(r2.index());
+                    let result = string1 + string2;
+                    let index = self.constants.insert(result);
+
+                    // set r3.index to the new constant index
+                    let var = LPCVar::String(index);
+                    let registers = self.current_registers();
+                    registers[r3.index()] = var
                 },
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {

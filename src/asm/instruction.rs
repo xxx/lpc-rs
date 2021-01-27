@@ -20,7 +20,8 @@ pub enum Instruction {
     IMul(Register, Register, Register),
     ISub(Register, Register, Register),
     RegCopy(Register, Register),
-    Ret
+    Ret,
+    SAdd(Register, Register, Register),
 }
 
 impl Display for Instruction {
@@ -58,6 +59,9 @@ impl Display for Instruction {
             },
             Instruction::Ret => {
                 write!(f, "ret")
+            },
+            Instruction::SAdd(r1, r2, r3) => {
+                write!(f, "sadd {}, {}, {}", r1, r2, r3)
             },
         }
     }

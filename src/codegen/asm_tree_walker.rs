@@ -20,6 +20,8 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
+use crate::ast::expression_node::ExpressionNode;
+use crate::semantic::lpc_type::LPCVarType;
 
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -171,12 +173,40 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_binary_op(&mut self, node: &BinaryOpNode) {
         node.l.visit(self);
         let reg_left = self.current_result;
+
         node.r.visit(self);
         let reg_right = self.current_result;
+
         let reg_result = self.register_counter.next();
         self.current_result = reg_result.unwrap();
+
+        fn op_instuction_picker(
+            node: &ExpressionNode,
+            walker: &AsmTreeWalker,
+            reg_left: Register,
+            reg_right: Register,
+            reg_result: Option<Register>
+        ) -> Instruction {
+            match node {
+                ExpressionNode::BinaryOp(bin_op) =>
+                    op_instuction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
+                ExpressionNode::Var(var_node) => {
+                    let type_ = walker.lookup_symbol(&var_node.value).unwrap().type_;
+                    match type_ {
+                        LPCVarType::String =>
+                            Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
+                        _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+                    }
+                }
+                ExpressionNode::String(_) =>
+                    Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
+                _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+            }
+        };
+
         let instruction = match node.op {
-            BinaryOperation::Add => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Add =>
+                op_instuction_picker(&*node.l, self, reg_left, reg_right, reg_result),
             BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
             BinaryOperation::Mul => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap())
@@ -284,19 +314,15 @@ mod tests {
         tree.visit(&mut walker);
 
         let expected = vec![
-            Instruction::IConst1(Register(1)),
-            Instruction::IConst(Register(2), 3),
-            Instruction::IAdd(Register(1), Register(2), Register(3)),
-            Instruction::IConst(Register(4), 5),
-            Instruction::ISub(Register(3), Register(4),Register(5)),
-            Instruction::IConst(Register(6), 4),
-            Instruction::IConst(Register(7), 5),
-            Instruction::IAdd(Register(6), Register(7), Register(8)),
-            Instruction::RegCopy(Register(8), Register(9)),
+            Instruction::IConst(Register(1), 4),
+            Instruction::IConst(Register(2), 5),
+            Instruction::ISub(Register(1), Register(2),Register(3)),
+            Instruction::IConst(Register(4), 9),
+            Instruction::RegCopy(Register(4), Register(5)),
             Instruction::Call {
                 name: String::from("print"),
                 num_args: 1,
-                initial_arg: Register(9)
+                initial_arg: Register(5)
             }
         ];
 
@@ -308,17 +334,19 @@ mod tests {
     #[test]
     fn test_visit_call_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
-        let call = "print(4 + 5)";
+        let call = "print(4 - 5)";
         let tree = mathstack_parser::CallParser::new()
             .parse(call)
             .unwrap();
 
         walker.visit_call(&tree);
 
+        println!("instr {:?}", walker.instructions);
+
         let expected = vec![
             Instruction::IConst(Register(1), 4),
             Instruction::IConst(Register(2), 5),
-            Instruction::IAdd(Register(1), Register(2), Register(3)),
+            Instruction::ISub(Register(1), Register(2), Register(3)),
             Instruction::RegCopy(Register(3), Register(4)),
             Instruction::Call {
                 name: String::from("print"),
@@ -355,32 +383,65 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_visit_binary_op_populates_the_instructions() {
-        let mut walker = AsmTreeWalker::default();
+    mod test_binary_op {
+        use super::*;
 
-        let node = BinaryOpNode {
-            l: Box::new(ExpressionNode::Int(IntNode::new(666))),
-            r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(ExpressionNode::Int(IntNode::new(123))),
-                r: Box::new(ExpressionNode::Int(IntNode::new(456))),
+        #[test]
+        fn test_visit_binary_op_populates_the_instructions_for_ints() {
+            let mut walker = AsmTreeWalker::default();
+
+            let node = BinaryOpNode {
+                l: Box::new(ExpressionNode::Int(IntNode::new(666))),
+                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::Int(IntNode::new(123))),
+                    r: Box::new(ExpressionNode::Int(IntNode::new(456))),
+                    op: BinaryOperation::Add
+                })),
+                op: BinaryOperation::Mul
+            };
+
+            walker.visit_binary_op(&node);
+
+            let expected = vec![
+                Instruction::IConst(Register(1), 666),
+                Instruction::IConst(Register(2), 123),
+                Instruction::IConst(Register(3), 456),
+                Instruction::IAdd(Register(2), Register(3), Register(4)),
+                Instruction::IMul(Register(1), Register(4), Register(5))
+            ];
+
+            for (idx, instruction) in walker.instructions.iter().enumerate() {
+                assert_eq!(instruction, &expected[idx]);
+            }
+        }
+
+        #[test]
+        fn test_visit_binary_op_populates_the_instructions_for_strings() {
+            let mut walker = AsmTreeWalker::default();
+
+            let node = BinaryOpNode {
+                l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
+                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::String(StringNode::new("bar"))),
+                    r: Box::new(ExpressionNode::String(StringNode::new("baz"))),
+                    op: BinaryOperation::Add
+                })),
                 op: BinaryOperation::Add
-            })),
-            op: BinaryOperation::Mul
-        };
+            };
 
-        walker.visit_binary_op(&node);
+            walker.visit_binary_op(&node);
 
-        let expected = vec![
-            Instruction::IConst(Register(1), 666),
-            Instruction::IConst(Register(2), 123),
-            Instruction::IConst(Register(3), 456),
-            Instruction::IAdd(Register(2), Register(3), Register(4)),
-            Instruction::IMul(Register(1), Register(4), Register(5))
-        ];
+            let expected = vec![
+                Instruction::SConst(Register(1), "foo".to_string()),
+                Instruction::SConst(Register(2), "bar".to_string()),
+                Instruction::SConst(Register(3), "baz".to_string()),
+                Instruction::SAdd(Register(2), Register(3), Register(4)),
+                Instruction::SAdd(Register(1), Register(4), Register(5))
+            ];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
+            for (idx, instruction) in walker.instructions.iter().enumerate() {
+                assert_eq!(instruction, &expected[idx]);
+            }
         }
     }
 
@@ -395,13 +456,11 @@ mod tests {
         walker.visit_function_def(&tree);
 
         let expected = vec![
-            Instruction::IConst(Register(1), 4),
-            Instruction::IConst(Register(2), 2),
-            Instruction::IAdd(Register(1), Register(2), Register(3)),
-            Instruction::IConst(Register(4), 5),
-            Instruction::IConst(Register(5), 2),
-            Instruction::IMul(Register(4), Register(5), Register(6)),
-            Instruction::ISub(Register(3), Register(6), Register(7))
+            Instruction::IConst(Register(1), 6),
+            Instruction::IConst(Register(2), 5),
+            Instruction::IConst(Register(3), 2),
+            Instruction::IMul(Register(2), Register(3), Register(4)),
+            Instruction::ISub(Register(1), Register(4), Register(5))
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -413,7 +472,7 @@ mod tests {
         let sym = FunctionSymbol {
             name: "main".to_string(),
             num_args: 0,
-            num_locals: 7,
+            num_locals: 5,
             address
         };
 

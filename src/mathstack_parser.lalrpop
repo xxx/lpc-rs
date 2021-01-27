@@ -182,11 +182,11 @@ pub AdditiveExpression: ExpressionNode = {
                 }
                 ExpressionNode::String(node) => {
                     match r {
-                        /// "string" + 123 == "string123"
+                        // "string" + 123 == "string123"
                         ExpressionNode::Int(node2) => {
                             ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value.to_string() })
                         },
-                        /// concat string literals
+                        // concat string literals
                         ExpressionNode::String(node2) => {
                             ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value })
                         },

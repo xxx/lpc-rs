@@ -5,7 +5,7 @@ use std::fmt;
 #[derive(Debug, Copy, Clone)]
 pub enum LPCVar {
     Int(i64),
-    String(i64)
+    String(usize)
 }
 
 impl Display for LPCVar {
