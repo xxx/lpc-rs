@@ -5,22 +5,35 @@ use crate::asm::register::Register;
 pub trait InstructionTrait: Display {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// Representation of an assembly language instruction.
 pub enum Instruction {
+    /// Function calls
     Call {
         name: String,
         num_args: usize,
         initial_arg: Register
     },
+    /// Integer addition - x.2 = x.0 + x.1
     IAdd(Register, Register, Register),
+    /// Integer constant
     IConst(Register, i64),
+    /// Integer constant 0
     IConst0(Register),
+    /// Integer constant 1
     IConst1(Register),
+    /// String constant
     SConst(Register, String),
+    /// Integer division - x.2 = x.0 / x.1
     IDiv(Register, Register, Register),
+    /// Integer division - x.2 = x.0 * x.1
     IMul(Register, Register, Register),
+    /// Integer division - x.2 = x.0 - x.1
     ISub(Register, Register, Register),
+    /// Copy x.0 to x.1
     RegCopy(Register, Register),
+    /// Return from current function
     Ret,
+    /// String addition (concatenation) - x.2 = x.0 + x.1
     SAdd(Register, Register, Register),
 }
 

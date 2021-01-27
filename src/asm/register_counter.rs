@@ -1,6 +1,7 @@
 use crate::asm::register::Register;
 
 #[derive(Debug, Copy, Clone, Default)]
+/// A `Register`-aware counter, used during code generation.
 pub struct RegisterCounter {
     count: usize
 }
@@ -12,11 +13,12 @@ impl RegisterCounter {
     }
 
     /// Return the current register.
-    pub fn value(&self) -> Register {
+    pub fn current(&self) -> Register {
         Register(self.count)
     }
 
-    /// move the counter back by one, for use after loops where next() is called.
+    /// Move the counter back by one, for use after loops where next()
+    /// is called., but the result is not used.
     pub fn go_back(&mut self) {
         self.count -= 1;
     }
@@ -53,38 +55,38 @@ mod tests {
     fn test_value_returns_without_increment() {
         let mut counter = RegisterCounter::default();
 
-        assert_eq!(counter.value(), Register(0));
+        assert_eq!(counter.current(), Register(0));
         counter.next();
         counter.next();
         counter.next();
-        assert_eq!(counter.value(), Register(3));
+        assert_eq!(counter.current(), Register(3));
     }
 
     #[test]
     fn test_reset_resets_the_value() {
         let mut counter = RegisterCounter::default();
 
-        assert_eq!(counter.value(), Register(0));
+        assert_eq!(counter.current(), Register(0));
         counter.next();
         counter.next();
         counter.next();
 
         counter.reset();
 
-        assert_eq!(counter.value(), Register(0));
+        assert_eq!(counter.current(), Register(0));
     }
 
     #[test]
     fn test_go_back_decrements_the_count() {
         let mut counter = RegisterCounter::default();
 
-        assert_eq!(counter.value(), Register(0));
+        assert_eq!(counter.current(), Register(0));
         counter.next();
         counter.next();
         counter.next();
 
         counter.go_back();
 
-        assert_eq!(counter.value(), Register(2));
+        assert_eq!(counter.current(), Register(2));
     }
 }

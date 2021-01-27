@@ -261,7 +261,7 @@ impl TreeWalker for AsmTreeWalker {
 
         if let Some(expression) = &node.value {
             expression.visit(self);
-            current_register = self.register_counter.value();
+            current_register = self.register_counter.current();
         } else {
             // Default value to 0 when uninitialized.
             current_register = self.register_counter.next().unwrap();
