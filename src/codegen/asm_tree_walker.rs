@@ -34,6 +34,26 @@ pub struct AsmTreeWalker {
 }
 
 impl AsmTreeWalker {
+    /// Get a listing of a translated AST, suitable for printing
+    ///
+    /// # Examples
+    /// ```
+    /// use mathstack::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
+    /// use mathstack::ast::int_node::IntNode;
+    /// use mathstack::ast::expression_node::ExpressionNode;
+    /// use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
+    /// use mathstack::codegen::tree_walker::TreeWalker;
+    /// let node = BinaryOpNode {
+    ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
+    ///     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
+    ///     op: BinaryOperation::Sub
+    /// };
+    /// let mut walker = AsmTreeWalker::default();
+    /// walker.visit_binary_op(&node);
+    /// for instruction in walker.listing() {
+    ///     println!("{}", instruction);
+    /// }
+    /// ```
     pub fn listing(&self) -> Vec<String> {
         let mut v = vec![];
 
@@ -78,6 +98,7 @@ impl AsmTreeWalker {
         map
     }
 
+    /// Return a map of function names to their corresponding full symbol
     pub fn function_map(&self) -> HashMap<String, FunctionSymbol> {
         let mut map = HashMap::new();
 

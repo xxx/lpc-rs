@@ -10,6 +10,18 @@ use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 
 #[derive(Debug)]
+/// A tree walker for pretty-printing an AST
+///
+/// # Examples
+/// ```
+/// use mathstack::mathstack_parser;
+/// use mathstack::codegen::tree_printer::TreePrinter;
+/// use mathstack::codegen::tree_walker::TreeWalker;
+/// let prog = "int main() { int b = 123; return b; }";
+/// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
+/// let mut walker = TreePrinter::new();
+/// walker.visit_program(&program_node);
+/// ```
 pub struct TreePrinter {
     indent: usize
 }
