@@ -1,6 +1,7 @@
 use std::fmt;
 use fmt::{Display, Formatter};
 
+/// The enumeration of types that a variable can be declared as.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LPCVarType {
     Int,
@@ -36,6 +37,8 @@ impl From<String> for LPCVarType {
     }
 }
 
+/// The enumeration of types that a function can return.
+/// If the field of any of the subtypes that have it is `true`, the type is an array.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LPCReturnType {
     Void,

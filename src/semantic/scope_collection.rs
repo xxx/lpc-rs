@@ -4,11 +4,13 @@ use crate::semantic::scope::Scope;
 use crate::semantic::symbol::Symbol;
 
 #[derive(Debug, Clone)]
+/// Represent a tree of scopes
 pub struct ScopeCollection {
     pub scopes: Vec<Scope>,
 }
 
 impl ScopeCollection {
+    /// Push a new scope onto the stack.
     pub fn push_new(&mut self) -> &mut Scope {
         let parent_id = if let Some(scope) = self.scopes.last() {
             Some(scope.id)
@@ -28,18 +30,27 @@ impl ScopeCollection {
         self.scopes[id].borrow_mut()
     }
 
+    /// Pop the top scope off of the stack.
     pub fn pop(&mut self) {
         self.scopes.pop();
     }
 
+    /// Return a reference to the top scope of the stack.
     pub fn last(&self) -> Option<&Scope> {
         self.scopes.last()
     }
 
+    /// Return a mutable reference to the scope on top of the stack.
     pub fn last_mut(&mut self) -> Option<&mut Scope> {
         self.scopes.last_mut()
     }
 
+    /// Lookup a symbol, recursing up to parent scopes as necessary.
+    ///
+    /// # Arguments
+    ///
+    /// * `name`: The name of the symbol to look up.
+    /// * `start_id`: The ID of the scope in which to start the search.
     pub fn lookup(&self, name: &str, start_id: usize) -> Option<&Symbol> {
         if let Some(scope) = self.scopes.get(start_id) {
             let sym = scope.lookup(name);

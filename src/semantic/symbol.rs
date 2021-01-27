@@ -2,21 +2,26 @@ use crate::semantic::lpc_type::LPCVarType;
 use crate::ast::var_init_node::VarInitNode;
 use crate::asm::register::Register;
 
+/// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Symbol {
+    /// The name of this symbol
     pub name: String,
+    /// The type of this var
     pub type_: LPCVarType,
+    /// Is this var an array?
     pub array: bool,
     // pub privacy: LPCPrivacy,
+    /// Is this var static?
     pub static_: bool,
-    /// which register is tracking this variable?
+    /// Which register is tracking this variable?
     pub location: Option<Register>,
-
     /// to which scope do i belong?
     pub scope_id: usize
 }
 
 impl Symbol {
+    /// Create a new, location-less Symbol
     pub fn new(name: &str, type_: LPCVarType, array: bool) -> Self {
         Self {
             name: String::from(name),
