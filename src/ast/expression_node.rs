@@ -11,6 +11,8 @@ use crate::ast::string_node::StringNode;
 
 
 #[derive(Debug, Eq, PartialEq)]
+/// A wrapper node for anything that can be considered an expression
+/// (i.e. an operation that returns a value)
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),

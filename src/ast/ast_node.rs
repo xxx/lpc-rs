@@ -15,6 +15,7 @@ use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
+/// Representation of a top-level node in the AST.
 pub enum ASTNode {
     Call(CallNode),
     Decl(DeclNode),
@@ -92,6 +93,7 @@ impl From<DeclNode> for ASTNode {
 mod tests {
     use super::*;
     use crate::ast::binary_op_node::BinaryOperation;
+    use crate::semantic::lpc_type::LPCVarType;
 
     #[test]
     fn test_from_expression_node() {
@@ -127,5 +129,21 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Program(clone));
+    }
+
+    #[test]
+    fn test_from_return_node() {
+        let node = ReturnNode { value: None };
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::Return(clone));
+    }
+
+    #[test]
+    fn test_from_decl_node() {
+        let node = DeclNode { type_: LPCVarType::Int, initializations: vec![] };
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::Decl(clone));
     }
 }

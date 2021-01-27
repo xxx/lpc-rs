@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// A node representing a string literal
 pub struct StringNode {
     pub value: String,
 }
@@ -15,6 +16,7 @@ impl StringNode {
 }
 
 impl ASTNodeTrait for StringNode {
+    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_string(self); }
 }
 

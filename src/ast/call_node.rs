@@ -5,9 +5,12 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
+/// Representation of a function call.
 pub struct CallNode {
+    /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,
-    pub id: String
+    /// The name of the function being called
+    pub name: String
 }
 
 impl ASTNodeTrait for CallNode {

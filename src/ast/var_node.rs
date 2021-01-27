@@ -4,13 +4,15 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// A node representing the use of a variable.
 pub struct VarNode {
-    pub value: String,
+    /// The name of the variable.
+    pub name: String,
 }
 
 impl VarNode {
-    pub fn new(value: &str) -> Self {
-        Self { value: String::from(value) }
+    pub fn new(name: &str) -> Self {
+        Self { name: String::from(name) }
     }
 }
 
@@ -20,6 +22,6 @@ impl ASTNodeTrait for VarNode {
 
 impl Display for VarNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "VarNode[{}]", self.value)
+        write!(f, "VarNode[{}]", self.name)
     }
 }

@@ -265,7 +265,7 @@ ArgumentExpressionList: Vec<ExpressionNode> = {
 };
 
 pub Call: CallNode = {
-    <id:ID> "(" <list:ArgumentExpressionList?> ")" => {
+    <name:ID> "(" <list:ArgumentExpressionList?> ")" => {
         let arguments = match list {
             Some(args) => args,
             None => vec![]
@@ -273,7 +273,7 @@ pub Call: CallNode = {
 
         CallNode {
             arguments,
-            id
+            name
         }
     }
 };
@@ -292,9 +292,9 @@ MultiplicitiveBinaryOp: BinaryOperation = {
     "/" => BinaryOperation::Div
 };
 
-Var: ExpressionNode = <value:ID> => ExpressionNode::Var(
+Var: ExpressionNode = <name:ID> => ExpressionNode::Var(
     VarNode {
-        value
+        name
     }
 );
 

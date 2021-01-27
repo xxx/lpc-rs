@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+/// All possible binary operations
 pub enum BinaryOperation {
     Add,
     Sub,
@@ -13,13 +14,18 @@ pub enum BinaryOperation {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+/// Representation of a binary operation
 pub struct BinaryOpNode {
+    /// Left-hand side
     pub l: Box<ExpressionNode>,
+    /// Right-hand side
     pub r: Box<ExpressionNode>,
+    /// The operation to perform
     pub op: BinaryOperation
 }
 
 impl ASTNodeTrait for BinaryOpNode {
+    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_binary_op(self); }
 }
 

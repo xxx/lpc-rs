@@ -45,7 +45,7 @@ impl TreeWalker for TreePrinter {
     fn visit_call(&mut self, node: &CallNode) {
         self.println_indented("Call");
         self.indent += 2;
-        self.println_indented(&format!("id: {}", node.id));
+        self.println_indented(&format!("id: {}", node.name));
         self.println_indented("args:");
         self.indent += 2;
         for arg in &node.arguments {

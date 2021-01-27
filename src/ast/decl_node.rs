@@ -6,8 +6,11 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::lpc_type::LPCVarType;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// A container for a set of variable declarations.
 pub struct DeclNode {
+    /// The declared type
     pub type_: LPCVarType,
+    /// The list of variables, with their optional initializations
     pub initializations: Vec<VarInitNode>,
 }
 
@@ -18,6 +21,7 @@ impl DeclNode {
 }
 
 impl ASTNodeTrait for DeclNode {
+    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_decl(self); }
 }
 

@@ -6,14 +6,20 @@ use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::lpc_type::LPCVarType;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// A node representing a variable definition, with optional initialization
 pub struct VarInitNode {
+    /// The LPC type. This is the "true" type, even for mixed vars.
     pub type_: LPCVarType,
+    /// The var name
     pub name: String,
+    /// The initialization value. When missing, defaults to 0.
     pub value: Option<ExpressionNode>,
+    /// Is this var actually an array?
     pub array: bool,
 }
 
 impl ASTNodeTrait for VarInitNode {
+    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_var_init(self); }
 }
 

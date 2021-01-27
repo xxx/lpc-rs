@@ -144,7 +144,7 @@ impl TreeWalker for AsmTreeWalker {
         self.register_counter.go_back();
 
         let instruction = Instruction::Call {
-            name: node.id.clone(),
+            name: node.name.clone(),
             num_args: node.arguments.len(),
             initial_arg: start_register.unwrap()
         };
@@ -191,7 +191,7 @@ impl TreeWalker for AsmTreeWalker {
                 ExpressionNode::BinaryOp(bin_op) =>
                     op_instuction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
                 ExpressionNode::Var(var_node) => {
-                    let type_ = walker.lookup_symbol(&var_node.value).unwrap().type_;
+                    let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
                     match type_ {
                         LPCVarType::String =>
                             Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
@@ -274,7 +274,7 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_var(&mut self, node: &VarNode) {
-        let sym = self.lookup_symbol(&node.value);
+        let sym = self.lookup_symbol(&node.name);
         self.current_result = sym.unwrap().location.unwrap();
     }
 
@@ -564,7 +564,7 @@ mod tests {
         });
 
         let node = VarNode {
-            value: "marf".to_string()
+            name: "marf".to_string()
         };
 
         walker.visit_var(&node);
@@ -586,7 +586,7 @@ mod tests {
 
         let node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode {
-                value: "marf".to_string()
+                name: "marf".to_string()
             })),
             rhs: Box::new(ExpressionNode::Int(IntNode {
                 value: -12

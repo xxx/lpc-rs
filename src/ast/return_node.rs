@@ -5,7 +5,9 @@ use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// A node representing a function return call.
 pub struct ReturnNode {
+    /// The value to return from the function.
     pub value: Option<ExpressionNode>,
 }
 
@@ -16,6 +18,7 @@ impl ReturnNode {
 }
 
 impl ASTNodeTrait for ReturnNode {
+    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_return(self); }
 }
 
