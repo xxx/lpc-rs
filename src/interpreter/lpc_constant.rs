@@ -1,6 +1,7 @@
 use std::ops::Add;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// An actual LPC value. These are stored as constants in the ConstantPool.
 pub enum LPCConstant {
     Int(i64),
     String(String)

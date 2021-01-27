@@ -14,6 +14,7 @@ fn format_expected(expected: &Vec<String>) -> String {
     }
 }
 
+/// Handle a parse error by pretty printing it to the console.
 pub fn handle_parse_error<E>(filename: &str, input: &str, err: &ParseError<usize, Token, E>)
     where E: Debug {
 

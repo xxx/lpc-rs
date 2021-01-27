@@ -5,6 +5,7 @@ use std::fmt;
 #[derive(Debug, Copy, Clone)]
 /// Represent a variable stored in a `Register`. `Int`s store the actual value.
 /// Other types store an index into a `ConstantPool`.
+/// This enum should remain `Copy`.
 pub enum LPCVar {
     Int(i64),
     String(usize)

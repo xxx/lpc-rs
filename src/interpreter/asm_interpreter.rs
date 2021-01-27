@@ -8,15 +8,17 @@ use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::interpreter::lpc_constant::LPCConstant;
 
-
+/// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
 
+/// Convenience helper for registers
 macro_rules! int {
     ($x:expr) => {
         LPCVar::Int($x)
     };
 }
 
+/// Convenience helper for registers
 macro_rules! string {
     ($x:expr) => {
         LPCVar::String($x)
@@ -24,8 +26,33 @@ macro_rules! string {
 }
 
 #[derive(Debug)]
+/// An interpreter that executes instructions
+///
+/// # Examples
+///
+/// ```
+/// use mathstack::mathstack_parser;
+/// use mathstack::codegen::tree_walker::TreeWalker;
+/// use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
+/// use mathstack::interpreter::asm_interpreter::AsmInterpreter;
+///
+/// let prog = "int main() { int b = 123; return b; }";
+/// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
+/// let mut walker = AsmTreeWalker::default();
+/// let mut interpreter = AsmInterpreter::default();
+///
+/// walker.visit_program(&program_node);
+///
+/// interpreter.load(
+///     &walker.instructions,
+///     &walker.combined_labels(),
+///     &walker.function_map()
+/// );
+///
+/// interpreter.exec();
+/// ```
 pub struct AsmInterpreter {
-    /// Out program to execute
+    /// The actual program to execute
     instructions: Vec<Instruction>,
 
     /// The call stack
@@ -34,19 +61,27 @@ pub struct AsmInterpreter {
     /// jump labels
     labels: HashMap<String, usize>,
 
-    /// function data
+    /// function mapping of name to Symbol
     functions: HashMap<String, FunctionSymbol>,
 
+    /// All non-int values are stored in the pool.
     constants: ConstantPool,
 
     /// program counter
     pc: usize,
 
+    /// Is the machine halted?
     is_halted: bool
 }
 
 impl AsmInterpreter {
-    /// load instructions for evaluation
+    /// Load instructions and associated data for evaluation
+    ///
+    /// # Arguments
+    ///
+    /// * `instructions` - The instructions to be executed.
+    /// * `labels` - The map of label names to their corresponding address.
+    /// * `functions` - The map of function names to their corresponding Symbols
     pub fn load(&mut self, instructions: &[Instruction],
                 labels: &HashMap<String, usize>,
                 functions: &HashMap<String, FunctionSymbol>) {
@@ -96,12 +131,12 @@ impl AsmInterpreter {
         match registers.get(index).unwrap() {
             LPCVar::Int(v) => LPCConstant::Int(*v),
             LPCVar::String(i) => {
-                self.constants.get((*i).try_into().unwrap()).unwrap().clone()
+                self.constants.get(*i).unwrap().clone()
             }
         }
     }
 
-    /// evaluate loaded instructions, starting from the current value of the PC
+    /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) {
         let instructions = self.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
@@ -230,10 +265,12 @@ impl AsmInterpreter {
         }
     }
 
+    /// Flag the machine to halt after it finishes executing its next instruction.
     fn halt(&mut self) {
         self.is_halted = true;
     }
 
+    /// Convenience helper to copy a return value from a given stack frame, back to the current one.
     fn copy_call_result(&mut self, from: &StackFrame) {
         if !self.stack.is_empty() {
             self.current_registers()[0] = from.registers[0];
