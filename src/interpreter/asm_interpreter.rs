@@ -82,7 +82,8 @@ impl AsmInterpreter {
     /// * `instructions` - The instructions to be executed.
     /// * `labels` - The map of label names to their corresponding address.
     /// * `functions` - The map of function names to their corresponding Symbols
-    pub fn load(&mut self, instructions: &[Instruction],
+    pub fn load(&mut self,
+                instructions: &[Instruction],
                 labels: &HashMap<String, usize>,
                 functions: &HashMap<String, FunctionSymbol>) {
         self.instructions = instructions.to_vec();
@@ -172,7 +173,7 @@ impl AsmInterpreter {
                     // copy argument registers from old frame to new
                     if *num_args > 0 as usize {
                         let index = initial_arg.index();
-                        let current_frame = &self.stack[self.stack.len() - 1];
+                        let current_frame = self.stack.last().unwrap();
                         new_frame.registers[1..=*num_args].copy_from_slice(
                             &current_frame.registers[index..(index + num_args)]
                         );
