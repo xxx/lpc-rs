@@ -15,6 +15,7 @@ use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::ast::ast_node::ASTNode;
 use crate::parser::collapse_expression::collapse_expression;
+use crate::parser::span::Span;
 
 grammar;
 
@@ -111,12 +112,13 @@ pub Statement: ASTNode = {
 };
 
 VarInit: VarInitNode = {
-    <array:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> => {
+    <l:@L> <array:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> <r:@R> => {
         VarInitNode {
             type_: LPCVarType::Int, // placeholder. Corrected in Decl.
             name,
             value,
-            array: array.is_some()
+            array: array.is_some(),
+            span: Some(Span { l, r })
         }
     }
 }

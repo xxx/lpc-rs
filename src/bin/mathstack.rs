@@ -34,7 +34,7 @@ fn main() {
     let mut walker = TreePrinter::new();
     program.visit(&mut walker);
 
-    let mut asm_walker = AsmTreeWalker::default();
+    let mut asm_walker = AsmTreeWalker::new(filename);
     program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {

@@ -33,6 +33,10 @@ impl Scope {
             /// Get a mutable reference to a symbol in this specific scope.
             #[call(get_mut)]
             pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol>;
+
+            /// Get whether or not a symbol is defined in this scope.
+            #[call(contains_key)]
+            pub fn contains(&self, name: &str) -> bool;
         }
     }
 }
