@@ -33,8 +33,10 @@ pub enum Instruction {
     RegCopy(Register, Register),
     /// Return from current function
     Ret,
-    /// String addition (concatenation) - x.2 = x.0 + x.1
+    /// String addition (concatenation) - x.2 = x.0x.1
     SAdd(Register, Register, Register),
+    /// String multiplication (repetition) - x.2 = x.0 repeated x.1 times
+    SMul(Register, Register, Register),
 }
 
 impl Display for Instruction {
@@ -75,6 +77,9 @@ impl Display for Instruction {
             },
             Instruction::SAdd(r1, r2, r3) => {
                 write!(f, "sadd {}, {}, {}", r1, r2, r3)
+            },
+            Instruction::SMul(r1, r2, r3) => {
+                write!(f, "smul {}, {}, {}", r1, r2, r3)
             },
         }
     }

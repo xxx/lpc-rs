@@ -247,6 +247,16 @@ impl AsmInterpreter {
                     let registers = self.current_registers();
                     registers[r3.index()] = var
                 },
+                Instruction::SMul(r1, r2, r3) => {
+                    let string = &self.resolve_register(r1.index());
+                    let multiplier = &self.resolve_register(r2.index());
+                    let result = string * multiplier;
+                    let index = self.constants.insert(result);
+
+                    let var = LPCVar::String(index);
+                    let registers = self.current_registers();
+                    registers[r3.index()] = var
+                },
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame);

@@ -208,7 +208,7 @@ impl TreeWalker for AsmTreeWalker {
         let reg_result = self.register_counter.next();
         self.current_result = reg_result.unwrap();
 
-        fn op_instuction_picker(
+        fn add_instruction_picker(
             node: &ExpressionNode,
             walker: &AsmTreeWalker,
             reg_left: Register,
@@ -217,7 +217,7 @@ impl TreeWalker for AsmTreeWalker {
         ) -> Instruction {
             match node {
                 ExpressionNode::BinaryOp(bin_op) =>
-                    op_instuction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
+                    add_instruction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
                 ExpressionNode::Var(var_node) => {
                     let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
                     match type_ {
@@ -232,11 +232,36 @@ impl TreeWalker for AsmTreeWalker {
             }
         };
 
+        fn mul_instruction_picker(
+            node: &ExpressionNode,
+            walker: &AsmTreeWalker,
+            reg_left: Register,
+            reg_right: Register,
+            reg_result: Option<Register>
+        ) -> Instruction {
+            match node {
+                ExpressionNode::BinaryOp(bin_op) =>
+                    mul_instruction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
+                ExpressionNode::Var(var_node) => {
+                    let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
+                    match type_ {
+                        LPCVarType::String =>
+                            Instruction::SMul(reg_left, reg_right, reg_result.unwrap()),
+                        _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+                    }
+                }
+                ExpressionNode::String(_) =>
+                    Instruction::SMul(reg_left, reg_right, reg_result.unwrap()),
+                _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+            }
+        };
+
         let instruction = match node.op {
             BinaryOperation::Add =>
-                op_instuction_picker(&*node.l, self, reg_left, reg_right, reg_result),
+                add_instruction_picker(&*node.l, self, reg_left, reg_right, reg_result),
             BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
-            BinaryOperation::Mul => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Mul =>
+                mul_instruction_picker(&*node.l, self, reg_left, reg_right, reg_result),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap())
         };
         self.instructions.push(instruction);
