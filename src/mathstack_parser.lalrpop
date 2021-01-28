@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::iter::repeat;
 
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::{BinaryOperation, BinaryOpNode};
@@ -163,40 +164,96 @@ pub CastExpression: ExpressionNode = {
 pub MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
     <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> => {
-        ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+         match op {
+             BinaryOperation::Mul => {
+                 match &l {
+                     ExpressionNode::Int(node) => {
+                         match r {
+                             ExpressionNode::Int(node2) => {
+                                 ExpressionNode::Int(IntNode { value: node.value * node2.value })
+                             },
+                             _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                         }
+                     },
+                     ExpressionNode::String(node) => {
+                         match r {
+                             // "string" * 3 == "stringstringstring"
+                             ExpressionNode::Int(node2) => {
+                                 if node2.value >= 0 {
+                                     let value = repeat(node.value.clone()).take(node2.value as usize).collect::<String>();
+                                     ExpressionNode::String(StringNode { value })
+                                 } else {
+                                     ExpressionNode::String(StringNode { value: String::from("") })
+                                 }
+                             },
+                             _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                         }
+                     },
+                     _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                 }
+             },
+             BinaryOperation::Div => {
+                 match &l {
+                     ExpressionNode::Int(node) => {
+                         match r {
+                             ExpressionNode::Int(node2) => {
+                                 ExpressionNode::Int(IntNode { value: node.value / node2.value })
+                             },
+                             _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                         }
+                     },
+                     _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                 }
+             },
+             _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+         }
     },
 };
 
 pub AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
     <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
-        if op == BinaryOperation::Add {
-            match &l {
-                ExpressionNode::Int(node) => {
-                    match r {
-                        ExpressionNode::Int(node2) => {
-                            ExpressionNode::Int(IntNode { value: node.value + node2.value })
-                        },
-                        _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+        match op {
+            BinaryOperation::Add => {
+                match &l {
+                    ExpressionNode::Int(node) => {
+                        match r {
+                            ExpressionNode::Int(node2) => {
+                                ExpressionNode::Int(IntNode { value: node.value + node2.value })
+                            },
+                            _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                        }
                     }
+                    ExpressionNode::String(node) => {
+                        match r {
+                            // "string" + 123 == "string123"
+                            ExpressionNode::Int(node2) => {
+                                ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value.to_string() })
+                            },
+                            // concat string literals
+                            ExpressionNode::String(node2) => {
+                                ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value })
+                            },
+                            _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                        }
+                    },
+                    _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
                 }
-                ExpressionNode::String(node) => {
-                    match r {
-                        // "string" + 123 == "string123"
-                        ExpressionNode::Int(node2) => {
-                            ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value.to_string() })
-                        },
-                        // concat string literals
-                        ExpressionNode::String(node2) => {
-                            ExpressionNode::String(StringNode { value: node.value.clone() + &node2.value })
-                        },
-                        _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
-                    }
-                },
-                _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
-            }
-        } else {
-            ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+            },
+            BinaryOperation::Sub => {
+                match &l {
+                    ExpressionNode::Int(node) => {
+                        match r {
+                            ExpressionNode::Int(node2) => {
+                                ExpressionNode::Int(IntNode { value: node.value - node2.value })
+                            },
+                            _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                        }
+                    },
+                    _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
+                }
+            },
+            _ => ExpressionNode::BinaryOp(BinaryOpNode { l: Box::new(l), r: Box::new(r), op })
         }
     }
 };

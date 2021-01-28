@@ -342,15 +342,13 @@ mod tests {
         tree.visit(&mut walker);
 
         let expected = vec![
-            Instruction::IConst(Register(1), 4),
-            Instruction::IConst(Register(2), 5),
-            Instruction::ISub(Register(1), Register(2),Register(3)),
-            Instruction::IConst(Register(4), 9),
-            Instruction::RegCopy(Register(4), Register(5)),
+            Instruction::IConst(Register(1), -1),
+            Instruction::IConst(Register(2), 9),
+            Instruction::RegCopy(Register(2), Register(3)),
             Instruction::Call {
                 name: String::from("print"),
                 num_args: 1,
-                initial_arg: Register(5)
+                initial_arg: Register(3)
             }
         ];
 
@@ -372,14 +370,12 @@ mod tests {
         println!("instr {:?}", walker.instructions);
 
         let expected = vec![
-            Instruction::IConst(Register(1), 4),
-            Instruction::IConst(Register(2), 5),
-            Instruction::ISub(Register(1), Register(2), Register(3)),
-            Instruction::RegCopy(Register(3), Register(4)),
+            Instruction::IConst(Register(1), -1),
+            Instruction::RegCopy(Register(1), Register(2)),
             Instruction::Call {
                 name: String::from("print"),
                 num_args: 1,
-                initial_arg: Register(4)
+                initial_arg: Register(2)
             }
         ];
 
@@ -484,11 +480,7 @@ mod tests {
         walker.visit_function_def(&tree);
 
         let expected = vec![
-            Instruction::IConst(Register(1), 6),
-            Instruction::IConst(Register(2), 5),
-            Instruction::IConst(Register(3), 2),
-            Instruction::IMul(Register(2), Register(3), Register(4)),
-            Instruction::ISub(Register(1), Register(4), Register(5))
+            Instruction::IConst(Register(1), -4),
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -500,7 +492,7 @@ mod tests {
         let sym = FunctionSymbol {
             name: "main".to_string(),
             num_args: 0,
-            num_locals: 5,
+            num_locals: 1,
             address
         };
 
