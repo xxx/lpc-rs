@@ -25,7 +25,7 @@ use crate::semantic::lpc_type::LPCVarType;
 use crate::interpreter::program::Program;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::semantic::semantic_checks::check_var_redefinition;
-use crate::semantic::semantic_error::handle_semantic_error;
+use crate::semantic::semantic_error::var_redefinition_error;
 
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug, Default)]
@@ -332,9 +332,9 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_var_init(&mut self, node: &VarInitNode) {
-        if let Err(e) = check_var_redefinition(&node.name, &self.scopes.last().unwrap()) {
-            handle_semantic_error(&self.filepath, &e, node.span);
-            panic!(e);
+        if let Err(e) = check_var_redefinition(&node, &self.scopes.last().unwrap()) {
+            var_redefinition_error(&self.filepath, &e);
+            panic!();
         }
 
         self.insert_symbol(Symbol::from(node));
@@ -378,6 +378,7 @@ mod tests {
     use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy};
     use crate::semantic::lpc_type::LPCVarType;
     use crate::ast::assignment_node::AssignmentOperation;
+    use crate::parser::span::Span;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -611,7 +612,8 @@ mod tests {
             array: false,
             static_: false,
             location: Some(Register(1)),
-            scope_id: 0
+            scope_id: 0,
+            span: Some(Span { l: 4, r: 11 })
         });
         assert_eq!(scope.lookup("bar").unwrap(), Symbol {
             name: String::from("bar"),
@@ -619,7 +621,8 @@ mod tests {
             array: true,
             static_: false,
             location: Some(Register(2)),
-            scope_id: 0
+            scope_id: 0,
+            span: Some(Span { l: 13, r: 22 })
         });
     }
 
@@ -633,7 +636,8 @@ mod tests {
             array: false,
             static_: false,
             location: Some(Register(666)),
-            scope_id: 0
+            scope_id: 0,
+            span: None
         });
 
         let node = VarNode {
@@ -654,7 +658,8 @@ mod tests {
             array: false,
             static_: false,
             location: Some(Register(666)),
-            scope_id: 0
+            scope_id: 0,
+            span: None
         });
 
         let node = AssignmentNode {

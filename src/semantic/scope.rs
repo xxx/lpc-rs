@@ -60,7 +60,8 @@ mod tests {
             array: false,
             scope_id: 0,
             static_: false,
-            location: None
+            location: None,
+            span: None
         };
 
         scope.insert(sym);

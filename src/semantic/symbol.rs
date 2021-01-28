@@ -1,6 +1,7 @@
 use crate::semantic::lpc_type::LPCVarType;
 use crate::ast::var_init_node::VarInitNode;
 use crate::asm::register::Register;
+use crate::parser::span::Span;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -17,7 +18,9 @@ pub struct Symbol {
     /// Which register is tracking this variable?
     pub location: Option<Register>,
     /// to which scope do i belong?
-    pub scope_id: usize
+    pub scope_id: usize,
+    /// The text span that first defined this symbol.
+    pub span: Option<Span>
 }
 
 impl Symbol {
@@ -29,14 +32,20 @@ impl Symbol {
             array,
             static_: false,
             location: None,
-            scope_id: 0
+            scope_id: 0,
+            span: None
         }
     }
 }
 
 impl From<&VarInitNode> for Symbol {
     fn from(node: &VarInitNode) -> Self {
-        Self::new(&node.name, node.type_, node.array)
+        let s = Self::new(&node.name, node.type_, node.array);
+
+        Self {
+            span: node.span,
+            ..s
+        }
     }
 }
 
