@@ -6,7 +6,7 @@ use crate::ast::var_init_node::VarInitNode;
 ///
 /// # Arguments
 ///
-/// * `name` - The name to check
+/// * `node` - The node we're checking to see if it's a redefinition
 /// * `scope` - The scope to check
 ///
 /// # Returns
