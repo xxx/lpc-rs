@@ -42,8 +42,9 @@ fn main() {
     }
 
     let mut interpreter = AsmInterpreter::default();
+    let program = asm_walker.to_program();
 
-    interpreter.load(&asm_walker.instructions, &asm_walker.combined_labels(), &asm_walker.function_map());
+    interpreter.load(program);
 
     // println!("{:?}", asm_walker.instructions);
     interpreter.exec();

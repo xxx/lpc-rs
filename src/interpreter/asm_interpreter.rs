@@ -1,12 +1,11 @@
-use std::collections::HashMap;
 use std::convert::TryInto;
 use crate::asm::instruction::Instruction;
 use crate::interpreter::efun::EFUNS;
 use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::function_symbol::FunctionSymbol;
 use crate::interpreter::lpc_var::LPCVar;
-use crate::interpreter::constant_pool::ConstantPool;
 use crate::interpreter::lpc_value::LPCValue;
+use crate::interpreter::program::Program;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
@@ -42,30 +41,18 @@ macro_rules! string {
 ///
 /// walker.visit_program(&program_node);
 ///
-/// interpreter.load(
-///     &walker.instructions,
-///     &walker.combined_labels(),
-///     &walker.function_map()
-/// );
+/// let mut program = walker.to_program();
 ///
+/// interpreter.load(program);
 /// interpreter.exec();
 /// ```
 #[derive(Debug)]
 pub struct AsmInterpreter {
-    /// The actual program to execute
-    instructions: Vec<Instruction>,
+    /// The program to run
+    program: Program,
 
     /// The call stack
     stack: Vec<StackFrame>,
-
-    /// jump labels
-    labels: HashMap<String, usize>,
-
-    /// function mapping of name to Symbol
-    functions: HashMap<String, FunctionSymbol>,
-
-    /// All non-int values are stored in the pool.
-    constants: ConstantPool,
 
     /// program counter
     pc: usize,
@@ -75,20 +62,13 @@ pub struct AsmInterpreter {
 }
 
 impl AsmInterpreter {
-    /// Load instructions and associated data for evaluation
+    /// Load a program for evaluation
     ///
     /// # Arguments
     ///
-    /// * `instructions` - The instructions to be executed.
-    /// * `labels` - The map of label names to their corresponding address.
-    /// * `functions` - The map of function names to their corresponding Symbols
-    pub fn load(&mut self,
-                instructions: &[Instruction],
-                labels: &HashMap<String, usize>,
-                functions: &HashMap<String, FunctionSymbol>) {
-        self.instructions = instructions.to_vec();
-        self.labels = labels.clone();
-        self.functions = functions.clone();
+    /// * `program` - The Program to load
+    pub fn load(&mut self, program: Program) {
+        self.program = program;
     }
 
     /// Dummy starter for the interpreter, to get the "main" stack frame setup
@@ -132,14 +112,14 @@ impl AsmInterpreter {
         match registers.get(index).unwrap() {
             LPCVar::Int(v) => LPCValue::Int(*v),
             LPCVar::String(i) => {
-                self.constants.get(*i).unwrap().clone()
+                self.program.constants.get(*i).unwrap().clone()
             }
         }
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) {
-        let instructions = self.instructions.clone();
+        let instructions = self.program.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
             if self.is_halted {
                 break;
@@ -149,7 +129,7 @@ impl AsmInterpreter {
 
             match instruction {
                 Instruction::Call { name, num_args, initial_arg } => {
-                    let mut new_frame = if let Some(func) = self.functions.get(name) {
+                    let mut new_frame = if let Some(func) = self.program.functions.get(name) {
                         StackFrame::new(
                             func.clone(),
                             self.pc + 1
@@ -181,7 +161,7 @@ impl AsmInterpreter {
 
                     self.stack.push(new_frame);
 
-                    if let Some(address) = self.labels.get(name) {
+                    if let Some(address) = self.program.labels.get(name) {
                         self.pc = *address;
                         continue;
                     } else if let Some(efun) = EFUNS.get(name) {
@@ -212,7 +192,7 @@ impl AsmInterpreter {
                     registers[r.index()] = int!(1);
                 },
                 Instruction::SConst(r, s) => {
-                    let index = self.constants.insert(LPCValue::from(s));
+                    let index = self.program.constants.insert(LPCValue::from(s));
                     let registers = self.current_registers();
                     registers[r.index()] = string!(index.try_into().unwrap());
                 },
@@ -240,7 +220,7 @@ impl AsmInterpreter {
                     let string1 = &self.resolve_register(r1.index());
                     let string2 = &self.resolve_register(r2.index());
                     let result = string1 + string2;
-                    let index = self.constants.insert(result);
+                    let index = self.program.constants.insert(result);
 
                     // set r3.index to the new constant index
                     let var = LPCVar::String(index);
@@ -251,7 +231,7 @@ impl AsmInterpreter {
                     let string = &self.resolve_register(r1.index());
                     let multiplier = &self.resolve_register(r2.index());
                     let result = string * multiplier;
-                    let index = self.constants.insert(result);
+                    let index = self.program.constants.insert(result);
 
                     let var = LPCVar::String(index);
                     let registers = self.current_registers();
@@ -292,11 +272,12 @@ impl AsmInterpreter {
 impl Default for AsmInterpreter {
     fn default() -> Self {
         Self {
-            instructions: vec![],
-            labels: HashMap::new(),
-            functions: HashMap::new(),
+            // instructions: vec![],
+            // labels: HashMap::new(),
+            // functions: HashMap::new(),
+            program: Program::default(),
             stack: Vec::with_capacity(MAX_STACK),
-            constants: ConstantPool::default(),
+            // constants: ConstantPool::default(),
             is_halted: true,
             pc: 0
         }

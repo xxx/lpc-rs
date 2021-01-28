@@ -22,6 +22,8 @@ use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::lpc_type::LPCVarType;
+use crate::interpreter::program::Program;
+use crate::interpreter::constant_pool::ConstantPool;
 
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug, Default)]
@@ -114,6 +116,16 @@ impl AsmTreeWalker {
         }
 
         map
+    }
+
+    /// Convert this walkers data into a Program
+    pub fn to_program(&self) -> Program {
+        Program {
+            instructions: self.instructions.to_vec(),
+            labels: self.labels.clone(),
+            functions: self.function_map(),
+            constants: ConstantPool::default()
+        }
     }
 
     fn insert_symbol(&mut self, symbol: Symbol) {
