@@ -11,15 +11,15 @@ use crate::ast::var_init_node::VarInitNode;
 ///
 /// # Returns
 ///
-/// A `Result` with either `Ok(true)` or `Err(<error object>)`
+/// A `Result` with either `Ok(())` or `Err(<error object>)`
 pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a Scope)
-    -> Result<bool, VarRedefinitionError<'a>> {
+    -> Result<(), VarRedefinitionError<'a>> {
     if let Some(sym) = scope.lookup(&node.name) {
         Err(VarRedefinitionError {
             symbol: &sym,
             span: node.span
         })
     } else {
-        Ok(true)
+        Ok(())
     }
 }
