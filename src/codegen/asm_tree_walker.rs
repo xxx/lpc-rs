@@ -141,12 +141,6 @@ impl AsmTreeWalker {
         }
     }
 
-    fn insert_symbol(&mut self, symbol: Symbol) {
-        if let Some(node_id) = self.scopes.current {
-            self.scopes.get_mut(node_id).unwrap().insert(symbol)
-        }
-    }
-
     fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
         if let Some(node_id) = self.scopes.current {
             self.scopes.get(node_id).unwrap().lookup(name)
@@ -376,6 +370,7 @@ mod tests {
     use crate::ast::assignment_node::AssignmentOperation;
     use crate::parser::span::Span;
     use crate::codegen::scope_walker::ScopeWalker;
+    use std::borrow::BorrowMut;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -639,7 +634,7 @@ mod tests {
     fn test_visit_var_sets_the_result() {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
-        walker.insert_symbol(Symbol {
+        insert_symbol(walker.borrow_mut(), Symbol {
             name: "marf".to_string(),
             type_: LPCVarType::Int,
             array: false,
@@ -661,7 +656,7 @@ mod tests {
     fn test_visit_assignment_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
-        walker.insert_symbol(Symbol {
+        insert_symbol(walker.borrow_mut(), Symbol {
             name: "marf".to_string(),
             type_: LPCVarType::Int,
             array: false,
@@ -686,5 +681,11 @@ mod tests {
             IConst(Register(1), -12),
             RegCopy(Register(1), Register(666))
         ]);
+    }
+
+    fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {
+        if let Some(node_id) = walker.scopes.current {
+            walker.scopes.get_mut(node_id).unwrap().insert(symbol)
+        }
     }
 }
