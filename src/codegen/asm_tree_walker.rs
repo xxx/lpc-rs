@@ -107,6 +107,11 @@ impl AsmTreeWalker {
         v
     }
 
+    /// Setter for the scopes
+    pub fn set_scopes(&mut self, scopes: ScopeCollection) {
+        self.scopes = scopes;
+    }
+
     /// Return a map of all labels to addresses, both "normal" and function defs
     pub fn combined_labels(&self) -> HashMap<String, usize> {
         let mut map = self.labels.clone();
@@ -140,22 +145,22 @@ impl AsmTreeWalker {
     }
 
     fn insert_symbol(&mut self, symbol: Symbol) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(symbol)
+        if let Some(mut node_id) = self.scopes.current {
+            self.scopes.get_mut(node_id).unwrap().insert(symbol)
         }
     }
 
     fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        if let Some(scope) = self.scopes.last() {
-            scope.lookup(name)
+        if let Some(node_id) = self.scopes.current {
+            self.scopes.get(node_id).unwrap().lookup(name)
         } else {
             None
         }
     }
 
     fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.lookup_mut(name)
+        if let Some(node_id) = self.scopes.current {
+            self.scopes.get_mut(node_id).unwrap().lookup_mut(name)
         } else {
             None
         }
@@ -164,7 +169,7 @@ impl AsmTreeWalker {
 
 impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &ProgramNode) {
-        let _global_scope = self.scopes.push_new();
+        self.scopes.new_program();
         for expr in &program.functions {
             expr.visit(self);
         }
@@ -293,7 +298,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_function_def(&mut self, node: &FunctionDefNode) {
         let return_address = self.instructions.len();
 
-        let _scope = self.scopes.push_new();
+        self.scopes.next();
         self.register_counter.reset();
 
         for parameter in &node.parameters {
@@ -332,10 +337,10 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_var_init(&mut self, node: &VarInitNode) {
-        if let Err(e) = check_var_redefinition(&node, &self.scopes.last().unwrap()) {
-            var_redefinition_error(&self.filepath, &e);
-            panic!();
-        }
+        // if let Err(e) = check_var_redefinition(&node, &self.scopes.last().unwrap()) {
+        //     var_redefinition_error(&self.filepath, &e);
+        //     panic!();
+        // }
 
         self.insert_symbol(Symbol::from(node));
         let current_register;
@@ -356,6 +361,7 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_var(&mut self, node: &VarNode) {
         let sym = self.lookup_symbol(&node.name);
+        println!("visit_var {:?} {:#?}", self.scopes.current, self.scopes);
         self.current_result = sym.unwrap().location.unwrap();
     }
 
@@ -379,9 +385,11 @@ mod tests {
     use crate::semantic::lpc_type::LPCVarType;
     use crate::ast::assignment_node::AssignmentOperation;
     use crate::parser::span::Span;
+    use crate::codegen::scope_walker::ScopeWalker;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
+        let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
         let program = "
             int main() {
@@ -392,6 +400,11 @@ mod tests {
         let tree = mathstack_parser::ProgramParser::new()
             .parse(program)
             .unwrap();
+
+        scope_walker.visit_program(&tree);
+
+        let mut scopes = ScopeCollection::from(scope_walker);
+        walker.scopes = scopes;
 
         tree.visit(&mut walker);
 
@@ -525,12 +538,18 @@ mod tests {
 
     #[test]
     fn test_visit_function_def_populates_the_data() {
+        let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
         let call = "int main() { 4 + 2 - 5 * 2; }";
         let tree = mathstack_parser::FunctionDefParser::new()
             .parse(call)
             .unwrap();
 
+        scope_walker.visit_function_def(&tree);
+
+        let mut scopes = ScopeCollection::from(scope_walker);
+        scopes.new_program();
+        walker.scopes = scopes;
         walker.visit_function_def(&tree);
 
         let expected = vec![
@@ -605,7 +624,8 @@ mod tests {
             assert_eq!(instruction, &expected[idx]);
         }
 
-        let scope = walker.scopes.last().unwrap();
+        let scope = walker.scopes.get_current().unwrap();
+        println!("scope? {:?}", walker.scopes.get_current_node());
         assert_eq!(scope.lookup("foo").unwrap(), Symbol {
             name: String::from("foo"),
             type_: LPCVarType::Int,

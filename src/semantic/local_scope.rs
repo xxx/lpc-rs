@@ -4,21 +4,20 @@ use crate::semantic::symbol::Symbol;
 
 /// A representation of a local scope / symbol table
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Scope {
+pub struct LocalScope {
     /// My ID
     pub id: usize,
-    /// My parent's ID
-    pub parent_id: Option<usize>,
+
     /// Map of symbol names to the symbol itself
     pub symbols: HashMap<String, Symbol>
 }
 
-impl Scope {
+impl LocalScope {
     /// Insert a new symbol into this scope.
     ///
     /// # Arguments
     ///
-    /// `symbol` - The Symbol to insert
+    /// `symbol` - The `Symbol` to insert
     pub fn insert(&mut self, mut symbol: Symbol) {
         symbol.scope_id = self.id;
         self.symbols.insert(symbol.name.clone(), symbol);
@@ -48,9 +47,8 @@ mod tests {
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {
-        let mut scope = Scope {
+        let mut scope = LocalScope {
             id: 0,
-            parent_id: None,
             symbols: HashMap::new()
         };
 

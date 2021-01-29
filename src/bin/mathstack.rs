@@ -8,6 +8,7 @@ use mathstack::parser::parse_error;
 use mathstack::errors::CompilerError;
 use mathstack::interpreter::program::Program;
 use mathstack::codegen::scope_walker::ScopeWalker;
+use mathstack::semantic::scope_collection::ScopeCollection;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -51,11 +52,12 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let mut walker = TreePrinter::new();
     program.visit(&mut walker);
 
-    let mut scope_walker = ScopeWalker::default();
+    let mut scope_walker = ScopeWalker::new();
     program.visit(&mut scope_walker);
-    println!("scopes: {:?}", scope_walker.scopes);
+    println!("scopes: {:#?}", scope_walker.scopes);
 
     let mut asm_walker = AsmTreeWalker::new(filename);
+    asm_walker.set_scopes(ScopeCollection::from(scope_walker));
     program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {

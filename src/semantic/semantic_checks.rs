@@ -1,4 +1,4 @@
-use crate::semantic::scope::Scope;
+use crate::semantic::local_scope::LocalScope;
 use crate::errors::VarRedefinitionError;
 use crate::ast::var_init_node::VarInitNode;
 
@@ -12,7 +12,7 @@ use crate::ast::var_init_node::VarInitNode;
 /// # Returns
 ///
 /// A `Result` with either `Ok(())` or `Err(<error object>)`
-pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a Scope)
+pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a LocalScope)
     -> Result<(), VarRedefinitionError<'a>> {
     if let Some(sym) = scope.lookup(&node.name) {
         Err(VarRedefinitionError {

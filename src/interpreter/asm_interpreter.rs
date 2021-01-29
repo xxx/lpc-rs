@@ -32,13 +32,20 @@ macro_rules! string {
 /// use mathstack::mathstack_parser;
 /// use mathstack::codegen::tree_walker::TreeWalker;
 /// use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
+/// use mathstack::codegen::scope_walker::ScopeWalker;
 /// use mathstack::interpreter::asm_interpreter::AsmInterpreter;
+/// use mathstack::semantic::scope_collection::ScopeCollection;
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
+/// let mut scope_walker = ScopeWalker::new();
 /// let mut walker = AsmTreeWalker::default();
 /// let mut interpreter = AsmInterpreter::default();
 ///
+/// // Populate the symbol tables
+/// scope_walker.visit_program(&program_node);
+///
+/// walker.set_scopes(ScopeCollection::from(scope_walker));
 /// walker.visit_program(&program_node);
 ///
 /// let mut program = walker.to_program();

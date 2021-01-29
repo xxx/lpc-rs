@@ -10,20 +10,26 @@ use crate::semantic::semantic_checks::check_var_redefinition;
 use crate::semantic::semantic_error::var_redefinition_error;
 
 /// A tree walker to handle populating all the scopes in the program
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ScopeWalker {
     pub scopes: ScopeCollection
 }
 
 impl ScopeWalker {
+    pub fn new() -> Self {
+        Self {
+            scopes: ScopeCollection::default()
+        }
+    }
+
     fn insert_symbol(&mut self, symbol: Symbol) {
-        if let Some(scope) = self.scopes.last_mut() {
+        if let Some(scope) = self.scopes.get_current_mut() {
             scope.insert(symbol)
         }
     }
 
     fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        if let Some(scope) = self.scopes.last() {
+        if let Some(scope) = self.scopes.get_current() {
             scope.lookup(name)
         } else {
             None
@@ -31,7 +37,7 @@ impl ScopeWalker {
     }
 
     fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        if let Some(scope) = self.scopes.last_mut() {
+        if let Some(scope) = self.scopes.get_current_mut() {
             scope.lookup_mut(name)
         } else {
             None
@@ -73,6 +79,18 @@ impl TreeWalker for ScopeWalker {
         // }
 
         self.insert_symbol(Symbol::from(node));
+    }
+}
+
+impl Default for ScopeWalker {
+    fn default() -> Self {
+        // Push a default global scope.
+        let mut scopes = ScopeCollection::default();
+        scopes.push_new();
+
+        Self {
+            scopes
+        }
     }
 }
 

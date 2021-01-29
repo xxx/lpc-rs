@@ -1,48 +1,134 @@
 use std::collections::HashMap;
 use std::borrow::BorrowMut;
-use crate::semantic::scope::Scope;
+use indextree::{Arena, NodeId, Node};
+use delegate::delegate;
+use crate::semantic::local_scope::LocalScope;
 use crate::semantic::symbol::Symbol;
+use crate::codegen::scope_walker::ScopeWalker;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
 pub struct ScopeCollection {
-    pub scopes: Vec<Scope>,
+    pub scopes: Arena<LocalScope>,
+    pub current: Option<NodeId>,
+    pub root: Option<NodeId>
 }
 
 impl ScopeCollection {
     /// Push a new scope onto the stack.
-    pub fn push_new(&mut self) -> &mut Scope {
-        let parent_id = if let Some(scope) = self.scopes.last() {
-            Some(scope.id)
-        } else {
-            None
-        };
+    pub fn push_new(&mut self) -> NodeId {
+        let id = self.scopes.count();
 
-        let id = self.scopes.len();
-
-        let scope = Scope {
+        let scope = LocalScope {
             id,
-            parent_id,
             symbols: HashMap::new()
         };
-        self.scopes.push(scope);
 
-        self.scopes[id].borrow_mut()
+        self.current = match self.current {
+            Some(parent) => {
+                let kid = self.scopes.new_node(scope);
+                parent.append(kid, self.scopes.borrow_mut());
+                Some(kid)
+            },
+            None => {
+                Some(self.scopes.new_node(scope))
+            }
+        };
+
+        if id == 0 {
+            self.root = self.current;
+        }
+
+        self.current.unwrap()
+    }
+
+    // Get a scope based on its ID
+    pub fn get(&self, index: NodeId) -> Option<&LocalScope> {
+        let opt = self.scopes.get(index);
+
+        if let Some(node) = opt {
+            Some(node.get())
+        } else {
+            None
+        }
+    }
+
+    // Get a mutable reference to a scope based on its ID
+    pub fn get_mut(&mut self, index: NodeId) -> Option<&mut LocalScope> {
+        let opt = self.scopes.get_mut(index);
+
+        if let Some(node) = opt {
+            Some(node.get_mut())
+        } else {
+            None
+        }
+    }
+
+    // Get the current scope
+    pub fn get_current(&self) -> Option<&LocalScope> {
+         match self.current {
+             Some(x) => self.get(x),
+             None => None
+         }
+    }
+
+    // Get a mutable reference to the current scope
+    pub fn get_current_mut(&mut self) -> Option<&mut LocalScope> {
+        match self.current {
+            Some(x) => self.get_mut(x),
+            None => None
+        }
+    }
+
+    // Get the node for the current scope, used for traversal.
+    pub fn get_current_node(&self) -> Option<&Node<LocalScope>> {
+        match self.current {
+            Some(x) => self.scopes.get(x),
+            None => None
+        }
     }
 
     /// Pop the top scope off of the stack.
     pub fn pop(&mut self) {
-        self.scopes.pop();
+        println!("scaskdjadfskjasd {:?} :: {:?}", self.current, self);
+        self.current = self.get_current_node().unwrap().parent();
     }
 
-    /// Return a reference to the top scope of the stack.
-    pub fn last(&self) -> Option<&Scope> {
-        self.scopes.last()
+    /// Advance to the next node that would come during a depth-first traversal
+    pub fn next(&mut self) -> Option<NodeId> {
+        println!("next (current): {:?}", self.current);
+        match self.current {
+            Some(node_id) => {
+                let kid = self.scopes.get(node_id).unwrap().first_child();
+
+                println!("next (kid): {:?}", kid);
+
+                if kid.is_some() {
+                    self.current = kid;
+                    return kid;
+                }
+
+                let sibling = self.scopes.get(node_id).unwrap().next_sibling();
+
+                println!("next (sibling): {:?}", sibling);
+
+                if sibling.is_some() {
+                    self.current = sibling;
+                    sibling
+                } else {
+                    self.current = None;
+                    None
+                }
+            },
+            None => {
+                self.current = self.root;
+                self.root
+            }
+        }
     }
 
-    /// Return a mutable reference to the scope on top of the stack.
-    pub fn last_mut(&mut self) -> Option<&mut Scope> {
-        self.scopes.last_mut()
+    pub fn new_program(&mut self) {
+        self.current = self.root;
     }
 
     /// Lookup a symbol, recursing up to parent scopes as necessary.
@@ -51,16 +137,16 @@ impl ScopeCollection {
     ///
     /// * `name`: The name of the symbol to look up.
     /// * `start_id`: The ID of the scope in which to start the search.
-    pub fn lookup(&self, name: &str, start_id: usize) -> Option<&Symbol> {
-        if let Some(scope) = self.scopes.get(start_id) {
-            let sym = scope.lookup(name);
+    pub fn lookup(&self, name: &str) -> Option<&Symbol> {
+        let mut node_id = self.current?;
+        loop {
+            let node = self.scopes.get(node_id)?;
+            let sym = node.get().lookup(name);
             if sym.is_some() {
                 return sym;
             }
 
-            if let Some(parent_id) = scope.parent_id {
-                return self.lookup(name, parent_id);
-            }
+            node_id = node.parent()?;
         }
 
         None
@@ -70,8 +156,16 @@ impl ScopeCollection {
 impl Default for ScopeCollection {
     fn default() -> Self {
         Self {
-            scopes: vec![]
+            scopes: Arena::new(),
+            current: None,
+            root: None
         }
+    }
+}
+
+impl From<ScopeWalker> for ScopeCollection {
+    fn from(walker: ScopeWalker) -> Self {
+        walker.scopes
     }
 }
 
@@ -83,27 +177,22 @@ mod tests {
     #[test]
     fn test_push_new() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.push_new();
-        let scope1_id = scope1.id;
-        let scope2 = collection.push_new();
-        let scope2_id = scope2.id;
+        let scope1_id = collection.push_new();
+        let scope2_id = collection.push_new();
 
-        assert_eq!(collection.scopes.first().unwrap().id, scope1_id);
+        scope1_id.append(scope2_id, collection.scopes.borrow_mut());
 
-        let last = collection.scopes.last().unwrap();
-        assert_eq!(last.id, scope2_id);
-        assert_eq!(last.parent_id.unwrap(), scope1_id);
+        assert_eq!(collection.scopes.get(scope2_id).unwrap().parent(), Some(scope1_id));
     }
 
     #[test]
     fn test_lookup_finds_the_symbol() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.push_new();
-        let scope1_id = scope1.id;
+        let scope1_id = collection.push_new();
         let sym = Symbol::new("foo", LPCVarType::String, false);
-        scope1.insert(sym);
+        collection.get_current_mut().unwrap().insert(sym);
 
-        if let Some(scope_ref) = collection.lookup("foo", scope1_id) {
+        if let Some(scope_ref) = collection.lookup("foo") {
             assert_eq!(scope_ref.type_, LPCVarType::String);
         } else {
             panic!("symbol not found.");
@@ -113,15 +202,15 @@ mod tests {
     #[test]
     fn test_lookup_checks_parent_recursively() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.push_new();
+        let scope1_id = collection.push_new();
+        let scope1 = collection.get_current_mut();
 
         let sym = Symbol::new("foo", LPCVarType::String, false);
-        scope1.insert(sym);
+        scope1.unwrap().insert(sym);
 
-        let scope2 = collection.push_new();
-        let scope2_id = scope2.id;
+        let scope2_id = collection.push_new();
 
-        if let Some(scope_ref) = collection.lookup("foo", scope2_id) {
+        if let Some(scope_ref) = collection.lookup("foo") {
             assert_eq!(scope_ref.type_, LPCVarType::String);
         } else {
             panic!("symbol not found.");
@@ -131,10 +220,9 @@ mod tests {
     #[test]
     fn test_lookup_returns_none_when_not_found() {
         let mut collection = ScopeCollection::default();
-        let scope1 = collection.push_new();
-        let scope1_id = scope1.id;
+        let scope1_id = collection.push_new();
 
-        let result = collection.lookup("asdf", scope1_id);
+        let result = collection.lookup("asdf");
         assert_eq!(result, None);
     }
 }
