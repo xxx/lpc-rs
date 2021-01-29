@@ -41,6 +41,10 @@ pub trait TreeWalker {
 
     /// Visit a function definition node
     fn visit_function_def(&mut self, node: &FunctionDefNode) where Self: Sized {
+        for parameter in &node.parameters {
+            parameter.visit(self);
+        }
+
         for expression in &node.body {
             expression.visit(self);
         }
