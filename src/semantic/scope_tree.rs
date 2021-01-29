@@ -8,8 +8,13 @@ use crate::codegen::scope_walker::ScopeWalker;
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
 pub struct ScopeTree {
+    /// The actual scopes
     pub scopes: Arena<LocalScope>,
+
+    /// ID of the current scope
     pub current: Option<NodeId>,
+
+    /// ID of the root of the tree
     pub root: Option<NodeId>
 }
 
@@ -43,24 +48,12 @@ impl ScopeTree {
 
     // Get a scope based on its ID
     pub fn get(&self, index: NodeId) -> Option<&LocalScope> {
-        let opt = self.scopes.get(index);
-
-        if let Some(node) = opt {
-            Some(node.get())
-        } else {
-            None
-        }
+        Some(self.scopes.get(index)?.get())
     }
 
     // Get a mutable reference to a scope based on its ID
     pub fn get_mut(&mut self, index: NodeId) -> Option<&mut LocalScope> {
-        let opt = self.scopes.get_mut(index);
-
-        if let Some(node) = opt {
-            Some(node.get_mut())
-        } else {
-            None
-        }
+        Some(self.scopes.get_mut(index)?.get_mut())
     }
 
     // Get the current scope
