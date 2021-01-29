@@ -160,7 +160,7 @@ impl AsmTreeWalker {
 
 impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &ProgramNode) {
-        self.scopes.new_program();
+        self.scopes.goto_root();
         for expr in &program.functions {
             expr.visit(self);
         }
@@ -531,7 +531,7 @@ mod tests {
         scope_walker.visit_function_def(&tree);
 
         let mut scopes = ScopeTree::from(scope_walker);
-        scopes.new_program();
+        scopes.goto_root();
         walker.scopes = scopes;
         walker.visit_function_def(&tree);
 

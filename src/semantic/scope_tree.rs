@@ -19,7 +19,7 @@ pub struct ScopeTree {
 }
 
 impl ScopeTree {
-    /// Push a new scope onto the stack.
+    /// Push a new scope onto the tree, and make it the current scope.
     pub fn push_new(&mut self) -> NodeId {
         let id = self.scopes.count();
 
@@ -46,17 +46,17 @@ impl ScopeTree {
         self.current_id.unwrap()
     }
 
-    // Get a scope based on its ID
+    /// Get a scope based on its ID
     pub fn get(&self, index: NodeId) -> Option<&LocalScope> {
         Some(self.scopes.get(index)?.get())
     }
 
-    // Get a mutable reference to a scope based on its ID
+    /// Get a mutable reference to a scope based on its ID
     pub fn get_mut(&mut self, index: NodeId) -> Option<&mut LocalScope> {
         Some(self.scopes.get_mut(index)?.get_mut())
     }
 
-    // Get the current scope
+    /// Get the current scope
     pub fn get_current(&self) -> Option<&LocalScope> {
          match self.current_id {
              Some(x) => self.get(x),
@@ -64,7 +64,7 @@ impl ScopeTree {
          }
     }
 
-    // Get a mutable reference to the current scope
+    /// Get a mutable reference to the current scope
     pub fn get_current_mut(&mut self) -> Option<&mut LocalScope> {
         match self.current_id {
             Some(x) => self.get_mut(x),
@@ -72,7 +72,7 @@ impl ScopeTree {
         }
     }
 
-    // Get the node for the current scope, used for traversal.
+    /// Get the node for the current scope, used for traversal.
     pub fn get_current_node(&self) -> Option<&Node<LocalScope>> {
         match self.current_id {
             Some(x) => self.scopes.get(x),
@@ -80,20 +80,16 @@ impl ScopeTree {
         }
     }
 
-    /// Pop the top scope off of the stack.
+    /// Set the current scope to the current's parent.
     pub fn pop(&mut self) {
-        println!("scaskdjadfskjasd {:?} :: {:?}", self.current_id, self);
         self.current_id = self.get_current_node().unwrap().parent();
     }
 
     /// Advance to the next node that would come during a depth-first traversal
     pub fn next(&mut self) -> Option<NodeId> {
-        println!("next (current): {:?}", self.current_id);
         match self.current_id {
             Some(node_id) => {
                 let kid = self.scopes.get(node_id).unwrap().first_child();
-
-                println!("next (kid): {:?}", kid);
 
                 if kid.is_some() {
                     self.current_id = kid;
@@ -101,8 +97,6 @@ impl ScopeTree {
                 }
 
                 let sibling = self.scopes.get(node_id).unwrap().next_sibling();
-
-                println!("next (sibling): {:?}", sibling);
 
                 if sibling.is_some() {
                     self.current_id = sibling;
@@ -119,7 +113,7 @@ impl ScopeTree {
         }
     }
 
-    pub fn new_program(&mut self) {
+    pub fn goto_root(&mut self) {
         self.current_id = self.root_id;
     }
 
