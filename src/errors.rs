@@ -3,6 +3,10 @@ use crate::semantic::symbol::Symbol;
 use std::fmt;
 use crate::parser::span::Span;
 
+pub enum CompilerError {
+    ParseError
+}
+
 /// Error for duplicate var definitions in a single local scope.
 #[derive(Debug, Clone)]
 pub struct VarRedefinitionError<'a> {
