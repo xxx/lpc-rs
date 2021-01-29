@@ -12,10 +12,10 @@ pub struct ScopeTree {
     pub scopes: Arena<LocalScope>,
 
     /// ID of the current scope
-    pub current: Option<NodeId>,
+    pub current_id: Option<NodeId>,
 
     /// ID of the root of the tree
-    pub root: Option<NodeId>
+    pub root_id: Option<NodeId>
 }
 
 impl ScopeTree {
@@ -28,7 +28,7 @@ impl ScopeTree {
             symbols: HashMap::new()
         };
 
-        self.current = match self.current {
+        self.current_id = match self.current_id {
             Some(parent) => {
                 let kid = self.scopes.new_node(scope);
                 parent.append(kid, self.scopes.borrow_mut());
@@ -40,10 +40,10 @@ impl ScopeTree {
         };
 
         if id == 0 {
-            self.root = self.current;
+            self.root_id = self.current_id;
         }
 
-        self.current.unwrap()
+        self.current_id.unwrap()
     }
 
     // Get a scope based on its ID
@@ -58,7 +58,7 @@ impl ScopeTree {
 
     // Get the current scope
     pub fn get_current(&self) -> Option<&LocalScope> {
-         match self.current {
+         match self.current_id {
              Some(x) => self.get(x),
              None => None
          }
@@ -66,7 +66,7 @@ impl ScopeTree {
 
     // Get a mutable reference to the current scope
     pub fn get_current_mut(&mut self) -> Option<&mut LocalScope> {
-        match self.current {
+        match self.current_id {
             Some(x) => self.get_mut(x),
             None => None
         }
@@ -74,7 +74,7 @@ impl ScopeTree {
 
     // Get the node for the current scope, used for traversal.
     pub fn get_current_node(&self) -> Option<&Node<LocalScope>> {
-        match self.current {
+        match self.current_id {
             Some(x) => self.scopes.get(x),
             None => None
         }
@@ -82,21 +82,21 @@ impl ScopeTree {
 
     /// Pop the top scope off of the stack.
     pub fn pop(&mut self) {
-        println!("scaskdjadfskjasd {:?} :: {:?}", self.current, self);
-        self.current = self.get_current_node().unwrap().parent();
+        println!("scaskdjadfskjasd {:?} :: {:?}", self.current_id, self);
+        self.current_id = self.get_current_node().unwrap().parent();
     }
 
     /// Advance to the next node that would come during a depth-first traversal
     pub fn next(&mut self) -> Option<NodeId> {
-        println!("next (current): {:?}", self.current);
-        match self.current {
+        println!("next (current): {:?}", self.current_id);
+        match self.current_id {
             Some(node_id) => {
                 let kid = self.scopes.get(node_id).unwrap().first_child();
 
                 println!("next (kid): {:?}", kid);
 
                 if kid.is_some() {
-                    self.current = kid;
+                    self.current_id = kid;
                     return kid;
                 }
 
@@ -105,22 +105,22 @@ impl ScopeTree {
                 println!("next (sibling): {:?}", sibling);
 
                 if sibling.is_some() {
-                    self.current = sibling;
+                    self.current_id = sibling;
                     sibling
                 } else {
-                    self.current = None;
+                    self.current_id = None;
                     None
                 }
             },
             None => {
-                self.current = self.root;
-                self.root
+                self.current_id = self.root_id;
+                self.root_id
             }
         }
     }
 
     pub fn new_program(&mut self) {
-        self.current = self.root;
+        self.current_id = self.root_id;
     }
 
     /// Lookup a symbol, recursing up to parent scopes as necessary.
@@ -130,7 +130,7 @@ impl ScopeTree {
     /// * `name`: The name of the symbol to look up.
     /// * `start_id`: The ID of the scope in which to start the search.
     pub fn lookup(&self, name: &str) -> Option<&Symbol> {
-        let mut node_id = self.current?;
+        let mut node_id = self.current_id?;
         loop {
             let node = self.scopes.get(node_id)?;
             let sym = node.get().lookup(name);
@@ -147,8 +147,8 @@ impl Default for ScopeTree {
     fn default() -> Self {
         Self {
             scopes: Arena::new(),
-            current: None,
-            root: None
+            current_id: None,
+            root_id: None
         }
     }
 }

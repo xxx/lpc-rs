@@ -142,7 +142,7 @@ impl AsmTreeWalker {
     }
 
     fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        if let Some(node_id) = self.scopes.current {
+        if let Some(node_id) = self.scopes.current_id {
             self.scopes.get(node_id).unwrap().lookup(name)
         } else {
             None
@@ -150,7 +150,7 @@ impl AsmTreeWalker {
     }
 
     fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        if let Some(node_id) = self.scopes.current {
+        if let Some(node_id) = self.scopes.current_id {
             self.scopes.get_mut(node_id).unwrap().lookup_mut(name)
         } else {
             None
@@ -684,7 +684,7 @@ mod tests {
     }
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {
-        if let Some(node_id) = walker.scopes.current {
+        if let Some(node_id) = walker.scopes.current_id {
             walker.scopes.get_mut(node_id).unwrap().insert(symbol)
         }
     }
