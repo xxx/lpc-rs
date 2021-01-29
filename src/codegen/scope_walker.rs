@@ -12,35 +12,27 @@ use crate::semantic::semantic_error::var_redefinition_error;
 /// A tree walker to handle populating all the scopes in the program
 #[derive(Debug)]
 pub struct ScopeWalker {
+    /// Store the path to the original file, used for error messaging.
+    filepath: String,
+
+    /// Our collection of scopes
     pub scopes: ScopeCollection
 }
 
 impl ScopeWalker {
-    pub fn new() -> Self {
+    /// Create a new `ScopeWalker`, using the content at `filepath`
+    /// as the file to check for error messaging.
+    pub fn new(filepath: &str) -> Self {
         Self {
+            filepath: String::from(filepath),
             scopes: ScopeCollection::default()
         }
     }
 
+    /// Insert a new symbol into the current scope
     fn insert_symbol(&mut self, symbol: Symbol) {
         if let Some(scope) = self.scopes.get_current_mut() {
             scope.insert(symbol)
-        }
-    }
-
-    fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        if let Some(scope) = self.scopes.get_current() {
-            scope.lookup(name)
-        } else {
-            None
-        }
-    }
-
-    fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        if let Some(scope) = self.scopes.get_current_mut() {
-            scope.lookup_mut(name)
-        } else {
-            None
         }
     }
 }
@@ -73,10 +65,11 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &VarInitNode) where Self: Sized {
-        // if let Err(e) = check_var_redefinition(&node, &self.scopes.last().unwrap()) {
-        //     var_redefinition_error(&self.filepath, &e);
-        //     panic!();
-        // }
+        if let Err(e) =
+            check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
+            var_redefinition_error(&self.filepath, &e);
+            panic!();
+        }
 
         self.insert_symbol(Symbol::from(node));
     }
@@ -89,6 +82,7 @@ impl Default for ScopeWalker {
         scopes.push_new();
 
         Self {
+            filepath: String::new(),
             scopes
         }
     }

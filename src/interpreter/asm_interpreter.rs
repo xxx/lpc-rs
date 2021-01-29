@@ -38,14 +38,15 @@ macro_rules! string {
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
-/// let mut scope_walker = ScopeWalker::new();
-/// let mut walker = AsmTreeWalker::default();
-/// let mut interpreter = AsmInterpreter::default();
+/// let filepath = "path/to/myfile.c";
+/// let mut scope_walker = ScopeWalker::new(filepath);
 ///
 /// // Populate the symbol tables
 /// scope_walker.visit_program(&program_node);
 ///
-/// walker.set_scopes(ScopeCollection::from(scope_walker));
+/// let mut walker = AsmTreeWalker::new(ScopeCollection::from(scope_walker));
+/// let mut interpreter = AsmInterpreter::default();
+///
 /// walker.visit_program(&program_node);
 ///
 /// let mut program = walker.to_program();

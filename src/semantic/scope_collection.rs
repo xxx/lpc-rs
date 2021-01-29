@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::borrow::BorrowMut;
 use indextree::{Arena, NodeId, Node};
-use delegate::delegate;
 use crate::semantic::local_scope::LocalScope;
 use crate::semantic::symbol::Symbol;
 use crate::codegen::scope_walker::ScopeWalker;
@@ -148,8 +147,6 @@ impl ScopeCollection {
 
             node_id = node.parent()?;
         }
-
-        None
     }
 }
 
@@ -188,7 +185,7 @@ mod tests {
     #[test]
     fn test_lookup_finds_the_symbol() {
         let mut collection = ScopeCollection::default();
-        let scope1_id = collection.push_new();
+        collection.push_new();
         let sym = Symbol::new("foo", LPCVarType::String, false);
         collection.get_current_mut().unwrap().insert(sym);
 
@@ -202,13 +199,13 @@ mod tests {
     #[test]
     fn test_lookup_checks_parent_recursively() {
         let mut collection = ScopeCollection::default();
-        let scope1_id = collection.push_new();
+        collection.push_new();
         let scope1 = collection.get_current_mut();
 
         let sym = Symbol::new("foo", LPCVarType::String, false);
         scope1.unwrap().insert(sym);
 
-        let scope2_id = collection.push_new();
+        collection.push_new();
 
         if let Some(scope_ref) = collection.lookup("foo") {
             assert_eq!(scope_ref.type_, LPCVarType::String);
@@ -220,7 +217,7 @@ mod tests {
     #[test]
     fn test_lookup_returns_none_when_not_found() {
         let mut collection = ScopeCollection::default();
-        let scope1_id = collection.push_new();
+        collection.push_new();
 
         let result = collection.lookup("asdf");
         assert_eq!(result, None);
