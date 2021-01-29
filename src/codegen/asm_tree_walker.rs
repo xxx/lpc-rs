@@ -13,7 +13,7 @@ use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::interpreter::function_symbol::FunctionSymbol;
 use crate::ast::return_node::ReturnNode;
-use crate::semantic::scope_collection::ScopeCollection;
+use crate::semantic::scope_tree::ScopeTree;
 use crate::ast::decl_node::DeclNode;
 use crate::semantic::symbol::Symbol;
 use crate::ast::var_init_node::VarInitNode;
@@ -39,12 +39,12 @@ pub struct AsmTreeWalker {
     /// The internal counter to track which registers are used.
     register_counter: RegisterCounter,
     /// The collection of scopes
-    scopes: ScopeCollection
+    scopes: ScopeTree
 }
 
 impl AsmTreeWalker {
     /// Create a new `AsmTreeWalker` that consumes the passed scopes
-    pub fn new(scopes: ScopeCollection) -> Self {
+    pub fn new(scopes: ScopeTree) -> Self {
         Self {
             scopes,
             ..Default::default()
@@ -105,7 +105,7 @@ impl AsmTreeWalker {
     }
 
     /// Setter for the scopes
-    pub fn set_scopes(&mut self, scopes: ScopeCollection) {
+    pub fn set_scopes(&mut self, scopes: ScopeTree) {
         self.scopes = scopes;
     }
 
@@ -393,7 +393,7 @@ mod tests {
 
         scope_walker.visit_program(&tree);
 
-        let scopes = ScopeCollection::from(scope_walker);
+        let scopes = ScopeTree::from(scope_walker);
         walker.scopes = scopes;
 
         tree.visit(&mut walker);
@@ -535,7 +535,7 @@ mod tests {
 
         scope_walker.visit_function_def(&tree);
 
-        let mut scopes = ScopeCollection::from(scope_walker);
+        let mut scopes = ScopeTree::from(scope_walker);
         scopes.new_program();
         walker.scopes = scopes;
         walker.visit_function_def(&tree);
@@ -602,7 +602,7 @@ mod tests {
 
         scope_walker.visit_decl(&tree);
 
-        let mut walker = AsmTreeWalker::new(ScopeCollection::from(scope_walker));
+        let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker));
         walker.visit_decl(&tree);
 
         let expected = vec![

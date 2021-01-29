@@ -34,7 +34,7 @@ macro_rules! string {
 /// use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
 /// use mathstack::codegen::scope_walker::ScopeWalker;
 /// use mathstack::interpreter::asm_interpreter::AsmInterpreter;
-/// use mathstack::semantic::scope_collection::ScopeCollection;
+/// use mathstack::semantic::scope_tree::ScopeTree;
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
@@ -44,7 +44,7 @@ macro_rules! string {
 /// // Populate the symbol tables
 /// scope_walker.visit_program(&program_node);
 ///
-/// let mut walker = AsmTreeWalker::new(ScopeCollection::from(scope_walker));
+/// let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker));
 /// let mut interpreter = AsmInterpreter::default();
 ///
 /// walker.visit_program(&program_node);

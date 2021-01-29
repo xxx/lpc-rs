@@ -8,7 +8,7 @@ use mathstack::parser::parse_error;
 use mathstack::errors::CompilerError;
 use mathstack::interpreter::program::Program;
 use mathstack::codegen::scope_walker::ScopeWalker;
-use mathstack::semantic::scope_collection::ScopeCollection;
+use mathstack::semantic::scope_tree::ScopeTree;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -55,7 +55,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let mut scope_walker = ScopeWalker::new(filename);
     program.visit(&mut scope_walker);
 
-    let mut asm_walker = AsmTreeWalker::new(ScopeCollection::from(scope_walker));
+    let mut asm_walker = AsmTreeWalker::new(ScopeTree::from(scope_walker));
     program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {

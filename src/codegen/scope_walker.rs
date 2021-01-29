@@ -1,4 +1,4 @@
-use crate::semantic::scope_collection::ScopeCollection;
+use crate::semantic::scope_tree::ScopeTree;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::BinaryOpNode;
@@ -16,7 +16,7 @@ pub struct ScopeWalker {
     filepath: String,
 
     /// Our collection of scopes
-    pub scopes: ScopeCollection
+    pub scopes: ScopeTree
 }
 
 impl ScopeWalker {
@@ -25,7 +25,7 @@ impl ScopeWalker {
     pub fn new(filepath: &str) -> Self {
         Self {
             filepath: String::from(filepath),
-            scopes: ScopeCollection::default()
+            scopes: ScopeTree::default()
         }
     }
 
@@ -78,7 +78,7 @@ impl TreeWalker for ScopeWalker {
 impl Default for ScopeWalker {
     fn default() -> Self {
         // Push a default global scope.
-        let mut scopes = ScopeCollection::default();
+        let mut scopes = ScopeTree::default();
         scopes.push_new();
 
         Self {

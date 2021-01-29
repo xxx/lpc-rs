@@ -7,13 +7,13 @@ use crate::codegen::scope_walker::ScopeWalker;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
-pub struct ScopeCollection {
+pub struct ScopeTree {
     pub scopes: Arena<LocalScope>,
     pub current: Option<NodeId>,
     pub root: Option<NodeId>
 }
 
-impl ScopeCollection {
+impl ScopeTree {
     /// Push a new scope onto the stack.
     pub fn push_new(&mut self) -> NodeId {
         let id = self.scopes.count();
@@ -150,7 +150,7 @@ impl ScopeCollection {
     }
 }
 
-impl Default for ScopeCollection {
+impl Default for ScopeTree {
     fn default() -> Self {
         Self {
             scopes: Arena::new(),
@@ -160,7 +160,7 @@ impl Default for ScopeCollection {
     }
 }
 
-impl From<ScopeWalker> for ScopeCollection {
+impl From<ScopeWalker> for ScopeTree {
     fn from(walker: ScopeWalker) -> Self {
         walker.scopes
     }
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_push_new() {
-        let mut collection = ScopeCollection::default();
+        let mut collection = ScopeTree::default();
         let scope1_id = collection.push_new();
         let scope2_id = collection.push_new();
 
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_lookup_finds_the_symbol() {
-        let mut collection = ScopeCollection::default();
+        let mut collection = ScopeTree::default();
         collection.push_new();
         let sym = Symbol::new("foo", LPCVarType::String, false);
         collection.get_current_mut().unwrap().insert(sym);
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_lookup_checks_parent_recursively() {
-        let mut collection = ScopeCollection::default();
+        let mut collection = ScopeTree::default();
         collection.push_new();
         let scope1 = collection.get_current_mut();
 
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_lookup_returns_none_when_not_found() {
-        let mut collection = ScopeCollection::default();
+        let mut collection = ScopeTree::default();
         collection.push_new();
 
         let result = collection.lookup("asdf");
