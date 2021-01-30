@@ -13,6 +13,19 @@ pub enum BinaryOperation {
     Div
 }
 
+impl Display for BinaryOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            BinaryOperation::Add => "+",
+            BinaryOperation::Sub => "-",
+            BinaryOperation::Mul => "*",
+            BinaryOperation::Div => "/"
+        };
+
+        write!(f, "{}", s)
+    }
+}
+
 /// Representation of a binary operation
 #[derive(Debug, Eq, PartialEq)]
 pub struct BinaryOpNode {

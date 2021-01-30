@@ -347,7 +347,7 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> {
         for init in &node.initializations {
-            self.visit_var_init(&init)?;
+            self.visit_var_init(&init).unwrap();
         }
 
         Ok(())
