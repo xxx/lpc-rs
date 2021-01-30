@@ -1,14 +1,16 @@
+use std::iter::repeat;
 use crate::ast::expression_node::ExpressionNode;
 use crate::ast::binary_op_node::{BinaryOperation, BinaryOpNode};
 use crate::ast::int_node::IntNode;
-use std::iter::repeat;
 use crate::ast::string_node::StringNode;
+use crate::parser::span::Span;
 
 /// Combine literals in cases where we have enough information to do so.
 pub fn collapse_expression(
     op: BinaryOperation,
     l: ExpressionNode,
-    r: ExpressionNode
+    r: ExpressionNode,
+    span: Span
 ) -> ExpressionNode {
     match op {
         BinaryOperation::Add => {
@@ -19,7 +21,12 @@ pub fn collapse_expression(
                             ExpressionNode::Int(IntNode { value: node.value + node2.value })
                         },
                         _ => ExpressionNode::BinaryOp(
-                            BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                            BinaryOpNode {
+                                l: Box::new(l),
+                                r: Box::new(r),
+                                op,
+                                span: Some(span)
+                            }
                         )
                     }
                 }
@@ -38,12 +45,22 @@ pub fn collapse_expression(
                             )
                         },
                         _ => ExpressionNode::BinaryOp(
-                            BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                            BinaryOpNode {
+                                l: Box::new(l),
+                                r: Box::new(r),
+                                op,
+                                span: Some(span)
+                            }
                         )
                     }
                 },
                 _ => ExpressionNode::BinaryOp(
-                    BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                    BinaryOpNode {
+                        l: Box::new(l),
+                        r: Box::new(r),
+                        op,
+                        span: Some(span)
+                    }
                 )
             }
         },
@@ -55,12 +72,22 @@ pub fn collapse_expression(
                             ExpressionNode::Int(IntNode { value: node.value - node2.value })
                         },
                         _ => ExpressionNode::BinaryOp(
-                            BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                            BinaryOpNode {
+                                l: Box::new(l),
+                                r: Box::new(r),
+                                op,
+                                span: Some(span)
+                            }
                         )
                     }
                 },
                 _ => ExpressionNode::BinaryOp(
-                    BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                    BinaryOpNode {
+                        l: Box::new(l),
+                        r: Box::new(r),
+                        op,
+                        span: Some(span)
+                    }
                 )
             }
         },
@@ -72,7 +99,12 @@ pub fn collapse_expression(
                             ExpressionNode::Int(IntNode { value: node.value * node2.value })
                         },
                         _ => ExpressionNode::BinaryOp(
-                            BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                            BinaryOpNode {
+                                l: Box::new(l),
+                                r: Box::new(r),
+                                op,
+                                span: Some(span)
+                            }
                         )
                     }
                 },
@@ -89,12 +121,21 @@ pub fn collapse_expression(
                             }
                         },
                         _ => ExpressionNode::BinaryOp(
-                            BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                            BinaryOpNode {
+                                l: Box::new(l),
+                                r: Box::new(r),
+                                op,
+                                span: Some(span)
+                            }
                         )
                     }
                 },
                 _ => ExpressionNode::BinaryOp(
-                    BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                    BinaryOpNode { l: Box::new(l),
+                        r: Box::new(r),
+                        op,
+                        span: Some(span)
+                    }
                 )
             }
         },
@@ -106,12 +147,22 @@ pub fn collapse_expression(
                             ExpressionNode::Int(IntNode { value: node.value / node2.value })
                         },
                         _ => ExpressionNode::BinaryOp(
-                            BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                            BinaryOpNode {
+                                l: Box::new(l),
+                                r: Box::new(r),
+                                op,
+                                span: Some(span)
+                            }
                         )
                     }
                 },
                 _ => ExpressionNode::BinaryOp(
-                    BinaryOpNode { l: Box::new(l), r: Box::new(r), op }
+                    BinaryOpNode {
+                        l: Box::new(l),
+                        r: Box::new(r),
+                        op,
+                        span: Some(span)
+                    }
                 )
             }
         }

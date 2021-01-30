@@ -116,7 +116,8 @@ mod tests {
         let node: BinaryOpNode = BinaryOpNode {
             l: Box::new(ExpressionNode::Int(IntNode::new(123))),
             r: Box::new(ExpressionNode::Int(IntNode::new(1233))),
-            op: BinaryOperation::Add
+            op: BinaryOperation::Add,
+            span: None
         };
         let clone = node.clone();
 

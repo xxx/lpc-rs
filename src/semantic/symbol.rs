@@ -38,6 +38,12 @@ impl Symbol {
     }
 }
 
+impl Default for Symbol {
+    fn default() -> Self {
+        Self::new("", LPCVarType::Int, false)
+    }
+}
+
 impl From<&VarInitNode> for Symbol {
     fn from(node: &VarInitNode) -> Self {
         let s = Self::new(&node.name, node.type_, node.array);

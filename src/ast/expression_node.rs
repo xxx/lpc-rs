@@ -42,6 +42,16 @@ macro_rules! destructured_traits {
                 }
             }
         }
+
+        impl Display for ExpressionNode {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+                match self {
+                $(
+                    $x(y) => write!(f, "{}", y),
+                )*
+                }
+            }
+        }
     };
 }
 
@@ -66,6 +76,12 @@ impl From<IntNode> for ExpressionNode {
     }
 }
 
+impl From<VarNode> for ExpressionNode {
+    fn from(node: VarNode) -> Self {
+        Self::Var(node)
+    }
+}
+
 impl From<ASTNode> for ExpressionNode {
     fn from(node: ASTNode) -> Self {
         match node {
@@ -75,9 +91,15 @@ impl From<ASTNode> for ExpressionNode {
     }
 }
 
-impl Display for ExpressionNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+impl From<i64> for ExpressionNode {
+    fn from(value: i64) -> Self {
+        Self::Int(IntNode { value })
+    }
+}
+
+impl From<&str> for ExpressionNode {
+    fn from(value: &str) -> Self {
+        Self::String(StringNode { value: String::from(value) })
     }
 }
 
@@ -91,7 +113,8 @@ mod tests {
         let node = BinaryOpNode {
             l: Box::new(IntNode::new(666).into()),
             r: Box::new(IntNode::new(324).into()),
-            op: BinaryOperation::Add
+            op: BinaryOperation::Add,
+            span: None
         };
 
         let clone = node.clone();

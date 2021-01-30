@@ -13,6 +13,14 @@ pub struct LocalScope {
 }
 
 impl LocalScope {
+    /// Create a new LocalScope with the passed `id`
+    pub fn new(id: usize) -> Self {
+        Self {
+            id,
+            symbols: HashMap::new()
+        }
+    }
+
     /// Insert a new symbol into this scope.
     ///
     /// # Arguments
@@ -37,6 +45,12 @@ impl LocalScope {
             #[call(contains_key)]
             pub fn contains(&self, name: &str) -> bool;
         }
+    }
+}
+
+impl Default for LocalScope {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 

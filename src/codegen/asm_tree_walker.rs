@@ -69,7 +69,8 @@ impl AsmTreeWalker {
     /// let node = BinaryOpNode {
     ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
     ///     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
-    ///     op: BinaryOperation::Sub
+    ///     op: BinaryOperation::Sub,
+    ///     span: None
     /// };
     /// let mut walker = AsmTreeWalker::default();
     /// walker.visit_binary_op(&node);
@@ -501,9 +502,11 @@ mod tests {
                 r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
                     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
-                    op: BinaryOperation::Add
+                    op: BinaryOperation::Add,
+                    span: None
                 })),
-                op: BinaryOperation::Mul
+                op: BinaryOperation::Mul,
+                span: None
             };
 
             walker.visit_binary_op(&node).unwrap();
@@ -530,9 +533,11 @@ mod tests {
                 r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::String(StringNode::new("bar"))),
                     r: Box::new(ExpressionNode::String(StringNode::new("baz"))),
-                    op: BinaryOperation::Add
+                    op: BinaryOperation::Add,
+                    span: None
                 })),
-                op: BinaryOperation::Add
+                op: BinaryOperation::Add,
+                span: None
             };
 
             walker.visit_binary_op(&node).unwrap();

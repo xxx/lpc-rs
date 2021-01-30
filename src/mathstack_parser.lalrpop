@@ -165,15 +165,15 @@ pub CastExpression: ExpressionNode = {
 
 pub MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
-    <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> => {
-         collapse_expression(op, l, r)
+    <left:@L> <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> <right:@R> => {
+         collapse_expression(op, l, r, Span { l: left, r: right })
     },
 };
 
 pub AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
-    <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
-        collapse_expression(op, l, r)
+    <left:@L> <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> <right:@R> => {
+        collapse_expression(op, l, r, Span { l: left, r: right })
     }
 };
 

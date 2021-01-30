@@ -1,8 +1,9 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::expression_node::ExpressionNode;
-use std::fmt::{Display, Formatter};
-use std::fmt;
+use crate::parser::span::Span;
 
 /// All possible binary operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -31,10 +32,15 @@ impl Display for BinaryOperation {
 pub struct BinaryOpNode {
     /// Left-hand side
     pub l: Box<ExpressionNode>,
+
     /// Right-hand side
     pub r: Box<ExpressionNode>,
+
     /// The operation to perform
-    pub op: BinaryOperation
+    pub op: BinaryOperation,
+
+    /// The text span in the original file that this node represents. Used for error messages.
+    pub span: Option<Span>
 }
 
 impl ASTNodeTrait for BinaryOpNode {
@@ -55,7 +61,8 @@ impl Clone for BinaryOpNode {
         Self {
             l: Box::new((*self.l).clone()),
             r: Box::new((*self.r).clone()),
-            op: self.op
+            op: self.op,
+            span: self.span
         }
     }
 }
