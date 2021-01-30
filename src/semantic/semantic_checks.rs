@@ -37,10 +37,6 @@ pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a LocalScope)
 ///
 /// * `node` - The node we're checking to see if it's a redefinition
 /// * `scope_tree` - A reference to the scope tree that holds the program symbols
-///
-/// # Returns
-///
-/// A `Result` with either `Ok(())` or `Err(<error object>)`
 pub fn check_binary_operation(node: &BinaryOpNode, scope_tree: &ScopeTree)
                               -> Result<(), BinaryOperationError> {
     fn create_error(
