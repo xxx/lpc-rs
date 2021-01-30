@@ -7,7 +7,7 @@ use crate::semantic::symbol::Symbol;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::semantic_checks::check_var_redefinition;
-use crate::semantic::semantic_error::var_redefinition_error;
+use crate::semantic::semantic_errors::var_redefinition_error;
 use crate::errors::CompilerError;
 
 /// A tree walker to handle populating all the scopes in the program
