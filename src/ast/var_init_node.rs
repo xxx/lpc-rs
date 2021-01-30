@@ -11,12 +11,16 @@ use crate::parser::span::Span;
 pub struct VarInitNode {
     /// The LPC type. This is the "true" type, even for mixed vars.
     pub type_: LPCVarType,
+
     /// The var name
     pub name: String,
+
     /// The initialization value. When missing, defaults to 0.
     pub value: Option<ExpressionNode>,
+
     /// Is this var actually an array?
     pub array: bool,
+
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>
 }
