@@ -17,7 +17,9 @@ impl VarNode {
 }
 
 impl ASTNodeTrait for VarNode {
-    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_var(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) {
+        tree_walker.visit_var(self).unwrap();
+    }
 }
 
 impl Display for VarNode {

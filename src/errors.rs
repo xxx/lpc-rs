@@ -3,6 +3,8 @@ use crate::semantic::symbol::Symbol;
 use std::fmt;
 use crate::parser::span::Span;
 
+/// General error wrapper type
+#[derive(Debug, Clone)]
 pub enum CompilerError {
     ParseError
 }

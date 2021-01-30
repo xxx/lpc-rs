@@ -17,7 +17,9 @@ impl IntNode {
 
 impl ASTNodeTrait for IntNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_int(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) {
+        tree_walker.visit_int(self).unwrap();
+    }
 }
 
 impl Display for IntNode {

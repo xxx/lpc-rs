@@ -15,7 +15,7 @@ pub struct CallNode {
 
 impl ASTNodeTrait for CallNode {
     fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        tree_walker.visit_call(self);
+        tree_walker.visit_call(self).unwrap();
     }
 }
 

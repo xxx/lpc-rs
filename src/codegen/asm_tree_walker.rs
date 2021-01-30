@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use multimap::MultiMap;
+use tree_walker::TreeWalker;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
 use crate::codegen::tree_walker;
-use tree_walker::TreeWalker;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::asm::instruction::Instruction;
@@ -24,6 +24,7 @@ use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::lpc_type::LPCVarType;
 use crate::interpreter::program::Program;
 use crate::interpreter::constant_pool::ConstantPool;
+use crate::errors::CompilerError;
 
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug, Default)]
@@ -159,15 +160,17 @@ impl AsmTreeWalker {
 }
 
 impl TreeWalker for AsmTreeWalker {
-    fn visit_program(&mut self, program: &ProgramNode) {
+    fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
         self.scopes.goto_root();
         for expr in &program.functions {
             expr.visit(self);
         }
         self.scopes.pop();
+
+        Ok(())
     }
 
-    fn visit_call(&mut self, node: &CallNode) {
+    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
         let mut arg_results: Vec<Register> = vec![];
 
         // eval args, then save each result register
@@ -198,9 +201,11 @@ impl TreeWalker for AsmTreeWalker {
 
         self.instructions.push(instruction);
         self.current_result = Register(0); // returned results are in r0
+
+        Ok(())
     }
 
-    fn visit_int(&mut self, node: &IntNode) {
+    fn visit_int(&mut self, node: &IntNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next();
         self.current_result = register.unwrap();
         let instruction = match node.value {
@@ -209,15 +214,19 @@ impl TreeWalker for AsmTreeWalker {
             v => Instruction::IConst(register.unwrap(), v)
         };
         self.instructions.push(instruction);
+
+        Ok(())
     }
 
-    fn visit_string(&mut self, node: &StringNode) {
+    fn visit_string(&mut self, node: &StringNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
         self.instructions.push(Instruction::SConst(register, node.value.clone()));
+
+        Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) {
+    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self);
         let reg_left = self.current_result;
 
@@ -284,9 +293,11 @@ impl TreeWalker for AsmTreeWalker {
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap())
         };
         self.instructions.push(instruction);
+
+        Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) {
+    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
         let return_address = self.instructions.len();
 
         self.scopes.next();
@@ -309,9 +320,11 @@ impl TreeWalker for AsmTreeWalker {
             num_locals: self.register_counter.get_count() - num_args,
             address: return_address
         }, return_address);
+
+        Ok(())
     }
 
-    fn visit_return(&mut self, node: &ReturnNode) {
+    fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> {
         if let Some(expression) = &node.value {
             expression.visit(self);
             let copy = Instruction::RegCopy(self.current_result, Register(0));
@@ -319,15 +332,19 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         self.instructions.push(Instruction::Ret);
+
+        Ok(())
     }
 
-    fn visit_decl(&mut self, node: &DeclNode) {
+    fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> {
         for init in &node.initializations {
-            self.visit_var_init(&init);
+            self.visit_var_init(&init)?;
         }
+
+        Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) {
+    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
         let current_register;
 
         if let Some(expression) = &node.value {
@@ -342,14 +359,18 @@ impl TreeWalker for AsmTreeWalker {
         if let Some(sym) = symbol {
             sym.location = Some(current_register);
         }
+
+        Ok(())
     }
 
-    fn visit_var(&mut self, node: &VarNode) {
+    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
         let sym = self.lookup_symbol(&node.name);
         self.current_result = sym.unwrap().location.unwrap();
+
+        Ok(())
     }
 
-    fn visit_assignment(&mut self, node: &AssignmentNode) where Self: Sized {
+    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
         node.lhs.visit(self);
         let dest = self.current_result;
         node.rhs.visit(self);
@@ -357,6 +378,8 @@ impl TreeWalker for AsmTreeWalker {
         let assign = Instruction::RegCopy(self.current_result, dest);
         self.instructions.push(assign);
         self.current_result = dest;
+
+        Ok(())
     }
 }
 
@@ -386,7 +409,7 @@ mod tests {
             .parse(program)
             .unwrap();
 
-        scope_walker.visit_program(&tree);
+        scope_walker.visit_program(&tree).unwrap();
 
         let scopes = ScopeTree::from(scope_walker);
         walker.scopes = scopes;
@@ -417,7 +440,7 @@ mod tests {
             .parse(call)
             .unwrap();
 
-        walker.visit_call(&tree);
+        walker.visit_call(&tree).unwrap();
 
         let expected = vec![
             Instruction::IConst(Register(1), -1),
@@ -442,9 +465,9 @@ mod tests {
         let tree0 = IntNode::new(0);
         let tree1 = IntNode::new(1);
 
-        walker.visit_int(&tree);
-        walker.visit_int(&tree0);
-        walker.visit_int(&tree1);
+        walker.visit_int(&tree).unwrap();
+        walker.visit_int(&tree0).unwrap();
+        walker.visit_int(&tree1).unwrap();
 
         let expected = vec![
             Instruction::IConst(Register(1), 666),
@@ -474,7 +497,7 @@ mod tests {
                 op: BinaryOperation::Mul
             };
 
-            walker.visit_binary_op(&node);
+            walker.visit_binary_op(&node).unwrap();
 
             let expected = vec![
                 Instruction::IConst(Register(1), 666),
@@ -503,7 +526,7 @@ mod tests {
                 op: BinaryOperation::Add
             };
 
-            walker.visit_binary_op(&node);
+            walker.visit_binary_op(&node).unwrap();
 
             let expected = vec![
                 Instruction::SConst(Register(1), "foo".to_string()),
@@ -528,12 +551,12 @@ mod tests {
             .parse(call)
             .unwrap();
 
-        scope_walker.visit_function_def(&tree);
+        scope_walker.visit_function_def(&tree).unwrap();
 
         let mut scopes = ScopeTree::from(scope_walker);
         scopes.goto_root();
         walker.scopes = scopes;
-        walker.visit_function_def(&tree);
+        walker.visit_function_def(&tree).unwrap();
 
         let expected = vec![
             Instruction::IConst(Register(1), -4),
@@ -560,7 +583,7 @@ mod tests {
         let mut walker = AsmTreeWalker::default();
 
         let node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
-        walker.visit_return(&node);
+        walker.visit_return(&node).unwrap();
 
         let expected = vec![
             Instruction::IConst(Register(1), 666),
@@ -576,7 +599,7 @@ mod tests {
 
         let mut walker = AsmTreeWalker::default();
         let node = ReturnNode::new(None);
-        walker.visit_return(&node);
+        walker.visit_return(&node).unwrap();
 
         let expected = vec![
             Instruction::Ret,
@@ -595,10 +618,10 @@ mod tests {
             .parse(call)
             .unwrap();
 
-        scope_walker.visit_decl(&tree);
+        scope_walker.visit_decl(&tree).unwrap();
 
         let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker));
-        walker.visit_decl(&tree);
+        walker.visit_decl(&tree).unwrap();
 
         let expected = vec![
             IConst1(Register(1)),
@@ -648,7 +671,7 @@ mod tests {
             name: "marf".to_string()
         };
 
-        walker.visit_var(&node);
+        walker.visit_var(&node).unwrap();
         assert_eq!(walker.current_result, Register(666));
     }
 
@@ -676,7 +699,7 @@ mod tests {
             op: AssignmentOperation::Simple
         };
 
-        walker.visit_assignment(&node);
+        walker.visit_assignment(&node).unwrap();
         assert_eq!(walker.instructions, [
             IConst(Register(1), -12),
             RegCopy(Register(1), Register(666))

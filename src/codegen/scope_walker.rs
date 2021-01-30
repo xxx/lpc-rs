@@ -8,6 +8,7 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::semantic_checks::check_var_redefinition;
 use crate::semantic::semantic_error::var_redefinition_error;
+use crate::errors::CompilerError;
 
 /// A tree walker to handle populating all the scopes in the program
 #[derive(Debug)]
@@ -38,21 +39,25 @@ impl ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn visit_program(&mut self, node: &ProgramNode) where Self: Sized {
+    fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> {
         // Push the global scope
         self.scopes.push_new();
 
         for expr in &node.functions {
             expr.visit(self);
         }
+
+        Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) where Self: Sized {
+    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self);
         node.r.visit(self);
+
+        Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) where Self: Sized {
+    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
         self.scopes.push_new();
 
         for parameter in &node.parameters {
@@ -62,9 +67,11 @@ impl TreeWalker for ScopeWalker {
         for expression in &node.body {
             expression.visit(self);
         }
+
+        Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) where Self: Sized {
+    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
         if let Err(e) =
             check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
             var_redefinition_error(&self.filepath, &e);
@@ -72,6 +79,8 @@ impl TreeWalker for ScopeWalker {
         }
 
         self.insert_symbol(Symbol::from(node));
+
+        Ok(())
     }
 }
 

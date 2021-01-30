@@ -23,7 +23,9 @@ pub struct VarInitNode {
 
 impl ASTNodeTrait for VarInitNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_var_init(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) {
+        tree_walker.visit_var_init(self).unwrap();
+    }
 }
 
 impl Display for VarInitNode {

@@ -19,7 +19,9 @@ impl ReturnNode {
 
 impl ASTNodeTrait for ReturnNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_return(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) {
+        tree_walker.visit_return(self).unwrap();
+    }
 }
 
 impl Display for ReturnNode {

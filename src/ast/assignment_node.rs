@@ -24,7 +24,9 @@ pub struct AssignmentNode {
 
 impl ASTNodeTrait for AssignmentNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) { tree_walker.visit_assignment(self); }
+    fn visit(&self, tree_walker: &mut impl TreeWalker) {
+        tree_walker.visit_assignment(self).unwrap();
+    }
 }
 
 impl Display for AssignmentNode {

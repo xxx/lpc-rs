@@ -8,6 +8,7 @@ use crate::ast::call_node::CallNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
+use crate::errors::CompilerError;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -45,16 +46,18 @@ impl Default for TreePrinter {
 }
 
 impl TreeWalker for TreePrinter {
-    fn visit_program(&mut self, program: &ProgramNode) {
+    fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
         println!("Program");
         self.indent += 2;
         for expr in &program.functions {
             expr.visit(self);
         }
         self.indent -= 2;
+
+        Ok(())
     }
 
-    fn visit_call(&mut self, node: &CallNode) {
+    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
         self.println_indented("Call");
         self.indent += 2;
         self.println_indented(&format!("id: {}", node.name));
@@ -64,13 +67,17 @@ impl TreeWalker for TreePrinter {
             arg.visit(self);
         }
         self.indent -= 4;
+
+        Ok(())
     }
 
-    fn visit_int(&mut self, int: &IntNode) {
+    fn visit_int(&mut self, int: &IntNode) -> Result<(), CompilerError> {
         self.println_indented(&format!("Int: {}", int.value));
+
+        Ok(())
     }
 
-    fn visit_binary_op(&mut self, expression: &BinaryOpNode) {
+    fn visit_binary_op(&mut self, expression: &BinaryOpNode) -> Result<(), CompilerError> {
         self.println_indented("Binary Op");
         self.indent += 2;
         self.println_indented(&format!("operation: {:?}", expression.op));
@@ -82,9 +89,11 @@ impl TreeWalker for TreePrinter {
         self.indent += 2;
         expression.r.visit(self);
         self.indent -= 4;
+
+        Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) {
+    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
         self.println_indented("Function Def");
         self.indent += 2;
         self.println_indented(&format!("name: {}", node.name));
@@ -101,9 +110,11 @@ impl TreeWalker for TreePrinter {
             expression.visit(self);
         }
         self.indent -= 4;
+
+        Ok(())
     }
 
-    fn visit_decl(&mut self, node: &DeclNode) {
+    fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> {
         self.println_indented("Decl");
         self.indent += 2;
         self.println_indented(&format!("type: {}", node.type_));
@@ -113,14 +124,18 @@ impl TreeWalker for TreePrinter {
             init.visit(self);
         }
         self.indent -= 4;
+
+        Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) {
+    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
         self.println_indented("VarInit");
         self.indent += 2;
         self.println_indented(&format!("name: {}", node.name));
         self.println_indented(&format!("type: {}", node.type_));
         self.println_indented(&format!("value: {:?}", node.value));
         self.println_indented(&format!("array: {:?}", node.array));
+
+        Ok(())
     }
 }

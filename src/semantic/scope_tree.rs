@@ -122,7 +122,6 @@ impl ScopeTree {
     /// # Arguments
     ///
     /// * `name`: The name of the symbol to look up.
-    /// * `start_id`: The ID of the scope in which to start the search.
     pub fn lookup(&self, name: &str) -> Option<&Symbol> {
         let mut node_id = self.current_id?;
         loop {
