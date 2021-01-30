@@ -1,5 +1,7 @@
 use crate::semantic::local_scope::LocalScope;
-use crate::errors::{VarRedefinitionError, BinaryOperationError};
+use crate::errors;
+use errors::binary_operation_error::BinaryOperationError;
+use errors::var_redefinition_error::VarRedefinitionError;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::semantic::scope_tree::ScopeTree;
@@ -20,10 +22,10 @@ use crate::ast::expression_node::ExpressionNode;
 ///
 /// A `Result` with either `Ok(())` or `Err(<error object>)`
 pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a LocalScope)
-                                  -> Result<(), VarRedefinitionError<'a>> {
+                                  -> Result<(), VarRedefinitionError> {
     if let Some(sym) = scope.lookup(&node.name) {
         Err(VarRedefinitionError {
-            symbol: &sym,
+            symbol: sym.clone(),
             span: node.span,
         })
     } else {

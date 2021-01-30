@@ -3,7 +3,7 @@ use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use std::fs;
-use crate::errors::VarRedefinitionError;
+use crate::errors::var_redefinition_error::VarRedefinitionError;
 
 /// Handle a var redefinition error by pretty printing it to the console.
 ///
@@ -13,7 +13,7 @@ use crate::errors::VarRedefinitionError;
 /// * `err` - The error object
 pub fn var_redefinition_error(filepath: &str, err: &VarRedefinitionError) {
     let input = fs::read_to_string(filepath)
-        .unwrap_or_else(|_| panic!("cannot read file: {}", filepath));
+        .unwrap_or_else(|e| panic!("cannot read file {}: {}", filepath, e));
 
     let mut files = SimpleFiles::new();
     let file_id = files.add(filepath, input);

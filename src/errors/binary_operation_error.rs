@@ -1,33 +1,9 @@
-use std::fmt::{Display, Formatter};
-use crate::semantic::symbol::Symbol;
 use std::fmt;
+use std::fmt::{Display, Formatter};
+use crate::ast::binary_op_node::BinaryOperation;
 use crate::parser::span::Span;
 use crate::semantic::lpc_type::LPCVarType;
-use crate::ast::binary_op_node::BinaryOperation;
-
-/// General error wrapper type
-#[derive(Debug, Clone)]
-pub enum CompilerError<'a> {
-    ParseError,
-    VarRedefinitionError(VarRedefinitionError<'a>),
-    BinaryOperationError(BinaryOperationError)
-}
-
-/// Error for duplicate var definitions in a single local scope.
-#[derive(Debug, Clone)]
-pub struct VarRedefinitionError<'a> {
-    /// Reference to the original symbol
-    pub symbol: &'a Symbol,
-
-    /// The span of the *re*definition
-    pub span: Option<Span>
-}
-
-impl Display for VarRedefinitionError<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Redefinition of `{}`", self.symbol.name)
-    }
-}
+use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 /// Error for mismatched types in binary operations
 #[derive(Debug, Clone)]
@@ -49,6 +25,24 @@ pub struct BinaryOperationError {
 
     /// The span of the operation
     pub span: Option<Span>
+}
+
+impl BinaryOperationError {
+    pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+        let mut diagnostic = Diagnostic::error()
+            .with_message(format!("{}", self));
+        let mut labels = vec![];
+
+        if let Some(span) = self.span {
+            labels.push(Label::primary(file_id, span.l..span.r));
+        }
+
+        if labels.len() > 0 {
+            diagnostic = diagnostic.with_labels(labels);
+        }
+
+        vec![diagnostic]
+    }
 }
 
 impl Display for BinaryOperationError {
