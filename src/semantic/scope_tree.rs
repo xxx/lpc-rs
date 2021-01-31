@@ -19,7 +19,25 @@ pub struct ScopeTree {
 }
 
 impl ScopeTree {
-    /// Push a new scope onto the tree, and make it the current scope.
+    /// Push a new scope onto the tree, as a child of the current scope,
+    /// and make it the current scope.
+    ///
+    /// # Example
+    /// ```
+    /// use mathstack::semantic::scope_tree::ScopeTree;
+    ///
+    /// let mut tree = ScopeTree::default();
+    ///
+    /// let root_id = tree.push_new();
+    /// let root = tree.get(root_id);
+    ///
+    /// let child_id = tree.push_new();
+    /// let grandchild_id = tree.push_new();
+    /// tree.pop();
+    /// let grandchild_id_2 = tree.push_new();
+    ///
+    /// // etc.
+    ///
     pub fn push_new(&mut self) -> NodeId {
         let id = self.scopes.count();
 
@@ -81,6 +99,8 @@ impl ScopeTree {
     }
 
     /// Set the current scope to the current's parent.
+    /// Note that this method does *not* actually remove the scope from the tree.
+    /// It remains accessible.
     pub fn pop(&mut self) {
         self.current_id = self.get_current_node().unwrap().parent();
     }
