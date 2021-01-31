@@ -74,7 +74,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     name: node.name.clone(),
                     expected: prototype.num_args,
                     actual: arg_len,
-                    span: node.span.clone()
+                    span: node.span.clone(),
+                    prototype_span: prototype.span.clone()
                 });
                 self.errors.push(e.clone());
             }
@@ -150,7 +151,8 @@ mod tests {
             functions.insert(String::from("known"), FunctionPrototype {
                 name: String::from("known"),
                 num_args: 0,
-                arg_types: vec![]
+                arg_types: vec![],
+                span: None
             });
 
             let mut scope_tree = ScopeTree::default();
@@ -186,8 +188,8 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let result = node.visit(walker.borrow_mut());
-            assert!(result.is_err());
+            let _ = node.visit(walker.borrow_mut());
+            assert!(!walker.errors.is_empty());
         }
     }
 

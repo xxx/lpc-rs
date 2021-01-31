@@ -42,7 +42,7 @@ pub Program: ProgramNode = <functions:FunctionDef*> => ProgramNode {
 };
 
 pub FunctionDef: FunctionDefNode = {
-    <r_type:ReturnType?> <star:"*"?> <name:ID> <parameters:Parameters> "{" <body:SemiSeq<Statement>> "}" => {
+    <l:@L> <r_type:ReturnType?> <star:"*"?> <name:ID> <parameters:Parameters> <r:@R> "{" <body:SemiSeq<Statement>> "}" => {
         let array = star.is_some();
 
         let return_type = if let Some(this_type) = r_type {
@@ -59,7 +59,8 @@ pub FunctionDef: FunctionDefNode = {
             name,
             parameters,
             body,
-            return_type
+            return_type,
+            span: Some(Span { l, r })
         }
     }
 };

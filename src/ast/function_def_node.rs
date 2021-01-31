@@ -5,6 +5,7 @@ use std::fmt;
 use crate::semantic::lpc_type::LPCReturnType;
 use crate::ast::var_init_node::VarInitNode;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 /// A node representation a function definition
 #[derive(Debug, Eq, PartialEq)]
@@ -12,7 +13,8 @@ pub struct FunctionDefNode {
     pub return_type: LPCReturnType,
     pub name: String,
     pub parameters: Vec<VarInitNode>,
-    pub body: Vec<ASTNode>
+    pub body: Vec<ASTNode>,
+    pub span: Option<Span>
 }
 
 impl ASTNodeTrait for FunctionDefNode {
@@ -34,7 +36,8 @@ impl Clone for FunctionDefNode {
             return_type: self.return_type,
             name: self.name.clone(),
             parameters: self.parameters.to_vec(),
-            body: self.body.to_vec()
+            body: self.body.to_vec(),
+            span: self.span,
         }
     }
 }

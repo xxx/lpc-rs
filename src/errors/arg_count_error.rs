@@ -14,8 +14,11 @@ pub struct ArgCountError {
     /// How many were actually passed
     pub actual: usize,
 
-    /// The span of the operation
-    pub span: Option<Span>
+    /// The span of the call
+    pub span: Option<Span>,
+
+    /// The span of the function prototype
+    pub prototype_span: Option<Span>
 }
 
 impl ArgCountError {
@@ -26,6 +29,11 @@ impl ArgCountError {
 
         if let Some(span) = self.span {
             labels.push(Label::primary(file_id, span.l..span.r));
+        }
+
+        if let Some(span) = self.prototype_span {
+            labels.push(Label::secondary(file_id, span.l..span.r)
+                .with_message("Defined here"));
         }
 
         if !labels.is_empty() {

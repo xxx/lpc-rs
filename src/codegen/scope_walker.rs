@@ -88,7 +88,8 @@ impl TreeWalker for ScopeWalker {
         self.function_prototypes.insert(node.name.clone(), FunctionPrototype {
             name: node.name.clone(),
             num_args,
-            arg_types
+            arg_types,
+            span: node.span
         });
 
         Ok(())

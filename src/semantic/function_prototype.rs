@@ -1,4 +1,5 @@
 use crate::semantic::lpc_type::LPCVarType;
+use crate::parser::span::Span;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone)]
@@ -12,4 +13,8 @@ pub struct FunctionPrototype {
 
     /// Vector of argument types, used for type checking calls.
     pub arg_types: Vec<LPCVarType>,
+
+    /// The span of the definition of this function, for use in error messaging.
+    /// When None, we assume this is an Efun prototype.
+    pub span: Option<Span>
 }

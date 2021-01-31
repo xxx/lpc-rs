@@ -26,7 +26,8 @@ lazy_static! {
         m.insert("print", FunctionPrototype {
             name: String::from("print"),
             num_args: 1,
-            arg_types: vec![LPCVarType::Int]
+            arg_types: vec![LPCVarType::Int],
+            span: None
         });
         m
     };
