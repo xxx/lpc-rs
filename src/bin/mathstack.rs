@@ -65,7 +65,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     let _ = program.visit(scope_walker.borrow_mut());
 
-    if scope_walker.get_errors().len() > 0 {
+    if !scope_walker.get_errors().is_empty() {
         errors.append(scope_walker.get_errors().to_vec().borrow_mut());
     }
 
@@ -74,11 +74,11 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let mut semantic_check_walker = SemanticCheckWalker::new(&scope_tree);
     let _ = program.visit(semantic_check_walker.borrow_mut());
 
-    if semantic_check_walker.get_errors().len() > 0 {
+    if !semantic_check_walker.get_errors().is_empty() {
         errors.append(semantic_check_walker.get_errors().to_vec().borrow_mut());
     }
 
-    if errors.len() > 0 {
+    if !errors.is_empty() {
         errors::emit_diagnostics(filename, &file_content, &errors);
         return Err(CompilerError::MultiError(errors));
     }

@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use crate::asm::instruction::Instruction;
 use crate::interpreter::efun::EFUNS;
 use crate::interpreter::stack_frame::StackFrame;
@@ -202,7 +201,7 @@ impl AsmInterpreter {
                 Instruction::SConst(r, s) => {
                     let index = self.program.constants.insert(LPCValue::from(s));
                     let registers = self.current_registers();
-                    registers[r.index()] = string!(index.try_into().unwrap());
+                    registers[r.index()] = string!(index);
                 },
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = self.current_registers();

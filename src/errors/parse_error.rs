@@ -28,7 +28,7 @@ pub struct ParseError {
     expected: Option<Vec<String>>
 }
 
-fn format_expected(expected: &Vec<String>) -> String {
+fn format_expected(expected: &[String]) -> String {
     if expected.len() == 1 {
         format!("expected: {}", expected[0])
     } else {

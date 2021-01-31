@@ -43,7 +43,7 @@ impl CompilerError {
 /// * `filename` - The name of the file, for the messaging. In practice, this is the full filepath.
 /// * `file_content` - The actual content of the file, used for messaging.
 /// * `errors` - A vector of errors to display diagnostics for.
-pub fn emit_diagnostics(filename: &str, file_content: &str, errors: &Vec<CompilerError>) {
+pub fn emit_diagnostics(filename: &str, file_content: &str, errors: &[CompilerError]) {
     let mut files = SimpleFiles::new();
     let file_id = files.add(filename, file_content);
 

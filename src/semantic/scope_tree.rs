@@ -85,34 +85,6 @@ impl ScopeTree {
         self.current_id = self.get_current_node().unwrap().parent();
     }
 
-    /// Advance to the next node that would come during a depth-first traversal
-    pub fn next(&mut self) -> Option<NodeId> {
-        match self.current_id {
-            Some(node_id) => {
-                let kid = self.scopes.get(node_id).unwrap().first_child();
-
-                if kid.is_some() {
-                    self.current_id = kid;
-                    return kid;
-                }
-
-                let sibling = self.scopes.get(node_id).unwrap().next_sibling();
-
-                if sibling.is_some() {
-                    self.current_id = sibling;
-                    sibling
-                } else {
-                    self.current_id = None;
-                    None
-                }
-            },
-            None => {
-                self.current_id = self.root_id;
-                self.root_id
-            }
-        }
-    }
-
     pub fn goto_root(&mut self) {
         self.current_id = self.root_id;
     }
@@ -142,6 +114,38 @@ impl Default for ScopeTree {
             scopes: Arena::new(),
             current_id: None,
             root_id: None
+        }
+    }
+}
+
+impl Iterator for ScopeTree {
+    type Item = NodeId;
+
+    /// Advance to the next node that would come during a depth-first traversal
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.current_id {
+            Some(node_id) => {
+                let kid = self.scopes.get(node_id).unwrap().first_child();
+
+                if kid.is_some() {
+                    self.current_id = kid;
+                    return kid;
+                }
+
+                let sibling = self.scopes.get(node_id).unwrap().next_sibling();
+
+                if sibling.is_some() {
+                    self.current_id = sibling;
+                    sibling
+                } else {
+                    self.current_id = None;
+                    None
+                }
+            },
+            None => {
+                self.current_id = self.root_id;
+                self.root_id
+            }
         }
     }
 }
@@ -202,10 +206,28 @@ mod tests {
 
     #[test]
     fn test_lookup_returns_none_when_not_found() {
-        let mut collection = ScopeTree::default();
-        collection.push_new();
+        let mut tree = ScopeTree::default();
+        tree.push_new();
 
-        let result = collection.lookup("asdf");
+        let result = tree.lookup("asdf");
         assert_eq!(result, None);
+    }
+
+    mod test_next {
+        use super::*;
+
+        #[test]
+        fn test_next() {
+            let mut tree = ScopeTree::default();
+            let _root = tree.push_new();
+            let child = tree.push_new();
+            tree.goto_root();
+            let child2 = tree.push_new();
+            tree.goto_root();
+
+            assert_eq!(tree.next().unwrap(), child);
+            assert_eq!(tree.next().unwrap(), child2);
+            assert_eq!(tree.next(), None);
+        }
     }
 }

@@ -31,7 +31,7 @@ impl VarRedefinitionError {
             );
         }
 
-        if labels.len() > 0 {
+        if !labels.is_empty() {
             diagnostic = diagnostic.with_labels(labels);
         }
 
