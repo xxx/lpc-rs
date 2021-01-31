@@ -7,6 +7,7 @@ use var_redefinition_error::VarRedefinitionError;
 
 pub mod binary_operation_error;
 pub mod var_redefinition_error;
+pub mod parse_error;
 
 /// General error wrapper type
 #[derive(Debug, Clone)]
