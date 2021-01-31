@@ -4,6 +4,7 @@ use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 
 use binary_operation_error::BinaryOperationError;
 use var_redefinition_error::VarRedefinitionError;
+use parse_error::ParseError;
 
 pub mod binary_operation_error;
 pub mod var_redefinition_error;
@@ -12,7 +13,7 @@ pub mod parse_error;
 /// General error wrapper type
 #[derive(Debug, Clone)]
 pub enum CompilerError {
-    ParseError,
+    ParseError(ParseError),
     VarRedefinitionError(VarRedefinitionError),
     BinaryOperationError(BinaryOperationError),
     MultiError(Vec<CompilerError>),
@@ -21,12 +22,12 @@ pub enum CompilerError {
 impl CompilerError {
     pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         match self {
+            CompilerError::ParseError(err) => err.to_diagnostics(file_id),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
             CompilerError::BinaryOperationError(err) => err.to_diagnostics(file_id),
             CompilerError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics(file_id) ).collect()
-            },
-            _ => unimplemented!()
+            }
         }
     }
 }
@@ -50,7 +51,7 @@ pub fn emit_diagnostics(filename: &str, file_content: &str, errors: &Vec<Compile
 
     for diagnostic in &diagnostics {
         if let Err(e) = codespan_reporting::term::emit(&mut writer.lock(), &config, &files, diagnostic) {
-            eprintln!("error attempting to emit semantic error: {:?}", e);
+            eprintln!("error attempting to emit error: {:?}", e);
         };
     }
 }

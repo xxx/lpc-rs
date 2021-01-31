@@ -11,7 +11,7 @@ use mathstack::codegen::tree_walker::TreeWalker;
 use mathstack::errors::CompilerError;
 use mathstack::interpreter::asm_interpreter::AsmInterpreter;
 use mathstack::interpreter::program::Program;
-use mathstack::parser::parse_error;
+use mathstack::errors::parse_error::ParseError;
 use mathstack::semantic::scope_tree::ScopeTree;
 
 const DEFAULT_FILE: &str = "mathfile.c";
@@ -52,9 +52,10 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            parse_error::handle_parse_error(filename, &file_content, &e);
-            // parse errors are fatal.
-            return Err(CompilerError::ParseError);
+            errors.push(CompilerError::ParseError(ParseError::from(e)));
+            errors::emit_diagnostics(filename, &file_content, &errors);
+
+            return Err(CompilerError::MultiError(errors));
         }
     };
 
