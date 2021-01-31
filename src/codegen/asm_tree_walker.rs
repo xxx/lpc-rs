@@ -433,7 +433,8 @@ mod tests {
                 name: String::from("print"),
                 num_args: 1,
                 initial_arg: Register(3)
-            }
+            },
+            Instruction::Ret // Automatically added
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
