@@ -6,6 +6,8 @@ use crate::ast::ast_node::ASTNodeTrait;
 use crate::semantic::semantic_checks::{check_binary_operation_types, node_type};
 use crate::ast::assignment_node::AssignmentNode;
 use crate::errors::assignment_error::AssignmentError;
+use crate::ast::int_node::IntNode;
+use crate::ast::expression_node::ExpressionNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -53,6 +55,9 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
 
         if left_type == right_type {
             Ok(())
+        } else if let ExpressionNode::Int(IntNode { value: 0 }) = *node.rhs {
+            // The integer 0 is always a valid assignment.
+            Ok(())
         } else {
             let e = CompilerError::AssignmentError(AssignmentError {
                 left_name: format!("{}", node.lhs),
@@ -74,19 +79,102 @@ mod tests {
     use super::*;
     use crate::ast::expression_node::ExpressionNode;
     use crate::ast::assignment_node::AssignmentOperation;
+    use crate::semantic::symbol::Symbol;
+    use crate::semantic::lpc_type::LPCVarType;
+    use std::borrow::BorrowMut;
+    use crate::ast::var_node::VarNode;
 
-    #[test]
-    fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {
-        let node = ExpressionNode::from(AssignmentNode {
-            lhs: Box::new(ExpressionNode::from(123)),
-            rhs: Box::new(ExpressionNode::from(456)),
-            op: AssignmentOperation::Simple,
-            span: None
-        });
+    mod test_visit_binary_op {
+        use super::*;
+        use crate::ast::binary_op_node::BinaryOperation;
 
-        let scope_tree = ScopeTree::default();
-        let mut walker = SemanticCheckWalker::new(&scope_tree);
-        node.visit(&walker)
+        #[test]
+        fn test_visit_binary_op_validates_both_sides() -> Result<(), CompilerError> {
+            let node = ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                r: Box::new(ExpressionNode::from(456)),
+                op: BinaryOperation::Add,
+                span: None
+            });
 
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCVarType::Int, false);
+            scope_tree.get_current_mut().unwrap().insert(sym);
+            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            node.visit(walker.borrow_mut())
+        }
+
+        #[test]
+        fn test_visit_assignment_disallows_differing_types() {
+            let node = ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                r: Box::new(ExpressionNode::from(123)),
+                op: BinaryOperation::Sub,
+                span: None
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCVarType::String, false);
+            scope_tree.get_current_mut().unwrap().insert(sym);
+            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            assert!(node.visit(walker.borrow_mut()).is_err());
+        }
+    }
+
+    mod test_visit_assignment {
+        use super::*;
+
+        #[test]
+        fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {
+            let node = ExpressionNode::from(AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                rhs: Box::new(ExpressionNode::from(456)),
+                op: AssignmentOperation::Simple,
+                span: None
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCVarType::Int, false);
+            scope_tree.get_current_mut().unwrap().insert(sym);
+            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            node.visit(walker.borrow_mut())
+        }
+
+        #[test]
+        fn test_visit_assignment_always_allows_0() -> Result<(), CompilerError> {
+            let node = ExpressionNode::from(AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                rhs: Box::new(ExpressionNode::from(0)),
+                op: AssignmentOperation::Simple,
+                span: None
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCVarType::String, false);
+            scope_tree.get_current_mut().unwrap().insert(sym);
+            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            node.visit(walker.borrow_mut())
+        }
+
+        #[test]
+        fn test_visit_assignment_disallows_differing_types() {
+            let node = ExpressionNode::from(AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                rhs: Box::new(ExpressionNode::from(123)),
+                op: AssignmentOperation::Simple,
+                span: None
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCVarType::String, false);
+            scope_tree.get_current_mut().unwrap().insert(sym);
+            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            assert!(node.visit(walker.borrow_mut()).is_err());
+        }
     }
 }

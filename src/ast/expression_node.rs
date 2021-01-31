@@ -83,6 +83,12 @@ impl From<VarNode> for ExpressionNode {
     }
 }
 
+impl From<AssignmentNode> for ExpressionNode {
+    fn from(node: AssignmentNode) -> Self {
+        Self::Assignment(node)
+    }
+}
+
 impl From<ASTNode> for ExpressionNode {
     fn from(node: ASTNode) -> Self {
         match node {
@@ -108,6 +114,7 @@ impl From<&str> for ExpressionNode {
 mod tests {
     use super::*;
     use crate::ast::binary_op_node::BinaryOperation;
+    use crate::ast::assignment_node::AssignmentOperation;
 
     #[test]
     fn test_from_binary_op_node() {
@@ -130,6 +137,20 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ExpressionNode::from(node), ExpressionNode::Int(clone));
+    }
+
+    #[test]
+    fn test_from_assignment_node() {
+        let node = AssignmentNode {
+            lhs: Box::new(VarNode::new("adsf").into()),
+            rhs: Box::new(IntNode::new(324).into()),
+            op: AssignmentOperation::Simple,
+            span: None
+        };
+
+        let clone = node.clone();
+
+        assert_eq!(ExpressionNode::from(node), ExpressionNode::Assignment(clone));
     }
 
     mod from_ast_node {

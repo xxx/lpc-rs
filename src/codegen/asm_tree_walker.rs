@@ -424,7 +424,7 @@ mod tests {
         let scopes = ScopeTree::from(scope_walker);
         walker.scopes = scopes;
 
-        tree.visit(&mut walker);
+        let _ = tree.visit(&mut walker);
 
         let expected = vec![
             Instruction::IConst(Register(1), -1),
@@ -710,7 +710,8 @@ mod tests {
             rhs: Box::new(ExpressionNode::Int(IntNode {
                 value: -12
             })),
-            op: AssignmentOperation::Simple
+            op: AssignmentOperation::Simple,
+            span: None
         };
 
         walker.visit_assignment(&node).unwrap();
