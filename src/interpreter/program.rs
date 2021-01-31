@@ -1,7 +1,7 @@
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::asm::instruction::Instruction;
 use std::collections::HashMap;
-use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::semantic::function_symbol::FunctionSymbol;
 
 #[derive(Debug)]
 pub struct Program {

@@ -11,7 +11,7 @@ use crate::asm::register::Register;
 use crate::ast::call_node::CallNode;
 use crate::asm::register_counter::RegisterCounter;
 use crate::ast::function_def_node::FunctionDefNode;
-use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::semantic::function_symbol::FunctionSymbol;
 use crate::ast::return_node::ReturnNode;
 use crate::semantic::scope_tree::ScopeTree;
 use crate::ast::decl_node::DeclNode;

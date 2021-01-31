@@ -1,4 +1,4 @@
-use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::semantic::function_symbol::FunctionSymbol;
 use crate::interpreter::lpc_var::LPCVar;
 
 /// A representation of a function call's context.

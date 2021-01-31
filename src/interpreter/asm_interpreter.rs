@@ -1,7 +1,7 @@
 use crate::asm::instruction::Instruction;
 use crate::interpreter::efun::EFUNS;
 use crate::interpreter::stack_frame::StackFrame;
-use crate::interpreter::function_symbol::FunctionSymbol;
+use crate::semantic::function_symbol::FunctionSymbol;
 use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::lpc_value::LPCValue;
 use crate::interpreter::program::Program;

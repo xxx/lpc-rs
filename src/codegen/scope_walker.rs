@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::semantic::scope_tree::ScopeTree;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::program_node::ProgramNode;
@@ -8,6 +9,7 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::semantic_checks::check_var_redefinition;
 use crate::errors::CompilerError;
+use crate::semantic::function_prototype::FunctionPrototype;
 
 /// A tree walker to handle populating all the scopes in the program
 #[derive(Debug)]
@@ -17,6 +19,10 @@ pub struct ScopeWalker {
 
     /// Our collection of scopes
     pub scopes: ScopeTree,
+
+    /// The map of function names, to their respective prototypes.
+    /// Used for checking forward references.
+    pub function_prototypes: HashMap<String, FunctionPrototype>,
 
     /// Collected errors
     errors: Vec<CompilerError>
@@ -29,6 +35,7 @@ impl ScopeWalker {
         Self {
             filepath: String::from(filepath),
             scopes: ScopeTree::default(),
+            function_prototypes: HashMap::new(),
             errors: vec![]
         }
     }
@@ -75,6 +82,15 @@ impl TreeWalker for ScopeWalker {
             expression.visit(self)?;
         }
 
+        // Store the prototype now, to allow for forward references.
+        let num_args = node.parameters.len();
+        let arg_types = node.parameters.iter().map(|parm| parm.type_ ).collect::<Vec<_>>();
+        self.function_prototypes.insert(node.name.clone(), FunctionPrototype {
+            name: node.name.clone(),
+            num_args,
+            arg_types
+        });
+
         Ok(())
     }
 
@@ -99,6 +115,7 @@ impl Default for ScopeWalker {
         Self {
             filepath: String::new(),
             scopes,
+            function_prototypes: HashMap::new(),
             errors: vec![]
         }
     }

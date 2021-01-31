@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::semantic::scope_tree::ScopeTree;
 use crate::codegen::tree_walker::TreeWalker;
 use crate::errors::CompilerError;
@@ -8,20 +9,27 @@ use crate::ast::assignment_node::AssignmentNode;
 use crate::errors::assignment_error::AssignmentError;
 use crate::ast::int_node::IntNode;
 use crate::ast::expression_node::ExpressionNode;
+use crate::semantic::function_prototype::FunctionPrototype;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
     /// The collection of scopes, to resolve var types
     pub scopes: &'a ScopeTree,
 
-    /// The errors we collect as we go through the tree
+    /// The map of function names, to their respective prototypes.
+    /// Used for checking forward references.
+    pub function_prototypes: &'a HashMap<String, FunctionPrototype>,
+
+    /// The errors we collect as we traverse the tree
     errors: Vec<CompilerError>
 }
 
 impl<'a> SemanticCheckWalker<'a> {
-    pub fn new(scopes: &'a ScopeTree) -> Self {
+    pub fn new(scopes: &'a ScopeTree,
+               function_prototypes: &'a HashMap<String, FunctionPrototype>) -> Self {
         Self {
             scopes,
+            function_prototypes,
             errors: vec![]
         }
     }
@@ -97,11 +105,12 @@ mod tests {
                 span: None
             });
 
+            let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let sym = Symbol::new("foo", LPCVarType::Int, false);
             scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             node.visit(walker.borrow_mut())
         }
 
@@ -114,11 +123,12 @@ mod tests {
                 span: None
             });
 
+            let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let sym = Symbol::new("foo", LPCVarType::String, false);
             scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             assert!(node.visit(walker.borrow_mut()).is_err());
         }
     }
@@ -135,11 +145,12 @@ mod tests {
                 span: None
             });
 
+            let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let sym = Symbol::new("foo", LPCVarType::Int, false);
             scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             node.visit(walker.borrow_mut())
         }
 
@@ -152,11 +163,12 @@ mod tests {
                 span: None
             });
 
+            let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let sym = Symbol::new("foo", LPCVarType::String, false);
             scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             node.visit(walker.borrow_mut())
         }
 
@@ -169,11 +181,12 @@ mod tests {
                 span: None
             });
 
+            let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let sym = Symbol::new("foo", LPCVarType::String, false);
             scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree);
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             assert!(node.visit(walker.borrow_mut()).is_err());
         }
     }
