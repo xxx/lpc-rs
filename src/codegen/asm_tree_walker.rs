@@ -26,6 +26,9 @@ use crate::interpreter::program::Program;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::errors::CompilerError;
 
+/// Really just a `pc` index in the vm.
+type Address = usize;
+
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug, Default)]
 pub struct AsmTreeWalker {
@@ -33,10 +36,10 @@ pub struct AsmTreeWalker {
     pub instructions: Vec<Instruction>,
 
     /// The map of labels, to their respective addresses
-    pub labels: HashMap<String, usize>,
+    pub labels: HashMap<String, Address>,
 
     /// The map of function Symbols, to their respective addresses
-    pub functions: HashMap<FunctionSymbol, usize>,
+    pub functions: HashMap<FunctionSymbol, Address>,
 
     /// Track where the result of a child branch is
     current_result: Register,
@@ -581,7 +584,7 @@ mod tests {
             assert_eq!(instruction, &expected[idx]);
         }
 
-        let address: usize = 0;
+        let address: Address = 0;
 
         let sym = FunctionSymbol {
             name: "main".to_string(),
