@@ -241,7 +241,7 @@ ArgumentExpressionList: Vec<ExpressionNode> = {
 };
 
 pub Call: CallNode = {
-    <name:ID> "(" <list:ArgumentExpressionList?> ")" => {
+    <l:@L> <name:ID> "(" <list:ArgumentExpressionList?> ")" <r:@R> => {
         let arguments = match list {
             Some(args) => args,
             None => vec![]
@@ -249,7 +249,8 @@ pub Call: CallNode = {
 
         CallNode {
             arguments,
-            name
+            name,
+            span: Some(Span { l, r })
         }
     }
 };

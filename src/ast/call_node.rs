@@ -4,14 +4,19 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 /// Representation of a function call.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CallNode {
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,
+
     /// The name of the function being called
-    pub name: String
+    pub name: String,
+
+    /// The text span in the original file that this node represents. Used for error messages.
+    pub span: Option<Span>
 }
 
 impl ASTNodeTrait for CallNode {

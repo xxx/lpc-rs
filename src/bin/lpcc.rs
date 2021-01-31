@@ -69,9 +69,8 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
         errors.append(scope_walker.get_errors().to_vec().borrow_mut());
     }
 
-    let scope_tree = ScopeTree::from(scope_walker);
-
-    let mut semantic_check_walker = SemanticCheckWalker::new(&scope_tree);
+    let mut semantic_check_walker =
+        SemanticCheckWalker::new(&scope_walker.scopes, &scope_walker.function_prototypes);
     let _ = program.visit(semantic_check_walker.borrow_mut());
 
     if !semantic_check_walker.get_errors().is_empty() {
@@ -83,6 +82,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
         return Err(CompilerError::MultiError(errors));
     }
 
+    let scope_tree = ScopeTree::from(scope_walker);
     let mut asm_walker = AsmTreeWalker::new(scope_tree);
     let _ = program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);

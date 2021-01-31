@@ -89,6 +89,12 @@ impl From<AssignmentNode> for ExpressionNode {
     }
 }
 
+impl From<CallNode> for ExpressionNode {
+    fn from(node: CallNode) -> Self {
+        Self::Call(node)
+    }
+}
+
 impl From<ASTNode> for ExpressionNode {
     fn from(node: ASTNode) -> Self {
         match node {
@@ -151,6 +157,19 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ExpressionNode::from(node), ExpressionNode::Assignment(clone));
+    }
+
+    #[test]
+    fn test_from_call_node() {
+        let node = CallNode {
+            arguments: vec![],
+            name: "foo".to_string(),
+            span: None
+        };
+
+        let clone = node.clone();
+
+        assert_eq!(ExpressionNode::from(node), ExpressionNode::Call(clone));
     }
 
     mod from_ast_node {

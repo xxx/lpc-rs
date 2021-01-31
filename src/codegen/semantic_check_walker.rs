@@ -10,6 +10,9 @@ use crate::errors::assignment_error::AssignmentError;
 use crate::ast::int_node::IntNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::function_prototype::FunctionPrototype;
+use crate::ast::call_node::CallNode;
+use crate::interpreter::efun::EFUNS;
+use crate::errors::unknown_function_error::UnknownFunctionError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -38,6 +41,23 @@ impl<'a> SemanticCheckWalker<'a> {
 impl<'a> TreeWalker for SemanticCheckWalker<'a> {
     fn get_errors(&self) -> Vec<CompilerError> {
         self.errors.to_vec()
+    }
+
+    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
+        for argument in &node.arguments {
+            argument.visit(self)?;
+        }
+
+        if !self.function_prototypes.contains_key(&node.name) && !EFUNS.contains_key(&node.name) {
+            let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
+                name: node.name.clone(),
+                span: node.span.clone()
+            });
+            self.errors.push(e.clone());
+            // Non-fatal. Continue.
+        }
+
+        Ok(())
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
@@ -91,6 +111,62 @@ mod tests {
     use crate::semantic::lpc_type::LPCVarType;
     use std::borrow::BorrowMut;
     use crate::ast::var_node::VarNode;
+
+    mod test_visit_call {
+        use super::*;
+
+        #[test]
+        fn test_visit_call_allows_known_functions() -> Result<(), CompilerError> {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None
+            });
+
+            let mut functions = HashMap::new();
+            functions.insert(String::from("known"), FunctionPrototype {
+                name: String::from("known"),
+                num_args: 0,
+                arg_types: vec![]
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            node.visit(walker.borrow_mut())
+        }
+
+        #[test]
+        fn test_visit_call_allows_known_efuns() -> Result<(), CompilerError> {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![],
+                name: "print".to_string(),
+                span: None
+            });
+
+            let functions = HashMap::new();
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            node.visit(walker.borrow_mut())
+        }
+
+        #[test]
+        fn test_visit_call_disallows_unknown_functions() {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![],
+                name: "unknown".to_string(),
+                span: None
+            });
+
+            let functions = HashMap::new();
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let result = node.visit(walker.borrow_mut());
+            assert!(result.is_err());
+        }
+    }
 
     mod test_visit_binary_op {
         use super::*;

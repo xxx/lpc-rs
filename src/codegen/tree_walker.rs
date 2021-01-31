@@ -15,6 +15,7 @@ use crate::errors::CompilerError;
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
     /// Get collected errors, for nodes that track them.
+    /// These are cloned, as they are intended for error messaging that requires passing ownership.
     fn get_errors(&self) -> Vec<CompilerError> {
         vec![]
     }
