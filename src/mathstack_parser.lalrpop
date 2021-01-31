@@ -215,10 +215,11 @@ pub ConditionalExpression: ExpressionNode = {
 
 AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
-    <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => ExpressionNode::Assignment(AssignmentNode {
+    <l:@L> <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> <r:@R> => ExpressionNode::Assignment(AssignmentNode {
         lhs: Box::new(lhs),
         rhs: Box::new(rhs),
-        op
+        op,
+        span: Some(Span { l, r })
     })
 };
 

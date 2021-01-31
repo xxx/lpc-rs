@@ -3,8 +3,10 @@ use crate::codegen::tree_walker::TreeWalker;
 use crate::errors::CompilerError;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::ast_node::ASTNodeTrait;
-use crate::semantic::semantic_checks::check_binary_operation_types;
+use crate::semantic::semantic_checks::{check_binary_operation_types, node_type};
 use codespan_reporting::diagnostic::Diagnostic;
+use crate::ast::assignment_node::AssignmentNode;
+use crate::errors::assignment_error::AssignmentError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -48,6 +50,30 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 self.errors.push(e.clone());
                 Err(e)
             }
+        }
+    }
+
+    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
+        node.lhs.visit(self);
+        node.rhs.visit(self);
+
+        let left_type = node_type(&node.lhs, self.scopes);
+        let right_type = node_type(&node.rhs, self.scopes);
+
+        if left_type == right_type {
+            Ok(())
+        } else {
+            let e = CompilerError::AssignmentError(AssignmentError {
+                left_name: format!("{}", node.lhs),
+                left_type,
+                right_name: format!("{}", node.rhs),
+                right_type,
+                span: node.span
+            });
+
+            self.errors.push(e.clone());
+
+            Err(e)
         }
     }
 }

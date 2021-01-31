@@ -10,6 +10,7 @@ use crate::ast::int_node::IntNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::expression_node::ExpressionNode;
+use crate::ast::assignment_node::AssignmentNode;
 
 /// Check if a var has already been defined in the local scope.
 ///
@@ -37,7 +38,7 @@ pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a LocalScope)
 ///
 /// # Arguments
 ///
-/// * `node` - The node we're checking to see if it's a redefinition
+/// * `node` - The node we're checking to see if it's being used incorrectly
 /// * `scope_tree` - A reference to the scope tree that holds the program symbols
 pub fn check_binary_operation_types(node: &BinaryOpNode, scope_tree: &ScopeTree)
                                     -> Result<(), BinaryOperationError> {
@@ -97,7 +98,8 @@ pub fn check_binary_operation_types(node: &BinaryOpNode, scope_tree: &ScopeTree)
     }
 }
 
-fn node_type(node: &ExpressionNode, scope_tree: &ScopeTree) -> LPCVarType {
+/// Resolve an expression node down to a single type, recursively if necessary
+pub fn node_type(node: &ExpressionNode, scope_tree: &ScopeTree) -> LPCVarType {
     match node {
         ExpressionNode::Int(IntNode { .. }) => LPCVarType::Int,
         ExpressionNode::String(StringNode { .. }) => LPCVarType::String,
@@ -111,6 +113,9 @@ fn node_type(node: &ExpressionNode, scope_tree: &ScopeTree) -> LPCVarType {
         }
         ExpressionNode::BinaryOp(BinaryOpNode { l, .. }) => {
             node_type(l, scope_tree)
+        }
+        ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
+            node_type(lhs, scope_tree)
         }
         &_ => unimplemented!()
     }

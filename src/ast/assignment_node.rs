@@ -3,6 +3,7 @@ use crate::codegen::tree_walker::TreeWalker;
 use crate::ast::expression_node::ExpressionNode;
 use std::fmt::{Display, Formatter};
 use std::fmt;
+use crate::parser::span::Span;
 
 /// All possible assignment operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -16,16 +17,21 @@ pub enum AssignmentOperation {
 pub struct AssignmentNode {
     /// left-hand side
     pub lhs: Box<ExpressionNode>,
+
     /// right-hand side
     pub rhs: Box<ExpressionNode>,
+
     /// the operation
-    pub op: AssignmentOperation
+    pub op: AssignmentOperation,
+
+    /// The text span in the original file that this node represents. Used for error messages.
+    pub span: Option<Span>
 }
 
 impl ASTNodeTrait for AssignmentNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        tree_walker.visit_assignment(self).unwrap();
+        let _ = tree_walker.visit_assignment(self);
     }
 }
 
@@ -40,7 +46,8 @@ impl Clone for AssignmentNode {
         Self {
             lhs: self.lhs.clone(),
             rhs: self.rhs.clone(),
-            op: self.op
+            op: self.op,
+            span: self.span
         }
     }
 }
