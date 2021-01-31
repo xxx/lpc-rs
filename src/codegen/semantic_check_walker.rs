@@ -11,8 +11,9 @@ use crate::ast::int_node::IntNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::function_prototype::FunctionPrototype;
 use crate::ast::call_node::CallNode;
-use crate::interpreter::efun::EFUNS;
+use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
 use crate::errors::unknown_function_error::UnknownFunctionError;
+use crate::errors::arg_count_error::ArgCountError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -48,13 +49,35 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             argument.visit(self)?;
         }
 
-        if !self.function_prototypes.contains_key(&node.name) && !EFUNS.contains_key(&node.name) {
+        if !self.function_prototypes.contains_key(&node.name) && !EFUNS.contains_key(node.name.as_str()) {
             let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
                 name: node.name.clone(),
                 span: node.span.clone()
             });
             self.errors.push(e.clone());
             // Non-fatal. Continue.
+        }
+
+        let proto_opt = if let Some(prototype) = self.function_prototypes.get(&node.name) {
+            Some(prototype)
+        } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
+            Some(prototype)
+        } else {
+            None
+        };
+
+        if let Some(prototype) = proto_opt {
+            let arg_len = node.arguments.len();
+
+            if arg_len != prototype.num_args {
+                let e = CompilerError::ArgCountError(ArgCountError {
+                    name: node.name.clone(),
+                    expected: prototype.num_args,
+                    actual: arg_len,
+                    span: node.span.clone()
+                });
+                self.errors.push(e.clone());
+            }
         }
 
         Ok(())

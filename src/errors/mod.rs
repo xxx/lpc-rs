@@ -1,3 +1,10 @@
+pub mod arg_count_error;
+pub mod assignment_error;
+pub mod binary_operation_error;
+pub mod var_redefinition_error;
+pub mod parse_error;
+pub mod unknown_function_error;
+
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
@@ -7,16 +14,12 @@ use binary_operation_error::BinaryOperationError;
 use var_redefinition_error::VarRedefinitionError;
 use assignment_error::AssignmentError;
 use unknown_function_error::UnknownFunctionError;
-
-pub mod assignment_error;
-pub mod binary_operation_error;
-pub mod var_redefinition_error;
-pub mod parse_error;
-pub mod unknown_function_error;
+use arg_count_error::ArgCountError;
 
 /// General error wrapper type
 #[derive(Debug, Clone)]
 pub enum CompilerError {
+    ArgCountError(ArgCountError),
     AssignmentError(AssignmentError),
     BinaryOperationError(BinaryOperationError),
     ParseError(ParseError),
@@ -29,6 +32,7 @@ impl CompilerError {
     /// Get the error diagnostics for printing to the user.
     pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         match self {
+            CompilerError::ArgCountError(err) => err.to_diagnostics(file_id),
             CompilerError::AssignmentError(err) => err.to_diagnostics(file_id),
             CompilerError::BinaryOperationError(err) => err.to_diagnostics(file_id),
             CompilerError::ParseError(err) => err.to_diagnostics(file_id),

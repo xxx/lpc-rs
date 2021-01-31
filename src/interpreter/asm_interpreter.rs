@@ -141,7 +141,7 @@ impl AsmInterpreter {
                             func.clone(),
                             self.pc + 1
                         )
-                    } else if EFUNS.contains_key(name) {
+                    } else if EFUNS.contains_key(name.as_str()) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
                             num_args: *num_args, // TODO: look this up server-side
@@ -171,7 +171,7 @@ impl AsmInterpreter {
                     if let Some(FunctionSymbol { address, .. }) = self.program.functions.get(name) {
                         self.pc = *address;
                         continue;
-                    } else if let Some(efun) = EFUNS.get(name) {
+                    } else if let Some(efun) = EFUNS.get(name.as_str()) {
                         // the efun is responsible for populating the return value
                         efun(&self.stack.last().unwrap(), &self);
                         if let Some(frame) = self.pop_frame() {
