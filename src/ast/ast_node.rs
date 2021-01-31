@@ -13,6 +13,7 @@ use crate::ast::return_node::ReturnNode;
 use std::fmt;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
+use crate::errors::CompilerError;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -28,13 +29,13 @@ pub enum ASTNode {
 
 #[auto_impl(&, &mut)]
 pub trait ASTNodeTrait: PartialEq + Display {
-    fn visit(&self, tree_walker: &mut impl TreeWalker);
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError>;
 }
 
 macro_rules! node_defs {
     ( $( $x:ident ),+ ) => {
         impl ASTNodeTrait for ASTNode {
-            fn visit(&self, tree_walker: &mut impl TreeWalker) {
+            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
                 match self {
                  $(
                     ASTNode::$x(y) => y.visit(tree_walker),

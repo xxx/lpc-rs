@@ -51,15 +51,15 @@ impl TreeWalker for ScopeWalker {
         self.scopes.push_new();
 
         for expr in &node.functions {
-            expr.visit(self);
+            expr.visit(self)?;
         }
 
         Ok(())
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
-        node.l.visit(self);
-        node.r.visit(self);
+        node.l.visit(self)?;
+        node.r.visit(self)?;
 
         Ok(())
     }
@@ -68,11 +68,11 @@ impl TreeWalker for ScopeWalker {
         self.scopes.push_new();
 
         for parameter in &node.parameters {
-            parameter.visit(self);
+            parameter.visit(self)?;
         }
 
         for expression in &node.body {
-            expression.visit(self);
+            expression.visit(self)?;
         }
 
         Ok(())

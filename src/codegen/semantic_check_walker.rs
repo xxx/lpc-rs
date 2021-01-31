@@ -4,7 +4,6 @@ use crate::errors::CompilerError;
 use crate::ast::binary_op_node::BinaryOpNode;
 use crate::ast::ast_node::ASTNodeTrait;
 use crate::semantic::semantic_checks::{check_binary_operation_types, node_type};
-use codespan_reporting::diagnostic::Diagnostic;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::errors::assignment_error::AssignmentError;
 
@@ -32,8 +31,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
-        node.l.visit(self);
-        node.r.visit(self);
+        node.l.visit(self)?;
+        node.r.visit(self)?;
 
         match check_binary_operation_types(node, self.scopes) {
             Ok(_) => Ok(()),
@@ -46,8 +45,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
     }
 
     fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
-        node.lhs.visit(self);
-        node.rhs.visit(self);
+        node.lhs.visit(self)?;
+        node.rhs.visit(self)?;
 
         let left_type = node_type(&node.lhs, self.scopes);
         let right_type = node_type(&node.rhs, self.scopes);
@@ -73,6 +72,21 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::expression_node::ExpressionNode;
+    use crate::ast::assignment_node::AssignmentOperation;
 
+    #[test]
+    fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {
+        let node = ExpressionNode::from(AssignmentNode {
+            lhs: Box::new(ExpressionNode::from(123)),
+            rhs: Box::new(ExpressionNode::from(456)),
+            op: AssignmentOperation::Simple,
+            span: None
+        });
 
+        let scope_tree = ScopeTree::default();
+        let mut walker = SemanticCheckWalker::new(&scope_tree);
+        node.visit(&walker)
+
+    }
 }

@@ -8,7 +8,7 @@ pub enum LPCVarType {
     Float,
     String,
     Mapping,
-    Mixed
+    Mixed,
 }
 
 impl Display for LPCVarType {
@@ -32,7 +32,7 @@ impl From<String> for LPCVarType {
             "string" => LPCVarType::String,
             "mapping" => LPCVarType::Mapping,
             "mixed" => LPCVarType::Mixed,
-            _ => panic!("Unknown LPCType. Cannot convert.")
+            _ => panic!("Unknown LPCType. Cannot convert."),
         }
     }
 }
@@ -46,7 +46,7 @@ pub enum LPCReturnType {
     Float(bool),
     String(bool),
     Mapping(bool),
-    Mixed(bool)
+    Mixed(bool),
 }
 
 impl Display for LPCReturnType {
@@ -56,10 +56,10 @@ impl Display for LPCReturnType {
         let type_ = match self {
             LPCReturnType::Void => String::from("void"),
             LPCReturnType::Int(array) => format!("int{}", to_star(array)),
-            LPCReturnType::Float(array) =>  format!("float{}", to_star(array)),
-            LPCReturnType::String(array) =>  format!("string{}", to_star(array)),
-            LPCReturnType::Mapping(array) =>  format!("mapping{}", to_star(array)),
-            LPCReturnType::Mixed(array) =>  format!("mixed{}", to_star(array)),
+            LPCReturnType::Float(array) => format!("float{}", to_star(array)),
+            LPCReturnType::String(array) => format!("string{}", to_star(array)),
+            LPCReturnType::Mapping(array) => format!("mapping{}", to_star(array)),
+            LPCReturnType::Mixed(array) => format!("mixed{}", to_star(array)),
         };
 
         write!(f, "{}", type_)

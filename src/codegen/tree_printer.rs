@@ -50,7 +50,7 @@ impl TreeWalker for TreePrinter {
         println!("Program");
         self.indent += 2;
         for expr in &program.functions {
-            expr.visit(self);
+            expr.visit(self)?;
         }
         self.indent -= 2;
 
@@ -64,7 +64,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented("args:");
         self.indent += 2;
         for arg in &node.arguments {
-            arg.visit(self);
+            arg.visit(self)?;
         }
         self.indent -= 4;
 
@@ -83,11 +83,11 @@ impl TreeWalker for TreePrinter {
         self.println_indented(&format!("operation: {:?}", expression.op));
         self.println_indented("l: ");
         self.indent += 2;
-        expression.l.visit(self);
+        expression.l.visit(self)?;
         self.indent -= 2;
         self.println_indented("r: ");
         self.indent += 2;
-        expression.r.visit(self);
+        expression.r.visit(self)?;
         self.indent -= 4;
 
         Ok(())
@@ -101,13 +101,13 @@ impl TreeWalker for TreePrinter {
         self.println_indented("parameters:");
         self.indent += 2;
         for parameter in &node.parameters {
-            parameter.visit(self);
+            parameter.visit(self)?;
         }
         self.indent -= 2;
         self.println_indented("body:");
         self.indent += 2;
         for expression in &node.body {
-            expression.visit(self);
+            expression.visit(self)?;
         }
         self.indent -= 4;
 
@@ -121,7 +121,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented("initializations:");
         self.indent += 2;
         for init in &node.initializations {
-            init.visit(self);
+            init.visit(self)?;
         }
         self.indent -= 4;
 

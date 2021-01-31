@@ -5,6 +5,7 @@ use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::lpc_type::LPCVarType;
 use crate::parser::span::Span;
+use crate::errors::CompilerError;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -27,8 +28,8 @@ pub struct VarInitNode {
 
 impl ASTNodeTrait for VarInitNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        let _ = tree_walker.visit_var_init(self);
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+        tree_walker.visit_var_init(self)
     }
 }
 

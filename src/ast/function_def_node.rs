@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::semantic::lpc_type::LPCReturnType;
 use crate::ast::var_init_node::VarInitNode;
+use crate::errors::CompilerError;
 
 /// A node representation a function definition
 #[derive(Debug, Eq, PartialEq)]
@@ -16,8 +17,8 @@ pub struct FunctionDefNode {
 
 impl ASTNodeTrait for FunctionDefNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        tree_walker.visit_function_def(self).unwrap();
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+        tree_walker.visit_function_def(self)
     }
 }
 

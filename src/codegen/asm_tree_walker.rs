@@ -171,7 +171,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
         self.scopes.goto_root();
         for expr in &program.functions {
-            expr.visit(self);
+            expr.visit(self)?
         }
         self.scopes.pop();
 
@@ -183,7 +183,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // eval args, then save each result register
         for argument in &node.arguments {
-            argument.visit(self);
+            argument.visit(self)?;
             arg_results.push(self.current_result);
         }
 
@@ -235,10 +235,10 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
-        node.l.visit(self);
+        node.l.visit(self)?;
         let reg_left = self.current_result;
 
-        node.r.visit(self);
+        node.r.visit(self)?;
         let reg_right = self.current_result;
 
         let reg_result = self.register_counter.next();
@@ -314,11 +314,11 @@ impl TreeWalker for AsmTreeWalker {
         self.register_counter.reset();
 
         for parameter in &node.parameters {
-            parameter.visit(self);
+            parameter.visit(self)?;
         }
 
         for expression in &node.body {
-            expression.visit(self);
+            expression.visit(self)?;
         }
 
         self.scopes.pop();
@@ -336,7 +336,7 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> {
         if let Some(expression) = &node.value {
-            expression.visit(self);
+            expression.visit(self)?;
             let copy = Instruction::RegCopy(self.current_result, Register(0));
             self.instructions.push(copy);
         }
@@ -358,7 +358,7 @@ impl TreeWalker for AsmTreeWalker {
         let current_register;
 
         if let Some(expression) = &node.value {
-            expression.visit(self);
+            expression.visit(self)?;
             current_register = self.register_counter.current();
         } else {
             // Default value to 0 when uninitialized.
@@ -381,9 +381,9 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
-        node.lhs.visit(self);
+        node.lhs.visit(self)?;
         let dest = self.current_result;
-        node.rhs.visit(self);
+        node.rhs.visit(self)?;
 
         let assign = Instruction::RegCopy(self.current_result, dest);
         self.instructions.push(assign);

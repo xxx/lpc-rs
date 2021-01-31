@@ -4,6 +4,7 @@ use crate::ast::expression_node::ExpressionNode;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::parser::span::Span;
+use crate::errors::CompilerError;
 
 /// All possible assignment operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -30,8 +31,8 @@ pub struct AssignmentNode {
 
 impl ASTNodeTrait for AssignmentNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        let _ = tree_walker.visit_assignment(self);
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+        tree_walker.visit_assignment(self)
     }
 }
 

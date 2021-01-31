@@ -5,7 +5,7 @@ use std::iter::repeat;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LPCValue {
     Int(i64),
-    String(String)
+    String(String),
 }
 
 impl From<&String> for LPCValue {
@@ -20,17 +20,17 @@ impl Add for &LPCValue {
     fn add(self, rhs: Self) -> Self::Output {
         match self {
             LPCValue::Int(i) => {
-              match rhs {
-                  LPCValue::Int(i2) => LPCValue::Int(i + i2),
-                  _ => unimplemented!()
-              }
-            },
+                match rhs {
+                    LPCValue::Int(i2) => LPCValue::Int(i + i2),
+                    _ => unimplemented!(),
+                }
+            }
             LPCValue::String(s) => {
                 match rhs {
                     LPCValue::String(s2) => LPCValue::String(s.clone() + s2),
-                    LPCValue::Int(i) => LPCValue::String(s.clone() + &i.to_string())
+                    LPCValue::Int(i) => LPCValue::String(s.clone() + &i.to_string()),
                 }
-            },
+            }
         }
     }
 }
@@ -43,25 +43,24 @@ impl Mul for &LPCValue {
             LPCValue::Int(i) => {
                 match rhs {
                     LPCValue::Int(i2) => LPCValue::Int(i * i2),
-                    _ => unimplemented!()
+                    _ => unimplemented!(),
                 }
-            },
+            }
             LPCValue::String(s) => {
                 match rhs {
                     // repeat the string `s`, `i` times
                     LPCValue::Int(i) => {
                         let value = if *i >= 0 {
-                            repeat(s.clone())
-                                .take(*i as usize).collect::<String>()
+                            repeat(s.clone()).take(*i as usize).collect::<String>()
                         } else {
                             String::from("")
                         };
 
                         LPCValue::String(value)
-                    },
-                    _ => unimplemented!()
+                    }
+                    _ => unimplemented!(),
                 }
-            },
+            }
         }
     }
 }

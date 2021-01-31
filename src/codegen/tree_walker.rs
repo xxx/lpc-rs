@@ -22,7 +22,7 @@ pub trait TreeWalker {
     /// Visit a program node. This is the top-level translation unit.
     fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> where Self: Sized {
         for expr in &node.functions {
-            expr.visit(self);
+            expr.visit(self)?;
         }
 
         Ok(())
@@ -31,7 +31,7 @@ pub trait TreeWalker {
     /// Visit a function call node
     fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> where Self: Sized {
         for argument in &node.arguments {
-            argument.visit(self);
+            argument.visit(self)?;
         }
 
         Ok(())
@@ -45,8 +45,8 @@ pub trait TreeWalker {
 
     /// Visit a binary operation node
     fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> where Self: Sized {
-        node.l.visit(self);
-        node.r.visit(self);
+        node.l.visit(self)?;
+        node.r.visit(self)?;
 
         Ok(())
     }
@@ -54,11 +54,11 @@ pub trait TreeWalker {
     /// Visit a function definition node
     fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> where Self: Sized {
         for parameter in &node.parameters {
-            parameter.visit(self);
+            parameter.visit(self)?;
         }
 
         for expression in &node.body {
-            expression.visit(self);
+            expression.visit(self)?;
         }
 
         Ok(())
@@ -67,7 +67,7 @@ pub trait TreeWalker {
     /// Visit a function return node
     fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> where Self: Sized {
         if let Some(expression) = &node.value {
-            expression.visit(self);
+            expression.visit(self)?;
         }
 
         Ok(())
@@ -76,7 +76,7 @@ pub trait TreeWalker {
     /// Visit a variable declaration node
     fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> where Self: Sized {
         for init in &node.initializations {
-            init.visit(self);
+            init.visit(self)?;
         }
 
         Ok(())
@@ -85,7 +85,7 @@ pub trait TreeWalker {
     /// Visit a variable initialization node
     fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> where Self: Sized {
         if let Some(expr) = &node.value {
-            expr.visit(self);
+            expr.visit(self)?;
         }
 
         Ok(())
@@ -100,8 +100,8 @@ pub trait TreeWalker {
     fn visit_assignment(&mut self, node: &AssignmentNode)  -> Result<(), CompilerError>
         where Self: Sized
     {
-        node.lhs.visit(self);
-        node.rhs.visit(self);
+        node.lhs.visit(self)?;
+        node.rhs.visit(self)?;
 
         Ok(())
     }

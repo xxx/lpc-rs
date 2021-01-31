@@ -3,6 +3,7 @@ use crate::ast::expression_node::ExpressionNode;
 use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
+use crate::errors::CompilerError;
 
 /// Representation of a function call.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -14,8 +15,8 @@ pub struct CallNode {
 }
 
 impl ASTNodeTrait for CallNode {
-    fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        tree_walker.visit_call(self).unwrap();
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+        tree_walker.visit_call(self)
     }
 }
 

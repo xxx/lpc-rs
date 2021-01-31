@@ -32,22 +32,19 @@ fn main() {
 
             // println!("{:?}", asm_walker.instructions);
             interpreter.exec();
-        },
-        Err(e) => {
-            panic!("unable to compile {}: {:?}", filename, e)
         }
+        Err(e) => panic!("unable to compile {}: {:?}", filename, e),
     }
 }
 
 /// Fully compile a file into a Program object
 fn compile_file(filename: &str) -> Result<Program, CompilerError> {
-    let file_content = fs::read_to_string(filename)
-        .unwrap_or_else(|_| panic!("cannot read file: {}", filename));
+    let file_content =
+        fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
 
     let mut errors: Vec<CompilerError> = vec![];
 
-    let program = mathstack_parser::ProgramParser::new()
-        .parse(&file_content);
+    let program = mathstack_parser::ProgramParser::new().parse(&file_content);
 
     let program = match program {
         Ok(prog) => prog,
@@ -66,7 +63,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     let mut scope_walker = ScopeWalker::new(filename);
 
-    program.visit(scope_walker.borrow_mut());
+    let _ = program.visit(scope_walker.borrow_mut());
 
     if scope_walker.get_errors().len() > 0 {
         errors.append(scope_walker.get_errors().to_vec().borrow_mut());
@@ -75,7 +72,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let scope_tree = ScopeTree::from(scope_walker);
 
     let mut semantic_check_walker = SemanticCheckWalker::new(&scope_tree);
-    program.visit(semantic_check_walker.borrow_mut());
+    let _ = program.visit(semantic_check_walker.borrow_mut());
 
     if semantic_check_walker.get_errors().len() > 0 {
         errors.append(semantic_check_walker.get_errors().to_vec().borrow_mut());
@@ -87,7 +84,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     }
 
     let mut asm_walker = AsmTreeWalker::new(scope_tree);
-    program.visit(&mut asm_walker);
+    let _ = program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     // for s in asm_walker.listing() {
     //     println!("{}", s);

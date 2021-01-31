@@ -3,5 +3,5 @@
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Span {
     pub l: usize,
-    pub r: usize
+    pub r: usize,
 }

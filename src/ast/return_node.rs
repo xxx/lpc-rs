@@ -3,6 +3,7 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
+use crate::errors::CompilerError;
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -19,8 +20,8 @@ impl ReturnNode {
 
 impl ASTNodeTrait for ReturnNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) {
-        tree_walker.visit_return(self).unwrap();
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+        tree_walker.visit_return(self)
     }
 }
 
