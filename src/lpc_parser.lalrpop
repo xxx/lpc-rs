@@ -78,7 +78,6 @@ Parameter: Vec<VarInitNode> = {
 
 ParameterList: Vec<VarInitNode> = {
     <list:(<ParameterList> ",")?> <name:ArgName> => {
-        println!("parmlist {:?}", list);
         let mut v = list.unwrap_or(vec![]);
         v.push(name);
         v

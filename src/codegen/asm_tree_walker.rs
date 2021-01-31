@@ -310,6 +310,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
         let return_address = self.instructions.len();
 
+        let len = self.instructions.len();
         self.scopes.next();
         self.register_counter.reset();
 
@@ -319,6 +320,11 @@ impl TreeWalker for AsmTreeWalker {
 
         for expression in &node.body {
             expression.visit(self)?;
+        }
+
+        // force a final return if one isn't already there.
+        if self.instructions.len() == len || *self.instructions.last().unwrap() != Instruction::Ret {
+            self.instructions.push(Instruction::Ret);
         }
 
         self.scopes.pop();
@@ -574,6 +580,7 @@ mod tests {
 
         let expected = vec![
             Instruction::IConst(Register(1), -4),
+            Instruction::Ret
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {

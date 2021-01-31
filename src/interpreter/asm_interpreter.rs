@@ -168,12 +168,12 @@ impl AsmInterpreter {
 
                     self.stack.push(new_frame);
 
-                    if let Some(address) = self.program.labels.get(name) {
+                    if let Some(FunctionSymbol { address, .. }) = self.program.functions.get(name) {
                         self.pc = *address;
                         continue;
                     } else if let Some(efun) = EFUNS.get(name) {
                         // the efun is responsible for populating the return value
-                        efun(&self.stack[self.stack.len() - 1], &self);
+                        efun(&self.stack.last().unwrap(), &self);
                         if let Some(frame) = self.pop_frame() {
                             self.copy_call_result(&frame);
                         }
