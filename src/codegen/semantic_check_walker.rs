@@ -24,14 +24,6 @@ impl<'a> SemanticCheckWalker<'a> {
             errors: vec![]
         }
     }
-
-    pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        self
-            .errors
-            .iter()
-            .flat_map(|e| e.to_diagnostics(file_id))
-            .collect()
-    }
 }
 
 impl<'a> TreeWalker for SemanticCheckWalker<'a> {
@@ -76,4 +68,11 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             Err(e)
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
 }
