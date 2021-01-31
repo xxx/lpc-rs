@@ -50,6 +50,9 @@ pub struct AsmTreeWalker {
 
 impl AsmTreeWalker {
     /// Create a new `AsmTreeWalker` that consumes the passed scopes
+    ///
+    /// # Arguments
+    /// `scopes` - The ScopeTree to use to resolve symbols and function calls.
     pub fn new(scopes: ScopeTree) -> Self {
         Self {
             scopes,
@@ -114,17 +117,6 @@ impl AsmTreeWalker {
     /// Setter for the scopes
     pub fn set_scopes(&mut self, scopes: ScopeTree) {
         self.scopes = scopes;
-    }
-
-    /// Return a map of all labels to addresses, both "normal" and function defs
-    pub fn combined_labels(&self) -> HashMap<String, usize> {
-        let mut map = self.labels.clone();
-
-        for (sym, address) in &self.functions {
-            map.insert(sym.name.clone(), *address);
-        }
-
-        map
     }
 
     /// Return a map of function names to their corresponding full symbol
@@ -324,6 +316,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // force a final return if one isn't already there.
         if self.instructions.len() == len || *self.instructions.last().unwrap() != Instruction::Ret {
+            // TODO: This should emit a warning
             self.instructions.push(Instruction::Ret);
         }
 
