@@ -12,7 +12,7 @@ pub struct SemanticCheckWalker<'a> {
     pub scopes: &'a ScopeTree,
 
     /// The errors we collect as we go through the tree
-    pub errors: Vec<CompilerError>
+    errors: Vec<CompilerError>
 }
 
 impl<'a> SemanticCheckWalker<'a> {
@@ -33,6 +33,10 @@ impl<'a> SemanticCheckWalker<'a> {
 }
 
 impl<'a> TreeWalker for SemanticCheckWalker<'a> {
+    fn get_errors(&self) -> Vec<CompilerError> {
+        self.errors.to_vec()
+    }
+
     fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self);
         node.r.visit(self);

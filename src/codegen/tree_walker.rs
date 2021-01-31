@@ -14,6 +14,11 @@ use crate::errors::CompilerError;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
+    /// Get collected errors, for nodes that track them.
+    fn get_errors(&self) -> Vec<CompilerError> {
+        vec![]
+    }
+
     /// Visit a program node. This is the top-level translation unit.
     fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> where Self: Sized {
         for expr in &node.functions {

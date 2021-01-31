@@ -7,7 +7,6 @@ use crate::semantic::symbol::Symbol;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::semantic_checks::check_var_redefinition;
-use crate::semantic::semantic_errors::var_redefinition_error;
 use crate::errors::CompilerError;
 
 /// A tree walker to handle populating all the scopes in the program
@@ -17,7 +16,10 @@ pub struct ScopeWalker {
     filepath: String,
 
     /// Our collection of scopes
-    pub scopes: ScopeTree
+    pub scopes: ScopeTree,
+
+    /// Collected errors
+    errors: Vec<CompilerError>
 }
 
 impl ScopeWalker {
@@ -26,7 +28,8 @@ impl ScopeWalker {
     pub fn new(filepath: &str) -> Self {
         Self {
             filepath: String::from(filepath),
-            scopes: ScopeTree::default()
+            scopes: ScopeTree::default(),
+            errors: vec![]
         }
     }
 
@@ -39,6 +42,10 @@ impl ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
+    fn get_errors(&self) -> Vec<CompilerError> {
+        self.errors.to_vec()
+    }
+
     fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> {
         // Push the global scope
         self.scopes.push_new();
@@ -72,10 +79,9 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
-        if let Err(e) =
-            check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
-            var_redefinition_error(&self.filepath, &e);
-            panic!();
+        if let Err(e) = check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
+            // This error is non-fatal. Let the walker continue.
+            self.errors.push(CompilerError::VarRedefinitionError(e));
         }
 
         self.insert_symbol(Symbol::from(node));
@@ -92,7 +98,8 @@ impl Default for ScopeWalker {
 
         Self {
             filepath: String::new(),
-            scopes
+            scopes,
+            errors: vec![]
         }
     }
 }
