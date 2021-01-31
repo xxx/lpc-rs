@@ -1,21 +1,18 @@
-use std::{fs, env};
+use std::{env, fs};
 use std::borrow::BorrowMut;
-use mathstack::mathstack_parser;
-use mathstack::codegen::tree_printer::TreePrinter;
-use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
-use mathstack::interpreter::asm_interpreter::AsmInterpreter;
+
+use mathstack::{errors, mathstack_parser};
 use mathstack::ast::ast_node::ASTNodeTrait;
-use mathstack::parser::parse_error;
-use mathstack::errors::CompilerError;
-use mathstack::interpreter::program::Program;
+use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
 use mathstack::codegen::scope_walker::ScopeWalker;
 use mathstack::codegen::semantic_check_walker::SemanticCheckWalker;
-use mathstack::semantic::scope_tree::ScopeTree;
-use codespan_reporting::term::termcolor::{StandardStream, ColorChoice};
-use codespan_reporting::files::SimpleFiles;
-use codespan_reporting::term;
+use mathstack::codegen::tree_printer::TreePrinter;
 use mathstack::codegen::tree_walker::TreeWalker;
-use codespan_reporting::diagnostic::Diagnostic;
+use mathstack::errors::CompilerError;
+use mathstack::interpreter::asm_interpreter::AsmInterpreter;
+use mathstack::interpreter::program::Program;
+use mathstack::parser::parse_error;
+use mathstack::semantic::scope_tree::ScopeTree;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -84,7 +81,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     }
 
     if errors.len() > 0 {
-        emit_diagnostics(filename, &file_content, &errors);
+        errors::emit_diagnostics(filename, &file_content, &errors);
         return Err(CompilerError::MultiError(errors));
     }
 
@@ -96,22 +93,4 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     // }
 
     Ok(asm_walker.to_program())
-}
-
-fn emit_diagnostics(filename: &str, file_content: &str, errors: &Vec<CompilerError>) {
-    let mut files = SimpleFiles::new();
-    let file_id = files.add(filename, file_content);
-
-    let diagnostics: Vec<Diagnostic<usize>> = errors
-        .iter()
-        .flat_map(|e| e.to_diagnostics(file_id))
-        .collect();
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = codespan_reporting::term::Config::default();
-
-    for diagnostic in &diagnostics {
-        if let Err(e) = term::emit(&mut writer.lock(), &config, &files, diagnostic) {
-            eprintln!("error attempting to emit semantic error: {:?}", e);
-        };
-    }
 }
