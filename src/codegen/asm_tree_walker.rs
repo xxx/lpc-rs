@@ -61,11 +61,11 @@ impl AsmTreeWalker {
     ///
     /// # Examples
     /// ```
-    /// use mathstack::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
-    /// use mathstack::ast::int_node::IntNode;
-    /// use mathstack::ast::expression_node::ExpressionNode;
-    /// use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
-    /// use mathstack::codegen::tree_walker::TreeWalker;
+    /// use lpc_rs::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
+    /// use lpc_rs::ast::int_node::IntNode;
+    /// use lpc_rs::ast::expression_node::ExpressionNode;
+    /// use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
+    /// use lpc_rs::codegen::tree_walker::TreeWalker;
     /// let node = BinaryOpNode {
     ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
     ///     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
@@ -396,7 +396,7 @@ impl TreeWalker for AsmTreeWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mathstack_parser;
+    use crate::lpc_parser;
     use crate::ast::expression_node::ExpressionNode;
     use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy};
     use crate::semantic::lpc_type::LPCVarType;
@@ -415,7 +415,7 @@ mod tests {
                 print(4 + 5);
             }
         ";
-        let tree = mathstack_parser::ProgramParser::new()
+        let tree = lpc_parser::ProgramParser::new()
             .parse(program)
             .unwrap();
 
@@ -446,7 +446,7 @@ mod tests {
     fn test_visit_call_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
         let call = "print(4 - 5)";
-        let tree = mathstack_parser::CallParser::new()
+        let tree = lpc_parser::CallParser::new()
             .parse(call)
             .unwrap();
 
@@ -561,7 +561,7 @@ mod tests {
         let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
         let call = "int main() { 4 + 2 - 5 * 2; }";
-        let tree = mathstack_parser::FunctionDefParser::new()
+        let tree = lpc_parser::FunctionDefParser::new()
             .parse(call)
             .unwrap();
 
@@ -628,7 +628,7 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let mut scope_walker = ScopeWalker::default();
         let call = "int foo = 1, *bar = 56";
-        let tree = mathstack_parser::DeclParser::new()
+        let tree = lpc_parser::DeclParser::new()
             .parse(call)
             .unwrap();
 

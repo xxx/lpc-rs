@@ -1,12 +1,12 @@
-use mathstack::mathstack_parser;
-use mathstack::ast::int_node::IntNode;
-use mathstack::ast::expression_node::ExpressionNode;
-use mathstack::ast::string_node::StringNode;
+use lpc_rs::lpc_parser;
+use lpc_rs::ast::int_node::IntNode;
+use lpc_rs::ast::expression_node::ExpressionNode;
+use lpc_rs::ast::string_node::StringNode;
 
 #[test]
 fn test_operator_precedence_add_first() {
     let expr = "1 + 2 * 3";
-    let node = mathstack_parser::ExpressionParser::new()
+    let node = lpc_parser::ExpressionParser::new()
         .parse(expr)
         .unwrap();
 
@@ -18,7 +18,7 @@ fn test_operator_precedence_add_first() {
 #[test]
 fn test_operator_precedence_mul_first() {
     let expr = "3 * 2 + 1";
-    let node = mathstack_parser::ExpressionParser::new()
+    let node = lpc_parser::ExpressionParser::new()
         .parse(expr)
         .unwrap();
 
@@ -30,7 +30,7 @@ fn test_operator_precedence_mul_first() {
 #[test]
 fn test_int_literal_collapse() {
     let expr = "10 - 3 * 2 + 4 / 2";
-    let node = mathstack_parser::ExpressionParser::new()
+    let node = lpc_parser::ExpressionParser::new()
         .parse(expr)
         .unwrap();
 
@@ -42,7 +42,7 @@ fn test_int_literal_collapse() {
 #[test]
 fn test_string_literal_concat() {
     let expr = r##""foo" + "bar" + "baz" + "quux""##;
-    let node = mathstack_parser::ExpressionParser::new()
+    let node = lpc_parser::ExpressionParser::new()
         .parse(expr)
         .unwrap();
 
@@ -54,7 +54,7 @@ fn test_string_literal_concat() {
 #[test]
 fn test_string_literal_repeat() {
     let expr = r##""foo" * 3"##;
-    let node = mathstack_parser::ExpressionParser::new()
+    let node = lpc_parser::ExpressionParser::new()
         .parse(expr)
         .unwrap();
 
@@ -64,7 +64,7 @@ fn test_string_literal_repeat() {
 
     // test negative multiplier
     let expr = r##""foo" * -3"##;
-    let node = mathstack_parser::ExpressionParser::new()
+    let node = lpc_parser::ExpressionParser::new()
         .parse(expr)
         .unwrap();
 

@@ -1,5 +1,5 @@
 [package]
-name = "mathstack"
+name = "lpc-rs"
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2018"

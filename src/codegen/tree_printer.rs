@@ -14,11 +14,11 @@ use crate::errors::CompilerError;
 ///
 /// # Examples
 /// ```
-/// use mathstack::mathstack_parser;
-/// use mathstack::codegen::tree_printer::TreePrinter;
-/// use mathstack::codegen::tree_walker::TreeWalker;
+/// use lpc_rs::lpc_parser;
+/// use lpc_rs::codegen::tree_printer::TreePrinter;
+/// use lpc_rs::codegen::tree_walker::TreeWalker;
 /// let prog = "int main() { int b = 123; return b; }";
-/// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
+/// let program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
 /// let mut walker = TreePrinter::new();
 /// walker.visit_program(&program_node);
 /// ```

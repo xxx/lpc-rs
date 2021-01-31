@@ -28,15 +28,15 @@ macro_rules! string {
 /// # Examples
 ///
 /// ```
-/// use mathstack::mathstack_parser;
-/// use mathstack::codegen::tree_walker::TreeWalker;
-/// use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
-/// use mathstack::codegen::scope_walker::ScopeWalker;
-/// use mathstack::interpreter::asm_interpreter::AsmInterpreter;
-/// use mathstack::semantic::scope_tree::ScopeTree;
+/// use lpc_rs::lpc_parser;
+/// use lpc_rs::codegen::tree_walker::TreeWalker;
+/// use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
+/// use lpc_rs::codegen::scope_walker::ScopeWalker;
+/// use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
+/// use lpc_rs::semantic::scope_tree::ScopeTree;
 ///
 /// let prog = "int main() { int b = 123; return b; }";
-/// let program_node = mathstack_parser::ProgramParser::new().parse(prog).unwrap();
+/// let program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
 /// let filepath = "path/to/myfile.c";
 /// let mut scope_walker = ScopeWalker::new(filepath);
 ///

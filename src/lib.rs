@@ -7,4 +7,4 @@ pub mod parser;
 pub mod semantic;
 
 #[macro_use] extern crate lalrpop_util;
-lalrpop_mod!(#[allow(clippy::all)] pub mathstack_parser);
+lalrpop_mod!(#[allow(clippy::all)] pub lpc_parser);

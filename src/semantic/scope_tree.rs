@@ -24,7 +24,7 @@ impl ScopeTree {
     ///
     /// # Example
     /// ```
-    /// use mathstack::semantic::scope_tree::ScopeTree;
+    /// use lpc_rs::semantic::scope_tree::ScopeTree;
     ///
     /// let mut tree = ScopeTree::default();
     ///

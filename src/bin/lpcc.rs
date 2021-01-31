@@ -1,18 +1,18 @@
 use std::{env, fs};
 use std::borrow::BorrowMut;
 
-use mathstack::{errors, mathstack_parser};
-use mathstack::ast::ast_node::ASTNodeTrait;
-use mathstack::codegen::asm_tree_walker::AsmTreeWalker;
-use mathstack::codegen::scope_walker::ScopeWalker;
-use mathstack::codegen::semantic_check_walker::SemanticCheckWalker;
-use mathstack::codegen::tree_printer::TreePrinter;
-use mathstack::codegen::tree_walker::TreeWalker;
-use mathstack::errors::CompilerError;
-use mathstack::interpreter::asm_interpreter::AsmInterpreter;
-use mathstack::interpreter::program::Program;
-use mathstack::errors::parse_error::ParseError;
-use mathstack::semantic::scope_tree::ScopeTree;
+use lpc_rs::{errors, lpc_parser};
+use lpc_rs::ast::ast_node::ASTNodeTrait;
+use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
+use lpc_rs::codegen::scope_walker::ScopeWalker;
+use lpc_rs::codegen::semantic_check_walker::SemanticCheckWalker;
+use lpc_rs::codegen::tree_printer::TreePrinter;
+use lpc_rs::codegen::tree_walker::TreeWalker;
+use lpc_rs::errors::CompilerError;
+use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
+use lpc_rs::interpreter::program::Program;
+use lpc_rs::errors::parse_error::ParseError;
+use lpc_rs::semantic::scope_tree::ScopeTree;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -44,7 +44,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     let mut errors: Vec<CompilerError> = vec![];
 
-    let program = mathstack_parser::ProgramParser::new().parse(&file_content);
+    let program = lpc_parser::ProgramParser::new().parse(&file_content);
 
     let program = match program {
         Ok(prog) => prog,
