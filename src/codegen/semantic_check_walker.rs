@@ -8,7 +8,7 @@ use crate::semantic::semantic_checks::{check_binary_operation_types, node_type};
 use crate::ast::assignment_node::AssignmentNode;
 use crate::errors::assignment_error::AssignmentError;
 use crate::ast::int_node::IntNode;
-use crate::ast::expression_node::ExpressionNode;
+use crate::ast::expression_node::ZERO_LITERAL;
 use crate::semantic::function_prototype::FunctionPrototype;
 use crate::ast::call_node::CallNode;
 use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
@@ -60,7 +60,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             // Non-fatal. Continue.
         }
 
-        // Further checks require access to the function prototype for error messaging
+        // Further checks require access to the function prototype for error messaging.
         let proto_opt = if let Some(prototype) = self.function_prototypes.get(&node.name) {
             Some(prototype)
         } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
@@ -84,18 +84,22 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 self.errors.push(e.clone());
             }
 
-            // check argument types
+            // Check argument types.
             for (index, ty) in prototype.arg_types.iter().enumerate() {
                 if let Some(arg) = node.arguments.get(index) {
-                    let arg_type = node_type(arg, self.scopes);
-                    if *ty != arg_type {
-                        self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
-                            name: node.name.clone(),
-                            type_: arg_type,
-                            expected: *ty,
-                            span: node.span,
-                            declaration_span: prototype.span
-                        }));
+                    if let ZERO_LITERAL = *arg {
+                        // sigh.
+                    } else {
+                        let arg_type = node_type(arg, self.scopes);
+                        if *ty != arg_type {
+                            self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
+                                name: node.name.clone(),
+                                type_: arg_type,
+                                expected: *ty,
+                                span: node.span,
+                                declaration_span: prototype.span
+                            }));
+                        }
                     }
                 }
             }
@@ -127,7 +131,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
 
         if left_type == right_type {
             Ok(())
-        } else if let ExpressionNode::Int(IntNode { value: 0 }) = *node.rhs {
+        } else if let ZERO_LITERAL = *node.rhs {
             // The integer 0 is always a valid assignment.
             Ok(())
         } else {
@@ -253,6 +257,29 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             let _ = node.visit(walker.borrow_mut());
             assert_eq!(walker.errors.len(), 1);
+        }
+
+        #[test]
+        fn test_visit_call_allows_0() {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![ExpressionNode::from(0)],
+                name: "my_func".to_string(),
+                span: None
+            });
+
+            let mut functions = HashMap::new();
+            functions.insert(String::from("my_func"), FunctionPrototype {
+                name: String::from("my_func"),
+                num_args: 1,
+                arg_types: vec![LPCVarType::String],
+                span: None
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let _ = node.visit(walker.borrow_mut());
+            assert!(walker.errors.is_empty());
         }
     }
 

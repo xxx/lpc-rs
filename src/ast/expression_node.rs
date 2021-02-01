@@ -10,6 +10,8 @@ use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 use crate::errors::CompilerError;
 
+pub const ZERO_LITERAL: ExpressionNode = ExpressionNode::Int(IntNode { value: 0 });
+
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
 #[derive(Debug, Eq, PartialEq)]
