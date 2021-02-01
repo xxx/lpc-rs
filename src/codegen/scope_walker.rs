@@ -89,7 +89,17 @@ impl TreeWalker for ScopeWalker {
             name: node.name.clone(),
             num_args,
             arg_types,
-            span: node.span
+            span: node.span,
+            arg_spans: {
+                node
+                    .parameters
+                    .iter()
+                    .map(|n| n.span)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+            }
         });
 
         Ok(())

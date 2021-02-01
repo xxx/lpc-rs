@@ -96,8 +96,12 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                                 name: node.name.clone(),
                                 type_: arg_type,
                                 expected: *ty,
-                                span: node.span,
-                                declaration_span: prototype.span
+                                span: arg.span(),
+                                declaration_span: if let Some(span) = prototype.arg_spans.get(index) {
+                                    Some(span.clone())
+                                } else {
+                                    None
+                                }
                             }));
                         }
                     }
@@ -176,7 +180,8 @@ mod tests {
                 name: String::from("known"),
                 num_args: 0,
                 arg_types: vec![],
-                span: None
+                span: None,
+                arg_spans: vec![]
             });
 
             let mut scope_tree = ScopeTree::default();
@@ -249,7 +254,8 @@ mod tests {
                 name: String::from("my_func"),
                 num_args: 1,
                 arg_types: vec![LPCVarType::String],
-                span: None
+                span: None,
+                arg_spans: vec![]
             });
 
             let mut scope_tree = ScopeTree::default();
@@ -272,7 +278,8 @@ mod tests {
                 name: String::from("my_func"),
                 num_args: 1,
                 arg_types: vec![LPCVarType::String],
-                span: None
+                span: None,
+                arg_spans: vec![]
             });
 
             let mut scope_tree = ScopeTree::default();

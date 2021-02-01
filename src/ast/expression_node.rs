@@ -9,6 +9,7 @@ use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 pub const ZERO_LITERAL: ExpressionNode = ExpressionNode::Int(IntNode { value: 0 });
 
@@ -18,10 +19,21 @@ pub const ZERO_LITERAL: ExpressionNode = ExpressionNode::Int(IntNode { value: 0 
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
-    Int(IntNode),
     Call(CallNode),
+    Int(IntNode),
+    String(StringNode),
     Var(VarNode),
-    String(StringNode)
+}
+
+impl ExpressionNode {
+    pub fn span(&self) -> Option<Span> {
+        match self {
+            ExpressionNode::Assignment(node) => node.span,
+            ExpressionNode::BinaryOp(node) => node.span,
+            ExpressionNode::Call(node) => node.span,
+            _ => None
+        }
+    }
 }
 
 macro_rules! destructured_traits {

@@ -48,7 +48,7 @@ impl ArgTypeError {
 impl Display for ArgTypeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f,
-               "Incorrect argument type: {} ({}). Expected {}",
+               "Unexpected argument type to `{}`: {}. Expected {}.",
                self.name,
                self.type_,
                self.expected

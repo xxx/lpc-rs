@@ -16,5 +16,8 @@ pub struct FunctionPrototype {
 
     /// The span of the definition of this function, for use in error messaging.
     /// When None, we assume this is an Efun prototype.
-    pub span: Option<Span>
+    pub span: Option<Span>,
+
+    /// Spans for my arguments
+    pub arg_spans: Vec<Span>
 }
