@@ -1,4 +1,5 @@
 pub mod arg_count_error;
+pub mod arg_type_error;
 pub mod assignment_error;
 pub mod binary_operation_error;
 pub mod var_redefinition_error;
@@ -15,11 +16,13 @@ use var_redefinition_error::VarRedefinitionError;
 use assignment_error::AssignmentError;
 use unknown_function_error::UnknownFunctionError;
 use arg_count_error::ArgCountError;
+use arg_type_error::ArgTypeError;
 
 /// General error wrapper type
 #[derive(Debug, Clone)]
 pub enum CompilerError {
     ArgCountError(ArgCountError),
+    ArgTypeError(ArgTypeError),
     AssignmentError(AssignmentError),
     BinaryOperationError(BinaryOperationError),
     ParseError(ParseError),
@@ -33,6 +36,7 @@ impl CompilerError {
     pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         match self {
             CompilerError::ArgCountError(err) => err.to_diagnostics(file_id),
+            CompilerError::ArgTypeError(err) => err.to_diagnostics(file_id),
             CompilerError::AssignmentError(err) => err.to_diagnostics(file_id),
             CompilerError::BinaryOperationError(err) => err.to_diagnostics(file_id),
             CompilerError::ParseError(err) => err.to_diagnostics(file_id),

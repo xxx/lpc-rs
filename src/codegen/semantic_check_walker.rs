@@ -14,6 +14,7 @@ use crate::ast::call_node::CallNode;
 use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
 use crate::errors::unknown_function_error::UnknownFunctionError;
 use crate::errors::arg_count_error::ArgCountError;
+use crate::errors::arg_type_error::ArgTypeError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -49,6 +50,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             argument.visit(self)?;
         }
 
+        // Check function existence.
         if !self.function_prototypes.contains_key(&node.name) && !EFUNS.contains_key(node.name.as_str()) {
             let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
                 name: node.name.clone(),
@@ -58,6 +60,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             // Non-fatal. Continue.
         }
 
+        // Further checks require access to the function prototype for error messaging
         let proto_opt = if let Some(prototype) = self.function_prototypes.get(&node.name) {
             Some(prototype)
         } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
@@ -69,6 +72,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         if let Some(prototype) = proto_opt {
             let arg_len = node.arguments.len();
 
+            // Check function arity.
             if arg_len != prototype.num_args {
                 let e = CompilerError::ArgCountError(ArgCountError {
                     name: node.name.clone(),
@@ -78,6 +82,22 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     prototype_span: prototype.span.clone()
                 });
                 self.errors.push(e.clone());
+            }
+
+            // check argument types
+            for (index, ty) in prototype.arg_types.iter().enumerate() {
+                if let Some(arg) = node.arguments.get(index) {
+                    let arg_type = node_type(arg, self.scopes);
+                    if *ty != arg_type {
+                        self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
+                            name: node.name.clone(),
+                            type_: arg_type,
+                            expected: *ty,
+                            span: node.span,
+                            declaration_span: prototype.span
+                        }));
+                    }
+                }
             }
         }
 
@@ -140,7 +160,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_call_allows_known_functions() -> Result<(), CompilerError> {
+        fn test_visit_call_allows_known_functions() {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "known".to_string(),
@@ -158,13 +178,15 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            node.visit(walker.borrow_mut())
+            let _ = node.visit(walker.borrow_mut());
+
+            assert!(walker.errors.is_empty());
         }
 
         #[test]
-        fn test_visit_call_allows_known_efuns() -> Result<(), CompilerError> {
+        fn test_visit_call_allows_known_efuns() {
             let node = ExpressionNode::from(CallNode {
-                arguments: vec![],
+                arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "print".to_string(),
                 span: None
             });
@@ -173,7 +195,9 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            node.visit(walker.borrow_mut())
+            let _ = node.visit(walker.borrow_mut());
+
+            assert!(walker.errors.is_empty());
         }
 
         #[test]
@@ -189,7 +213,46 @@ mod tests {
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             let _ = node.visit(walker.borrow_mut());
-            assert!(!walker.errors.is_empty());
+            assert_eq!(walker.errors.len(), 1);
+        }
+
+        #[test]
+        fn test_visit_call_disallows_incorrect_function_arity() {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![],
+                name: "print".to_string(),
+                span: None
+            });
+
+            let functions = HashMap::new();
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let _ = node.visit(walker.borrow_mut());
+            assert_eq!(walker.errors.len(), 1);
+        }
+
+        #[test]
+        fn test_visit_call_disallows_invalid_arg_types() {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![ExpressionNode::from(123)],
+                name: "my_func".to_string(),
+                span: None
+            });
+
+            let mut functions = HashMap::new();
+            functions.insert(String::from("my_func"), FunctionPrototype {
+                name: String::from("my_func"),
+                num_args: 1,
+                arg_types: vec![LPCVarType::String],
+                span: None
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let _ = node.visit(walker.borrow_mut());
+            assert_eq!(walker.errors.len(), 1);
         }
     }
 
