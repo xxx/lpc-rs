@@ -685,9 +685,7 @@ mod tests {
             span: None
         });
 
-        let node = VarNode {
-            name: "marf".to_string()
-        };
+        let node = VarNode::new("marf");
 
         walker.visit_var(&node).unwrap();
         assert_eq!(walker.current_result, Register(666));
@@ -708,12 +706,8 @@ mod tests {
         });
 
         let node = AssignmentNode {
-            lhs: Box::new(ExpressionNode::Var(VarNode {
-                name: "marf".to_string()
-            })),
-            rhs: Box::new(ExpressionNode::Int(IntNode {
-                value: -12
-            })),
+            lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
+            rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
             op: AssignmentOperation::Simple,
             span: None
         };

@@ -3,16 +3,20 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 /// A node representing an integer literal
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct IntNode {
     pub value: i64,
+
+    /// The span of the string in the original file
+    pub span: Option<Span>
 }
 
 impl IntNode {
     pub fn new(value: i64) -> Self {
-        Self { value }
+        Self { value, span: None }
     }
 }
 

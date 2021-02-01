@@ -8,13 +8,14 @@ use crate::semantic::semantic_checks::{check_binary_operation_types, node_type};
 use crate::ast::assignment_node::AssignmentNode;
 use crate::errors::assignment_error::AssignmentError;
 use crate::ast::int_node::IntNode;
-use crate::ast::expression_node::ZERO_LITERAL;
+use crate::ast::expression_node::ExpressionNode;
 use crate::semantic::function_prototype::FunctionPrototype;
 use crate::ast::call_node::CallNode;
 use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
 use crate::errors::unknown_function_error::UnknownFunctionError;
 use crate::errors::arg_count_error::ArgCountError;
 use crate::errors::arg_type_error::ArgTypeError;
+use crate::semantic::lpc_type::LPCReturnType;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -37,6 +38,16 @@ impl<'a> SemanticCheckWalker<'a> {
             function_prototypes,
             errors: vec![]
         }
+    }
+
+    fn function_return_values(&self) -> HashMap<&str, LPCReturnType> {
+        self
+            .function_prototypes
+            .keys()
+            .map(|k| k.as_str())
+            .zip(
+                self.function_prototypes.values().map(|v| v.return_type)
+            ).collect::<HashMap<_, _>>()
     }
 }
 
@@ -87,10 +98,14 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             // Check argument types.
             for (index, ty) in prototype.arg_types.iter().enumerate() {
                 if let Some(arg) = node.arguments.get(index) {
-                    if let ZERO_LITERAL = *arg {
+                    if let ExpressionNode::Int(IntNode { value: 0, .. }) = *arg {
                         // sigh.
                     } else {
-                        let arg_type = node_type(arg, self.scopes);
+                        let arg_type = node_type(
+                            arg,
+                            self.scopes,
+                            &self.function_return_values()
+                        );
                         if *ty != arg_type {
                             self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
                                 name: node.name.clone(),
@@ -116,7 +131,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
-        match check_binary_operation_types(node, self.scopes) {
+        match check_binary_operation_types(node, self.scopes, &self.function_return_values()) {
             Ok(_) => Ok(()),
             Err(err) => {
                 let e = CompilerError::BinaryOperationError(err);
@@ -130,12 +145,12 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
-        let left_type = node_type(&node.lhs, self.scopes);
-        let right_type = node_type(&node.rhs, self.scopes);
+        let left_type = node_type(&node.lhs, self.scopes, &self.function_return_values());
+        let right_type = node_type(&node.rhs, self.scopes, &self.function_return_values());
 
         if left_type == right_type {
             Ok(())
-        } else if let ZERO_LITERAL = *node.rhs {
+        } else if let ExpressionNode::Int(IntNode { value: 0, .. }) = *node.rhs {
             // The integer 0 is always a valid assignment.
             Ok(())
         } else {
@@ -178,6 +193,7 @@ mod tests {
             let mut functions = HashMap::new();
             functions.insert(String::from("known"), FunctionPrototype {
                 name: String::from("known"),
+                return_type: LPCReturnType::Int(false),
                 num_args: 0,
                 arg_types: vec![],
                 span: None,
@@ -252,6 +268,7 @@ mod tests {
             let mut functions = HashMap::new();
             functions.insert(String::from("my_func"), FunctionPrototype {
                 name: String::from("my_func"),
+                return_type: LPCReturnType::Int(false),
                 num_args: 1,
                 arg_types: vec![LPCVarType::String],
                 span: None,
@@ -276,6 +293,7 @@ mod tests {
             let mut functions = HashMap::new();
             functions.insert(String::from("my_func"), FunctionPrototype {
                 name: String::from("my_func"),
+                return_type: LPCReturnType::String(false),
                 num_args: 1,
                 arg_types: vec![LPCVarType::String],
                 span: None,

@@ -1,4 +1,4 @@
-use crate::semantic::lpc_type::LPCVarType;
+use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::parser::span::Span;
 
 /// A representation of a function prototype, used to allow forward references.
@@ -6,6 +6,9 @@ use crate::parser::span::Span;
 pub struct FunctionPrototype {
     /// The name of the function
     pub name: String,
+
+    /// The return type
+    pub return_type: LPCReturnType,
 
     /// The number of arguments this function accepts.
     /// Varargs are handled elsewhere and are ignored in this count.

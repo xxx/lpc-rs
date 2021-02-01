@@ -3,16 +3,20 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 /// A node representing a string literal
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StringNode {
     pub value: String,
+
+    /// The span of the string in the original file, including quotes
+    pub span: Option<Span>
 }
 
 impl StringNode {
     pub fn new(value: &str) -> Self {
-        Self { value: String::from(value) }
+        Self { value: String::from(value), span: None }
     }
 }
 

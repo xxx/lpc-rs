@@ -270,31 +270,35 @@ MultiplicitiveBinaryOp: BinaryOperation = {
     "/" => BinaryOperation::Div
 };
 
-Var: ExpressionNode = <name:ID> => ExpressionNode::Var(
+Var: ExpressionNode = <l:@L> <name:ID> <r:@R> => ExpressionNode::Var(
     VarNode {
-        name
+        name,
+        span: Some(Span { l, r })
     }
 );
 
-Int: ExpressionNode = <s:r"-?[0-9]+"> => ExpressionNode::Int(
+Int: ExpressionNode = <l:@L> <s:r"-?[0-9]+"> <r:@R> => ExpressionNode::Int(
     IntNode {
-        value: i64::from_str(s).unwrap()
+        value: i64::from_str(s).unwrap(),
+        span: Some(Span { l, r })
     }
 );
 
 String: ExpressionNode = {
-    <StringLiteral> => {
+    <l:@L> <s:StringLiteral> <r:@R> => {
         ExpressionNode::String(
             StringNode {
-                value: <>
+                value: s,
+                span: Some(Span { l, r })
             }
         )
     },
-    <s1:StringLiteral> <s2:String> => {
+    <l:@L> <s1:StringLiteral> <s2:String> <r:@R> => {
         match s2 {
             ExpressionNode::String(node) => {
                 ExpressionNode::String(StringNode {
-                    value: s1 + &node.value
+                    value: s1 + &node.value,
+                    span: Some(Span { l, r })
                 })
             }
             _ => unimplemented!()

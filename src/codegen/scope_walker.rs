@@ -87,6 +87,7 @@ impl TreeWalker for ScopeWalker {
         let arg_types = node.parameters.iter().map(|parm| parm.type_ ).collect::<Vec<_>>();
         self.function_prototypes.insert(node.name.clone(), FunctionPrototype {
             name: node.name.clone(),
+            return_type: node.return_type,
             num_args,
             arg_types,
             span: node.span,

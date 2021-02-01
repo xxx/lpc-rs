@@ -3,17 +3,21 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 /// A node representing the use of a variable.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarNode {
     /// The name of the variable.
     pub name: String,
+
+    /// The span of the string in the original file
+    pub span: Option<Span>
 }
 
 impl VarNode {
     pub fn new(name: &str) -> Self {
-        Self { name: String::from(name) }
+        Self { name: String::from(name), span: None }
     }
 }
 

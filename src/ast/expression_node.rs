@@ -11,8 +11,6 @@ use crate::ast::string_node::StringNode;
 use crate::errors::CompilerError;
 use crate::parser::span::Span;
 
-pub const ZERO_LITERAL: ExpressionNode = ExpressionNode::Int(IntNode { value: 0 });
-
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
 #[derive(Debug, Eq, PartialEq)]
@@ -31,7 +29,9 @@ impl ExpressionNode {
             ExpressionNode::Assignment(node) => node.span,
             ExpressionNode::BinaryOp(node) => node.span,
             ExpressionNode::Call(node) => node.span,
-            _ => None
+            ExpressionNode::Int(node) => node.span,
+            ExpressionNode::String(node) => node.span,
+            ExpressionNode::Var(node) => node.span,
         }
     }
 }
@@ -120,13 +120,13 @@ impl From<ASTNode> for ExpressionNode {
 
 impl From<i64> for ExpressionNode {
     fn from(value: i64) -> Self {
-        Self::Int(IntNode { value })
+        Self::Int(IntNode::new(value))
     }
 }
 
 impl From<&str> for ExpressionNode {
     fn from(value: &str) -> Self {
-        Self::String(StringNode { value: String::from(value) })
+        Self::String(StringNode { value: String::from(value), span: None })
     }
 }
 

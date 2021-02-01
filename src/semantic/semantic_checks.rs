@@ -5,12 +5,14 @@ use errors::var_redefinition_error::VarRedefinitionError;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::semantic::scope_tree::ScopeTree;
-use crate::semantic::lpc_type::LPCVarType;
+use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
 use crate::ast::int_node::IntNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::ast::assignment_node::AssignmentNode;
+use crate::ast::call_node::CallNode;
+use std::collections::HashMap;
 
 /// Check if a var has already been defined in the local scope.
 ///
@@ -40,8 +42,11 @@ pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a LocalScope)
 ///
 /// * `node` - The node we're checking to see if it's being used incorrectly
 /// * `scope_tree` - A reference to the scope tree that holds the program symbols
-pub fn check_binary_operation_types(node: &BinaryOpNode, scope_tree: &ScopeTree)
-                                    -> Result<(), BinaryOperationError> {
+/// * `function_return_types` - A reference to a mapping of function names to their return types
+pub fn check_binary_operation_types(
+    node: &BinaryOpNode,
+    scope_tree: &ScopeTree,
+    function_return_types: &HashMap<&str, LPCReturnType>) -> Result<(), BinaryOperationError> {
     fn create_error(
         node: &BinaryOpNode,
         op: BinaryOperation,
@@ -59,8 +64,8 @@ pub fn check_binary_operation_types(node: &BinaryOpNode, scope_tree: &ScopeTree)
     }
 
     let tuple = (
-        node_type(&node.l, scope_tree),
-        node_type(&node.r, scope_tree)
+        node_type(&node.l, scope_tree, function_return_types),
+        node_type(&node.r, scope_tree, function_return_types)
     );
 
     match node.op {
@@ -99,11 +104,21 @@ pub fn check_binary_operation_types(node: &BinaryOpNode, scope_tree: &ScopeTree)
 }
 
 /// Resolve an expression node down to a single type, recursively if necessary
-pub fn node_type(node: &ExpressionNode, scope_tree: &ScopeTree) -> LPCVarType {
+pub fn node_type(
+    node: &ExpressionNode,
+    scope_tree: &ScopeTree,
+    function_return_types: &HashMap<&str, LPCReturnType>) -> LPCVarType {
     match node {
+        ExpressionNode::Call(CallNode { name, .. }) => {
+            if let Some(return_type) = function_return_types.get(name.as_str()) {
+                LPCVarType::from(*return_type)
+            } else {
+                LPCVarType::Int
+            }
+        },
         ExpressionNode::Int(IntNode { .. }) => LPCVarType::Int,
         ExpressionNode::String(StringNode { .. }) => LPCVarType::String,
-        ExpressionNode::Var(VarNode { name }) => {
+        ExpressionNode::Var(VarNode { name, .. }) => {
             match scope_tree.lookup(name) {
                 Some(sym) => {
                     sym.type_
@@ -112,12 +127,11 @@ pub fn node_type(node: &ExpressionNode, scope_tree: &ScopeTree) -> LPCVarType {
             }
         }
         ExpressionNode::BinaryOp(BinaryOpNode { l, .. }) => {
-            node_type(l, scope_tree)
+            node_type(l, scope_tree, function_return_types)
         }
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
-            node_type(lhs, scope_tree)
+            node_type(lhs, scope_tree, function_return_types)
         }
-        &_ => unimplemented!()
     }
 }
 
@@ -173,8 +187,9 @@ mod tests {
                 op,
                 span: None,
             };
+            let function_return_types = HashMap::new();
 
-            check_binary_operation_types(&node, &scope_tree)
+            check_binary_operation_types(&node, &scope_tree, &function_return_types)
         }
 
         fn int_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
@@ -216,8 +231,8 @@ mod tests {
         fn int_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
             get_result(
                 op,
-                ExpressionNode::from(VarNode { name: "int1".to_string() }),
-                ExpressionNode::from(VarNode { name: "int2".to_string() }),
+                ExpressionNode::from(VarNode::new("int1")),
+                ExpressionNode::from(VarNode::new("int2")),
                 &scope_tree
             )
         }
@@ -225,8 +240,8 @@ mod tests {
         fn string_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
             get_result(
                 op,
-                ExpressionNode::from(VarNode { name: "string2".to_string() }),
-                ExpressionNode::from(VarNode { name: "int2".to_string() }),
+                ExpressionNode::from(VarNode::new("string2")),
+                ExpressionNode::from(VarNode::new("int2")),
                 &scope_tree
             )
         }
@@ -234,8 +249,8 @@ mod tests {
         fn int_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
             get_result(
                 op,
-                ExpressionNode::from(VarNode { name: "int2".to_string() }),
-                ExpressionNode::from(VarNode { name: "string2".to_string() }),
+                ExpressionNode::from(VarNode::new("int2")),
+                ExpressionNode::from(VarNode::new("string2")),
                 &scope_tree
             )
         }
@@ -243,8 +258,8 @@ mod tests {
         fn string_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
             get_result(
                 op,
-                ExpressionNode::from(VarNode { name: "string1".to_string() }),
-                ExpressionNode::from(VarNode { name: "string2".to_string() }),
+                ExpressionNode::from(VarNode::new("string1")),
+                ExpressionNode::from(VarNode::new("string2")),
                 &scope_tree
             )
         }
@@ -270,7 +285,7 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from("foo")),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "string1".to_string() })
+                            ExpressionNode::from(VarNode::new("string1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -283,7 +298,7 @@ mod tests {
                             span: None
                         })),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int2".to_string() })
+                            ExpressionNode::from(VarNode::new("int2"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -299,15 +314,15 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(222)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
                     }),
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode { name: "string2".to_string() })),
-                            r: Box::new(ExpressionNode::from(VarNode { name: "int2".to_string() })),
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
                             op: BinaryOperation::Mul,
                             span: None
                         })),
@@ -343,7 +358,7 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(123)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -356,7 +371,7 @@ mod tests {
                             span: None
                         })),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int2".to_string() })
+                            ExpressionNode::from(VarNode::new("int2"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -372,15 +387,15 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(222)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
                     }),
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode { name: "string2".to_string() })),
-                            r: Box::new(ExpressionNode::from(VarNode { name: "int2".to_string() })),
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
                             op: BinaryOperation::Mul,
                             span: None
                         })),
@@ -416,7 +431,7 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(123)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -429,7 +444,7 @@ mod tests {
                             span: None
                         })),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int2".to_string() })
+                            ExpressionNode::from(VarNode::new("int2"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -445,15 +460,15 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(222)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
                     }),
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode { name: "string2".to_string() })),
-                            r: Box::new(ExpressionNode::from(VarNode { name: "int2".to_string() })),
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
                             op: BinaryOperation::Mul,
                             span: None
                         })),
@@ -489,7 +504,7 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(123)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -502,7 +517,7 @@ mod tests {
                             span: None
                         })),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int2".to_string() })
+                            ExpressionNode::from(VarNode::new("int2"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
@@ -518,15 +533,15 @@ mod tests {
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(222)),
                         r: Box::new(
-                            ExpressionNode::from(VarNode { name: "int1".to_string() })
+                            ExpressionNode::from(VarNode::new("int1"))
                         ),
                         op: BinaryOperation::Add,
                         span: None
                     }),
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode { name: "string2".to_string() })),
-                            r: Box::new(ExpressionNode::from(VarNode { name: "int2".to_string() })),
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
                             op: BinaryOperation::Mul,
                             span: None
                         })),

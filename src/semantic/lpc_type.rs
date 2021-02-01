@@ -11,6 +11,18 @@ pub enum LPCVarType {
     Mixed,
 }
 
+impl From<LPCReturnType> for LPCVarType {
+    fn from(return_type: LPCReturnType) -> Self {
+        match return_type {
+            LPCReturnType::Int(_) => LPCVarType::Int,
+            LPCReturnType::String(_) => LPCVarType::String,
+            LPCReturnType::Float(_) => LPCVarType::Float,
+            LPCReturnType::Mapping(_) => LPCVarType::Mapping,
+            _ => unimplemented!()
+        }
+    }
+}
+
 impl Display for LPCVarType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let output = match self {
