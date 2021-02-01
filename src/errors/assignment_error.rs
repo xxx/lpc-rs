@@ -44,7 +44,7 @@ impl AssignmentError {
 impl Display for AssignmentError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f,
-               "Mismatched types: {} ({}) = {} ({})",
+               "Mismatched types: `{}` ({}) = `{}` ({})",
                self.left_name,
                self.left_type,
                self.right_name,

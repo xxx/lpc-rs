@@ -48,7 +48,7 @@ impl BinaryOperationError {
 impl Display for BinaryOperationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f,
-               "Mismatched types: {} ({}) {} {} ({})",
+               "Mismatched types: `{}` ({}) {} `{}` ({})",
                self.left_name,
                self.left_type,
                self.op,
