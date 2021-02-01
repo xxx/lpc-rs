@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_from_return_node() {
-        let node = ReturnNode { value: None };
+        let node = ReturnNode { value: None, span: None };
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Return(clone));

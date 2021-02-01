@@ -228,8 +228,8 @@ pub Expression: ExpressionNode = {
 };
 
 pub Return: ReturnNode = {
-    "return" => ReturnNode::new(None),
-    "return" <Expression> => ReturnNode::new(Some(<>))
+    <l:@L> "return" <r:@R> => ReturnNode { value: None, span: Some(Span { l, r }) },
+    <l:@L> "return" <e:Expression> <r:@R> => ReturnNode { value: Some(e), span: Some(Span { l, r }) }
 }
 
 ArgumentExpressionList: Vec<ExpressionNode> = {

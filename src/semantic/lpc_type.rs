@@ -61,6 +61,18 @@ pub enum LPCReturnType {
     Mixed(bool),
 }
 
+impl From<LPCVarType> for LPCReturnType {
+    fn from(return_type: LPCVarType) -> Self {
+        match return_type {
+            LPCVarType::Int => LPCReturnType::Int(false),
+            LPCVarType::String => LPCReturnType::String(false),
+            LPCVarType::Float => LPCReturnType::Float(false),
+            LPCVarType::Mapping => LPCReturnType::Mapping(false),
+            _ => unimplemented!()
+        }
+    }
+}
+
 impl Display for LPCReturnType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let to_star = |array: &bool| -> &str { if *array { " *" } else { "" } };

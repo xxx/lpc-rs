@@ -4,17 +4,21 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
 use crate::errors::CompilerError;
+use crate::parser::span::Span;
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ReturnNode {
     /// The value to return from the function.
     pub value: Option<ExpressionNode>,
+
+    /// The span of the string in the original file
+    pub span: Option<Span>
 }
 
 impl ReturnNode {
     pub fn new(value: Option<ExpressionNode>) -> Self {
-        Self { value }
+        Self { value, span: None }
     }
 }
 
