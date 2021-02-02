@@ -35,9 +35,6 @@ impl ArgTypeError {
         if let Some(span) = self.declaration_span {
             labels.push(Label::secondary(file_id, span.l..span.r)
                 .with_message("Declared here"));
-        }
-
-        if !labels.is_empty() {
             diagnostic = diagnostic.with_labels(labels);
         }
 

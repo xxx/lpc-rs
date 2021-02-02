@@ -24,9 +24,6 @@ impl ReturnTypeError {
 
         if let Some(span) = self.span {
             labels.push(Label::primary(file_id, span.l..span.r));
-        }
-
-        if !labels.is_empty() {
             diagnostic = diagnostic.with_labels(labels);
         }
 

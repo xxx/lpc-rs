@@ -5,6 +5,7 @@ pub mod binary_operation_error;
 pub mod var_redefinition_error;
 pub mod parse_error;
 pub mod return_type_error;
+pub mod undefined_var_error;
 pub mod unknown_function_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
