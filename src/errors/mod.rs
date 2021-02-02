@@ -19,7 +19,8 @@ use assignment_error::AssignmentError;
 use unknown_function_error::UnknownFunctionError;
 use arg_count_error::ArgCountError;
 use arg_type_error::ArgTypeError;
-use crate::errors::return_type_error::ReturnTypeError;
+use return_type_error::ReturnTypeError;
+use undefined_var_error::UndefinedVarError;
 
 /// General error wrapper type
 #[derive(Debug, Clone)]
@@ -32,6 +33,7 @@ pub enum CompilerError {
     UnknownFunctionError(UnknownFunctionError),
     VarRedefinitionError(VarRedefinitionError),
     ReturnTypeError(ReturnTypeError),
+    UndefinedVarError(UndefinedVarError),
     MultiError(Vec<CompilerError>),
 }
 
@@ -47,6 +49,7 @@ impl CompilerError {
             CompilerError::UnknownFunctionError(err) => err.to_diagnostics(file_id),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
             CompilerError::ReturnTypeError(err) => err.to_diagnostics(file_id),
+            CompilerError::UndefinedVarError(err) => err.to_diagnostics(file_id),
             CompilerError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics(file_id) ).collect()
             }
@@ -59,7 +62,7 @@ impl CompilerError {
 /// # Arguments
 /// * `filename` - The name of the file, for the messaging. In practice, this is the full filepath.
 /// * `file_content` - The actual content of the file, used for messaging.
-/// * `errors` - A vector of errors to display diagnostics for.
+/// * `errors` - A slice of errors to display diagnostics for.
 pub fn emit_diagnostics(filename: &str, file_content: &str, errors: &[CompilerError]) {
     let mut files = SimpleFiles::new();
     let file_id = files.add(filename, file_content);

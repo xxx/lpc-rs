@@ -10,6 +10,8 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::semantic_checks::check_var_redefinition;
 use crate::errors::CompilerError;
 use crate::semantic::function_prototype::FunctionPrototype;
+use crate::ast::var_node::VarNode;
+use crate::errors::undefined_var_error::UndefinedVarError;
 
 /// A tree walker to handle populating all the scopes in the program
 #[derive(Debug)]
@@ -108,11 +110,24 @@ impl TreeWalker for ScopeWalker {
 
     fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
         if let Err(e) = check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
-            // This error is non-fatal. Let the walker continue.
             self.errors.push(CompilerError::VarRedefinitionError(e));
         }
 
         self.insert_symbol(Symbol::from(node));
+
+        Ok(())
+    }
+
+    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
+        // We check for undefined vars here in case a symbol is subsequently defined.
+        if let None = self.scopes.lookup(&node.name) {
+            self.errors.push(CompilerError::UndefinedVarError(
+                UndefinedVarError {
+                    name: node.name.clone(),
+                    span: node.span
+                }
+            ));
+        }
 
         Ok(())
     }
