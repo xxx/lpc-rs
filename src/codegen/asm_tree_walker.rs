@@ -21,10 +21,10 @@ use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::expression_node::ExpressionNode;
-use crate::semantic::lpc_type::LPCVarType;
 use crate::interpreter::program::Program;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::errors::CompilerError;
+use crate::semantic::lpc_type::LPCType;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -253,7 +253,7 @@ impl TreeWalker for AsmTreeWalker {
                 ExpressionNode::Var(var_node) => {
                     let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
                     match type_ {
-                        LPCVarType::String =>
+                        LPCType::String(_, _) =>
                             Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
                         _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
                     }
@@ -278,7 +278,7 @@ impl TreeWalker for AsmTreeWalker {
                 ExpressionNode::Var(var_node) => {
                     let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
                     match type_ {
-                        LPCVarType::String =>
+                        LPCType::String(_, _) =>
                             Instruction::SMul(reg_left, reg_right, reg_result.unwrap()),
                         _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
                     }
@@ -401,7 +401,7 @@ mod tests {
     use crate::lpc_parser;
     use crate::ast::expression_node::ExpressionNode;
     use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy};
-    use crate::semantic::lpc_type::LPCVarType;
+    use crate::semantic::lpc_type::LPCType;
     use crate::ast::assignment_node::AssignmentOperation;
     use crate::parser::span::Span;
     use crate::codegen::scope_walker::ScopeWalker;
@@ -653,8 +653,7 @@ mod tests {
         let scope = walker.scopes.get_current().unwrap();
         assert_eq!(scope.lookup("foo").unwrap(), Symbol {
             name: String::from("foo"),
-            type_: LPCVarType::Int,
-            array: false,
+            type_: LPCType::Int(false, false),
             static_: false,
             location: Some(Register(1)),
             scope_id: 0,
@@ -662,8 +661,7 @@ mod tests {
         });
         assert_eq!(scope.lookup("bar").unwrap(), Symbol {
             name: String::from("bar"),
-            type_: LPCVarType::Int,
-            array: true,
+            type_: LPCType::Int(false, false),
             static_: false,
             location: Some(Register(2)),
             scope_id: 0,
@@ -677,8 +675,7 @@ mod tests {
         walker.scopes.push_new();
         insert_symbol(walker.borrow_mut(), Symbol {
             name: "marf".to_string(),
-            type_: LPCVarType::Int,
-            array: false,
+            type_: LPCType::Int(false, false),
             static_: false,
             location: Some(Register(666)),
             scope_id: 0,
@@ -697,8 +694,7 @@ mod tests {
         walker.scopes.push_new();
         insert_symbol(walker.borrow_mut(), Symbol {
             name: "marf".to_string(),
-            type_: LPCVarType::Int,
-            array: false,
+            type_: LPCType::Int(false, false),
             static_: false,
             location: Some(Register(666)),
             scope_id: 0,

@@ -5,7 +5,7 @@ use errors::var_redefinition_error::VarRedefinitionError;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::semantic::scope_tree::ScopeTree;
-use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
+use crate::semantic::lpc_type::LPCType;
 use crate::ast::int_node::IntNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::var_node::VarNode;
@@ -46,12 +46,12 @@ pub fn check_var_redefinition<'a>(node: &'_ VarInitNode, scope: &'a LocalScope)
 pub fn check_binary_operation_types(
     node: &BinaryOpNode,
     scope_tree: &ScopeTree,
-    function_return_types: &HashMap<&str, LPCReturnType>) -> Result<(), BinaryOperationError> {
+    function_return_types: &HashMap<&str, LPCType>) -> Result<(), BinaryOperationError> {
     fn create_error(
         node: &BinaryOpNode,
         op: BinaryOperation,
-        left_type: LPCVarType,
-        right_type: LPCVarType,
+        left_type: LPCType,
+        right_type: LPCType,
     ) -> BinaryOperationError {
         BinaryOperationError {
             op,
@@ -71,31 +71,31 @@ pub fn check_binary_operation_types(
     match node.op {
         BinaryOperation::Add => {
             match tuple {
-                (LPCVarType::Int, LPCVarType::Int) => Ok(()),
-                (LPCVarType::String, LPCVarType::Int) => Ok(()),
-                (LPCVarType::String, LPCVarType::String) => Ok(()),
+                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
+                (LPCType::String(false, _), LPCType::Int(false, _)) => Ok(()),
+                (LPCType::String(false, _), LPCType::String(false, _)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Add, left_type, right_type))
             }
         }
         BinaryOperation::Sub => {
             match tuple {
-                (LPCVarType::Int, LPCVarType::Int) => Ok(()),
+                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Sub, left_type, right_type))
             }
         }
         BinaryOperation::Mul => {
             match tuple {
-                (LPCVarType::Int, LPCVarType::Int) => Ok(()),
-                (LPCVarType::String, LPCVarType::Int) => Ok(()),
+                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
+                (LPCType::String(false, _), LPCType::Int(false, _)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Mul, left_type, right_type))
             }
         }
         BinaryOperation::Div => {
             match tuple {
-                (LPCVarType::Int, LPCVarType::Int) => Ok(()),
+                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Div, left_type, right_type))
             }
@@ -107,17 +107,17 @@ pub fn check_binary_operation_types(
 pub fn node_type(
     node: &ExpressionNode,
     scope_tree: &ScopeTree,
-    function_return_types: &HashMap<&str, LPCReturnType>) -> LPCVarType {
+    function_return_types: &HashMap<&str, LPCType>) -> LPCType {
     match node {
         ExpressionNode::Call(CallNode { name, .. }) => {
             if let Some(return_type) = function_return_types.get(name.as_str()) {
-                LPCVarType::from(*return_type)
+                *return_type
             } else {
-                LPCVarType::Int
+                LPCType::Int(false, false)
             }
         },
-        ExpressionNode::Int(IntNode { .. }) => LPCVarType::Int,
-        ExpressionNode::String(StringNode { .. }) => LPCVarType::String,
+        ExpressionNode::Int(IntNode { .. }) => LPCType::Int(false, false),
+        ExpressionNode::String(StringNode { .. }) => LPCType::String(false, false),
         ExpressionNode::Var(VarNode { name, .. }) => {
             match scope_tree.lookup(name) {
                 Some(sym) => {
@@ -146,23 +146,35 @@ mod tests {
         fn setup() -> ScopeTree {
             let int1 = Symbol {
                 name: "int1".to_string(),
-                type_: LPCVarType::Int,
-                ..Default::default()
+                type_: LPCType::Int(false, false),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None
             };
             let int2 = Symbol {
                 name: "int2".to_string(),
-                type_: LPCVarType::Int,
-                ..Default::default()
+                type_: LPCType::Int(false, false),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None
             };
             let string1 = Symbol {
                 name: "string1".to_string(),
-                type_: LPCVarType::String,
-                ..Default::default()
+                type_: LPCType::String(false, false),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None
             };
             let string2 = Symbol {
                 name: "string2".to_string(),
-                type_: LPCVarType::String,
-                ..Default::default()
+                type_: LPCType::String(false, false),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None
             };
 
             let mut scope_tree = ScopeTree::default();

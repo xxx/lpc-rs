@@ -12,7 +12,7 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
-use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
+use crate::semantic::lpc_type::LPCType;
 use crate::ast::ast_node::ASTNode;
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
@@ -47,12 +47,12 @@ pub FunctionDef: FunctionDefNode = {
 
         let return_type = if let Some(this_type) = r_type {
             match this_type.as_str() {
-                "int" => LPCReturnType::Int(array),
-                "string" => LPCReturnType::String(array),
+                "int" => LPCType::Int(array, false),
+                "string" => LPCType::String(array, false),
                 _ => unimplemented!()
             }
         } else {
-            LPCReturnType::Int(array)
+            LPCType::Int(array, false)
         };
 
         FunctionDefNode {
@@ -87,7 +87,7 @@ ParameterList: Vec<VarInitNode> = {
 
 ArgName: VarInitNode = {
     <var_type:VarType> <mut init:VarInit> => {
-        let new_type = LPCVarType::from(var_type);
+        let new_type = LPCType::from(var_type);
 
         init.type_ = new_type;
 
@@ -114,7 +114,7 @@ pub Statement: ASTNode = {
 VarInit: VarInitNode = {
     <l:@L> <array:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> <r:@R> => {
         VarInitNode {
-            type_: LPCVarType::Int, // placeholder. Corrected in Decl.
+            type_: LPCType::Int(false, false), // placeholder. Corrected in Decl.
             name,
             value,
             array: array.is_some(),
@@ -129,7 +129,7 @@ pub Decl: DeclNode = {
 
         initializations.append(optional.to_vec().as_mut());
 
-        let new_type = LPCVarType::from(var_type);
+        let new_type = LPCType::from(var_type);
 
         // Update each VarInitNode with the correct type.
         for init in &mut initializations {

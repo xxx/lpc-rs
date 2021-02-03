@@ -2,7 +2,7 @@ use crate::parser::span::Span;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::fmt::{Display, Formatter};
 use std::fmt;
-use crate::semantic::lpc_type::LPCVarType;
+use crate::semantic::lpc_type::LPCType;
 
 #[derive(Debug, Clone)]
 pub struct ArgTypeError {
@@ -10,10 +10,10 @@ pub struct ArgTypeError {
     pub name: String,
 
     /// The argument type
-    pub type_: LPCVarType,
+    pub type_: LPCType,
 
     /// The expected arg type
-    pub expected: LPCVarType,
+    pub expected: LPCType,
     
     /// The span of the call
     pub span: Option<Span>,

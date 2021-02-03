@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::parser::span::Span;
-use crate::semantic::lpc_type::LPCVarType;
+use crate::semantic::lpc_type::LPCType;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 /// Error for mismatched types in binary operations
@@ -15,13 +15,13 @@ pub struct BinaryOperationError {
     pub left_name: String,
 
     /// Type of left-side term
-    pub left_type: LPCVarType,
+    pub left_type: LPCType,
 
     /// Name of left-hand term
     pub right_name: String,
 
     /// Type of right-side term
-    pub right_type: LPCVarType,
+    pub right_type: LPCType,
 
     /// The span of the operation
     pub span: Option<Span>

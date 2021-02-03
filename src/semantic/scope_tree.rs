@@ -179,7 +179,7 @@ impl From<ScopeWalker> for ScopeTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::lpc_type::LPCVarType;
+    use crate::semantic::lpc_type::LPCType;
 
     #[test]
     fn test_push_new() {
@@ -196,11 +196,11 @@ mod tests {
     fn test_lookup_finds_the_symbol() {
         let mut collection = ScopeTree::default();
         collection.push_new();
-        let sym = Symbol::new("foo", LPCVarType::String, false);
+        let sym = Symbol::new("foo", LPCType::String(false, false));
         collection.get_current_mut().unwrap().insert(sym);
 
         if let Some(scope_ref) = collection.lookup("foo") {
-            assert_eq!(scope_ref.type_, LPCVarType::String);
+            assert_eq!(scope_ref.type_, LPCType::String(false, false));
         } else {
             panic!("symbol not found.");
         }
@@ -212,13 +212,13 @@ mod tests {
         collection.push_new();
         let scope1 = collection.get_current_mut();
 
-        let sym = Symbol::new("foo", LPCVarType::String, false);
+        let sym = Symbol::new("foo", LPCType::String(false, false));
         scope1.unwrap().insert(sym);
 
         collection.push_new();
 
         if let Some(scope_ref) = collection.lookup("foo") {
-            assert_eq!(scope_ref.type_, LPCVarType::String);
+            assert_eq!(scope_ref.type_, LPCType::String(false, false));
         } else {
             panic!("symbol not found.");
         }

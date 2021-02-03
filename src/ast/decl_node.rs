@@ -3,20 +3,20 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::var_init_node::VarInitNode;
-use crate::semantic::lpc_type::LPCVarType;
 use crate::errors::CompilerError;
+use crate::semantic::lpc_type::LPCType;
 
 /// A container for a set of variable declarations.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DeclNode {
     /// The declared type
-    pub type_: LPCVarType,
+    pub type_: LPCType,
     /// The list of variables, with their optional initializations
     pub initializations: Vec<VarInitNode>,
 }
 
 impl DeclNode {
-    pub fn new(type_: LPCVarType, initializations: Vec<VarInitNode>) -> Self {
+    pub fn new(type_: LPCType, initializations: Vec<VarInitNode>) -> Self {
         Self { type_, initializations }
     }
 }

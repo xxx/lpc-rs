@@ -7,7 +7,7 @@ use print::print;
 use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::asm_interpreter::AsmInterpreter;
 use crate::semantic::function_prototype::FunctionPrototype;
-use crate::semantic::lpc_type::{LPCVarType, LPCReturnType};
+use crate::semantic::lpc_type::LPCType;
 
 /// Signature for Efuns
 pub type Efun = fn(&StackFrame, &AsmInterpreter);
@@ -25,9 +25,9 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert("print", FunctionPrototype {
             name: String::from("print"),
-            return_type: LPCReturnType::Int(false),
+            return_type: LPCType::Int(false, false),
             num_args: 1,
-            arg_types: vec![LPCVarType::Int],
+            arg_types: vec![LPCType::Int(false, false)],
             span: None,
             arg_spans: vec![]
         });

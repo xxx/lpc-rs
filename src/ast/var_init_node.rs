@@ -3,15 +3,15 @@ use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use crate::ast::expression_node::ExpressionNode;
-use crate::semantic::lpc_type::LPCVarType;
 use crate::parser::span::Span;
 use crate::errors::CompilerError;
+use crate::semantic::lpc_type::LPCType;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarInitNode {
     /// The LPC type. This is the "true" type, even for mixed vars.
-    pub type_: LPCVarType,
+    pub type_: LPCType,
 
     /// The var name
     pub name: String,

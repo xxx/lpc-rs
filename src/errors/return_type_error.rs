@@ -2,15 +2,15 @@ use crate::parser::span::Span;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::fmt::{Display, Formatter};
 use std::fmt;
-use crate::semantic::lpc_type::LPCReturnType;
+use crate::semantic::lpc_type::LPCType;
 
 #[derive(Debug, Clone)]
 pub struct ReturnTypeError {
     /// The return type
-    pub type_: LPCReturnType,
+    pub type_: LPCType,
 
     /// The expected return type
-    pub expected: LPCReturnType,
+    pub expected: LPCType,
     
     /// The span of the call
     pub span: Option<Span>,

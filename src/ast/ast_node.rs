@@ -94,7 +94,7 @@ impl From<DeclNode> for ASTNode {
 mod tests {
     use super::*;
     use crate::ast::binary_op_node::BinaryOperation;
-    use crate::semantic::lpc_type::LPCVarType;
+    use crate::semantic::lpc_type::LPCType;
 
     #[test]
     fn test_from_expression_node() {
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_from_decl_node() {
-        let node = DeclNode { type_: LPCVarType::Int, initializations: vec![] };
+        let node = DeclNode { type_: LPCType::Int(false, false), initializations: vec![] };
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Decl(clone));

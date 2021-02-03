@@ -15,7 +15,7 @@ use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
 use crate::errors::unknown_function_error::UnknownFunctionError;
 use crate::errors::arg_count_error::ArgCountError;
 use crate::errors::arg_type_error::ArgTypeError;
-use crate::semantic::lpc_type::{LPCReturnType, LPCVarType};
+use crate::semantic::lpc_type::LPCType;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::function_def_node::FunctionDefNode;
@@ -49,7 +49,7 @@ impl<'a> SemanticCheckWalker<'a> {
     }
 
     /// A transformation helper to get a map of function names to their return values.
-    fn function_return_values(&self) -> HashMap<&str, LPCReturnType> {
+    fn function_return_values(&self) -> HashMap<&str, LPCType> {
         self
             .function_prototypes
             .keys()
@@ -180,10 +180,10 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                         &self.function_return_values()
                     );
 
-                    if function_def.return_type == LPCReturnType::Void ||
-                        LPCVarType::from(function_def.return_type) != return_type {
+                    if function_def.return_type == LPCType::Void ||
+                        function_def.return_type != return_type {
                         let error = CompilerError::ReturnTypeError(ReturnTypeError {
-                            type_: LPCReturnType::from(return_type),
+                            type_: return_type,
                             expected: function_def.return_type,
                             span: node.span
                         });
@@ -192,9 +192,9 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     }
                 }
             } else {
-                if function_def.return_type != LPCReturnType::Void {
+                if function_def.return_type != LPCType::Void {
                     let error = CompilerError::ReturnTypeError(ReturnTypeError {
-                        type_: LPCReturnType::Void,
+                        type_: LPCType::Void,
                         expected: function_def.return_type,
                         span: node.span
                     });
@@ -276,7 +276,7 @@ mod tests {
     use crate::ast::expression_node::ExpressionNode;
     use crate::ast::assignment_node::AssignmentOperation;
     use crate::semantic::symbol::Symbol;
-    use crate::semantic::lpc_type::LPCVarType;
+    use crate::semantic::lpc_type::LPCType;
     use std::borrow::BorrowMut;
     use crate::ast::var_node::VarNode;
 
@@ -294,7 +294,7 @@ mod tests {
             let mut functions = HashMap::new();
             functions.insert(String::from("known"), FunctionPrototype {
                 name: String::from("known"),
-                return_type: LPCReturnType::Int(false),
+                return_type: LPCType::Int(false, false),
                 num_args: 0,
                 arg_types: vec![],
                 span: None,
@@ -369,9 +369,9 @@ mod tests {
             let mut functions = HashMap::new();
             functions.insert(String::from("my_func"), FunctionPrototype {
                 name: String::from("my_func"),
-                return_type: LPCReturnType::Int(false),
+                return_type: LPCType::Int(false, false),
                 num_args: 1,
-                arg_types: vec![LPCVarType::String],
+                arg_types: vec![LPCType::String(false, false)],
                 span: None,
                 arg_spans: vec![]
             });
@@ -394,9 +394,9 @@ mod tests {
             let mut functions = HashMap::new();
             functions.insert(String::from("my_func"), FunctionPrototype {
                 name: String::from("my_func"),
-                return_type: LPCReturnType::String(false),
+                return_type: LPCType::String(false, false),
                 num_args: 1,
-                arg_types: vec![LPCVarType::String],
+                arg_types: vec![LPCType::String(false, false)],
                 span: None,
                 arg_spans: vec![]
             });
@@ -425,7 +425,7 @@ mod tests {
             let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
-            let sym = Symbol::new("foo", LPCVarType::Int, false);
+            let sym = Symbol::new("foo", LPCType::Int(false, false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             node.visit(walker.borrow_mut())
@@ -443,7 +443,7 @@ mod tests {
             let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
-            let sym = Symbol::new("foo", LPCVarType::String, false);
+            let sym = Symbol::new("foo", LPCType::String(false, false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             assert!(node.visit(walker.borrow_mut()).is_err());
@@ -465,7 +465,7 @@ mod tests {
             let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
-            let sym = Symbol::new("foo", LPCVarType::Int, false);
+            let sym = Symbol::new("foo", LPCType::Int(false, false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             node.visit(walker.borrow_mut())
@@ -483,7 +483,7 @@ mod tests {
             let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
-            let sym = Symbol::new("foo", LPCVarType::String, false);
+            let sym = Symbol::new("foo", LPCType::String(false, false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             node.visit(walker.borrow_mut())
@@ -501,7 +501,7 @@ mod tests {
             let functions = HashMap::new();
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
-            let sym = Symbol::new("foo", LPCVarType::String, false);
+            let sym = Symbol::new("foo", LPCType::String(false, false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             assert!(node.visit(walker.borrow_mut()).is_err());
@@ -514,8 +514,8 @@ mod tests {
         #[test]
         fn test_visit_var_init_validates_both_sides() {
             let node = VarInitNode {
-                type_: LPCVarType::Int,
                 name: "foo".to_string(),
+                type_: LPCType::Int(false, false),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 span: None
@@ -533,7 +533,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_always_allows_0() {
             let node = VarInitNode {
-                type_: LPCVarType::String,
+                type_: LPCType::String(false, false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
@@ -552,7 +552,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_disallows_differing_types() {
             let node = VarInitNode {
-                type_: LPCVarType::String,
+                type_: LPCType::String(false, false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -585,7 +585,7 @@ mod tests {
             };
 
             let void_function_def = FunctionDefNode {
-                return_type: LPCReturnType::Void,
+                return_type: LPCType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -593,7 +593,7 @@ mod tests {
             };
 
             let int_function_def = FunctionDefNode {
-                return_type: LPCReturnType::Int(false),
+                return_type: LPCType::Int(false, false),
                 name: "snuh".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -635,7 +635,7 @@ mod tests {
             };
 
             let void_function_def = FunctionDefNode {
-                return_type: LPCReturnType::Void,
+                return_type: LPCType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -655,7 +655,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_always_allows_0() {
             let node = VarInitNode {
-                type_: LPCVarType::String,
+                type_: LPCType::String(false, false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
@@ -674,7 +674,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_disallows_differing_types() {
             let node = VarInitNode {
-                type_: LPCVarType::String,
+                type_: LPCType::String(false, false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(123)),
                 array: false,

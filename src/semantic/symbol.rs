@@ -1,4 +1,4 @@
-use crate::semantic::lpc_type::LPCVarType;
+use crate::semantic::lpc_type::LPCType;
 use crate::ast::var_init_node::VarInitNode;
 use crate::asm::register::Register;
 use crate::parser::span::Span;
@@ -9,9 +9,7 @@ pub struct Symbol {
     /// The name of this symbol
     pub name: String,
     /// The type of this var
-    pub type_: LPCVarType,
-    /// Is this var an array?
-    pub array: bool,
+    pub type_: LPCType,
     // pub privacy: LPCPrivacy,
     /// Is this var static?
     pub static_: bool,
@@ -25,11 +23,10 @@ pub struct Symbol {
 
 impl Symbol {
     /// Create a new, location-less Symbol
-    pub fn new(name: &str, type_: LPCVarType, array: bool) -> Self {
+    pub fn new(name: &str, type_: LPCType) -> Self {
         Self {
             name: String::from(name),
             type_,
-            array,
             static_: false,
             location: None,
             scope_id: 0,
@@ -38,15 +35,9 @@ impl Symbol {
     }
 }
 
-impl Default for Symbol {
-    fn default() -> Self {
-        Self::new("", LPCVarType::Int, false)
-    }
-}
-
 impl From<&VarInitNode> for Symbol {
     fn from(node: &VarInitNode) -> Self {
-        let s = Self::new(&node.name, node.type_, node.array);
+        let s = Self::new(&node.name, node.type_);
 
         Self {
             span: node.span,
