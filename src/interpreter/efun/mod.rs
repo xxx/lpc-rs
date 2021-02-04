@@ -27,8 +27,7 @@ lazy_static! {
             name: String::from("print"),
             return_type: LPCType::Int(false),
             num_args: 1,
-            arg_types: vec![LPCType::Int(false)],
-            // arg_types: LPCType::Int(false) | LPCType::String(false),
+            arg_types: vec![LPCType::Int(false) | LPCType::String(false)],
             span: None,
             arg_spans: vec![]
         });

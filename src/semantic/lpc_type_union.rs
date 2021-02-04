@@ -8,19 +8,19 @@ use crate::semantic::lpc_type::LPCType;
 #[bitfield(filled = false)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LPCTypeUnion {
-    void: bool,
-    int: bool,
-    int_array: bool,
-    string: bool,
-    string_array: bool,
-    float: bool,
-    float_array: bool,
-    object: bool,
-    object_array: bool,
-    mapping: bool,
-    mapping_array: bool,
-    mixed: bool,
-    mixed_array: bool
+    pub void: bool,
+    pub int: bool,
+    pub int_array: bool,
+    pub string: bool,
+    pub string_array: bool,
+    pub float: bool,
+    pub float_array: bool,
+    pub object: bool,
+    pub object_array: bool,
+    pub mapping: bool,
+    pub mapping_array: bool,
+    pub mixed: bool,
+    pub mixed_array: bool
 }
 
 impl LPCTypeUnion {
@@ -52,13 +52,42 @@ impl LPCTypeUnion {
             )
         }
     }
+
+    pub fn matches_type(&self, other: LPCType) -> bool {
+        match other {
+            LPCType::Void => {
+                self.void()
+            }
+            LPCType::Int(array) => {
+                if array { self.int_array() } else { self.int() }
+            }
+            LPCType::String(array) => {
+                if array { self.string_array() } else { self.string() }
+            }
+            LPCType::Float(array) => {
+                if array { self.float_array() } else { self.float() }
+            }
+            LPCType::Object(array) => {
+                if array { self.object_array() } else { self.object() }
+            }
+            LPCType::Mapping(array) => {
+                if array { self.mapping_array() } else { self.mapping() }
+            }
+            LPCType::Mixed(array) => {
+                if array { self.mixed_array() } else { self.mixed() }
+            }
+            LPCType::Union(other_union) => {
+                self.into_bytes() == other_union.into_bytes()
+            }
+        }
+    }
 }
 
 impl BitOr for LPCTypeUnion {
     type Output = LPCTypeUnion;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        let mut my_bytes = self.into_bytes();
+        let my_bytes = self.into_bytes();
         let rhs_bytes = rhs.into_bytes();
 
         let combined = my_bytes
@@ -70,5 +99,49 @@ impl BitOr for LPCTypeUnion {
             .expect("Unexpected length trying to recombine bytes?");
 
         Self::from_bytes(combined).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::semantic::lpc_type::LPCType;
+
+    #[test]
+    fn test_bitor() {
+        let lpc_u = LPCType::Int(false) | LPCType::Int(true) | LPCType::Void;
+        let lpc_u2 = LPCType::String(true) | LPCType::Object(false);
+
+        if let (LPCType::Union(u1), LPCType::Union(u2)) = (lpc_u, lpc_u2) {
+            let union = u1 | u2;
+
+            assert!(union.int());
+            assert!(union.int_array());
+            assert!(union.void());
+            assert!(!union.string());
+            assert!(union.string_array());
+            assert!(!union.float());
+            assert!(!union.float_array());
+            assert!(union.object());
+            assert!(!union.object_array());
+            assert!(!union.mapping_array());
+            assert!(!union.mapping());
+            assert!(!union.mapping_array());
+            assert!(!union.mixed());
+            assert!(!union.mixed_array());
+        }
+    }
+
+    #[test]
+    fn test_matches_type() {
+        let mut union = LPCTypeUnion::new();
+        union.set_string_array(true);
+        union.set_void(true);
+
+        assert!(union.matches_type(LPCType::String(true)));
+        assert!(!union.matches_type(LPCType::String(false)));
+        assert!(union.matches_type(LPCType::Void));
+        assert!(!union.matches_type(LPCType::Int(false)));
+        assert!(!union.matches_type(LPCType::Mapping(true)));
     }
 }

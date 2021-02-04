@@ -1,7 +1,6 @@
 use std::fmt;
 use fmt::{Display, Formatter};
 use std::ops::BitOr;
-use std::collections::HashSet;
 use crate::semantic::lpc_type_union::LPCTypeUnion;
 
 /// The enumeration of types that a variable can be declared as.
@@ -18,6 +17,19 @@ pub enum LPCType {
 
     // To allow efuns to declare prototypes with multiple allowed types
     Union(LPCTypeUnion)
+}
+
+impl LPCType {
+    /// Allow myself to match on another type. Handles unions seamlessly.
+    pub fn matches_type(&self, other: LPCType) -> bool {
+        if let LPCType::Union(self_union) = self {
+            self_union.matches_type(other)
+        } else if let LPCType::Union(other_union) = other {
+            other_union.matches_type(*self)
+        } else {
+            *self == other
+        }
+    }
 }
 
 impl BitOr for LPCType {
@@ -77,5 +89,42 @@ impl From<String> for LPCType {
             "mixed" => LPCType::Mixed(false),
             _ => panic!("Unknown LPCType. Cannot convert."),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bitor() {
+        let lpc_u = LPCType::Int(false) | LPCType::Int(true) | LPCType::Void;
+
+        if let LPCType::Union(union) = lpc_u {
+            assert!(union.int());
+            assert!(union.int_array());
+            assert!(union.void());
+            assert!(!union.string());
+            assert!(!union.string_array());
+            assert!(!union.float());
+            assert!(!union.float_array());
+            assert!(!union.object());
+            assert!(!union.object_array());
+            assert!(!union.mapping());
+            assert!(!union.mapping_array());
+            assert!(!union.mixed());
+            assert!(!union.mixed_array());
+        } else {
+            panic!("no match")
+        }
+    }
+
+    #[test]
+    fn test_matches_type() {
+        assert!(LPCType::Void.matches_type(LPCType::Void));
+        assert!(!LPCType::Void.matches_type(LPCType::Int(true)));
+
+        let union = LPCType::Void | LPCType::Int(false);
+        assert!(LPCType::Void.matches_type(union));
     }
 }

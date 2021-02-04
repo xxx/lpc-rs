@@ -107,6 +107,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             // Check argument types.
             for (index, ty) in prototype.arg_types.iter().enumerate() {
                 if let Some(arg) = node.arguments.get(index) {
+                    // Literal zero is always allowed
                     if let ExpressionNode::Int(IntNode { value: 0, .. }) = *arg {
                         // sigh.
                     } else {
@@ -115,7 +116,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                             self.scopes,
                             &self.function_return_values()
                         );
-                        if *ty != arg_type {
+                        if !ty.matches_type(arg_type) {
                             self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
                                 name: node.name.clone(),
                                 type_: arg_type,
