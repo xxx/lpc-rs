@@ -253,7 +253,7 @@ impl TreeWalker for AsmTreeWalker {
                 ExpressionNode::Var(var_node) => {
                     let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
                     match type_ {
-                        LPCType::String(_, _) =>
+                        LPCType::String(_) =>
                             Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
                         _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
                     }
@@ -278,7 +278,7 @@ impl TreeWalker for AsmTreeWalker {
                 ExpressionNode::Var(var_node) => {
                     let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
                     match type_ {
-                        LPCType::String(_, _) =>
+                        LPCType::String(_) =>
                             Instruction::SMul(reg_left, reg_right, reg_result.unwrap()),
                         _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
                     }
@@ -653,7 +653,7 @@ mod tests {
         let scope = walker.scopes.get_current().unwrap();
         assert_eq!(scope.lookup("foo").unwrap(), Symbol {
             name: String::from("foo"),
-            type_: LPCType::Int(false, false),
+            type_: LPCType::Int(false),
             static_: false,
             location: Some(Register(1)),
             scope_id: 0,
@@ -661,7 +661,7 @@ mod tests {
         });
         assert_eq!(scope.lookup("bar").unwrap(), Symbol {
             name: String::from("bar"),
-            type_: LPCType::Int(false, false),
+            type_: LPCType::Int(false),
             static_: false,
             location: Some(Register(2)),
             scope_id: 0,
@@ -675,7 +675,7 @@ mod tests {
         walker.scopes.push_new();
         insert_symbol(walker.borrow_mut(), Symbol {
             name: "marf".to_string(),
-            type_: LPCType::Int(false, false),
+            type_: LPCType::Int(false),
             static_: false,
             location: Some(Register(666)),
             scope_id: 0,
@@ -694,7 +694,7 @@ mod tests {
         walker.scopes.push_new();
         insert_symbol(walker.borrow_mut(), Symbol {
             name: "marf".to_string(),
-            type_: LPCType::Int(false, false),
+            type_: LPCType::Int(false),
             static_: false,
             location: Some(Register(666)),
             scope_id: 0,

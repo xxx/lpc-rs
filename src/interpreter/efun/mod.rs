@@ -25,9 +25,10 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert("print", FunctionPrototype {
             name: String::from("print"),
-            return_type: LPCType::Int(false, false),
+            return_type: LPCType::Int(false),
             num_args: 1,
-            arg_types: vec![LPCType::Int(false, false)],
+            arg_types: vec![LPCType::Int(false)],
+            // arg_types: LPCType::Int(false) | LPCType::String(false),
             span: None,
             arg_spans: vec![]
         });

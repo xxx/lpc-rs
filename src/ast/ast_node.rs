@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_from_decl_node() {
-        let node = DeclNode { type_: LPCType::Int(false, false), initializations: vec![] };
+        let node = DeclNode { type_: LPCType::Int(false), initializations: vec![] };
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Decl(clone));

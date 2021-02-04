@@ -68,7 +68,7 @@ mod tests {
 
         let sym = Symbol {
             name: "foo".to_string(),
-            type_: LPCType::Int(false, false),
+            type_: LPCType::Int(false),
             scope_id: 0,
             static_: false,
             location: None,
@@ -79,7 +79,7 @@ mod tests {
 
         if let Some(symbol) = scope.lookup("foo") {
             assert_eq!(symbol.name, "foo");
-            assert_eq!(symbol.type_, LPCType::Int(false, false));
+            assert_eq!(symbol.type_, LPCType::Int(false));
         } else {
             panic!("symbol not found");
         }

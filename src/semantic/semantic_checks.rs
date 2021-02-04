@@ -71,31 +71,31 @@ pub fn check_binary_operation_types(
     match node.op {
         BinaryOperation::Add => {
             match tuple {
-                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
-                (LPCType::String(false, _), LPCType::Int(false, _)) => Ok(()),
-                (LPCType::String(false, _), LPCType::String(false, _)) => Ok(()),
+                (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
+                (LPCType::String(false), LPCType::Int(false)) => Ok(()),
+                (LPCType::String(false), LPCType::String(false)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Add, left_type, right_type))
             }
         }
         BinaryOperation::Sub => {
             match tuple {
-                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
+                (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Sub, left_type, right_type))
             }
         }
         BinaryOperation::Mul => {
             match tuple {
-                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
-                (LPCType::String(false, _), LPCType::Int(false, _)) => Ok(()),
+                (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
+                (LPCType::String(false), LPCType::Int(false)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Mul, left_type, right_type))
             }
         }
         BinaryOperation::Div => {
             match tuple {
-                (LPCType::Int(false, _), LPCType::Int(false, _)) => Ok(()),
+                (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Div, left_type, right_type))
             }
@@ -113,11 +113,11 @@ pub fn node_type(
             if let Some(return_type) = function_return_types.get(name.as_str()) {
                 *return_type
             } else {
-                LPCType::Int(false, false)
+                LPCType::Int(false)
             }
         },
-        ExpressionNode::Int(IntNode { .. }) => LPCType::Int(false, false),
-        ExpressionNode::String(StringNode { .. }) => LPCType::String(false, false),
+        ExpressionNode::Int(IntNode { .. }) => LPCType::Int(false),
+        ExpressionNode::String(StringNode { .. }) => LPCType::String(false),
         ExpressionNode::Var(VarNode { name, .. }) => {
             match scope_tree.lookup(name) {
                 Some(sym) => {
@@ -146,7 +146,7 @@ mod tests {
         fn setup() -> ScopeTree {
             let int1 = Symbol {
                 name: "int1".to_string(),
-                type_: LPCType::Int(false, false),
+                type_: LPCType::Int(false),
                 static_: false,
                 location: None,
                 scope_id: 0,
@@ -154,7 +154,7 @@ mod tests {
             };
             let int2 = Symbol {
                 name: "int2".to_string(),
-                type_: LPCType::Int(false, false),
+                type_: LPCType::Int(false),
                 static_: false,
                 location: None,
                 scope_id: 0,
@@ -162,7 +162,7 @@ mod tests {
             };
             let string1 = Symbol {
                 name: "string1".to_string(),
-                type_: LPCType::String(false, false),
+                type_: LPCType::String(false),
                 static_: false,
                 location: None,
                 scope_id: 0,
@@ -170,7 +170,7 @@ mod tests {
             };
             let string2 = Symbol {
                 name: "string2".to_string(),
-                type_: LPCType::String(false, false),
+                type_: LPCType::String(false),
                 static_: false,
                 location: None,
                 scope_id: 0,
