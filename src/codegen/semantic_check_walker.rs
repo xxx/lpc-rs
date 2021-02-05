@@ -250,7 +250,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         let left_type = node_type(&node.lhs, self.scopes, &self.function_return_values());
         let right_type = node_type(&node.rhs, self.scopes, &self.function_return_values());
 
-        if left_type == right_type || left_type == LPCType::Mixed(false) {
+        if left_type.matches_type(right_type) {
             Ok(())
         } else if let ExpressionNode::Int(IntNode { value: 0, .. }) = *node.rhs {
             // The integer 0 is always a valid assignment.
