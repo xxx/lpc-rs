@@ -68,9 +68,7 @@ impl Display for LPCType {
             LPCType::Object(array) => format!("object{}", to_star(array)),
             LPCType::Mapping(array) => format!("mapping{}", to_star(array)),
             LPCType::Mixed(array) => format!("mixed{}", to_star(array)),
-            LPCType::Union(union) => {
-                format!("union {:?}", union)
-            },
+            LPCType::Union(union) => format!("{}", union),
         };
 
         write!(f, "{}", type_)

@@ -2,6 +2,9 @@ use std::ops::BitOr;
 use std::convert::TryInto;
 use modular_bitfield::prelude::*;
 use crate::semantic::lpc_type::LPCType;
+use std::fmt::Display;
+use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+use std::fmt;
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
@@ -80,6 +83,70 @@ impl LPCTypeUnion {
                 self.into_bytes() == other_union.into_bytes()
             }
         }
+    }
+}
+
+impl Display for LPCTypeUnion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut vec = vec![];
+        
+        // facepalm.
+        
+        if self.void() {
+            vec.push(LPCType::Void)
+        }
+        
+        if self.int() {
+            vec.push(LPCType::Int(false));
+        }
+        
+        if self.int_array() {
+            vec.push(LPCType::Int(true));
+        }
+        
+        if self.string() {
+            vec.push(LPCType::String(false));
+        }
+        
+        if self.string_array() {
+            vec.push(LPCType::String(true));
+        }
+        
+        if self.float() {
+            vec.push(LPCType::Float(false));
+        }
+        
+        if self.float_array() {
+            vec.push(LPCType::Float(true));
+        }
+        
+        if self.object() {
+            vec.push(LPCType::Object(false));
+        }
+        
+        if self.object_array() {
+            vec.push(LPCType::Object(true));
+        }
+        
+        if self.mapping() {
+            vec.push(LPCType::Mapping(false));
+        }
+        
+        if self.mapping_array() {
+            vec.push(LPCType::Mapping(true));
+        }
+        
+        if self.mixed() {
+            vec.push(LPCType::Mixed(false));
+        }
+        
+        if self.mixed_array() {
+            vec.push(LPCType::Mixed(true));
+        }
+
+        let s = vec.iter().map(|i| format!("{}", i)).collect::<Vec<_>>().join(" | ");
+        
+        write!(f, "{}", s)
     }
 }
 
