@@ -77,7 +77,21 @@ impl LPCTypeUnion {
                 if array { self.mapping_array() } else { self.mapping() }
             }
             LPCType::Mixed(array) => {
-                if array { self.mixed_array() } else { self.mixed() }
+                if array {
+                    self.int_array() ||
+                    self.string_array() ||
+                    self.float_array() ||
+                    self.object_array() ||
+                    self.mapping_array() ||
+                    self.mixed_array()
+                } else {
+                    self.int() ||
+                    self.string() ||
+                    self.float() ||
+                    self.object() ||
+                    self.mapping() ||
+                    self.mixed()
+                }
             }
             LPCType::Union(other_union) => {
                 self.into_bytes() == other_union.into_bytes()

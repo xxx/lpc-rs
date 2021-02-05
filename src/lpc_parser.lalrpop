@@ -49,6 +49,7 @@ pub FunctionDef: FunctionDefNode = {
             match this_type.as_str() {
                 "int" => LPCType::Int(array),
                 "string" => LPCType::String(array),
+                "mixed" => LPCType::Mixed(array),
                 _ => unimplemented!()
             }
         } else {
@@ -71,6 +72,7 @@ Parameters: Vec<VarInitNode> = {
     }
 };
 
+// TODO: ellipsis
 Parameter: Vec<VarInitNode> = {
     <parms:ParameterList> <ellipsis:("," "...")?> => {
         parms
@@ -97,12 +99,14 @@ ArgName: VarInitNode = {
 
 ReturnType: String = {
     "int" => String::from(<>),
-    "string" => String::from(<>)
+    "string" => String::from(<>),
+    "mixed" => String::from(<>),
 };
 
 VarType: String = {
     "int" => String::from(<>),
-    "string" => String::from(<>)
+    "string" => String::from(<>),
+    "mixed" => String::from(<>),
 };
 
 pub Statement: ASTNode = {

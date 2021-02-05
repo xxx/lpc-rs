@@ -13,6 +13,7 @@ use crate::ast::expression_node::ExpressionNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::call_node::CallNode;
 use std::collections::HashMap;
+/// Utility functions for doing various semantic checks.
 
 /// Check if a var has already been defined in the local scope.
 ///
