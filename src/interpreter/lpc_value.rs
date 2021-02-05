@@ -101,39 +101,71 @@ impl Div for &LPCValue {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_add_int_plus_int() {
-        let int1 = LPCValue::Int(123);
-        let int2 = LPCValue::Int(456);
-        let result = &int1 + &int2;
-        if let LPCValue::Int(x) = result {
-            assert_eq!(x, 579)
-        } else {
-            panic!("no match")
+    mod test_add {
+        use super::*;
+        
+        #[test]
+        fn test_add_int_int() {
+            let int1 = LPCValue::Int(123);
+            let int2 = LPCValue::Int(456);
+            let result = &int1 + &int2;
+            if let LPCValue::Int(x) = result {
+                assert_eq!(x, 579)
+            } else {
+                panic!("no match")
+            }
+        }
+
+        #[test]
+        fn test_add_string_string() {
+            let string1 = LPCValue::String("foo".to_string());
+            let string2 = LPCValue::String("bar".to_string());
+            let result = &string1 + &string2;
+            if let LPCValue::String(x) = result {
+                assert_eq!(x, String::from("foobar"))
+            } else {
+                panic!("no match")
+            }
+        }
+
+        #[test]
+        fn test_add_string_int() {
+            let string = LPCValue::String("foo".to_string());
+            let int = LPCValue::Int(123);
+            let result = &string + &int;
+            if let LPCValue::String(x) = result {
+                assert_eq!(x, String::from("foo123"))
+            } else {
+                panic!("no match")
+            }
+        }
+
+        #[test]
+        fn test_add_int_string() {
+            let string = LPCValue::String("foo".to_string());
+            let int = LPCValue::Int(123);
+            let result = &int + &string;
+            if let LPCValue::String(x) = result {
+                assert_eq!(x, String::from("123foo"))
+            } else {
+                panic!("no match")
+            }
         }
     }
-
-    #[test]
-    fn test_add_string_plus_string() {
-        let string1 = LPCValue::String("foo".to_string());
-        let string2 = LPCValue::String("bar".to_string());
-        let result = &string1 + &string2;
-        if let LPCValue::String(x) = result {
-            assert_eq!(x, String::from("foobar"))
-        } else {
-            panic!("no match")
-        }
-    }
-
-    #[test]
-    fn test_add_string_plus_int() {
-        let string = LPCValue::String("foo".to_string());
-        let int = LPCValue::Int(123);
-        let result = &string + &int;
-        if let LPCValue::String(x) = result {
-            assert_eq!(x, String::from("foo123"))
-        } else {
-            panic!("no match")
+    
+    mod test_mul {
+        use super::*;
+        
+        #[test]
+        fn test_mul_string_int() {
+            let string = LPCValue::String("foo".to_string());
+            let int = LPCValue::Int(4);
+            let result = &string * &int;
+            if let LPCValue::String(x) = result {
+                assert_eq!(x, String::from("foofoofoofoo"))
+            } else {
+                panic!("no match")
+            }
         }
     }
 }
