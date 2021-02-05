@@ -1,7 +1,7 @@
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Sub, Div};
 use std::iter::repeat;
 
-/// An actual LPC value. These are stored as constants in the ConstantPool.
+/// An actual LPC value. These are stored in memory, and as constants.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LPCValue {
     Int(i64),
@@ -22,7 +22,7 @@ impl Add for &LPCValue {
             LPCValue::Int(i) => {
                 match rhs {
                     LPCValue::Int(i2) => LPCValue::Int(i + i2),
-                    _ => unimplemented!(),
+                    LPCValue::String(s) => LPCValue::String(i.to_string() + &s),
                 }
             }
             LPCValue::String(s) => {
@@ -31,6 +31,22 @@ impl Add for &LPCValue {
                     LPCValue::Int(i) => LPCValue::String(s.clone() + &i.to_string()),
                 }
             }
+        }
+    }
+}
+
+impl Sub for &LPCValue {
+    type Output = LPCValue;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        match self {
+            LPCValue::Int(i) => {
+                match rhs {
+                    LPCValue::Int(i2) => LPCValue::Int(i - i2),
+                    _ => unimplemented!(),
+                }
+            }
+            _ => unimplemented!()
         }
     }
 }
@@ -61,6 +77,22 @@ impl Mul for &LPCValue {
                     _ => unimplemented!(),
                 }
             }
+        }
+    }
+}
+
+impl Div for &LPCValue {
+    type Output = LPCValue;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match self {
+            LPCValue::Int(i) => {
+                match rhs {
+                    LPCValue::Int(i2) => LPCValue::Int(i / i2),
+                    _ => unimplemented!(),
+                }
+            }
+            _ => unimplemented!()
         }
     }
 }

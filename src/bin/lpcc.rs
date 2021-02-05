@@ -85,10 +85,10 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let scope_tree = ScopeTree::from(scope_walker);
     let mut asm_walker = AsmTreeWalker::new(scope_tree);
     let _ = program.visit(&mut asm_walker);
-    // print!("{:?}", asm_walker.instructions);
-    // for s in asm_walker.listing() {
-    //     println!("{}", s);
-    // }
+    print!("{:?}", asm_walker.instructions);
+    for s in asm_walker.listing() {
+        println!("{}", s);
+    }
 
     Ok(asm_walker.to_program())
 }

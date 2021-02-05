@@ -218,21 +218,57 @@ impl AsmInterpreter {
                     registers[r3.index()] =
                         registers[r1.index()] - registers[r2.index()]
                 },
-                Instruction::RegCopy(r1, r2) => {
-                    let registers = self.current_registers();
-                    registers[r2.index()] = registers[r1.index()]
-                },
-                Instruction::SAdd(r1, r2, r3) => {
-                    // look up strings, concat, add to constant pool,
-                    let string1 = &self.resolve_register(r1.index());
-                    let string2 = &self.resolve_register(r2.index());
-                    let result = string1 + string2;
+                Instruction::MAdd(r1, r2, r3) => {
+                    // look up vals, add, store result.
+                    let val1 = &self.resolve_register(r1.index());
+                    let val2 = &self.resolve_register(r2.index());
+                    let result = val1 + val2;
                     let index = self.program.constants.insert(result);
 
                     // set r3.index to the new constant index
                     let var = LPCVar::String(index);
                     let registers = self.current_registers();
                     registers[r3.index()] = var
+                },
+                Instruction::MDiv(r1, r2, r3) => {
+                    // look up vals, divide, store result.
+                    let val1 = &self.resolve_register(r1.index());
+                    let val2 = &self.resolve_register(r2.index());
+                    let result = val1 / val2;
+                    let index = self.program.constants.insert(result);
+
+                    // set r3.index to the new constant index
+                    let var = LPCVar::String(index);
+                    let registers = self.current_registers();
+                    registers[r3.index()] = var
+                },
+                Instruction::MMul(r1, r2, r3) => {
+                    // look up vals, multiply, store result.
+                    let val1 = &self.resolve_register(r1.index());
+                    let val2 = &self.resolve_register(r2.index());
+                    let result = val1 * val2;
+                    let index = self.program.constants.insert(result);
+
+                    // set r3.index to the new constant index
+                    let var = LPCVar::String(index);
+                    let registers = self.current_registers();
+                    registers[r3.index()] = var
+                },
+                Instruction::MSub(r1, r2, r3) => {
+                    // look up vals, subtract, store result.
+                    let val1 = &self.resolve_register(r1.index());
+                    let val2 = &self.resolve_register(r2.index());
+                    let result = val1 - val2;
+                    let index = self.program.constants.insert(result);
+
+                    // set r3.index to the new constant index
+                    let var = LPCVar::String(index);
+                    let registers = self.current_registers();
+                    registers[r3.index()] = var
+                },
+                Instruction::RegCopy(r1, r2) => {
+                    let registers = self.current_registers();
+                    registers[r2.index()] = registers[r1.index()]
                 },
                 Instruction::SMul(r1, r2, r3) => {
                     let string = &self.resolve_register(r1.index());

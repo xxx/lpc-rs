@@ -160,6 +160,62 @@ impl AsmTreeWalker {
             None
         }
     }
+
+    /// Allows for recursive determination of typed add instructions
+    fn choose_add_instruction(
+        &self,
+        node: &BinaryOpNode,
+        reg_left: Register,
+        reg_right: Register,
+        reg_result: Option<Register>
+    ) -> Instruction {
+        match (&*node.l, &*node.r) {
+            (ExpressionNode::BinaryOp(bin_op), _) =>
+                self.choose_add_instruction(bin_op, reg_left, reg_right, reg_result),
+            (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
+                let type1 = self.lookup_symbol(&var_node1.name).unwrap().type_;
+                let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
+
+                if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
+                    Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+                } else {
+                    Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
+                }
+            },
+            (ExpressionNode::String(_), _) =>
+                Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
+            _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap()),
+        }
+    }
+
+    /// Allows for recursive determination of typed mul instructions
+    fn choose_mul_instruction(
+        &self,
+        node: &BinaryOpNode,
+        reg_left: Register,
+        reg_right: Register,
+        reg_result: Option<Register>
+    ) -> Instruction {
+        match (&*node.l, &*node.r) {
+            (ExpressionNode::BinaryOp(bin_op), _) =>
+                self.choose_mul_instruction(bin_op, reg_left, reg_right, reg_result),
+            (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
+                let type1 = self.lookup_symbol(&var_node1.name).unwrap().type_;
+                let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
+
+                if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
+                    Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+                } else {
+                    Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
+                }
+            },
+            (ExpressionNode::String(_), _) =>
+                Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
+            (_, ExpressionNode::String(_)) =>
+                Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
+            _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
+        }
+    }
 }
 
 impl TreeWalker for AsmTreeWalker {
@@ -239,62 +295,12 @@ impl TreeWalker for AsmTreeWalker {
         let reg_result = self.register_counter.next();
         self.current_result = reg_result.unwrap();
 
-        /// Allows for recursive determination of typed add instructions
-        fn add_instruction_picker(
-            node: &ExpressionNode,
-            walker: &AsmTreeWalker,
-            reg_left: Register,
-            reg_right: Register,
-            reg_result: Option<Register>
-        ) -> Instruction {
-            match node {
-                ExpressionNode::BinaryOp(bin_op) =>
-                    add_instruction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
-                ExpressionNode::Var(var_node) => {
-                    let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
-                    match type_ {
-                        LPCType::String(_) =>
-                            Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
-                        _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
-                    }
-                }
-                ExpressionNode::String(_) =>
-                    Instruction::SAdd(reg_left, reg_right, reg_result.unwrap()),
-                _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
-            }
-        };
-
-        /// Allows for recursive determination of typed mul instructions
-        fn mul_instruction_picker(
-            node: &ExpressionNode,
-            walker: &AsmTreeWalker,
-            reg_left: Register,
-            reg_right: Register,
-            reg_result: Option<Register>
-        ) -> Instruction {
-            match node {
-                ExpressionNode::BinaryOp(bin_op) =>
-                    mul_instruction_picker(&bin_op.l, walker, reg_left, reg_right, reg_result),
-                ExpressionNode::Var(var_node) => {
-                    let type_ = walker.lookup_symbol(&var_node.name).unwrap().type_;
-                    match type_ {
-                        LPCType::String(_) =>
-                            Instruction::SMul(reg_left, reg_right, reg_result.unwrap()),
-                        _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
-                    }
-                }
-                ExpressionNode::String(_) =>
-                    Instruction::SMul(reg_left, reg_right, reg_result.unwrap()),
-                _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
-            }
-        };
-
         let instruction = match node.op {
             BinaryOperation::Add =>
-                add_instruction_picker(&*node.l, self, reg_left, reg_right, reg_result),
+                self.choose_add_instruction(&node, reg_left, reg_right, reg_result),
             BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
             BinaryOperation::Mul =>
-                mul_instruction_picker(&*node.l, self, reg_left, reg_right, reg_result),
+                self.choose_mul_instruction(&node, reg_left, reg_right, reg_result),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap())
         };
         self.instructions.push(instruction);
@@ -549,8 +555,8 @@ mod tests {
                 Instruction::SConst(Register(1), "foo".to_string()),
                 Instruction::SConst(Register(2), "bar".to_string()),
                 Instruction::SConst(Register(3), "baz".to_string()),
-                Instruction::SAdd(Register(2), Register(3), Register(4)),
-                Instruction::SAdd(Register(1), Register(4), Register(5))
+                Instruction::MAdd(Register(2), Register(3), Register(4)),
+                Instruction::MAdd(Register(1), Register(4), Register(5))
             ];
 
             for (idx, instruction) in walker.instructions.iter().enumerate() {

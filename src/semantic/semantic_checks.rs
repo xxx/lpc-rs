@@ -69,6 +69,20 @@ pub fn check_binary_operation_types(
         node_type(&node.r, scope_tree, function_return_types)
     );
 
+    if let LPCType::Mixed(_) = tuple.0 {
+        return if tuple.0.matches_type(tuple.1) {
+            Ok(())
+        } else {
+            Err(create_error(node, node.op, tuple.0, tuple.1))
+        }
+    } else if let LPCType::Mixed(_) = tuple.1 {
+        return if tuple.0.matches_type(tuple.1) {
+            Ok(())
+        } else {
+            Err(create_error(node, node.op, tuple.0, tuple.1))
+        }
+    }
+
     match node.op {
         BinaryOperation::Add => {
             match tuple {
