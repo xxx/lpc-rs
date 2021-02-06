@@ -58,8 +58,8 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     // println!("{:?}", program);
 
-    // let mut walker = TreePrinter::new();
-    // program.visit(&mut walker);
+    let mut walker = TreePrinter::new();
+    let _ = program.visit(&mut walker);
 
     let mut scope_walker = ScopeWalker::new(filename);
 

@@ -1,5 +1,5 @@
-use std::fmt::{Formatter,Display};
 use std::fmt;
+use std::fmt::{Formatter,Display};
 use crate::asm::register::Register;
 
 pub trait InstructionTrait: Display {}

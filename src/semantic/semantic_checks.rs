@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::semantic::local_scope::LocalScope;
 use crate::errors;
 use errors::binary_operation_error::BinaryOperationError;
@@ -12,7 +13,8 @@ use crate::ast::var_node::VarNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::call_node::CallNode;
-use std::collections::HashMap;
+use crate::ast::array_node::ArrayNode;
+
 /// Utility functions for doing various semantic checks.
 
 /// Check if a var has already been defined in the local scope.
@@ -146,6 +148,14 @@ pub fn node_type(
         }
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
+        }
+        ExpressionNode::Array(ArrayNode { value, .. }) => {
+            if value.len() == 0 {
+                LPCType::Int(false)
+            } else {
+                // we arbitrarily take the type of the first item in the list.
+                node_type(&value[0], scope_tree, function_return_types)
+            }
         }
     }
 }

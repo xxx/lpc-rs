@@ -11,6 +11,7 @@ use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 use crate::errors::CompilerError;
+use crate::ast::array_node::ArrayNode;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
@@ -98,11 +99,22 @@ pub trait TreeWalker {
     }
 
     /// Visit an assignment node
-    fn visit_assignment(&mut self, node: &AssignmentNode)  -> Result<(), CompilerError>
+    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError>
         where Self: Sized
     {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
+
+        Ok(())
+    }
+
+    /// Visit an array literal node
+    fn visit_array(&mut self, node: &ArrayNode) -> Result<(), CompilerError>
+        where Self: Sized
+    {
+        for node in &node.value {
+            node.visit(self)?;
+        }
 
         Ok(())
     }

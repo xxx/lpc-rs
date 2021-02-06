@@ -10,6 +10,7 @@ use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
 use crate::errors::CompilerError;
 use crate::parser::span::Span;
+use crate::ast::array_node::ArrayNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -21,6 +22,7 @@ pub enum ExpressionNode {
     Int(IntNode),
     String(StringNode),
     Var(VarNode),
+    Array(ArrayNode)
 }
 
 impl ExpressionNode {
@@ -32,6 +34,7 @@ impl ExpressionNode {
             ExpressionNode::Int(node) => node.span,
             ExpressionNode::String(node) => node.span,
             ExpressionNode::Var(node) => node.span,
+            ExpressionNode::Array(node) => node.span
         }
     }
 }
@@ -76,7 +79,8 @@ destructured_traits!(
     ExpressionNode::Int,
     ExpressionNode::Call,
     ExpressionNode::Var,
-    ExpressionNode::String
+    ExpressionNode::String,
+    ExpressionNode::Array
 );
 
 impl From<BinaryOpNode> for ExpressionNode {

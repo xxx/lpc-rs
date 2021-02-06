@@ -12,6 +12,7 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
+use crate::ast::array_node::ArrayNode;
 use crate::semantic::lpc_type::LPCType;
 use crate::ast::ast_node::ASTNode;
 use crate::parser::collapse_expression::collapse_expression;
@@ -151,7 +152,10 @@ pub PrimaryExpression: ExpressionNode = {
     <Int>,
     <String>,
     <Var>,
-    "(" <Expression> ")"
+    "(" <Expression> ")",
+    "(" "{" <list:ExpressionList> "}" ")" => {
+        ExpressionNode::Array(ArrayNode::new(list))
+    }
 };
 
 pub PostfixExpression: ExpressionNode = {
@@ -235,6 +239,15 @@ pub Return: ReturnNode = {
     <l:@L> "return" <r:@R> => ReturnNode { value: None, span: Some(Span { l, r }) },
     <l:@L> "return" <e:Expression> <r:@R> => ReturnNode { value: Some(e), span: Some(Span { l, r }) }
 }
+
+ExpressionList: Vec<ExpressionNode> = {
+    <Expression> => vec![<>],
+    <list:ExpressionList> "," <arg:Expression> => {
+        let mut v = list;
+        v.push(arg);
+        v
+    }
+};
 
 ArgumentExpressionList: Vec<ExpressionNode> = {
     <AssignmentExpression> => vec![<>],

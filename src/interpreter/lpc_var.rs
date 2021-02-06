@@ -1,6 +1,6 @@
-use std::ops::{Add, Sub, Mul, Div};
-use std::fmt::{Display, Formatter};
 use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::ops::{Add, Sub, Mul, Div};
 
 /// Represent a variable stored in a `Register`. `Int`s store the actual value.
 /// Other types store an index into a `ConstantPool`.

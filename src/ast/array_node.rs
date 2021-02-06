@@ -1,0 +1,46 @@
+use crate::ast::ast_node::ASTNodeTrait;
+use crate::codegen::tree_walker::TreeWalker;
+use std::fmt::{Display, Formatter};
+use std::fmt;
+use crate::errors::CompilerError;
+use crate::parser::span::Span;
+use crate::ast::expression_node::ExpressionNode;
+
+/// A node representing an array literal
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ArrayNode {
+    pub value: Vec<ExpressionNode>,
+
+    /// The full span of all expressions in the array - from the left side of the first item
+    /// to the right side of the last
+    pub span: Option<Span>
+}
+
+impl ArrayNode {
+    pub fn new(value: Vec<ExpressionNode>) -> Self {
+        let span = if value.len() == 0 {
+            None
+        } else if let (Some(node1), Some(node2)) =
+        (value[0].span(), value.last().unwrap().span()) {
+            Some(Span { l: node1.l, r: node2.r })
+        } else {
+            None
+        };
+
+        Self { value, span }
+    }
+}
+
+impl ASTNodeTrait for ArrayNode {
+    /// This is the double-dispatch endpoint for tree-walking
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+        tree_walker.visit_array(self)
+    }
+}
+
+impl Display for ArrayNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s = self.value.iter().map(|item| format!("{}", item)).collect::<Vec<_>>().join(", ");
+        write!(f, "ArrayNode[{}]", s)
+    }
+}
