@@ -39,7 +39,7 @@ impl ExpressionNode {
     }
 }
 
-macro_rules! destructured_traits {
+macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl ASTNodeTrait for ExpressionNode {
             fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), LPCError> {
@@ -73,7 +73,7 @@ macro_rules! destructured_traits {
     };
 }
 
-destructured_traits!(
+delegated_traits!(
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Int,
