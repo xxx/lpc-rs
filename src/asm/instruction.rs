@@ -2,8 +2,6 @@ use std::fmt;
 use std::fmt::{Formatter,Display};
 use crate::asm::register::Register;
 
-pub trait InstructionTrait: Display {}
-
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Instruction {
