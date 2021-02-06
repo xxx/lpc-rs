@@ -3,7 +3,7 @@ use crate::ast::function_def_node::FunctionDefNode;
 use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
-use crate::errors::CompilerError;
+use crate::errors::LPCError;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, Eq, PartialEq, Clone, Default)]
@@ -14,7 +14,7 @@ pub struct ProgramNode {
 
 impl ASTNodeTrait for ProgramNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), LPCError> {
         tree_walker.visit_program(self)
     }
 }

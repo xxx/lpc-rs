@@ -8,7 +8,7 @@ use lpc_rs::codegen::scope_walker::ScopeWalker;
 use lpc_rs::codegen::semantic_check_walker::SemanticCheckWalker;
 use lpc_rs::codegen::tree_printer::TreePrinter;
 use lpc_rs::codegen::tree_walker::TreeWalker;
-use lpc_rs::errors::CompilerError;
+use lpc_rs::errors::LPCError;
 use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
 use lpc_rs::interpreter::program::Program;
 use lpc_rs::errors::parse_error::ParseError;
@@ -38,21 +38,21 @@ fn main() {
 }
 
 /// Fully compile a file into a Program object
-fn compile_file(filename: &str) -> Result<Program, CompilerError> {
+fn compile_file(filename: &str) -> Result<Program, LPCError> {
     let file_content =
         fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
 
-    let mut errors: Vec<CompilerError> = vec![];
+    let mut errors: Vec<LPCError> = vec![];
 
     let program = lpc_parser::ProgramParser::new().parse(&file_content);
 
     let program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            errors.push(CompilerError::ParseError(ParseError::from(e)));
+            errors.push(LPCError::ParseError(ParseError::from(e)));
             errors::emit_diagnostics(filename, &file_content, &errors);
 
-            return Err(CompilerError::MultiError(errors));
+            return Err(LPCError::MultiError(errors));
         }
     };
 
@@ -79,7 +79,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     if !errors.is_empty() {
         errors::emit_diagnostics(filename, &file_content, &errors);
-        return Err(CompilerError::MultiError(errors));
+        return Err(LPCError::MultiError(errors));
     }
 
     let scope_tree = ScopeTree::from(scope_walker);

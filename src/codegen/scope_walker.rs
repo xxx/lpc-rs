@@ -8,7 +8,7 @@ use crate::semantic::symbol::Symbol;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::semantic_checks::check_var_redefinition;
-use crate::errors::CompilerError;
+use crate::errors::LPCError;
 use crate::semantic::function_prototype::FunctionPrototype;
 use crate::ast::var_node::VarNode;
 use crate::errors::undefined_var_error::UndefinedVarError;
@@ -27,7 +27,7 @@ pub struct ScopeWalker {
     pub function_prototypes: HashMap<String, FunctionPrototype>,
 
     /// Collected errors
-    errors: Vec<CompilerError>
+    errors: Vec<LPCError>
 }
 
 impl ScopeWalker {
@@ -51,11 +51,11 @@ impl ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn get_errors(&self) -> Vec<CompilerError> {
+    fn get_errors(&self) -> Vec<LPCError> {
         self.errors.to_vec()
     }
 
-    fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> {
+    fn visit_program(&mut self, node: &ProgramNode) -> Result<(), LPCError> {
         // Push the global scope
         self.scopes.push_new();
 
@@ -66,14 +66,14 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
+    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), LPCError> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), LPCError> {
         self.scopes.push_new();
 
         for parameter in &node.parameters {
@@ -108,9 +108,9 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
+    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), LPCError> {
         if let Err(e) = check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
-            self.errors.push(CompilerError::VarRedefinitionError(e));
+            self.errors.push(LPCError::VarRedefinitionError(e));
         }
 
         self.insert_symbol(Symbol::from(node));
@@ -118,10 +118,10 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
+    fn visit_var(&mut self, node: &VarNode) -> Result<(), LPCError> {
         // We check for undefined vars here in case a symbol is subsequently defined.
         if let None = self.scopes.lookup(&node.name) {
-            self.errors.push(CompilerError::UndefinedVarError(
+            self.errors.push(LPCError::UndefinedVarError(
                 UndefinedVarError {
                     name: node.name.clone(),
                     span: node.span

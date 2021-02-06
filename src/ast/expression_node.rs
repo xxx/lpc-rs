@@ -8,7 +8,7 @@ use std::fmt;
 use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
-use crate::errors::CompilerError;
+use crate::errors::LPCError;
 use crate::parser::span::Span;
 use crate::ast::array_node::ArrayNode;
 
@@ -42,7 +42,7 @@ impl ExpressionNode {
 macro_rules! destructured_traits {
     ( $( $x:path ),+ ) => {
         impl ASTNodeTrait for ExpressionNode {
-            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), LPCError> {
                 match self {
                 $(
                     $x(y) => y.visit(tree_walker),

@@ -24,7 +24,7 @@ use undefined_var_error::UndefinedVarError;
 
 /// General error wrapper type
 #[derive(Debug, Clone)]
-pub enum CompilerError {
+pub enum LPCError {
     ArgCountError(ArgCountError),
     ArgTypeError(ArgTypeError),
     AssignmentError(AssignmentError),
@@ -34,23 +34,23 @@ pub enum CompilerError {
     VarRedefinitionError(VarRedefinitionError),
     ReturnTypeError(ReturnTypeError),
     UndefinedVarError(UndefinedVarError),
-    MultiError(Vec<CompilerError>),
+    MultiError(Vec<LPCError>),
 }
 
-impl CompilerError {
+impl LPCError {
     /// Get the error diagnostics for printing to the user.
     pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         match self {
-            CompilerError::ArgCountError(err) => err.to_diagnostics(file_id),
-            CompilerError::ArgTypeError(err) => err.to_diagnostics(file_id),
-            CompilerError::AssignmentError(err) => err.to_diagnostics(file_id),
-            CompilerError::BinaryOperationError(err) => err.to_diagnostics(file_id),
-            CompilerError::ParseError(err) => err.to_diagnostics(file_id),
-            CompilerError::UnknownFunctionError(err) => err.to_diagnostics(file_id),
-            CompilerError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
-            CompilerError::ReturnTypeError(err) => err.to_diagnostics(file_id),
-            CompilerError::UndefinedVarError(err) => err.to_diagnostics(file_id),
-            CompilerError::MultiError(errs) => {
+            LPCError::ArgCountError(err) => err.to_diagnostics(file_id),
+            LPCError::ArgTypeError(err) => err.to_diagnostics(file_id),
+            LPCError::AssignmentError(err) => err.to_diagnostics(file_id),
+            LPCError::BinaryOperationError(err) => err.to_diagnostics(file_id),
+            LPCError::ParseError(err) => err.to_diagnostics(file_id),
+            LPCError::UnknownFunctionError(err) => err.to_diagnostics(file_id),
+            LPCError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
+            LPCError::ReturnTypeError(err) => err.to_diagnostics(file_id),
+            LPCError::UndefinedVarError(err) => err.to_diagnostics(file_id),
+            LPCError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics(file_id) ).collect()
             }
         }
@@ -63,7 +63,7 @@ impl CompilerError {
 /// * `filename` - The name of the file, for the messaging. In practice, this is the full filepath.
 /// * `file_content` - The actual content of the file, used for messaging.
 /// * `errors` - A slice of errors to display diagnostics for.
-pub fn emit_diagnostics(filename: &str, file_content: &str, errors: &[CompilerError]) {
+pub fn emit_diagnostics(filename: &str, file_content: &str, errors: &[LPCError]) {
     let mut files = SimpleFiles::new();
     let file_id = files.add(filename, file_content);
 
