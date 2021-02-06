@@ -14,6 +14,13 @@ pub enum Instruction {
         initial_arg: Register
     },
 
+    /// Create an array with values from the vector
+    AConst(Register, Vec<Register>),
+
+    /// Append to an array, extending it as needed.
+    /// x.0 is the item to append, x.1 is the array.
+    AAppend(Register, Register),
+
     /// Integer addition - x.2 = x.0 + x.1
     IAdd(Register, Register, Register),
 
@@ -63,6 +70,13 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            Instruction::AAppend(r1, r2) => {
+                write!(f, "aappend {}, {}", r1, r2)
+            }
+            Instruction::AConst(r1, vec) => {
+                let s = vec.iter().map(|i| format!("{}", i)).collect::<Vec<_>>().join(", ");
+                write!(f, "aconst {}, {}", r1, s)
+            }
             Instruction::Call { name, num_args, initial_arg } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)
             },

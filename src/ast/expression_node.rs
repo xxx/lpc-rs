@@ -134,6 +134,12 @@ impl From<&str> for ExpressionNode {
     }
 }
 
+impl From<Vec<ExpressionNode>> for ExpressionNode {
+    fn from(value: Vec<ExpressionNode>) -> Self {
+        Self::Array(ArrayNode { value, span: None })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,5 +219,38 @@ mod tests {
 
             ExpressionNode::from(ast_node);
         }
+    }
+
+    #[test]
+    fn test_from_int() {
+        let i = 666;
+
+        assert_eq!(ExpressionNode::from(i), ExpressionNode::Int(IntNode { value: i, span: None }));
+    }
+
+    #[test]
+    fn test_from_str() {
+        let s = "hello";
+
+        assert_eq!(
+            ExpressionNode::from(s),
+            ExpressionNode::String(StringNode { value: String::from(s), span: None })
+        );
+    }
+
+    #[test]
+    fn test_from_expression_node_vec() {
+        let vec = vec![
+            ExpressionNode::from(123),
+            ExpressionNode::from(31),
+            ExpressionNode::from(-4567),
+            ExpressionNode::from(8238),
+        ];
+
+
+        assert_eq!(
+            ExpressionNode::from(vec.to_vec()),
+            ExpressionNode::Array(ArrayNode { value: vec, span: None })
+        );
     }
 }

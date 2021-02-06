@@ -17,6 +17,9 @@ pub struct ArrayNode {
 }
 
 impl ArrayNode {
+    /// Construct a new `ArrayNode`. The `span` will be calculated
+    /// as the span from the start of the first item, to the end of
+    /// the last.
     pub fn new(value: Vec<ExpressionNode>) -> Self {
         let span = if value.len() == 0 {
             None

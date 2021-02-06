@@ -13,7 +13,6 @@ use crate::ast::var_node::VarNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::call_node::CallNode;
-use crate::ast::array_node::ArrayNode;
 
 /// Utility functions for doing various semantic checks.
 
@@ -144,452 +143,525 @@ pub fn node_type(
             }
         }
         ExpressionNode::BinaryOp(BinaryOpNode { l, .. }) => {
+            // TODO: int + string = string, and this doesn't handle that.
             node_type(l, scope_tree, function_return_types)
         }
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
         }
-        ExpressionNode::Array(ArrayNode { value, .. }) => {
-            if value.len() == 0 {
-                LPCType::Int(false)
+        ExpressionNode::Array(node) => {
+            if node.value.is_empty() {
+                return LPCType::Mixed(true);
+            }
+
+            let value_types = node.value
+                .iter()
+                .map(|i| node_type(i, scope_tree, function_return_types))
+                .collect::<Vec<_>>();
+
+            if value_types.iter().any(|ty|
+                  match *ty {
+                      LPCType::Int(arr) => arr,
+                      LPCType::String(arr) => arr,
+                      LPCType::Float(arr) => arr,
+                      LPCType::Object(arr) => arr,
+                      LPCType::Mapping(arr) => arr,
+                      LPCType::Mixed(arr) => arr,
+                      _ => unimplemented!() // ExpressionNodes have a concrete type.
+                  })
+            {
+                LPCType::Mixed(true)
+            } else if value_types.windows(2).all(|w| w[0] == w[1]) {
+                value_types[0].as_array(true)
             } else {
-                // we arbitrarily take the type of the first item in the list.
-                node_type(&value[0], scope_tree, function_return_types)
+                LPCType::Mixed(true)
             }
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod check_binary_operation_tests {
+    use super::*;
+    use crate::semantic::symbol::Symbol;
+
+    fn setup() -> ScopeTree {
+        let int1 = Symbol {
+            name: "int1".to_string(),
+            type_: LPCType::Int(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None
+        };
+        let int2 = Symbol {
+            name: "int2".to_string(),
+            type_: LPCType::Int(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None
+        };
+        let string1 = Symbol {
+            name: "string1".to_string(),
+            type_: LPCType::String(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None
+        };
+        let string2 = Symbol {
+            name: "string2".to_string(),
+            type_: LPCType::String(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None
+        };
+
+        let mut scope_tree = ScopeTree::default();
+        scope_tree.push_new();
+        let scope = scope_tree.get_current_mut().unwrap();
+        scope.insert(int1);
+        scope.insert(int2);
+        scope.insert(string1);
+        scope.insert(string2);
+
+        scope_tree
+    }
+
+    fn get_result(
+        op: BinaryOperation,
+        left_node: ExpressionNode,
+        right_node: ExpressionNode,
+        scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        let node = BinaryOpNode {
+            l: Box::new(left_node),
+            r: Box::new(right_node),
+            op,
+            span: None,
+        };
+        let function_return_types = HashMap::new();
+
+        check_binary_operation_types(&node, &scope_tree, &function_return_types)
+    }
+
+    fn int_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(123),
+            ExpressionNode::from(-123),
+            &scope_tree
+        )
+    }
+
+    fn string_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from("foo"),
+            ExpressionNode::from(123),
+            &scope_tree
+        )
+    }
+
+    fn int_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(123),
+            ExpressionNode::from("foo"),
+            &scope_tree
+        )
+    }
+
+    fn string_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from("asdf"),
+            ExpressionNode::from("foo"),
+            &scope_tree
+        )
+    }
+
+    fn int_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("int1")),
+            ExpressionNode::from(VarNode::new("int2")),
+            &scope_tree
+        )
+    }
+
+    fn string_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("string2")),
+            ExpressionNode::from(VarNode::new("int2")),
+            &scope_tree
+        )
+    }
+
+    fn int_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("int2")),
+            ExpressionNode::from(VarNode::new("string2")),
+            &scope_tree
+        )
+    }
+
+    fn string_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("string1")),
+            ExpressionNode::from(VarNode::new("string2")),
+            &scope_tree
+        )
+    }
+
+    #[test]
+    fn test_add() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(string_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(int_string_literals(BinaryOperation::Add, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(string_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(int_string_vars(BinaryOperation::Add, &scope_tree).is_err());
+
+        // valid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Add,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from("foo")),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("string1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(-123)),
+                        r: Box::new(ExpressionNode::from(82)),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int2"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_ok()
+        );
+
+        // invalid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Add,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(222)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(-123)
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_err()
+        );
+    }
+
+    #[test]
+    fn test_sub() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Sub, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Sub, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
+
+        // valid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Sub,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(123)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(-123)),
+                        r: Box::new(ExpressionNode::from(82)),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int2"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_ok()
+        );
+
+        // invalid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Sub,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(222)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(-123)
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_err()
+        );
+    }
+
+    #[test]
+    fn test_mul() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
+        assert!(int_string_literals(BinaryOperation::Mul, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
+        assert!(int_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
+
+        // valid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Mul,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(123)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(-123)),
+                        r: Box::new(ExpressionNode::from(82)),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int2"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_ok()
+        );
+
+        // invalid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Mul,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(222)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(-123)
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_err()
+        );
+    }
+
+    #[test]
+    fn test_div() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Div, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Div, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Div, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Div, &scope_tree).is_err());
+
+        // valid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Div,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(123)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(-123)),
+                        r: Box::new(ExpressionNode::from(82)),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int2"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_ok()
+        );
+
+        // invalid complex tree
+        assert!(
+            get_result(
+                BinaryOperation::Div,
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(222)),
+                    r: Box::new(
+                        ExpressionNode::from(VarNode::new("int1"))
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Mul,
+                        span: None
+                    })),
+                    r: Box::new(
+                        ExpressionNode::from(-123)
+                    ),
+                    op: BinaryOperation::Add,
+                    span: None
+                }),
+                &scope_tree,
+            ).is_err()
+        );
+    }
+}
+
+#[cfg(test)]
+mod check_node_type_tests {
     use super::*;
 
-    mod check_binary_operation_tests {
+    mod arrays {
         use super::*;
-        use crate::semantic::symbol::Symbol;
 
-        fn setup() -> ScopeTree {
-            let int1 = Symbol {
-                name: "int1".to_string(),
-                type_: LPCType::Int(false),
-                static_: false,
-                location: None,
-                scope_id: 0,
-                span: None
-            };
-            let int2 = Symbol {
-                name: "int2".to_string(),
-                type_: LPCType::Int(false),
-                static_: false,
-                location: None,
-                scope_id: 0,
-                span: None
-            };
-            let string1 = Symbol {
-                name: "string1".to_string(),
-                type_: LPCType::String(false),
-                static_: false,
-                location: None,
-                scope_id: 0,
-                span: None
-            };
-            let string2 = Symbol {
-                name: "string2".to_string(),
-                type_: LPCType::String(false),
-                static_: false,
-                location: None,
-                scope_id: 0,
-                span: None
-            };
-
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let scope = scope_tree.get_current_mut().unwrap();
-            scope.insert(int1);
-            scope.insert(int2);
-            scope.insert(string1);
-            scope.insert(string2);
-
-            scope_tree
-        }
-
-        fn get_result(
-            op: BinaryOperation,
-            left_node: ExpressionNode,
-            right_node: ExpressionNode,
-            scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            let node = BinaryOpNode {
-                l: Box::new(left_node),
-                r: Box::new(right_node),
-                op,
-                span: None,
-            };
+        #[test]
+        fn test_node_type_empty_array_is_mixed() {
+            let node = ExpressionNode::from(vec![]);
+            let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 
-            check_binary_operation_types(&node, &scope_tree, &function_return_types)
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::Mixed(true)
+            );
         }
 
-        fn int_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
+        #[test]
+        fn test_node_type_array_all_same_is_that() {
+            let scope_tree = ScopeTree::default();
+            let function_return_types = HashMap::new();
+
+            let node = ExpressionNode::from(vec![
                 ExpressionNode::from(123),
-                ExpressionNode::from(-123),
-                &scope_tree
-            )
-        }
+                ExpressionNode::from(31),
+                ExpressionNode::from(-4567),
+                ExpressionNode::from(8238),
+            ]);
 
-        fn string_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from("foo"),
-                ExpressionNode::from(123),
-                &scope_tree
-            )
-        }
-
-        fn int_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from(123),
-                ExpressionNode::from("foo"),
-                &scope_tree
-            )
-        }
-
-        fn string_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from("asdf"),
-                ExpressionNode::from("foo"),
-                &scope_tree
-            )
-        }
-        
-        fn int_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from(VarNode::new("int1")),
-                ExpressionNode::from(VarNode::new("int2")),
-                &scope_tree
-            )
-        }
-
-        fn string_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from(VarNode::new("string2")),
-                ExpressionNode::from(VarNode::new("int2")),
-                &scope_tree
-            )
-        }
-
-        fn int_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from(VarNode::new("int2")),
-                ExpressionNode::from(VarNode::new("string2")),
-                &scope_tree
-            )
-        }
-
-        fn string_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
-            get_result(
-                op,
-                ExpressionNode::from(VarNode::new("string1")),
-                ExpressionNode::from(VarNode::new("string2")),
-                &scope_tree
-            )
-        }
-        
-        #[test]
-        fn test_add() {
-            let scope_tree = setup();
-
-            assert!(int_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
-            assert!(string_string_literals(BinaryOperation::Add, &scope_tree).is_ok());
-            assert!(string_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
-            assert!(int_string_literals(BinaryOperation::Add, &scope_tree).is_err());
-
-            assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
-            assert!(string_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
-            assert!(string_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
-            assert!(int_string_vars(BinaryOperation::Add, &scope_tree).is_err());
-
-            // valid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Add,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from("foo")),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("string1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(-123)),
-                            r: Box::new(ExpressionNode::from(82)),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int2"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_ok()
-            );
-
-            // invalid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Add,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(222)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(-123)
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_err()
-            );
-        }
-        
-        #[test]
-        fn test_sub() {
-            let scope_tree = setup();
-
-            assert!(int_int_literals(BinaryOperation::Sub, &scope_tree).is_ok());
-            assert!(string_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
-            assert!(string_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
-            assert!(int_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
-
-            assert!(int_int_vars(BinaryOperation::Sub, &scope_tree).is_ok());
-            assert!(string_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
-            assert!(string_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
-            assert!(int_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
-
-            // valid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Sub,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(123)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(-123)),
-                            r: Box::new(ExpressionNode::from(82)),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int2"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_ok()
-            );
-
-            // invalid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Sub,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(222)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(-123)
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_err()
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::Int(true)
             );
         }
 
         #[test]
-        fn test_mul() {
-            let scope_tree = setup();
+        fn test_node_type_array_any_array_is_mixed() {
+            let scope_tree = ScopeTree::default();
+            let function_return_types = HashMap::new();
 
-            assert!(int_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
-            assert!(string_string_literals(BinaryOperation::Mul, &scope_tree).is_err());
-            assert!(string_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
-            assert!(int_string_literals(BinaryOperation::Mul, &scope_tree).is_err());
+            let node = ExpressionNode::from(vec![
+                ExpressionNode::from(vec![ExpressionNode::from(1)]),
+                ExpressionNode::from(vec![ExpressionNode::from(34)]),
+                ExpressionNode::from(vec![ExpressionNode::from(-123)]),
+            ]);
 
-            assert!(int_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
-            assert!(string_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
-            assert!(string_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
-            assert!(int_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
-
-            // valid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Mul,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(123)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(-123)),
-                            r: Box::new(ExpressionNode::from(82)),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int2"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_ok()
-            );
-
-            // invalid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Mul,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(222)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(-123)
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_err()
-            );
-        }
-        
-        #[test]
-        fn test_div() {
-            let scope_tree = setup();
-
-            assert!(int_int_literals(BinaryOperation::Div, &scope_tree).is_ok());
-            assert!(string_string_literals(BinaryOperation::Div, &scope_tree).is_err());
-            assert!(string_int_literals(BinaryOperation::Div, &scope_tree).is_err());
-            assert!(int_string_literals(BinaryOperation::Div, &scope_tree).is_err());
-
-            assert!(int_int_vars(BinaryOperation::Div, &scope_tree).is_ok());
-            assert!(string_string_vars(BinaryOperation::Div, &scope_tree).is_err());
-            assert!(string_int_vars(BinaryOperation::Div, &scope_tree).is_err());
-            assert!(int_string_vars(BinaryOperation::Div, &scope_tree).is_err());
-
-            // valid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Div,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(123)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(-123)),
-                            r: Box::new(ExpressionNode::from(82)),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int2"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_ok()
-            );
-
-            // invalid complex tree
-            assert!(
-                get_result(
-                    BinaryOperation::Div,
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(222)),
-                        r: Box::new(
-                            ExpressionNode::from(VarNode::new("int1"))
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(BinaryOpNode {
-                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                            op: BinaryOperation::Mul,
-                            span: None
-                        })),
-                        r: Box::new(
-                            ExpressionNode::from(-123)
-                        ),
-                        op: BinaryOperation::Add,
-                        span: None
-                    }),
-                    &scope_tree,
-                ).is_err()
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::Mixed(true)
             );
         }
     }

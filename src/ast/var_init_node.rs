@@ -26,6 +26,24 @@ pub struct VarInitNode {
     pub span: Option<Span>
 }
 
+impl VarInitNode {
+    /// Set a new type on this node, in a way that maintains the array state
+    pub fn update_type(&mut self, new_type: LPCType) {
+        let updated = match new_type {
+            LPCType::Void => LPCType::Void,
+            LPCType::Int(_) => LPCType::Int(self.array),
+            LPCType::String(_) => LPCType::String(self.array),
+            LPCType::Float(_) => LPCType::Float(self.array),
+            LPCType::Object(_) => LPCType::Object(self.array),
+            LPCType::Mapping(_) => LPCType::Mapping(self.array),
+            LPCType::Mixed(_) => LPCType::Mixed(self.array),
+            LPCType::Union(x) => LPCType::Union(x),
+        };
+
+        self.type_ = updated;
+    }
+}
+
 impl ASTNodeTrait for VarInitNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
@@ -36,5 +54,28 @@ impl ASTNodeTrait for VarInitNode {
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "VarInitNode[{} {} {:?}]", self.type_, self.name, self.value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_update_type_maintains_the_array_state() {
+        let mut node = VarInitNode {
+            type_: LPCType::Void,
+            name: "marf".to_string(),
+            value: None,
+            array: true,
+            span: None
+        };
+
+        node.update_type(LPCType::Int(false));
+        assert_eq!(node.type_, LPCType::Int(true));
+
+        node.array = false;
+        node.update_type(LPCType::String(true));
+        assert_eq!(node.type_, LPCType::String(false));
     }
 }

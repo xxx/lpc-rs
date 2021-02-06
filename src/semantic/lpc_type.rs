@@ -42,6 +42,18 @@ impl LPCType {
             *self == other
         }
     }
+
+    /// Return a copy of me, with the array flag set to `arr`.
+    pub fn as_array(&self, arr: bool) -> LPCType {
+        match self {
+            LPCType::Int(_) => LPCType::Int(arr),
+            LPCType::String(_) => LPCType::String(arr),
+            LPCType::Float(_) => LPCType::Float(arr),
+            LPCType::Mapping(_) => LPCType::Mapping(arr),
+            LPCType::Mixed(_) => LPCType::Mixed(arr),
+            x => *x
+        }
+    }
 }
 
 impl BitOr for LPCType {

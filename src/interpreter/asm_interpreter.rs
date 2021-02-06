@@ -23,6 +23,13 @@ macro_rules! string {
     };
 }
 
+/// Convenience helper for registers
+macro_rules! array {
+    ($x:expr) => {
+        LPCVar::Array($x)
+    };
+}
+
 /// An interpreter that executes instructions
 ///
 /// # Examples
@@ -111,17 +118,28 @@ impl AsmInterpreter {
         self.stack.last_mut().unwrap().registers.as_mut()
     }
 
+    /// Resolve an LPCVar into an LPCValue
+    pub fn resolve_var(&self, var: &LPCVar) -> LPCValue {
+        match var {
+            LPCVar::Int(v) => LPCValue::Int(*v),
+            LPCVar::String(i) => {
+                self.program.constants.get(*i).unwrap().clone()
+            },
+            LPCVar::Array(i) => {
+                // not recursive
+                self.program.constants.get(*i).unwrap().clone()
+            }
+        }
+    }
+
     /// Resolve the passed index within the current stack frame's registers
     pub fn resolve_register(&self, index: usize) -> LPCValue {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
 
-        match registers.get(index).unwrap() {
-            LPCVar::Int(v) => LPCValue::Int(*v),
-            LPCVar::String(i) => {
-                self.program.constants.get(*i).unwrap().clone()
-            }
-        }
+        // println!("regs {:?}", registers);
+
+        self.resolve_var(registers.get(index).unwrap())
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
@@ -132,9 +150,23 @@ impl AsmInterpreter {
                 break;
             }
 
-            // println!("{:?}", instruction);
+            // println!("instruction: {:?}", instruction);
+            // println!("registers: {:?}", self.current_registers());
 
             match instruction {
+                Instruction::AAppend(_r1, _r2) => {
+                    todo!()
+                }
+                Instruction::AConst(r, vec) => {
+                    let registers = self.current_registers();
+                    let vars = vec
+                        .iter()
+                        .map(|i| registers[i.index()])
+                        .collect::<Vec<_>>();
+                    let index = self.program.constants.insert(LPCValue::from(vars));
+                    let registers = self.current_registers();
+                    registers[r.index()] = array!(index);
+                }
                 Instruction::Call { name, num_args, initial_arg } => {
                     let mut new_frame = if let Some(func) = self.program.functions.get(name) {
                         StackFrame::new(
@@ -142,6 +174,7 @@ impl AsmInterpreter {
                             self.pc + 1
                         )
                     } else if EFUNS.contains_key(name.as_str()) {
+                        // TODO: memoize this symbol
                         let sym = FunctionSymbol {
                             name: name.clone(),
                             num_args: *num_args, // TODO: look this up server-side

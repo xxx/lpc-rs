@@ -25,6 +25,7 @@ use crate::interpreter::program::Program;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::errors::CompilerError;
 use crate::semantic::lpc_type::LPCType;
+use crate::ast::array_node::ArrayNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -399,6 +400,20 @@ impl TreeWalker for AsmTreeWalker {
 
         Ok(())
     }
+
+    fn visit_array(&mut self, node: &ArrayNode) -> Result<(), CompilerError> {
+        let mut items = Vec::with_capacity(node.value.len());
+        for member in &node.value {
+            let _ = member.visit(self);
+            items.push(self.current_result);
+        }
+
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+        self.instructions.push(Instruction::AConst(register, items));
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -406,7 +421,7 @@ mod tests {
     use super::*;
     use crate::lpc_parser;
     use crate::ast::expression_node::ExpressionNode;
-    use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy};
+    use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy, AConst};
     use crate::semantic::lpc_type::LPCType;
     use crate::ast::assignment_node::AssignmentOperation;
     use crate::parser::span::Span;
@@ -637,7 +652,7 @@ mod tests {
     #[test]
     fn test_decl_sets_scope_and_instructions() {
         let mut scope_walker = ScopeWalker::default();
-        let call = "int foo = 1, *bar = 56";
+        let call = "int foo = 1, *bar = ({ 56 })";
         let tree = lpc_parser::DeclParser::new()
             .parse(call)
             .unwrap();
@@ -649,7 +664,8 @@ mod tests {
 
         let expected = vec![
             IConst1(Register(1)),
-            IConst(Register(2), 56)
+            IConst(Register(2), 56),
+            AConst(Register(3), vec![Register(2)])
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -667,11 +683,11 @@ mod tests {
         });
         assert_eq!(scope.lookup("bar").unwrap(), Symbol {
             name: String::from("bar"),
-            type_: LPCType::Int(false),
+            type_: LPCType::Int(true),
             static_: false,
-            location: Some(Register(2)),
+            location: Some(Register(3)),
             scope_id: 0,
-            span: Some(Span { l: 13, r: 22 })
+            span: Some(Span { l: 13, r: 28 })
         });
     }
 
@@ -719,6 +735,35 @@ mod tests {
             IConst(Register(1), -12),
             RegCopy(Register(1), Register(666))
         ]);
+    }
+
+    #[test]
+    fn test_visit_array_populates_the_instructions() {
+        let mut walker = AsmTreeWalker::default();
+
+        let arr = ArrayNode::new(
+            vec![
+                ExpressionNode::from(123),
+                ExpressionNode::from("foo"),
+                ExpressionNode::from(vec![
+                    ExpressionNode::from(666)
+                ])
+            ]
+        );
+
+        walker.visit_array(&arr).unwrap();
+
+        let expected = vec![
+            Instruction::IConst(Register(1), 123),
+            Instruction::SConst(Register(2), String::from("foo")),
+            Instruction::IConst(Register(3), 666),
+            Instruction::AConst(Register(4), vec![Register(3)]),
+            Instruction::AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
+        ];
+
+        for (idx, instruction) in walker.instructions.iter().enumerate() {
+            assert_eq!(instruction, &expected[idx]);
+        }
     }
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {

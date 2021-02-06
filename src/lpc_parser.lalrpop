@@ -92,7 +92,7 @@ ArgName: VarInitNode = {
     <var_type:VarType> <mut init:VarInit> => {
         let new_type = LPCType::from(var_type);
 
-        init.type_ = new_type;
+        init.type_ = new_type; // We don't know if any of these are arrays
 
         init
     }
@@ -138,7 +138,7 @@ pub Decl: DeclNode = {
 
         // Update each VarInitNode with the correct type.
         for init in &mut initializations {
-            init.type_ = new_type
+            init.update_type(new_type)
         }
 
         DeclNode {

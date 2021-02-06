@@ -5,10 +5,11 @@ use std::ops::{Add, Sub, Mul, Div};
 /// Represent a variable stored in a `Register`. `Int`s store the actual value.
 /// Other types store an index into a `ConstantPool`.
 /// This enum should remain `Copy`.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum LPCVar {
     Int(i64),
     String(usize),
+    Array(usize),
 }
 
 impl Display for LPCVar {
@@ -16,6 +17,7 @@ impl Display for LPCVar {
         match self {
             LPCVar::Int(x) => write!(f, "{}", x),
             LPCVar::String(x) => write!(f, "string with index {}", x),
+            LPCVar::Array(x) => write!(f, "array with index {}", x),
         }
     }
 }
