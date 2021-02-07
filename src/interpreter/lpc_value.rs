@@ -4,6 +4,7 @@ use crate::interpreter::lpc_var::LPCVar;
 use crate::errors::runtime_error::RuntimeError;
 use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
 use crate::ast::binary_op_node::BinaryOperation;
+use crate::errors::runtime_error::division_by_zero_error::DivisionByZeroError;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -145,7 +146,15 @@ impl Div for &LPCValue {
         match self {
             LPCValue::Int(i) => {
                 match rhs {
-                    LPCValue::Int(i2) => Ok(LPCValue::Int(i / i2)),
+                    LPCValue::Int(i2) => {
+                        if *i2 == 0 {
+                            Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
+                                span: None
+                            }))
+                        } else {
+                            Ok(LPCValue::Int(i / i2))
+                        }
+                    },
                     _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
                 }
             }
@@ -166,7 +175,7 @@ mod tests {
             let int1 = LPCValue::Int(123);
             let int2 = LPCValue::Int(456);
             let result = &int1 + &int2;
-            if let LPCValue::Int(x) = result.unwrap() {
+            if let Ok(LPCValue::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
                 panic!("no match")
@@ -178,7 +187,7 @@ mod tests {
             let string1 = LPCValue::String("foo".to_string());
             let string2 = LPCValue::String("bar".to_string());
             let result = &string1 + &string2;
-            if let LPCValue::String(x) = result.unwrap() {
+            if let Ok(LPCValue::String(x)) = result {
                 assert_eq!(x, String::from("foobar"))
             } else {
                 panic!("no match")
@@ -190,7 +199,7 @@ mod tests {
             let string = LPCValue::String("foo".to_string());
             let int = LPCValue::Int(123);
             let result = &string + &int;
-            if let LPCValue::String(x) = result.unwrap() {
+            if let Ok(LPCValue::String(x)) = result {
                 assert_eq!(x, String::from("foo123"))
             } else {
                 panic!("no match")
@@ -202,7 +211,7 @@ mod tests {
             let string = LPCValue::String("foo".to_string());
             let int = LPCValue::Int(123);
             let result = &int + &string;
-            if let LPCValue::String(x) = result.unwrap() {
+            if let Ok(LPCValue::String(x)) = result {
                 assert_eq!(x, String::from("123foo"))
             } else {
                 panic!("no match")
@@ -215,7 +224,7 @@ mod tests {
             let array2 = LPCValue::from(vec![LPCVar::Int(4433)]);
             let result = &array + &array2;
 
-            if let LPCValue::Array(a) = result.unwrap() {
+            if let Ok(LPCValue::Array(a)) = result {
                 assert_eq!(a, vec![LPCVar::Int(123), LPCVar::Int(4433)])
             } else {
                 panic!("no match")
@@ -242,7 +251,7 @@ mod tests {
             let string = LPCValue::String("foo".to_string());
             let int = LPCValue::Int(4);
             let result = &string * &int;
-            if let LPCValue::String(x) = result.unwrap() {
+            if let Ok(LPCValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
                 panic!("no match")
@@ -254,7 +263,7 @@ mod tests {
             let string = LPCValue::String("foo".to_string());
             let int = LPCValue::Int(4);
             let result = &int * &string;
-            if let LPCValue::String(x) = result.unwrap() {
+            if let Ok(LPCValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
                 panic!("no match")

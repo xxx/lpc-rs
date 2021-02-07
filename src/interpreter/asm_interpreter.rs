@@ -267,10 +267,8 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         },
                         Err(mut e) => {
-                            match &mut e {
-                                RuntimeError::BinaryOperationError(ref mut err) => {
-                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                                },
+                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
+                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
                             }
 
                             return Err(e);
@@ -291,10 +289,10 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            match &mut e {
-                                RuntimeError::BinaryOperationError(ref mut err) => {
-                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                                },
+                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
+                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
+                            } else if let RuntimeError::DivisionByZeroError(ref mut err) = &mut e {
+                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
                             }
 
                             return Err(e);
@@ -315,10 +313,8 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            match &mut e {
-                                RuntimeError::BinaryOperationError(ref mut err) => {
-                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                                },
+                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
+                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
                             }
 
                             return Err(e);
@@ -339,10 +335,8 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            match &mut e {
-                                RuntimeError::BinaryOperationError(ref mut err) => {
-                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                                },
+                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
+                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
                             }
 
                             return Err(e);
