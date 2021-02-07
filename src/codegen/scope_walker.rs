@@ -97,10 +97,7 @@ impl TreeWalker for ScopeWalker {
                 node
                     .parameters
                     .iter()
-                    .map(|n| n.span)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .flatten()
+                    .flat_map(|n| n.span)
                     .collect::<Vec<_>>()
             }
         });
