@@ -6,8 +6,6 @@ use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::lpc_value::LPCValue;
 use crate::interpreter::program::Program;
 use crate::errors::runtime_error::RuntimeError;
-use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
-use crate::ast::binary_op_node::BinaryOperation;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
@@ -259,80 +257,96 @@ impl AsmInterpreter {
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
 
-                    if let Some(result) = val1 + val2 {
-                        let index = self.program.constants.insert(result);
+                    match val1 + val2 {
+                        Ok(result) => {
+                            let index = self.program.constants.insert(result);
 
-                        // set r3.index to the new constant index
-                        let var = LPCVar::String(index);
-                        let registers = self.current_registers();
-                        registers[r3.index()] = var
-                    } else {
-                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
-                            op: BinaryOperation::Add,
-                            left_type: "foo".to_string(),
-                            right_type: "bar".to_string(),
-                            span: *self.program.debug_spans.get(self.pc).unwrap()
-                        }));
+                            // set r3.index to the new constant index
+                            let var = LPCVar::String(index);
+                            let registers = self.current_registers();
+                            registers[r3.index()] = var
+                        },
+                        Err(mut e) => {
+                            match &mut e {
+                                RuntimeError::BinaryOperationError(ref mut err) => {
+                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
+                                },
+                            }
+
+                            return Err(e);
+                        }
                     }
                 },
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    if let Some(result) = val1 / val2 {
-                        let index = self.program.constants.insert(result);
+                    match val1 / val2 {
+                        Ok(result) => {
+                            let index = self.program.constants.insert(result);
 
-                        // set r3.index to the new constant index
-                        let var = LPCVar::String(index);
-                        let registers = self.current_registers();
-                        registers[r3.index()] = var
-                    } else {
-                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
-                            op: BinaryOperation::Div,
-                            left_type: "foo".to_string(),
-                            right_type: "bar".to_string(),
-                            span: *self.program.debug_spans.get(self.pc).unwrap()
-                        }));
+                            // set r3.index to the new constant index
+                            let var = LPCVar::String(index);
+                            let registers = self.current_registers();
+                            registers[r3.index()] = var
+                        }
+                        Err(mut e) => {
+                            match &mut e {
+                                RuntimeError::BinaryOperationError(ref mut err) => {
+                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
+                                },
+                            }
+
+                            return Err(e);
+                        }
                     }
                 },
                 Instruction::MMul(r1, r2, r3) => {
                     // look up vals, multiply, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    if let Some(result) = val1 * val2 {
-                        let index = self.program.constants.insert(result);
+                    match val1 * val2 {
+                        Ok(result) => {
+                            let index = self.program.constants.insert(result);
 
-                        // set r3.index to the new constant index
-                        let var = LPCVar::String(index);
-                        let registers = self.current_registers();
-                        registers[r3.index()] = var
-                    } else {
-                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
-                            op: BinaryOperation::Mul,
-                            left_type: "foo".to_string(),
-                            right_type: "bar".to_string(),
-                            span: *self.program.debug_spans.get(self.pc).unwrap()
-                        }));
+                            // set r3.index to the new constant index
+                            let var = LPCVar::String(index);
+                            let registers = self.current_registers();
+                            registers[r3.index()] = var
+                        }
+                        Err(mut e) => {
+                            match &mut e {
+                                RuntimeError::BinaryOperationError(ref mut err) => {
+                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
+                                },
+                            }
+
+                            return Err(e);
+                        }
                     }
                 },
                 Instruction::MSub(r1, r2, r3) => {
                     // look up vals, subtract, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    if let Some(result) = val1 - val2 {
-                        let index = self.program.constants.insert(result);
+                    match val1 - val2 {
+                        Ok(result) => {
+                            let index = self.program.constants.insert(result);
 
-                        // set r3.index to the new constant index
-                        let var = LPCVar::String(index);
-                        let registers = self.current_registers();
-                        registers[r3.index()] = var
-                    } else {
-                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
-                            op: BinaryOperation::Sub,
-                            left_type: "foo".to_string(),
-                            right_type: "bar".to_string(),
-                            span: *self.program.debug_spans.get(self.pc).unwrap()
-                        }));
+                            // set r3.index to the new constant index
+                            let var = LPCVar::String(index);
+                            let registers = self.current_registers();
+                            registers[r3.index()] = var
+                        }
+                        Err(mut e) => {
+                            match &mut e {
+                                RuntimeError::BinaryOperationError(ref mut err) => {
+                                    err.span = *self.program.debug_spans.get(self.pc).unwrap();
+                                },
+                            }
+
+                            return Err(e);
+                        }
                     }
                 },
                 Instruction::RegCopy(r1, r2) => {

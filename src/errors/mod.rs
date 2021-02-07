@@ -1,4 +1,3 @@
-use crate::errors::compiler_error::CompilerError;
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};

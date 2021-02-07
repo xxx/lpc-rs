@@ -1,6 +1,9 @@
 use std::ops::{Add, Mul, Sub, Div};
 use std::iter::repeat;
 use crate::interpreter::lpc_var::LPCVar;
+use crate::errors::runtime_error::RuntimeError;
+use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
+use crate::ast::binary_op_node::BinaryOperation;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -9,6 +12,32 @@ pub enum LPCValue {
     Int(i64),
     String(String),
     Array(Vec<LPCVar>)
+}
+
+impl LPCValue {
+    pub fn type_name(&self) -> &str {
+        match self {
+            LPCValue::Int(_) => "int",
+            LPCValue::String(_) => "string",
+            LPCValue::Array(_) => "array",
+        }
+    }
+
+    // Just a refactor of a common operation
+    fn to_binary_op_error(
+        &self,
+        op: BinaryOperation,
+        right: &LPCValue
+    ) -> RuntimeError {
+        let e = BinaryOperationError {
+            op,
+            left_type: self.type_name().to_string(),
+            right_type: right.type_name().to_string(),
+            span: None
+        };
+
+        RuntimeError::BinaryOperationError(e)
+    }
 }
 
 impl From<&String> for LPCValue {
@@ -24,22 +53,22 @@ impl From<Vec<LPCVar>> for LPCValue {
 }
 
 impl Add for &LPCValue {
-    type Output = Option<LPCValue>;
+    type Output = Result<LPCValue, RuntimeError>;
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
             LPCValue::Int(i) => {
                 match rhs {
-                    LPCValue::Int(i2) => Some(LPCValue::Int(i + i2)),
-                    LPCValue::String(s) => Some(LPCValue::String(i.to_string() + &s)),
-                    _ => None
+                    LPCValue::Int(i2) => Ok(LPCValue::Int(i + i2)),
+                    LPCValue::String(s) => Ok(LPCValue::String(i.to_string() + &s)),
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs))
                 }
             }
             LPCValue::String(s) => {
                 match rhs {
-                    LPCValue::String(s2) => Some(LPCValue::String(s.clone() + s2)),
-                    LPCValue::Int(i) => Some(LPCValue::String(s.clone() + &i.to_string())),
-                    _ => None
+                    LPCValue::String(s2) => Ok(LPCValue::String(s.clone() + s2)),
+                    LPCValue::Int(i) => Ok(LPCValue::String(s.clone() + &i.to_string())),
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs))
                 }
             }
             LPCValue::Array(vec) => {
@@ -47,9 +76,9 @@ impl Add for &LPCValue {
                     LPCValue::Array(vec2) => {
                         let mut new_vec = vec.to_vec();
                         new_vec.extend(&*vec2);
-                        Some(LPCValue::Array(new_vec))
+                        Ok(LPCValue::Array(new_vec))
                     },
-                    _ => None
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs))
                 }
             }
         }
@@ -57,17 +86,17 @@ impl Add for &LPCValue {
 }
 
 impl Sub for &LPCValue {
-    type Output = Option<LPCValue>;
+    type Output = Result<LPCValue, RuntimeError>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
             LPCValue::Int(i) => {
                 match rhs {
-                    LPCValue::Int(i2) => Some(LPCValue::Int(i - i2)),
-                    _ => None,
+                    LPCValue::Int(i2) => Ok(LPCValue::Int(i - i2)),
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs))
                 }
             }
-            _ => None
+            _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs))
         }
     }
 }
@@ -82,45 +111,45 @@ fn repeat_string(s: &str, i: &i64) -> String {
 }
 
 impl Mul for &LPCValue {
-    type Output = Option<LPCValue>;
+    type Output = Result<LPCValue, RuntimeError>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
             LPCValue::Int(i) => {
                 match rhs {
-                    LPCValue::Int(i2) => Some(LPCValue::Int(i * i2)),
+                    LPCValue::Int(i2) => Ok(LPCValue::Int(i * i2)),
                     LPCValue::String(s) => {
-                        Some(LPCValue::String(repeat_string(s, i)))
+                        Ok(LPCValue::String(repeat_string(s, i)))
                     },
-                    _ => None,
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs))
                 }
             }
             LPCValue::String(s) => {
                 match rhs {
                     // repeat the string `s`, `i` times
                     LPCValue::Int(i) => {
-                        Some(LPCValue::String(repeat_string(s, i)))
+                        Ok(LPCValue::String(repeat_string(s, i)))
                     }
-                    _ => None,
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs))
                 }
             },
-            _ => None
+            _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs))
         }
     }
 }
 
 impl Div for &LPCValue {
-    type Output = Option<LPCValue>;
+    type Output = Result<LPCValue, RuntimeError>;
 
     fn div(self, rhs: Self) -> Self::Output {
         match self {
             LPCValue::Int(i) => {
                 match rhs {
-                    LPCValue::Int(i2) => Some(LPCValue::Int(i / i2)),
-                    _ => None,
+                    LPCValue::Int(i2) => Ok(LPCValue::Int(i / i2)),
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
                 }
             }
-            _ => None
+            _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs))
         }
     }
 }
@@ -198,7 +227,10 @@ mod tests {
             let int = LPCValue::Int(123);
             let array = LPCValue::Array(vec![]);
             let result = &int + &array;
-            assert_eq!(result, None);
+
+            if let Ok(_) = result {
+                panic!("int + array should have failed, but didn't!")
+            }
         }
     }
     

@@ -4,6 +4,7 @@ use crate::errors::LPCError;
 
 pub mod binary_operation_error;
 
+#[derive(Debug)]
 pub enum RuntimeError {
     BinaryOperationError(BinaryOperationError)
 }

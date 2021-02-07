@@ -6,6 +6,7 @@ use codespan_reporting::diagnostic::{Diagnostic, Label};
 use crate::errors::LPCError;
 
 /// Errors for mismatched binary operations at runtime.
+#[derive(Debug)]
 pub struct BinaryOperationError {
     /// The operation
     pub op: BinaryOperation,
