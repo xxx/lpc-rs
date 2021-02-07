@@ -22,7 +22,8 @@ fn print_val(val: LPCValue, interpreter: &AsmInterpreter, indent: usize) {
     }
 }
 
-pub fn print(frame: &StackFrame, interpreter: &AsmInterpreter) {
+/// The dump() Efun
+pub fn dump(frame: &StackFrame, interpreter: &AsmInterpreter) {
     // function arguments start in register 1, and we know this function has only 1 arg.
     let val = interpreter.resolve_register(1);
 
