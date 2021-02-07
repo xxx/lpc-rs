@@ -1,12 +1,16 @@
+use std::collections::HashMap;
 use crate::interpreter::constant_pool::ConstantPool;
 use crate::asm::instruction::Instruction;
-use std::collections::HashMap;
 use crate::semantic::function_symbol::FunctionSymbol;
+use crate::parser::span::Span;
 
 #[derive(Debug)]
 pub struct Program {
     /// The actual program to execute
     pub instructions: Vec<Instruction>,
+
+    /// Code spans corresponding to instructions, for use in error messages
+    pub debug_spans: Vec<Option<Span>>,
 
     /// jump labels
     pub labels: HashMap<String, usize>,
@@ -22,6 +26,7 @@ impl Default for Program {
     fn default() -> Self {
         Self {
             instructions: vec![],
+            debug_spans: vec![],
             labels: HashMap::new(),
             functions: HashMap::new(),
             constants: ConstantPool::default()
