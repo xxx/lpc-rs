@@ -8,10 +8,10 @@ use lpc_rs::codegen::scope_walker::ScopeWalker;
 use lpc_rs::codegen::semantic_check_walker::SemanticCheckWalker;
 use lpc_rs::codegen::tree_printer::TreePrinter;
 use lpc_rs::codegen::tree_walker::TreeWalker;
-use lpc_rs::errors::LPCError;
+use lpc_rs::errors::compiler_error::CompilerError;
 use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
 use lpc_rs::interpreter::program::Program;
-use lpc_rs::errors::parse_error::ParseError;
+use lpc_rs::errors::compiler_error::parse_error::ParseError;
 use lpc_rs::semantic::scope_tree::ScopeTree;
 
 const DEFAULT_FILE: &str = "mathfile.c";
@@ -42,21 +42,21 @@ fn main() {
 }
 
 /// Fully compile a file into a Program object
-fn compile_file(filename: &str) -> Result<Program, LPCError> {
+fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let file_content =
         fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
 
-    let mut errors: Vec<LPCError> = vec![];
+    let mut errors: Vec<CompilerError> = vec![];
 
     let program = lpc_parser::ProgramParser::new().parse(&file_content);
 
     let program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            errors.push(LPCError::ParseError(ParseError::from(e)));
+            errors.push(CompilerError::ParseError(ParseError::from(e)));
             errors::emit_diagnostics(filename, &file_content, &errors);
 
-            return Err(LPCError::MultiError(errors));
+            return Err(CompilerError::MultiError(errors));
         }
     };
 
@@ -83,7 +83,7 @@ fn compile_file(filename: &str) -> Result<Program, LPCError> {
 
     if !errors.is_empty() {
         errors::emit_diagnostics(filename, &file_content, &errors);
-        return Err(LPCError::MultiError(errors));
+        return Err(CompilerError::MultiError(errors));
     }
 
     let scope_tree = ScopeTree::from(scope_walker);

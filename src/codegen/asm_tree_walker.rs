@@ -23,10 +23,10 @@ use crate::ast::string_node::StringNode;
 use crate::ast::expression_node::ExpressionNode;
 use crate::interpreter::program::Program;
 use crate::interpreter::constant_pool::ConstantPool;
-use crate::errors::LPCError;
 use crate::semantic::lpc_type::LPCType;
 use crate::ast::array_node::ArrayNode;
 use crate::parser::span::Span;
+use crate::errors::compiler_error::CompilerError;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -232,7 +232,7 @@ impl AsmTreeWalker {
 }
 
 impl TreeWalker for AsmTreeWalker {
-    fn visit_program(&mut self, program: &ProgramNode) -> Result<(), LPCError> {
+    fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
         self.scopes.goto_root();
         for expr in &program.functions {
             expr.visit(self)?
@@ -242,7 +242,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_call(&mut self, node: &CallNode) -> Result<(), LPCError> {
+    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
         let mut arg_results: Vec<Register> = vec![];
 
         // eval args, then save each result register
@@ -279,7 +279,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_int(&mut self, node: &IntNode) -> Result<(), LPCError> {
+    fn visit_int(&mut self, node: &IntNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next();
         self.current_result = register.unwrap();
         let instruction = match node.value {
@@ -293,7 +293,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_string(&mut self, node: &StringNode) -> Result<(), LPCError> {
+    fn visit_string(&mut self, node: &StringNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
         self.instructions.push(Instruction::SConst(register, node.value.clone()));
@@ -302,7 +302,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), LPCError> {
+    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self)?;
         let reg_left = self.current_result;
 
@@ -326,7 +326,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), LPCError> {
+    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
         let return_address = self.instructions.len();
 
         let len = self.instructions.len();
@@ -361,7 +361,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_return(&mut self, node: &ReturnNode) -> Result<(), LPCError> {
+    fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> {
         if let Some(expression) = &node.value {
             expression.visit(self)?;
             let copy = Instruction::RegCopy(self.current_result, Register(0));
@@ -375,7 +375,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_decl(&mut self, node: &DeclNode) -> Result<(), LPCError> {
+    fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> {
         for init in &node.initializations {
             self.visit_var_init(&init).unwrap();
         }
@@ -383,7 +383,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), LPCError> {
+    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
         let current_register;
 
         if let Some(expression) = &node.value {
@@ -402,14 +402,14 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &VarNode) -> Result<(), LPCError> {
+    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
         let sym = self.lookup_symbol(&node.name);
         self.current_result = sym.unwrap().location.unwrap();
 
         Ok(())
     }
 
-    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), LPCError> {
+    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
         node.lhs.visit(self)?;
         let dest = self.current_result;
         node.rhs.visit(self)?;
@@ -424,7 +424,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_array(&mut self, node: &ArrayNode) -> Result<(), LPCError> {
+    fn visit_array(&mut self, node: &ArrayNode) -> Result<(), CompilerError> {
         let mut items = Vec::with_capacity(node.value.len());
         for member in &node.value {
             let _ = member.visit(self);

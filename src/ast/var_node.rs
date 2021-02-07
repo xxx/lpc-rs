@@ -2,8 +2,8 @@ use crate::ast::ast_node::ASTNodeTrait;
 use crate::codegen::tree_walker::TreeWalker;
 use std::fmt::{Display, Formatter};
 use std::fmt;
-use crate::errors::LPCError;
 use crate::parser::span::Span;
+use crate::errors::compiler_error::CompilerError;
 
 /// A node representing the use of a variable.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -22,7 +22,7 @@ impl VarNode {
 }
 
 impl ASTNodeTrait for VarNode {
-    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), LPCError> {
+    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_var(self)
     }
 }

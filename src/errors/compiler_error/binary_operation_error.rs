@@ -4,6 +4,7 @@ use crate::ast::binary_op_node::BinaryOperation;
 use crate::parser::span::Span;
 use crate::semantic::lpc_type::LPCType;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
+use crate::errors::LPCError;
 
 /// Error for mismatched types in binary operations
 #[derive(Debug, Clone)]
@@ -27,8 +28,8 @@ pub struct BinaryOperationError {
     pub span: Option<Span>
 }
 
-impl BinaryOperationError {
-    pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+impl LPCError for BinaryOperationError {
+    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error()
             .with_message(format!("{}", self));
         let mut labels = vec![];

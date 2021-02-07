@@ -1,30 +1,27 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
+use crate::ast::binary_op_node::BinaryOperation;
 use crate::parser::span::Span;
-use crate::semantic::lpc_type::LPCType;
+use std::fmt::{Formatter, Display};
+use std::fmt;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
+use crate::errors::LPCError;
 
-/// Error for mismatched types in binary operations
-#[derive(Debug, Clone)]
-pub struct AssignmentError {
-    /// Name of left-hand term
-    pub left_name: String,
+/// Errors for mismatched binary operations at runtime.
+pub struct BinaryOperationError {
+    /// The operation
+    pub op: BinaryOperation,
 
     /// Type of left-side term
-    pub left_type: LPCType,
-
-    /// Name of left-hand term
-    pub right_name: String,
+    pub left_type: String,
 
     /// Type of right-side term
-    pub right_type: LPCType,
+    pub right_type: String,
 
-    /// The span of the operation
+    /// The code span related to the operation
     pub span: Option<Span>
 }
 
-impl AssignmentError {
-    pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+impl LPCError for BinaryOperationError {
+    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error()
             .with_message(format!("{}", self));
         let mut labels = vec![];
@@ -38,13 +35,12 @@ impl AssignmentError {
     }
 }
 
-impl Display for AssignmentError {
+impl Display for BinaryOperationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f,
-               "Mismatched types: `{}` ({}) = `{}` ({})",
-               self.left_name,
+               "Runtime Error: Mismatched types: ({}) {} ({})",
                self.left_type,
-               self.right_name,
+               self.op,
                self.right_type
         )
     }

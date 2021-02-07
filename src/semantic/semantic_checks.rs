@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use crate::semantic::local_scope::LocalScope;
 use crate::errors;
-use errors::binary_operation_error::BinaryOperationError;
-use errors::var_redefinition_error::VarRedefinitionError;
+use errors::compiler_error::binary_operation_error::BinaryOperationError;
+use errors::compiler_error::var_redefinition_error::VarRedefinitionError;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::semantic::scope_tree::ScopeTree;

@@ -5,8 +5,9 @@ use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::lpc_value::LPCValue;
 use crate::interpreter::program::Program;
-use crate::errors::LPCError;
 use crate::errors::runtime_error::RuntimeError;
+use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
+use crate::ast::binary_op_node::BinaryOperation;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
@@ -88,7 +89,7 @@ impl AsmInterpreter {
     }
 
     /// Dummy starter for the interpreter, to get the "main" stack frame setup
-    pub fn exec(&mut self) -> Result<(), LPCError> {
+    pub fn exec(&mut self) -> Result<(), RuntimeError> {
         let main = StackFrame::new(
             FunctionSymbol {
                 name: "main".to_string(),
@@ -145,7 +146,7 @@ impl AsmInterpreter {
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
-    fn eval(&mut self) -> Result<(), LPCError> {
+    fn eval(&mut self) -> Result<(), RuntimeError> {
         let instructions = self.program.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
             if self.is_halted {
@@ -266,8 +267,10 @@ impl AsmInterpreter {
                         let registers = self.current_registers();
                         registers[r3.index()] = var
                     } else {
-                        return Err(LPCError::RuntimeError(RuntimeError {
-                            message: "Mismatched types to +".to_string(),
+                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
+                            op: BinaryOperation::Add,
+                            left_type: "foo".to_string(),
+                            right_type: "bar".to_string(),
                             span: *self.program.debug_spans.get(self.pc).unwrap()
                         }));
                     }
@@ -284,8 +287,10 @@ impl AsmInterpreter {
                         let registers = self.current_registers();
                         registers[r3.index()] = var
                     } else {
-                        return Err(LPCError::RuntimeError(RuntimeError {
-                            message: "Mismatched types to /".to_string(),
+                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
+                            op: BinaryOperation::Div,
+                            left_type: "foo".to_string(),
+                            right_type: "bar".to_string(),
                             span: *self.program.debug_spans.get(self.pc).unwrap()
                         }));
                     }
@@ -302,8 +307,10 @@ impl AsmInterpreter {
                         let registers = self.current_registers();
                         registers[r3.index()] = var
                     } else {
-                        return Err(LPCError::RuntimeError(RuntimeError {
-                            message: "Mismatched types to *".to_string(),
+                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
+                            op: BinaryOperation::Mul,
+                            left_type: "foo".to_string(),
+                            right_type: "bar".to_string(),
                             span: *self.program.debug_spans.get(self.pc).unwrap()
                         }));
                     }
@@ -320,8 +327,10 @@ impl AsmInterpreter {
                         let registers = self.current_registers();
                         registers[r3.index()] = var
                     } else {
-                        return Err(LPCError::RuntimeError(RuntimeError {
-                            message: "Mismatched types to -".to_string(),
+                        return Err(RuntimeError::BinaryOperationError(BinaryOperationError {
+                            op: BinaryOperation::Sub,
+                            left_type: "foo".to_string(),
+                            right_type: "bar".to_string(),
                             span: *self.program.debug_spans.get(self.pc).unwrap()
                         }));
                     }

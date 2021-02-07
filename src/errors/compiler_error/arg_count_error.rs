@@ -2,6 +2,7 @@ use crate::parser::span::Span;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::fmt::{Display, Formatter};
 use std::fmt;
+use crate::errors::LPCError;
 
 #[derive(Debug, Clone)]
 pub struct ArgCountError {
@@ -21,8 +22,8 @@ pub struct ArgCountError {
     pub prototype_span: Option<Span>
 }
 
-impl ArgCountError {
-    pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+impl LPCError for ArgCountError {
+    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error()
             .with_message(format!("{}", self));
         let mut labels = vec![];

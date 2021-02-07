@@ -8,9 +8,9 @@ use std::fmt;
 use crate::ast::var_node::VarNode;
 use crate::ast::assignment_node::AssignmentNode;
 use crate::ast::string_node::StringNode;
-use crate::errors::LPCError;
 use crate::parser::span::Span;
 use crate::ast::array_node::ArrayNode;
+use crate::errors::compiler_error::CompilerError;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -42,7 +42,7 @@ impl ExpressionNode {
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl ASTNodeTrait for ExpressionNode {
-            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), LPCError> {
+            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
                 match self {
                 $(
                     $x(y) => y.visit(tree_walker),

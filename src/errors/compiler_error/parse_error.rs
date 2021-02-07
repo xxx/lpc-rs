@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter, Debug};
 use std::fmt;
 use lalrpop_util::lexer::Token;
 use crate::parser::span::Span;
+use crate::errors::LPCError;
 
 #[derive(Debug, Clone)]
 enum ParseErrorType {
@@ -36,8 +37,8 @@ fn format_expected(expected: &[String]) -> String {
     }
 }
 
-impl ParseError {
-    pub fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+impl LPCError for ParseError {
+    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
         let diagnostic: Diagnostic<usize>;
 
         match &self.type_ {
