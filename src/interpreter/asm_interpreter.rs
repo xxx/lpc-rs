@@ -5,6 +5,8 @@ use crate::interpreter::stack_frame::StackFrame;
 use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::lpc_value::LPCValue;
 use crate::interpreter::program::Program;
+use crate::errors::LPCError;
+use crate::errors::runtime_error::RuntimeError;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
@@ -55,7 +57,7 @@ macro_rules! array {
 ///
 /// walker.visit_program(&program_node);
 ///
-/// let mut program = walker.to_program();
+/// let mut program = walker.to_program(filepath);
 ///
 /// interpreter.load(program);
 /// interpreter.exec();
@@ -86,7 +88,7 @@ impl AsmInterpreter {
     }
 
     /// Dummy starter for the interpreter, to get the "main" stack frame setup
-    pub fn exec(&mut self) {
+    pub fn exec(&mut self) -> Result<(), LPCError> {
         let main = StackFrame::new(
             FunctionSymbol {
                 name: "main".to_string(),
@@ -143,7 +145,7 @@ impl AsmInterpreter {
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
-    fn eval(&mut self) {
+    fn eval(&mut self) -> Result<(), LPCError> {
         let instructions = self.program.instructions.clone();
         while let Some(instruction) = instructions.get(self.pc) {
             if self.is_halted {
@@ -255,63 +257,78 @@ impl AsmInterpreter {
                     // look up vals, add, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    let result = val1 + val2;
-                    let index = self.program.constants.insert(result);
 
-                    // set r3.index to the new constant index
-                    let var = LPCVar::String(index);
-                    let registers = self.current_registers();
-                    registers[r3.index()] = var
+                    if let Some(result) = val1 + val2 {
+                        let index = self.program.constants.insert(result);
+
+                        // set r3.index to the new constant index
+                        let var = LPCVar::String(index);
+                        let registers = self.current_registers();
+                        registers[r3.index()] = var
+                    } else {
+                        return Err(LPCError::RuntimeError(RuntimeError {
+                            message: "Mismatched types to +".to_string(),
+                            span: *self.program.debug_spans.get(self.pc).unwrap()
+                        }));
+                    }
                 },
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    let result = val1 / val2;
-                    let index = self.program.constants.insert(result);
+                    if let Some(result) = val1 / val2 {
+                        let index = self.program.constants.insert(result);
 
-                    // set r3.index to the new constant index
-                    let var = LPCVar::String(index);
-                    let registers = self.current_registers();
-                    registers[r3.index()] = var
+                        // set r3.index to the new constant index
+                        let var = LPCVar::String(index);
+                        let registers = self.current_registers();
+                        registers[r3.index()] = var
+                    } else {
+                        return Err(LPCError::RuntimeError(RuntimeError {
+                            message: "Mismatched types to /".to_string(),
+                            span: *self.program.debug_spans.get(self.pc).unwrap()
+                        }));
+                    }
                 },
                 Instruction::MMul(r1, r2, r3) => {
                     // look up vals, multiply, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    let result = val1 * val2;
-                    let index = self.program.constants.insert(result);
+                    if let Some(result) = val1 * val2 {
+                        let index = self.program.constants.insert(result);
 
-                    // set r3.index to the new constant index
-                    let var = LPCVar::String(index);
-                    let registers = self.current_registers();
-                    registers[r3.index()] = var
+                        // set r3.index to the new constant index
+                        let var = LPCVar::String(index);
+                        let registers = self.current_registers();
+                        registers[r3.index()] = var
+                    } else {
+                        return Err(LPCError::RuntimeError(RuntimeError {
+                            message: "Mismatched types to *".to_string(),
+                            span: *self.program.debug_spans.get(self.pc).unwrap()
+                        }));
+                    }
                 },
                 Instruction::MSub(r1, r2, r3) => {
                     // look up vals, subtract, store result.
                     let val1 = &self.resolve_register(r1.index());
                     let val2 = &self.resolve_register(r2.index());
-                    let result = val1 - val2;
-                    let index = self.program.constants.insert(result);
+                    if let Some(result) = val1 - val2 {
+                        let index = self.program.constants.insert(result);
 
-                    // set r3.index to the new constant index
-                    let var = LPCVar::String(index);
-                    let registers = self.current_registers();
-                    registers[r3.index()] = var
+                        // set r3.index to the new constant index
+                        let var = LPCVar::String(index);
+                        let registers = self.current_registers();
+                        registers[r3.index()] = var
+                    } else {
+                        return Err(LPCError::RuntimeError(RuntimeError {
+                            message: "Mismatched types to -".to_string(),
+                            span: *self.program.debug_spans.get(self.pc).unwrap()
+                        }));
+                    }
                 },
                 Instruction::RegCopy(r1, r2) => {
                     let registers = self.current_registers();
                     registers[r2.index()] = registers[r1.index()]
-                },
-                Instruction::SMul(r1, r2, r3) => {
-                    let string = &self.resolve_register(r1.index());
-                    let multiplier = &self.resolve_register(r2.index());
-                    let result = string * multiplier;
-                    let index = self.program.constants.insert(result);
-
-                    let var = LPCVar::String(index);
-                    let registers = self.current_registers();
-                    registers[r3.index()] = var
                 },
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
@@ -330,6 +347,8 @@ impl AsmInterpreter {
 
             self.pc += 1;
         }
+
+        Ok(())
     }
 
     /// Flag the machine to halt after it finishes executing its next instruction.

@@ -43,16 +43,16 @@ pub enum Instruction {
     /// Integer division - x.2 = x.0 - x.1
     ISub(Register, Register, Register),
 
-    /// Addition where at least one side is mixed, so check at runtime.
+    /// Addition where at least one side is a reference type, so check at runtime.
     MAdd(Register, Register, Register),
 
-    /// Division where at least one side is mixed, so check at runtime.
+    /// Division where at least one side is a reference type, so check at runtime.
     MDiv(Register, Register, Register),
 
-    /// Multiplication where at least one side is mixed, so check at runtime.
+    /// Multiplication where at least one side is a reference type, so check at runtime.
     MMul(Register, Register, Register),
 
-    /// Subtraction where at least one side is mixed, so check at runtime.
+    /// Subtraction where at least one side is a reference type, so check at runtime.
     MSub(Register, Register, Register),
 
     /// Copy x.0 to x.1
@@ -60,9 +60,6 @@ pub enum Instruction {
 
     /// Return from current function
     Ret,
-
-    /// String multiplication (repetition) - x.2 = x.0 repeated x.1 times
-    SMul(Register, Register, Register),
 }
 
 impl Display for Instruction {
@@ -119,10 +116,7 @@ impl Display for Instruction {
             },
             Instruction::Ret => {
                 write!(f, "ret")
-            },
-            Instruction::SMul(r1, r2, r3) => {
-                write!(f, "smul {}, {}, {}", r1, r2, r3)
-            },
+            }
         }
     }
 }

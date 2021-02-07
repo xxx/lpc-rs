@@ -5,6 +5,7 @@ pub mod binary_operation_error;
 pub mod var_redefinition_error;
 pub mod parse_error;
 pub mod return_type_error;
+pub mod runtime_error;
 pub mod undefined_var_error;
 pub mod unknown_function_error;
 
@@ -21,6 +22,7 @@ use arg_count_error::ArgCountError;
 use arg_type_error::ArgTypeError;
 use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
+use crate::errors::runtime_error::RuntimeError;
 
 /// General error wrapper type
 #[derive(Debug, Clone)]
@@ -34,6 +36,7 @@ pub enum LPCError {
     VarRedefinitionError(VarRedefinitionError),
     ReturnTypeError(ReturnTypeError),
     UndefinedVarError(UndefinedVarError),
+    RuntimeError(RuntimeError),
     MultiError(Vec<LPCError>),
 }
 
@@ -50,6 +53,7 @@ impl LPCError {
             LPCError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
             LPCError::ReturnTypeError(err) => err.to_diagnostics(file_id),
             LPCError::UndefinedVarError(err) => err.to_diagnostics(file_id),
+            LPCError::RuntimeError(err) => err.to_diagnostics(file_id),
             LPCError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics(file_id) ).collect()
             }

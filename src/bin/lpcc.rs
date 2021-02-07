@@ -28,10 +28,14 @@ fn main() {
         Ok(program) => {
             let mut interpreter = AsmInterpreter::default();
 
+            println!("{:?}", program);
             interpreter.load(program);
 
-            // println!("{:?}", asm_walker.instructions);
-            interpreter.exec();
+            if let Err(e) = interpreter.exec() {
+                let file_content =
+                    fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
+                errors::emit_diagnostics(filename, &file_content, &[e]);
+            }
         }
         Err(e) => panic!("unable to compile {}: {:?}", filename, e),
     }
@@ -56,7 +60,7 @@ fn compile_file(filename: &str) -> Result<Program, LPCError> {
         }
     };
 
-    println!("{:?}", program);
+    // println!("{:?}", program);
 
     let mut walker = TreePrinter::new();
     let _ = program.visit(&mut walker);
@@ -85,10 +89,10 @@ fn compile_file(filename: &str) -> Result<Program, LPCError> {
     let scope_tree = ScopeTree::from(scope_walker);
     let mut asm_walker = AsmTreeWalker::new(scope_tree);
     let _ = program.visit(&mut asm_walker);
-    print!("{:?}", asm_walker.instructions);
+    // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {
         println!("{}", s);
     }
 
-    Ok(asm_walker.to_program())
+    Ok(asm_walker.to_program(filename))
 }

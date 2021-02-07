@@ -139,13 +139,14 @@ impl AsmTreeWalker {
     }
 
     /// Convert this walkers data into a Program
-    pub fn to_program(&self) -> Program {
+    pub fn to_program(&self, filepath: &str) -> Program {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         assert_eq!(self.instructions.len(), self.debug_spans.len());
 
         Program {
             instructions: self.instructions.to_vec(),
             debug_spans: self.debug_spans.to_vec(),
+            filename: filepath.to_string(),
             labels: self.labels.clone(),
             functions: self.function_map(),
             constants: ConstantPool::default()
@@ -193,7 +194,10 @@ impl AsmTreeWalker {
             },
             (ExpressionNode::String(_), _) =>
                 Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
-            _ => Instruction::IAdd(reg_left, reg_right, reg_result.unwrap()),
+            (ExpressionNode::Int(_), ExpressionNode::Int(_)) => {
+                Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+            }
+            _ => Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
         }
     }
 
@@ -592,6 +596,34 @@ mod tests {
                 Instruction::SConst(Register(3), "baz".to_string()),
                 Instruction::MAdd(Register(2), Register(3), Register(4)),
                 Instruction::MAdd(Register(1), Register(4), Register(5))
+            ];
+
+            for (idx, instruction) in walker.instructions.iter().enumerate() {
+                assert_eq!(instruction, &expected[idx]);
+            }
+        }
+
+        #[test]
+        fn test_visit_binary_op_populates_the_instructions_for_arrays() {
+            let mut walker = AsmTreeWalker::default();
+
+            let node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
+                r: Box::new(ExpressionNode::from(vec![ExpressionNode::from(456)])),
+                op: BinaryOperation::Add,
+                span: None
+            };
+
+            walker.visit_binary_op(&node).unwrap();
+
+            println!("asd {:?}", walker.instructions);
+
+            let expected = vec![
+                Instruction::IConst(Register(1), 123),
+                Instruction::AConst(Register(2), vec![Register(1)]),
+                Instruction::IConst(Register(3), 456),
+                Instruction::AConst(Register(4), vec![Register(3)]),
+                Instruction::MAdd(Register(2), Register(4), Register(5))
             ];
 
             for (idx, instruction) in walker.instructions.iter().enumerate() {
