@@ -1,6 +1,10 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Sub, Mul, Div};
+use crate::errors::runtime_error::RuntimeError;
+use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
+use crate::ast::binary_op_node::BinaryOperation;
+use crate::errors::runtime_error::division_by_zero_error::DivisionByZeroError;
 
 /// Represent a variable stored in a `Register`. `Int`s store the actual value.
 /// Other types store an index into a `ConstantPool`.
@@ -10,6 +14,31 @@ pub enum LPCVar {
     Int(i64),
     String(usize),
     Array(usize),
+}
+
+impl LPCVar {
+    pub fn type_name(&self) -> &str {
+        match self {
+            LPCVar::Int(_) => "int",
+            LPCVar::String(_) => "string",
+            LPCVar::Array(_) => "array",
+        }
+    }
+
+    fn to_binary_op_error(
+        &self,
+        op: BinaryOperation,
+        right: &LPCVar
+    ) -> RuntimeError {
+        let e = BinaryOperationError {
+            op,
+            left_type: self.type_name().to_string(),
+            right_type: right.type_name().to_string(),
+            span: None
+        };
+
+        RuntimeError::BinaryOperationError(e)
+    }
 }
 
 impl Display for LPCVar {
@@ -23,120 +52,53 @@ impl Display for LPCVar {
 }
 
 impl Add for LPCVar {
-    type Output = LPCVar;
+    type Output = Result<LPCVar, RuntimeError>;
 
-    /// # Panics
-    /// This will panic for any type other than LPCVar::Int
     fn add(self, rhs: Self) -> Self::Output {
-        match self {
-            LPCVar::Int(x) => {
-                match rhs {
-                    LPCVar::Int(y) => LPCVar::Int(x + y),
-                    _ => {
-                        panic!(
-                            "Unable to add these LPCVars directly, as they only \
-                                contain indices into a ConstantPool. \
-                                Resolve them to LPCValues first."
-                        )
-                    }
-                }
-            }
-            _ => {
-                panic!(
-                    "Unable to add these LPCVars directly, as they only \
-                        contain indices into a ConstantPool. Resolve them to LPCValues first."
-                )
-            }
+        if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
+            Ok(LPCVar::Int(x + y))
+        } else {
+            Err(self.to_binary_op_error(BinaryOperation::Add, &rhs))
         }
     }
 }
 
 impl Sub for LPCVar {
-    type Output = LPCVar;
+    type Output = Result<LPCVar, RuntimeError>;
 
-    /// # Panics
-    /// This will panic for any type other than LPCVar::Int
     fn sub(self, rhs: Self) -> Self::Output {
-        match self {
-            LPCVar::Int(x) => {
-                match rhs {
-                    LPCVar::Int(y) => LPCVar::Int(x - y),
-                    _ => {
-                        panic!(
-                            "Unable to subtract these LPCVars directly, as they only \
-                                contain indices into a ConstantPool. \
-                                Resolve them to LPCValues first."
-                        )
-                    }
-                }
-            }
-            _ => {
-                panic!(
-                    "Unable to subtract these LPCVars directly, as they only \
-                        contain indices into a ConstantPool. \
-                        Resolve them to LPCValues first."
-                )
-            }
+        if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
+            Ok(LPCVar::Int(x - y))
+        } else {
+            Err(self.to_binary_op_error(BinaryOperation::Sub, &rhs))
         }
     }
 }
 
 impl Mul for LPCVar {
-    type Output = LPCVar;
+    type Output = Result<LPCVar, RuntimeError>;
 
-    /// # Panics
-    /// This will panic for any type other than LPCVar::Int
     fn mul(self, rhs: Self) -> Self::Output {
-        match self {
-            LPCVar::Int(x) => {
-                match rhs {
-                    LPCVar::Int(y) => LPCVar::Int(x * y),
-                    _ => {
-                        panic!(
-                            "Unable to multiply these LPCVars directly, as they only \
-                                contain indices into a ConstantPool. \
-                                Resolve them to LPCValues first."
-                        )
-                    }
-                }
-            }
-            _ => {
-                panic!(
-                    "Unable to multiply these LPCVars directly, as they only \
-                        contain indices into a ConstantPool. \
-                        Resolve them to LPCValues first."
-                )
-            }
+        if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
+            Ok(LPCVar::Int(x * y))
+        } else {
+            Err(self.to_binary_op_error(BinaryOperation::Mul, &rhs))
         }
     }
 }
 
 impl Div for LPCVar {
-    type Output = LPCVar;
+    type Output = Result<LPCVar, RuntimeError>;
 
-    /// # Panics
-    /// This will panic for any type other than LPCVar::Int
     fn div(self, rhs: Self) -> Self::Output {
-        match self {
-            LPCVar::Int(x) => {
-                match rhs {
-                    LPCVar::Int(y) => LPCVar::Int(x / y),
-                    _ => {
-                        panic!(
-                            "Unable to divide these LPCVars directly, as they only \
-                                contain indices into a ConstantPool. \
-                                Resolve them to LPCValues first."
-                        )
-                    }
-                }
+        if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
+            if y == 0 {
+                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError { span: None }))
+            } else {
+                Ok(LPCVar::Int(x / y))
             }
-            _ => {
-                panic!(
-                    "Unable to divide these LPCVars directly, as they only \
-                        contain indices into a ConstantPool. \
-                        Resolve them to LPCValues first."
-                )
-            }
+        } else {
+            Err(self.to_binary_op_error(BinaryOperation::Div, &rhs))
         }
     }
 }

@@ -1,4 +1,3 @@
-use crate::ast::binary_op_node::BinaryOperation;
 use crate::parser::span::Span;
 use std::fmt::{Formatter, Display};
 use std::fmt;

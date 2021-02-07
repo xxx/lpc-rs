@@ -6,6 +6,7 @@ use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::lpc_value::LPCValue;
 use crate::interpreter::program::Program;
 use crate::errors::runtime_error::RuntimeError;
+use std::borrow::BorrowMut;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
@@ -217,8 +218,14 @@ impl AsmInterpreter {
                 },
                 Instruction::IAdd(r1, r2, r3) => {
                     let registers = self.current_registers();
-                    registers[r3.index()] =
-                        registers[r1.index()] + registers[r2.index()]
+                    match registers[r1.index()] + registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = result,
+                        Err(mut e) => {
+                            self.populate_error_span(e.borrow_mut());
+
+                            return Err(e);
+                        }
+                    }
                 },
                 Instruction::IConst(r, i) => {
                     let registers = self.current_registers();
@@ -239,18 +246,36 @@ impl AsmInterpreter {
                 },
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = self.current_registers();
-                    registers[r3.index()] =
-                        registers[r1.index()] / registers[r2.index()]
+                    match registers[r1.index()] / registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = result,
+                        Err(mut e) => {
+                            self.populate_error_span(e.borrow_mut());
+
+                            return Err(e);
+                        }
+                    }
                 },
                 Instruction::IMul(r1, r2, r3) => {
                     let registers = self.current_registers();
-                    registers[r3.index()] =
-                        registers[r1.index()] * registers[r2.index()]
+                    match registers[r1.index()] * registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = result,
+                        Err(mut e) => {
+                            self.populate_error_span(e.borrow_mut());
+
+                            return Err(e);
+                        }
+                    }
                 },
                 Instruction::ISub(r1, r2, r3) => {
                     let registers = self.current_registers();
-                    registers[r3.index()] =
-                        registers[r1.index()] - registers[r2.index()]
+                    match registers[r1.index()] - registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = result,
+                        Err(mut e) => {
+                            self.populate_error_span(e.borrow_mut());
+
+                            return Err(e);
+                        }
+                    }
                 },
                 Instruction::MAdd(r1, r2, r3) => {
                     // look up vals, add, store result.
@@ -267,9 +292,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         },
                         Err(mut e) => {
-                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
-                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                            }
+                            self.populate_error_span(e.borrow_mut());
 
                             return Err(e);
                         }
@@ -289,11 +312,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
-                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                            } else if let RuntimeError::DivisionByZeroError(ref mut err) = &mut e {
-                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                            }
+                            self.populate_error_span(e.borrow_mut());
 
                             return Err(e);
                         }
@@ -313,9 +332,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
-                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                            }
+                            self.populate_error_span(e.borrow_mut());
 
                             return Err(e);
                         }
@@ -335,9 +352,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            if let RuntimeError::BinaryOperationError(ref mut err) = &mut e {
-                                err.span = *self.program.debug_spans.get(self.pc).unwrap();
-                            }
+                            self.populate_error_span(e.borrow_mut());
 
                             return Err(e);
                         }
@@ -377,6 +392,16 @@ impl AsmInterpreter {
     fn copy_call_result(&mut self, from: &StackFrame) {
         if !self.stack.is_empty() {
             self.current_registers()[0] = from.registers[0];
+        }
+    }
+
+    /// Handle the common switch on errors that pop out of various operations to get the span
+    /// into place for reporting.
+    fn populate_error_span(&self, error: &mut RuntimeError) {
+        if let RuntimeError::BinaryOperationError(ref mut err) = error {
+            err.span = *self.program.debug_spans.get(self.pc).unwrap();
+        } else if let RuntimeError::DivisionByZeroError(ref mut err) = error {
+            err.span = *self.program.debug_spans.get(self.pc).unwrap();
         }
     }
 }
