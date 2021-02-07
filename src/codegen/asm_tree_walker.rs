@@ -330,7 +330,7 @@ impl TreeWalker for AsmTreeWalker {
         let return_address = self.instructions.len();
 
         let len = self.instructions.len();
-        self.scopes.next();
+        self.scopes.goto_function(&node.name);
         self.register_counter.reset();
 
         for parameter in &node.parameters {

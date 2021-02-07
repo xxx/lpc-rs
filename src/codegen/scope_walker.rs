@@ -74,7 +74,8 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
-        self.scopes.push_new();
+        let scope_id = self.scopes.push_new();
+        self.scopes.insert_function(&node.name, &scope_id);
 
         for parameter in &node.parameters {
             parameter.visit(self)?;

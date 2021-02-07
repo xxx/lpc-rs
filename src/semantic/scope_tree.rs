@@ -14,8 +14,11 @@ pub struct ScopeTree {
     /// ID of the current scope
     pub current_id: Option<NodeId>,
 
-    /// ID of the root of the tree
-    pub root_id: Option<NodeId>
+    /// ID of the root of the tree (i.e. the global scope)
+    pub root_id: Option<NodeId>,
+
+    /// ID of the scopes of this program's functions
+    function_scopes: HashMap<String, NodeId>,
 }
 
 impl ScopeTree {
@@ -98,6 +101,11 @@ impl ScopeTree {
         }
     }
 
+    /// Insert a new function scope
+    pub fn insert_function(&mut self, name: &str, id: &NodeId) {
+        self.function_scopes.insert(name.to_string(), *id);
+    }
+
     /// Set the current scope to the current's parent.
     /// Note that this method does *not* actually remove the scope from the tree.
     /// It remains accessible.
@@ -105,8 +113,21 @@ impl ScopeTree {
         self.current_id = self.get_current_node().unwrap().parent();
     }
 
+    /// Set the current node to the root of the tree.
     pub fn goto_root(&mut self) {
         self.current_id = self.root_id;
+    }
+
+    /// Set the current node to the scope for function named `name`.
+    ///
+    /// # Panics
+    /// Will panic if an unknown function name is passed.
+    pub fn goto_function(&mut self, name: &str) {
+        if let Some(id) = self.function_scopes.get(name) {
+            self.current_id = Some(*id);
+        } else {
+            panic!("Unknown function passed to goto_function: {}", name);
+        }
     }
 
     /// Lookup a symbol, recursing up to parent scopes as necessary.
@@ -133,39 +154,8 @@ impl Default for ScopeTree {
         Self {
             scopes: Arena::new(),
             current_id: None,
-            root_id: None
-        }
-    }
-}
-
-impl Iterator for ScopeTree {
-    type Item = NodeId;
-
-    /// Advance to the next node that would come during a depth-first traversal
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.current_id {
-            Some(node_id) => {
-                let kid = self.scopes.get(node_id).unwrap().first_child();
-
-                if kid.is_some() {
-                    self.current_id = kid;
-                    return kid;
-                }
-
-                let sibling = self.scopes.get(node_id).unwrap().next_sibling();
-
-                if sibling.is_some() {
-                    self.current_id = sibling;
-                    sibling
-                } else {
-                    self.current_id = None;
-                    None
-                }
-            },
-            None => {
-                self.current_id = self.root_id;
-                self.root_id
-            }
+            root_id: None,
+            function_scopes: HashMap::new(),
         }
     }
 }
@@ -231,23 +221,5 @@ mod tests {
 
         let result = tree.lookup("asdf");
         assert_eq!(result, None);
-    }
-
-    mod test_next {
-        use super::*;
-
-        #[test]
-        fn test_next() {
-            let mut tree = ScopeTree::default();
-            let _root = tree.push_new();
-            let child = tree.push_new();
-            tree.goto_root();
-            let child2 = tree.push_new();
-            tree.goto_root();
-
-            assert_eq!(tree.next().unwrap(), child);
-            assert_eq!(tree.next().unwrap(), child2);
-            assert_eq!(tree.next(), None);
-        }
     }
 }
