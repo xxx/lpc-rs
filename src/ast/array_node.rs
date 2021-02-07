@@ -21,7 +21,7 @@ impl ArrayNode {
     /// as the span from the start of the first item, to the end of
     /// the last.
     pub fn new(value: Vec<ExpressionNode>) -> Self {
-        let span = if value.len() == 0 {
+        let span = if value.is_empty() {
             None
         } else if let (Some(node1), Some(node2)) =
         (value[0].span(), value.last().unwrap().span()) {

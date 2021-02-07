@@ -152,7 +152,7 @@ impl TreeWalker for TreePrinter {
             node.visit(self)?;
             self.indent -= 2;
         } else {
-            self.println_indented(&format!("value: None"));
+            self.println_indented("value: None");
         }
         self.println_indented(&format!("array: {}", node.array));
         self.indent -= 2;

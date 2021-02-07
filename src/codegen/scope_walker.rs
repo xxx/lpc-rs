@@ -120,7 +120,7 @@ impl TreeWalker for ScopeWalker {
 
     fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
         // We check for undefined vars here in case a symbol is subsequently defined.
-        if let None = self.scopes.lookup(&node.name) {
+        if self.scopes.lookup(&node.name).is_none() {
             self.errors.push(CompilerError::UndefinedVarError(
                 UndefinedVarError {
                     name: node.name.clone(),

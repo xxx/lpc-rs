@@ -42,11 +42,7 @@ impl LPCType {
                     _ => unimplemented!() // Union is handled in an above if-let.
                 }
             } else {
-                if let LPCType::Void = other {
-                    false
-                } else {
-                    true
-                }
+                !matches!(other, LPCType::Void)
             }
         } else {
             *self == other

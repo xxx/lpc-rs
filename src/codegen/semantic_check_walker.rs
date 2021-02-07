@@ -74,9 +74,9 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         if !self.function_prototypes.contains_key(&node.name) && !EFUNS.contains_key(node.name.as_str()) {
             let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
                 name: node.name.clone(),
-                span: node.span.clone()
+                span: node.span
             });
-            self.errors.push(e.clone());
+            self.errors.push(e);
             // Non-fatal. Continue.
         }
 
@@ -98,10 +98,10 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     name: node.name.clone(),
                     expected: prototype.num_args,
                     actual: arg_len,
-                    span: node.span.clone(),
-                    prototype_span: prototype.span.clone()
+                    span: node.span,
+                    prototype_span: prototype.span
                 });
-                self.errors.push(e.clone());
+                self.errors.push(e);
             }
 
             // Check argument types.
@@ -123,7 +123,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                                 expected: *ty,
                                 span: arg.span(),
                                 declaration_span: if let Some(span) = prototype.arg_spans.get(index) {
-                                    Some(span.clone())
+                                    Some(*span)
                                 } else {
                                     None
                                 }
@@ -192,16 +192,14 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                         self.errors.push(error);
                     }
                 }
-            } else {
-                if function_def.return_type != LPCType::Void {
-                    let error = CompilerError::ReturnTypeError(ReturnTypeError {
-                        type_: LPCType::Void,
-                        expected: function_def.return_type,
-                        span: node.span
-                    });
+            } else if function_def.return_type != LPCType::Void {
+                let error = CompilerError::ReturnTypeError(ReturnTypeError {
+                    type_: LPCType::Void,
+                    expected: function_def.return_type,
+                    span: node.span
+                });
 
-                    self.errors.push(error);
-                }
+                self.errors.push(error);
             }
         } // else warn?
 
@@ -225,9 +223,9 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 Ok(())
             } else {
                 let e = CompilerError::AssignmentError(AssignmentError {
-                    left_name: format!("{}", node.name),
+                    left_name: node.name.to_string(),
                     left_type: node.type_,
-                    right_name: format!("{}", expression),
+                    right_name: expression.to_string(),
                     right_type: expr_type,
                     span: node.span
                 });

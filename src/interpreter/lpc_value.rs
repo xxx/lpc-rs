@@ -105,7 +105,7 @@ impl Sub for &LPCValue {
 /// Repeat `s`, `i` times, and return a new String of it.
 fn repeat_string(s: &str, i: &i64) -> String {
     if *i >= 0 {
-        repeat(s.clone()).take(*i as usize).collect::<String>()
+        repeat(s).take(*i as usize).collect::<String>()
     } else {
         String::from("")
     }
