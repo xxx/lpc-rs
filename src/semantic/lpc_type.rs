@@ -25,6 +25,19 @@ impl LPCType {
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
     pub fn matches_type(&self, other: LPCType) -> bool {
+        fn array_value(t: &LPCType) -> bool {
+            match t {
+                LPCType::Void => false,
+                LPCType::Int(arr) => *arr,
+                LPCType::String(arr) => *arr,
+                LPCType::Float(arr) => *arr,
+                LPCType::Object(arr) => *arr,
+                LPCType::Mapping(arr) => *arr,
+                LPCType::Mixed(arr) => *arr,
+                _ => unimplemented!()
+            }
+        }
+
         if let LPCType::Union(self_union) = self {
             self_union.matches_type(other)
         } else if let LPCType::Union(other_union) = other {
@@ -33,31 +46,13 @@ impl LPCType {
             // "mixed *" only matches arrays (but the elements can be any type)
             // "mixed" is a literal wildcard.
             if *array {
-                match other {
-                    LPCType::Void => false,
-                    LPCType::Int(arr) => arr,
-                    LPCType::String(arr) => arr,
-                    LPCType::Float(arr) => arr,
-                    LPCType::Object(arr) => arr,
-                    LPCType::Mapping(arr) => arr,
-                    LPCType::Mixed(arr) => arr,
-                    _ => unimplemented!() // Union is handled in an above if-let.
-                }
+                array_value(&other)
             } else {
                 !matches!(other, LPCType::Void)
             }
         } else if let LPCType::Mixed(array) = other {
             if array {
-                match self {
-                    LPCType::Void => false,
-                    LPCType::Int(arr) => *arr,
-                    LPCType::String(arr) => *arr,
-                    LPCType::Float(arr) => *arr,
-                    LPCType::Object(arr) => *arr,
-                    LPCType::Mapping(arr) => *arr,
-                    LPCType::Mixed(arr) => *arr,
-                    _ => unimplemented!() // Union is handled in an above if-let.
-                }
+                array_value(self)
             } else {
                 !matches!(other, LPCType::Void)
             }
@@ -149,6 +144,7 @@ mod tests {
             assert!(union.int());
             assert!(union.int_array());
             assert!(union.void());
+
             assert!(!union.string());
             assert!(!union.string_array());
             assert!(!union.float());
