@@ -11,6 +11,7 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::errors::compiler_error::CompilerError;
 use crate::ast::array_node::ArrayNode;
 use crate::ast::return_node::ReturnNode;
+use crate::ast::var_node::VarNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -155,6 +156,15 @@ impl TreeWalker for TreePrinter {
             self.println_indented("value: None");
         }
         self.println_indented(&format!("array: {}", node.array));
+        self.indent -= 2;
+
+        Ok(())
+    }
+
+    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
+        self.println_indented("Var");
+        self.indent += 2;
+        self.println_indented(&format!("name: {}", node.name));
         self.indent -= 2;
 
         Ok(())

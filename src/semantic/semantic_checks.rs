@@ -120,6 +120,15 @@ pub fn check_binary_operation_types(
 }
 
 /// Resolve an expression node down to a single type, recursively if necessary
+///
+/// # Arguments
+/// `node` - The `ExpressionNode` whose type we would like to resolve.
+/// `scope_tree` - A `ScopeTree`, with its current scope set to the start scope
+///                    for resolving variables.
+/// `function_return_types` - A `HashMap` of function names, to the type they return
+///
+/// # Returns
+/// The `LPCType` of the passed node.
 pub fn node_type(
     node: &ExpressionNode,
     scope_tree: &ScopeTree,

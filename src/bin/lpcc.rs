@@ -28,7 +28,7 @@ fn main() {
         Ok(program) => {
             let mut interpreter = AsmInterpreter::default();
 
-            println!("{:?}", program);
+            // println!("{:?}", program);
             interpreter.load(program);
 
             if let Err(e) = interpreter.exec() {

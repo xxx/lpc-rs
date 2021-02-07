@@ -192,6 +192,24 @@ impl AsmTreeWalker {
                     Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
                 }
             },
+            (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
+                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+
+                if let LPCType::Int(false) = type_ {
+                    Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+                } else {
+                    Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
+                }
+            },
+            (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
+                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+
+                if let LPCType::Int(false) = type_ {
+                    Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+                } else {
+                    Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
+                }
+            },
             (ExpressionNode::String(_), _) =>
                 Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
             (ExpressionNode::Int(_), ExpressionNode::Int(_)) => {
@@ -217,6 +235,24 @@ impl AsmTreeWalker {
                 let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
 
                 if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
+                    Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+                } else {
+                    Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
+                }
+            },
+            (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
+                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+
+                if let LPCType::Int(false) = type_ {
+                    Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+                } else {
+                    Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
+                }
+            },
+            (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
+                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+
+                if let LPCType::Int(false) = type_ {
                     Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
                 } else {
                     Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
@@ -343,7 +379,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // force a final return if one isn't already there.
         if self.instructions.len() == len || *self.instructions.last().unwrap() != Instruction::Ret {
-            // TODO: This should emit a warning
+            // TODO: This should emit a warning unless the return type is void
             self.instructions.push(Instruction::Ret);
             self.debug_spans.push(node.span);
         }
@@ -636,7 +672,7 @@ mod tests {
     fn test_visit_function_def_populates_the_data() {
         let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
-        let call = "int main() { 4 + 2 - 5 * 2; }";
+        let call = "int main(int i) { return i + 4; }";
         let tree = lpc_parser::FunctionDefParser::new()
             .parse(call)
             .unwrap();
@@ -649,7 +685,9 @@ mod tests {
         walker.visit_function_def(&tree).unwrap();
 
         let expected = vec![
-            Instruction::IConst(Register(1), -4),
+            Instruction::IConst(Register(2), 4),
+            Instruction::IAdd(Register(1), Register(2), Register(3)),
+            Instruction::RegCopy(Register(3), Register(0)),
             Instruction::Ret
         ];
 
@@ -661,8 +699,8 @@ mod tests {
 
         let sym = FunctionSymbol {
             name: "main".to_string(),
-            num_args: 0,
-            num_locals: 1,
+            num_args: 1,
+            num_locals: 2,
             address
         };
 
