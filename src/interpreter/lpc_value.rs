@@ -5,6 +5,9 @@ use crate::errors::runtime_error::RuntimeError;
 use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::errors::runtime_error::division_by_zero_error::DivisionByZeroError;
+use std::fmt::Display;
+use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+use std::fmt;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -38,6 +41,16 @@ impl LPCValue {
         };
 
         RuntimeError::BinaryOperationError(e)
+    }
+}
+
+impl Display for LPCValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            LPCValue::Int(i) => write!(f, "{}", i),
+            LPCValue::String(s) => write!(f, "{}", s),
+            LPCValue::Array(a) => write!(f, "({{ {:?} }})", a),
+        }
     }
 }
 
