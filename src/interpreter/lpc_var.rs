@@ -6,8 +6,8 @@ use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::errors::runtime_error::division_by_zero_error::DivisionByZeroError;
 
-/// Represent a variable stored in a `Register`. `Int`s store the actual value.
-/// Other types store an index into a `ConstantPool`.
+/// Represent a variable stored in a `Register`. `Copy` types store the actual value.
+/// Non-`Copy` types store an index into memory (i.e. an address).
 /// This enum should remain `Copy`.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum LPCVar {
