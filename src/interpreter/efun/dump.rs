@@ -3,7 +3,7 @@ use crate::interpreter::lpc_var::LPCVar;
 use crate::interpreter::asm_interpreter::AsmInterpreter;
 use crate::interpreter::lpc_value::LPCValue;
 
-fn print_array(arr: &Vec<LPCVar>, interpreter: &AsmInterpreter, indent: usize) {
+fn print_array(arr: &[LPCVar], interpreter: &AsmInterpreter, indent: usize) {
     println!("{:width$}({{", "", width = indent);
 
     for var in arr {

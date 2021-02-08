@@ -77,7 +77,7 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.scopes.push_new();
         self.scopes.insert_function(&node.name, &scope_id);
 
-        let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).collect::<Vec<_>>().len();
+        let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
 
         for parameter in &node.parameters {
             parameter.visit(self)?;
