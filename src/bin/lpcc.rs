@@ -13,6 +13,7 @@ use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
 use lpc_rs::interpreter::program::Program;
 use lpc_rs::errors::compiler_error::parse_error::ParseError;
 use lpc_rs::semantic::scope_tree::ScopeTree;
+use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -73,6 +74,12 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
         errors.append(scope_walker.get_errors().to_vec().borrow_mut());
     }
 
+    let mut default_params_walker = DefaultParamsWalker::new();
+    let _ = program.visit(default_params_walker.borrow_mut());
+    if !default_params_walker.get_errors().is_empty() {
+        errors.append(default_params_walker.get_errors().to_vec().borrow_mut());
+    }
+
     let mut semantic_check_walker =
         SemanticCheckWalker::new(&scope_walker.scopes, &scope_walker.function_prototypes);
     let _ = program.visit(semantic_check_walker.borrow_mut());
@@ -87,7 +94,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     }
 
     let scope_tree = ScopeTree::from(scope_walker);
-    let mut asm_walker = AsmTreeWalker::new(scope_tree);
+    let mut asm_walker = AsmTreeWalker::new(scope_tree, default_params_walker.into_functions());
     let _ = program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {

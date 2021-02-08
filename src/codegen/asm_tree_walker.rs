@@ -49,6 +49,10 @@ pub struct AsmTreeWalker {
     /// Track where the result of a child branch is
     current_result: Register,
 
+    /// A mapping of function names to initializers, for use in dealing
+    /// with default parameters while generating code for calls
+    function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
+
     /// The internal counter to track which registers are used.
     register_counter: RegisterCounter,
 
@@ -61,9 +65,10 @@ impl AsmTreeWalker {
     ///
     /// # Arguments
     /// `scopes` - The ScopeTree to use to resolve symbols and function calls.
-    pub fn new(scopes: ScopeTree) -> Self {
+    pub fn new(scopes: ScopeTree, function_params: HashMap<String, Vec<Option<ExpressionNode>>>) -> Self {
         Self {
             scopes,
+            function_params,
             ..Default::default()
         }
     }
@@ -138,7 +143,7 @@ impl AsmTreeWalker {
         map
     }
 
-    /// Convert this walkers data into a Program
+    /// Convert this walker's data into a Program
     pub fn to_program(&self, filepath: &str) -> Program {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         assert_eq!(self.instructions.len(), self.debug_spans.len());
@@ -265,6 +270,22 @@ impl AsmTreeWalker {
             _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
         }
     }
+
+    /// A special case for function def parameters, where we don't want to generate code
+    /// for default arguments - we just want to have it on hand to refer to
+    /// when we generate code for calls.
+    fn visit_parameter(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
+        let current_register;
+
+        current_register = self.register_counter.next().unwrap();
+
+        let symbol = self.lookup_symbol_mut(&node.name);
+        if let Some(sym) = symbol {
+            sym.location = Some(current_register);
+        }
+
+        Ok(())
+    }
 }
 
 impl TreeWalker for AsmTreeWalker {
@@ -279,21 +300,37 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
-        let mut arg_results: Vec<Register> = vec![];
+        let mut arg_results = vec![];
 
-        // eval args, then save each result register
-        for argument in &node.arguments {
-            argument.visit(self)?;
-            arg_results.push(self.current_result);
+        let params = self.function_params.get(&node.name);
+
+        if let Some(function_args) = params {
+            let function_args = function_args.to_vec();
+
+            for (idx, function_arg) in function_args.iter().enumerate() {
+                if let Some(arg) = node.arguments.get(idx) {
+                    arg.visit(self)?;
+                    arg_results.push(self.current_result);
+                } else if let Some(arg) = function_arg {
+                    arg.visit(self)?;
+                    arg_results.push(self.current_result);
+                }
+            }
+        } else {
+            // TODO: This is where efuns are handled
+            for argument in &node.arguments {
+                argument.visit(self)?;
+                arg_results.push(self.current_result);
+            }
         }
 
         let start_register = self.register_counter.next();
         let mut register = start_register;
 
         // copy each result to the start of the arg register
-        for result in arg_results {
+        for result in &arg_results {
             self.instructions.push(
-                Instruction::RegCopy(result, register.unwrap())
+                Instruction::RegCopy(*result, register.unwrap())
             );
             self.debug_spans.push(node.span);
             register = self.register_counter.next();
@@ -304,7 +341,7 @@ impl TreeWalker for AsmTreeWalker {
 
         let instruction = Instruction::Call {
             name: node.name.clone(),
-            num_args: node.arguments.len(),
+            num_args: arg_results.len(),
             initial_arg: start_register.unwrap()
         };
 
@@ -370,7 +407,7 @@ impl TreeWalker for AsmTreeWalker {
         self.register_counter.reset();
 
         for parameter in &node.parameters {
-            parameter.visit(self)?;
+            self.visit_parameter(parameter)?;
         }
 
         for expression in &node.body {
@@ -526,28 +563,64 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_visit_call_populates_the_instructions() {
-        let mut walker = AsmTreeWalker::default();
-        let call = "print(4 - 5)";
-        let tree = lpc_parser::CallParser::new()
-            .parse(call)
-            .unwrap();
+    mod test_visit_call {
+        use super::*;
 
-        walker.visit_call(&tree).unwrap();
+        #[test]
+        fn test_visit_call_populates_the_instructions() {
+            let mut walker = AsmTreeWalker::default();
+            let call = "print(4 - 5)";
+            let tree = lpc_parser::CallParser::new()
+                .parse(call)
+                .unwrap();
 
-        let expected = vec![
-            Instruction::IConst(Register(1), -1),
-            Instruction::RegCopy(Register(1), Register(2)),
-            Instruction::Call {
-                name: String::from("print"),
-                num_args: 1,
-                initial_arg: Register(2)
+            walker.visit_call(&tree);
+
+            let expected = vec![
+                Instruction::IConst(Register(1), -1),
+                Instruction::RegCopy(Register(1), Register(2)),
+                Instruction::Call {
+                    name: String::from("print"),
+                    num_args: 1,
+                    initial_arg: Register(2)
+                }
+            ];
+
+            for (idx, instruction) in walker.instructions.iter().enumerate() {
+                assert_eq!(instruction, &expected[idx]);
             }
-        ];
+        }
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
+        #[test]
+        fn test_visit_call_populates_the_instructions_with_defaults() {
+            let scope_tree = ScopeTree::default();
+            let mut functions = HashMap::new();
+
+            functions.insert(String::from("foo"), vec![None, Some(ExpressionNode::from("muffuns"))]);
+
+            let mut walker = AsmTreeWalker::new(scope_tree, functions);
+            let call = "foo(666)";
+            let tree = lpc_parser::CallParser::new()
+                .parse(call)
+                .unwrap();
+
+            walker.visit_call(&tree);
+
+            let expected = vec![
+                Instruction::IConst(Register(1), 666),
+                Instruction::SConst(Register(2), "muffuns".to_string()),
+                Instruction::RegCopy(Register(1), Register(3)),
+                Instruction::RegCopy(Register(2), Register(4)),
+                Instruction::Call {
+                    name: "foo".to_string(),
+                    num_args: 2,
+                    initial_arg: Register(3)
+                },
+            ];
+
+            for (idx, instruction) in walker.instructions.iter().enumerate() {
+                assert_eq!(instruction, &expected[idx]);
+            }
         }
     }
 
@@ -749,7 +822,7 @@ mod tests {
 
         scope_walker.visit_decl(&tree).unwrap();
 
-        let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker));
+        let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker), HashMap::new());
         walker.visit_decl(&tree).unwrap();
 
         let expected = vec![
