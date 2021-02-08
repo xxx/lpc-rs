@@ -48,8 +48,12 @@ pub FunctionDef: FunctionDefNode = {
 
         let return_type = if let Some(this_type) = r_type {
             match this_type.as_str() {
+                "void" => LPCType::Void,
                 "int" => LPCType::Int(array),
                 "string" => LPCType::String(array),
+                // "float" => LPCType::Float(array),
+                // "object" => LPCType::Object(array),
+                // "mapping" => LPCType::Mapping(array),
                 "mixed" => LPCType::Mixed(array),
                 _ => unimplemented!()
             }
@@ -102,6 +106,7 @@ ReturnType: String = {
     "int" => String::from(<>),
     "string" => String::from(<>),
     "mixed" => String::from(<>),
+    "void" => String::from(<>),
 };
 
 VarType: String = {
