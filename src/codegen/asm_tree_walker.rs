@@ -457,7 +457,7 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> {
         for init in &node.initializations {
-            self.visit_var_init(&init).unwrap();
+            let _ = self.visit_var_init(&init);
         }
 
         Ok(())
@@ -546,7 +546,7 @@ mod tests {
             .parse(program)
             .unwrap();
 
-        scope_walker.visit_program(&tree).unwrap();
+        let _ = scope_walker.visit_program(&tree);
 
         let scopes = ScopeTree::from(scope_walker);
         walker.scopes = scopes;
@@ -639,9 +639,9 @@ mod tests {
         let tree0 = IntNode::new(0);
         let tree1 = IntNode::new(1);
 
-        walker.visit_int(&tree).unwrap();
-        walker.visit_int(&tree0).unwrap();
-        walker.visit_int(&tree1).unwrap();
+        let _ = walker.visit_int(&tree);
+        let _ = walker.visit_int(&tree0);
+        let _ = walker.visit_int(&tree1);
 
         let expected = vec![
             Instruction::IConst(Register(1), 666),
@@ -673,7 +673,7 @@ mod tests {
                 span: None
             };
 
-            walker.visit_binary_op(&node).unwrap();
+            let _ = walker.visit_binary_op(&node);
 
             let expected = vec![
                 Instruction::IConst(Register(1), 666),
@@ -704,7 +704,7 @@ mod tests {
                 span: None
             };
 
-            walker.visit_binary_op(&node).unwrap();
+            let _ = walker.visit_binary_op(&node);
 
             let expected = vec![
                 Instruction::SConst(Register(1), 0),
@@ -730,7 +730,7 @@ mod tests {
                 span: None
             };
 
-            walker.visit_binary_op(&node).unwrap();
+            let _ = walker.visit_binary_op(&node);
 
             println!("asd {:?}", walker.instructions);
 
@@ -779,12 +779,12 @@ mod tests {
             .parse(call)
             .unwrap();
 
-        scope_walker.visit_function_def(&tree).unwrap();
+        let _ = scope_walker.visit_function_def(&tree);
 
         let mut scopes = ScopeTree::from(scope_walker);
         scopes.goto_root();
         walker.scopes = scopes;
-        walker.visit_function_def(&tree).unwrap();
+        let _ = walker.visit_function_def(&tree);
 
         let expected = vec![
             Instruction::IConst(Register(2), 4),
@@ -814,7 +814,7 @@ mod tests {
         let mut walker = AsmTreeWalker::default();
 
         let node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
-        walker.visit_return(&node).unwrap();
+        let _ = walker.visit_return(&node);
 
         let expected = vec![
             Instruction::IConst(Register(1), 666),
@@ -830,7 +830,7 @@ mod tests {
 
         let mut walker = AsmTreeWalker::default();
         let node = ReturnNode::new(None);
-        walker.visit_return(&node).unwrap();
+        let _ = walker.visit_return(&node);
 
         let expected = vec![
             Instruction::Ret,
@@ -849,10 +849,10 @@ mod tests {
             .parse(call)
             .unwrap();
 
-        scope_walker.visit_decl(&tree).unwrap();
+        let _ = scope_walker.visit_decl(&tree);
 
         let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker), HashMap::new());
-        walker.visit_decl(&tree).unwrap();
+        let _ = walker.visit_decl(&tree);
 
         let expected = vec![
             IConst1(Register(1)),
@@ -898,7 +898,7 @@ mod tests {
 
         let node = VarNode::new("marf");
 
-        walker.visit_var(&node).unwrap();
+        let _ = walker.visit_var(&node);
         assert_eq!(walker.current_result, Register(666));
     }
 
@@ -922,7 +922,7 @@ mod tests {
             span: None
         };
 
-        walker.visit_assignment(&node).unwrap();
+        let _ = walker.visit_assignment(&node);
         assert_eq!(walker.instructions, [
             IConst(Register(1), -12),
             RegCopy(Register(1), Register(666))
@@ -943,7 +943,7 @@ mod tests {
             ]
         );
 
-        walker.visit_array(&arr).unwrap();
+        let _ = walker.visit_array(&arr);
 
         let expected = vec![
             Instruction::IConst(Register(1), 123),
