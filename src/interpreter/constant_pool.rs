@@ -2,7 +2,7 @@ use delegate::delegate;
 use crate::interpreter::lpc_value::LPCValue;
 
 /// Hold constant values, to allow for re-use without copying.
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct ConstantPool {
     constants: Vec<LPCValue>
 }
@@ -23,14 +23,6 @@ impl ConstantPool {
         to self.constants {
             #[call(get)]
             pub fn get(&self, index: usize) -> Option<&LPCValue>;
-        }
-    }
-}
-
-impl Default for ConstantPool {
-    fn default() -> Self {
-        Self {
-            constants: vec![]
         }
     }
 }

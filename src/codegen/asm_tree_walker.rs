@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use multimap::MultiMap;
 use tree_walker::TreeWalker;
+use crate::interpreter::lpc_value::LPCValue;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::int_node::IntNode;
 use crate::codegen::tree_walker;
@@ -57,7 +58,10 @@ pub struct AsmTreeWalker {
     register_counter: RegisterCounter,
 
     /// The collection of scopes
-    scopes: ScopeTree
+    scopes: ScopeTree,
+
+    /// All constants (really only string literals) in the program
+    constants: ConstantPool,
 }
 
 impl AsmTreeWalker {
@@ -154,7 +158,7 @@ impl AsmTreeWalker {
             filename: filepath.to_string(),
             labels: self.labels.clone(),
             functions: self.function_map(),
-            constants: ConstantPool::default()
+            constants: self.constants.clone()
         }
     }
 
@@ -369,7 +373,10 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_string(&mut self, node: &StringNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
-        self.instructions.push(Instruction::SConst(register, node.value.clone()));
+
+        let index = self.constants.insert(LPCValue::from(&node.value));
+
+        self.instructions.push(Instruction::SConst(register, index));
         self.debug_spans.push(node.span);
 
         Ok(())
@@ -518,7 +525,7 @@ mod tests {
     use super::*;
     use crate::lpc_parser;
     use crate::ast::expression_node::ExpressionNode;
-    use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy, AConst};
+    use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy, AConst, SConst};
     use crate::semantic::lpc_type::LPCType;
     use crate::ast::assignment_node::AssignmentOperation;
     use crate::parser::span::Span;
@@ -608,7 +615,7 @@ mod tests {
 
             let expected = vec![
                 Instruction::IConst(Register(1), 666),
-                Instruction::SConst(Register(2), "muffuns".to_string()),
+                Instruction::SConst(Register(2), 0),
                 Instruction::RegCopy(Register(1), Register(3)),
                 Instruction::RegCopy(Register(2), Register(4)),
                 Instruction::Call {
@@ -700,9 +707,9 @@ mod tests {
             walker.visit_binary_op(&node).unwrap();
 
             let expected = vec![
-                Instruction::SConst(Register(1), "foo".to_string()),
-                Instruction::SConst(Register(2), "bar".to_string()),
-                Instruction::SConst(Register(3), "baz".to_string()),
+                Instruction::SConst(Register(1), 0),
+                Instruction::SConst(Register(2), 1),
+                Instruction::SConst(Register(3), 2),
                 Instruction::MAdd(Register(2), Register(3), Register(4)),
                 Instruction::MAdd(Register(1), Register(4), Register(5))
             ];
@@ -738,6 +745,28 @@ mod tests {
             for (idx, instruction) in walker.instructions.iter().enumerate() {
                 assert_eq!(instruction, &expected[idx]);
             }
+        }
+    }
+
+    #[test]
+    fn test_visit_string_populates_the_instructions() {
+        let mut walker = AsmTreeWalker::default();
+        let node = StringNode::new("marf");
+        let node2 = StringNode::new("tacos");
+        let node3 = StringNode::new("marf");
+
+        let _ = walker.visit_string(&node);
+        let _ = walker.visit_string(&node2);
+        let _ = walker.visit_string(&node3);
+
+        let expected = vec![
+            SConst(Register(1), 0),
+            SConst(Register(2), 1),
+            SConst(Register(3), 0) // reuses constant
+        ];
+
+        for (a, b) in walker.instructions.iter().zip(expected) {
+            assert_eq!(*a, b);
         }
     }
 
@@ -918,7 +947,7 @@ mod tests {
 
         let expected = vec![
             Instruction::IConst(Register(1), 123),
-            Instruction::SConst(Register(2), String::from("foo")),
+            Instruction::SConst(Register(2), 0),
             Instruction::IConst(Register(3), 666),
             Instruction::AConst(Register(4), vec![Register(3)]),
             Instruction::AConst(Register(5), vec![Register(1), Register(2), Register(4)]),

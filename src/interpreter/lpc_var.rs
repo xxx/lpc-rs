@@ -14,6 +14,9 @@ pub enum LPCVar {
     Int(i64),
     String(usize),
     Array(usize),
+
+    /// Stores an index into the program's `ConstantPool`, rather than memory.
+    StringConstant(usize),
 }
 
 impl LPCVar {
@@ -22,6 +25,7 @@ impl LPCVar {
             LPCVar::Int(_) => "int",
             LPCVar::String(_) => "string",
             LPCVar::Array(_) => "array",
+            LPCVar::StringConstant(_) => "string",
         }
     }
 
@@ -47,6 +51,7 @@ impl Display for LPCVar {
             LPCVar::Int(x) => write!(f, "{}", x),
             LPCVar::String(x) => write!(f, "string with index {}", x),
             LPCVar::Array(x) => write!(f, "array with index {}", x),
+            LPCVar::StringConstant(x) => write!(f, "string (constant) with index {}", x),
         }
     }
 }

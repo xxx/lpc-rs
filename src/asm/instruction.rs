@@ -31,8 +31,9 @@ pub enum Instruction {
     /// Integer constant 1
     IConst1(Register),
 
-    /// String constant
-    SConst(Register, String),
+    /// String constant.
+    /// Store an index into the program's ConstantPool in the passed register
+    SConst(Register, usize),
 
     /// Integer division - x.2 = x.0 / x.1
     IDiv(Register, Register, Register),
@@ -84,8 +85,8 @@ impl Display for Instruction {
             Instruction::IConst0(r) => {
                 write!(f, "iconst0 {}", r)
             },
-            Instruction::SConst(r, s) => {
-                write!(f, "sconst {}, \"{}\"", r, s)
+            Instruction::SConst(r, i) => {
+                write!(f, "sconst {}, {}", r, i)
             },
             Instruction::IConst1(r) => {
                 write!(f, "iconst1 {}", r)

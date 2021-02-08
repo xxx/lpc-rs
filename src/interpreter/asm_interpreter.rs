@@ -10,6 +10,7 @@ use std::borrow::BorrowMut;
 
 /// The max size (in frames) of the call stack
 const MAX_STACK: usize = 1000;
+const MAX_MEMORY: usize = 100000;
 
 /// Convenience helper for registers
 macro_rules! int {
@@ -19,16 +20,16 @@ macro_rules! int {
 }
 
 /// Convenience helper for registers
-macro_rules! string {
+macro_rules! array {
     ($x:expr) => {
-        LPCVar::String($x)
+        LPCVar::Array($x)
     };
 }
 
 /// Convenience helper for registers
-macro_rules! array {
+macro_rules! string_constant {
     ($x:expr) => {
-        LPCVar::Array($x)
+        LPCVar::StringConstant($x)
     };
 }
 
@@ -67,8 +68,7 @@ macro_rules! array {
 /// let mut program = walker.to_program(filepath);
 ///
 /// // Load the program and run it
-/// let mut interpreter = AsmInterpreter::default();
-/// interpreter.load(program);
+/// let mut interpreter = AsmInterpreter::new(program);
 /// interpreter.exec();
 /// ```
 #[derive(Debug)]
@@ -79,6 +79,9 @@ pub struct AsmInterpreter {
     /// The call stack
     stack: Vec<StackFrame>,
 
+    /// Our memory
+    memory: Vec<LPCValue>,
+
     /// program counter
     pc: usize,
 
@@ -87,6 +90,12 @@ pub struct AsmInterpreter {
 }
 
 impl AsmInterpreter {
+    pub fn new(program: Program) -> Self {
+        let mut s = Self::default();
+        s.load(program);
+        s
+    }
+
     /// Load a program for evaluation
     ///
     /// # Arguments
@@ -134,12 +143,15 @@ impl AsmInterpreter {
         match var {
             LPCVar::Int(v) => LPCValue::Int(*v),
             LPCVar::String(i) => {
-                self.program.constants.get(*i).unwrap().clone()
+                self.memory.get(*i).unwrap().clone()
             },
             LPCVar::Array(i) => {
                 // not recursive
-                self.program.constants.get(*i).unwrap().clone()
+                self.memory.get(*i).unwrap().clone()
             }
+            LPCVar::StringConstant(i) => {
+                self.program.constants.get(*i).unwrap().clone()
+            },
         }
     }
 
@@ -174,7 +186,8 @@ impl AsmInterpreter {
                         .iter()
                         .map(|i| registers[i.index()])
                         .collect::<Vec<_>>();
-                    let index = self.program.constants.insert(LPCValue::from(vars));
+                    let index = self.memory.len();
+                    self.memory.push(LPCValue::from(vars));
                     let registers = self.current_registers();
                     registers[r.index()] = array!(index);
                 }
@@ -249,9 +262,8 @@ impl AsmInterpreter {
                     registers[r.index()] = int!(1);
                 },
                 Instruction::SConst(r, s) => {
-                    let index = self.program.constants.insert(LPCValue::from(s));
                     let registers = self.current_registers();
-                    registers[r.index()] = string!(index);
+                    registers[r.index()] = string_constant!(*s);
                 },
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = self.current_registers();
@@ -293,9 +305,9 @@ impl AsmInterpreter {
 
                     match val1 + val2 {
                         Ok(result) => {
-                            let index = self.program.constants.insert(result);
+                            let index = self.memory.len();
+                            self.memory.push(result);
 
-                            // set r3.index to the new constant index
                             let var = LPCVar::String(index);
                             let registers = self.current_registers();
                             registers[r3.index()] = var
@@ -313,9 +325,9 @@ impl AsmInterpreter {
                     let val2 = &self.resolve_register(r2.index());
                     match val1 / val2 {
                         Ok(result) => {
-                            let index = self.program.constants.insert(result);
+                            let index = self.memory.len();
+                            self.memory.push(result);
 
-                            // set r3.index to the new constant index
                             let var = LPCVar::String(index);
                             let registers = self.current_registers();
                             registers[r3.index()] = var
@@ -333,9 +345,9 @@ impl AsmInterpreter {
                     let val2 = &self.resolve_register(r2.index());
                     match val1 * val2 {
                         Ok(result) => {
-                            let index = self.program.constants.insert(result);
+                            let index = self.memory.len();
+                            self.memory.push(result);
 
-                            // set r3.index to the new constant index
                             let var = LPCVar::String(index);
                             let registers = self.current_registers();
                             registers[r3.index()] = var
@@ -353,9 +365,9 @@ impl AsmInterpreter {
                     let val2 = &self.resolve_register(r2.index());
                     match val1 - val2 {
                         Ok(result) => {
-                            let index = self.program.constants.insert(result);
+                            let index = self.memory.len();
+                            self.memory.push(result);
 
-                            // set r3.index to the new constant index
                             let var = LPCVar::String(index);
                             let registers = self.current_registers();
                             registers[r3.index()] = var
@@ -420,6 +432,7 @@ impl Default for AsmInterpreter {
         Self {
             program: Program::default(),
             stack: Vec::with_capacity(MAX_STACK),
+            memory: Vec::with_capacity(MAX_MEMORY),
             is_halted: true,
             pc: 0
         }
