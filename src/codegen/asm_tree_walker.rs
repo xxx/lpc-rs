@@ -574,7 +574,7 @@ mod tests {
                 .parse(call)
                 .unwrap();
 
-            walker.visit_call(&tree);
+            let _ = walker.visit_call(&tree);
 
             let expected = vec![
                 Instruction::IConst(Register(1), -1),
@@ -604,7 +604,7 @@ mod tests {
                 .parse(call)
                 .unwrap();
 
-            walker.visit_call(&tree);
+            let _ = walker.visit_call(&tree);
 
             let expected = vec![
                 Instruction::IConst(Register(1), 666),

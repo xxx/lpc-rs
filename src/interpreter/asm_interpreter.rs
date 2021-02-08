@@ -37,28 +37,37 @@ macro_rules! array {
 /// # Examples
 ///
 /// ```
+/// use std::borrow::BorrowMut;
 /// use lpc_rs::lpc_parser;
 /// use lpc_rs::codegen::tree_walker::TreeWalker;
 /// use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
 /// use lpc_rs::codegen::scope_walker::ScopeWalker;
 /// use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
 /// use lpc_rs::semantic::scope_tree::ScopeTree;
+/// use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
 ///
-/// let prog = "int main() { int b = 123; return b; }";
+/// let prog = r#"int main() { dump("hello, world"); int b = 123; return b; }"#;
 /// let program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
 /// let filepath = "path/to/myfile.c";
-/// let mut scope_walker = ScopeWalker::new(filepath);
 ///
 /// // Populate the symbol tables
-/// scope_walker.visit_program(&program_node);
+/// let mut scope_walker = ScopeWalker::new(filepath);
+/// let scope_result = scope_walker.visit_program(&program_node);
 ///
-/// let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker));
-/// let mut interpreter = AsmInterpreter::default();
+/// // Gather information about function default params
+/// let mut default_params_walker = DefaultParamsWalker::new();
+/// let params_result = default_params_walker.visit_program(&program_node);
 ///
+/// // Generate machine instructions
+/// let mut walker = AsmTreeWalker::new(
+///     ScopeTree::from(scope_walker),
+///     default_params_walker.into_functions()
+/// );
 /// walker.visit_program(&program_node);
-///
 /// let mut program = walker.to_program(filepath);
 ///
+/// // Load the program and run it
+/// let mut interpreter = AsmInterpreter::default();
 /// interpreter.load(program);
 /// interpreter.exec();
 /// ```
@@ -409,12 +418,8 @@ impl AsmInterpreter {
 impl Default for AsmInterpreter {
     fn default() -> Self {
         Self {
-            // instructions: vec![],
-            // labels: HashMap::new(),
-            // functions: HashMap::new(),
             program: Program::default(),
             stack: Vec::with_capacity(MAX_STACK),
-            // constants: ConstantPool::default(),
             is_halted: true,
             pc: 0
         }

@@ -13,13 +13,13 @@ use crate::semantic::function_prototype::FunctionPrototype;
 use crate::ast::call_node::CallNode;
 use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
 use crate::errors::compiler_error::unknown_function_error::UnknownFunctionError;
-use crate::errors::compiler_error::arg_count_error::ArgCountError;
 use crate::errors::compiler_error::arg_type_error::ArgTypeError;
 use crate::errors::compiler_error::return_type_error::ReturnTypeError;
 use crate::semantic::lpc_type::LPCType;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::function_def_node::FunctionDefNode;
+use crate::errors::compiler_error::arg_count_error::ArgCountError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -93,7 +93,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             let arg_len = node.arguments.len();
 
             // Check function arity.
-            if arg_len != prototype.num_args {
+            if !((prototype.num_args - prototype.num_default_args)..=prototype.num_args).contains(&arg_len) {
                 let e = CompilerError::ArgCountError(ArgCountError {
                     name: node.name.clone(),
                     expected: prototype.num_args,
@@ -245,6 +245,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
+        println!("ass: {:?}", node.lhs);
         let left_type = node_type(&node.lhs, self.scopes, &self.function_return_values());
         let right_type = node_type(&node.rhs, self.scopes, &self.function_return_values());
 
@@ -295,6 +296,7 @@ mod tests {
                 name: String::from("known"),
                 return_type: LPCType::Int(false),
                 num_args: 0,
+                num_default_args: 0,
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![]
@@ -312,7 +314,7 @@ mod tests {
         fn test_visit_call_allows_known_efuns() {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
-                name: "print".to_string(),
+                name: "dump".to_string(),
                 span: None
             });
 
@@ -358,6 +360,32 @@ mod tests {
         }
 
         #[test]
+        fn test_visit_call_understands_argument_defaults() {
+            let node = ExpressionNode::from(CallNode {
+                arguments: vec![],
+                name: "my_func".to_string(),
+                span: None
+            });
+
+            let mut functions = HashMap::new();
+            functions.insert(String::from("my_func"), FunctionPrototype {
+                name: String::from("my_func"),
+                return_type: LPCType::Int(false),
+                num_args: 1,
+                num_default_args: 1,
+                arg_types: vec![LPCType::String(false)],
+                span: None,
+                arg_spans: vec![]
+            });
+
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let _ = node.visit(walker.borrow_mut());
+            assert!(walker.errors.is_empty());
+        }
+
+        #[test]
         fn test_visit_call_disallows_invalid_arg_types() {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(123)],
@@ -370,6 +398,7 @@ mod tests {
                 name: String::from("my_func"),
                 return_type: LPCType::Int(false),
                 num_args: 1,
+                num_default_args: 0,
                 arg_types: vec![LPCType::String(false)],
                 span: None,
                 arg_spans: vec![]
@@ -395,6 +424,7 @@ mod tests {
                 name: String::from("my_func"),
                 return_type: LPCType::String(false),
                 num_args: 1,
+                num_default_args: 0,
                 arg_types: vec![LPCType::String(false)],
                 span: None,
                 arg_spans: vec![]

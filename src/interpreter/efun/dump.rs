@@ -16,7 +16,7 @@ fn print_array(arr: &Vec<LPCVar>, interpreter: &AsmInterpreter, indent: usize) {
 
 fn print_val(val: LPCValue, interpreter: &AsmInterpreter, indent: usize) {
     if let LPCValue::Array(a) = &val {
-        print_array(a, interpreter, 0);
+        print_array(a, interpreter, indent);
     } else {
         println!("{:width$}{}", "", val, width = indent);
     }
