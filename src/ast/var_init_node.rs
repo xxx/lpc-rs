@@ -10,7 +10,7 @@ use crate::errors::compiler_error::CompilerError;
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VarInitNode {
-    /// The LPC type. This is the "true" type, even for mixed vars.
+    /// The LPC type.
     pub type_: LPCType,
 
     /// The var name
