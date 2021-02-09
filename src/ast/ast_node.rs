@@ -60,6 +60,12 @@ impl From<ExpressionNode> for ASTNode {
     }
 }
 
+impl From<FunctionDefNode> for ASTNode {
+    fn from(node: FunctionDefNode) -> Self {
+        ASTNode::FunctionDef(node)
+    }
+}
+
 impl From<IntNode> for ASTNode {
     fn from(node: IntNode) -> Self {
         ASTNode::Expression(ExpressionNode::Int(node))
@@ -102,6 +108,20 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Expression(clone));
+    }
+
+    #[test]
+    fn test_from_function_def_node() {
+        let node = FunctionDefNode {
+            return_type: LPCType::Void,
+            name: "foo".to_string(),
+            parameters: vec![],
+            body: vec![],
+            span: None
+        };
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::FunctionDef(clone));
     }
 
     #[test]
