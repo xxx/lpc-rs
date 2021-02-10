@@ -39,7 +39,7 @@ SemiSeq<T>: Vec<T> = {
 };
 
 pub Program: ProgramNode = <body:FunctionDef*> => ProgramNode {
-    body
+    body: body.iter().map(|i| ASTNode::from(i.clone())).collect::<Vec<_>>()
 };
 
 pub FunctionDef: FunctionDefNode = {
