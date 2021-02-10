@@ -156,8 +156,14 @@ pub PrimaryExpression: ExpressionNode = {
     <String>,
     <Var>,
     "(" <Expression> ")",
-    "(" "{" <list:ExpressionList> "}" ")" => {
-        ExpressionNode::Array(ArrayNode::new(list))
+    "(" "{" <l:ExpressionList?> "}" ")" => {
+        let vec = if let Some(list) = l {
+            list
+        } else {
+            vec![]
+        };
+
+        ExpressionNode::Array(ArrayNode::new(vec))
     }
 };
 
