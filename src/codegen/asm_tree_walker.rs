@@ -531,6 +531,7 @@ mod tests {
     use crate::parser::span::Span;
     use crate::codegen::scope_walker::ScopeWalker;
     use std::borrow::BorrowMut;
+    use crate::ast::ast_node::ASTNode;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -775,16 +776,22 @@ mod tests {
         let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
         let call = "int main(int i) { return i + 4; }";
-        let tree = lpc_parser::FunctionDefParser::new()
+        let tree = lpc_parser::DefParser::new()
             .parse(call)
             .unwrap();
 
-        let _ = scope_walker.visit_function_def(&tree);
+        let node = if let ASTNode::FunctionDef(node) = tree {
+            node
+        } else {
+            panic!("Didn't receive a function def?");
+        };
+
+        let _ = scope_walker.visit_function_def(&node);
 
         let mut scopes = ScopeTree::from(scope_walker);
         scopes.goto_root();
         walker.scopes = scopes;
-        let _ = walker.visit_function_def(&tree);
+        let _ = walker.visit_function_def(&node);
 
         let expected = vec![
             Instruction::IConst(Register(2), 4),

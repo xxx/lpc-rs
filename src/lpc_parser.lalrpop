@@ -38,38 +38,78 @@ SemiSeq<T>: Vec<T> = {
     }
 };
 
-pub Program: ProgramNode = <body:FunctionDef*> => ProgramNode {
+pub Program: ProgramNode = <body:Def*> => ProgramNode {
     body: body.iter().map(|i| ASTNode::from(i.clone())).collect::<Vec<_>>()
 };
 
-pub FunctionDef: FunctionDefNode = {
+pub Def: ASTNode = {
     <l:@L> <r_type:Type?> <star:"*"?> <name:ID> <parameters:Parameters> <r:@R> "{" <body:SemiSeq<Statement>> "}" => {
-        let array = star.is_some();
+         let array = star.is_some();
 
-        let return_type = if let Some(this_type) = r_type {
-            match this_type.as_str() {
-                "void" => LPCType::Void,
-                "int" => LPCType::Int(array),
-                "string" => LPCType::String(array),
-                // "float" => LPCType::Float(array),
-                // "object" => LPCType::Object(array),
-                // "mapping" => LPCType::Mapping(array),
-                "mixed" => LPCType::Mixed(array),
-                _ => unimplemented!()
-            }
-        } else {
-            LPCType::Int(array)
-        };
+         let return_type = if let Some(this_type) = r_type {
+             match this_type.as_str() {
+                 "void" => LPCType::Void,
+                 "int" => LPCType::Int(array),
+                 "string" => LPCType::String(array),
+                 // "float" => LPCType::Float(array),
+                 // "object" => LPCType::Object(array),
+                 // "mapping" => LPCType::Mapping(array),
+                 "mixed" => LPCType::Mixed(array),
+                 _ => unimplemented!()
+             }
+         } else {
+             LPCType::Int(array)
+         };
 
-        FunctionDefNode {
+        let node = FunctionDefNode {
             name,
             parameters,
             body,
             return_type,
             span: Some(Span { l, r })
+        };
+
+        ASTNode::from(node)
+    },
+    <l:@L> <type_:Type> <list:NameList> ";" <r:@R> => {
+        let new_type = LPCType::from(type_);
+        let mut initializations = list.to_vec();
+
+        // Update each VarInitNode with the correct type.
+        for init in &mut initializations {
+            init.update_type(new_type)
         }
-    }
+
+        let node = DeclNode {
+            type_: new_type,
+            initializations
+        };
+
+        ASTNode::from(node)
+    },
 };
+
+NameList: Vec<VarInitNode> = {
+    <name:NewName> <list:("," <NameList>)?> => {
+        let mut initializations = vec![name];
+
+        if let Some(inits) = list {
+            initializations.append(inits.to_vec().as_mut());
+        }
+
+        initializations
+    },
+};
+
+NewName: VarInitNode = {
+    <l:@L> <star:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> <r:@R> => VarInitNode {
+        type_: LPCType::Int(false), // corrected later
+        name,
+        value,
+        array: star.is_some(),
+        span: Some(Span { l, r })
+    }
+}
 
 Parameters: Vec<VarInitNode> = {
     "(" <parm:Parameter?> ")" => {
