@@ -295,7 +295,7 @@ impl AsmTreeWalker {
 impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
         self.scopes.goto_root();
-        for expr in &program.functions {
+        for expr in &program.body {
             expr.visit(self)?
         }
         self.scopes.pop();

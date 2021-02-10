@@ -9,7 +9,7 @@ use crate::errors::compiler_error::CompilerError;
 #[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct ProgramNode {
     /// The list of function defs for this program
-    pub functions: Vec<FunctionDefNode>
+    pub body: Vec<FunctionDefNode>
 }
 
 impl ASTNodeTrait for ProgramNode {

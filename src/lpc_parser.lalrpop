@@ -38,8 +38,8 @@ SemiSeq<T>: Vec<T> = {
     }
 };
 
-pub Program: ProgramNode = <functions:FunctionDef*> => ProgramNode {
-    functions
+pub Program: ProgramNode = <body:FunctionDef*> => ProgramNode {
+    body
 };
 
 pub FunctionDef: FunctionDefNode = {

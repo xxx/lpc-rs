@@ -23,7 +23,7 @@ pub trait TreeWalker {
 
     /// Visit a program node. This is the top-level translation unit.
     fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> where Self: Sized {
-        for expr in &node.functions {
+        for expr in &node.body {
             expr.visit(self)?;
         }
 

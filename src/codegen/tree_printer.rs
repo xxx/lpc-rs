@@ -52,7 +52,7 @@ impl TreeWalker for TreePrinter {
     fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
         println!("Program");
         self.indent += 2;
-        for expr in &program.functions {
+        for expr in &program.body {
             expr.visit(self)?;
         }
         self.indent -= 2;

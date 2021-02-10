@@ -59,7 +59,7 @@ impl TreeWalker for ScopeWalker {
         // Push the global scope
         self.scopes.push_new();
 
-        for expr in &node.functions {
+        for expr in &node.body {
             expr.visit(self)?;
         }
 
