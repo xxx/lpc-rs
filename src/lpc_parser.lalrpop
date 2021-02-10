@@ -43,6 +43,11 @@ pub Program: ProgramNode = <body:Def*> => ProgramNode {
 };
 
 pub Def: ASTNode = {
+    <FunctionDef> => ASTNode::from(<>),
+    <Decl> ";" => ASTNode::from(<>)
+};
+
+FunctionDef: FunctionDefNode = {
     <l:@L> <r_type:Type?> <star:"*"?> <name:ID> <parameters:Parameters> <r:@R> "{" <body:SemiSeq<Statement>> "}" => {
          let array = star.is_some();
 
@@ -61,54 +66,14 @@ pub Def: ASTNode = {
              LPCType::Int(array)
          };
 
-        let node = FunctionDefNode {
+        FunctionDefNode {
             name,
             parameters,
             body,
             return_type,
             span: Some(Span { l, r })
-        };
-
-        ASTNode::from(node)
-    },
-    <l:@L> <type_:Type> <list:NameList> ";" <r:@R> => {
-        let new_type = LPCType::from(type_);
-        let mut initializations = list.to_vec();
-
-        // Update each VarInitNode with the correct type.
-        for init in &mut initializations {
-            init.update_type(new_type)
         }
-
-        let node = DeclNode {
-            type_: new_type,
-            initializations
-        };
-
-        ASTNode::from(node)
     },
-};
-
-NameList: Vec<VarInitNode> = {
-    <name:NewName> <list:("," <NameList>)?> => {
-        let mut initializations = vec![name];
-
-        if let Some(inits) = list {
-            initializations.append(inits.to_vec().as_mut());
-        }
-
-        initializations
-    },
-};
-
-NewName: VarInitNode = {
-    <l:@L> <star:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> <r:@R> => VarInitNode {
-        type_: LPCType::Int(false), // corrected later
-        name,
-        value,
-        array: star.is_some(),
-        span: Some(Span { l, r })
-    }
 }
 
 Parameters: Vec<VarInitNode> = {
