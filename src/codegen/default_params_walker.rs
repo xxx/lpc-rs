@@ -54,6 +54,7 @@ mod tests {
                 name: "i".to_string(),
                 value: None,
                 array: false,
+                global: false,
                 span: None
             },
             VarInitNode {
@@ -61,6 +62,7 @@ mod tests {
                 name: "s".to_string(),
                 value: Some(ExpressionNode::from("marf")),
                 array: false,
+                global: false,
                 span: None
             },
         ];

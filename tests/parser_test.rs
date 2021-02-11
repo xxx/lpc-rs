@@ -3,6 +3,96 @@ use lpc_rs::ast::int_node::IntNode;
 use lpc_rs::ast::expression_node::ExpressionNode;
 use lpc_rs::ast::string_node::StringNode;
 use lpc_rs::parser::span::Span;
+use lpc_rs::ast::program_node::ProgramNode;
+use lpc_rs::ast::var_init_node::VarInitNode;
+use lpc_rs::semantic::lpc_type::LPCType;
+use lpc_rs::ast::var_node::VarNode;
+use lpc_rs::ast::decl_node::DeclNode;
+use lpc_rs::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
+use lpc_rs::ast::ast_node::ASTNode;
+
+#[test]
+fn test_program_global_vars() {
+    let prog = "int i = 123; int j = i - 8; string *k;";
+    let node = lpc_parser::ProgramParser::new()
+        .parse(prog)
+        .unwrap();
+
+    let expected = ProgramNode {
+        body: vec![
+            ASTNode::from(
+                DeclNode {
+                    type_: LPCType::Int(false),
+                    initializations: vec![
+                        VarInitNode {
+                            type_: LPCType::Int(false),
+                            name: "i".to_string(),
+                            value: Some(
+                                ExpressionNode::Int(
+                                    IntNode { value: 123, span: Some(Span { l: 8, r: 11 }) }
+                                )
+                            ),
+                            array: false,
+                            global: true,
+                            span: Some(Span { l: 4, r: 11 })
+                        }
+                    ]
+                }
+            ),
+            ASTNode::from(
+                DeclNode {
+                    type_: LPCType::Int(false),
+                    initializations: vec![
+                        VarInitNode {
+                            type_: LPCType::Int(false),
+                            name: "j".to_string(),
+                            value: Some(
+                                ExpressionNode::BinaryOp(
+                                    BinaryOpNode {
+                                        l: Box::new(
+                                            ExpressionNode::Var(
+                                                VarNode {
+                                                    name: "i".to_string(),
+                                                    span: Some(Span { l: 21, r: 22 })
+                                                }
+                                            )
+                                        ),
+                                        r: Box::new(ExpressionNode::Int(IntNode {
+                                            value: 8,
+                                            span: Some(Span { l: 25, r: 26 })
+                                        })),
+                                        op: BinaryOperation::Sub,
+                                        span: Some(Span { l: 21, r: 26 })
+                                    }
+                                )
+                            ),
+                            array: false,
+                            global: true,
+                            span: Some(Span { l: 17, r: 26 })
+                        }
+                    ]
+                }
+            ),
+            ASTNode::from(
+                DeclNode {
+                    type_: LPCType::String(true),
+                    initializations: vec![
+                        VarInitNode {
+                            type_: LPCType::String(true),
+                            name: "k".to_string(),
+                            value: None,
+                            array: true,
+                            global: true,
+                            span: Some(Span { l: 35, r: 37 })
+                        }
+                    ]
+                }
+            )
+        ]
+    };
+
+    assert_eq!(node, expected);
+}
 
 #[test]
 fn test_operator_precedence_add_first() {

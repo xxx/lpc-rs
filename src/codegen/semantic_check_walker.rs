@@ -547,6 +547,7 @@ mod tests {
                 type_: LPCType::Int(false),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
+                global: false,
                 span: None
             };
 
@@ -566,6 +567,7 @@ mod tests {
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
+                global: false,
                 span: None
             };
 
@@ -585,6 +587,7 @@ mod tests {
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
+                global: false,
                 span: None
             };
 
@@ -723,6 +726,7 @@ mod tests {
                     name: "foo".to_string(),
                     value: Some(ExpressionNode::from(0)),
                     array: false,
+                    global: false,
                     span: None
                 };
 
@@ -742,6 +746,7 @@ mod tests {
                     name: "foo".to_string(),
                     value: Some(ExpressionNode::from(324)),
                     array: false,
+                    global: false,
                     span: None
                 };
 
@@ -777,6 +782,7 @@ mod tests {
                     name: "foo".to_string(),
                     value: Some(ExpressionNode::from(123)),
                     array: false,
+                    global: false,
                     span: None
                 };
 

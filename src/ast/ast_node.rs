@@ -96,6 +96,12 @@ impl From<DeclNode> for ASTNode {
     }
 }
 
+impl From<VarInitNode> for ASTNode {
+    fn from(node: VarInitNode) -> Self {
+        ASTNode::VarInit(node)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,5 +173,20 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Decl(clone));
+    }
+
+    #[test]
+    fn test_from_var_init_node() {
+        let node = VarInitNode {
+            type_: LPCType::String(true),
+            name: "tacos".to_string(),
+            value: None,
+            array: false,
+            global: false,
+            span: None
+        };
+        let clone = node.clone();
+
+        assert_eq!(ASTNode::from(node), ASTNode::VarInit(clone));
     }
 }

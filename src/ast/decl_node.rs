@@ -12,7 +12,7 @@ pub struct DeclNode {
     /// The declared type
     pub type_: LPCType,
     /// The list of variables, with their optional initializations
-    pub initializations: Vec<VarInitNode>,
+    pub initializations: Vec<VarInitNode>
 }
 
 impl DeclNode {

@@ -61,7 +61,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
         }
     };
 
-    // println!("{:?}", program);
+    println!("{:?}", program);
 
     let mut walker = TreePrinter::new();
     let _ = program.visit(&mut walker);

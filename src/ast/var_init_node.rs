@@ -22,6 +22,9 @@ pub struct VarInitNode {
     /// Is this var actually an array?
     pub array: bool,
 
+    /// Is this var a global variable?
+    pub global: bool,
+
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>
 }
@@ -68,6 +71,7 @@ mod tests {
             name: "marf".to_string(),
             value: None,
             array: true,
+            global: false,
             span: None
         };
 
