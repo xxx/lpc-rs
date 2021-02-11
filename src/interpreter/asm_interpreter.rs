@@ -9,9 +9,14 @@ use crate::{
 };
 use std::borrow::BorrowMut;
 
-/// The max size (in frames) of the call stack
-const MAX_STACK: usize = 1000;
-const MAX_MEMORY: usize = 100000;
+/// The initial size (in frames) of the call stack
+const STACK_SIZE: usize = 1000;
+
+/// The initial size (in `Copy`-able cells) of system memory
+const MEMORY_SIZE: usize = 100000;
+
+/// The initial size of the globals vector
+const GLOBALS_SIZE: usize = 100;
 
 /// Convenience helper for registers
 macro_rules! int {
@@ -82,6 +87,9 @@ pub struct AsmInterpreter {
 
     /// Our memory
     memory: Vec<LPCValue>,
+
+    /// Registers that hold global variables
+    globals: Vec<LPCVar>,
 
     /// program counter
     pc: usize,
@@ -422,8 +430,9 @@ impl Default for AsmInterpreter {
     fn default() -> Self {
         Self {
             program: Program::default(),
-            stack: Vec::with_capacity(MAX_STACK),
-            memory: Vec::with_capacity(MAX_MEMORY),
+            stack: Vec::with_capacity(STACK_SIZE),
+            memory: Vec::with_capacity(MEMORY_SIZE),
+            globals: Vec::with_capacity(GLOBALS_SIZE),
             is_halted: true,
             pc: 0,
         }
