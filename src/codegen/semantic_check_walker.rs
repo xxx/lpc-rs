@@ -1,25 +1,24 @@
+use crate::{
+    ast::{
+        assignment_node::AssignmentNode, ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode,
+        call_node::CallNode, expression_node::ExpressionNode, function_def_node::FunctionDefNode,
+        int_node::IntNode, return_node::ReturnNode, var_init_node::VarInitNode,
+    },
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::{
+        arg_count_error::ArgCountError, arg_type_error::ArgTypeError,
+        assignment_error::AssignmentError, return_type_error::ReturnTypeError,
+        unknown_function_error::UnknownFunctionError, CompilerError,
+    },
+    interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
+    semantic::{
+        function_prototype::FunctionPrototype,
+        lpc_type::LPCType,
+        scope_tree::ScopeTree,
+        semantic_checks::{check_binary_operation_types, node_type},
+    },
+};
 use std::collections::HashMap;
-use crate::semantic::scope_tree::ScopeTree;
-use crate::codegen::tree_walker::TreeWalker;
-use crate::errors::compiler_error::CompilerError;
-use crate::ast::binary_op_node::BinaryOpNode;
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::semantic::semantic_checks::{check_binary_operation_types, node_type};
-use crate::ast::assignment_node::AssignmentNode;
-use crate::errors::compiler_error::assignment_error::AssignmentError;
-use crate::ast::int_node::IntNode;
-use crate::ast::expression_node::ExpressionNode;
-use crate::semantic::function_prototype::FunctionPrototype;
-use crate::ast::call_node::CallNode;
-use crate::interpreter::efun::{EFUNS, EFUN_PROTOTYPES};
-use crate::errors::compiler_error::unknown_function_error::UnknownFunctionError;
-use crate::errors::compiler_error::arg_type_error::ArgTypeError;
-use crate::errors::compiler_error::return_type_error::ReturnTypeError;
-use crate::semantic::lpc_type::LPCType;
-use crate::ast::var_init_node::VarInitNode;
-use crate::ast::return_node::ReturnNode;
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::errors::compiler_error::arg_count_error::ArgCountError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker<'a> {
@@ -38,25 +37,25 @@ pub struct SemanticCheckWalker<'a> {
 }
 
 impl<'a> SemanticCheckWalker<'a> {
-    pub fn new(scopes: &'a ScopeTree,
-               function_prototypes: &'a HashMap<String, FunctionPrototype>) -> Self {
+    pub fn new(
+        scopes: &'a ScopeTree,
+        function_prototypes: &'a HashMap<String, FunctionPrototype>,
+    ) -> Self {
         Self {
             scopes,
             function_prototypes,
             errors: vec![],
-            current_function: None
+            current_function: None,
         }
     }
 
     /// A transformation helper to get a map of function names to their return values.
     fn function_return_values(&self) -> HashMap<&str, LPCType> {
-        self
-            .function_prototypes
+        self.function_prototypes
             .keys()
             .map(|k| k.as_str())
-            .zip(
-                self.function_prototypes.values().map(|v| v.return_type)
-            ).collect::<HashMap<_, _>>()
+            .zip(self.function_prototypes.values().map(|v| v.return_type))
+            .collect::<HashMap<_, _>>()
     }
 }
 
@@ -71,10 +70,12 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         }
 
         // Check function existence.
-        if !self.function_prototypes.contains_key(&node.name) && !EFUNS.contains_key(node.name.as_str()) {
+        if !self.function_prototypes.contains_key(&node.name)
+            && !EFUNS.contains_key(node.name.as_str())
+        {
             let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
                 name: node.name.clone(),
-                span: node.span
+                span: node.span,
             });
             self.errors.push(e);
             // Non-fatal. Continue.
@@ -93,13 +94,15 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
             let arg_len = node.arguments.len();
 
             // Check function arity.
-            if !((prototype.num_args - prototype.num_default_args)..=prototype.num_args).contains(&arg_len) {
+            if !((prototype.num_args - prototype.num_default_args)..=prototype.num_args)
+                .contains(&arg_len)
+            {
                 let e = CompilerError::ArgCountError(ArgCountError {
                     name: node.name.clone(),
                     expected: prototype.num_args,
                     actual: arg_len,
                     span: node.span,
-                    prototype_span: prototype.span
+                    prototype_span: prototype.span,
                 });
                 self.errors.push(e);
             }
@@ -111,22 +114,19 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     if let ExpressionNode::Int(IntNode { value: 0, .. }) = *arg {
                         // sigh.
                     } else {
-                        let arg_type = node_type(
-                            arg,
-                            self.scopes,
-                            &self.function_return_values()
-                        );
+                        let arg_type = node_type(arg, self.scopes, &self.function_return_values());
                         if !ty.matches_type(arg_type) {
                             self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
                                 name: node.name.clone(),
                                 type_: arg_type,
                                 expected: *ty,
                                 span: arg.span(),
-                                declaration_span: if let Some(span) = prototype.arg_spans.get(index) {
+                                declaration_span: if let Some(span) = prototype.arg_spans.get(index)
+                                {
                                     Some(*span)
                                 } else {
                                     None
-                                }
+                                },
                             }));
                         }
                     }
@@ -175,18 +175,16 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 if let ExpressionNode::Int(IntNode { value: 0, .. }) = expression {
                     // returning a literal 0 is allowable for any type, including void.
                 } else {
-                    let return_type = node_type(
-                        expression,
-                        self.scopes,
-                        &self.function_return_values()
-                    );
+                    let return_type =
+                        node_type(expression, self.scopes, &self.function_return_values());
 
-                    if function_def.return_type == LPCType::Void ||
-                        !function_def.return_type.matches_type(return_type) {
+                    if function_def.return_type == LPCType::Void
+                        || !function_def.return_type.matches_type(return_type)
+                    {
                         let error = CompilerError::ReturnTypeError(ReturnTypeError {
                             type_: return_type,
                             expected: function_def.return_type,
-                            span: node.span
+                            span: node.span,
                         });
 
                         self.errors.push(error);
@@ -196,7 +194,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 let error = CompilerError::ReturnTypeError(ReturnTypeError {
                     type_: LPCType::Void,
                     expected: function_def.return_type,
-                    span: node.span
+                    span: node.span,
                 });
 
                 self.errors.push(error);
@@ -210,11 +208,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         if let Some(expression) = &node.value {
             expression.visit(self)?;
 
-            let expr_type = node_type(
-                expression,
-                self.scopes,
-                &self.function_return_values()
-            );
+            let expr_type = node_type(expression, self.scopes, &self.function_return_values());
 
             let ret = if node.type_.matches_type(expr_type) {
                 Ok(())
@@ -227,7 +221,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     left_type: node.type_,
                     right_name: expression.to_string(),
                     right_type: expr_type,
-                    span: node.span
+                    span: node.span,
                 });
 
                 self.errors.push(e.clone());
@@ -260,7 +254,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 left_type,
                 right_name: format!("{}", node.rhs),
                 right_type,
-                span: node.span
+                span: node.span,
             });
 
             self.errors.push(e.clone());
@@ -273,12 +267,14 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::expression_node::ExpressionNode;
-    use crate::ast::assignment_node::AssignmentOperation;
-    use crate::semantic::symbol::Symbol;
-    use crate::semantic::lpc_type::LPCType;
+    use crate::{
+        ast::{
+            assignment_node::AssignmentOperation, expression_node::ExpressionNode,
+            var_node::VarNode,
+        },
+        semantic::{lpc_type::LPCType, symbol::Symbol},
+    };
     use std::borrow::BorrowMut;
-    use crate::ast::var_node::VarNode;
 
     mod test_visit_call {
         use super::*;
@@ -288,19 +284,22 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "known".to_string(),
-                span: None
+                span: None,
             });
 
             let mut functions = HashMap::new();
-            functions.insert(String::from("known"), FunctionPrototype {
-                name: String::from("known"),
-                return_type: LPCType::Int(false),
-                num_args: 0,
-                num_default_args: 0,
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![]
-            });
+            functions.insert(
+                String::from("known"),
+                FunctionPrototype {
+                    name: String::from("known"),
+                    return_type: LPCType::Int(false),
+                    num_args: 0,
+                    num_default_args: 0,
+                    arg_types: vec![],
+                    span: None,
+                    arg_spans: vec![],
+                },
+            );
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -315,7 +314,7 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "dump".to_string(),
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -332,7 +331,7 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "unknown".to_string(),
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -348,7 +347,7 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "print".to_string(),
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -364,19 +363,22 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "my_func".to_string(),
-                span: None
+                span: None,
             });
 
             let mut functions = HashMap::new();
-            functions.insert(String::from("my_func"), FunctionPrototype {
-                name: String::from("my_func"),
-                return_type: LPCType::Int(false),
-                num_args: 1,
-                num_default_args: 1,
-                arg_types: vec![LPCType::String(false)],
-                span: None,
-                arg_spans: vec![]
-            });
+            functions.insert(
+                String::from("my_func"),
+                FunctionPrototype {
+                    name: String::from("my_func"),
+                    return_type: LPCType::Int(false),
+                    num_args: 1,
+                    num_default_args: 1,
+                    arg_types: vec![LPCType::String(false)],
+                    span: None,
+                    arg_spans: vec![],
+                },
+            );
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -390,19 +392,22 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(123)],
                 name: "my_func".to_string(),
-                span: None
+                span: None,
             });
 
             let mut functions = HashMap::new();
-            functions.insert(String::from("my_func"), FunctionPrototype {
-                name: String::from("my_func"),
-                return_type: LPCType::Int(false),
-                num_args: 1,
-                num_default_args: 0,
-                arg_types: vec![LPCType::String(false)],
-                span: None,
-                arg_spans: vec![]
-            });
+            functions.insert(
+                String::from("my_func"),
+                FunctionPrototype {
+                    name: String::from("my_func"),
+                    return_type: LPCType::Int(false),
+                    num_args: 1,
+                    num_default_args: 0,
+                    arg_types: vec![LPCType::String(false)],
+                    span: None,
+                    arg_spans: vec![],
+                },
+            );
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -416,19 +421,22 @@ mod tests {
             let node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(0)],
                 name: "my_func".to_string(),
-                span: None
+                span: None,
             });
 
             let mut functions = HashMap::new();
-            functions.insert(String::from("my_func"), FunctionPrototype {
-                name: String::from("my_func"),
-                return_type: LPCType::String(false),
-                num_args: 1,
-                num_default_args: 0,
-                arg_types: vec![LPCType::String(false)],
-                span: None,
-                arg_spans: vec![]
-            });
+            functions.insert(
+                String::from("my_func"),
+                FunctionPrototype {
+                    name: String::from("my_func"),
+                    return_type: LPCType::String(false),
+                    num_args: 1,
+                    num_default_args: 0,
+                    arg_types: vec![LPCType::String(false)],
+                    span: None,
+                    arg_spans: vec![],
+                },
+            );
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -448,7 +456,7 @@ mod tests {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
                 op: BinaryOperation::Add,
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -466,7 +474,7 @@ mod tests {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(123)),
                 op: BinaryOperation::Sub,
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -488,7 +496,7 @@ mod tests {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
                 op: AssignmentOperation::Simple,
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -506,7 +514,7 @@ mod tests {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
                 op: AssignmentOperation::Simple,
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -524,7 +532,7 @@ mod tests {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
                 op: AssignmentOperation::Simple,
-                span: None
+                span: None,
             });
 
             let functions = HashMap::new();
@@ -548,7 +556,7 @@ mod tests {
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             };
 
             let functions = HashMap::new();
@@ -568,7 +576,7 @@ mod tests {
                 value: Some(ExpressionNode::from(0)),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             };
 
             let functions = HashMap::new();
@@ -588,7 +596,7 @@ mod tests {
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             };
 
             let functions = HashMap::new();
@@ -611,12 +619,12 @@ mod tests {
             fn test_visit_return() {
                 let void_node = ReturnNode {
                     value: None, // indicates a Void return value.
-                    span: None
+                    span: None,
                 };
 
                 let int_node = ReturnNode {
                     value: Some(ExpressionNode::from(100)),
-                    span: None
+                    span: None,
                 };
 
                 let void_function_def = FunctionDefNode {
@@ -624,7 +632,7 @@ mod tests {
                     name: "foo".to_string(),
                     parameters: vec![],
                     body: vec![],
-                    span: None
+                    span: None,
                 };
 
                 let int_function_def = FunctionDefNode {
@@ -632,7 +640,7 @@ mod tests {
                     name: "snuh".to_string(),
                     parameters: vec![],
                     body: vec![],
-                    span: None
+                    span: None,
                 };
 
                 let functions = HashMap::new();
@@ -666,7 +674,7 @@ mod tests {
             fn test_visit_return_allows_0() {
                 let node = ReturnNode {
                     value: Some(ExpressionNode::from(0)),
-                    span: None
+                    span: None,
                 };
 
                 let void_function_def = FunctionDefNode {
@@ -674,7 +682,7 @@ mod tests {
                     name: "foo".to_string(),
                     parameters: vec![],
                     body: vec![],
-                    span: None
+                    span: None,
                 };
 
                 let functions = HashMap::new();
@@ -691,7 +699,7 @@ mod tests {
             fn test_visit_return_allows_mixed() {
                 let node = ReturnNode {
                     value: Some(ExpressionNode::from(123)),
-                    span: None
+                    span: None,
                 };
 
                 let function_def = FunctionDefNode {
@@ -699,7 +707,7 @@ mod tests {
                     name: "foo".to_string(),
                     parameters: vec![],
                     body: vec![],
-                    span: None
+                    span: None,
                 };
 
                 let functions = HashMap::new();
@@ -727,7 +735,7 @@ mod tests {
                     value: Some(ExpressionNode::from(0)),
                     array: false,
                     global: false,
-                    span: None
+                    span: None,
                 };
 
                 let functions = HashMap::new();
@@ -747,7 +755,7 @@ mod tests {
                     value: Some(ExpressionNode::from(324)),
                     array: false,
                     global: false,
-                    span: None
+                    span: None,
                 };
 
                 let var_node = VarNode::new("foo");
@@ -756,7 +764,7 @@ mod tests {
                     lhs: Box::new(ExpressionNode::Var(var_node)),
                     rhs: Box::new(ExpressionNode::from("foobar")),
                     op: AssignmentOperation::Simple,
-                    span: None
+                    span: None,
                 };
 
                 let functions = HashMap::new();
@@ -783,7 +791,7 @@ mod tests {
                     value: Some(ExpressionNode::from(123)),
                     array: false,
                     global: false,
-                    span: None
+                    span: None,
                 };
 
                 let functions = HashMap::new();

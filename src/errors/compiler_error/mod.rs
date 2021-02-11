@@ -2,24 +2,24 @@ pub mod arg_count_error;
 pub mod arg_type_error;
 pub mod assignment_error;
 pub mod binary_operation_error;
-pub mod var_redefinition_error;
 pub mod parse_error;
 pub mod return_type_error;
 pub mod undefined_var_error;
 pub mod unknown_function_error;
+pub mod var_redefinition_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
-use parse_error::ParseError;
-use binary_operation_error::BinaryOperationError;
-use var_redefinition_error::VarRedefinitionError;
-use assignment_error::AssignmentError;
-use unknown_function_error::UnknownFunctionError;
+use crate::errors::LPCError;
 use arg_count_error::ArgCountError;
 use arg_type_error::ArgTypeError;
+use assignment_error::AssignmentError;
+use binary_operation_error::BinaryOperationError;
+use parse_error::ParseError;
 use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
-use crate::errors::LPCError;
+use unknown_function_error::UnknownFunctionError;
+use var_redefinition_error::VarRedefinitionError;
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
@@ -49,9 +49,10 @@ impl LPCError for CompilerError {
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
             CompilerError::ReturnTypeError(err) => err.to_diagnostics(file_id),
             CompilerError::UndefinedVarError(err) => err.to_diagnostics(file_id),
-            CompilerError::MultiError(errs) => {
-                errs.iter().flat_map(|e| e.to_diagnostics(file_id) ).collect()
-            }
+            CompilerError::MultiError(errs) => errs
+                .iter()
+                .flat_map(|e| e.to_diagnostics(file_id))
+                .collect(),
         }
     }
 }

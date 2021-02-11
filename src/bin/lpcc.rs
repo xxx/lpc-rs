@@ -1,19 +1,18 @@
-use std::{env, fs};
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, env, fs};
 
-use lpc_rs::{errors, lpc_parser};
-use lpc_rs::ast::ast_node::ASTNodeTrait;
-use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
-use lpc_rs::codegen::scope_walker::ScopeWalker;
-use lpc_rs::codegen::semantic_check_walker::SemanticCheckWalker;
-use lpc_rs::codegen::tree_printer::TreePrinter;
-use lpc_rs::codegen::tree_walker::TreeWalker;
-use lpc_rs::errors::compiler_error::CompilerError;
-use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
-use lpc_rs::interpreter::program::Program;
-use lpc_rs::errors::compiler_error::parse_error::ParseError;
-use lpc_rs::semantic::scope_tree::ScopeTree;
-use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
+use lpc_rs::{
+    ast::ast_node::ASTNodeTrait,
+    codegen::{
+        asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
+        scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
+        tree_printer::TreePrinter, tree_walker::TreeWalker,
+    },
+    errors,
+    errors::compiler_error::{parse_error::ParseError, CompilerError},
+    interpreter::{asm_interpreter::AsmInterpreter, program::Program},
+    lpc_parser,
+    semantic::scope_tree::ScopeTree,
+};
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -33,8 +32,8 @@ fn main() {
             interpreter.load(program);
 
             if let Err(e) = interpreter.exec() {
-                let file_content =
-                    fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
+                let file_content = fs::read_to_string(filename)
+                    .unwrap_or_else(|_| panic!("cannot read file: {}", filename));
                 errors::emit_diagnostics(filename, &file_content, &[e]);
             }
         }

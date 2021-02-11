@@ -1,11 +1,17 @@
-use crate::ast::ast_node::{ASTNodeTrait, ASTNode};
-use crate::codegen::tree_walker::TreeWalker;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::ast::var_init_node::VarInitNode;
-use crate::parser::span::Span;
-use crate::semantic::lpc_type::LPCType;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{
+        ast_node::{ASTNode, ASTNodeTrait},
+        var_init_node::VarInitNode,
+    },
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
+    semantic::lpc_type::LPCType,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// A node representation a function definition
 #[derive(Debug, Eq, PartialEq)]
@@ -14,7 +20,7 @@ pub struct FunctionDefNode {
     pub name: String,
     pub parameters: Vec<VarInitNode>,
     pub body: Vec<ASTNode>,
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl ASTNodeTrait for FunctionDefNode {
@@ -26,7 +32,11 @@ impl ASTNodeTrait for FunctionDefNode {
 
 impl Display for FunctionDefNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "FunctionDefNode[{}, {} {:?} {:?}]", self.return_type, self.name, self.parameters, self.body)
+        write!(
+            f,
+            "FunctionDefNode[{}, {} {:?} {:?}]",
+            self.return_type, self.name, self.parameters, self.body
+        )
     }
 }
 

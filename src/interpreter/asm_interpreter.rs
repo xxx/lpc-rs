@@ -1,11 +1,12 @@
-use crate::asm::instruction::Instruction;
-use crate::semantic::function_symbol::FunctionSymbol;
-use crate::interpreter::efun::EFUNS;
-use crate::interpreter::stack_frame::StackFrame;
-use crate::interpreter::lpc_var::LPCVar;
-use crate::interpreter::lpc_value::LPCValue;
-use crate::interpreter::program::Program;
-use crate::errors::runtime_error::RuntimeError;
+use crate::{
+    asm::instruction::Instruction,
+    errors::runtime_error::RuntimeError,
+    interpreter::{
+        efun::EFUNS, lpc_value::LPCValue, lpc_var::LPCVar, program::Program,
+        stack_frame::StackFrame,
+    },
+    semantic::function_symbol::FunctionSymbol,
+};
 use std::borrow::BorrowMut;
 
 /// The max size (in frames) of the call stack
@@ -86,7 +87,7 @@ pub struct AsmInterpreter {
     pc: usize,
 
     /// Is the machine halted?
-    is_halted: bool
+    is_halted: bool,
 }
 
 impl AsmInterpreter {
@@ -112,9 +113,9 @@ impl AsmInterpreter {
                 name: "main".to_string(),
                 num_args: 0,
                 num_locals: 200,
-                address: 0
+                address: 0,
             },
-            0
+            0,
         );
         self.push_frame(main);
 
@@ -142,16 +143,12 @@ impl AsmInterpreter {
     pub fn resolve_var(&self, var: &LPCVar) -> LPCValue {
         match var {
             LPCVar::Int(v) => LPCValue::Int(*v),
-            LPCVar::String(i) => {
-                self.memory.get(*i).unwrap().clone()
-            },
+            LPCVar::String(i) => self.memory.get(*i).unwrap().clone(),
             LPCVar::Array(i) => {
                 // not recursive
                 self.memory.get(*i).unwrap().clone()
             }
-            LPCVar::StringConstant(i) => {
-                self.program.constants.get(*i).unwrap().clone()
-            },
+            LPCVar::StringConstant(i) => self.program.constants.get(*i).unwrap().clone(),
         }
     }
 
@@ -182,34 +179,29 @@ impl AsmInterpreter {
                 }
                 Instruction::AConst(r, vec) => {
                     let registers = self.current_registers();
-                    let vars = vec
-                        .iter()
-                        .map(|i| registers[i.index()])
-                        .collect::<Vec<_>>();
+                    let vars = vec.iter().map(|i| registers[i.index()]).collect::<Vec<_>>();
                     let index = self.memory.len();
                     self.memory.push(LPCValue::from(vars));
                     let registers = self.current_registers();
                     registers[r.index()] = array!(index);
                 }
-                Instruction::Call { name, num_args, initial_arg } => {
+                Instruction::Call {
+                    name,
+                    num_args,
+                    initial_arg,
+                } => {
                     let mut new_frame = if let Some(func) = self.program.functions.get(name) {
-                        StackFrame::new(
-                            func.clone(),
-                            self.pc + 1
-                        )
+                        StackFrame::new(func.clone(), self.pc + 1)
                     } else if EFUNS.contains_key(name.as_str()) {
                         // TODO: memoize this symbol
                         let sym = FunctionSymbol {
                             name: name.clone(),
                             num_args: *num_args, // TODO: look this up server-side
                             num_locals: 0,
-                            address: 0
+                            address: 0,
                         };
 
-                        StackFrame::new(
-                            sym,
-                            self.pc + 1
-                        )
+                        StackFrame::new(sym, self.pc + 1)
                     } else {
                         panic!("Unable to find function: {}", name);
                     };
@@ -218,9 +210,8 @@ impl AsmInterpreter {
                     if *num_args > 0 as usize {
                         let index = initial_arg.index();
                         let current_frame = self.stack.last().unwrap();
-                        new_frame.registers[1..=*num_args].copy_from_slice(
-                            &current_frame.registers[index..(index + num_args)]
-                        );
+                        new_frame.registers[1..=*num_args]
+                            .copy_from_slice(&current_frame.registers[index..(index + num_args)]);
                     }
 
                     self.stack.push(new_frame);
@@ -237,7 +228,7 @@ impl AsmInterpreter {
                     } else {
                         unimplemented!()
                     }
-                },
+                }
                 Instruction::IAdd(r1, r2, r3) => {
                     let registers = self.current_registers();
                     match registers[r1.index()] + registers[r2.index()] {
@@ -248,23 +239,23 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::IConst(r, i) => {
                     let registers = self.current_registers();
                     registers[r.index()] = int!(*i);
-                },
+                }
                 Instruction::IConst0(r) => {
                     let registers = self.current_registers();
                     registers[r.index()] = int!(0);
-                },
+                }
                 Instruction::IConst1(r) => {
                     let registers = self.current_registers();
                     registers[r.index()] = int!(1);
-                },
+                }
                 Instruction::SConst(r, s) => {
                     let registers = self.current_registers();
                     registers[r.index()] = string_constant!(*s);
-                },
+                }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = self.current_registers();
                     match registers[r1.index()] / registers[r2.index()] {
@@ -275,7 +266,7 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::IMul(r1, r2, r3) => {
                     let registers = self.current_registers();
                     match registers[r1.index()] * registers[r2.index()] {
@@ -286,7 +277,7 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::ISub(r1, r2, r3) => {
                     let registers = self.current_registers();
                     match registers[r1.index()] - registers[r2.index()] {
@@ -297,7 +288,7 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::MAdd(r1, r2, r3) => {
                     // look up vals, add, store result.
                     let val1 = &self.resolve_register(r1.index());
@@ -311,14 +302,14 @@ impl AsmInterpreter {
                             let var = LPCVar::String(index);
                             let registers = self.current_registers();
                             registers[r3.index()] = var
-                        },
+                        }
                         Err(mut e) => {
                             self.populate_error_span(e.borrow_mut());
 
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.
                     let val1 = &self.resolve_register(r1.index());
@@ -338,7 +329,7 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::MMul(r1, r2, r3) => {
                     // look up vals, multiply, store result.
                     let val1 = &self.resolve_register(r1.index());
@@ -358,7 +349,7 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::MSub(r1, r2, r3) => {
                     // look up vals, subtract, store result.
                     let val1 = &self.resolve_register(r1.index());
@@ -378,11 +369,11 @@ impl AsmInterpreter {
                             return Err(e);
                         }
                     }
-                },
+                }
                 Instruction::RegCopy(r1, r2) => {
                     let registers = self.current_registers();
                     registers[r2.index()] = registers[r1.index()]
-                },
+                }
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame);
@@ -434,7 +425,7 @@ impl Default for AsmInterpreter {
             stack: Vec::with_capacity(MAX_STACK),
             memory: Vec::with_capacity(MAX_MEMORY),
             is_halted: true,
-            pc: 0
+            pc: 0,
         }
     }
 }

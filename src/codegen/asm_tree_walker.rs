@@ -1,33 +1,32 @@
-use std::collections::HashMap;
+use crate::{
+    asm::{instruction::Instruction, register::Register, register_counter::RegisterCounter},
+    ast::{
+        array_node::ArrayNode,
+        assignment_node::AssignmentNode,
+        ast_node::ASTNodeTrait,
+        binary_op_node::{BinaryOpNode, BinaryOperation},
+        call_node::CallNode,
+        decl_node::DeclNode,
+        expression_node::ExpressionNode,
+        function_def_node::FunctionDefNode,
+        int_node::IntNode,
+        program_node::ProgramNode,
+        return_node::ReturnNode,
+        string_node::StringNode,
+        var_init_node::VarInitNode,
+        var_node::VarNode,
+    },
+    codegen::tree_walker,
+    errors::compiler_error::CompilerError,
+    interpreter::{constant_pool::ConstantPool, lpc_value::LPCValue, program::Program},
+    parser::span::Span,
+    semantic::{
+        function_symbol::FunctionSymbol, lpc_type::LPCType, scope_tree::ScopeTree, symbol::Symbol,
+    },
+};
 use multimap::MultiMap;
+use std::collections::HashMap;
 use tree_walker::TreeWalker;
-use crate::interpreter::lpc_value::LPCValue;
-use crate::ast::program_node::ProgramNode;
-use crate::ast::int_node::IntNode;
-use crate::codegen::tree_walker;
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
-use crate::asm::instruction::Instruction;
-use crate::asm::register::Register;
-use crate::ast::call_node::CallNode;
-use crate::asm::register_counter::RegisterCounter;
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::semantic::function_symbol::FunctionSymbol;
-use crate::ast::return_node::ReturnNode;
-use crate::semantic::scope_tree::ScopeTree;
-use crate::ast::decl_node::DeclNode;
-use crate::semantic::symbol::Symbol;
-use crate::ast::var_init_node::VarInitNode;
-use crate::ast::var_node::VarNode;
-use crate::ast::assignment_node::AssignmentNode;
-use crate::ast::string_node::StringNode;
-use crate::ast::expression_node::ExpressionNode;
-use crate::interpreter::program::Program;
-use crate::interpreter::constant_pool::ConstantPool;
-use crate::semantic::lpc_type::LPCType;
-use crate::ast::array_node::ArrayNode;
-use crate::parser::span::Span;
-use crate::errors::compiler_error::CompilerError;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -69,7 +68,10 @@ impl AsmTreeWalker {
     ///
     /// # Arguments
     /// `scopes` - The ScopeTree to use to resolve symbols and function calls.
-    pub fn new(scopes: ScopeTree, function_params: HashMap<String, Vec<Option<ExpressionNode>>>) -> Self {
+    pub fn new(
+        scopes: ScopeTree,
+        function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
+    ) -> Self {
         Self {
             scopes,
             function_params,
@@ -102,23 +104,25 @@ impl AsmTreeWalker {
         let mut v = vec![];
 
         // invert these maps for by-address lookup
-        let functions_by_pc =
-            self.functions.values().zip(self.functions.keys()).collect::<HashMap<_, _>>();
+        let functions_by_pc = self
+            .functions
+            .values()
+            .zip(self.functions.keys())
+            .collect::<HashMap<_, _>>();
 
         // use MultiMap as multiple labels can be at the same address
-        let labels_by_pc =
-            self.labels.values().zip(self.labels.keys()).collect::<MultiMap<_, _>>();
+        let labels_by_pc = self
+            .labels
+            .values()
+            .zip(self.labels.keys())
+            .collect::<MultiMap<_, _>>();
 
         for (counter, instruction) in self.instructions.iter().enumerate() {
             if let Some(sym) = functions_by_pc.get(&counter) {
-                v.push(
-                    format!(
-                        "fn {} num_args={} num_locals={}:",
-                        sym.name,
-                        sym.num_args,
-                        sym.num_locals
-                    )
-                );
+                v.push(format!(
+                    "fn {} num_args={} num_locals={}:",
+                    sym.name, sym.num_args, sym.num_locals
+                ));
             }
             if let Some(vec) = labels_by_pc.get_vec(&counter) {
                 for label in vec {
@@ -158,7 +162,7 @@ impl AsmTreeWalker {
             filename: filepath.to_string(),
             labels: self.labels.clone(),
             functions: self.function_map(),
-            constants: self.constants.clone()
+            constants: self.constants.clone(),
         }
     }
 
@@ -186,11 +190,12 @@ impl AsmTreeWalker {
         node: &BinaryOpNode,
         reg_left: Register,
         reg_right: Register,
-        reg_result: Option<Register>
+        reg_result: Option<Register>,
     ) -> Instruction {
         match (&*node.l, &*node.r) {
-            (ExpressionNode::BinaryOp(bin_op), _) =>
-                self.choose_add_instruction(bin_op, reg_left, reg_right, reg_result),
+            (ExpressionNode::BinaryOp(bin_op), _) => {
+                self.choose_add_instruction(bin_op, reg_left, reg_right, reg_result)
+            }
             (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
                 let type1 = self.lookup_symbol(&var_node1.name).unwrap().type_;
                 let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
@@ -200,7 +205,7 @@ impl AsmTreeWalker {
                 } else {
                     Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
                 }
-            },
+            }
             (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
                 let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
 
@@ -209,7 +214,7 @@ impl AsmTreeWalker {
                 } else {
                     Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
                 }
-            },
+            }
             (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
                 let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
 
@@ -218,9 +223,10 @@ impl AsmTreeWalker {
                 } else {
                     Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
                 }
-            },
-            (ExpressionNode::String(_), _) =>
-                Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
+            }
+            (ExpressionNode::String(_), _) => {
+                Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
+            }
             (ExpressionNode::Int(_), ExpressionNode::Int(_)) => {
                 Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
             }
@@ -234,11 +240,12 @@ impl AsmTreeWalker {
         node: &BinaryOpNode,
         reg_left: Register,
         reg_right: Register,
-        reg_result: Option<Register>
+        reg_result: Option<Register>,
     ) -> Instruction {
         match (&*node.l, &*node.r) {
-            (ExpressionNode::BinaryOp(bin_op), _) =>
-                self.choose_mul_instruction(bin_op, reg_left, reg_right, reg_result),
+            (ExpressionNode::BinaryOp(bin_op), _) => {
+                self.choose_mul_instruction(bin_op, reg_left, reg_right, reg_result)
+            }
             (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
                 let type1 = self.lookup_symbol(&var_node1.name).unwrap().type_;
                 let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
@@ -248,7 +255,7 @@ impl AsmTreeWalker {
                 } else {
                     Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
                 }
-            },
+            }
             (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
                 let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
 
@@ -257,7 +264,7 @@ impl AsmTreeWalker {
                 } else {
                     Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
                 }
-            },
+            }
             (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
                 let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
 
@@ -266,11 +273,13 @@ impl AsmTreeWalker {
                 } else {
                     Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
                 }
-            },
-            (ExpressionNode::String(_), _) =>
-                Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
-            (_, ExpressionNode::String(_)) =>
-                Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
+            }
+            (ExpressionNode::String(_), _) => {
+                Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
+            }
+            (_, ExpressionNode::String(_)) => {
+                Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
+            }
             _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
         }
     }
@@ -333,9 +342,8 @@ impl TreeWalker for AsmTreeWalker {
 
         // copy each result to the start of the arg register
         for result in &arg_results {
-            self.instructions.push(
-                Instruction::RegCopy(*result, register.unwrap())
-            );
+            self.instructions
+                .push(Instruction::RegCopy(*result, register.unwrap()));
             self.debug_spans.push(node.span);
             register = self.register_counter.next();
         }
@@ -346,7 +354,7 @@ impl TreeWalker for AsmTreeWalker {
         let instruction = Instruction::Call {
             name: node.name.clone(),
             num_args: arg_results.len(),
-            initial_arg: start_register.unwrap()
+            initial_arg: start_register.unwrap(),
         };
 
         self.instructions.push(instruction);
@@ -362,7 +370,7 @@ impl TreeWalker for AsmTreeWalker {
         let instruction = match node.value {
             0 => Instruction::IConst0(register.unwrap()),
             1 => Instruction::IConst1(register.unwrap()),
-            v => Instruction::IConst(register.unwrap(), v)
+            v => Instruction::IConst(register.unwrap(), v),
         };
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
@@ -393,12 +401,14 @@ impl TreeWalker for AsmTreeWalker {
         self.current_result = reg_result.unwrap();
 
         let instruction = match node.op {
-            BinaryOperation::Add =>
-                self.choose_add_instruction(&node, reg_left, reg_right, reg_result),
+            BinaryOperation::Add => {
+                self.choose_add_instruction(&node, reg_left, reg_right, reg_result)
+            }
             BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
-            BinaryOperation::Mul =>
-                self.choose_mul_instruction(&node, reg_left, reg_right, reg_result),
-            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap())
+            BinaryOperation::Mul => {
+                self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
         };
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
@@ -422,7 +432,8 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         // force a final return if one isn't already there.
-        if self.instructions.len() == len || *self.instructions.last().unwrap() != Instruction::Ret {
+        if self.instructions.len() == len || *self.instructions.last().unwrap() != Instruction::Ret
+        {
             // TODO: This should emit a warning unless the return type is void
             self.instructions.push(Instruction::Ret);
             self.debug_spans.push(node.span);
@@ -431,12 +442,15 @@ impl TreeWalker for AsmTreeWalker {
         self.scopes.pop();
 
         let num_args = node.parameters.len();
-        self.functions.insert(FunctionSymbol {
-            name: node.name.clone(),
-            num_args,
-            num_locals: self.register_counter.get_count() - num_args,
-            address: return_address
-        }, return_address);
+        self.functions.insert(
+            FunctionSymbol {
+                name: node.name.clone(),
+                num_args,
+                num_locals: self.register_counter.get_count() - num_args,
+                address: return_address,
+            },
+            return_address,
+        );
 
         Ok(())
     }
@@ -523,15 +537,18 @@ impl TreeWalker for AsmTreeWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lpc_parser;
-    use crate::ast::expression_node::ExpressionNode;
-    use crate::asm::instruction::Instruction::{IConst1, IConst, RegCopy, AConst, SConst};
-    use crate::semantic::lpc_type::LPCType;
-    use crate::ast::assignment_node::AssignmentOperation;
-    use crate::parser::span::Span;
-    use crate::codegen::scope_walker::ScopeWalker;
+    use crate::{
+        asm::instruction::Instruction::{AConst, IConst, IConst1, RegCopy, SConst},
+        ast::{
+            assignment_node::AssignmentOperation, ast_node::ASTNode,
+            expression_node::ExpressionNode,
+        },
+        codegen::scope_walker::ScopeWalker,
+        lpc_parser,
+        parser::span::Span,
+        semantic::lpc_type::LPCType,
+    };
     use std::borrow::BorrowMut;
-    use crate::ast::ast_node::ASTNode;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -543,9 +560,7 @@ mod tests {
                 print(4 + 5);
             }
         ";
-        let tree = lpc_parser::ProgramParser::new()
-            .parse(program)
-            .unwrap();
+        let tree = lpc_parser::ProgramParser::new().parse(program).unwrap();
 
         let _ = scope_walker.visit_program(&tree);
 
@@ -561,9 +576,9 @@ mod tests {
             Instruction::Call {
                 name: String::from("print"),
                 num_args: 1,
-                initial_arg: Register(3)
+                initial_arg: Register(3),
             },
-            Instruction::Ret // Automatically added
+            Instruction::Ret, // Automatically added
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -578,9 +593,7 @@ mod tests {
         fn test_visit_call_populates_the_instructions() {
             let mut walker = AsmTreeWalker::default();
             let call = "print(4 - 5)";
-            let tree = lpc_parser::CallParser::new()
-                .parse(call)
-                .unwrap();
+            let tree = lpc_parser::CallParser::new().parse(call).unwrap();
 
             let _ = walker.visit_call(&tree);
 
@@ -590,8 +603,8 @@ mod tests {
                 Instruction::Call {
                     name: String::from("print"),
                     num_args: 1,
-                    initial_arg: Register(2)
-                }
+                    initial_arg: Register(2),
+                },
             ];
 
             for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -604,13 +617,14 @@ mod tests {
             let scope_tree = ScopeTree::default();
             let mut functions = HashMap::new();
 
-            functions.insert(String::from("foo"), vec![None, Some(ExpressionNode::from("muffuns"))]);
+            functions.insert(
+                String::from("foo"),
+                vec![None, Some(ExpressionNode::from("muffuns"))],
+            );
 
             let mut walker = AsmTreeWalker::new(scope_tree, functions);
             let call = "foo(666)";
-            let tree = lpc_parser::CallParser::new()
-                .parse(call)
-                .unwrap();
+            let tree = lpc_parser::CallParser::new().parse(call).unwrap();
 
             let _ = walker.visit_call(&tree);
 
@@ -622,7 +636,7 @@ mod tests {
                 Instruction::Call {
                     name: "foo".to_string(),
                     num_args: 2,
-                    initial_arg: Register(3)
+                    initial_arg: Register(3),
                 },
             ];
 
@@ -668,10 +682,10 @@ mod tests {
                     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
                     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
                     op: BinaryOperation::Add,
-                    span: None
+                    span: None,
                 })),
                 op: BinaryOperation::Mul,
-                span: None
+                span: None,
             };
 
             let _ = walker.visit_binary_op(&node);
@@ -681,7 +695,7 @@ mod tests {
                 Instruction::IConst(Register(2), 123),
                 Instruction::IConst(Register(3), 456),
                 Instruction::IAdd(Register(2), Register(3), Register(4)),
-                Instruction::IMul(Register(1), Register(4), Register(5))
+                Instruction::IMul(Register(1), Register(4), Register(5)),
             ];
 
             for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -699,10 +713,10 @@ mod tests {
                     l: Box::new(ExpressionNode::String(StringNode::new("bar"))),
                     r: Box::new(ExpressionNode::String(StringNode::new("baz"))),
                     op: BinaryOperation::Add,
-                    span: None
+                    span: None,
                 })),
                 op: BinaryOperation::Add,
-                span: None
+                span: None,
             };
 
             let _ = walker.visit_binary_op(&node);
@@ -712,7 +726,7 @@ mod tests {
                 Instruction::SConst(Register(2), 1),
                 Instruction::SConst(Register(3), 2),
                 Instruction::MAdd(Register(2), Register(3), Register(4)),
-                Instruction::MAdd(Register(1), Register(4), Register(5))
+                Instruction::MAdd(Register(1), Register(4), Register(5)),
             ];
 
             for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -728,7 +742,7 @@ mod tests {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
                 r: Box::new(ExpressionNode::from(vec![ExpressionNode::from(456)])),
                 op: BinaryOperation::Add,
-                span: None
+                span: None,
             };
 
             let _ = walker.visit_binary_op(&node);
@@ -740,7 +754,7 @@ mod tests {
                 Instruction::AConst(Register(2), vec![Register(1)]),
                 Instruction::IConst(Register(3), 456),
                 Instruction::AConst(Register(4), vec![Register(3)]),
-                Instruction::MAdd(Register(2), Register(4), Register(5))
+                Instruction::MAdd(Register(2), Register(4), Register(5)),
             ];
 
             for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -763,7 +777,7 @@ mod tests {
         let expected = vec![
             SConst(Register(1), 0),
             SConst(Register(2), 1),
-            SConst(Register(3), 0) // reuses constant
+            SConst(Register(3), 0), // reuses constant
         ];
 
         for (a, b) in walker.instructions.iter().zip(expected) {
@@ -776,9 +790,7 @@ mod tests {
         let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
         let call = "int main(int i) { return i + 4; }";
-        let tree = lpc_parser::DefParser::new()
-            .parse(call)
-            .unwrap();
+        let tree = lpc_parser::DefParser::new().parse(call).unwrap();
 
         let node = if let ASTNode::FunctionDef(node) = tree {
             node
@@ -797,7 +809,7 @@ mod tests {
             Instruction::IConst(Register(2), 4),
             Instruction::IAdd(Register(1), Register(2), Register(3)),
             Instruction::RegCopy(Register(3), Register(0)),
-            Instruction::Ret
+            Instruction::Ret,
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -810,7 +822,7 @@ mod tests {
             name: "main".to_string(),
             num_args: 1,
             num_locals: 2,
-            address
+            address,
         };
 
         assert_eq!(walker.functions.get(&sym).unwrap(), &address);
@@ -839,9 +851,7 @@ mod tests {
         let node = ReturnNode::new(None);
         let _ = walker.visit_return(&node);
 
-        let expected = vec![
-            Instruction::Ret,
-        ];
+        let expected = vec![Instruction::Ret];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
             assert_eq!(instruction, &expected[idx]);
@@ -852,9 +862,7 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let mut scope_walker = ScopeWalker::default();
         let call = "int foo = 1, *bar = ({ 56 })";
-        let tree = lpc_parser::DeclParser::new()
-            .parse(call)
-            .unwrap();
+        let tree = lpc_parser::DeclParser::new().parse(call).unwrap();
 
         let _ = scope_walker.visit_decl(&tree);
 
@@ -864,7 +872,7 @@ mod tests {
         let expected = vec![
             IConst1(Register(1)),
             IConst(Register(2), 56),
-            AConst(Register(3), vec![Register(2)])
+            AConst(Register(3), vec![Register(2)]),
         ];
 
         for (idx, instruction) in walker.instructions.iter().enumerate() {
@@ -872,36 +880,45 @@ mod tests {
         }
 
         let scope = walker.scopes.get_current().unwrap();
-        assert_eq!(scope.lookup("foo").unwrap(), Symbol {
-            name: String::from("foo"),
-            type_: LPCType::Int(false),
-            static_: false,
-            location: Some(Register(1)),
-            scope_id: 0,
-            span: Some(Span { l: 4, r: 11 })
-        });
-        assert_eq!(scope.lookup("bar").unwrap(), Symbol {
-            name: String::from("bar"),
-            type_: LPCType::Int(true),
-            static_: false,
-            location: Some(Register(3)),
-            scope_id: 0,
-            span: Some(Span { l: 13, r: 28 })
-        });
+        assert_eq!(
+            scope.lookup("foo").unwrap(),
+            Symbol {
+                name: String::from("foo"),
+                type_: LPCType::Int(false),
+                static_: false,
+                location: Some(Register(1)),
+                scope_id: 0,
+                span: Some(Span { l: 4, r: 11 })
+            }
+        );
+        assert_eq!(
+            scope.lookup("bar").unwrap(),
+            Symbol {
+                name: String::from("bar"),
+                type_: LPCType::Int(true),
+                static_: false,
+                location: Some(Register(3)),
+                scope_id: 0,
+                span: Some(Span { l: 13, r: 28 })
+            }
+        );
     }
 
     #[test]
     fn test_visit_var_sets_the_result() {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
-        insert_symbol(walker.borrow_mut(), Symbol {
-            name: "marf".to_string(),
-            type_: LPCType::Int(false),
-            static_: false,
-            location: Some(Register(666)),
-            scope_id: 0,
-            span: None
-        });
+        insert_symbol(
+            walker.borrow_mut(),
+            Symbol {
+                name: "marf".to_string(),
+                type_: LPCType::Int(false),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 0,
+                span: None,
+            },
+        );
 
         let node = VarNode::new("marf");
 
@@ -913,42 +930,44 @@ mod tests {
     fn test_visit_assignment_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
-        insert_symbol(walker.borrow_mut(), Symbol {
-            name: "marf".to_string(),
-            type_: LPCType::Int(false),
-            static_: false,
-            location: Some(Register(666)),
-            scope_id: 0,
-            span: None
-        });
+        insert_symbol(
+            walker.borrow_mut(),
+            Symbol {
+                name: "marf".to_string(),
+                type_: LPCType::Int(false),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 0,
+                span: None,
+            },
+        );
 
         let node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
             rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
             op: AssignmentOperation::Simple,
-            span: None
+            span: None,
         };
 
         let _ = walker.visit_assignment(&node);
-        assert_eq!(walker.instructions, [
-            IConst(Register(1), -12),
-            RegCopy(Register(1), Register(666))
-        ]);
+        assert_eq!(
+            walker.instructions,
+            [
+                IConst(Register(1), -12),
+                RegCopy(Register(1), Register(666))
+            ]
+        );
     }
 
     #[test]
     fn test_visit_array_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
 
-        let arr = ArrayNode::new(
-            vec![
-                ExpressionNode::from(123),
-                ExpressionNode::from("foo"),
-                ExpressionNode::from(vec![
-                    ExpressionNode::from(666)
-                ])
-            ]
-        );
+        let arr = ArrayNode::new(vec![
+            ExpressionNode::from(123),
+            ExpressionNode::from("foo"),
+            ExpressionNode::from(vec![ExpressionNode::from(666)]),
+        ]);
 
         let _ = walker.visit_array(&arr);
 

@@ -1,19 +1,20 @@
+use crate::{
+    ast::{expression_node::ExpressionNode, function_def_node::FunctionDefNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+};
 use std::collections::HashMap;
-use crate::codegen::tree_walker::TreeWalker;
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::errors::compiler_error::CompilerError;
-use crate::ast::expression_node::ExpressionNode;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
 #[derive(Debug)]
 pub struct DefaultParamsWalker {
-    functions: HashMap<String, Vec<Option<ExpressionNode>>>
+    functions: HashMap<String, Vec<Option<ExpressionNode>>>,
 }
 
 impl DefaultParamsWalker {
     pub fn new() -> Self {
         Self {
-            functions: HashMap::new()
+            functions: HashMap::new(),
         }
     }
 
@@ -25,7 +26,11 @@ impl DefaultParamsWalker {
 
 impl TreeWalker for DefaultParamsWalker {
     fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
-        let vec = node.parameters.iter().map(|p| p.value.clone()).collect::<Vec<_>>();
+        let vec = node
+            .parameters
+            .iter()
+            .map(|p| p.value.clone())
+            .collect::<Vec<_>>();
         self.functions.insert(node.name.clone(), vec);
 
         Ok(())
@@ -41,8 +46,7 @@ impl Default for DefaultParamsWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::lpc_type::LPCType;
-    use crate::ast::var_init_node::VarInitNode;
+    use crate::{ast::var_init_node::VarInitNode, semantic::lpc_type::LPCType};
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
@@ -55,7 +59,7 @@ mod tests {
                 value: None,
                 array: false,
                 global: false,
-                span: None
+                span: None,
             },
             VarInitNode {
                 type_: LPCType::String(false),
@@ -63,7 +67,7 @@ mod tests {
                 value: Some(ExpressionNode::from("marf")),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             },
         ];
 
@@ -72,17 +76,14 @@ mod tests {
             name: "foo".to_string(),
             parameters,
             body: vec![],
-            span: None
+            span: None,
         };
 
         let _ = walker.visit_function_def(&node);
 
         let params = walker.functions.get("foo").unwrap();
 
-        let expected = vec![
-            None,
-            Some(ExpressionNode::from("marf"))
-        ];
+        let expected = vec![None, Some(ExpressionNode::from("marf"))];
 
         for (idx, param) in params.into_iter().enumerate() {
             assert_eq!(*param, expected[idx]);

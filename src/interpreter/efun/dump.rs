@@ -1,7 +1,6 @@
-use crate::interpreter::stack_frame::StackFrame;
-use crate::interpreter::lpc_var::LPCVar;
-use crate::interpreter::asm_interpreter::AsmInterpreter;
-use crate::interpreter::lpc_value::LPCValue;
+use crate::interpreter::{
+    asm_interpreter::AsmInterpreter, lpc_value::LPCValue, lpc_var::LPCVar, stack_frame::StackFrame,
+};
 
 fn print_array(arr: &[LPCVar], interpreter: &AsmInterpreter, indent: usize) {
     println!("{:width$}({{", "", width = indent);

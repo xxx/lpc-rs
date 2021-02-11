@@ -1,10 +1,13 @@
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalker;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::ast::var_init_node::VarInitNode;
-use crate::semantic::lpc_type::LPCType;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{ast_node::ASTNodeTrait, var_init_node::VarInitNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    semantic::lpc_type::LPCType,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// A container for a set of variable declarations.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -12,12 +15,15 @@ pub struct DeclNode {
     /// The declared type
     pub type_: LPCType,
     /// The list of variables, with their optional initializations
-    pub initializations: Vec<VarInitNode>
+    pub initializations: Vec<VarInitNode>,
 }
 
 impl DeclNode {
     pub fn new(type_: LPCType, initializations: Vec<VarInitNode>) -> Self {
-        Self { type_, initializations }
+        Self {
+            type_,
+            initializations,
+        }
     }
 }
 

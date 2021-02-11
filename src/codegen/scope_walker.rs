@@ -1,17 +1,16 @@
+use crate::{
+    ast::{
+        ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode, function_def_node::FunctionDefNode,
+        program_node::ProgramNode, var_init_node::VarInitNode, var_node::VarNode,
+    },
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::{undefined_var_error::UndefinedVarError, CompilerError},
+    semantic::{
+        function_prototype::FunctionPrototype, scope_tree::ScopeTree,
+        semantic_checks::check_var_redefinition, symbol::Symbol,
+    },
+};
 use std::collections::HashMap;
-use crate::semantic::scope_tree::ScopeTree;
-use crate::codegen::tree_walker::TreeWalker;
-use crate::ast::program_node::ProgramNode;
-use crate::ast::binary_op_node::BinaryOpNode;
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::semantic::symbol::Symbol;
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::ast::var_init_node::VarInitNode;
-use crate::semantic::semantic_checks::check_var_redefinition;
-use crate::errors::compiler_error::CompilerError;
-use crate::semantic::function_prototype::FunctionPrototype;
-use crate::ast::var_node::VarNode;
-use crate::errors::compiler_error::undefined_var_error::UndefinedVarError;
 
 /// A tree walker to handle populating all the scopes in the program
 #[derive(Debug)]
@@ -27,7 +26,7 @@ pub struct ScopeWalker {
     pub function_prototypes: HashMap<String, FunctionPrototype>,
 
     /// Collected errors
-    errors: Vec<CompilerError>
+    errors: Vec<CompilerError>,
 }
 
 impl ScopeWalker {
@@ -38,7 +37,7 @@ impl ScopeWalker {
             filepath: String::from(filepath),
             scopes: ScopeTree::default(),
             function_prototypes: HashMap::new(),
-            errors: vec![]
+            errors: vec![],
         }
     }
 
@@ -89,22 +88,28 @@ impl TreeWalker for ScopeWalker {
 
         // Store the prototype now, to allow for forward references.
         let num_args = node.parameters.len();
-        let arg_types = node.parameters.iter().map(|parm| parm.type_ ).collect::<Vec<_>>();
-        self.function_prototypes.insert(node.name.clone(), FunctionPrototype {
-            name: node.name.clone(),
-            return_type: node.return_type,
-            num_args,
-            num_default_args,
-            arg_types,
-            span: node.span,
-            arg_spans: {
-                node
-                    .parameters
-                    .iter()
-                    .flat_map(|n| n.span)
-                    .collect::<Vec<_>>()
-            }
-        });
+        let arg_types = node
+            .parameters
+            .iter()
+            .map(|parm| parm.type_)
+            .collect::<Vec<_>>();
+        self.function_prototypes.insert(
+            node.name.clone(),
+            FunctionPrototype {
+                name: node.name.clone(),
+                return_type: node.return_type,
+                num_args,
+                num_default_args,
+                arg_types,
+                span: node.span,
+                arg_spans: {
+                    node.parameters
+                        .iter()
+                        .flat_map(|n| n.span)
+                        .collect::<Vec<_>>()
+                },
+            },
+        );
 
         Ok(())
     }
@@ -122,12 +127,11 @@ impl TreeWalker for ScopeWalker {
     fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
         // We check for undefined vars here in case a symbol is subsequently defined.
         if self.scopes.lookup(&node.name).is_none() {
-            self.errors.push(CompilerError::UndefinedVarError(
-                UndefinedVarError {
+            self.errors
+                .push(CompilerError::UndefinedVarError(UndefinedVarError {
                     name: node.name.clone(),
-                    span: node.span
-                }
-            ));
+                    span: node.span,
+                }));
         }
 
         Ok(())
@@ -144,8 +148,7 @@ impl Default for ScopeWalker {
             filepath: String::new(),
             scopes,
             function_prototypes: HashMap::new(),
-            errors: vec![]
+            errors: vec![],
         }
     }
 }
-

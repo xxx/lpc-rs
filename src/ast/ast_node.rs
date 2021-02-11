@@ -1,19 +1,21 @@
+use crate::{
+    ast::{
+        binary_op_node::BinaryOpNode, call_node::CallNode, decl_node::DeclNode, expression_node,
+        function_def_node::FunctionDefNode, int_node, program_node, return_node::ReturnNode,
+        var_init_node::VarInitNode,
+    },
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+};
+use auto_impl::auto_impl;
 use core::fmt::Debug;
-use crate::ast::{expression_node, int_node, program_node};
 use expression_node::ExpressionNode;
 use int_node::IntNode;
 use program_node::ProgramNode;
-use crate::codegen::tree_walker::TreeWalker;
-use auto_impl::auto_impl;
-use crate::ast::binary_op_node::BinaryOpNode;
-use crate::ast::call_node::CallNode;
-use std::fmt::{Display, Formatter};
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::ast::return_node::ReturnNode;
-use std::fmt;
-use crate::ast::decl_node::DeclNode;
-use crate::ast::var_init_node::VarInitNode;
-use crate::errors::compiler_error::CompilerError;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -24,7 +26,7 @@ pub enum ASTNode {
     FunctionDef(FunctionDefNode),
     Program(ProgramNode),
     Return(ReturnNode),
-    VarInit(VarInitNode)
+    VarInit(VarInitNode),
 }
 
 #[auto_impl(&, &mut)]
@@ -46,7 +48,15 @@ macro_rules! node_defs {
     };
 }
 
-node_defs!(Call, Decl, Expression, FunctionDef, Program, Return, VarInit);
+node_defs!(
+    Call,
+    Decl,
+    Expression,
+    FunctionDef,
+    Program,
+    Return,
+    VarInit
+);
 
 impl Display for ASTNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -105,8 +115,7 @@ impl From<VarInitNode> for ASTNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::binary_op_node::BinaryOperation;
-    use crate::semantic::lpc_type::LPCType;
+    use crate::{ast::binary_op_node::BinaryOperation, semantic::lpc_type::LPCType};
 
     #[test]
     fn test_from_expression_node() {
@@ -123,7 +132,7 @@ mod tests {
             name: "foo".to_string(),
             parameters: vec![],
             body: vec![],
-            span: None
+            span: None,
         };
         let clone = node.clone();
 
@@ -135,7 +144,10 @@ mod tests {
         let node = IntNode::new(123);
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::Expression(ExpressionNode::Int(clone)));
+        assert_eq!(
+            ASTNode::from(node),
+            ASTNode::Expression(ExpressionNode::Int(clone))
+        );
     }
 
     #[test]
@@ -144,11 +156,14 @@ mod tests {
             l: Box::new(ExpressionNode::Int(IntNode::new(123))),
             r: Box::new(ExpressionNode::Int(IntNode::new(1233))),
             op: BinaryOperation::Add,
-            span: None
+            span: None,
         };
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::Expression(ExpressionNode::BinaryOp(clone)));
+        assert_eq!(
+            ASTNode::from(node),
+            ASTNode::Expression(ExpressionNode::BinaryOp(clone))
+        );
     }
 
     #[test]
@@ -161,7 +176,10 @@ mod tests {
 
     #[test]
     fn test_from_return_node() {
-        let node = ReturnNode { value: None, span: None };
+        let node = ReturnNode {
+            value: None,
+            span: None,
+        };
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Return(clone));
@@ -169,7 +187,10 @@ mod tests {
 
     #[test]
     fn test_from_decl_node() {
-        let node = DeclNode { type_: LPCType::Int(false), initializations: vec![] };
+        let node = DeclNode {
+            type_: LPCType::Int(false),
+            initializations: vec![],
+        };
         let clone = node.clone();
 
         assert_eq!(ASTNode::from(node), ASTNode::Decl(clone));
@@ -183,7 +204,7 @@ mod tests {
             value: None,
             array: false,
             global: false,
-            span: None
+            span: None,
         };
         let clone = node.clone();
 

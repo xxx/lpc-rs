@@ -1,11 +1,14 @@
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalker;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::ast::expression_node::ExpressionNode;
-use crate::parser::span::Span;
-use crate::semantic::lpc_type::LPCType;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{ast_node::ASTNodeTrait, expression_node::ExpressionNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
+    semantic::lpc_type::LPCType,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -26,7 +29,7 @@ pub struct VarInitNode {
     pub global: bool,
 
     /// The text span in the original file that this node represents. Used for error messages.
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl VarInitNode {
@@ -56,7 +59,11 @@ impl ASTNodeTrait for VarInitNode {
 
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "VarInitNode[{} {} {:?}]", self.type_, self.name, self.value)
+        write!(
+            f,
+            "VarInitNode[{} {} {:?}]",
+            self.type_, self.name, self.value
+        )
     }
 }
 
@@ -72,7 +79,7 @@ mod tests {
             value: None,
             array: true,
             global: false,
-            span: None
+            span: None,
         };
 
         node.update_type(LPCType::Int(false));
