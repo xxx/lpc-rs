@@ -33,6 +33,11 @@ impl Symbol {
             span: None
         }
     }
+
+    /// We're global if we're in the top-level scope.
+    pub fn is_global(&self) -> bool {
+        self.scope_id == 0
+    }
 }
 
 impl From<&VarInitNode> for Symbol {
