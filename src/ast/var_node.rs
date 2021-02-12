@@ -12,12 +12,20 @@ pub struct VarNode {
     pub name: String,
 
     /// The span of the string in the original file
-    pub span: Option<Span>
+    pub span: Option<Span>,
+
+    /// Is this node referring to a global? Tracked in case a var is used,
+    /// then subsequently defined.
+    pub global: bool,
 }
 
 impl VarNode {
     pub fn new(name: &str) -> Self {
-        Self { name: String::from(name), span: None }
+        Self { name: String::from(name), span: None, global: false }
+    }
+
+    pub fn set_global(&mut self, val: bool) {
+        self.global = val;
     }
 }
 
@@ -29,6 +37,10 @@ impl ASTNodeTrait for VarNode {
 
 impl Display for VarNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "VarNode[{}]", self.name)
+        write!(f,
+            "VarNode[{}] {}",
+            self.name,
+            if self.global { "(global)" } else { "" }
+        )
     }
 }

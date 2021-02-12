@@ -239,7 +239,6 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
-        println!("ass: {:?}", node.lhs);
         let left_type = node_type(&node.lhs, self.scopes, &self.function_return_values());
         let right_type = node_type(&node.rhs, self.scopes, &self.function_return_values());
 
@@ -716,8 +715,6 @@ mod tests {
                 let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
                 walker.current_function = Some(function_def);
                 let _ = node.visit(walker.borrow_mut());
-
-                println!("{:?}", walker.errors);
 
                 assert!(walker.errors.is_empty());
             }

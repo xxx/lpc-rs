@@ -60,10 +60,10 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
         }
     };
 
-    println!("{:?}", program);
+    // println!("{:?}", program);
 
-    let mut walker = TreePrinter::new();
-    let _ = program.visit(&mut walker);
+    // let mut walker = TreePrinter::new();
+    // let _ = program.visit(&mut walker);
 
     let mut scope_walker = ScopeWalker::new(filename);
 
@@ -82,7 +82,6 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let mut semantic_check_walker =
         SemanticCheckWalker::new(&scope_walker.scopes, &scope_walker.function_prototypes);
     let _ = program.visit(semantic_check_walker.borrow_mut());
-
     if !semantic_check_walker.get_errors().is_empty() {
         errors.append(semantic_check_walker.get_errors().to_vec().borrow_mut());
     }

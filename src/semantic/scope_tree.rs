@@ -147,6 +147,28 @@ impl ScopeTree {
             node_id = node.parent()?;
         }
     }
+
+    /// Lookup a symbol and return a mutable reference,
+    /// recursing up to parent scopes as necessary.
+    ///
+    /// # Arguments
+    ///
+    /// * `name`: The name of the symbol to look up.
+    pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol> {
+        let mut node_id = self.current_id?;
+        loop {
+            let node = self.scopes.get(node_id)?;
+            let sym = node.get().lookup(name);
+
+            if sym.is_some() {
+                let node = self.scopes.get_mut(node_id)?;
+                let sym = node.get_mut().lookup_mut(name);
+                return sym;
+            }
+
+            node_id = node.parent()?;
+        }
+    }
 }
 
 impl Default for ScopeTree {

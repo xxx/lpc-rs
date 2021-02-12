@@ -19,6 +19,14 @@ pub enum Instruction {
     /// x.0 is the item to append, x.1 is the array.
     AAppend(Register, Register),
 
+    /// Copy a global from the global registers, into the current stack frame.
+    /// Copies the global in x.0 to the local register x.1.
+    GLoad(Register, Register),
+
+    /// Copy a variable from the current stack frame, to the global registers.
+    /// Copies a variable from the local register x.0, into the global register x.1.
+    GStore(Register, Register),
+
     /// Integer addition - x.2 = x.0 + x.1
     IAdd(Register, Register, Register),
 
@@ -72,6 +80,12 @@ impl Display for Instruction {
             Instruction::AConst(r1, vec) => {
                 let s = vec.iter().map(|i| format!("{}", i)).collect::<Vec<_>>().join(", ");
                 write!(f, "aconst {}, {}", r1, s)
+            }
+            Instruction::GLoad(r1, r2) => {
+                write!(f, "gload {}, {}", r1, r2)
+            }
+            Instruction::GStore(r1, r2) => {
+                write!(f, "gstore {}, {}", r1, r2)
             }
             Instruction::Call { name, num_args, initial_arg } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)

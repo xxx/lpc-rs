@@ -4,7 +4,7 @@ use crate::asm::instruction::Instruction;
 use crate::semantic::function_symbol::FunctionSymbol;
 use crate::parser::span::Span;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Program {
     /// The actual program to execute
     pub instructions: Vec<Instruction>,
@@ -22,18 +22,8 @@ pub struct Program {
     pub functions: HashMap<String, FunctionSymbol>,
 
     /// All non-int constants are stored in the pool.
-    pub constants: ConstantPool
-}
+    pub constants: ConstantPool,
 
-impl Default for Program {
-    fn default() -> Self {
-        Self {
-            instructions: vec![],
-            debug_spans: vec![],
-            filename: String::new(),
-            labels: HashMap::new(),
-            functions: HashMap::new(),
-            constants: ConstantPool::default()
-        }
-    }
+    /// How many globals does this program need storage for?
+    pub num_globals: usize
 }

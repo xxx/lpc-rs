@@ -305,7 +305,8 @@ MultiplicitiveBinaryOp: BinaryOperation = {
 Var: ExpressionNode = <l:@L> <name:ID> <r:@R> => ExpressionNode::Var(
     VarNode {
         name,
-        span: Some(Span { l, r })
+        span: Some(Span { l, r }),
+        global: false
     }
 );
 

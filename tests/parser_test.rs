@@ -45,6 +45,7 @@ fn test_program_global_vars() {
                         l: Box::new(ExpressionNode::Var(VarNode {
                             name: "i".to_string(),
                             span: Some(Span { l: 21, r: 22 }),
+                            global: false
                         })),
                         r: Box::new(ExpressionNode::Int(IntNode {
                             value: 8,

@@ -111,6 +111,7 @@ impl AsmInterpreter {
     ///
     /// * `program` - The Program to load
     pub fn load(&mut self, program: Program) {
+        self.globals = vec![LPCVar::Int(0); program.num_globals];
         self.program = program;
     }
 
@@ -236,6 +237,15 @@ impl AsmInterpreter {
                     } else {
                         unimplemented!()
                     }
+                }
+                Instruction::GLoad(r1, r2) => {
+                    let global = self.globals[r1.index()];
+                    let registers = self.current_registers();
+                    registers[r2.index()] = global
+                }
+                Instruction::GStore(r1, r2) => {
+                    let registers = self.current_registers();
+                    self.globals[r2.index()] = registers[r1.index()]
                 }
                 Instruction::IAdd(r1, r2, r3) => {
                     let registers = self.current_registers();

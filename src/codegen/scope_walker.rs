@@ -125,8 +125,15 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
-        // We check for undefined vars here in case a symbol is subsequently defined.
-        if self.scopes.lookup(&node.name).is_none() {
+        let sym = self.scopes.lookup(&node.name);
+
+        if let Some(symbol) = sym {
+            if symbol.is_global() {
+                // TODO: track that this var reference refers to a global
+                // node.set_global(true);
+            }
+        } else {
+            // We check for undefined vars here in case a symbol is subsequently defined.
             self.errors
                 .push(CompilerError::UndefinedVarError(UndefinedVarError {
                     name: node.name.clone(),

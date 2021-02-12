@@ -56,6 +56,9 @@ pub struct AsmTreeWalker {
     /// The internal counter to track which registers are used.
     register_counter: RegisterCounter,
 
+    /// The counter for tracking globals
+    global_counter: RegisterCounter,
+
     /// The collection of scopes
     scopes: ScopeTree,
 
@@ -163,25 +166,18 @@ impl AsmTreeWalker {
             labels: self.labels.clone(),
             functions: self.function_map(),
             constants: self.constants.clone(),
+            num_globals: self.global_counter.get_count()
         }
     }
 
     /// Get a reference to a symbol in the current scope
     fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        if let Some(node_id) = self.scopes.current_id {
-            self.scopes.get(node_id).unwrap().lookup(name)
-        } else {
-            None
-        }
+        self.scopes.lookup(name)
     }
 
     /// Get a mutable reference to a symbol in the current scope
     fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        if let Some(node_id) = self.scopes.current_id {
-            self.scopes.get_mut(node_id).unwrap().lookup_mut(name)
-        } else {
-            None
-        }
+        self.scopes.lookup_mut(name)
     }
 
     /// Allows for recursive determination of typed add instructions
@@ -479,26 +475,66 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
         let current_register;
+        let symbol = self.lookup_symbol(&node.name);
+
+        let sym = symbol.unwrap_or_else(||
+            panic!("Missing symbol, that passed semantic checks: {}", &node.name)
+        );
+
+        let global = sym.is_global();
 
         if let Some(expression) = &node.value {
             expression.visit(self)?;
+
             current_register = self.register_counter.current();
         } else {
             // Default value to 0 when uninitialized.
             current_register = self.register_counter.next().unwrap();
         }
 
+        if global {
+            // Store the reference in the globals register.
+            // Using next() "wastes" global r0, but makes it possible for us to skip a
+            // bunch of conditionals.
+            let dest_register = self.global_counter.next().unwrap();
+            let instruction = Instruction::GStore(current_register, dest_register);
+
+            self.instructions.push(instruction);
+            self.debug_spans.push(node.span);
+        }
+
+        let current_global_register = self.global_counter.current();
         let symbol = self.lookup_symbol_mut(&node.name);
+
         if let Some(sym) = symbol {
-            sym.location = Some(current_register);
+            if global {
+                sym.location = Some(current_global_register);
+                self.global_counter.next();
+            } else {
+                sym.location = Some(current_register);
+            }
         }
 
         Ok(())
     }
 
     fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
-        let sym = self.lookup_symbol(&node.name);
-        self.current_result = sym.unwrap().location.unwrap();
+        let sym = self.lookup_symbol(&node.name).unwrap();
+        let sym_loc = sym.location.unwrap();
+
+        if sym.is_global() {
+            let result_register = self.register_counter.next().unwrap();
+            let instruction = Instruction::GLoad(
+                sym_loc,
+                result_register
+            );
+            self.instructions.push(instruction);
+            self.debug_spans.push(node.span);
+
+            self.current_result = result_register;
+        } else {
+            self.current_result = sym_loc;
+        }
 
         Ok(())
     }
@@ -512,6 +548,15 @@ impl TreeWalker for AsmTreeWalker {
 
         self.instructions.push(assign);
         self.debug_spans.push(node.span);
+
+        // Copy over globals if necessary
+        if let ExpressionNode::Var(VarNode { name, .. }) = &*node.lhs {
+            if let Some(Symbol { scope_id: 0, location: Some(register), .. }) = self.lookup_symbol(&name) {
+                let store = Instruction::GStore(dest, *register);
+                self.instructions.push(store);
+                self.debug_spans.push(node.span);
+            }
+        }
 
         self.current_result = dest;
 
@@ -746,8 +791,6 @@ mod tests {
             };
 
             let _ = walker.visit_binary_op(&node);
-
-            println!("asd {:?}", walker.instructions);
 
             let expected = vec![
                 Instruction::IConst(Register(1), 123),
