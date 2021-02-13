@@ -184,6 +184,20 @@ impl AsmTreeWalker {
         self.scopes.lookup_mut(name)
     }
 
+    /// Check for a symbol in the global scope
+    fn lookup_global(&self, name: &str) -> Option<&Symbol> {
+        self.scopes.lookup_global(name)
+    }
+
+    /// encapsulate vars that can find themselves if they're global
+    fn lookup_var_symbol(&self, node: &VarNode) -> Option<&Symbol> {
+        if node.global {
+            self.lookup_global(&node.name)
+        } else {
+            self.lookup_symbol(&node.name)
+        }
+    }
+
     /// Allows for recursive determination of typed add instructions
     fn choose_add_instruction(
         &self,
@@ -197,8 +211,8 @@ impl AsmTreeWalker {
                 self.choose_add_instruction(bin_op, reg_left, reg_right, reg_result)
             }
             (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
-                let type1 = self.lookup_symbol(&var_node1.name).unwrap().type_;
-                let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
+                let type1 = self.lookup_var_symbol(&var_node1).unwrap().type_;
+                let type2 = self.lookup_var_symbol(&var_node2).unwrap().type_;
 
                 if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
                     Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
@@ -207,7 +221,7 @@ impl AsmTreeWalker {
                 }
             }
             (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
-                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
 
                 if let LPCType::Int(false) = type_ {
                     Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
@@ -216,7 +230,7 @@ impl AsmTreeWalker {
                 }
             }
             (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
-                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
 
                 if let LPCType::Int(false) = type_ {
                     Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
@@ -247,8 +261,8 @@ impl AsmTreeWalker {
                 self.choose_mul_instruction(bin_op, reg_left, reg_right, reg_result)
             }
             (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
-                let type1 = self.lookup_symbol(&var_node1.name).unwrap().type_;
-                let type2 = self.lookup_symbol(&var_node2.name).unwrap().type_;
+                let type1 = self.lookup_var_symbol(&var_node1).unwrap().type_;
+                let type2 = self.lookup_var_symbol(&var_node2).unwrap().type_;
 
                 if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
                     Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
@@ -257,7 +271,7 @@ impl AsmTreeWalker {
                 }
             }
             (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
-                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
 
                 if let LPCType::Int(false) = type_ {
                     Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
@@ -266,7 +280,7 @@ impl AsmTreeWalker {
                 }
             }
             (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
-                let type_ = self.lookup_symbol(&var_node.name).unwrap().type_;
+                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
 
                 if let LPCType::Int(false) = type_ {
                     Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
@@ -321,6 +335,7 @@ impl TreeWalker for AsmTreeWalker {
             let mut function_args = function_args.to_vec();
 
             for (idx, function_arg) in function_args.iter_mut().enumerate() {
+                // use passed parameters, or default parameters if applicable.
                 if let Some(arg) = node.arguments.get_mut(idx) {
                     arg.visit(self)?;
                     arg_results.push(self.current_result);
@@ -523,7 +538,8 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<(), CompilerError> {
-        let sym = self.lookup_symbol(&node.name).unwrap();
+        let sym = self.lookup_var_symbol(node).unwrap();
+
         let sym_loc = sym.location.unwrap();
 
         if sym.is_global() {
@@ -555,7 +571,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // Copy over globals if necessary
         if let ExpressionNode::Var(VarNode { name, global: true, .. }) = &*node.lhs {
-            if let Some(Symbol { scope_id: 0, location: Some(register), .. }) = self.lookup_symbol(&name) {
+            if let Some(Symbol { scope_id: 0, location: Some(register), .. }) = self.lookup_global(&name) {
                 let store = Instruction::GStore(dest, *register);
                 self.instructions.push(store);
                 self.debug_spans.push(node.span);
@@ -954,7 +970,7 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_var_sets_the_result_for_globals() {
+    fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
         insert_symbol(
@@ -968,17 +984,51 @@ mod tests {
                 span: None,
             },
         );
+        // push a local scope with a matching variable in a different location
+        walker.scopes.push_new();
+        insert_symbol(
+            walker.borrow_mut(),
+            Symbol {
+                name: "marf".to_string(),
+                type_: LPCType::Int(false),
+                static_: false,
+                location: Some(Register(222)),
+                scope_id: 1,
+                span: None,
+            },
+        );
 
-        let mut node = VarNode::new("marf");
+        let mut node = VarNode {
+            name: "marf".to_string(),
+            span: None,
+            global: true
+        };
 
         let _ = walker.visit_var(node.borrow_mut());
         assert_eq!(walker.current_result, Register(1)); // global loaded into r1
+
+        let expected = vec![
+            GLoad(Register(666), Register(1))
+        ];
+        assert_eq!(walker.instructions, expected);
     }
 
     #[test]
     fn test_visit_var_sets_the_result_for_locals() {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
+        insert_symbol(
+            walker.borrow_mut(),
+            // push a global marf to ensure we don't find it.
+            Symbol {
+                name: "marf".to_string(),
+                type_: LPCType::Int(false),
+                static_: false,
+                location: Some(Register(444)),
+                scope_id: 0,
+                span: None,
+            },
+        );
         walker.scopes.push_new(); // push a local scope
         insert_symbol(
             walker.borrow_mut(),
@@ -987,7 +1037,7 @@ mod tests {
                 type_: LPCType::Int(false),
                 static_: false,
                 location: Some(Register(666)),
-                scope_id: 0,
+                scope_id: 1,
                 span: None,
             },
         );
@@ -996,6 +1046,9 @@ mod tests {
 
         let _ = walker.visit_var(node.borrow_mut());
         assert_eq!(walker.current_result, Register(666));
+
+        let expected = vec![];
+        assert_eq!(walker.instructions, expected);
     }
 
     #[test]
@@ -1007,17 +1060,35 @@ mod tests {
             type_: LPCType::Int(false),
             static_: false,
             location: Some(Register(666)),
+            scope_id: 0,
+            span: None,
+        };
+        insert_symbol(
+            walker.borrow_mut(),
+            sym,
+        );
+
+        // push a different, local `marf`, to ensure that we don't find it for this assignment.
+        walker.scopes.push_new();
+        let sym = Symbol {
+            name: "marf".to_string(),
+            type_: LPCType::Int(false),
+            static_: false,
+            location: Some(Register(123)),
             scope_id: 1,
             span: None,
         };
-
         insert_symbol(
             walker.borrow_mut(),
             sym,
         );
 
         let mut node = AssignmentNode {
-            lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
+            lhs: Box::new(ExpressionNode::Var(VarNode {
+                name: "marf".to_string(),
+                span: None,
+                global: true
+            })),
             rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
             op: AssignmentOperation::Simple,
             span: None,
@@ -1029,7 +1100,8 @@ mod tests {
             [
                 GLoad(Register(666), Register(1)),
                 IConst(Register(2), -12),
-                RegCopy(Register(2), Register(1))
+                RegCopy(Register(2), Register(1)),
+                GStore(Register(1), Register(666))
             ]
         );
     }

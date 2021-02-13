@@ -130,7 +130,7 @@ impl ScopeTree {
         }
     }
 
-    /// Lookup a symbol, recursing up to parent scopes as necessary.
+    /// Look up a symbol, recursing up to parent scopes as necessary.
     ///
     /// # Arguments
     ///
@@ -148,7 +148,7 @@ impl ScopeTree {
         }
     }
 
-    /// Lookup a symbol and return a mutable reference,
+    /// Look up a symbol and return a mutable reference,
     /// recursing up to parent scopes as necessary.
     ///
     /// # Arguments
@@ -167,6 +167,19 @@ impl ScopeTree {
             }
 
             node_id = node.parent()?;
+        }
+    }
+
+    /// Look up a symbol in the global scope and return a reference if found.
+    ///
+    /// # Arguments
+    ///
+    /// * `name`: The name of the symbol to look up.
+    pub fn lookup_global(&self, name: &str) -> Option<&Symbol> {
+        if let Some(root_id) = self.root_id {
+            self.scopes.get(root_id)?.get().lookup(name)
+        } else {
+            None
         }
     }
 }
