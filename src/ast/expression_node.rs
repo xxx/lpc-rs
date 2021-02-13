@@ -42,7 +42,7 @@ impl ExpressionNode {
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl ASTNodeTrait for ExpressionNode {
-            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
                 match self {
                 $(
                     $x(y) => y.visit(tree_walker),

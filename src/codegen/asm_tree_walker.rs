@@ -86,19 +86,23 @@ impl AsmTreeWalker {
     ///
     /// # Examples
     /// ```
+    /// use std::borrow::BorrowMut;
     /// use lpc_rs::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
     /// use lpc_rs::ast::int_node::IntNode;
     /// use lpc_rs::ast::expression_node::ExpressionNode;
     /// use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
     /// use lpc_rs::codegen::tree_walker::TreeWalker;
-    /// let node = BinaryOpNode {
+    ///
+    /// let mut node = BinaryOpNode {
     ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
     ///     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
     ///     op: BinaryOperation::Sub,
     ///     span: None
     /// };
     /// let mut walker = AsmTreeWalker::default();
-    /// walker.visit_binary_op(&node);
+    ///
+    /// walker.visit_binary_op(node.borrow_mut());
+    ///
     /// for instruction in walker.listing() {
     ///     println!("{}", instruction);
     /// }
@@ -298,26 +302,26 @@ impl AsmTreeWalker {
 }
 
 impl TreeWalker for AsmTreeWalker {
-    fn visit_program(&mut self, program: &ProgramNode) -> Result<(), CompilerError> {
+    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<(), CompilerError> {
         self.scopes.goto_root();
-        for expr in &program.body {
-            expr.visit(self)?
+        for expr in &mut program.body {
+            let _ = expr.visit(self);
         }
         self.scopes.pop();
 
         Ok(())
     }
 
-    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> {
         let mut arg_results = vec![];
 
         let params = self.function_params.get(&node.name);
 
         if let Some(function_args) = params {
-            let function_args = function_args.to_vec();
+            let mut function_args = function_args.to_vec();
 
-            for (idx, function_arg) in function_args.iter().enumerate() {
-                if let Some(arg) = node.arguments.get(idx) {
+            for (idx, function_arg) in function_args.iter_mut().enumerate() {
+                if let Some(arg) = node.arguments.get_mut(idx) {
                     arg.visit(self)?;
                     arg_results.push(self.current_result);
                 } else if let Some(arg) = function_arg {
@@ -327,7 +331,7 @@ impl TreeWalker for AsmTreeWalker {
             }
         } else {
             // TODO: This is where efuns are handled
-            for argument in &node.arguments {
+            for argument in &mut node.arguments {
                 argument.visit(self)?;
                 arg_results.push(self.current_result);
             }
@@ -360,7 +364,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_int(&mut self, node: &IntNode) -> Result<(), CompilerError> {
+    fn visit_int(&mut self, node: &mut IntNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next();
         self.current_result = register.unwrap();
         let instruction = match node.value {
@@ -374,7 +378,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_string(&mut self, node: &StringNode) -> Result<(), CompilerError> {
+    fn visit_string(&mut self, node: &mut StringNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
@@ -386,7 +390,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self)?;
         let reg_left = self.current_result;
 
@@ -412,7 +416,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let return_address = self.instructions.len();
 
         let len = self.instructions.len();
@@ -423,7 +427,7 @@ impl TreeWalker for AsmTreeWalker {
             self.visit_parameter(parameter)?;
         }
 
-        for expression in &node.body {
+        for expression in &mut node.body {
             expression.visit(self)?;
         }
 
@@ -451,8 +455,8 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> {
-        if let Some(expression) = &node.value {
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), CompilerError> {
+        if let Some(expression) = &mut node.value {
             expression.visit(self)?;
             let copy = Instruction::RegCopy(self.current_result, Register(0));
             self.instructions.push(copy);
@@ -465,15 +469,15 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> {
-        for init in &node.initializations {
-            let _ = self.visit_var_init(&init);
+    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<(), CompilerError> {
+        for init in &mut node.initializations {
+            let _ = self.visit_var_init(init);
         }
 
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
         let current_register;
         let symbol = self.lookup_symbol(&node.name);
 
@@ -483,7 +487,7 @@ impl TreeWalker for AsmTreeWalker {
 
         let global = sym.is_global();
 
-        if let Some(expression) = &node.value {
+        if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
             current_register = self.register_counter.current();
@@ -518,7 +522,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), CompilerError> {
         let sym = self.lookup_symbol(&node.name).unwrap();
         let sym_loc = sym.location.unwrap();
 
@@ -539,7 +543,7 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError> {
         node.lhs.visit(self)?;
         let dest = self.current_result;
         node.rhs.visit(self)?;
@@ -563,9 +567,9 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
-    fn visit_array(&mut self, node: &ArrayNode) -> Result<(), CompilerError> {
+    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<(), CompilerError> {
         let mut items = Vec::with_capacity(node.value.len());
-        for member in &node.value {
+        for member in &mut node.value {
             let _ = member.visit(self);
             items.push(self.current_result);
         }
@@ -605,9 +609,9 @@ mod tests {
                 print(4 + 5);
             }
         ";
-        let tree = lpc_parser::ProgramParser::new().parse(program).unwrap();
+        let mut tree = lpc_parser::ProgramParser::new().parse(program).unwrap();
 
-        let _ = scope_walker.visit_program(&tree);
+        let _ = scope_walker.visit_program(tree.borrow_mut());
 
         let scopes = ScopeTree::from(scope_walker);
         walker.scopes = scopes;
@@ -638,9 +642,9 @@ mod tests {
         fn test_visit_call_populates_the_instructions() {
             let mut walker = AsmTreeWalker::default();
             let call = "print(4 - 5)";
-            let tree = lpc_parser::CallParser::new().parse(call).unwrap();
+            let mut tree = lpc_parser::CallParser::new().parse(call).unwrap();
 
-            let _ = walker.visit_call(&tree);
+            let _ = walker.visit_call(tree.borrow_mut());
 
             let expected = vec![
                 Instruction::IConst(Register(1), -1),
@@ -669,9 +673,9 @@ mod tests {
 
             let mut walker = AsmTreeWalker::new(scope_tree, functions);
             let call = "foo(666)";
-            let tree = lpc_parser::CallParser::new().parse(call).unwrap();
+            let mut tree = lpc_parser::CallParser::new().parse(call).unwrap();
 
-            let _ = walker.visit_call(&tree);
+            let _ = walker.visit_call(tree.borrow_mut());
 
             let expected = vec![
                 Instruction::IConst(Register(1), 666),
@@ -695,13 +699,13 @@ mod tests {
     fn test_visit_int_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
 
-        let tree = IntNode::new(666);
-        let tree0 = IntNode::new(0);
-        let tree1 = IntNode::new(1);
+        let mut tree = IntNode::new(666);
+        let mut tree0 = IntNode::new(0);
+        let mut tree1 = IntNode::new(1);
 
-        let _ = walker.visit_int(&tree);
-        let _ = walker.visit_int(&tree0);
-        let _ = walker.visit_int(&tree1);
+        let _ = walker.visit_int(tree.borrow_mut());
+        let _ = walker.visit_int(tree0.borrow_mut());
+        let _ = walker.visit_int(tree1.borrow_mut());
 
         let expected = vec![
             Instruction::IConst(Register(1), 666),
@@ -721,7 +725,7 @@ mod tests {
         fn test_visit_binary_op_populates_the_instructions_for_ints() {
             let mut walker = AsmTreeWalker::default();
 
-            let node = BinaryOpNode {
+            let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::Int(IntNode::new(666))),
                 r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
@@ -733,7 +737,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&node);
+            let _ = walker.visit_binary_op(node.borrow_mut());
 
             let expected = vec![
                 Instruction::IConst(Register(1), 666),
@@ -752,7 +756,7 @@ mod tests {
         fn test_visit_binary_op_populates_the_instructions_for_strings() {
             let mut walker = AsmTreeWalker::default();
 
-            let node = BinaryOpNode {
+            let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
                 r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::String(StringNode::new("bar"))),
@@ -764,7 +768,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&node);
+            let _ = walker.visit_binary_op(node.borrow_mut());
 
             let expected = vec![
                 Instruction::SConst(Register(1), 0),
@@ -783,14 +787,14 @@ mod tests {
         fn test_visit_binary_op_populates_the_instructions_for_arrays() {
             let mut walker = AsmTreeWalker::default();
 
-            let node = BinaryOpNode {
+            let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
                 r: Box::new(ExpressionNode::from(vec![ExpressionNode::from(456)])),
                 op: BinaryOperation::Add,
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&node);
+            let _ = walker.visit_binary_op(node.borrow_mut());
 
             let expected = vec![
                 Instruction::IConst(Register(1), 123),
@@ -809,13 +813,13 @@ mod tests {
     #[test]
     fn test_visit_string_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
-        let node = StringNode::new("marf");
-        let node2 = StringNode::new("tacos");
-        let node3 = StringNode::new("marf");
+        let mut node = StringNode::new("marf");
+        let mut node2 = StringNode::new("tacos");
+        let mut node3 = StringNode::new("marf");
 
-        let _ = walker.visit_string(&node);
-        let _ = walker.visit_string(&node2);
-        let _ = walker.visit_string(&node3);
+        let _ = walker.visit_string(node.borrow_mut());
+        let _ = walker.visit_string(node2.borrow_mut());
+        let _ = walker.visit_string(node3.borrow_mut());
 
         let expected = vec![
             SConst(Register(1), 0),
@@ -835,18 +839,18 @@ mod tests {
         let call = "int main(int i) { return i + 4; }";
         let tree = lpc_parser::DefParser::new().parse(call).unwrap();
 
-        let node = if let ASTNode::FunctionDef(node) = tree {
+        let mut node = if let ASTNode::FunctionDef(node) = tree {
             node
         } else {
             panic!("Didn't receive a function def?");
         };
 
-        let _ = scope_walker.visit_function_def(&node);
+        let _ = scope_walker.visit_function_def(node.borrow_mut());
 
         let mut scopes = ScopeTree::from(scope_walker);
         scopes.goto_root();
         walker.scopes = scopes;
-        let _ = walker.visit_function_def(&node);
+        let _ = walker.visit_function_def(node.borrow_mut());
 
         let expected = vec![
             Instruction::IConst(Register(2), 4),
@@ -875,8 +879,8 @@ mod tests {
     fn visit_return_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
 
-        let node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
-        let _ = walker.visit_return(&node);
+        let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
+        let _ = walker.visit_return(node.borrow_mut());
 
         let expected = vec![
             Instruction::IConst(Register(1), 666),
@@ -891,8 +895,8 @@ mod tests {
         /* === */
 
         let mut walker = AsmTreeWalker::default();
-        let node = ReturnNode::new(None);
-        let _ = walker.visit_return(&node);
+        let mut node = ReturnNode::new(None);
+        let _ = walker.visit_return(node.borrow_mut());
 
         let expected = vec![Instruction::Ret];
 
@@ -905,12 +909,12 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let mut scope_walker = ScopeWalker::default();
         let call = "int foo = 1, *bar = ({ 56 })";
-        let tree = lpc_parser::DeclParser::new().parse(call).unwrap();
+        let mut tree = lpc_parser::DeclParser::new().parse(call).unwrap();
 
-        let _ = scope_walker.visit_decl(&tree);
+        let _ = scope_walker.visit_decl(tree.borrow_mut());
 
         let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker), HashMap::new());
-        let _ = walker.visit_decl(&tree);
+        let _ = walker.visit_decl(tree.borrow_mut());
 
         let expected = vec![
             IConst1(Register(1)),
@@ -963,9 +967,9 @@ mod tests {
             },
         );
 
-        let node = VarNode::new("marf");
+        let mut node = VarNode::new("marf");
 
-        let _ = walker.visit_var(&node);
+        let _ = walker.visit_var(node.borrow_mut());
         assert_eq!(walker.current_result, Register(666));
     }
 
@@ -985,14 +989,14 @@ mod tests {
             },
         );
 
-        let node = AssignmentNode {
+        let mut node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
             rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
             op: AssignmentOperation::Simple,
             span: None,
         };
 
-        let _ = walker.visit_assignment(&node);
+        let _ = walker.visit_assignment(node.borrow_mut());
         assert_eq!(
             walker.instructions,
             [
@@ -1006,13 +1010,13 @@ mod tests {
     fn test_visit_array_populates_the_instructions() {
         let mut walker = AsmTreeWalker::default();
 
-        let arr = ArrayNode::new(vec![
+        let mut arr = ArrayNode::new(vec![
             ExpressionNode::from(123),
             ExpressionNode::from("foo"),
             ExpressionNode::from(vec![ExpressionNode::from(666)]),
         ]);
 
-        let _ = walker.visit_array(&arr);
+        let _ = walker.visit_array(arr.borrow_mut());
 
         let expected = vec![
             Instruction::IConst(Register(1), 123),

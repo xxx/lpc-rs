@@ -64,8 +64,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         self.errors.to_vec()
     }
 
-    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> {
-        for argument in &node.arguments {
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> {
+        for argument in &mut node.arguments {
             argument.visit(self)?;
         }
 
@@ -137,7 +137,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
@@ -151,22 +151,22 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         }
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         self.current_function = Some(node.clone());
 
-        for parameter in &node.parameters {
+        for parameter in &mut node.parameters {
             parameter.visit(self)?;
         }
 
-        for expression in &node.body {
+        for expression in &mut node.body {
             expression.visit(self)?;
         }
 
         Ok(())
     }
 
-    fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> {
-        if let Some(expression) = &node.value {
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), CompilerError> {
+        if let Some(expression) = &mut node.value {
             expression.visit(self)?;
         }
 
@@ -204,8 +204,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
-        if let Some(expression) = &node.value {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
+        if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
             let expr_type = node_type(expression, self.scopes, &self.function_return_values());
@@ -235,7 +235,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         Ok(())
     }
 
-    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError> {
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
@@ -280,7 +280,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_allows_known_functions() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
@@ -310,7 +310,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_allows_known_efuns() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "dump".to_string(),
                 span: None,
@@ -327,7 +327,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_disallows_unknown_functions() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "unknown".to_string(),
                 span: None,
@@ -343,7 +343,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_disallows_incorrect_function_arity() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "print".to_string(),
                 span: None,
@@ -359,7 +359,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_understands_argument_defaults() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "my_func".to_string(),
                 span: None,
@@ -388,7 +388,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_disallows_invalid_arg_types() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(123)],
                 name: "my_func".to_string(),
                 span: None,
@@ -417,7 +417,7 @@ mod tests {
 
         #[test]
         fn test_visit_call_allows_0() {
-            let node = ExpressionNode::from(CallNode {
+            let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(0)],
                 name: "my_func".to_string(),
                 span: None,
@@ -451,7 +451,7 @@ mod tests {
 
         #[test]
         fn test_visit_binary_op_validates_both_sides() -> Result<(), CompilerError> {
-            let node = ExpressionNode::from(BinaryOpNode {
+            let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
                 op: BinaryOperation::Add,
@@ -469,7 +469,7 @@ mod tests {
 
         #[test]
         fn test_visit_assignment_disallows_differing_types() {
-            let node = ExpressionNode::from(BinaryOpNode {
+            let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(123)),
                 op: BinaryOperation::Sub,
@@ -491,7 +491,7 @@ mod tests {
 
         #[test]
         fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {
-            let node = ExpressionNode::from(AssignmentNode {
+            let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
                 op: AssignmentOperation::Simple,
@@ -509,7 +509,7 @@ mod tests {
 
         #[test]
         fn test_visit_assignment_always_allows_0() -> Result<(), CompilerError> {
-            let node = ExpressionNode::from(AssignmentNode {
+            let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
                 op: AssignmentOperation::Simple,
@@ -527,7 +527,7 @@ mod tests {
 
         #[test]
         fn test_visit_assignment_disallows_differing_types() {
-            let node = ExpressionNode::from(AssignmentNode {
+            let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
                 op: AssignmentOperation::Simple,
@@ -549,7 +549,7 @@ mod tests {
 
         #[test]
         fn test_visit_var_init_validates_both_sides() {
-            let node = VarInitNode {
+            let mut node = VarInitNode {
                 name: "foo".to_string(),
                 type_: LPCType::Int(false),
                 value: Some(ExpressionNode::from(123)),
@@ -569,7 +569,7 @@ mod tests {
 
         #[test]
         fn test_visit_assignment_always_allows_0() {
-            let node = VarInitNode {
+            let mut node = VarInitNode {
                 type_: LPCType::String(false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(0)),
@@ -589,7 +589,7 @@ mod tests {
 
         #[test]
         fn test_visit_assignment_disallows_differing_types() {
-            let node = VarInitNode {
+            let mut node = VarInitNode {
                 type_: LPCType::String(false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(123)),
@@ -616,12 +616,12 @@ mod tests {
 
             #[test]
             fn test_visit_return() {
-                let void_node = ReturnNode {
+                let mut void_node = ReturnNode {
                     value: None, // indicates a Void return value.
                     span: None,
                 };
 
-                let int_node = ReturnNode {
+                let mut int_node = ReturnNode {
                     value: Some(ExpressionNode::from(100)),
                     span: None,
                 };
@@ -671,7 +671,7 @@ mod tests {
 
             #[test]
             fn test_visit_return_allows_0() {
-                let node = ReturnNode {
+                let mut node = ReturnNode {
                     value: Some(ExpressionNode::from(0)),
                     span: None,
                 };
@@ -696,7 +696,7 @@ mod tests {
 
             #[test]
             fn test_visit_return_allows_mixed() {
-                let node = ReturnNode {
+                let mut node = ReturnNode {
                     value: Some(ExpressionNode::from(123)),
                     span: None,
                 };
@@ -726,7 +726,7 @@ mod tests {
             #[test]
             fn test_visit_assignment_always_allows_0() {
                 // It's easiest to test visit_assignment() through VarInitNodes
-                let node = VarInitNode {
+                let mut node = VarInitNode {
                     type_: LPCType::String(false),
                     name: "foo".to_string(),
                     value: Some(ExpressionNode::from(0)),
@@ -746,7 +746,7 @@ mod tests {
 
             #[test]
             fn test_visit_assignment_allows_mixed() {
-                let init_node = VarInitNode {
+                let mut init_node = VarInitNode {
                     type_: LPCType::Mixed(false),
                     name: "foo".to_string(),
                     value: Some(ExpressionNode::from(324)),
@@ -757,7 +757,7 @@ mod tests {
 
                 let var_node = VarNode::new("foo");
 
-                let assignment_node = AssignmentNode {
+                let mut assignment_node = AssignmentNode {
                     lhs: Box::new(ExpressionNode::Var(var_node)),
                     rhs: Box::new(ExpressionNode::from("foobar")),
                     op: AssignmentOperation::Simple,
@@ -782,7 +782,7 @@ mod tests {
 
             #[test]
             fn test_visit_assignment_disallows_differing_types() {
-                let node = VarInitNode {
+                let mut node = VarInitNode {
                     type_: LPCType::String(false),
                     name: "foo".to_string(),
                     value: Some(ExpressionNode::from(123)),

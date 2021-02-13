@@ -40,8 +40,8 @@ impl Symbol {
     }
 }
 
-impl From<&VarInitNode> for Symbol {
-    fn from(node: &VarInitNode) -> Self {
+impl From<&mut VarInitNode> for Symbol {
+    fn from(node: &mut VarInitNode) -> Self {
         let s = Self::new(&node.name, node.type_);
 
         Self {

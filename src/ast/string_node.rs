@@ -22,7 +22,7 @@ impl StringNode {
 
 impl ASTNodeTrait for StringNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_string(self)
     }
 }

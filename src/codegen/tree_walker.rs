@@ -22,8 +22,8 @@ pub trait TreeWalker {
     }
 
     /// Visit a program node. This is the top-level translation unit.
-    fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> where Self: Sized {
-        for expr in &node.body {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> where Self: Sized {
+        for expr in &mut node.body {
             expr.visit(self)?;
         }
 
@@ -31,8 +31,8 @@ pub trait TreeWalker {
     }
 
     /// Visit a function call node
-    fn visit_call(&mut self, node: &CallNode) -> Result<(), CompilerError> where Self: Sized {
-        for argument in &node.arguments {
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> where Self: Sized {
+        for argument in &mut node.arguments {
             argument.visit(self)?;
         }
 
@@ -40,13 +40,13 @@ pub trait TreeWalker {
     }
 
     /// Visit an int (literal) node
-    fn visit_int(&mut self, _node: &IntNode)  -> Result<(), CompilerError> { Ok(()) }
+    fn visit_int(&mut self, _node: &mut IntNode)  -> Result<(), CompilerError> { Ok(()) }
 
     /// Visit a string (literal) node
-    fn visit_string(&mut self, _node: &StringNode) -> Result<(), CompilerError> { Ok(()) }
+    fn visit_string(&mut self, _node: &mut StringNode) -> Result<(), CompilerError> { Ok(()) }
 
     /// Visit a binary operation node
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> where Self: Sized {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> where Self: Sized {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
@@ -54,12 +54,12 @@ pub trait TreeWalker {
     }
 
     /// Visit a function definition node
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> where Self: Sized {
-        for parameter in &node.parameters {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> where Self: Sized {
+        for parameter in &mut node.parameters {
             parameter.visit(self)?;
         }
 
-        for expression in &node.body {
+        for expression in &mut node.body {
             expression.visit(self)?;
         }
 
@@ -67,8 +67,8 @@ pub trait TreeWalker {
     }
 
     /// Visit a function return node
-    fn visit_return(&mut self, node: &ReturnNode) -> Result<(), CompilerError> where Self: Sized {
-        if let Some(expression) = &node.value {
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), CompilerError> where Self: Sized {
+        if let Some(expression) = &mut node.value {
             expression.visit(self)?;
         }
 
@@ -76,8 +76,8 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable declaration node
-    fn visit_decl(&mut self, node: &DeclNode) -> Result<(), CompilerError> where Self: Sized {
-        for init in &node.initializations {
+    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<(), CompilerError> where Self: Sized {
+        for init in &mut node.initializations {
             init.visit(self)?;
         }
 
@@ -85,8 +85,8 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable initialization node
-    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> where Self: Sized {
-        if let Some(expr) = &node.value {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> where Self: Sized {
+        if let Some(expr) = &mut node.value {
             expr.visit(self)?;
         }
 
@@ -94,12 +94,12 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable use node
-    fn visit_var(&mut self, _node: &VarNode) -> Result<(), CompilerError>  where Self: Sized {
+    fn visit_var(&mut self, _node: &mut VarNode) -> Result<(), CompilerError>  where Self: Sized {
         Ok(())
     }
 
     /// Visit an assignment node
-    fn visit_assignment(&mut self, node: &AssignmentNode) -> Result<(), CompilerError>
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError>
         where Self: Sized
     {
         node.lhs.visit(self)?;
@@ -109,10 +109,10 @@ pub trait TreeWalker {
     }
 
     /// Visit an array literal node
-    fn visit_array(&mut self, node: &ArrayNode) -> Result<(), CompilerError>
+    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<(), CompilerError>
         where Self: Sized
     {
-        for node in &node.value {
+        for node in &mut node.value {
             node.visit(self)?;
         }
 

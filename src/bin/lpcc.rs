@@ -50,7 +50,7 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     let program = lpc_parser::ProgramParser::new().parse(&file_content);
 
-    let program = match program {
+    let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
             errors.push(CompilerError::ParseError(ParseError::from(e)));

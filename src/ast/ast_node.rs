@@ -29,15 +29,15 @@ pub enum ASTNode {
     VarInit(VarInitNode),
 }
 
-#[auto_impl(&, &mut)]
+#[auto_impl(&mut)]
 pub trait ASTNodeTrait: PartialEq + Display {
-    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError>;
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError>;
 }
 
 macro_rules! node_defs {
     ( $( $x:ident ),+ ) => {
         impl ASTNodeTrait for ASTNode {
-            fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
                 match self {
                  $(
                     ASTNode::$x(y) => y.visit(tree_walker),

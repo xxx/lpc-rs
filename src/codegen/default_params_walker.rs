@@ -25,7 +25,7 @@ impl DefaultParamsWalker {
 }
 
 impl TreeWalker for DefaultParamsWalker {
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let vec = node
             .parameters
             .iter()
@@ -47,6 +47,7 @@ impl Default for DefaultParamsWalker {
 mod tests {
     use super::*;
     use crate::{ast::var_init_node::VarInitNode, semantic::lpc_type::LPCType};
+    use std::borrow::BorrowMut;
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
@@ -71,7 +72,7 @@ mod tests {
             },
         ];
 
-        let node = FunctionDefNode {
+        let mut node = FunctionDefNode {
             return_type: LPCType::Void,
             name: "foo".to_string(),
             parameters,
@@ -79,7 +80,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_function_def(&node);
+        let _ = walker.visit_function_def(node.borrow_mut());
 
         let params = walker.functions.get("foo").unwrap();
 

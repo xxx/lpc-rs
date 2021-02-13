@@ -46,7 +46,7 @@ pub struct BinaryOpNode {
 
 impl ASTNodeTrait for BinaryOpNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_binary_op(self)
     }
 }

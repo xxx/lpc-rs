@@ -54,35 +54,35 @@ impl TreeWalker for ScopeWalker {
         self.errors.to_vec()
     }
 
-    fn visit_program(&mut self, node: &ProgramNode) -> Result<(), CompilerError> {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> {
         // Push the global scope
         self.scopes.push_new();
 
-        for expr in &node.body {
+        for expr in &mut node.body {
             expr.visit(self)?;
         }
 
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &BinaryOpNode) -> Result<(), CompilerError> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let scope_id = self.scopes.push_new();
         self.scopes.insert_function(&node.name, &scope_id);
 
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
 
-        for parameter in &node.parameters {
+        for parameter in &mut node.parameters {
             parameter.visit(self)?;
         }
 
-        for expression in &node.body {
+        for expression in &mut node.body {
             expression.visit(self)?;
         }
 
@@ -114,7 +114,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
         if let Err(e) = check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
             self.errors.push(CompilerError::VarRedefinitionError(e));
         }
@@ -124,13 +124,12 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &VarNode) -> Result<(), CompilerError> {
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), CompilerError> {
         let sym = self.scopes.lookup(&node.name);
 
         if let Some(symbol) = sym {
             if symbol.is_global() {
-                // TODO: track that this var reference refers to a global
-                // node.set_global(true);
+                node.set_global(true);
             }
         } else {
             // We check for undefined vars here in case a symbol is subsequently defined.

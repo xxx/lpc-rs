@@ -20,7 +20,7 @@ pub struct CallNode {
 }
 
 impl ASTNodeTrait for CallNode {
-    fn visit(&self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_call(self)
     }
 }
