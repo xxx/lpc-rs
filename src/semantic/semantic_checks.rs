@@ -94,6 +94,7 @@ pub fn check_binary_operation_types(
             match tuple {
                 (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
                 (LPCType::String(false), LPCType::Int(false)) => Ok(()),
+                (LPCType::Int(false), LPCType::String(false)) => Ok(()),
                 (LPCType::String(false), LPCType::String(false)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Add, left_type, right_type))
@@ -110,6 +111,7 @@ pub fn check_binary_operation_types(
             match tuple {
                 (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
                 (LPCType::String(false), LPCType::Int(false)) => Ok(()),
+                (LPCType::Int(false), LPCType::String(false)) => Ok(()),
                 (left_type, right_type) =>
                     Err(create_error(node, BinaryOperation::Mul, left_type, right_type))
             }
@@ -124,7 +126,30 @@ pub fn check_binary_operation_types(
     }
 }
 
+/// Check two types, and return the promotion if one occurs (or the same type if both are the same)
+/// Returns the first type if no promotion is possible.
+fn combine_types(type1: LPCType, type2: LPCType) -> LPCType {
+    if type1 == type2 ||
+        (!type1.is_array() && type2.is_array()) ||
+        (type1.is_array() && !type2.is_array()) {
+
+        return type1;
+    }
+
+    // array + array is always a mixed array
+    if type1.is_array() && type2.is_array() {
+        return LPCType::Mixed(true);
+    }
+
+    match (type1, type2) {
+        (LPCType::Int(false), LPCType::String(false)) => LPCType::String(false),
+        (LPCType::String(false), LPCType::Int(false)) => LPCType::String(false),
+        (x, _) => x
+    }
+}
+
 /// Resolve an expression node down to a single type, recursively if necessary
+/// Handles type promotion when necessary.
 ///
 /// # Arguments
 /// `node` - The `ExpressionNode` whose type we would like to resolve.
@@ -156,9 +181,11 @@ pub fn node_type(
                 _ => panic!("undefined symbol {}", name)
             }
         }
-        ExpressionNode::BinaryOp(BinaryOpNode { l, .. }) => {
-            // TODO: int + string = string, and this doesn't handle that.
-            node_type(l, scope_tree, function_return_types)
+        ExpressionNode::BinaryOp(BinaryOpNode { l, r, .. }) => {
+            combine_types(
+                node_type(l, scope_tree, function_return_types),
+                node_type(r, scope_tree, function_return_types)
+            )
         }
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
@@ -375,13 +402,13 @@ mod check_binary_operation_tests {
         assert!(int_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_string_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
-        assert!(int_string_literals(BinaryOperation::Add, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_literals(BinaryOperation::Add, &scope_tree).is_ok());
 
         assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
-        assert!(int_string_vars(BinaryOperation::Add, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_vars(BinaryOperation::Add, &scope_tree).is_ok());
 
         // valid complex tree
@@ -418,7 +445,7 @@ mod check_binary_operation_tests {
             get_result(
                 BinaryOperation::Add,
                 ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(222)),
+                    l: Box::new(ExpressionNode::from(vec![123])),
                     r: Box::new(
                         ExpressionNode::from(VarNode::new("int1"))
                     ),
@@ -451,11 +478,13 @@ mod check_binary_operation_tests {
         assert!(string_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(string_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(int_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Sub, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(string_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(int_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Sub, &scope_tree).is_err());
 
         // valid complex tree
         assert!(
@@ -523,12 +552,14 @@ mod check_binary_operation_tests {
         assert!(int_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(string_string_literals(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(string_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
-        assert!(int_string_literals(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Mul, &scope_tree).is_ok());
+        assert!(array_array_literals(BinaryOperation::Mul, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(string_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
-        assert!(int_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Mul, &scope_tree).is_ok());
+        assert!(array_array_vars(BinaryOperation::Mul, &scope_tree).is_err());
 
         // valid complex tree
         assert!(
@@ -564,7 +595,7 @@ mod check_binary_operation_tests {
             get_result(
                 BinaryOperation::Mul,
                 ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(222)),
+                    l: Box::new(ExpressionNode::from(vec![222])),
                     r: Box::new(
                         ExpressionNode::from(VarNode::new("int1"))
                     ),
@@ -597,11 +628,13 @@ mod check_binary_operation_tests {
         assert!(string_string_literals(BinaryOperation::Div, &scope_tree).is_err());
         assert!(string_int_literals(BinaryOperation::Div, &scope_tree).is_err());
         assert!(int_string_literals(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Div, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Div, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(string_int_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(int_string_vars(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Div, &scope_tree).is_err());
 
         // valid complex tree
         assert!(
@@ -715,6 +748,42 @@ mod check_node_type_tests {
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
                 LPCType::Mixed(true)
+            );
+        }
+
+        #[test]
+        fn test_node_type_int_op_string_is_string() {
+            let scope_tree = ScopeTree::default();
+            let function_return_types = HashMap::new();
+
+            let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(123)),
+                r: Box::new(ExpressionNode::from("asdf")),
+                op: BinaryOperation::Add,
+                span: None
+            });
+
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::String(false)
+            );
+        }
+
+        #[test]
+        fn test_node_type_string_op_int_is_string() {
+            let scope_tree = ScopeTree::default();
+            let function_return_types = HashMap::new();
+
+            let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(ExpressionNode::from("asdf")),
+                r: Box::new(ExpressionNode::from(23423)),
+                op: BinaryOperation::Div,
+                span: None
+            });
+
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::String(false)
             );
         }
     }
