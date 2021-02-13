@@ -140,6 +140,20 @@ impl From<Vec<ExpressionNode>> for ExpressionNode {
     }
 }
 
+impl From<Vec<&str>> for ExpressionNode {
+    fn from(vec: Vec<&str>) -> Self {
+        let value = vec.iter().map(|i| ExpressionNode::from(*i)).collect::<Vec<_>>();
+        Self::Array(ArrayNode { value, span: None })
+    }
+}
+
+impl From<Vec<i64>> for ExpressionNode {
+    fn from(vec: Vec<i64>) -> Self {
+        let value = vec.iter().map(|i| ExpressionNode::from(*i)).collect::<Vec<_>>();
+        Self::Array(ArrayNode { value, span: None })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +265,38 @@ mod tests {
         assert_eq!(
             ExpressionNode::from(vec.to_vec()),
             ExpressionNode::Array(ArrayNode { value: vec, span: None })
+        );
+    }
+
+    #[test]
+    fn test_from_str_vec() {
+        let vec = vec![
+            "foo",
+            "asdfas",
+            "asdkj",
+            "as",
+        ];
+
+        let value = vec.iter().map(|i| ExpressionNode::from(*i)).collect::<Vec<_>>();
+        assert_eq!(
+            ExpressionNode::from(vec.to_vec()),
+            ExpressionNode::Array(ArrayNode { value, span: None })
+        );
+    }
+
+    #[test]
+    fn test_from_int_vec() {
+        let vec = vec![
+            123,
+            31,
+            -4567,
+            8238,
+        ];
+
+        let value = vec.iter().map(|i| ExpressionNode::from(*i)).collect::<Vec<_>>();
+        assert_eq!(
+            ExpressionNode::from(vec.to_vec()),
+            ExpressionNode::Array(ArrayNode { value, span: None })
         );
     }
 }

@@ -20,7 +20,7 @@ pub enum LPCType {
 }
 
 impl LPCType {
-    /// Allow myself to match on another type. Handles unions seamlessly.
+    /// See if I match another type. Handles unions seamlessly.
     /// This is the main type-checking routine.
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
@@ -58,6 +58,20 @@ impl LPCType {
             }
         } else {
             *self == other
+        }
+    }
+
+    /// Return if we're an array or not
+    pub fn is_array(&self) -> bool {
+        match self {
+            LPCType::Void => false,
+            LPCType::Int(arr) => *arr,
+            LPCType::String(arr) => *arr,
+            LPCType::Float(arr) => *arr,
+            LPCType::Object(arr) => *arr,
+            LPCType::Mapping(arr) => *arr,
+            LPCType::Mixed(arr) => *arr,
+            LPCType::Union(union) => union.is_array()
         }
     }
 

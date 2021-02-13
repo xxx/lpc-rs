@@ -28,7 +28,7 @@ lazy_static! {
             return_type: LPCType::Int(false),
             num_args: 1,
             num_default_args: 0,
-            arg_types: vec![LPCType::Int(false) | LPCType::String(false) | LPCType::String(true)],
+            arg_types: vec![LPCType::Mixed(false)],
             span: None,
             arg_spans: vec![]
         });

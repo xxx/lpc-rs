@@ -86,6 +86,11 @@ pub fn check_binary_operation_types(
 
     match node.op {
         BinaryOperation::Add => {
+            // Arrays have no type at runtime, so concatenation is always allowed.
+            if tuple.0.is_array() && tuple.1.is_array() {
+                return Ok(());
+            }
+
             match tuple {
                 (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
                 (LPCType::String(false), LPCType::Int(false)) => Ok(()),
@@ -227,6 +232,22 @@ mod check_binary_operation_tests {
             scope_id: 0,
             span: None
         };
+        let array1 = Symbol {
+            name: "array1".to_string(),
+            type_: LPCType::Int(true),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None
+        };
+        let array2 = Symbol {
+            name: "array2".to_string(),
+            type_: LPCType::Int(true),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None
+        };
 
         let mut scope_tree = ScopeTree::default();
         scope_tree.push_new();
@@ -235,6 +256,8 @@ mod check_binary_operation_tests {
         scope.insert(int2);
         scope.insert(string1);
         scope.insert(string2);
+        scope.insert(array1);
+        scope.insert(array2);
 
         scope_tree
     }
@@ -327,6 +350,24 @@ mod check_binary_operation_tests {
         )
     }
 
+    fn array_array_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(vec!["asdf", "bar", "hi"]),
+            ExpressionNode::from(vec![1, 2, 5]),
+            &scope_tree
+        )
+    }
+
+    fn array_array_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("array1")),
+            ExpressionNode::from(VarNode::new("array2")),
+            &scope_tree
+        )
+    }
+
     #[test]
     fn test_add() {
         let scope_tree = setup();
@@ -335,11 +376,13 @@ mod check_binary_operation_tests {
         assert!(string_string_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(int_string_literals(BinaryOperation::Add, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Add, &scope_tree).is_ok());
 
         assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(int_string_vars(BinaryOperation::Add, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Add, &scope_tree).is_ok());
 
         // valid complex tree
         assert!(
@@ -626,10 +669,11 @@ mod check_node_type_tests {
 
     mod arrays {
         use super::*;
+        use crate::ast::array_node::ArrayNode;
 
         #[test]
         fn test_node_type_empty_array_is_mixed() {
-            let node = ExpressionNode::from(vec![]);
+            let node = ExpressionNode::Array(ArrayNode { value: vec![], span: None });
             let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 

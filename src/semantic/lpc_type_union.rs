@@ -27,6 +27,7 @@ pub struct LPCTypeUnion {
 }
 
 impl LPCTypeUnion {
+    /// Insert a new type into the union
     pub fn insert(&mut self, type_: LPCType) {
         match type_ {
             LPCType::Void => {
@@ -56,6 +57,7 @@ impl LPCTypeUnion {
         }
     }
 
+    /// Do we match against another type?
     pub fn matches_type(&self, other: LPCType) -> bool {
         match other {
             LPCType::Void => {
@@ -78,12 +80,7 @@ impl LPCTypeUnion {
             }
             LPCType::Mixed(array) => {
                 if array {
-                    self.int_array() ||
-                    self.string_array() ||
-                    self.float_array() ||
-                    self.object_array() ||
-                    self.mapping_array() ||
-                    self.mixed_array()
+                    self.is_array()
                 } else {
                     self.int() ||
                     self.string() ||
@@ -97,6 +94,16 @@ impl LPCTypeUnion {
                 self.into_bytes() == other_union.into_bytes()
             }
         }
+    }
+
+    /// Is at least one of our types an array?
+    pub fn is_array(&self) -> bool {
+        self.int_array() ||
+        self.string_array() ||
+        self.float_array() ||
+        self.object_array() ||
+        self.mapping_array() ||
+        self.mixed_array()
     }
 }
 
