@@ -54,23 +54,23 @@ macro_rules! string_constant {
 /// use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
 ///
 /// let prog = r#"int main() { dump("hello, world"); int b = 123; return b; }"#;
-/// let program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
+/// let mut program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
 /// let filepath = "path/to/myfile.c";
 ///
 /// // Populate the symbol tables
 /// let mut scope_walker = ScopeWalker::new(filepath);
-/// let scope_result = scope_walker.visit_program(&program_node);
+/// let scope_result = scope_walker.visit_program(program_node.borrow_mut());
 ///
 /// // Gather information about function default params
 /// let mut default_params_walker = DefaultParamsWalker::new();
-/// let params_result = default_params_walker.visit_program(&program_node);
+/// let params_result = default_params_walker.visit_program(program_node.borrow_mut());
 ///
 /// // Generate machine instructions
 /// let mut walker = AsmTreeWalker::new(
 ///     ScopeTree::from(scope_walker),
 ///     default_params_walker.into_functions()
 /// );
-/// walker.visit_program(&program_node);
+/// walker.visit_program(program_node.borrow_mut());
 /// let mut program = walker.to_program(filepath);
 ///
 /// // Load the program and run it

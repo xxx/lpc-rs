@@ -17,13 +17,14 @@ use crate::ast::var_node::VarNode;
 ///
 /// # Examples
 /// ```
+/// use std::borrow::BorrowMut;
 /// use lpc_rs::lpc_parser;
 /// use lpc_rs::codegen::tree_printer::TreePrinter;
 /// use lpc_rs::codegen::tree_walker::TreeWalker;
 /// let prog = "int main() { int b = 123; return b; }";
-/// let program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
+/// let mut program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
 /// let mut walker = TreePrinter::new();
-/// walker.visit_program(program_node);
+/// walker.visit_program(program_node.borrow_mut());
 /// ```
 #[derive(Debug)]
 pub struct TreePrinter {
