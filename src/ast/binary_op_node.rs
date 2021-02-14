@@ -16,6 +16,9 @@ pub enum BinaryOperation {
     Sub,
     Mul,
     Div,
+
+    /// Index into an array or mapping
+    Index
 }
 
 impl Display for BinaryOperation {
@@ -25,6 +28,7 @@ impl Display for BinaryOperation {
             BinaryOperation::Sub => "-",
             BinaryOperation::Mul => "*",
             BinaryOperation::Div => "/",
+            BinaryOperation::Index => "[]",
         };
 
         write!(f, "{}", s)

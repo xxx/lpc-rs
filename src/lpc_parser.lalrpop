@@ -175,6 +175,9 @@ pub PrimaryExpression: ExpressionNode = {
 
 pub PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
+    <left:@L> <l:PostfixExpression> "[" <r:Expression> "]" <right:@R> => {
+          collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+    },
     Call => ExpressionNode::Call(<>)
 };
 

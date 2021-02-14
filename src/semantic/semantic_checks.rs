@@ -71,10 +71,9 @@ pub fn check_binary_operation_types(
         }
     }
 
-    let tuple = (
-        node_type(&node.l, scope_tree, function_return_types),
-        node_type(&node.r, scope_tree, function_return_types),
-    );
+    let left_type = node_type(&node.l, scope_tree, function_return_types);
+    let right_type = node_type(&node.r, scope_tree, function_return_types);
+    let tuple = (left_type, right_type);
 
     if let LPCType::Mixed(_) = tuple.0 {
         return if tuple.0.matches_type(tuple.1) {
@@ -139,12 +138,36 @@ pub fn check_binary_operation_types(
                 right_type,
             )),
         },
+        BinaryOperation::Index => {
+            if left_type.is_array() && right_type == LPCType::Int(false) {
+                Ok(())
+            } else {
+                Err(create_error(
+                    node,
+                    BinaryOperation::Index,
+                    left_type,
+                    right_type,
+                ))
+            }
+        }
     }
 }
 
 /// Check two types, and return the promotion if one occurs (or the same type if both are the same)
 /// Returns the first type if no promotion is possible.
-fn combine_types(type1: LPCType, type2: LPCType) -> LPCType {
+fn combine_types(type1: LPCType, type2: LPCType, op: BinaryOperation) -> LPCType {
+    if op == BinaryOperation::Index {
+        return match type1 {
+            LPCType::Int(true) => LPCType::Int(false),
+            LPCType::Float(true) => LPCType::Float(false),
+            LPCType::Object(true) => LPCType::Object(false),
+            LPCType::String(true) => LPCType::String(false),
+            LPCType::Mapping(true) => LPCType::Mapping(false),
+            LPCType::Mixed(true) => LPCType::Mixed(false),
+            _ => unimplemented!()
+        }
+    }
+
     if type1 == type2
         || (!type1.is_array() && type2.is_array())
         || (type1.is_array() && !type2.is_array())
@@ -152,7 +175,7 @@ fn combine_types(type1: LPCType, type2: LPCType) -> LPCType {
         return type1;
     }
 
-    // array + array is always a mixed array
+    // array <op> array is always a mixed array
     if type1.is_array() && type2.is_array() {
         return LPCType::Mixed(true);
     }
@@ -194,9 +217,10 @@ pub fn node_type(
             Some(sym) => sym.type_,
             _ => panic!("undefined symbol {}", name),
         },
-        ExpressionNode::BinaryOp(BinaryOpNode { l, r, .. }) => combine_types(
+        ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => combine_types(
             node_type(l, scope_tree, function_return_types),
             node_type(r, scope_tree, function_return_types),
+            *op,
         ),
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
@@ -698,7 +722,7 @@ mod check_binary_operation_tests {
 }
 
 #[cfg(test)]
-mod check_node_type_tests {
+mod node_type_tests {
     use super::*;
 
     mod arrays {
@@ -789,6 +813,47 @@ mod check_node_type_tests {
                 node_type(&node, &scope_tree, &function_return_types),
                 LPCType::String(false)
             );
+        }
+    }
+
+    mod binary_ops {
+        use super::*;
+        use crate::semantic::symbol::Symbol;
+
+        #[test]
+        fn test_index_array_returns_singular_of_left_type() {
+            let mut scope_tree = ScopeTree::default();
+            let id = scope_tree.push_new();
+            let scope = scope_tree.get_mut(id).unwrap();
+            scope.insert(Symbol {
+                name: "foo".to_string(),
+                type_: LPCType::Int(true),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None
+            });
+            let function_return_types = HashMap::new();
+
+            let l = ExpressionNode::Var(VarNode {
+                name: "foo".to_string(),
+                span: None,
+                global: true
+            });
+            let r = ExpressionNode::from(1);
+
+            let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(l),
+                r: Box::new(r),
+                op: BinaryOperation::Index,
+                span: None
+            });
+
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::Int(false)
+            );
+
         }
     }
 }

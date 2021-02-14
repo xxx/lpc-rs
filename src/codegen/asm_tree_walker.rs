@@ -424,6 +424,7 @@ impl TreeWalker for AsmTreeWalker {
                 self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
             }
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Index => todo!(),
         };
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
