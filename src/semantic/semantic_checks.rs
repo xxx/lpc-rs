@@ -166,8 +166,8 @@ fn combine_types(type1: LPCType, type2: LPCType, op: BinaryOperation) -> LPCType
             LPCType::String(true) => LPCType::String(false),
             LPCType::Mapping(true) => LPCType::Mapping(false),
             LPCType::Mixed(true) => LPCType::Mixed(false),
-            _ => unimplemented!()
-        }
+            _ => unimplemented!(),
+        };
     }
 
     if type1 == type2
@@ -794,7 +794,7 @@ mod check_binary_operation_tests {
             }),
             &scope_tree,
         )
-            .is_ok());
+        .is_ok());
 
         // invalid complex tree
         assert!(get_result(
@@ -818,7 +818,7 @@ mod check_binary_operation_tests {
             }),
             &scope_tree,
         )
-            .is_err());
+        .is_err());
     }
 }
 
@@ -932,14 +932,14 @@ mod node_type_tests {
                 static_: false,
                 location: None,
                 scope_id: 0,
-                span: None
+                span: None,
             });
             let function_return_types = HashMap::new();
 
             let l = ExpressionNode::Var(VarNode {
                 name: "foo".to_string(),
                 span: None,
-                global: true
+                global: true,
             });
             let r = ExpressionNode::from(1);
 
@@ -947,14 +947,13 @@ mod node_type_tests {
                 l: Box::new(l),
                 r: Box::new(r),
                 op: BinaryOperation::Index,
-                span: None
+                span: None,
             });
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
                 LPCType::Int(false)
             );
-
         }
     }
 }

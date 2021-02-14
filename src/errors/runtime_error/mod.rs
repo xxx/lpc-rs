@@ -1,12 +1,11 @@
 use crate::errors::{
     runtime_error::{
         binary_operation_error::BinaryOperationError, division_by_zero_error::DivisionByZeroError,
-        unknown_error::UnknownError,
+        index_error::IndexError, unknown_error::UnknownError,
     },
     LPCError,
 };
 use codespan_reporting::diagnostic::Diagnostic;
-use crate::errors::runtime_error::index_error::IndexError;
 
 pub mod binary_operation_error;
 pub mod division_by_zero_error;

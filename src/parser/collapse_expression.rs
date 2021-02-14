@@ -27,18 +27,21 @@ pub fn collapse_expression(
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Div => collapse_div(op, l, r, span),
-        BinaryOperation::Index => {
-            ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(l),
-                r: Box::new(r),
-                op,
-                span: Some(span),
-            })
-        },
+        BinaryOperation::Index => ExpressionNode::BinaryOp(BinaryOpNode {
+            l: Box::new(l),
+            r: Box::new(r),
+            op,
+            span: Some(span),
+        }),
     }
 }
 
-fn collapse_add(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span: Span) -> ExpressionNode {
+fn collapse_add(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
     match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -85,7 +88,12 @@ fn collapse_add(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span:
     }
 }
 
-fn collapse_sub(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span: Span) -> ExpressionNode {
+fn collapse_sub(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
     match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -108,7 +116,12 @@ fn collapse_sub(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span:
     }
 }
 
-fn collapse_mul(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span: Span) -> ExpressionNode {
+fn collapse_mul(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
     match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -116,7 +129,9 @@ fn collapse_mul(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span:
                 span: Some(span),
             }),
             // 3 * "string" = "stringstringstring"
-            ExpressionNode::String(node2) => collapse_repeat_string(node2.value.clone(), node.value, span),
+            ExpressionNode::String(node2) => {
+                collapse_repeat_string(node2.value.clone(), node.value, span)
+            }
             _ => ExpressionNode::BinaryOp(BinaryOpNode {
                 l: Box::new(l),
                 r: Box::new(r),
@@ -127,7 +142,9 @@ fn collapse_mul(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span:
         ExpressionNode::String(node) => {
             match r {
                 // "string" * 3 == "stringstringstring"
-                ExpressionNode::Int(node2) => collapse_repeat_string(node.value.clone(), node2.value, span),
+                ExpressionNode::Int(node2) => {
+                    collapse_repeat_string(node.value.clone(), node2.value, span)
+                }
                 _ => ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(l),
                     r: Box::new(r),
@@ -145,7 +162,12 @@ fn collapse_mul(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span:
     }
 }
 
-fn collapse_div(op: BinaryOperation, l: ExpressionNode, r: ExpressionNode, span: Span) -> ExpressionNode {
+fn collapse_div(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
     match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -198,7 +220,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::Int(IntNode { value: 579, span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 579,
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -209,7 +237,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::Int(IntNode { value: -333, span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: -333,
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -220,7 +254,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::Int(IntNode { value: 369, span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 369,
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -231,7 +271,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::Int(IntNode { value: 40, span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 40,
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -242,7 +288,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::String(StringNode { value: "123hello".to_string(), span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::String(StringNode {
+                value: "123hello".to_string(),
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -253,7 +305,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::String(StringNode { value: "hello123".to_string(), span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::String(StringNode {
+                value: "hello123".to_string(),
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -264,7 +322,13 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::String(StringNode { value: "hellohellohellohello".to_string(), span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::String(StringNode {
+                value: "hellohellohellohello".to_string(),
+                span: Some(span)
+            })
+        );
     }
 
     #[test]
@@ -275,6 +339,12 @@ mod tests {
         let span = Span { l: 0, r: 1 };
 
         let result = collapse_expression(op, node1, node2, span);
-        assert_eq!(result, ExpressionNode::String(StringNode { value: "hellohellohellohello".to_string(), span: Some(span) }));
+        assert_eq!(
+            result,
+            ExpressionNode::String(StringNode {
+                value: "hellohellohellohello".to_string(),
+                span: Some(span)
+            })
+        );
     }
 }

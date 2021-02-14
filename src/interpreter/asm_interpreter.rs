@@ -1,6 +1,6 @@
 use crate::{
     asm::instruction::Instruction,
-    errors::runtime_error::RuntimeError,
+    errors::runtime_error::{index_error::IndexError, RuntimeError},
     interpreter::{
         efun::EFUNS, lpc_value::LPCValue, lpc_var::LPCVar, program::Program,
         stack_frame::StackFrame,
@@ -8,7 +8,6 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use std::borrow::BorrowMut;
-use crate::errors::runtime_error::index_error::IndexError;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -217,9 +216,7 @@ impl AsmInterpreter {
                         panic!("This shouldn't have passed type checks.")
                     }
                 }
-                Instruction::AStore(_r1, _r2, _r3) => {
-
-                }
+                Instruction::AStore(_r1, _r2, _r3) => {}
                 Instruction::Call {
                     name,
                     num_args,
@@ -458,10 +455,16 @@ impl AsmInterpreter {
     #[doc(hidden)]
     fn populate_error_span(&self, error: &mut RuntimeError) {
         match error {
-            RuntimeError::BinaryOperationError(err) => err.span = *self.program.debug_spans.get(self.pc).unwrap(),
-            RuntimeError::DivisionByZeroError(err) => err.span = *self.program.debug_spans.get(self.pc).unwrap(),
-            RuntimeError::IndexError(err) => err.span = *self.program.debug_spans.get(self.pc).unwrap(),
-            RuntimeError::UnknownError(_) => unimplemented!()
+            RuntimeError::BinaryOperationError(err) => {
+                err.span = *self.program.debug_spans.get(self.pc).unwrap()
+            }
+            RuntimeError::DivisionByZeroError(err) => {
+                err.span = *self.program.debug_spans.get(self.pc).unwrap()
+            }
+            RuntimeError::IndexError(err) => {
+                err.span = *self.program.debug_spans.get(self.pc).unwrap()
+            }
+            RuntimeError::UnknownError(_) => unimplemented!(),
         }
     }
 
@@ -470,7 +473,7 @@ impl AsmInterpreter {
         let e = IndexError {
             index,
             length,
-            span: None
+            span: None,
         };
 
         let mut e = RuntimeError::IndexError(e);

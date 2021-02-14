@@ -18,7 +18,7 @@ pub enum BinaryOperation {
     Div,
 
     /// Index into an array or mapping
-    Index
+    Index,
 }
 
 impl Display for BinaryOperation {
