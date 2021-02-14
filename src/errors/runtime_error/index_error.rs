@@ -1,4 +1,4 @@
-use crate::{ast::binary_op_node::BinaryOperation, errors::LPCError, parser::span::Span};
+use crate::{errors::LPCError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     fmt,

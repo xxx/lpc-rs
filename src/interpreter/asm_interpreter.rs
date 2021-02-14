@@ -217,7 +217,7 @@ impl AsmInterpreter {
                         panic!("This shouldn't have passed type checks.")
                     }
                 }
-                Instruction::AStore(r1, r2, r3) => {
+                Instruction::AStore(_r1, _r2, _r3) => {
 
                 }
                 Instruction::Call {
