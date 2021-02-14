@@ -561,33 +561,89 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError> {
-        node.lhs.visit(self)?;
-        let dest = self.current_result;
         node.rhs.visit(self)?;
+        let rhs_result = self.current_result;
+        let ref mut lhs = *node.lhs;
 
-        let assign = Instruction::RegCopy(self.current_result, dest);
+        match lhs.clone() {
+            ExpressionNode::Var(VarNode { name, global, .. }) => {
+                node.lhs.visit(self)?;
+                let lhs_result = self.current_result;
 
-        self.instructions.push(assign);
-        self.debug_spans.push(node.span);
+                let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
-        // Copy over globals if necessary
-        if let ExpressionNode::Var(VarNode {
-            name, global: true, ..
-        }) = &*node.lhs
-        {
-            if let Some(Symbol {
-                scope_id: 0,
-                location: Some(register),
-                ..
-            }) = self.lookup_global(&name)
-            {
-                let store = Instruction::GStore(dest, *register);
-                self.instructions.push(store);
+                self.instructions.push(assign);
                 self.debug_spans.push(node.span);
+
+                // Copy over globals if necessary
+                if global {
+                    if let Some(Symbol {
+                                    scope_id: 0,
+                                    location: Some(register),
+                                    ..
+                                }) = self.lookup_global(&name)
+                    {
+                        let store = Instruction::GStore(lhs_result, *register);
+                        self.instructions.push(store);
+                        self.debug_spans.push(node.span);
+                    }
+                }
+
+                self.current_result = lhs_result;
+
+            }
+            ExpressionNode::BinaryOp(BinaryOpNode { op: BinaryOperation::Index, ref mut l, ref mut r, .. }) => {
+                let _ = l.visit(self);
+                let var_result = self.current_result;
+                let _ = r.visit(self);
+                let index_result = self.current_result;
+
+                let assign = Instruction::AStore(rhs_result, var_result, index_result);
+
+                self.instructions.push(assign);
+                self.debug_spans.push(node.span);
+
+                self.current_result = rhs_result;
+            }
+            _x => {
+                panic!("trying to assign to an invalid lvalue")
             }
         }
 
-        self.current_result = dest;
+
+
+
+
+
+
+
+        // node.lhs.visit(self)?;
+        // let dest = self.current_result;
+        // node.rhs.visit(self)?;
+        //
+        // let assign = Instruction::RegCopy(self.current_result, dest);
+        //
+        // self.instructions.push(assign);
+        // self.debug_spans.push(node.span);
+        //
+        // // Copy over globals if necessary
+        // if let ExpressionNode::Var(VarNode {
+        //     name, global: true, ..
+        // }) = &*node.lhs
+        // {
+        //     if let Some(Symbol {
+        //         scope_id: 0,
+        //         location: Some(register),
+        //         ..
+        //     }) = self.lookup_global(&name)
+        //     {
+        //         let store = Instruction::GStore(dest, *register);
+        //         self.instructions.push(store);
+        //         self.debug_spans.push(node.span);
+        //     }
+        // }
+        //
+        // self.current_result = dest;
 
         Ok(())
     }
@@ -623,6 +679,7 @@ mod tests {
         semantic::lpc_type::LPCType,
     };
     use std::borrow::BorrowMut;
+    use crate::asm::instruction::Instruction::AStore;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -1097,10 +1154,10 @@ mod tests {
         assert_eq!(
             walker.instructions,
             [
-                GLoad(Register(666), Register(1)),
-                IConst(Register(2), -12),
-                RegCopy(Register(2), Register(1)),
-                GStore(Register(1), Register(666))
+                IConst(Register(1), -12),
+                GLoad(Register(666), Register(2)),
+                RegCopy(Register(1), Register(2)),
+                GStore(Register(2), Register(666))
             ]
         );
     }
@@ -1134,6 +1191,45 @@ mod tests {
             [
                 IConst(Register(1), -12),
                 RegCopy(Register(1), Register(666))
+            ]
+        );
+    }
+
+    #[test]
+    fn test_visit_assignment_populates_the_instructions_for_array_items() {
+        let mut walker = AsmTreeWalker::default();
+        walker.scopes.push_new();
+        walker.scopes.push_new();
+        let sym = Symbol {
+            name: "marf".to_string(),
+            type_: LPCType::Int(true),
+            static_: false,
+            location: Some(Register(666)),
+            scope_id: 1,
+            span: None,
+        };
+
+        insert_symbol(walker.borrow_mut(), sym);
+
+        let mut node = AssignmentNode {
+            lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
+                r: Box::new(ExpressionNode::from(1)),
+                op: BinaryOperation::Index,
+                span: None
+            })),
+            rhs: Box::new(ExpressionNode::from(-12)),
+            op: AssignmentOperation::Simple,
+            span: None,
+        };
+
+        let _ = walker.visit_assignment(node.borrow_mut());
+        assert_eq!(
+            walker.instructions,
+            [
+                IConst(Register(1), -12),
+                IConst1(Register(2)),
+                AStore(Register(1), Register(666), Register(2))
             ]
         );
     }

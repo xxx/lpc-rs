@@ -14,6 +14,9 @@ use std::{
 pub enum AssignmentOperation {
     /// Simple assignment - `var = 2;`
     Simple,
+
+    /// Index assigment - `a[2] = "hello";`
+    Index
 }
 
 /// A node representing an assignment.
