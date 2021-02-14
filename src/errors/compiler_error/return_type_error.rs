@@ -1,9 +1,9 @@
-use crate::parser::span::Span;
+use crate::{errors::LPCError, parser::span::Span, semantic::lpc_type::LPCType};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::semantic::lpc_type::LPCType;
-use crate::errors::LPCError;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 #[derive(Debug, Clone)]
 pub struct ReturnTypeError {
@@ -12,15 +12,14 @@ pub struct ReturnTypeError {
 
     /// The expected return type
     pub expected: LPCType,
-    
+
     /// The span of the call
     pub span: Option<Span>,
 }
 
 impl LPCError for ReturnTypeError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error()
-            .with_message(format!("{}", self));
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {
@@ -34,10 +33,10 @@ impl LPCError for ReturnTypeError {
 
 impl Display for ReturnTypeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f,
-               "Invalid return type {}. Expected {}.",
-               self.type_,
-               self.expected
+        write!(
+            f,
+            "Invalid return type {}. Expected {}.",
+            self.type_, self.expected
         )
     }
 }

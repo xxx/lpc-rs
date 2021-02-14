@@ -1,5 +1,4 @@
-use crate::semantic::lpc_type::LPCType;
-use crate::parser::span::Span;
+use crate::{parser::span::Span, semantic::lpc_type::LPCType};
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone)]
@@ -26,5 +25,5 @@ pub struct FunctionPrototype {
     pub span: Option<Span>,
 
     /// Spans for my arguments
-    pub arg_spans: Vec<Span>
+    pub arg_spans: Vec<Span>,
 }

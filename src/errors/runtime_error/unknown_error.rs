@@ -1,21 +1,21 @@
-use crate::parser::span::Span;
-use std::fmt::{Formatter, Display};
-use std::fmt;
+use crate::{errors::LPCError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use crate::errors::LPCError;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Errors for unknown issues at runtime. Anything that pops one of these should be
 /// fixed to use another error type.
 #[derive(Debug)]
 pub struct UnknownError {
     /// The code span
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl LPCError for UnknownError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error()
-            .with_message(format!("{}", self));
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {

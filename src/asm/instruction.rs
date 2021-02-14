@@ -1,6 +1,8 @@
-use std::fmt;
-use std::fmt::{Formatter,Display};
 use crate::asm::register::Register;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -9,7 +11,7 @@ pub enum Instruction {
     Call {
         name: String,
         num_args: usize,
-        initial_arg: Register
+        initial_arg: Register,
     },
 
     /// Create an array with values from the vector
@@ -78,7 +80,11 @@ impl Display for Instruction {
                 write!(f, "aappend {}, {}", r1, r2)
             }
             Instruction::AConst(r1, vec) => {
-                let s = vec.iter().map(|i| format!("{}", i)).collect::<Vec<_>>().join(", ");
+                let s = vec
+                    .iter()
+                    .map(|i| format!("{}", i))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
             }
             Instruction::GLoad(r1, r2) => {
@@ -87,48 +93,52 @@ impl Display for Instruction {
             Instruction::GStore(r1, r2) => {
                 write!(f, "gstore {}, {}", r1, r2)
             }
-            Instruction::Call { name, num_args, initial_arg } => {
+            Instruction::Call {
+                name,
+                num_args,
+                initial_arg,
+            } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)
-            },
+            }
             Instruction::IAdd(r1, r2, r3) => {
                 write!(f, "iadd {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::IConst(r, i) => {
                 write!(f, "iconst {}, {}", r, i)
-            },
+            }
             Instruction::IConst0(r) => {
                 write!(f, "iconst0 {}", r)
-            },
+            }
             Instruction::SConst(r, i) => {
                 write!(f, "sconst {}, {}", r, i)
-            },
+            }
             Instruction::IConst1(r) => {
                 write!(f, "iconst1 {}", r)
-            },
+            }
             Instruction::IDiv(r1, r2, r3) => {
                 write!(f, "idiv {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::IMul(r1, r2, r3) => {
                 write!(f, "imul {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::ISub(r1, r2, r3) => {
                 write!(f, "isub {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::MAdd(r1, r2, r3) => {
                 write!(f, "madd {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::MDiv(r1, r2, r3) => {
                 write!(f, "mdiv {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::MMul(r1, r2, r3) => {
                 write!(f, "mmul {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::MSub(r1, r2, r3) => {
                 write!(f, "msub {}, {}, {}", r1, r2, r3)
-            },
+            }
             Instruction::RegCopy(r1, r2) => {
                 write!(f, "regcopy {}, {}", r1, r2)
-            },
+            }
             Instruction::Ret => {
                 write!(f, "ret")
             }

@@ -1,13 +1,13 @@
 mod dump;
 
-use std::collections::HashMap;
 use lazy_static::lazy_static;
+use std::collections::HashMap;
 
+use crate::{
+    interpreter::{asm_interpreter::AsmInterpreter, stack_frame::StackFrame},
+    semantic::{function_prototype::FunctionPrototype, lpc_type::LPCType},
+};
 use dump::dump;
-use crate::interpreter::stack_frame::StackFrame;
-use crate::interpreter::asm_interpreter::AsmInterpreter;
-use crate::semantic::function_prototype::FunctionPrototype;
-use crate::semantic::lpc_type::LPCType;
 
 /// Signature for Efuns
 pub type Efun = fn(&StackFrame, &AsmInterpreter);

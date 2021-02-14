@@ -1,9 +1,9 @@
-use crate::ast::binary_op_node::BinaryOperation;
-use crate::parser::span::Span;
-use std::fmt::{Formatter, Display};
-use std::fmt;
+use crate::{ast::binary_op_node::BinaryOperation, errors::LPCError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use crate::errors::LPCError;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Errors for mismatched binary operations at runtime.
 #[derive(Debug)]
@@ -18,13 +18,12 @@ pub struct BinaryOperationError {
     pub right_type: String,
 
     /// The code span related to the operation
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl LPCError for BinaryOperationError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error()
-            .with_message(format!("{}", self));
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {
@@ -38,11 +37,10 @@ impl LPCError for BinaryOperationError {
 
 impl Display for BinaryOperationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f,
-               "Runtime Error: Mismatched types: ({}) {} ({})",
-               self.left_type,
-               self.op,
-               self.right_type
+        write!(
+            f,
+            "Runtime Error: Mismatched types: ({}) {} ({})",
+            self.left_type, self.op, self.right_type
         )
     }
 }

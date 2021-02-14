@@ -1,6 +1,8 @@
-use codespan_reporting::files::SimpleFiles;
-use codespan_reporting::diagnostic::Diagnostic;
-use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
+use codespan_reporting::{
+    diagnostic::Diagnostic,
+    files::SimpleFiles,
+    term::termcolor::{ColorChoice, StandardStream},
+};
 
 pub mod compiler_error;
 pub mod runtime_error;
@@ -16,7 +18,8 @@ pub trait LPCError {
 /// * `file_content` - The actual content of the file, used for messaging.
 /// * `errors` - A slice of errors to display diagnostics for.
 pub fn emit_diagnostics<T>(filename: &str, file_content: &str, errors: &[T])
-    where T: LPCError
+where
+    T: LPCError,
 {
     let mut files = SimpleFiles::new();
     let file_id = files.add(filename, file_content);
@@ -29,7 +32,9 @@ pub fn emit_diagnostics<T>(filename: &str, file_content: &str, errors: &[T])
     let config = codespan_reporting::term::Config::default();
 
     for diagnostic in &diagnostics {
-        if let Err(e) = codespan_reporting::term::emit(&mut writer.lock(), &config, &files, diagnostic) {
+        if let Err(e) =
+            codespan_reporting::term::emit(&mut writer.lock(), &config, &files, diagnostic)
+        {
             eprintln!("error attempting to emit error: {:?}", e);
         };
     }

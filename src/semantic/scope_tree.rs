@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::borrow::BorrowMut;
-use indextree::{Arena, NodeId, Node};
-use crate::semantic::local_scope::LocalScope;
-use crate::semantic::symbol::Symbol;
-use crate::codegen::scope_walker::ScopeWalker;
+use crate::{
+    codegen::scope_walker::ScopeWalker,
+    semantic::{local_scope::LocalScope, symbol::Symbol},
+};
+use indextree::{Arena, Node, NodeId};
+use std::{borrow::BorrowMut, collections::HashMap};
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -46,7 +46,7 @@ impl ScopeTree {
 
         let scope = LocalScope {
             id,
-            symbols: HashMap::new()
+            symbols: HashMap::new(),
         };
 
         self.current_id = match self.current_id {
@@ -54,10 +54,8 @@ impl ScopeTree {
                 let kid = self.scopes.new_node(scope);
                 parent.append(kid, self.scopes.borrow_mut());
                 Some(kid)
-            },
-            None => {
-                Some(self.scopes.new_node(scope))
             }
+            None => Some(self.scopes.new_node(scope)),
         };
 
         if id == 0 {
@@ -79,17 +77,17 @@ impl ScopeTree {
 
     /// Get the current scope
     pub fn get_current(&self) -> Option<&LocalScope> {
-         match self.current_id {
-             Some(x) => self.get(x),
-             None => None
-         }
+        match self.current_id {
+            Some(x) => self.get(x),
+            None => None,
+        }
     }
 
     /// Get a mutable reference to the current scope
     pub fn get_current_mut(&mut self) -> Option<&mut LocalScope> {
         match self.current_id {
             Some(x) => self.get_mut(x),
-            None => None
+            None => None,
         }
     }
 
@@ -97,7 +95,7 @@ impl ScopeTree {
     pub fn get_current_node(&self) -> Option<&Node<LocalScope>> {
         match self.current_id {
             Some(x) => self.scopes.get(x),
-            None => None
+            None => None,
         }
     }
 
@@ -214,7 +212,10 @@ mod tests {
 
         scope1_id.append(scope2_id, collection.scopes.borrow_mut());
 
-        assert_eq!(collection.scopes.get(scope2_id).unwrap().parent(), Some(scope1_id));
+        assert_eq!(
+            collection.scopes.get(scope2_id).unwrap().parent(),
+            Some(scope1_id)
+        );
     }
 
     #[test]

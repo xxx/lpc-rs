@@ -1,9 +1,9 @@
-use crate::parser::span::Span;
+use crate::{errors::LPCError, parser::span::Span, semantic::lpc_type::LPCType};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::semantic::lpc_type::LPCType;
-use crate::errors::LPCError;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 #[derive(Debug, Clone)]
 pub struct ArgTypeError {
@@ -15,18 +15,17 @@ pub struct ArgTypeError {
 
     /// The expected arg type
     pub expected: LPCType,
-    
+
     /// The span of the call
     pub span: Option<Span>,
 
     /// The span of the var declaration (within the function decl)
-    pub declaration_span: Option<Span>
+    pub declaration_span: Option<Span>,
 }
 
 impl LPCError for ArgTypeError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error()
-            .with_message(format!("{}", self));
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {
@@ -34,8 +33,7 @@ impl LPCError for ArgTypeError {
         }
 
         if let Some(span) = self.declaration_span {
-            labels.push(Label::secondary(file_id, span.l..span.r)
-                .with_message("Declared here"));
+            labels.push(Label::secondary(file_id, span.l..span.r).with_message("Declared here"));
         }
 
         if !labels.is_empty() {
@@ -48,11 +46,10 @@ impl LPCError for ArgTypeError {
 
 impl Display for ArgTypeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f,
-               "Unexpected argument type to `{}`: {}. Expected {}.",
-               self.name,
-               self.type_,
-               self.expected
+        write!(
+            f,
+            "Unexpected argument type to `{}`: {}. Expected {}.",
+            self.name, self.type_, self.expected
         )
     }
 }

@@ -1,10 +1,13 @@
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalker;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::parser::span::Span;
-use crate::ast::expression_node::ExpressionNode;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{ast_node::ASTNodeTrait, expression_node::ExpressionNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// A node representing an array literal
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -13,7 +16,7 @@ pub struct ArrayNode {
 
     /// The full span of all expressions in the array - from the left side of the first item
     /// to the right side of the last
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl ArrayNode {
@@ -23,9 +26,11 @@ impl ArrayNode {
     pub fn new(value: Vec<ExpressionNode>) -> Self {
         let span = if value.is_empty() {
             None
-        } else if let (Some(node1), Some(node2)) =
-        (value[0].span(), value.last().unwrap().span()) {
-            Some(Span { l: node1.l, r: node2.r })
+        } else if let (Some(node1), Some(node2)) = (value[0].span(), value.last().unwrap().span()) {
+            Some(Span {
+                l: node1.l,
+                r: node2.r,
+            })
         } else {
             None
         };
@@ -43,7 +48,12 @@ impl ASTNodeTrait for ArrayNode {
 
 impl Display for ArrayNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let s = self.value.iter().map(|item| format!("{}", item)).collect::<Vec<_>>().join(", ");
+        let s = self
+            .value
+            .iter()
+            .map(|item| format!("{}", item))
+            .collect::<Vec<_>>()
+            .join(", ");
         write!(f, "ArrayNode[{}]", s)
     }
 }

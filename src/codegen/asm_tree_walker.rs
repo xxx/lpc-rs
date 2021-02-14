@@ -170,7 +170,7 @@ impl AsmTreeWalker {
             labels: self.labels.clone(),
             functions: self.function_map(),
             constants: self.constants.clone(),
-            num_globals: self.global_counter.get_count()
+            num_globals: self.global_counter.get_count(),
         }
     }
 
@@ -496,9 +496,12 @@ impl TreeWalker for AsmTreeWalker {
         let current_register;
         let symbol = self.lookup_symbol(&node.name);
 
-        let sym = symbol.unwrap_or_else(||
-            panic!("Missing symbol, that passed semantic checks: {}", &node.name)
-        );
+        let sym = symbol.unwrap_or_else(|| {
+            panic!(
+                "Missing symbol, that passed semantic checks: {}",
+                &node.name
+            )
+        });
 
         let global = sym.is_global();
 
@@ -544,10 +547,7 @@ impl TreeWalker for AsmTreeWalker {
 
         if sym.is_global() {
             let result_register = self.register_counter.next().unwrap();
-            let instruction = Instruction::GLoad(
-                sym_loc,
-                result_register
-            );
+            let instruction = Instruction::GLoad(sym_loc, result_register);
             self.instructions.push(instruction);
             self.debug_spans.push(node.span);
 
@@ -570,8 +570,16 @@ impl TreeWalker for AsmTreeWalker {
         self.debug_spans.push(node.span);
 
         // Copy over globals if necessary
-        if let ExpressionNode::Var(VarNode { name, global: true, .. }) = &*node.lhs {
-            if let Some(Symbol { scope_id: 0, location: Some(register), .. }) = self.lookup_global(&name) {
+        if let ExpressionNode::Var(VarNode {
+            name, global: true, ..
+        }) = &*node.lhs
+        {
+            if let Some(Symbol {
+                scope_id: 0,
+                location: Some(register),
+                ..
+            }) = self.lookup_global(&name)
+            {
                 let store = Instruction::GStore(dest, *register);
                 self.instructions.push(store);
                 self.debug_spans.push(node.span);
@@ -603,7 +611,7 @@ impl TreeWalker for AsmTreeWalker {
 mod tests {
     use super::*;
     use crate::{
-        asm::instruction::Instruction::{AConst, IConst, IConst1, RegCopy, SConst},
+        asm::instruction::Instruction::{AConst, GLoad, GStore, IConst, IConst1, RegCopy, SConst},
         ast::{
             assignment_node::AssignmentOperation, ast_node::ASTNode,
             expression_node::ExpressionNode,
@@ -614,7 +622,6 @@ mod tests {
         semantic::lpc_type::LPCType,
     };
     use std::borrow::BorrowMut;
-    use crate::asm::instruction::Instruction::{GLoad, GStore};
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -935,11 +942,10 @@ mod tests {
 
         let expected = vec![
             IConst1(Register(1)),
-            GStore(Register(1),
-            Register(1)),
+            GStore(Register(1), Register(1)),
             IConst(Register(2), 56),
             AConst(Register(3), vec![Register(2)]),
-            GStore(Register(3), Register(3))
+            GStore(Register(3), Register(3)),
         ];
 
         assert_eq!(walker.instructions, expected);
@@ -1001,15 +1007,13 @@ mod tests {
         let mut node = VarNode {
             name: "marf".to_string(),
             span: None,
-            global: true
+            global: true,
         };
 
         let _ = walker.visit_var(node.borrow_mut());
         assert_eq!(walker.current_result, Register(1)); // global loaded into r1
 
-        let expected = vec![
-            GLoad(Register(666), Register(1))
-        ];
+        let expected = vec![GLoad(Register(666), Register(1))];
         assert_eq!(walker.instructions, expected);
     }
 
@@ -1063,10 +1067,7 @@ mod tests {
             scope_id: 0,
             span: None,
         };
-        insert_symbol(
-            walker.borrow_mut(),
-            sym,
-        );
+        insert_symbol(walker.borrow_mut(), sym);
 
         // push a different, local `marf`, to ensure that we don't find it for this assignment.
         walker.scopes.push_new();
@@ -1078,16 +1079,13 @@ mod tests {
             scope_id: 1,
             span: None,
         };
-        insert_symbol(
-            walker.borrow_mut(),
-            sym,
-        );
+        insert_symbol(walker.borrow_mut(), sym);
 
         let mut node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode {
                 name: "marf".to_string(),
                 span: None,
-                global: true
+                global: true,
             })),
             rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
             op: AssignmentOperation::Simple,
@@ -1120,10 +1118,7 @@ mod tests {
             span: None,
         };
 
-        insert_symbol(
-            walker.borrow_mut(),
-            sym,
-        );
+        insert_symbol(walker.borrow_mut(), sym);
 
         let mut node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),

@@ -1,7 +1,6 @@
-use std::fmt;
-use fmt::{Display, Formatter};
-use std::ops::BitOr;
 use crate::semantic::lpc_type_union::LPCTypeUnion;
+use fmt::{Display, Formatter};
+use std::{fmt, ops::BitOr};
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.
@@ -16,7 +15,7 @@ pub enum LPCType {
     Mixed(bool),
 
     // To allow efuns to declare prototypes with multiple allowed types
-    Union(LPCTypeUnion)
+    Union(LPCTypeUnion),
 }
 
 impl LPCType {
@@ -34,7 +33,7 @@ impl LPCType {
                 LPCType::Object(arr) => *arr,
                 LPCType::Mapping(arr) => *arr,
                 LPCType::Mixed(arr) => *arr,
-                _ => unimplemented!()
+                _ => unimplemented!(),
             }
         }
 
@@ -71,7 +70,7 @@ impl LPCType {
             LPCType::Object(arr) => *arr,
             LPCType::Mapping(arr) => *arr,
             LPCType::Mixed(arr) => *arr,
-            LPCType::Union(union) => union.is_array()
+            LPCType::Union(union) => union.is_array(),
         }
     }
 
@@ -83,7 +82,7 @@ impl LPCType {
             LPCType::Float(_) => LPCType::Float(arr),
             LPCType::Mapping(_) => LPCType::Mapping(arr),
             LPCType::Mixed(_) => LPCType::Mixed(arr),
-            x => *x
+            x => *x,
         }
     }
 }
@@ -114,7 +113,13 @@ impl BitOr for LPCType {
 
 impl Display for LPCType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let to_star = |array: &bool| -> &str { if *array { " *" } else { "" } };
+        let to_star = |array: &bool| -> &str {
+            if *array {
+                " *"
+            } else {
+                ""
+            }
+        };
 
         let type_ = match self {
             LPCType::Void => String::from("void"),
@@ -181,10 +186,10 @@ mod tests {
 
         let union = LPCType::Void | LPCType::Int(false);
         assert!(LPCType::Void.matches_type(union));
-        
+
         // Void only matches void.
         assert!(!LPCType::Mixed(false).matches_type(LPCType::Void));
-        
+
         // non-array mixed against non-arrays
         assert!(LPCType::Mixed(false).matches_type(LPCType::Int(false)));
         assert!(LPCType::Mixed(false).matches_type(LPCType::String(false)));

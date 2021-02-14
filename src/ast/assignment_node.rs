@@ -1,10 +1,13 @@
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalker;
-use crate::ast::expression_node::ExpressionNode;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::parser::span::Span;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{ast_node::ASTNodeTrait, expression_node::ExpressionNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// All possible assignment operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -26,7 +29,7 @@ pub struct AssignmentNode {
     pub op: AssignmentOperation,
 
     /// The text span in the original file that this node represents. Used for error messages.
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl ASTNodeTrait for AssignmentNode {
@@ -48,7 +51,7 @@ impl Clone for AssignmentNode {
             lhs: self.lhs.clone(),
             rhs: self.rhs.clone(),
             op: self.op,
-            span: self.span
+            span: self.span,
         }
     }
 }

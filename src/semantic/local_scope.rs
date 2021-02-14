@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use delegate::delegate;
 use crate::semantic::symbol::Symbol;
+use delegate::delegate;
+use std::collections::HashMap;
 
 /// A representation of a local scope / symbol table
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -9,7 +9,7 @@ pub struct LocalScope {
     pub id: usize,
 
     /// Map of symbol names to the symbol itself
-    pub symbols: HashMap<String, Symbol>
+    pub symbols: HashMap<String, Symbol>,
 }
 
 impl LocalScope {
@@ -17,7 +17,7 @@ impl LocalScope {
     pub fn new(id: usize) -> Self {
         Self {
             id,
-            symbols: HashMap::new()
+            symbols: HashMap::new(),
         }
     }
 
@@ -63,7 +63,7 @@ mod tests {
     fn test_lookup_looks_up_the_symbols() {
         let mut scope = LocalScope {
             id: 0,
-            symbols: HashMap::new()
+            symbols: HashMap::new(),
         };
 
         let sym = Symbol {
@@ -72,7 +72,7 @@ mod tests {
             scope_id: 0,
             static_: false,
             location: None,
-            span: None
+            span: None,
         };
 
         scope.insert(sym);

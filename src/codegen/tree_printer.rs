@@ -1,17 +1,14 @@
-use crate::ast::program_node::ProgramNode;
-use crate::ast::int_node::IntNode;
-use crate::codegen::tree_walker;
+use crate::{
+    ast::{
+        array_node::ArrayNode, ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode,
+        call_node::CallNode, decl_node::DeclNode, function_def_node::FunctionDefNode,
+        int_node::IntNode, program_node::ProgramNode, return_node::ReturnNode,
+        var_init_node::VarInitNode, var_node::VarNode,
+    },
+    codegen::tree_walker,
+    errors::compiler_error::CompilerError,
+};
 use tree_walker::TreeWalker;
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::ast::binary_op_node::BinaryOpNode;
-use crate::ast::call_node::CallNode;
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::ast::decl_node::DeclNode;
-use crate::ast::var_init_node::VarInitNode;
-use crate::errors::compiler_error::CompilerError;
-use crate::ast::array_node::ArrayNode;
-use crate::ast::return_node::ReturnNode;
-use crate::ast::var_node::VarNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -28,14 +25,12 @@ use crate::ast::var_node::VarNode;
 /// ```
 #[derive(Debug)]
 pub struct TreePrinter {
-    indent: usize
+    indent: usize,
 }
 
 impl TreePrinter {
     pub fn new() -> Self {
-        Self {
-            indent: 0
-        }
+        Self { indent: 0 }
     }
 
     fn println_indented(&self, output: &str) {

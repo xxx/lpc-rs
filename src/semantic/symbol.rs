@@ -1,7 +1,7 @@
-use crate::semantic::lpc_type::LPCType;
-use crate::ast::var_init_node::VarInitNode;
-use crate::asm::register::Register;
-use crate::parser::span::Span;
+use crate::{
+    asm::register::Register, ast::var_init_node::VarInitNode, parser::span::Span,
+    semantic::lpc_type::LPCType,
+};
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -18,7 +18,7 @@ pub struct Symbol {
     /// to which scope do i belong?
     pub scope_id: usize,
     /// The text span that first defined this symbol.
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl Symbol {
@@ -30,7 +30,7 @@ impl Symbol {
             static_: false,
             location: None,
             scope_id: 0,
-            span: None
+            span: None,
         }
     }
 

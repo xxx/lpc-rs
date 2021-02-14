@@ -1,9 +1,9 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
+use crate::{errors::LPCError, parser::span::Span, semantic::symbol::Symbol};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use crate::parser::span::Span;
-use crate::semantic::symbol::Symbol;
-use crate::errors::LPCError;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Error for duplicate var definitions in a single local scope.
 #[derive(Debug, Clone)]
@@ -12,13 +12,12 @@ pub struct VarRedefinitionError {
     pub symbol: Symbol,
 
     /// The span of the *re*definition
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl LPCError for VarRedefinitionError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error()
-            .with_message(format!("{}", self));
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {
@@ -27,8 +26,7 @@ impl LPCError for VarRedefinitionError {
 
         if let Some(span) = self.symbol.span {
             labels.push(
-                Label::secondary(file_id, span.l..span.r)
-                    .with_message("Originally defined here.")
+                Label::secondary(file_id, span.l..span.r).with_message("Originally defined here."),
             );
         }
 

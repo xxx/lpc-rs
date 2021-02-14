@@ -1,10 +1,10 @@
-use lalrpop_util::ParseError as LalrpopParseError;
+use crate::{errors::LPCError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use std::fmt::{Display, Formatter, Debug};
-use std::fmt;
-use lalrpop_util::lexer::Token;
-use crate::parser::span::Span;
-use crate::errors::LPCError;
+use lalrpop_util::{lexer::Token, ParseError as LalrpopParseError};
+use std::{
+    fmt,
+    fmt::{Debug, Display, Formatter},
+};
 
 #[derive(Debug, Clone)]
 enum ParseErrorType {
@@ -12,7 +12,7 @@ enum ParseErrorType {
     UnrecognizedEOF,
     UnrecognizedToken,
     ExtraToken,
-    User
+    User,
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ pub struct ParseError {
     type_: ParseErrorType,
     location: Option<Span>,
     token: Option<ParseErrorToken>,
-    expected: Option<Vec<String>>
+    expected: Option<Vec<String>>,
 }
 
 fn format_expected(expected: &[String]) -> String {
@@ -46,11 +46,7 @@ impl LPCError for ParseError {
                 let loc = self.location.unwrap();
                 diagnostic = Diagnostic::error()
                     .with_message("Invalid Token")
-                    .with_labels(
-                        vec!(
-                            Label::primary(file_id, loc.l..loc.r)
-                        )
-                    )
+                    .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
             }
             ParseErrorType::UnrecognizedEOF => {
                 let loc = self.location.unwrap();
@@ -62,11 +58,7 @@ impl LPCError for ParseError {
 
                 diagnostic = Diagnostic::error()
                     .with_message("Unexpected EOF")
-                    .with_labels(
-                        vec!(
-                            Label::primary(file_id, loc.l..loc.r)
-                        )
-                    )
+                    .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
                     .with_notes(vec![format_expected(&expected)]);
             }
             ParseErrorType::UnrecognizedToken => {
@@ -85,11 +77,7 @@ impl LPCError for ParseError {
 
                 diagnostic = Diagnostic::error()
                     .with_message(format!("Unrecognized Token: {}", token.1))
-                    .with_labels(
-                        vec!(
-                            Label::primary(file_id, loc.l..loc.r)
-                        )
-                    )
+                    .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
                     .with_notes(vec![format_expected(&expected)]);
             }
             ParseErrorType::ExtraToken => {
@@ -101,9 +89,7 @@ impl LPCError for ParseError {
 
                 diagnostic = Diagnostic::error().with_message(format!("Extra Token {:?}", token))
             }
-            ParseErrorType::User => {
-                diagnostic = Diagnostic::error().with_message("User error")
-            }
+            ParseErrorType::User => diagnostic = Diagnostic::error().with_message("User error"),
         }
 
         vec![diagnostic]
@@ -113,54 +99,57 @@ impl LPCError for ParseError {
 impl<'a, E> From<LalrpopParseError<usize, Token<'a>, E>> for ParseError {
     fn from(err: LalrpopParseError<usize, Token<'a>, E>) -> Self {
         match err {
-            LalrpopParseError::InvalidToken { location } => {
-                ParseError {
-                    type_: ParseErrorType::InvalidToken,
-                    location: Some(Span { l: location, r: location }),
-                    token: None,
-                    expected: None
-                }
-            }
-            LalrpopParseError::UnrecognizedEOF { location, expected } => {
-                ParseError {
-                    type_: ParseErrorType::UnrecognizedEOF,
-                    location: Some(Span { l: location, r: location }),
-                    token: None,
-                    expected: Some(expected)
-                }
-            }
-            LalrpopParseError::UnrecognizedToken { token: (start, ref token, end), ref expected } => {
-                ParseError {
-                    type_: ParseErrorType::UnrecognizedToken,
-                    location: Some(Span { l: start, r: end }),
-                    token: Some(ParseErrorToken(token.0, token.1.to_string())),
-                    expected: Some(expected.to_vec())
-                }
-            }
-            LalrpopParseError::ExtraToken { ref token } => {
-                ParseError {
-                    type_: ParseErrorType::ExtraToken,
-                    location: None,
-                    token: Some(ParseErrorToken(token.0, token.1.to_string())),
-                    expected: None
-                }
-            }
+            LalrpopParseError::InvalidToken { location } => ParseError {
+                type_: ParseErrorType::InvalidToken,
+                location: Some(Span {
+                    l: location,
+                    r: location,
+                }),
+                token: None,
+                expected: None,
+            },
+            LalrpopParseError::UnrecognizedEOF { location, expected } => ParseError {
+                type_: ParseErrorType::UnrecognizedEOF,
+                location: Some(Span {
+                    l: location,
+                    r: location,
+                }),
+                token: None,
+                expected: Some(expected),
+            },
+            LalrpopParseError::UnrecognizedToken {
+                token: (start, ref token, end),
+                ref expected,
+            } => ParseError {
+                type_: ParseErrorType::UnrecognizedToken,
+                location: Some(Span { l: start, r: end }),
+                token: Some(ParseErrorToken(token.0, token.1.to_string())),
+                expected: Some(expected.to_vec()),
+            },
+            LalrpopParseError::ExtraToken { ref token } => ParseError {
+                type_: ParseErrorType::ExtraToken,
+                location: None,
+                token: Some(ParseErrorToken(token.0, token.1.to_string())),
+                expected: None,
+            },
 
             // We don't track this error, to avoid having the type param leak *all over* the place.
-            LalrpopParseError::User { error: _ } => {
-                ParseError {
-                    type_: ParseErrorType::User,
-                    location: None,
-                    token: None,
-                    expected: None
-                }
-            }
+            LalrpopParseError::User { error: _ } => ParseError {
+                type_: ParseErrorType::User,
+                location: None,
+                token: None,
+                expected: None,
+            },
         }
     }
 }
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Parse error: {:?} {:?} {:?} {:?}", self.type_, self.location, self.token, self.expected)
+        write!(
+            f,
+            "Parse error: {:?} {:?} {:?} {:?}",
+            self.type_, self.location, self.token, self.expected
+        )
     }
 }

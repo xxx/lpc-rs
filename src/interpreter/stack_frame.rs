@@ -1,5 +1,4 @@
-use crate::semantic::function_symbol::FunctionSymbol;
-use crate::interpreter::lpc_var::LPCVar;
+use crate::{interpreter::lpc_var::LPCVar, semantic::function_symbol::FunctionSymbol};
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -9,7 +8,7 @@ pub struct StackFrame {
     /// Where we return to after we return from this function.
     pub return_address: usize,
     /// Our registers. By convention, `registers[0]` is for the return value of the call.
-    pub registers: Vec<LPCVar>
+    pub registers: Vec<LPCVar>,
 }
 
 impl StackFrame {
@@ -25,7 +24,7 @@ impl StackFrame {
         Self {
             symbol,
             return_address,
-            registers: vec![LPCVar::Int(0); reg_len]
+            registers: vec![LPCVar::Int(0); reg_len],
         }
     }
 }

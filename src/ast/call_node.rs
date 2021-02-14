@@ -1,10 +1,13 @@
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::ast::expression_node::ExpressionNode;
-use crate::codegen::tree_walker::TreeWalker;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::parser::span::Span;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{ast_node::ASTNodeTrait, expression_node::ExpressionNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Representation of a function call.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -16,7 +19,7 @@ pub struct CallNode {
     pub name: String,
 
     /// The text span in the original file that this node represents. Used for error messages.
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl ASTNodeTrait for CallNode {

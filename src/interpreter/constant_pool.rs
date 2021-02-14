@@ -1,10 +1,10 @@
-use delegate::delegate;
 use crate::interpreter::lpc_value::LPCValue;
+use delegate::delegate;
 
 /// Hold constant values, to allow for re-use without copying.
 #[derive(Debug, Default, Clone)]
 pub struct ConstantPool {
-    constants: Vec<LPCValue>
+    constants: Vec<LPCValue>,
 }
 
 impl ConstantPool {

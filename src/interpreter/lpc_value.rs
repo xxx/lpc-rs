@@ -1,13 +1,18 @@
-use std::ops::{Add, Mul, Sub, Div};
-use std::iter::repeat;
-use crate::interpreter::lpc_var::LPCVar;
-use crate::errors::runtime_error::RuntimeError;
-use crate::errors::runtime_error::binary_operation_error::BinaryOperationError;
-use crate::ast::binary_op_node::BinaryOperation;
-use crate::errors::runtime_error::division_by_zero_error::DivisionByZeroError;
-use std::fmt::Display;
+use crate::{
+    ast::binary_op_node::BinaryOperation,
+    errors::runtime_error::{
+        binary_operation_error::BinaryOperationError, division_by_zero_error::DivisionByZeroError,
+        RuntimeError,
+    },
+    interpreter::lpc_var::LPCVar,
+};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use std::fmt;
+use std::{
+    fmt,
+    fmt::Display,
+    iter::repeat,
+    ops::{Add, Div, Mul, Sub},
+};
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -15,7 +20,7 @@ use std::fmt;
 pub enum LPCValue {
     Int(i64),
     String(String),
-    Array(Vec<LPCVar>)
+    Array(Vec<LPCVar>),
 }
 
 impl LPCValue {
@@ -28,16 +33,12 @@ impl LPCValue {
     }
 
     // Just a refactor of a common operation
-    fn to_binary_op_error(
-        &self,
-        op: BinaryOperation,
-        right: &LPCValue
-    ) -> RuntimeError {
+    fn to_binary_op_error(&self, op: BinaryOperation, right: &LPCValue) -> RuntimeError {
         let e = BinaryOperationError {
             op,
             left_type: self.type_name().to_string(),
             right_type: right.type_name().to_string(),
-            span: None
+            span: None,
         };
 
         RuntimeError::BinaryOperationError(e)
@@ -71,30 +72,24 @@ impl Add for &LPCValue {
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Int(i) => {
-                match rhs {
-                    LPCValue::Int(i2) => Ok(LPCValue::Int(i + i2)),
-                    LPCValue::String(s) => Ok(LPCValue::String(i.to_string() + &s)),
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs))
+            LPCValue::Int(i) => match rhs {
+                LPCValue::Int(i2) => Ok(LPCValue::Int(i + i2)),
+                LPCValue::String(s) => Ok(LPCValue::String(i.to_string() + &s)),
+                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+            },
+            LPCValue::String(s) => match rhs {
+                LPCValue::String(s2) => Ok(LPCValue::String(s.clone() + s2)),
+                LPCValue::Int(i) => Ok(LPCValue::String(s.clone() + &i.to_string())),
+                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+            },
+            LPCValue::Array(vec) => match rhs {
+                LPCValue::Array(vec2) => {
+                    let mut new_vec = vec.to_vec();
+                    new_vec.extend(&*vec2);
+                    Ok(LPCValue::Array(new_vec))
                 }
-            }
-            LPCValue::String(s) => {
-                match rhs {
-                    LPCValue::String(s2) => Ok(LPCValue::String(s.clone() + s2)),
-                    LPCValue::Int(i) => Ok(LPCValue::String(s.clone() + &i.to_string())),
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs))
-                }
-            }
-            LPCValue::Array(vec) => {
-                match rhs {
-                    LPCValue::Array(vec2) => {
-                        let mut new_vec = vec.to_vec();
-                        new_vec.extend(&*vec2);
-                        Ok(LPCValue::Array(new_vec))
-                    },
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs))
-                }
-            }
+                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+            },
         }
     }
 }
@@ -104,13 +99,11 @@ impl Sub for &LPCValue {
 
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Int(i) => {
-                match rhs {
-                    LPCValue::Int(i2) => Ok(LPCValue::Int(i - i2)),
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs))
-                }
-            }
-            _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs))
+            LPCValue::Int(i) => match rhs {
+                LPCValue::Int(i2) => Ok(LPCValue::Int(i - i2)),
+                _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
+            },
+            _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
         }
     }
 }
@@ -129,25 +122,19 @@ impl Mul for &LPCValue {
 
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Int(i) => {
-                match rhs {
-                    LPCValue::Int(i2) => Ok(LPCValue::Int(i * i2)),
-                    LPCValue::String(s) => {
-                        Ok(LPCValue::String(repeat_string(s, i)))
-                    },
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs))
-                }
-            }
+            LPCValue::Int(i) => match rhs {
+                LPCValue::Int(i2) => Ok(LPCValue::Int(i * i2)),
+                LPCValue::String(s) => Ok(LPCValue::String(repeat_string(s, i))),
+                _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
+            },
             LPCValue::String(s) => {
                 match rhs {
                     // repeat the string `s`, `i` times
-                    LPCValue::Int(i) => {
-                        Ok(LPCValue::String(repeat_string(s, i)))
-                    }
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs))
+                    LPCValue::Int(i) => Ok(LPCValue::String(repeat_string(s, i))),
+                    _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
                 }
-            },
-            _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs))
+            }
+            _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
         }
     }
 }
@@ -157,21 +144,19 @@ impl Div for &LPCValue {
 
     fn div(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Int(i) => {
-                match rhs {
-                    LPCValue::Int(i2) => {
-                        if *i2 == 0 {
-                            Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                                span: None
-                            }))
-                        } else {
-                            Ok(LPCValue::Int(i / i2))
-                        }
-                    },
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
+            LPCValue::Int(i) => match rhs {
+                LPCValue::Int(i2) => {
+                    if *i2 == 0 {
+                        Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
+                            span: None,
+                        }))
+                    } else {
+                        Ok(LPCValue::Int(i / i2))
+                    }
                 }
-            }
-            _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs))
+                _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
+            },
+            _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
         }
     }
 }
@@ -182,7 +167,7 @@ mod tests {
 
     mod test_add {
         use super::*;
-        
+
         #[test]
         fn test_add_int_int() {
             let int1 = LPCValue::Int(123);
@@ -255,10 +240,10 @@ mod tests {
             }
         }
     }
-    
+
     mod test_mul {
         use super::*;
-        
+
         #[test]
         fn test_mul_string_int() {
             let string = LPCValue::String("foo".to_string());

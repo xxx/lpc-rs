@@ -1,8 +1,8 @@
+use crate::{
+    asm::instruction::Instruction, interpreter::constant_pool::ConstantPool, parser::span::Span,
+    semantic::function_symbol::FunctionSymbol,
+};
 use std::collections::HashMap;
-use crate::interpreter::constant_pool::ConstantPool;
-use crate::asm::instruction::Instruction;
-use crate::semantic::function_symbol::FunctionSymbol;
-use crate::parser::span::Span;
 
 #[derive(Debug, Default)]
 pub struct Program {
@@ -25,5 +25,5 @@ pub struct Program {
     pub constants: ConstantPool,
 
     /// How many globals does this program need storage for?
-    pub num_globals: usize
+    pub num_globals: usize,
 }

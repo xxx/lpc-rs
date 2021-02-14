@@ -1,10 +1,13 @@
-use crate::ast::ast_node::ASTNodeTrait;
-use crate::codegen::tree_walker::TreeWalker;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::ast::expression_node::ExpressionNode;
-use crate::parser::span::Span;
-use crate::errors::compiler_error::CompilerError;
+use crate::{
+    ast::{ast_node::ASTNodeTrait, expression_node::ExpressionNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
+};
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -13,7 +16,7 @@ pub struct ReturnNode {
     pub value: Option<ExpressionNode>,
 
     /// The span of the string in the original file
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl ReturnNode {
