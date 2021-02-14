@@ -216,7 +216,22 @@ impl AsmInterpreter {
                         panic!("This shouldn't have passed type checks.")
                     }
                 }
-                Instruction::AStore(_r1, _r2, _r3) => {}
+                Instruction::AStore(r1, r2, r3) => {
+                    let arr = self.resolve_register(r2.index());
+                    let index = self.resolve_register(r3.index());
+
+                    if let (LPCValue::Array(ref mut vec), LPCValue::Int(i)) = (arr, index) {
+                        let idx = if i >= 0 { i } else { vec.len() as i64 + i };
+
+                        if idx >= 0 && idx < vec.len() as i64 {
+                            vec[i as usize] = self.current_registers()[r1.index()];
+                        } else {
+                            return Err(self.make_index_error(idx, vec.len()));
+                        }
+                    } else {
+                        panic!("This shouldn't have passed type checks.")
+                    }
+                }
                 Instruction::Call {
                     name,
                     num_args,
