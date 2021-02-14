@@ -8,11 +8,12 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use std::borrow::BorrowMut;
+use crate::errors::runtime_error::index_error::IndexError;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
 
-/// The initial size (in `Copy`-able cells) of system memory
+/// The initial size (in cells) of system memory
 const MEMORY_SIZE: usize = 100000;
 
 /// The initial size of the globals vector
@@ -174,6 +175,7 @@ impl AsmInterpreter {
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<(), RuntimeError> {
         let instructions = self.program.instructions.clone();
+
         while let Some(instruction) = instructions.get(self.pc) {
             if self.is_halted {
                 break;
@@ -193,6 +195,30 @@ impl AsmInterpreter {
                     self.memory.push(LPCValue::from(vars));
                     let registers = self.current_registers();
                     registers[r.index()] = array!(index);
+                }
+                Instruction::ALoad(r1, r2, r3) => {
+                    let arr = self.resolve_register(r1.index());
+                    let index = self.resolve_register(r2.index());
+                    let registers = self.current_registers();
+
+                    if let (LPCValue::Array(vec), LPCValue::Int(i)) = (arr, index) {
+                        let idx = if i >= 0 { i } else { vec.len() as i64 + i };
+
+                        if idx >= 0 {
+                            if let Some(v) = vec.get(idx as usize) {
+                                registers[r3.index()] = *v;
+                            } else {
+                                return Err(self.make_index_error(idx, vec.len()));
+                            }
+                        } else {
+                            return Err(self.make_index_error(idx, vec.len()));
+                        }
+                    } else {
+                        panic!("This shouldn't have passed type checks.")
+                    }
+                }
+                Instruction::AStore(r1, r2, r3) => {
+
                 }
                 Instruction::Call {
                     name,
@@ -315,9 +341,13 @@ impl AsmInterpreter {
                     match val1 + val2 {
                         Ok(result) => {
                             let index = self.memory.len();
-                            self.memory.push(result);
+                            let var = match result {
+                                LPCValue::String(_) => LPCVar::String(index),
+                                LPCValue::Array(_) => LPCVar::Array(index),
+                                LPCValue::Int(_) => unimplemented!(),
+                            };
 
-                            let var = LPCVar::String(index);
+                            self.memory.push(result);
                             let registers = self.current_registers();
                             registers[r3.index()] = var
                         }
@@ -425,14 +455,29 @@ impl AsmInterpreter {
         }
     }
 
-    /// Handle the common switch on errors that pop out of various operations to get the span
-    /// into place for reporting.
+    #[doc(hidden)]
     fn populate_error_span(&self, error: &mut RuntimeError) {
-        if let RuntimeError::BinaryOperationError(ref mut err) = error {
-            err.span = *self.program.debug_spans.get(self.pc).unwrap();
-        } else if let RuntimeError::DivisionByZeroError(ref mut err) = error {
-            err.span = *self.program.debug_spans.get(self.pc).unwrap();
+        match error {
+            RuntimeError::BinaryOperationError(err) => err.span = *self.program.debug_spans.get(self.pc).unwrap(),
+            RuntimeError::DivisionByZeroError(err) => err.span = *self.program.debug_spans.get(self.pc).unwrap(),
+            RuntimeError::IndexError(err) => err.span = *self.program.debug_spans.get(self.pc).unwrap(),
+            RuntimeError::UnknownError(_) => unimplemented!()
         }
+    }
+
+    #[doc(hidden)]
+    fn make_index_error(&self, index: i64, length: usize) -> RuntimeError {
+        let e = IndexError {
+            index,
+            length,
+            span: None
+        };
+
+        let mut e = RuntimeError::IndexError(e);
+
+        self.populate_error_span(e.borrow_mut());
+
+        e
     }
 }
 

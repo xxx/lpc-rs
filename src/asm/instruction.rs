@@ -7,19 +7,27 @@ use std::{
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Instruction {
-    /// Function calls
+    /// Append to an array, extending it as needed.
+    /// x.0 is the item to append, x.1 is the array.
+    AAppend(Register, Register),
+
+    /// Create an array with values from the vector
+    AConst(Register, Vec<Register>),
+
+    /// Load a single item from an array into a register
+    /// x.2 = x.0[x.1]
+    ALoad(Register, Register, Register),
+
+    /// Store a single item into an array
+    /// x.1[x.2] = x.0
+    AStore(Register, Register, Register),
+
+    /// Call a function
     Call {
         name: String,
         num_args: usize,
         initial_arg: Register,
     },
-
-    /// Create an array with values from the vector
-    AConst(Register, Vec<Register>),
-
-    /// Append to an array, extending it as needed.
-    /// x.0 is the item to append, x.1 is the array.
-    AAppend(Register, Register),
 
     /// Copy a global from the global registers, into the current stack frame.
     /// Copies the global in x.0 to the local register x.1.
@@ -86,6 +94,12 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
+            }
+            Instruction::ALoad(r1, r2, r3) => {
+                write!(f, "aload {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::AStore(r1, r2, r3) => {
+                write!(f, "astore {}, {}, {}", r1, r2, r3)
             }
             Instruction::GLoad(r1, r2) => {
                 write!(f, "gload {}, {}", r1, r2)

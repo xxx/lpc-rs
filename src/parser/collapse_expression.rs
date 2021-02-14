@@ -27,7 +27,14 @@ pub fn collapse_expression(
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Div => collapse_div(op, l, r, span),
-        _ => unimplemented!()
+        BinaryOperation::Index => {
+            ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(l),
+                r: Box::new(r),
+                op,
+                span: Some(span),
+            })
+        },
     }
 }
 

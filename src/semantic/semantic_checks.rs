@@ -75,18 +75,20 @@ pub fn check_binary_operation_types(
     let right_type = node_type(&node.r, scope_tree, function_return_types);
     let tuple = (left_type, right_type);
 
-    if let LPCType::Mixed(_) = tuple.0 {
-        return if tuple.0.matches_type(tuple.1) {
-            Ok(())
-        } else {
-            Err(create_error(node, node.op, tuple.0, tuple.1))
+    if node.op != BinaryOperation::Index {
+        let handle = |tuple: (LPCType, LPCType), node| {
+            if tuple.0.matches_type(tuple.1) {
+                Ok(())
+            } else {
+                Err(create_error(node, node.op, tuple.0, tuple.1))
+            }
         };
-    } else if let LPCType::Mixed(_) = tuple.1 {
-        return if tuple.0.matches_type(tuple.1) {
-            Ok(())
-        } else {
-            Err(create_error(node, node.op, tuple.0, tuple.1))
-        };
+
+        if let LPCType::Mixed(_) = tuple.0 {
+            return handle(tuple, node);
+        } else if let LPCType::Mixed(_) = tuple.1 {
+            return handle(tuple, node);
+        }
     }
 
     match node.op {
@@ -460,6 +462,30 @@ mod check_binary_operation_tests {
         )
     }
 
+    fn array_int_literals(
+        op: BinaryOperation,
+        scope_tree: &ScopeTree,
+    ) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(vec!["asdf", "bar", "hi"]),
+            ExpressionNode::from(666),
+            &scope_tree,
+        )
+    }
+
+    fn array_int_vars(
+        op: BinaryOperation,
+        scope_tree: &ScopeTree,
+    ) -> Result<(), BinaryOperationError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("array1")),
+            ExpressionNode::from(VarNode::new("int1")),
+            &scope_tree,
+        )
+    }
+
     #[test]
     fn test_add() {
         let scope_tree = setup();
@@ -469,12 +495,14 @@ mod check_binary_operation_tests {
         assert!(string_int_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(int_string_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(array_int_literals(BinaryOperation::Add, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(int_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_vars(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(array_int_vars(BinaryOperation::Add, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -534,12 +562,14 @@ mod check_binary_operation_tests {
         assert!(string_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(int_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_array_literals(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(string_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(int_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_array_vars(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -599,12 +629,14 @@ mod check_binary_operation_tests {
         assert!(string_int_literals(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(int_string_literals(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(array_array_literals(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Mul, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(string_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(int_string_vars(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(array_array_vars(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Mul, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -664,12 +696,14 @@ mod check_binary_operation_tests {
         assert!(string_int_literals(BinaryOperation::Div, &scope_tree).is_err());
         assert!(int_string_literals(BinaryOperation::Div, &scope_tree).is_err());
         assert!(array_array_literals(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Div, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Div, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(string_int_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(int_string_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(array_array_vars(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Div, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -718,6 +752,73 @@ mod check_binary_operation_tests {
             &scope_tree,
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_index() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(string_string_literals(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Index, &scope_tree).is_ok());
+
+        assert!(int_int_vars(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(string_string_vars(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Index, &scope_tree).is_ok());
+
+        // valid complex tree
+        assert!(get_result(
+            BinaryOperation::Index,
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec!["foo"])),
+                r: Box::new(ExpressionNode::from(VarNode::new("array1"))),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(-123)),
+                    r: Box::new(ExpressionNode::from(82)),
+                    op: BinaryOperation::Mul,
+                    span: None
+                })),
+                r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            &scope_tree,
+        )
+            .is_ok());
+
+        // invalid complex tree
+        assert!(get_result(
+            BinaryOperation::Index,
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![123])),
+                r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                    op: BinaryOperation::Mul,
+                    span: None
+                })),
+                r: Box::new(ExpressionNode::from(-123)),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            &scope_tree,
+        )
+            .is_err());
     }
 }
 
