@@ -8,6 +8,7 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use std::borrow::BorrowMut;
+use std::env::current_dir;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -143,12 +144,17 @@ impl AsmInterpreter {
         self.stack.pop()
     }
 
+    /// Get a reference to the current stack frame's registers
+    fn current_registers(&self) -> &Vec<LPCVar> {
+        &self.stack.last().unwrap().registers
+    }
+
     /// Get a mutable reference to the current stack frame's registers
-    fn current_registers(&mut self) -> &mut Vec<LPCVar> {
+    fn current_registers_mut(&mut self) -> &mut Vec<LPCVar> {
         self.stack.last_mut().unwrap().registers.as_mut()
     }
 
-    /// Resolve an LPCVar into an LPCValue
+    /// Resolve an LPCVar into an LPCValue. This clones the value, so writes will not do anything.
     pub fn resolve_var(&self, var: &LPCVar) -> LPCValue {
         match var {
             LPCVar::Int(v) => LPCValue::Int(*v),
@@ -162,6 +168,8 @@ impl AsmInterpreter {
     }
 
     /// Resolve the passed index within the current stack frame's registers
+    /// # Arguments
+    /// `index` - the register index to resolve
     pub fn resolve_register(&self, index: usize) -> LPCValue {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
@@ -169,6 +177,29 @@ impl AsmInterpreter {
         // println!("regs {:?}", registers);
 
         self.resolve_var(registers.get(index).unwrap())
+    }
+
+    /// Get a mutable reference to an array in memory, so writes can be made to it.
+    /// # Arguments
+    /// `index` - the register index to resolve
+    fn resolve_array_reference_mut(&mut self, index: usize) -> &mut Vec<LPCVar> {
+        let len = self.stack.len();
+        let registers = &self.stack[len - 1].registers;
+
+        // println!("regs {:?}", registers);
+        let var = registers.get(index).unwrap();
+
+        match var {
+            LPCVar::Array(i) => {
+                // not recursive
+                if let LPCValue::Array(ref mut vec) = self.memory.get_mut(*i).unwrap() {
+                    vec
+                } else {
+                    unimplemented!()
+                }
+            },
+            _ => unimplemented!()
+        }
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
@@ -188,17 +219,17 @@ impl AsmInterpreter {
                     todo!()
                 }
                 Instruction::AConst(r, vec) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     let vars = vec.iter().map(|i| registers[i.index()]).collect::<Vec<_>>();
                     let index = self.memory.len();
                     self.memory.push(LPCValue::from(vars));
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r.index()] = array!(index);
                 }
                 Instruction::ALoad(r1, r2, r3) => {
                     let arr = self.resolve_register(r1.index());
                     let index = self.resolve_register(r2.index());
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
 
                     if let (LPCValue::Array(vec), LPCValue::Int(i)) = (arr, index) {
                         let idx = if i >= 0 { i } else { vec.len() as i64 + i };
@@ -217,10 +248,10 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::AStore(r1, r2, r3) => {
-                    let arr = self.resolve_register(r2.index());
                     let index = self.resolve_register(r3.index());
 
-                    if let (LPCValue::Array(ref mut vec), LPCValue::Int(i)) = (arr, index) {
+                    if let LPCValue::Int(i) = index {
+                        let vec = self.resolve_array_reference_mut(r2.index());
                         let idx = if i >= 0 { i } else { vec.len() as i64 + i };
 
                         if idx >= 0 && idx < vec.len() as i64 {
@@ -278,15 +309,15 @@ impl AsmInterpreter {
                 }
                 Instruction::GLoad(r1, r2) => {
                     let global = self.globals[r1.index()];
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r2.index()] = global
                 }
                 Instruction::GStore(r1, r2) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     self.globals[r2.index()] = registers[r1.index()]
                 }
                 Instruction::IAdd(r1, r2, r3) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     match registers[r1.index()] + registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
@@ -297,23 +328,23 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::IConst(r, i) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r.index()] = int!(*i);
                 }
                 Instruction::IConst0(r) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r.index()] = int!(0);
                 }
                 Instruction::IConst1(r) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r.index()] = int!(1);
                 }
                 Instruction::SConst(r, s) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r.index()] = string_constant!(*s);
                 }
                 Instruction::IDiv(r1, r2, r3) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     match registers[r1.index()] / registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
@@ -324,7 +355,7 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::IMul(r1, r2, r3) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     match registers[r1.index()] * registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
@@ -335,7 +366,7 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::ISub(r1, r2, r3) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     match registers[r1.index()] - registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
@@ -360,7 +391,7 @@ impl AsmInterpreter {
                             };
 
                             self.memory.push(result);
-                            let registers = self.current_registers();
+                            let registers = self.current_registers_mut();
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
@@ -380,7 +411,7 @@ impl AsmInterpreter {
                             self.memory.push(result);
 
                             let var = LPCVar::String(index);
-                            let registers = self.current_registers();
+                            let registers = self.current_registers_mut();
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
@@ -400,7 +431,7 @@ impl AsmInterpreter {
                             self.memory.push(result);
 
                             let var = LPCVar::String(index);
-                            let registers = self.current_registers();
+                            let registers = self.current_registers_mut();
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
@@ -420,7 +451,7 @@ impl AsmInterpreter {
                             self.memory.push(result);
 
                             let var = LPCVar::String(index);
-                            let registers = self.current_registers();
+                            let registers = self.current_registers_mut();
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
@@ -431,7 +462,7 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::RegCopy(r1, r2) => {
-                    let registers = self.current_registers();
+                    let registers = self.current_registers_mut();
                     registers[r2.index()] = registers[r1.index()]
                 }
                 Instruction::Ret => {
@@ -463,7 +494,7 @@ impl AsmInterpreter {
     /// Convenience helper to copy a return value from a given stack frame, back to the current one.
     fn copy_call_result(&mut self, from: &StackFrame) {
         if !self.stack.is_empty() {
-            self.current_registers()[0] = from.registers[0];
+            self.current_registers_mut()[0] = from.registers[0];
         }
     }
 
