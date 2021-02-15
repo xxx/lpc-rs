@@ -8,6 +8,7 @@ pub mod expression_node;
 pub mod function_def_node;
 pub mod int_node;
 pub mod program_node;
+pub mod range_node;
 pub mod return_node;
 pub mod string_node;
 pub mod var_init_node;

@@ -9,6 +9,7 @@ use crate::ast::call_node::CallNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::var_init_node::VarInitNode;
+use crate::ast::range_node::RangeNode;
 use crate::ast::var_node::VarNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
@@ -176,7 +177,34 @@ pub PrimaryExpression: ExpressionNode = {
 pub PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
     <left:@L> <l:PostfixExpression> "[" <r:Expression> "]" <right:@R> => {
-          collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+    },
+    <left:@L> <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> "]" <right:@R> => {
+        let r = ExpressionNode::Range(RangeNode {
+            l: Box::new(Some(e1)),
+            r: Box::new(Some(e2)),
+            span: Some(Span { l: left, r: right })
+        });
+
+        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+    },
+    <left:@L> <l:PostfixExpression> "[" ".." <e:Expression> "]" <right:@R> => {
+        let r = ExpressionNode::Range(RangeNode {
+            l: Box::new(None),
+            r: Box::new(Some(e)),
+            span: Some(Span { l: left, r: right })
+        });
+
+        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+    },
+    <left:@L> <l:PostfixExpression> "[" <e:Expression> ".." "]" <right:@R> => {
+        let r = ExpressionNode::Range(RangeNode {
+            l: Box::new(None),
+            r: Box::new(Some(e)),
+            span: Some(Span { l: left, r: right })
+        });
+
+        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
     },
     Call => ExpressionNode::Call(<>)
 };

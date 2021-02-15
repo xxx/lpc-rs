@@ -8,6 +8,7 @@ use crate::{
     },
     errors::compiler_error::CompilerError,
 };
+use crate::ast::range_node::RangeNode;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
@@ -140,6 +141,21 @@ pub trait TreeWalker {
     {
         for node in &mut node.value {
             node.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        if let Some(expr) = &mut *node.l {
+            expr.visit(self)?;
+        }
+
+        if let Some(expr) = &mut *node.r {
+            expr.visit(self)?;
         }
 
         Ok(())

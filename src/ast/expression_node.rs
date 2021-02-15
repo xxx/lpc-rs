@@ -17,6 +17,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::range_node::RangeNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -26,6 +27,7 @@ pub enum ExpressionNode {
     BinaryOp(BinaryOpNode),
     Call(CallNode),
     Int(IntNode),
+    Range(RangeNode),
     String(StringNode),
     Var(VarNode),
     Array(ArrayNode),
@@ -38,6 +40,7 @@ impl ExpressionNode {
             ExpressionNode::BinaryOp(node) => node.span,
             ExpressionNode::Call(node) => node.span,
             ExpressionNode::Int(node) => node.span,
+            ExpressionNode::Range(node) => node.span,
             ExpressionNode::String(node) => node.span,
             ExpressionNode::Var(node) => node.span,
             ExpressionNode::Array(node) => node.span,
@@ -85,6 +88,7 @@ delegated_traits!(
     ExpressionNode::Int,
     ExpressionNode::Call,
     ExpressionNode::Var,
+    ExpressionNode::Range,
     ExpressionNode::String,
     ExpressionNode::Array
 );
@@ -116,6 +120,12 @@ impl From<AssignmentNode> for ExpressionNode {
 impl From<CallNode> for ExpressionNode {
     fn from(node: CallNode) -> Self {
         Self::Call(node)
+    }
+}
+
+impl From<RangeNode> for ExpressionNode {
+    fn from(node: RangeNode) -> Self {
+        Self::Range(node)
     }
 }
 
@@ -228,6 +238,19 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ExpressionNode::from(node), ExpressionNode::Call(clone));
+    }
+
+    #[test]
+    fn test_from_range_node() {
+        let node = RangeNode {
+            l: Box::new(Some(ExpressionNode::from(666))),
+            r: Box::new(Some(ExpressionNode::from(432))),
+            span: None,
+        };
+
+        let clone = node.clone();
+
+        assert_eq!(ExpressionNode::from(node), ExpressionNode::Range(clone));
     }
 
     mod from_ast_node {
