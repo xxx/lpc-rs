@@ -160,15 +160,7 @@ pub fn check_binary_operation_types(
 /// Returns the first type if no promotion is possible.
 fn combine_types(type1: LPCType, type2: LPCType, op: BinaryOperation) -> LPCType {
     if op == BinaryOperation::Index {
-        return match type1 {
-            LPCType::Int(true) => LPCType::Int(false),
-            LPCType::Float(true) => LPCType::Float(false),
-            LPCType::Object(true) => LPCType::Object(false),
-            LPCType::String(true) => LPCType::String(false),
-            LPCType::Mapping(true) => LPCType::Mapping(false),
-            LPCType::Mixed(true) => LPCType::Mixed(false),
-            _ => unimplemented!(),
-        };
+        return type1.as_array(type2.is_array());
     }
 
     if type1 == type2

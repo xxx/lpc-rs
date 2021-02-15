@@ -9,6 +9,7 @@ use crate::{
     errors::compiler_error::CompilerError,
 };
 use tree_walker::TreeWalker;
+use crate::ast::range_node::RangeNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -76,17 +77,17 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, expression: &mut BinaryOpNode) -> Result<(), CompilerError> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
         self.println_indented("Binary Op");
         self.indent += 2;
-        self.println_indented(&format!("operation: {:?}", expression.op));
+        self.println_indented(&format!("operation: {:?}", node.op));
         self.println_indented("l: ");
         self.indent += 2;
-        expression.l.visit(self)?;
+        node.l.visit(self)?;
         self.indent -= 2;
         self.println_indented("r: ");
         self.indent += 2;
-        expression.r.visit(self)?;
+        node.r.visit(self)?;
         self.indent -= 4;
 
         Ok(())
@@ -174,6 +175,31 @@ impl TreeWalker for TreePrinter {
         }
         self.indent -= 2;
         self.println_indented("})");
+
+        Ok(())
+    }
+
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), CompilerError> {
+        self.println_indented("Range");
+
+        self.println_indented("l: ");
+        self.indent += 2;
+        if let Some(expr) = &mut *node.l {
+            expr.visit(self)?;
+        } else {
+            self.println_indented("None");
+        }
+        self.indent -= 2;
+
+        self.println_indented("r: ");
+        self.indent += 2;
+        if let Some(expr) = &mut *node.r {
+            expr.visit(self)?;
+        } else {
+            self.println_indented("None");
+        }
+
+        self.indent -= 2;
 
         Ok(())
     }

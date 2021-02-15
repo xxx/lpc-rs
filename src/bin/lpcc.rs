@@ -13,6 +13,7 @@ use lpc_rs::{
     lpc_parser,
     semantic::scope_tree::ScopeTree,
 };
+use lpc_rs::codegen::tree_printer::TreePrinter;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 
@@ -62,8 +63,8 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     // println!("{:?}", program);
 
-    // let mut walker = TreePrinter::new();
-    // let _ = program.visit(&mut walker);
+    let mut walker = TreePrinter::new();
+    let _ = program.visit(&mut walker);
 
     let mut scope_walker = ScopeWalker::new(filename);
 

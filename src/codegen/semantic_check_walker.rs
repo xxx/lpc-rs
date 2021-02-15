@@ -626,6 +626,92 @@ mod tests {
 
             assert!(walker.errors.is_empty());
         }
+
+        #[test]
+        fn test_visit_assignment_allows_array_items() {
+            let mut init_node = VarInitNode {
+                type_: LPCType::Int(false),
+                name: "foo".to_string(),
+                value: Some(ExpressionNode::from(324)),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            let var_node = VarNode::new("foo");
+
+            let mut assignment_node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(var_node)),
+                rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(vec![1, 2, 3])),
+                    r: Box::new(ExpressionNode::from(1)),
+                    op: BinaryOperation::Index,
+                    span: None
+                })),
+                op: AssignmentOperation::Simple,
+                span: None,
+            };
+
+            let functions = HashMap::new();
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCType::Mixed(false));
+            scope_tree.get_current_mut().unwrap().insert(sym);
+
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let _ = init_node.visit(walker.borrow_mut());
+
+            assert!(walker.errors.is_empty());
+
+            let _ = assignment_node.visit(walker.borrow_mut());
+
+            assert!(walker.errors.is_empty());
+        }
+
+        #[test]
+        fn test_visit_assignment_allows_array_ranges() {
+            let mut init_node = VarInitNode {
+                type_: LPCType::Int(true),
+                name: "foo".to_string(),
+                value: Some(ExpressionNode::from(vec![324])),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            let var_node = VarNode::new("foo");
+
+            let mut assignment_node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(var_node)),
+                rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(vec![1, 2, 3])),
+                    r: Box::new(ExpressionNode::Range(RangeNode {
+                        l: Box::new(Some(ExpressionNode::from(1))),
+                        r: Box::new(Some(ExpressionNode::from(4))),
+                        span: None,
+                    })),
+                    op: BinaryOperation::Index,
+                    span: None
+                })),
+                op: AssignmentOperation::Simple,
+                span: None,
+            };
+
+            let functions = HashMap::new();
+            let mut scope_tree = ScopeTree::default();
+            scope_tree.push_new();
+            let sym = Symbol::new("foo", LPCType::Mixed(false));
+            scope_tree.get_current_mut().unwrap().insert(sym);
+
+            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let _ = init_node.visit(walker.borrow_mut());
+
+            assert!(walker.errors.is_empty());
+
+            let _ = assignment_node.visit(walker.borrow_mut());
+
+            assert!(walker.errors.is_empty());
+        }
     }
 
     mod test_visit_var_init {
