@@ -27,7 +27,7 @@ impl RangeNode {
         Self {
             l: Box::new(l),
             r: Box::new(r),
-            span
+            span,
         }
     }
 }

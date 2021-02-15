@@ -5,7 +5,7 @@ use lpc_rs::{
     codegen::{
         asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
-        tree_walker::TreeWalker,
+        tree_printer::TreePrinter, tree_walker::TreeWalker,
     },
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
@@ -13,7 +13,6 @@ use lpc_rs::{
     lpc_parser,
     semantic::scope_tree::ScopeTree,
 };
-use lpc_rs::codegen::tree_printer::TreePrinter;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 

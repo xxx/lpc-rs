@@ -6,6 +6,7 @@ use crate::{
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
         int_node::IntNode,
+        range_node::RangeNode,
         string_node::StringNode,
         var_node::VarNode,
     },
@@ -17,7 +18,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::ast::range_node::RangeNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

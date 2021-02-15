@@ -1,7 +1,4 @@
-use crate::{
-    ast::binary_op_node::BinaryOperation, errors::LPCError, parser::span::Span,
-    semantic::lpc_type::LPCType,
-};
+use crate::{errors::LPCError, parser::span::Span, semantic::lpc_type::LPCType};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     fmt,

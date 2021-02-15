@@ -2,7 +2,8 @@ use crate::{
     ast::{
         assignment_node::AssignmentNode, ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode,
         call_node::CallNode, expression_node::ExpressionNode, function_def_node::FunctionDefNode,
-        int_node::IntNode, return_node::ReturnNode, var_init_node::VarInitNode,
+        int_node::IntNode, range_node::RangeNode, return_node::ReturnNode,
+        var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::{
@@ -19,9 +20,7 @@ use crate::{
     },
 };
 use std::collections::HashMap;
-use crate::ast::range_node::RangeNode;
-use crate::errors::compiler_error::binary_operation_error::BinaryOperationError;
-use crate::ast::binary_op_node::BinaryOperation;
+
 use crate::errors::compiler_error::range_error::RangeError;
 
 /// A tree walker to handle various semantic & type checks
@@ -267,8 +266,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
     }
 
     fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), CompilerError>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         if let Some(expr) = &mut *node.l {
             expr.visit(self)?;
@@ -536,6 +535,7 @@ mod tests {
 
     mod test_visit_assignment {
         use super::*;
+        use crate::ast::binary_op_node::BinaryOperation;
 
         #[test]
         fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {
@@ -646,7 +646,7 @@ mod tests {
                     l: Box::new(ExpressionNode::from(vec![1, 2, 3])),
                     r: Box::new(ExpressionNode::from(1)),
                     op: BinaryOperation::Index,
-                    span: None
+                    span: None,
                 })),
                 op: AssignmentOperation::Simple,
                 span: None,
@@ -691,7 +691,7 @@ mod tests {
                         span: None,
                     })),
                     op: BinaryOperation::Index,
-                    span: None
+                    span: None,
                 })),
                 op: AssignmentOperation::Simple,
                 span: None,

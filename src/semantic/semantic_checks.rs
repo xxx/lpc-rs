@@ -5,6 +5,7 @@ use crate::{
         call_node::CallNode,
         expression_node::ExpressionNode,
         int_node::IntNode,
+        range_node::RangeNode,
         string_node::StringNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
@@ -16,7 +17,6 @@ use errors::compiler_error::{
     binary_operation_error::BinaryOperationError, var_redefinition_error::VarRedefinitionError,
 };
 use std::collections::HashMap;
-use crate::ast::range_node::RangeNode;
 
 /// Utility functions for doing various semantic checks.
 
@@ -142,7 +142,10 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Index => {
-            if left_type.is_array() && (right_type == LPCType::Int(false) || matches!(*node.r, ExpressionNode::Range(_))) {
+            if left_type.is_array()
+                && (right_type == LPCType::Int(false)
+                    || matches!(*node.r, ExpressionNode::Range(_)))
+            {
                 Ok(())
             } else {
                 Err(create_error(
@@ -487,11 +490,7 @@ mod check_binary_operation_tests {
         get_result(
             op,
             ExpressionNode::from(vec![666, 2]),
-            ExpressionNode::Range(RangeNode::new(
-                Some(ExpressionNode::from(0)),
-                None,
-                None
-            )),
+            ExpressionNode::Range(RangeNode::new(Some(ExpressionNode::from(0)), None, None)),
             &scope_tree,
         )
     }
@@ -506,7 +505,7 @@ mod check_binary_operation_tests {
             ExpressionNode::Range(RangeNode::new(
                 Some(ExpressionNode::from(VarNode::new("int1"))),
                 Some(ExpressionNode::from(VarNode::new("int2"))),
-                None
+                None,
             )),
             &scope_tree,
         )

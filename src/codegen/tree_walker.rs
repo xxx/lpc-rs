@@ -3,12 +3,11 @@ use crate::{
         array_node::ArrayNode, assignment_node::AssignmentNode, ast_node::ASTNodeTrait,
         binary_op_node::BinaryOpNode, call_node::CallNode, decl_node::DeclNode,
         function_def_node::FunctionDefNode, int_node::IntNode, program_node::ProgramNode,
-        return_node::ReturnNode, string_node::StringNode, var_init_node::VarInitNode,
-        var_node::VarNode,
+        range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
+        var_init_node::VarInitNode, var_node::VarNode,
     },
     errors::compiler_error::CompilerError,
 };
-use crate::ast::range_node::RangeNode;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
