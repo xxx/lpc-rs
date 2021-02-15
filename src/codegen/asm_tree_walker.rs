@@ -578,10 +578,10 @@ impl TreeWalker for AsmTreeWalker {
                 // Copy over globals if necessary
                 if global {
                     if let Some(Symbol {
-                                    scope_id: 0,
-                                    location: Some(register),
-                                    ..
-                                }) = self.lookup_global(&name)
+                        scope_id: 0,
+                        location: Some(register),
+                        ..
+                    }) = self.lookup_global(&name)
                     {
                         let store = Instruction::GStore(lhs_result, *register);
                         self.instructions.push(store);
@@ -590,9 +590,13 @@ impl TreeWalker for AsmTreeWalker {
                 }
 
                 self.current_result = lhs_result;
-
             }
-            ExpressionNode::BinaryOp(BinaryOpNode { op: BinaryOperation::Index, ref mut l, ref mut r, .. }) => {
+            ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                ref mut l,
+                ref mut r,
+                ..
+            }) => {
                 let _ = l.visit(self);
                 let var_result = self.current_result;
                 let _ = r.visit(self);
@@ -609,13 +613,6 @@ impl TreeWalker for AsmTreeWalker {
                 panic!("trying to assign to an invalid lvalue")
             }
         }
-
-
-
-
-
-
-
 
         // node.lhs.visit(self)?;
         // let dest = self.current_result;
@@ -668,7 +665,9 @@ impl TreeWalker for AsmTreeWalker {
 mod tests {
     use super::*;
     use crate::{
-        asm::instruction::Instruction::{AConst, GLoad, GStore, IConst, IConst1, RegCopy, SConst},
+        asm::instruction::Instruction::{
+            AConst, AStore, GLoad, GStore, IConst, IConst1, RegCopy, SConst,
+        },
         ast::{
             assignment_node::AssignmentOperation, ast_node::ASTNode,
             expression_node::ExpressionNode,
@@ -679,7 +678,6 @@ mod tests {
         semantic::lpc_type::LPCType,
     };
     use std::borrow::BorrowMut;
-    use crate::asm::instruction::Instruction::AStore;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -1216,7 +1214,7 @@ mod tests {
                 l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
                 r: Box::new(ExpressionNode::from(1)),
                 op: BinaryOperation::Index,
-                span: None
+                span: None,
             })),
             rhs: Box::new(ExpressionNode::from(-12)),
             op: AssignmentOperation::Simple,

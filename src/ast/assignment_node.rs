@@ -16,7 +16,7 @@ pub enum AssignmentOperation {
     Simple,
 
     /// Index assigment - `a[2] = "hello";`
-    Index
+    Index,
 }
 
 /// A node representing an assignment.

@@ -113,7 +113,11 @@ fn current_registers_mut(stack: &mut Vec<StackFrame>) -> &mut Vec<LPCVar> {
 /// Get a mutable reference to an array in memory, so writes can be made to it.
 /// # Arguments
 /// `index` - the register index to resolve
-fn resolve_array_reference_mut<'a>(index: usize, stack: &Vec<StackFrame>, memory: &'a mut Vec<LPCValue>) -> &'a mut Vec<LPCVar> {
+fn resolve_array_reference_mut<'a>(
+    index: usize,
+    stack: &Vec<StackFrame>,
+    memory: &'a mut Vec<LPCValue>,
+) -> &'a mut Vec<LPCVar> {
     let len = stack.len();
     let registers = &stack[len - 1].registers;
 
@@ -128,8 +132,8 @@ fn resolve_array_reference_mut<'a>(index: usize, stack: &Vec<StackFrame>, memory
             } else {
                 unimplemented!()
             }
-        },
-        _ => unimplemented!()
+        }
+        _ => unimplemented!(),
     }
 }
 
@@ -258,7 +262,7 @@ impl AsmInterpreter {
                         let vec = resolve_array_reference_mut(
                             r2.index(),
                             &self.stack,
-                            self.memory.borrow_mut()
+                            self.memory.borrow_mut(),
                         );
                         let len = vec.len();
                         // handle negative indices
