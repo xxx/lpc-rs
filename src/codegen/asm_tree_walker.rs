@@ -87,7 +87,6 @@ impl AsmTreeWalker {
     ///
     /// # Examples
     /// ```
-    /// use std::borrow::BorrowMut;
     /// use lpc_rs::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
     /// use lpc_rs::ast::int_node::IntNode;
     /// use lpc_rs::ast::expression_node::ExpressionNode;
@@ -102,7 +101,7 @@ impl AsmTreeWalker {
     /// };
     /// let mut walker = AsmTreeWalker::default();
     ///
-    /// walker.visit_binary_op(node.borrow_mut());
+    /// walker.visit_binary_op(&mut node);
     ///
     /// for instruction in walker.listing() {
     ///     println!("{}", instruction);

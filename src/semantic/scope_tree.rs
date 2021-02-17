@@ -3,7 +3,7 @@ use crate::{
     semantic::{local_scope::LocalScope, symbol::Symbol},
 };
 use indextree::{Arena, Node, NodeId};
-use std::{borrow::BorrowMut, collections::HashMap};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -52,7 +52,7 @@ impl ScopeTree {
         self.current_id = match self.current_id {
             Some(parent) => {
                 let kid = self.scopes.new_node(scope);
-                parent.append(kid, self.scopes.borrow_mut());
+                parent.append(kid, &mut self.scopes);
                 Some(kid)
             }
             None => Some(self.scopes.new_node(scope)),
@@ -210,7 +210,7 @@ mod tests {
         let scope1_id = collection.push_new();
         let scope2_id = collection.push_new();
 
-        scope1_id.append(scope2_id, collection.scopes.borrow_mut());
+        scope1_id.append(scope2_id, &mut collection.scopes);
 
         assert_eq!(
             collection.scopes.get(scope2_id).unwrap().parent(),

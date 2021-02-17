@@ -47,7 +47,6 @@ impl Default for DefaultParamsWalker {
 mod tests {
     use super::*;
     use crate::{ast::var_init_node::VarInitNode, semantic::lpc_type::LPCType};
-    use std::borrow::BorrowMut;
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
@@ -80,7 +79,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_function_def(node.borrow_mut());
+        let _ = walker.visit_function_def(&mut node);
 
         let params = walker.functions.get("foo").unwrap();
 

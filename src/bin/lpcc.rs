@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, env, fs};
+use std::{env, fs};
 
 use lpc_rs::{
     ast::ast_node::ASTNodeTrait,
@@ -67,23 +67,23 @@ fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 
     let mut scope_walker = ScopeWalker::new(filename);
 
-    let _ = program.visit(scope_walker.borrow_mut());
+    let _ = program.visit(&mut scope_walker);
 
     if !scope_walker.get_errors().is_empty() {
-        errors.append(scope_walker.get_errors().to_vec().borrow_mut());
+        errors.append(&mut scope_walker.get_errors().to_vec());
     }
 
     let mut default_params_walker = DefaultParamsWalker::new();
-    let _ = program.visit(default_params_walker.borrow_mut());
+    let _ = program.visit(&mut default_params_walker);
     if !default_params_walker.get_errors().is_empty() {
-        errors.append(default_params_walker.get_errors().to_vec().borrow_mut());
+        errors.append(&mut default_params_walker.get_errors().to_vec());
     }
 
     let mut semantic_check_walker =
         SemanticCheckWalker::new(&scope_walker.scopes, &scope_walker.function_prototypes);
-    let _ = program.visit(semantic_check_walker.borrow_mut());
+    let _ = program.visit(&mut semantic_check_walker);
     if !semantic_check_walker.get_errors().is_empty() {
-        errors.append(semantic_check_walker.get_errors().to_vec().borrow_mut());
+        errors.append(&mut semantic_check_walker.get_errors().to_vec());
     }
 
     if !errors.is_empty() {
