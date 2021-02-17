@@ -11,6 +11,7 @@ use crate::{
         function_def_node::FunctionDefNode,
         int_node::IntNode,
         program_node::ProgramNode,
+        range_node::RangeNode,
         return_node::ReturnNode,
         string_node::StringNode,
         var_init_node::VarInitNode,
@@ -27,7 +28,6 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
-use crate::ast::range_node::RangeNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -343,7 +343,12 @@ impl AsmTreeWalker {
 
         let result = self.register_counter.next().unwrap();
         self.current_result = result;
-        self.instructions.push(Instruction::ARange(array, first_index, second_index, result));
+        self.instructions.push(Instruction::ARange(
+            array,
+            first_index,
+            second_index,
+            result,
+        ));
         self.debug_spans.push(node.span);
 
         Ok(())
@@ -680,6 +685,10 @@ impl TreeWalker for AsmTreeWalker {
 mod tests {
     use super::*;
     use crate::{
+        asm::instruction::Instruction::{
+            AConst, AStore, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret,
+            SConst,
+        },
         ast::{
             assignment_node::AssignmentOperation, ast_node::ASTNode,
             expression_node::ExpressionNode,
@@ -690,7 +699,6 @@ mod tests {
         semantic::lpc_type::LPCType,
     };
     use std::borrow::BorrowMut;
-    use crate::asm::instruction::Instruction::{SConst, IConst, AConst, IConst1, AStore, RegCopy, GLoad, GStore, Ret, IAdd, IConst0, Call};
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -806,7 +814,7 @@ mod tests {
 
     mod test_binary_op {
         use super::*;
-        use crate::asm::instruction::Instruction::{ARange, IConst0, ALoad, MAdd, IMul};
+        use crate::asm::instruction::Instruction::{ALoad, ARange, IConst0, IMul, MAdd};
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_ints() {
@@ -922,7 +930,7 @@ mod tests {
                 r: Box::new(ExpressionNode::Range(RangeNode {
                     l: Box::new(Some(ExpressionNode::from(1))),
                     r: Box::new(None),
-                    span: None
+                    span: None,
                 })),
                 op: BinaryOperation::Index,
                 span: None,
@@ -937,7 +945,7 @@ mod tests {
                 AConst(Register(2), vec![Register(1)]),
                 IConst1(Register(3)),
                 IConst(Register(4), -1),
-                ARange(Register(2), Register(3), Register(4), Register(5))
+                ARange(Register(2), Register(3), Register(4), Register(5)),
             ];
 
             assert_eq!(walker.instructions, expected);

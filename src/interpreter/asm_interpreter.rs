@@ -254,12 +254,13 @@ impl AsmInterpreter {
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
                     // r4 = r1[r2..r3]
-                    let return_array = |arr, memory: &mut Vec<LPCValue>, stack: &mut Vec<StackFrame>| {
-                        let index = memory.len();
-                        memory.push(LPCValue::from(arr));
-                        let registers = current_registers_mut(stack);
-                        registers[r4.index()] = array!(index);
-                    };
+                    let return_array =
+                        |arr, memory: &mut Vec<LPCValue>, stack: &mut Vec<StackFrame>| {
+                            let index = memory.len();
+                            memory.push(LPCValue::from(arr));
+                            let registers = current_registers_mut(stack);
+                            registers[r4.index()] = array!(index);
+                        };
 
                     let value = self.resolve_register(r1.index());
                     if let LPCValue::Array(vec) = value {
@@ -273,7 +274,11 @@ impl AsmInterpreter {
                         if let (LPCValue::Int(start), LPCValue::Int(end)) = (index1, index2) {
                             let to_idx = |i: i64| {
                                 // We handle the potential overflow just below.
-                                if i >= 0 { i as usize } else { (vec.len() as i64 + i) as usize }
+                                if i >= 0 {
+                                    i as usize
+                                } else {
+                                    (vec.len() as i64 + i) as usize
+                                }
                             };
                             let real_start = to_idx(start);
                             let mut real_end = to_idx(end);
@@ -293,7 +298,6 @@ impl AsmInterpreter {
                         } else {
                             panic!("Invalid code was generated for an ARange instruction.")
                         }
-
                     } else {
                         panic!("ARange's array isn't actually an array?");
                     }
@@ -305,11 +309,8 @@ impl AsmInterpreter {
 
                     if let LPCValue::Int(i) = index {
                         // update the vector in memory directly
-                        let vec = resolve_array_reference_mut(
-                            r2.index(),
-                            &self.stack,
-                            &mut self.memory,
-                        );
+                        let vec =
+                            resolve_array_reference_mut(r2.index(), &self.stack, &mut self.memory);
                         let len = vec.len();
                         // handle negative indices
                         let idx = if i >= 0 { i } else { len as i64 + i };
