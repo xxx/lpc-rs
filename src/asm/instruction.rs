@@ -18,6 +18,10 @@ pub enum Instruction {
     /// x.2 = x.0[x.1]
     ALoad(Register, Register, Register),
 
+    /// Create an array from some range of another array
+    /// x.3 = x.1[x.2..x.3]
+    ASlice(Register, i64, i64, Register),
+
     /// Store a single item into an array
     /// x.1[x.2] = x.0
     AStore(Register, Register, Register),
@@ -97,6 +101,9 @@ impl Display for Instruction {
             }
             Instruction::ALoad(r1, r2, r3) => {
                 write!(f, "aload {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::ASlice(r1, i, i2, r2) => {
+                write!(f, "aslice {}, {}, {}, {}", r1, i, i2, r2)
             }
             Instruction::AStore(r1, r2, r3) => {
                 write!(f, "astore {}, {}, {}", r1, r2, r3)
