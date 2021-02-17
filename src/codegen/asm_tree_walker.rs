@@ -614,34 +614,6 @@ impl TreeWalker for AsmTreeWalker {
             }
         }
 
-        // node.lhs.visit(self)?;
-        // let dest = self.current_result;
-        // node.rhs.visit(self)?;
-        //
-        // let assign = Instruction::RegCopy(self.current_result, dest);
-        //
-        // self.instructions.push(assign);
-        // self.debug_spans.push(node.span);
-        //
-        // // Copy over globals if necessary
-        // if let ExpressionNode::Var(VarNode {
-        //     name, global: true, ..
-        // }) = &*node.lhs
-        // {
-        //     if let Some(Symbol {
-        //         scope_id: 0,
-        //         location: Some(register),
-        //         ..
-        //     }) = self.lookup_global(&name)
-        //     {
-        //         let store = Instruction::GStore(dest, *register);
-        //         self.instructions.push(store);
-        //         self.debug_spans.push(node.span);
-        //     }
-        // }
-        //
-        // self.current_result = dest;
-
         Ok(())
     }
 
