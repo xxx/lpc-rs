@@ -199,8 +199,8 @@ pub PostfixExpression: ExpressionNode = {
     },
     <left:@L> <l:PostfixExpression> "[" <e:Expression> ".." "]" <right:@R> => {
         let r = ExpressionNode::Range(RangeNode {
-            l: Box::new(None),
-            r: Box::new(Some(e)),
+            l: Box::new(Some(e)),
+            r: Box::new(None),
             span: Some(Span { l: left, r: right })
         });
 

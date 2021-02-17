@@ -252,8 +252,51 @@ impl AsmInterpreter {
                         panic!("This shouldn't have passed type checks.")
                     }
                 }
-                Instruction::ASlice(_r1, _i, _i2, _r2) => {
-                    todo!()
+                Instruction::ARange(r1, r2, r3, r4) => {
+                    // r4 = r1[r2..r3]
+                    let return_array = |arr, memory: &mut Vec<LPCValue>, stack: &mut Vec<StackFrame>| {
+                        let index = memory.len();
+                        memory.push(LPCValue::from(arr));
+                        let registers = current_registers_mut(stack);
+                        registers[r4.index()] = array!(index);
+                    };
+
+                    let value = self.resolve_register(r1.index());
+                    if let LPCValue::Array(vec) = value {
+                        if vec.is_empty() {
+                            return_array(vec![], &mut self.memory, &mut self.stack);
+                        }
+
+                        let index1 = self.resolve_register(r2.index());
+                        let index2 = self.resolve_register(r3.index());
+
+                        if let (LPCValue::Int(start), LPCValue::Int(end)) = (index1, index2) {
+                            let to_idx = |i: i64| {
+                                // We handle the potential overflow just below.
+                                if i >= 0 { i as usize } else { (vec.len() as i64 + i) as usize }
+                            };
+                            let real_start = to_idx(start);
+                            let mut real_end = to_idx(end);
+
+                            if real_end >= vec.len() {
+                                real_end = vec.len() - 1;
+                            }
+
+                            if real_start <= real_end {
+                                let slice = &vec[real_start..=real_end];
+                                let mut new_vec = vec![LPCVar::Int(0); slice.len()];
+                                new_vec.copy_from_slice(slice);
+                                return_array(new_vec, &mut self.memory, &mut self.stack);
+                            } else {
+                                return_array(vec![], &mut self.memory, &mut self.stack);
+                            }
+                        } else {
+                            panic!("Invalid code was generated for an ARange instruction.")
+                        }
+
+                    } else {
+                        panic!("ARange's array isn't actually an array?");
+                    }
                 }
                 Instruction::AStore(r1, r2, r3) => {
                     // r2[r3] = r1;
@@ -265,7 +308,7 @@ impl AsmInterpreter {
                         let vec = resolve_array_reference_mut(
                             r2.index(),
                             &self.stack,
-                            self.memory.borrow_mut(),
+                            &mut self.memory,
                         );
                         let len = vec.len();
                         // handle negative indices
@@ -338,7 +381,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] + registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(e.borrow_mut());
+                            self.populate_error_span(&mut e);
 
                             return Err(e);
                         }
@@ -365,7 +408,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] / registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(e.borrow_mut());
+                            self.populate_error_span(&mut e);
 
                             return Err(e);
                         }
@@ -376,7 +419,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] * registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(e.borrow_mut());
+                            self.populate_error_span(&mut e);
 
                             return Err(e);
                         }
@@ -387,7 +430,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] - registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(e.borrow_mut());
+                            self.populate_error_span(&mut e);
 
                             return Err(e);
                         }
@@ -412,7 +455,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            self.populate_error_span(e.borrow_mut());
+                            self.populate_error_span(&mut e);
 
                             return Err(e);
                         }
@@ -428,11 +471,11 @@ impl AsmInterpreter {
                             self.memory.push(result);
 
                             let var = LPCVar::String(index);
-                            let registers = current_registers_mut(self.stack.borrow_mut());
+                            let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            self.populate_error_span(e.borrow_mut());
+                            self.populate_error_span(&mut e);
 
                             return Err(e);
                         }

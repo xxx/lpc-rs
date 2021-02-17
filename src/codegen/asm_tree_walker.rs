@@ -27,6 +27,7 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
+use crate::ast::range_node::RangeNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -313,6 +314,40 @@ impl AsmTreeWalker {
 
         Ok(())
     }
+
+    /// Emit the instruction(s) to take the range of an array
+    /// # Arguments
+    /// `array` - The register holding the reference to the array we're taking a slice from.
+    /// `node` - A reference to the `RangeNode` that holds the range of the slice we're taking.
+    fn emit_range(&mut self, array: Register, node: &mut RangeNode) -> Result<(), CompilerError> {
+        println!("node? {:?}", node);
+        let first_index = if let Some(expr) = &mut *node.l {
+            let _ = expr.visit(self);
+            self.current_result
+        } else {
+            // Default to 0. No instruction needed as the value in registers defaults to int 0.
+            self.register_counter.next().unwrap()
+        };
+
+        let second_index = if let Some(expr) = &mut *node.r {
+            let _ = expr.visit(self);
+            self.current_result
+        } else {
+            // A missing range end means just go to the end of the array.
+            let register = self.register_counter.next().unwrap();
+            let instruction = Instruction::IConst(register, -1);
+            self.instructions.push(instruction);
+            self.debug_spans.push(node.span);
+            register
+        };
+
+        let result = self.register_counter.next().unwrap();
+        self.current_result = result;
+        self.instructions.push(Instruction::ARange(array, first_index, second_index, result));
+        self.debug_spans.push(node.span);
+
+        Ok(())
+    }
 }
 
 impl TreeWalker for AsmTreeWalker {
@@ -408,6 +443,14 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
         node.l.visit(self)?;
         let reg_left = self.current_result;
+
+        // Ranges need special handling that complicates this function otherwise, due to
+        // the visit to node.r needing to handle multiple results.
+        if node.op == BinaryOperation::Index {
+            if let ExpressionNode::Range(range_node) = &mut *node.r {
+                return self.emit_range(reg_left, range_node);
+            }
+        }
 
         node.r.visit(self)?;
         let reg_right = self.current_result;
@@ -637,9 +680,6 @@ impl TreeWalker for AsmTreeWalker {
 mod tests {
     use super::*;
     use crate::{
-        asm::instruction::Instruction::{
-            AConst, AStore, GLoad, GStore, IConst, IConst1, RegCopy, SConst,
-        },
         ast::{
             assignment_node::AssignmentOperation, ast_node::ASTNode,
             expression_node::ExpressionNode,
@@ -650,6 +690,7 @@ mod tests {
         semantic::lpc_type::LPCType,
     };
     use std::borrow::BorrowMut;
+    use crate::asm::instruction::Instruction::{SConst, IConst, AConst, IConst1, AStore, RegCopy, GLoad, GStore, Ret, IAdd, IConst0, Call};
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -671,24 +712,23 @@ mod tests {
         let _ = tree.visit(&mut walker);
 
         let expected = vec![
-            Instruction::IConst(Register(1), -1),
-            Instruction::IConst(Register(2), 9),
-            Instruction::RegCopy(Register(2), Register(3)),
-            Instruction::Call {
+            IConst(Register(1), -1),
+            IConst(Register(2), 9),
+            RegCopy(Register(2), Register(3)),
+            Call {
                 name: String::from("print"),
                 num_args: 1,
                 initial_arg: Register(3),
             },
-            Instruction::Ret, // Automatically added
+            Ret, // Automatically added
         ];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
-        }
+        assert_eq!(walker.instructions, expected);
     }
 
     mod test_visit_call {
         use super::*;
+        use crate::asm::instruction::Instruction::Call;
 
         #[test]
         fn test_visit_call_populates_the_instructions() {
@@ -699,18 +739,16 @@ mod tests {
             let _ = walker.visit_call(tree.borrow_mut());
 
             let expected = vec![
-                Instruction::IConst(Register(1), -1),
-                Instruction::RegCopy(Register(1), Register(2)),
-                Instruction::Call {
+                IConst(Register(1), -1),
+                RegCopy(Register(1), Register(2)),
+                Call {
                     name: String::from("print"),
                     num_args: 1,
                     initial_arg: Register(2),
                 },
             ];
 
-            for (idx, instruction) in walker.instructions.iter().enumerate() {
-                assert_eq!(instruction, &expected[idx]);
-            }
+            assert_eq!(walker.instructions, expected);
         }
 
         #[test]
@@ -730,20 +768,18 @@ mod tests {
             let _ = walker.visit_call(tree.borrow_mut());
 
             let expected = vec![
-                Instruction::IConst(Register(1), 666),
-                Instruction::SConst(Register(2), 0),
-                Instruction::RegCopy(Register(1), Register(3)),
-                Instruction::RegCopy(Register(2), Register(4)),
-                Instruction::Call {
+                IConst(Register(1), 666),
+                SConst(Register(2), 0),
+                RegCopy(Register(1), Register(3)),
+                RegCopy(Register(2), Register(4)),
+                Call {
                     name: "foo".to_string(),
                     num_args: 2,
                     initial_arg: Register(3),
                 },
             ];
 
-            for (idx, instruction) in walker.instructions.iter().enumerate() {
-                assert_eq!(instruction, &expected[idx]);
-            }
+            assert_eq!(walker.instructions, expected);
         }
     }
 
@@ -760,18 +796,17 @@ mod tests {
         let _ = walker.visit_int(tree1.borrow_mut());
 
         let expected = vec![
-            Instruction::IConst(Register(1), 666),
-            Instruction::IConst0(Register(2)),
-            Instruction::IConst1(Register(3)),
+            IConst(Register(1), 666),
+            IConst0(Register(2)),
+            IConst1(Register(3)),
         ];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
-        }
+        assert_eq!(walker.instructions, expected);
     }
 
     mod test_binary_op {
         use super::*;
+        use crate::asm::instruction::Instruction::{ARange, IConst0, ALoad, MAdd, IMul};
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_ints() {
@@ -792,16 +827,14 @@ mod tests {
             let _ = walker.visit_binary_op(node.borrow_mut());
 
             let expected = vec![
-                Instruction::IConst(Register(1), 666),
-                Instruction::IConst(Register(2), 123),
-                Instruction::IConst(Register(3), 456),
-                Instruction::IAdd(Register(2), Register(3), Register(4)),
-                Instruction::IMul(Register(1), Register(4), Register(5)),
+                IConst(Register(1), 666),
+                IConst(Register(2), 123),
+                IConst(Register(3), 456),
+                IAdd(Register(2), Register(3), Register(4)),
+                IMul(Register(1), Register(4), Register(5)),
             ];
 
-            for (idx, instruction) in walker.instructions.iter().enumerate() {
-                assert_eq!(instruction, &expected[idx]);
-            }
+            assert_eq!(walker.instructions, expected);
         }
 
         #[test]
@@ -823,16 +856,14 @@ mod tests {
             let _ = walker.visit_binary_op(node.borrow_mut());
 
             let expected = vec![
-                Instruction::SConst(Register(1), 0),
-                Instruction::SConst(Register(2), 1),
-                Instruction::SConst(Register(3), 2),
-                Instruction::MAdd(Register(2), Register(3), Register(4)),
-                Instruction::MAdd(Register(1), Register(4), Register(5)),
+                SConst(Register(1), 0),
+                SConst(Register(2), 1),
+                SConst(Register(3), 2),
+                MAdd(Register(2), Register(3), Register(4)),
+                MAdd(Register(1), Register(4), Register(5)),
             ];
 
-            for (idx, instruction) in walker.instructions.iter().enumerate() {
-                assert_eq!(instruction, &expected[idx]);
-            }
+            assert_eq!(walker.instructions, expected);
         }
 
         #[test]
@@ -849,16 +880,67 @@ mod tests {
             let _ = walker.visit_binary_op(node.borrow_mut());
 
             let expected = vec![
-                Instruction::IConst(Register(1), 123),
-                Instruction::AConst(Register(2), vec![Register(1)]),
-                Instruction::IConst(Register(3), 456),
-                Instruction::AConst(Register(4), vec![Register(3)]),
-                Instruction::MAdd(Register(2), Register(4), Register(5)),
+                IConst(Register(1), 123),
+                AConst(Register(2), vec![Register(1)]),
+                IConst(Register(3), 456),
+                AConst(Register(4), vec![Register(3)]),
+                MAdd(Register(2), Register(4), Register(5)),
             ];
 
-            for (idx, instruction) in walker.instructions.iter().enumerate() {
-                assert_eq!(instruction, &expected[idx]);
-            }
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn test_visit_binary_op_populates_the_instructions_for_indexes() {
+            let mut walker = AsmTreeWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
+                r: Box::new(ExpressionNode::from(0)),
+                op: BinaryOperation::Index,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(node.borrow_mut());
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                AConst(Register(2), vec![Register(1)]),
+                IConst0(Register(3)),
+                ALoad(Register(2), Register(3), Register(4)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn test_visit_binary_op_populates_the_instructions_for_slices() {
+            let mut walker = AsmTreeWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
+                r: Box::new(ExpressionNode::Range(RangeNode {
+                    l: Box::new(Some(ExpressionNode::from(1))),
+                    r: Box::new(None),
+                    span: None
+                })),
+                op: BinaryOperation::Index,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(node.borrow_mut());
+
+            println!("isa' {:?}", walker.instructions);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                AConst(Register(2), vec![Register(1)]),
+                IConst1(Register(3)),
+                IConst(Register(4), -1),
+                ARange(Register(2), Register(3), Register(4), Register(5))
+            ];
+
+            assert_eq!(walker.instructions, expected);
         }
     }
 
@@ -879,9 +961,7 @@ mod tests {
             SConst(Register(3), 0), // reuses constant
         ];
 
-        for (a, b) in walker.instructions.iter().zip(expected) {
-            assert_eq!(*a, b);
-        }
+        assert_eq!(walker.instructions, expected);
     }
 
     #[test]
@@ -905,15 +985,13 @@ mod tests {
         let _ = walker.visit_function_def(node.borrow_mut());
 
         let expected = vec![
-            Instruction::IConst(Register(2), 4),
-            Instruction::IAdd(Register(1), Register(2), Register(3)),
-            Instruction::RegCopy(Register(3), Register(0)),
-            Instruction::Ret,
+            IConst(Register(2), 4),
+            IAdd(Register(1), Register(2), Register(3)),
+            RegCopy(Register(3), Register(0)),
+            Ret,
         ];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
-        }
+        assert_eq!(walker.instructions, expected);
 
         let address: Address = 0;
 
@@ -935,14 +1013,12 @@ mod tests {
         let _ = walker.visit_return(node.borrow_mut());
 
         let expected = vec![
-            Instruction::IConst(Register(1), 666),
-            Instruction::RegCopy(Register(1), Register(0)),
-            Instruction::Ret,
+            IConst(Register(1), 666),
+            RegCopy(Register(1), Register(0)),
+            Ret,
         ];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
-        }
+        assert_eq!(walker.instructions, expected);
 
         /* === */
 
@@ -950,11 +1026,9 @@ mod tests {
         let mut node = ReturnNode::new(None);
         let _ = walker.visit_return(node.borrow_mut());
 
-        let expected = vec![Instruction::Ret];
+        let expected = vec![Ret];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
-        }
+        assert_eq!(walker.instructions, expected);
     }
 
     #[test]
@@ -1217,16 +1291,14 @@ mod tests {
         let _ = walker.visit_array(arr.borrow_mut());
 
         let expected = vec![
-            Instruction::IConst(Register(1), 123),
-            Instruction::SConst(Register(2), 0),
-            Instruction::IConst(Register(3), 666),
-            Instruction::AConst(Register(4), vec![Register(3)]),
-            Instruction::AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
+            IConst(Register(1), 123),
+            SConst(Register(2), 0),
+            IConst(Register(3), 666),
+            AConst(Register(4), vec![Register(3)]),
+            AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
         ];
 
-        for (idx, instruction) in walker.instructions.iter().enumerate() {
-            assert_eq!(instruction, &expected[idx]);
-        }
+        assert_eq!(walker.instructions, expected);
     }
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {

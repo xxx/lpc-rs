@@ -9,7 +9,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-/// Representation of a binary operation
+/// Representation of a Range, with optional ends.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RangeNode {
     /// Left-hand side
