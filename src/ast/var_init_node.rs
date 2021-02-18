@@ -33,6 +33,17 @@ pub struct VarInitNode {
 }
 
 impl VarInitNode {
+    pub fn new(name: &str, type_: LPCType) -> Self {
+        Self {
+            name: name.to_string(),
+            type_,
+            value: None,
+            array: false,
+            global: false,
+            span: None
+        }
+    }
+
     /// Set a new type on this node, in a way that maintains the array state
     pub fn update_type(&mut self, new_type: LPCType) {
         let updated = match new_type {

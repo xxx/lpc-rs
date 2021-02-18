@@ -160,21 +160,98 @@ impl Default for ScopeWalker {
 mod tests {
     use super::*;
 
-    mod test_visit_var_init {
+    mod test_visit_function_def {
         use super::*;
         use crate::semantic::lpc_type::LPCType;
 
         #[test]
+        fn test_stores_the_prototype() {
+            let mut walker = ScopeWalker::default();
+            let mut node = FunctionDefNode {
+                return_type: LPCType::Mixed(false),
+                name: "marf".to_string(),
+                parameters: vec![
+                    VarInitNode::new("foo", LPCType::Int(false)),
+                    VarInitNode::new("bar", LPCType::Mapping(true)),
+                ],
+                body: vec![],
+                span: None
+            };
+
+            let _ = walker.visit_function_def(&mut node);
+
+            if let Some(proto) = walker.function_prototypes.get("marf") {
+                assert_eq!(*proto, FunctionPrototype {
+                    name: "marf".to_string(),
+                    return_type: LPCType::Mixed(false),
+                    num_args: 2,
+                    num_default_args: 0,
+                    arg_types: vec![LPCType::Int(false), LPCType::Mapping(true)],
+                    span: None,
+                    arg_spans: vec![]
+                })
+            } else {
+                panic!("prototype not found!")
+            }
+        }
+    }
+
+    mod test_visit_var_init {
+        use super::*;
+        use crate::semantic::lpc_type::LPCType;
+
+        fn setup() -> (ScopeWalker, VarInitNode) {
+            let mut walker = ScopeWalker::default();
+            let node = VarInitNode {
+                    type_: LPCType::Int(false),
+                    name: "foo".to_string(),
+                    value: None,
+                    array: false,
+                    global: false,
+                    span: None
+            };
+
+            walker.insert_symbol(Symbol {
+                name: "foo".to_string(),
+                type_: LPCType::String(false),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None
+            });
+
+            (walker, node)
+        }
+
+        #[test]
         fn test_sets_error_for_var_redefinition_in_same_scope() {
+            let (mut walker, mut node) = setup();
+
+            let _ = walker.visit_var_init(&mut node);
+
+            assert!(!walker.errors.is_empty());
         }
 
         #[test]
         fn test_does_not_error_for_var_shadow_in_different_scope() {
+            let (mut walker, mut node) = setup();
+
+            walker.scopes.push_new();
+
+            let _ = walker.visit_var_init(&mut node);
+
+            assert!(walker.errors.is_empty());
         }
 
         #[test]
-        fn test_pushes_error_for_undefined() {
+        fn test_inserts_the_symbol() {
+            let (mut walker, mut node) = setup();
 
+            walker.scopes.push_new();
+
+            let _ = walker.visit_var_init(&mut node);
+
+            assert!(walker.scopes.get_current().unwrap().lookup("foo").is_some());
         }
     }
 
@@ -182,22 +259,42 @@ mod tests {
         use super::*;
         use crate::semantic::lpc_type::LPCType;
 
-        #[test]
-        fn test_sets_global_flag() {
-            // let walker = ScopeWalker::default();
-            // let node = VarInitNode {
-            //     type_: LPCType::Int(false),
-            //     name: "foo".to_string(),
-            //     value: None,
-            //     array: false,
-            //     global: false,
-            //     span: None
-            // };
+        fn setup() -> (ScopeWalker, VarNode) {
+            let walker = ScopeWalker::default();
+            let node = VarNode {
+                name: "foo".to_string(),
+                global: false,
+                span: None
+            };
+
+            (walker, node)
         }
 
         #[test]
-        fn test_pushes_error_for_undefined() {
+        fn test_sets_global_flag() {
+            let (mut walker, mut node) = setup();
 
+            walker.insert_symbol(Symbol {
+                name: "foo".to_string(),
+                type_: LPCType::Int(false),
+                static_: false,
+                location: None,
+                scope_id: 0, // denotes a global symbol
+                span: None
+            });
+
+            let _ = walker.visit_var(&mut node);
+
+            assert!(node.global);
+        }
+
+        #[test]
+        fn test_pushes_error_for_undefined_vars() {
+            let (mut walker, mut node) = setup();
+
+            let _ = walker.visit_var(&mut node);
+
+            assert!(!walker.errors.is_empty());
         }
     }
 }

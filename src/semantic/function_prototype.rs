@@ -1,7 +1,7 @@
 use crate::{parser::span::Span, semantic::lpc_type::LPCType};
 
 /// A representation of a function prototype, used to allow forward references.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionPrototype {
     /// The name of the function
     pub name: String,
