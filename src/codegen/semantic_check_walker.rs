@@ -320,7 +320,6 @@ mod tests {
         },
         semantic::{lpc_type::LPCType, symbol::Symbol},
     };
-    use std::borrow::BorrowMut;
 
     mod test_visit_call {
         use super::*;
@@ -350,7 +349,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -367,7 +366,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -384,7 +383,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
             assert_eq!(walker.errors.len(), 1);
         }
 
@@ -400,7 +399,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
             assert_eq!(walker.errors.len(), 1);
         }
 
@@ -429,7 +428,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
             assert!(walker.errors.is_empty());
         }
 
@@ -458,7 +457,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
             assert_eq!(walker.errors.len(), 1);
         }
 
@@ -487,7 +486,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
             assert!(walker.errors.is_empty());
         }
     }
@@ -511,7 +510,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::Int(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            node.visit(walker.borrow_mut())
+            node.visit(&mut walker)
         }
 
         #[test]
@@ -529,7 +528,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::String(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            assert!(node.visit(walker.borrow_mut()).is_err());
+            assert!(node.visit(&mut walker).is_err());
         }
     }
 
@@ -552,7 +551,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::Int(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            node.visit(walker.borrow_mut())
+            node.visit(&mut walker)
         }
 
         #[test]
@@ -570,7 +569,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::String(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            node.visit(walker.borrow_mut())
+            node.visit(&mut walker)
         }
 
         #[test]
@@ -588,7 +587,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::String(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            assert!(node.visit(walker.borrow_mut()).is_err());
+            assert!(node.visit(&mut walker).is_err());
         }
 
         #[test]
@@ -618,11 +617,11 @@ mod tests {
             scope_tree.get_current_mut().unwrap().insert(sym);
 
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = init_node.visit(walker.borrow_mut());
+            let _ = init_node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
 
-            let _ = assignment_node.visit(walker.borrow_mut());
+            let _ = assignment_node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -659,11 +658,11 @@ mod tests {
             scope_tree.get_current_mut().unwrap().insert(sym);
 
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = init_node.visit(walker.borrow_mut());
+            let _ = init_node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
 
-            let _ = assignment_node.visit(walker.borrow_mut());
+            let _ = assignment_node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -704,11 +703,11 @@ mod tests {
             scope_tree.get_current_mut().unwrap().insert(sym);
 
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = init_node.visit(walker.borrow_mut());
+            let _ = init_node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
 
-            let _ = assignment_node.visit(walker.borrow_mut());
+            let _ = assignment_node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -732,7 +731,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -752,7 +751,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -772,7 +771,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(!walker.errors.is_empty());
         }
@@ -816,23 +815,23 @@ mod tests {
 
             // return void from void function
             walker.current_function = Some(void_function_def.clone());
-            let _ = void_node.visit(walker.borrow_mut());
+            let _ = void_node.visit(&mut walker);
             assert!(walker.errors.is_empty());
 
             // return void from non-void function
             walker.current_function = Some(int_function_def);
-            let _ = void_node.visit(walker.borrow_mut());
+            let _ = void_node.visit(&mut walker);
             assert!(!walker.errors.is_empty());
 
             walker.errors = vec![];
 
             // return int from int function
-            let _ = int_node.visit(walker.borrow_mut());
+            let _ = int_node.visit(&mut walker);
             assert!(walker.errors.is_empty());
 
             // return int from void function
             walker.current_function = Some(void_function_def);
-            let _ = int_node.visit(walker.borrow_mut());
+            let _ = int_node.visit(&mut walker);
             assert!(!walker.errors.is_empty());
         }
 
@@ -856,7 +855,7 @@ mod tests {
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             walker.current_function = Some(void_function_def);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -881,7 +880,7 @@ mod tests {
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
             walker.current_function = Some(function_def);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -904,7 +903,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::Int(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -923,7 +922,7 @@ mod tests {
             let sym = Symbol::new("foo", LPCType::String(false));
             scope_tree.get_current_mut().unwrap().insert(sym);
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(!walker.errors.is_empty());
         }
@@ -940,7 +939,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -957,7 +956,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }
@@ -974,7 +973,7 @@ mod tests {
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
             let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
-            let _ = node.visit(walker.borrow_mut());
+            let _ = node.visit(&mut walker);
 
             assert!(walker.errors.is_empty());
         }

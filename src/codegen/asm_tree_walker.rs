@@ -697,7 +697,6 @@ mod tests {
         parser::span::Span,
         semantic::lpc_type::LPCType,
     };
-    use std::borrow::BorrowMut;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -711,7 +710,7 @@ mod tests {
         ";
         let mut tree = lpc_parser::ProgramParser::new().parse(program).unwrap();
 
-        let _ = scope_walker.visit_program(tree.borrow_mut());
+        let _ = scope_walker.visit_program(&mut tree);
 
         let scopes = ScopeTree::from(scope_walker);
         walker.scopes = scopes;
@@ -743,7 +742,7 @@ mod tests {
             let call = "print(4 - 5)";
             let mut tree = lpc_parser::CallParser::new().parse(call).unwrap();
 
-            let _ = walker.visit_call(tree.borrow_mut());
+            let _ = walker.visit_call(&mut tree);
 
             let expected = vec![
                 IConst(Register(1), -1),
@@ -772,7 +771,7 @@ mod tests {
             let call = "foo(666)";
             let mut tree = lpc_parser::CallParser::new().parse(call).unwrap();
 
-            let _ = walker.visit_call(tree.borrow_mut());
+            let _ = walker.visit_call(&mut tree);
 
             let expected = vec![
                 IConst(Register(1), 666),
@@ -798,9 +797,9 @@ mod tests {
         let mut tree0 = IntNode::new(0);
         let mut tree1 = IntNode::new(1);
 
-        let _ = walker.visit_int(tree.borrow_mut());
-        let _ = walker.visit_int(tree0.borrow_mut());
-        let _ = walker.visit_int(tree1.borrow_mut());
+        let _ = walker.visit_int(&mut tree);
+        let _ = walker.visit_int(&mut tree0);
+        let _ = walker.visit_int(&mut tree1);
 
         let expected = vec![
             IConst(Register(1), 666),
@@ -831,7 +830,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(node.borrow_mut());
+            let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
                 IConst(Register(1), 666),
@@ -860,7 +859,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(node.borrow_mut());
+            let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
                 SConst(Register(1), 0),
@@ -884,7 +883,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(node.borrow_mut());
+            let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
                 IConst(Register(1), 123),
@@ -908,7 +907,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(node.borrow_mut());
+            let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
                 IConst(Register(1), 123),
@@ -935,7 +934,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(node.borrow_mut());
+            let _ = walker.visit_binary_op(&mut node);
 
             println!("isa' {:?}", walker.instructions);
 
@@ -958,9 +957,9 @@ mod tests {
         let mut node2 = StringNode::new("tacos");
         let mut node3 = StringNode::new("marf");
 
-        let _ = walker.visit_string(node.borrow_mut());
-        let _ = walker.visit_string(node2.borrow_mut());
-        let _ = walker.visit_string(node3.borrow_mut());
+        let _ = walker.visit_string(&mut node);
+        let _ = walker.visit_string(&mut node2);
+        let _ = walker.visit_string(&mut node3);
 
         let expected = vec![
             SConst(Register(1), 0),
@@ -984,12 +983,12 @@ mod tests {
             panic!("Didn't receive a function def?");
         };
 
-        let _ = scope_walker.visit_function_def(node.borrow_mut());
+        let _ = scope_walker.visit_function_def(&mut node);
 
         let mut scopes = ScopeTree::from(scope_walker);
         scopes.goto_root();
         walker.scopes = scopes;
-        let _ = walker.visit_function_def(node.borrow_mut());
+        let _ = walker.visit_function_def(&mut node);
 
         let expected = vec![
             IConst(Register(2), 4),
@@ -1017,7 +1016,7 @@ mod tests {
         let mut walker = AsmTreeWalker::default();
 
         let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
-        let _ = walker.visit_return(node.borrow_mut());
+        let _ = walker.visit_return(&mut node);
 
         let expected = vec![
             IConst(Register(1), 666),
@@ -1031,7 +1030,7 @@ mod tests {
 
         let mut walker = AsmTreeWalker::default();
         let mut node = ReturnNode::new(None);
-        let _ = walker.visit_return(node.borrow_mut());
+        let _ = walker.visit_return(&mut node);
 
         let expected = vec![Ret];
 
@@ -1044,10 +1043,10 @@ mod tests {
         let call = "int foo = 1, *bar = ({ 56 })";
         let mut tree = lpc_parser::DeclParser::new().parse(call).unwrap();
 
-        let _ = scope_walker.visit_decl(tree.borrow_mut());
+        let _ = scope_walker.visit_decl(&mut tree);
 
         let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker), HashMap::new());
-        let _ = walker.visit_decl(tree.borrow_mut());
+        let _ = walker.visit_decl(&mut tree);
 
         let expected = vec![
             IConst1(Register(1)),
@@ -1089,7 +1088,7 @@ mod tests {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
         insert_symbol(
-            walker.borrow_mut(),
+            &mut walker,
             Symbol {
                 name: "marf".to_string(),
                 type_: LPCType::Int(false),
@@ -1102,7 +1101,7 @@ mod tests {
         // push a local scope with a matching variable in a different location
         walker.scopes.push_new();
         insert_symbol(
-            walker.borrow_mut(),
+            &mut walker,
             Symbol {
                 name: "marf".to_string(),
                 type_: LPCType::Int(false),
@@ -1119,7 +1118,7 @@ mod tests {
             global: true,
         };
 
-        let _ = walker.visit_var(node.borrow_mut());
+        let _ = walker.visit_var(&mut node);
         assert_eq!(walker.current_result, Register(1)); // global loaded into r1
 
         let expected = vec![GLoad(Register(666), Register(1))];
@@ -1131,7 +1130,7 @@ mod tests {
         let mut walker = AsmTreeWalker::default();
         walker.scopes.push_new();
         insert_symbol(
-            walker.borrow_mut(),
+            &mut walker,
             // push a global marf to ensure we don't find it.
             Symbol {
                 name: "marf".to_string(),
@@ -1144,7 +1143,7 @@ mod tests {
         );
         walker.scopes.push_new(); // push a local scope
         insert_symbol(
-            walker.borrow_mut(),
+            &mut walker,
             Symbol {
                 name: "marf".to_string(),
                 type_: LPCType::Int(false),
@@ -1157,7 +1156,7 @@ mod tests {
 
         let mut node = VarNode::new("marf");
 
-        let _ = walker.visit_var(node.borrow_mut());
+        let _ = walker.visit_var(&mut node);
         assert_eq!(walker.current_result, Register(666));
 
         let expected = vec![];
@@ -1176,7 +1175,7 @@ mod tests {
             scope_id: 0,
             span: None,
         };
-        insert_symbol(walker.borrow_mut(), sym);
+        insert_symbol(&mut walker, sym);
 
         // push a different, local `marf`, to ensure that we don't find it for this assignment.
         walker.scopes.push_new();
@@ -1188,7 +1187,7 @@ mod tests {
             scope_id: 1,
             span: None,
         };
-        insert_symbol(walker.borrow_mut(), sym);
+        insert_symbol(&mut walker, sym);
 
         let mut node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode {
@@ -1201,7 +1200,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_assignment(node.borrow_mut());
+        let _ = walker.visit_assignment(&mut node);
         assert_eq!(
             walker.instructions,
             [
@@ -1227,7 +1226,7 @@ mod tests {
             span: None,
         };
 
-        insert_symbol(walker.borrow_mut(), sym);
+        insert_symbol(&mut walker, sym);
 
         let mut node = AssignmentNode {
             lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
@@ -1236,7 +1235,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_assignment(node.borrow_mut());
+        let _ = walker.visit_assignment(&mut node);
         assert_eq!(
             walker.instructions,
             [
@@ -1260,7 +1259,7 @@ mod tests {
             span: None,
         };
 
-        insert_symbol(walker.borrow_mut(), sym);
+        insert_symbol(&mut walker, sym);
 
         let mut node = AssignmentNode {
             lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
@@ -1274,7 +1273,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_assignment(node.borrow_mut());
+        let _ = walker.visit_assignment(&mut node);
         assert_eq!(
             walker.instructions,
             [
@@ -1295,7 +1294,7 @@ mod tests {
             ExpressionNode::from(vec![ExpressionNode::from(666)]),
         ]);
 
-        let _ = walker.visit_array(arr.borrow_mut());
+        let _ = walker.visit_array(&mut arr);
 
         let expected = vec![
             IConst(Register(1), 123),
