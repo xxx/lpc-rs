@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode, function_def_node::FunctionDefNode,
+        ast_node::ASTNodeTrait, function_def_node::FunctionDefNode,
         program_node::ProgramNode, var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
@@ -65,13 +65,6 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
-        node.l.visit(self)?;
-        node.r.visit(self)?;
-
-        Ok(())
-    }
-
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let scope_id = self.scopes.push_new();
         self.scopes.insert_function(&node.name, &scope_id);
@@ -119,6 +112,10 @@ impl TreeWalker for ScopeWalker {
             self.errors.push(CompilerError::VarRedefinitionError(e));
         }
 
+        if let Some(expr_node) = &mut node.value {
+            expr_node.visit(self)?;
+        }
+
         self.insert_symbol(Symbol::from(node));
 
         Ok(())
@@ -155,6 +152,52 @@ impl Default for ScopeWalker {
             scopes,
             function_prototypes: HashMap::new(),
             errors: vec![],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod test_visit_var_init {
+        use super::*;
+        use crate::semantic::lpc_type::LPCType;
+
+        #[test]
+        fn test_sets_error_for_var_redefinition_in_same_scope() {
+        }
+
+        #[test]
+        fn test_does_not_error_for_var_shadow_in_different_scope() {
+        }
+
+        #[test]
+        fn test_pushes_error_for_undefined() {
+
+        }
+    }
+
+    mod test_visit_var {
+        use super::*;
+        use crate::semantic::lpc_type::LPCType;
+
+        #[test]
+        fn test_sets_global_flag() {
+            // let walker = ScopeWalker::default();
+            // let node = VarInitNode {
+            //     type_: LPCType::Int(false),
+            //     name: "foo".to_string(),
+            //     value: None,
+            //     array: false,
+            //     global: false,
+            //     span: None
+            // };
+        }
+
+        #[test]
+        fn test_pushes_error_for_undefined() {
+
         }
     }
 }
