@@ -40,7 +40,7 @@ impl VarInitNode {
             value: None,
             array: false,
             global: false,
-            span: None
+            span: None,
         }
     }
 

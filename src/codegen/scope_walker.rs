@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        ast_node::ASTNodeTrait, function_def_node::FunctionDefNode,
-        program_node::ProgramNode, var_init_node::VarInitNode, var_node::VarNode,
+        ast_node::ASTNodeTrait, function_def_node::FunctionDefNode, program_node::ProgramNode,
+        var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::{undefined_var_error::UndefinedVarError, CompilerError},
@@ -175,21 +175,24 @@ mod tests {
                     VarInitNode::new("bar", LPCType::Mapping(true)),
                 ],
                 body: vec![],
-                span: None
+                span: None,
             };
 
             let _ = walker.visit_function_def(&mut node);
 
             if let Some(proto) = walker.function_prototypes.get("marf") {
-                assert_eq!(*proto, FunctionPrototype {
-                    name: "marf".to_string(),
-                    return_type: LPCType::Mixed(false),
-                    num_args: 2,
-                    num_default_args: 0,
-                    arg_types: vec![LPCType::Int(false), LPCType::Mapping(true)],
-                    span: None,
-                    arg_spans: vec![]
-                })
+                assert_eq!(
+                    *proto,
+                    FunctionPrototype {
+                        name: "marf".to_string(),
+                        return_type: LPCType::Mixed(false),
+                        num_args: 2,
+                        num_default_args: 0,
+                        arg_types: vec![LPCType::Int(false), LPCType::Mapping(true)],
+                        span: None,
+                        arg_spans: vec![]
+                    }
+                )
             } else {
                 panic!("prototype not found!")
             }
@@ -203,12 +206,12 @@ mod tests {
         fn setup() -> (ScopeWalker, VarInitNode) {
             let mut walker = ScopeWalker::default();
             let node = VarInitNode {
-                    type_: LPCType::Int(false),
-                    name: "foo".to_string(),
-                    value: None,
-                    array: false,
-                    global: false,
-                    span: None
+                type_: LPCType::Int(false),
+                name: "foo".to_string(),
+                value: None,
+                array: false,
+                global: false,
+                span: None,
             };
 
             walker.insert_symbol(Symbol {
@@ -217,7 +220,7 @@ mod tests {
                 static_: false,
                 location: None,
                 scope_id: 0,
-                span: None
+                span: None,
             });
 
             (walker, node)
@@ -264,7 +267,7 @@ mod tests {
             let node = VarNode {
                 name: "foo".to_string(),
                 global: false,
-                span: None
+                span: None,
             };
 
             (walker, node)
@@ -280,7 +283,7 @@ mod tests {
                 static_: false,
                 location: None,
                 scope_id: 0, // denotes a global symbol
-                span: None
+                span: None,
             });
 
             let _ = walker.visit_var(&mut node);
