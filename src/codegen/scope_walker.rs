@@ -12,7 +12,8 @@ use crate::{
 };
 use std::collections::HashMap;
 
-/// A tree walker to handle populating all the scopes in the program
+/// A tree walker to handle populating all the scopes in the program, as well as generating
+/// errors for undefined and redefined variables.
 #[derive(Debug)]
 pub struct ScopeWalker {
     /// Store the path to the original file, used for error messaging.
