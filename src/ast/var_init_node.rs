@@ -11,7 +11,7 @@ use std::{
 };
 
 /// A node representing a variable definition, with optional initialization
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VarInitNode {
     /// The LPC type.
     pub type_: LPCType,

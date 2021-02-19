@@ -9,6 +9,7 @@ use crate::{
     errors::compiler_error::CompilerError,
 };
 use tree_walker::TreeWalker;
+use crate::ast::float_node::FloatNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -69,8 +70,14 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_int(&mut self, int: &mut IntNode) -> Result<(), CompilerError> {
-        self.println_indented(&format!("Int: {}", int.value));
+    fn visit_int(&mut self, node: &mut IntNode) -> Result<(), CompilerError> {
+        self.println_indented(&format!("Int: {}", node.value));
+
+        Ok(())
+    }
+
+    fn visit_float(&mut self, node: &mut FloatNode) -> Result<(), CompilerError> {
+        self.println_indented(&format!("Float: {}", node.value));
 
         Ok(())
     }

@@ -8,6 +8,7 @@ use crate::{
     },
     errors::compiler_error::CompilerError,
 };
+use crate::ast::float_node::FloatNode;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
@@ -43,6 +44,11 @@ pub trait TreeWalker {
 
     /// Visit an int (literal) node
     fn visit_int(&mut self, _node: &mut IntNode) -> Result<(), CompilerError> {
+        Ok(())
+    }
+
+    /// Visit a float (literal) node
+    fn visit_float(&mut self, _node: &mut FloatNode) -> Result<(), CompilerError> {
         Ok(())
     }
 

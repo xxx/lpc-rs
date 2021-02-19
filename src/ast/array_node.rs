@@ -10,7 +10,7 @@ use std::{
 };
 
 /// A node representing an array literal
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayNode {
     pub value: Vec<ExpressionNode>,
 

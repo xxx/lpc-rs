@@ -18,7 +18,7 @@ use std::{
 };
 
 /// Representation of a top-level node in the AST.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
     Call(CallNode),
     Decl(DeclNode),

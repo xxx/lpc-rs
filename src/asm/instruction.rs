@@ -5,7 +5,7 @@ use std::{
 };
 
 /// Representation of an assembly language instruction.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     /// Append to an array, extending it as needed.
     /// x.0 is the item to append, x.1 is the array.
@@ -32,6 +32,9 @@ pub enum Instruction {
         num_args: usize,
         initial_arg: Register,
     },
+
+    /// Float Constant
+    FConst(Register, f64),
 
     /// Copy a global from the global registers, into the current stack frame.
     /// Copies the global in x.0 to the local register x.1.
@@ -120,6 +123,9 @@ impl Display for Instruction {
                 initial_arg,
             } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)
+            }
+            Instruction::FConst(r, fl) => {
+                write!(f, "fconst {}, {}", r, fl)
             }
             Instruction::IAdd(r1, r2, r3) => {
                 write!(f, "iadd {}, {}, {}", r1, r2, r3)

@@ -9,7 +9,7 @@ use std::{
 };
 
 /// A node representing a full object. This is the top-level translation unit.
-#[derive(Debug, Eq, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct ProgramNode {
     /// The list of function defs for this program
     pub body: Vec<ASTNode>,

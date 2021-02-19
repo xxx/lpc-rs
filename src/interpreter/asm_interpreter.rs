@@ -25,6 +25,13 @@ macro_rules! int {
 }
 
 /// Convenience helper for registers
+macro_rules! float {
+    ($x:expr) => {
+        LPCVar::Float($x)
+    };
+}
+
+/// Convenience helper for registers
 macro_rules! array {
     ($x:expr) => {
         LPCVar::Array($x)
@@ -184,6 +191,7 @@ impl AsmInterpreter {
     pub fn resolve_var(&self, var: &LPCVar) -> LPCValue {
         match var {
             LPCVar::Int(v) => LPCValue::Int(*v),
+            LPCVar::Float(v) => LPCValue::Float(*v),
             LPCVar::String(i) => self.memory.get(*i).unwrap().clone(),
             LPCVar::Array(i) => {
                 // not recursive
@@ -366,6 +374,10 @@ impl AsmInterpreter {
                         unimplemented!()
                     }
                 }
+                Instruction::FConst(r, f) => {
+                    let registers = current_registers_mut(&mut self.stack);
+                    registers[r.index()] = float!(*f);
+                }
                 Instruction::GLoad(r1, r2) => {
                     let global = self.globals[r1.index()];
                     let registers = current_registers_mut(&mut self.stack);
@@ -447,6 +459,7 @@ impl AsmInterpreter {
                                 LPCValue::String(_) => LPCVar::String(index),
                                 LPCValue::Array(_) => LPCVar::Array(index),
                                 LPCValue::Int(_) => unimplemented!(),
+                                LPCValue::Float(_) => unimplemented!(),
                             };
 
                             self.memory.push(result);

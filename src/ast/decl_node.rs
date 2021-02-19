@@ -10,7 +10,7 @@ use std::{
 };
 
 /// A container for a set of variable declarations.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DeclNode {
     /// The declared type
     pub type_: LPCType,

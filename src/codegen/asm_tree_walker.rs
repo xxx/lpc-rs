@@ -28,9 +28,16 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
+use crate::ast::float_node::FloatNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
+
+/// Partition on whether the value is stored in registers or memory, to help select instructions
+enum OperationType {
+    Register,
+    Memory
+}
 
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug, Default)]
@@ -198,6 +205,52 @@ impl AsmTreeWalker {
         }
     }
 
+    /// helper to choose operation instructions
+    fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
+        match node {
+            ExpressionNode::Int(_) => OperationType::Register,
+            ExpressionNode::Float(_) => OperationType::Register,
+            ExpressionNode::String(_) => OperationType::Memory,
+            ExpressionNode::Array(_) => OperationType::Memory,
+            ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs),
+            ExpressionNode::BinaryOp(node) => {
+                let left_type = self.to_operation_type(&node.l);
+                let right_type = self.to_operation_type(&node.r);
+                match (left_type, right_type) {
+                    (OperationType::Register, OperationType::Register) => OperationType::Register,
+                    _ => OperationType::Memory
+                }
+            },
+            // TODO: Calls can be optimized if we can get the return types available here
+            ExpressionNode::Call(_) => OperationType::Memory,
+            ExpressionNode::Range(_) => OperationType::Memory,
+            ExpressionNode::Var(v) => {
+                let ty = self.lookup_var_symbol(&v).unwrap().type_;
+
+                match ty {
+                    LPCType::Int(false) => OperationType::Register,
+                    LPCType::Float(false) => OperationType::Register,
+                    _ => OperationType::Memory
+                }
+            }
+        }
+    }
+
+    /// The main switch to determine which instruction we select for a binary operation
+    fn choose_op_instruction(&self, node: &BinaryOpNode, reg_left: Register, reg_right: Register, reg_result: Option<Register>) -> Instruction {
+        match node.op {
+            BinaryOperation::Add => {
+                self.choose_add_instruction(&node, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Mul => {
+                self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Index => Instruction::ALoad(reg_left, reg_right, reg_result.unwrap()),
+        }
+    }
+
     /// Allows for recursive determination of typed add instructions
     fn choose_add_instruction(
         &self,
@@ -206,44 +259,12 @@ impl AsmTreeWalker {
         reg_right: Register,
         reg_result: Option<Register>,
     ) -> Instruction {
-        match (&*node.l, &*node.r) {
-            (ExpressionNode::BinaryOp(bin_op), _) => {
-                self.choose_add_instruction(bin_op, reg_left, reg_right, reg_result)
-            }
-            (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
-                let type1 = self.lookup_var_symbol(&var_node1).unwrap().type_;
-                let type2 = self.lookup_var_symbol(&var_node2).unwrap().type_;
+        let left_type = self.to_operation_type(&node.l);
+        let right_type = self.to_operation_type(&node.r);
 
-                if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
-                    Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
-                } else {
-                    Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
-                }
-            }
-            (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
-                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
-
-                if let LPCType::Int(false) = type_ {
-                    Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
-                } else {
-                    Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
-                }
-            }
-            (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
-                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
-
-                if let LPCType::Int(false) = type_ {
-                    Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
-                } else {
-                    Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
-                }
-            }
-            (ExpressionNode::String(_), _) => {
-                Instruction::MAdd(reg_left, reg_right, reg_result.unwrap())
-            }
-            (ExpressionNode::Int(_), ExpressionNode::Int(_)) => {
-                Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
-            }
+        match (left_type, right_type) {
+            (OperationType::Register, OperationType::Register) =>
+                Instruction::IAdd(reg_left, reg_right, reg_result.unwrap()),
             _ => Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
         }
     }
@@ -256,45 +277,13 @@ impl AsmTreeWalker {
         reg_right: Register,
         reg_result: Option<Register>,
     ) -> Instruction {
-        match (&*node.l, &*node.r) {
-            (ExpressionNode::BinaryOp(bin_op), _) => {
-                self.choose_mul_instruction(bin_op, reg_left, reg_right, reg_result)
-            }
-            (ExpressionNode::Var(var_node1), ExpressionNode::Var(var_node2)) => {
-                let type1 = self.lookup_var_symbol(&var_node1).unwrap().type_;
-                let type2 = self.lookup_var_symbol(&var_node2).unwrap().type_;
+        let left_type = self.to_operation_type(&node.l);
+        let right_type = self.to_operation_type(&node.r);
 
-                if let (LPCType::Int(false), LPCType::Int(false)) = (type1, type2) {
-                    Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
-                } else {
-                    Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
-                }
-            }
-            (ExpressionNode::Int(_), ExpressionNode::Var(var_node)) => {
-                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
-
-                if let LPCType::Int(false) = type_ {
-                    Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
-                } else {
-                    Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
-                }
-            }
-            (ExpressionNode::Var(var_node), ExpressionNode::Int(_)) => {
-                let type_ = self.lookup_var_symbol(&var_node).unwrap().type_;
-
-                if let LPCType::Int(false) = type_ {
-                    Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
-                } else {
-                    Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
-                }
-            }
-            (ExpressionNode::String(_), _) => {
-                Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
-            }
-            (_, ExpressionNode::String(_)) => {
-                Instruction::MMul(reg_left, reg_right, reg_result.unwrap())
-            }
-            _ => Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
+        match (left_type, right_type) {
+            (OperationType::Register, OperationType::Register) =>
+                Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
+            _ => Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
         }
     }
 
@@ -432,6 +421,16 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
+    fn visit_float(&mut self, node: &mut FloatNode) -> Result<(), CompilerError> {
+        let register = self.register_counter.next();
+        self.current_result = register.unwrap();
+        let instruction = Instruction::FConst(self.current_result, node.value);
+        self.instructions.push(instruction);
+        self.debug_spans.push(node.span);
+
+        Ok(())
+    }
+
     fn visit_string(&mut self, node: &mut StringNode) -> Result<(), CompilerError> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
@@ -462,17 +461,7 @@ impl TreeWalker for AsmTreeWalker {
         let reg_result = self.register_counter.next();
         self.current_result = reg_result.unwrap();
 
-        let instruction = match node.op {
-            BinaryOperation::Add => {
-                self.choose_add_instruction(&node, reg_left, reg_right, reg_result)
-            }
-            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
-            BinaryOperation::Mul => {
-                self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
-            }
-            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
-            BinaryOperation::Index => Instruction::ALoad(reg_left, reg_right, reg_result.unwrap()),
-        };
+        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
 
@@ -812,7 +801,7 @@ mod tests {
 
     mod test_binary_op {
         use super::*;
-        use crate::asm::instruction::Instruction::{ALoad, ARange, IConst0, IMul, MAdd};
+        use crate::asm::instruction::Instruction::{ALoad, ARange, IConst0, IMul, MAdd, FConst};
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_ints() {
@@ -838,6 +827,44 @@ mod tests {
                 IConst(Register(3), 456),
                 IAdd(Register(2), Register(3), Register(4)),
                 IMul(Register(1), Register(4), Register(5)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn test_visit_binary_op_populates_the_instructions_for_floats() {
+            let mut walker = AsmTreeWalker::default();
+            walker.scopes.push_new();
+
+            let mut sym = Symbol::new("foo", LPCType::Float(false));
+            sym.location = Some(Register(1));
+            walker.scopes.get_current_mut().unwrap().insert(sym);
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::Float(FloatNode::new(123.45))),
+                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::Var(VarNode {
+                        name: "foo".to_string(),
+                        span: None,
+                        global: false
+                    })),
+                    r: Box::new(ExpressionNode::Int(IntNode::new(456))),
+                    op: BinaryOperation::Mul,
+                    span: None,
+                })),
+                op: BinaryOperation::Add,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                FConst(Register(1), 123.45),
+                GLoad(Register(1), Register(2)),
+                IConst(Register(3), 456),
+                IMul(Register(2), Register(3), Register(4)),
+                IAdd(Register(1), Register(4), Register(5)),
             ];
 
             assert_eq!(walker.instructions, expected);

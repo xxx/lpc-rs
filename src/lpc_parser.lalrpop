@@ -5,6 +5,7 @@ use crate::ast::binary_op_node::BinaryOperation;
 use crate::ast::expression_node::ExpressionNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::int_node::IntNode;
+use crate::ast::float_node::FloatNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::decl_node::DeclNode;
@@ -62,7 +63,7 @@ FunctionDef: FunctionDefNode = {
                  "void" => LPCType::Void,
                  "int" => LPCType::Int(array),
                  "string" => LPCType::String(array),
-                 // "float" => LPCType::Float(array),
+                 "float" => LPCType::Float(array),
                  // "object" => LPCType::Object(array),
                  // "mapping" => LPCType::Mapping(array),
                  "mixed" => LPCType::Mixed(array),
@@ -115,6 +116,7 @@ ArgName: VarInitNode = {
 
 Type: String = {
     "int" => String::from(<>),
+    "float" => String::from(<>),
     "string" => String::from(<>),
     "mixed" => String::from(<>),
     "void" => String::from(<>),
@@ -160,6 +162,7 @@ pub Decl: DeclNode = {
 
 pub PrimaryExpression: ExpressionNode = {
     <Int>,
+    <Float>,
     <String>,
     <Var>,
     "(" <Expression> ")",
@@ -344,6 +347,13 @@ Var: ExpressionNode = <l:@L> <name:ID> <r:@R> => ExpressionNode::Var(
 Int: ExpressionNode = <l:@L> <s:r"-?[0-9]+"> <r:@R> => ExpressionNode::Int(
     IntNode {
         value: i64::from_str(s).unwrap(),
+        span: Some(Span { l, r })
+    }
+);
+
+Float: ExpressionNode = <l:@L> <s:r"-?[0-9][0-9]*\.[0-9][0-9]*(?:[eE][-+]?[0-9]+)?"> <r:@R> => ExpressionNode::Float(
+    FloatNode {
+        value: f64::from_str(s).unwrap(),
         span: Some(Span { l, r })
     }
 );

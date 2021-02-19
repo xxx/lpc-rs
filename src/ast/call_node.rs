@@ -10,7 +10,7 @@ use std::{
 };
 
 /// Representation of a function call.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CallNode {
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,

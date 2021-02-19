@@ -10,7 +10,7 @@ use std::{
 };
 
 /// A node representing a function return call.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReturnNode {
     /// The value to return from the function.
     pub value: Option<ExpressionNode>,

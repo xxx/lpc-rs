@@ -10,7 +10,7 @@ use std::{
 };
 
 /// Representation of a Range, with optional ends.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RangeNode {
     /// Left-hand side
     pub l: Box<Option<ExpressionNode>>,

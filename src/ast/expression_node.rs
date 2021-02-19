@@ -18,14 +18,16 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::float_node::FloatNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
     Call(CallNode),
+    Float(FloatNode),
     Int(IntNode),
     Range(RangeNode),
     String(StringNode),
@@ -39,6 +41,7 @@ impl ExpressionNode {
             ExpressionNode::Assignment(node) => node.span,
             ExpressionNode::BinaryOp(node) => node.span,
             ExpressionNode::Call(node) => node.span,
+            ExpressionNode::Float(node) => node.span,
             ExpressionNode::Int(node) => node.span,
             ExpressionNode::Range(node) => node.span,
             ExpressionNode::String(node) => node.span,
@@ -85,11 +88,12 @@ macro_rules! delegated_traits {
 delegated_traits!(
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
-    ExpressionNode::Int,
     ExpressionNode::Call,
-    ExpressionNode::Var,
+    ExpressionNode::Float,
+    ExpressionNode::Int,
     ExpressionNode::Range,
     ExpressionNode::String,
+    ExpressionNode::Var,
     ExpressionNode::Array
 );
 
@@ -144,6 +148,12 @@ impl From<ASTNode> for ExpressionNode {
 impl From<i64> for ExpressionNode {
     fn from(value: i64) -> Self {
         Self::Int(IntNode::new(value))
+    }
+}
+
+impl From<f64> for ExpressionNode {
+    fn from(value: f64) -> Self {
+        Self::Float(FloatNode::new(value))
     }
 }
 
@@ -286,6 +296,19 @@ mod tests {
             ExpressionNode::from(i),
             ExpressionNode::Int(IntNode {
                 value: i,
+                span: None
+            })
+        );
+    }
+
+    #[test]
+    fn test_from_float() {
+        let f = 666.69;
+
+        assert_eq!(
+            ExpressionNode::from(f),
+            ExpressionNode::Float(FloatNode {
+                value: f,
                 span: None
             })
         );

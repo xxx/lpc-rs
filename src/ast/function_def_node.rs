@@ -14,7 +14,7 @@ use std::{
 };
 
 /// A node representation a function definition
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct FunctionDefNode {
     pub return_type: LPCType,
     pub name: String,

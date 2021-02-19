@@ -20,7 +20,7 @@ pub enum AssignmentOperation {
 }
 
 /// A node representing an assignment.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct AssignmentNode {
     /// left-hand side
     pub lhs: Box<ExpressionNode>,

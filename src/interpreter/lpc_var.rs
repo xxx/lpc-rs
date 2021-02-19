@@ -14,8 +14,9 @@ use std::{
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
 /// This enum should remain `Copy`.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum LPCVar {
+    Float(f64),
     Int(i64),
     String(usize),
     Array(usize),
@@ -27,6 +28,7 @@ pub enum LPCVar {
 impl LPCVar {
     pub fn type_name(&self) -> &str {
         match self {
+            LPCVar::Float(_) => "float",
             LPCVar::Int(_) => "int",
             LPCVar::String(_) => "string",
             LPCVar::Array(_) => "array",
@@ -49,6 +51,7 @@ impl LPCVar {
 impl Display for LPCVar {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            LPCVar::Float(x) => write!(f, "{}", x),
             LPCVar::Int(x) => write!(f, "{}", x),
             LPCVar::String(x) => write!(f, "string with index {}", x),
             LPCVar::Array(x) => write!(f, "array with index {}", x),
@@ -63,6 +66,12 @@ impl Add for LPCVar {
     fn add(self, rhs: Self) -> Self::Output {
         if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
             Ok(LPCVar::Int(x + y))
+        } else if let (LPCVar::Float(x), LPCVar::Float(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x + y))
+        } else if let (LPCVar::Float(x), LPCVar::Int(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x + y as f64))
+        } else if let (LPCVar::Int(x), LPCVar::Float(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x as f64 + y))
         } else {
             Err(self.to_binary_op_error(BinaryOperation::Add, &rhs))
         }
@@ -75,6 +84,12 @@ impl Sub for LPCVar {
     fn sub(self, rhs: Self) -> Self::Output {
         if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
             Ok(LPCVar::Int(x - y))
+        } else if let (LPCVar::Float(x), LPCVar::Float(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x - y))
+        } else if let (LPCVar::Float(x), LPCVar::Int(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x - y as f64))
+        } else if let (LPCVar::Int(x), LPCVar::Float(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x as f64 - y))
         } else {
             Err(self.to_binary_op_error(BinaryOperation::Sub, &rhs))
         }
@@ -87,6 +102,12 @@ impl Mul for LPCVar {
     fn mul(self, rhs: Self) -> Self::Output {
         if let (LPCVar::Int(x), LPCVar::Int(y)) = (self, rhs) {
             Ok(LPCVar::Int(x * y))
+        } else if let (LPCVar::Float(x), LPCVar::Float(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x * y))
+        } else if let (LPCVar::Float(x), LPCVar::Int(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x * y as f64))
+        } else if let (LPCVar::Int(x), LPCVar::Float(y)) = (self, rhs) {
+            Ok(LPCVar::Float(x as f64 * y))
         } else {
             Err(self.to_binary_op_error(BinaryOperation::Mul, &rhs))
         }
@@ -104,6 +125,30 @@ impl Div for LPCVar {
                 }))
             } else {
                 Ok(LPCVar::Int(x / y))
+            }
+        } else if let (LPCVar::Float(x), LPCVar::Float(y)) = (self, rhs) {
+            if y == 0.0 {
+                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
+                    span: None,
+                }))
+            } else {
+                Ok(LPCVar::Float(x / y))
+            }
+        } else if let (LPCVar::Float(x), LPCVar::Int(y)) = (self, rhs) {
+            if y == 0 {
+                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
+                    span: None,
+                }))
+            } else {
+                Ok(LPCVar::Float(x / y as f64))
+            }
+        } else if let (LPCVar::Int(x), LPCVar::Float(y)) = (self, rhs) {
+            if y == 0.0 {
+                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
+                    span: None,
+                }))
+            } else {
+                Ok(LPCVar::Float(x as f64 / y))
             }
         } else {
             Err(self.to_binary_op_error(BinaryOperation::Div, &rhs))

@@ -36,7 +36,7 @@ impl Display for BinaryOperation {
 }
 
 /// Representation of a binary operation
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct BinaryOpNode {
     /// Left-hand side
     pub l: Box<ExpressionNode>,
