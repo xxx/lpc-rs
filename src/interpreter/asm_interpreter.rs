@@ -105,7 +105,7 @@ pub struct AsmInterpreter {
 
 /// Get a reference to the passed stack frame's registers
 #[inline]
-fn current_registers(stack: &Vec<StackFrame>) -> &Vec<LPCVar> {
+fn current_registers(stack: &[StackFrame]) -> &Vec<LPCVar> {
     &stack.last().unwrap().registers
 }
 
@@ -120,7 +120,7 @@ fn current_registers_mut(stack: &mut Vec<StackFrame>) -> &mut Vec<LPCVar> {
 /// `index` - the register index to resolve
 fn resolve_array_reference_mut<'a>(
     index: usize,
-    stack: &Vec<StackFrame>,
+    stack: &[StackFrame],
     memory: &'a mut Vec<LPCValue>,
 ) -> &'a mut Vec<LPCVar> {
     let len = stack.len();
@@ -352,7 +352,7 @@ impl AsmInterpreter {
                     };
 
                     // copy argument registers from old frame to new
-                    if *num_args > 0 as usize {
+                    if *num_args > 0_usize {
                         let index = initial_arg.index();
                         let current_frame = self.stack.last().unwrap();
                         new_frame.registers[1..=*num_args]

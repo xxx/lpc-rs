@@ -31,9 +31,9 @@ use std::collections::HashMap;
 /// # Returns
 ///
 /// A `Result` with either `Ok(())` or `Err(<error object>)`
-pub fn check_var_redefinition<'a>(
+pub fn check_var_redefinition(
     node: &'_ VarInitNode,
-    scope: &'a LocalScope,
+    scope: &'_ LocalScope,
 ) -> Result<(), VarRedefinitionError> {
     if let Some(sym) = scope.lookup(&node.name) {
         Err(VarRedefinitionError {

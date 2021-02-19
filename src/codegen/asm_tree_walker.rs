@@ -298,7 +298,7 @@ impl AsmTreeWalker {
     /// A special case for function def parameters, where we don't want to generate code
     /// for default arguments - we just want to have it on hand to refer to
     /// when we generate code for calls.
-    fn visit_parameter(&mut self, node: &VarInitNode) -> Result<(), CompilerError> {
+    fn visit_parameter(&mut self, node: &VarInitNode) {
         let current_register;
 
         current_register = self.register_counter.next().unwrap();
@@ -307,15 +307,13 @@ impl AsmTreeWalker {
         if let Some(sym) = symbol {
             sym.location = Some(current_register);
         }
-
-        Ok(())
     }
 
     /// Emit the instruction(s) to take the range of an array
     /// # Arguments
     /// `array` - The register holding the reference to the array we're taking a slice from.
     /// `node` - A reference to the `RangeNode` that holds the range of the slice we're taking.
-    fn emit_range(&mut self, array: Register, node: &mut RangeNode) -> Result<(), CompilerError> {
+    fn emit_range(&mut self, array: Register, node: &mut RangeNode) {
         println!("node? {:?}", node);
         let first_index = if let Some(expr) = &mut *node.l {
             let _ = expr.visit(self);
@@ -346,8 +344,6 @@ impl AsmTreeWalker {
             result,
         ));
         self.debug_spans.push(node.span);
-
-        Ok(())
     }
 }
 
@@ -459,7 +455,8 @@ impl TreeWalker for AsmTreeWalker {
         // the visit to node.r needing to handle multiple results.
         if node.op == BinaryOperation::Index {
             if let ExpressionNode::Range(range_node) = &mut *node.r {
-                return self.emit_range(reg_left, range_node);
+                self.emit_range(reg_left, range_node);
+                return Ok(());
             }
         }
 
@@ -484,7 +481,7 @@ impl TreeWalker for AsmTreeWalker {
         self.register_counter.reset();
 
         for parameter in &node.parameters {
-            self.visit_parameter(parameter)?;
+            self.visit_parameter(parameter);
         }
 
         for expression in &mut node.body {
@@ -607,7 +604,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError> {
         node.rhs.visit(self)?;
         let rhs_result = self.current_result;
-        let ref mut lhs = *node.lhs;
+        let lhs = &mut *node.lhs;
 
         match lhs.clone() {
             ExpressionNode::Var(VarNode { name, global, .. }) => {

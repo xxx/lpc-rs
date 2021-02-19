@@ -130,7 +130,7 @@ fn collapse_mul(
             }),
             // 3 * "string" = "stringstringstring"
             ExpressionNode::String(node2) => {
-                collapse_repeat_string(node2.value.clone(), node.value, span)
+                collapse_repeat_string(node2.value, node.value, span)
             }
             _ => ExpressionNode::BinaryOp(BinaryOpNode {
                 l: Box::new(l),
@@ -193,7 +193,7 @@ fn collapse_div(
 /// handle string * int and int * string
 fn collapse_repeat_string(string: String, amount: i64, span: Span) -> ExpressionNode {
     if amount >= 0 {
-        let value = repeat(string.clone())
+        let value = repeat(string)
             .take(amount as usize)
             .collect::<String>();
         ExpressionNode::String(StringNode {
