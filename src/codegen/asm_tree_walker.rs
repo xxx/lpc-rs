@@ -8,6 +8,7 @@ use crate::{
         call_node::CallNode,
         decl_node::DeclNode,
         expression_node::ExpressionNode,
+        float_node::FloatNode,
         function_def_node::FunctionDefNode,
         int_node::IntNode,
         program_node::ProgramNode,
@@ -28,7 +29,6 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
-use crate::ast::float_node::FloatNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -36,7 +36,7 @@ type Address = usize;
 /// Partition on whether the value is stored in registers or memory, to help select instructions
 enum OperationType {
     Register,
-    Memory
+    Memory,
 }
 
 /// A tree walker that generates assembly language instructions based on an AST.
@@ -218,9 +218,9 @@ impl AsmTreeWalker {
                 let right_type = self.to_operation_type(&node.r);
                 match (left_type, right_type) {
                     (OperationType::Register, OperationType::Register) => OperationType::Register,
-                    _ => OperationType::Memory
+                    _ => OperationType::Memory,
                 }
-            },
+            }
             // TODO: Calls can be optimized if we can get the return types available here
             ExpressionNode::Call(_) => OperationType::Memory,
             ExpressionNode::Range(_) => OperationType::Memory,
@@ -230,14 +230,20 @@ impl AsmTreeWalker {
                 match ty {
                     LPCType::Int(false) => OperationType::Register,
                     LPCType::Float(false) => OperationType::Register,
-                    _ => OperationType::Memory
+                    _ => OperationType::Memory,
                 }
             }
         }
     }
 
     /// The main switch to determine which instruction we select for a binary operation
-    fn choose_op_instruction(&self, node: &BinaryOpNode, reg_left: Register, reg_right: Register, reg_result: Option<Register>) -> Instruction {
+    fn choose_op_instruction(
+        &self,
+        node: &BinaryOpNode,
+        reg_left: Register,
+        reg_right: Register,
+        reg_result: Option<Register>,
+    ) -> Instruction {
         match node.op {
             BinaryOperation::Add => {
                 self.choose_add_instruction(&node, reg_left, reg_right, reg_result)
@@ -263,8 +269,9 @@ impl AsmTreeWalker {
         let right_type = self.to_operation_type(&node.r);
 
         match (left_type, right_type) {
-            (OperationType::Register, OperationType::Register) =>
-                Instruction::IAdd(reg_left, reg_right, reg_result.unwrap()),
+            (OperationType::Register, OperationType::Register) => {
+                Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+            }
             _ => Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
         }
     }
@@ -281,8 +288,9 @@ impl AsmTreeWalker {
         let right_type = self.to_operation_type(&node.r);
 
         match (left_type, right_type) {
-            (OperationType::Register, OperationType::Register) =>
-                Instruction::IMul(reg_left, reg_right, reg_result.unwrap()),
+            (OperationType::Register, OperationType::Register) => {
+                Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+            }
             _ => Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
         }
     }
@@ -801,7 +809,7 @@ mod tests {
 
     mod test_binary_op {
         use super::*;
-        use crate::asm::instruction::Instruction::{ALoad, ARange, IConst0, IMul, MAdd, FConst};
+        use crate::asm::instruction::Instruction::{ALoad, ARange, FConst, IConst0, IMul, MAdd};
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_ints() {
@@ -847,7 +855,7 @@ mod tests {
                     l: Box::new(ExpressionNode::Var(VarNode {
                         name: "foo".to_string(),
                         span: None,
-                        global: false
+                        global: false,
                     })),
                     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
                     op: BinaryOperation::Mul,

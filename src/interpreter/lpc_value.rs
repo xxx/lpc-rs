@@ -174,7 +174,7 @@ impl Div for &LPCValue {
                     } else {
                         Ok(LPCValue::Float(f / f2))
                     }
-                },
+                }
                 LPCValue::Int(i) => {
                     if *i == 0 {
                         Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
@@ -195,7 +195,7 @@ impl Div for &LPCValue {
                     } else {
                         Ok(LPCValue::Float(*i as f64 / f))
                     }
-                },
+                }
                 LPCValue::Int(i2) => {
                     if *i2 == 0 {
                         Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
@@ -315,7 +315,7 @@ mod tests {
             }
         }
     }
-    
+
     mod test_sub {
         use super::*;
 

@@ -4,6 +4,7 @@ use crate::{
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         expression_node::ExpressionNode,
+        float_node::FloatNode,
         int_node::IntNode,
         range_node::RangeNode,
         string_node::StringNode,
@@ -17,7 +18,6 @@ use errors::compiler_error::{
     binary_operation_error::BinaryOperationError, var_redefinition_error::VarRedefinitionError,
 };
 use std::collections::HashMap;
-use crate::ast::float_node::FloatNode;
 
 /// Utility functions for doing various semantic checks.
 
