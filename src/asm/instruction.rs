@@ -7,10 +7,6 @@ use std::{
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
-    /// Append to an array, extending it as needed.
-    /// x.0 is the item to append, x.1 is the array.
-    AAppend(Register, Register),
-
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),
 
@@ -91,9 +87,6 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Instruction::AAppend(r1, r2) => {
-                write!(f, "aappend {}, {}", r1, r2)
-            }
             Instruction::AConst(r1, vec) => {
                 let s = vec
                     .iter()

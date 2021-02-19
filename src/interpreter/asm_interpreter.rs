@@ -208,27 +208,17 @@ impl AsmInterpreter {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
 
-        // println!("regs {:?}", registers);
-
         self.resolve_var(registers.get(index).unwrap())
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<(), RuntimeError> {
-        let instructions = self.program.instructions.clone();
-
-        while let Some(instruction) = instructions.get(self.pc) {
+        while let Some(instruction) = self.program.instructions.get(self.pc) {
             if self.is_halted {
                 break;
             }
 
-            // println!("instruction: {:?}", instruction);
-            // println!("registers: {:?}", self.current_registers());
-
             match instruction {
-                Instruction::AAppend(_r1, _r2) => {
-                    todo!()
-                }
                 Instruction::AConst(r, vec) => {
                     let registers = current_registers_mut(&mut self.stack);
                     let vars = vec.iter().map(|i| registers[i.index()]).collect::<Vec<_>>();
