@@ -49,7 +49,7 @@ impl From<Vec<u8>> for Program {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::{compile_file, compile_string};
+    use crate::compiler::{compile_string};
 
     fn test_serialization_and_deserialization() {
         let content = r#"
