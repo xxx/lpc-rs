@@ -9,7 +9,7 @@ use crate::{
     },
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
-    interpreter::{asm_interpreter::AsmInterpreter, program::Program},
+    interpreter::program::Program,
     lpc_parser,
     semantic::scope_tree::ScopeTree,
 };

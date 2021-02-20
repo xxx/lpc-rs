@@ -51,6 +51,7 @@ mod tests {
     use super::*;
     use crate::compiler::compile_string;
 
+    #[test]
     fn test_serialization_and_deserialization() {
         let content = r#"
             int *foo = ({ 1, 2, 3, 4, 234 });
