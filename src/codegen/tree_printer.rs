@@ -11,6 +11,7 @@ use crate::{
 };
 use tree_walker::TreeWalker;
 use crate::ast::comma_expression_node::CommaExpressionNode;
+use crate::ast::string_node::StringNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -79,6 +80,12 @@ impl TreeWalker for TreePrinter {
 
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<(), CompilerError> {
         self.println_indented(&format!("Float: {}", node.value));
+
+        Ok(())
+    }
+
+    fn visit_string(&mut self, node: &mut StringNode) -> Result<(), CompilerError> {
+        self.println_indented(&format!("String: {}", node.value));
 
         Ok(())
     }
