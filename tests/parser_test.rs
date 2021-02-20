@@ -131,7 +131,7 @@ fn test_int_literal_binary() {
 }
 
 #[test]
-fn test_float_literal_underscopes() {
+fn test_float_literal_underscores() {
     let expr = "1_1.234_332e2_2";
     let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
 
