@@ -15,6 +15,9 @@ use crate::{
 };
 
 /// Fully compile a file into a Program struct
+///
+/// # Arguments
+/// `filename` - The name of the file to compile. Also used for error messaging.
 pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
     let file_content =
         fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
@@ -23,16 +26,21 @@ pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 }
 
 /// Compile a string containing an LPC program into a Program struct
-pub fn compile_string(filename: &str, content: String) -> Result<Program, CompilerError> {
+///
+/// # Arguments
+/// `filename` - The name of the file being compiled. Used for error messaging.
+/// `code` - The actual code to be compiled.
+///
+pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerError> {
     let mut errors: Vec<CompilerError> = vec![];
 
-    let program = lpc_parser::ProgramParser::new().parse(&content);
+    let program = lpc_parser::ProgramParser::new().parse(&code);
 
     let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
             errors.push(CompilerError::ParseError(ParseError::from(e)));
-            errors::emit_diagnostics(filename, &content, &errors);
+            errors::emit_diagnostics(filename, &code, &errors);
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -65,7 +73,7 @@ pub fn compile_string(filename: &str, content: String) -> Result<Program, Compil
     }
 
     if !errors.is_empty() {
-        errors::emit_diagnostics(filename, &content, &errors);
+        errors::emit_diagnostics(filename, &code, &errors);
         return Err(CompilerError::MultiError(errors));
     }
 
