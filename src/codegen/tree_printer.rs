@@ -10,6 +10,7 @@ use crate::{
     errors::compiler_error::CompilerError,
 };
 use tree_walker::TreeWalker;
+use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -204,6 +205,18 @@ impl TreeWalker for TreePrinter {
             self.println_indented("None");
         }
 
+        self.indent -= 2;
+
+        Ok(())
+    }
+
+    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<(), CompilerError>
+    {
+        self.println_indented("Comma Expression");
+        self.indent += 2;
+        for expr in &mut node.value {
+            let _ = expr.visit(self);
+        }
         self.indent -= 2;
 
         Ok(())

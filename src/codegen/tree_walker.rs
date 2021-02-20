@@ -8,6 +8,7 @@ use crate::{
     },
     errors::compiler_error::CompilerError,
 };
+use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
@@ -150,6 +151,7 @@ pub trait TreeWalker {
         Ok(())
     }
 
+    /// Visit a range literal
     fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), CompilerError>
     where
         Self: Sized,
@@ -160,6 +162,18 @@ pub trait TreeWalker {
 
         if let Some(expr) = &mut *node.r {
             expr.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    /// Visit a comma expression
+    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<(), CompilerError>
+    where
+        Self: Sized,
+    {
+        for expr in &mut node.value {
+            let _ = expr.visit(self);
         }
 
         Ok(())

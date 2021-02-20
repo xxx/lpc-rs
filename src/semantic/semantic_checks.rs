@@ -18,6 +18,7 @@ use errors::compiler_error::{
     binary_operation_error::BinaryOperationError, var_redefinition_error::VarRedefinitionError,
 };
 use std::collections::HashMap;
+use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// Utility functions for doing various semantic checks.
 
@@ -223,6 +224,14 @@ pub fn node_type(
                 *return_type
             } else {
                 LPCType::Int(false)
+            }
+        }
+        ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
+            if !value.is_empty() {
+                let len = value.len();
+                node_type(&value[len - 1], scope_tree, function_return_types)
+            } else {
+                panic!("We've somehow created an empty CommaExpression node")
             }
         }
         ExpressionNode::Float(FloatNode { .. }) => LPCType::Float(false),
@@ -1071,6 +1080,24 @@ mod node_type_tests {
                 r: Box::new(ExpressionNode::from(23423)),
                 op: BinaryOperation::Div,
                 span: None,
+            });
+
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LPCType::String(false)
+            );
+        }
+
+        #[test]
+        fn test_node_type_comma_expression_is_last_item() {
+            let scope_tree = ScopeTree::default();
+            let function_return_types = HashMap::new();
+
+            let node = ExpressionNode::CommaExpression(CommaExpressionNode {
+                value: vec![
+                    ExpressionNode::from(123),
+                    ExpressionNode::from("foobar"),
+                ], span: None,
             });
 
             assert_eq!(

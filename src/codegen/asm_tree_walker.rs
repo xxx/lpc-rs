@@ -223,6 +223,7 @@ impl AsmTreeWalker {
             }
             // TODO: Calls can be optimized if we can get the return types available here
             ExpressionNode::Call(_) => OperationType::Memory,
+            ExpressionNode::CommaExpression(_) => OperationType::Memory,
             ExpressionNode::Range(_) => OperationType::Memory,
             ExpressionNode::Var(v) => {
                 let ty = self.lookup_var_symbol(&v).unwrap().type_;
@@ -691,6 +692,7 @@ mod tests {
         parser::span::Span,
         semantic::lpc_type::LPCType,
     };
+    use crate::ast::comma_expression_node::CommaExpressionNode;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -1337,6 +1339,29 @@ mod tests {
         ];
 
         assert_eq!(walker.instructions, expected);
+    }
+
+    #[test]
+    fn test_visit_comma_expression_populates_the_instructions() {
+        let mut walker = AsmTreeWalker::default();
+
+        let mut expr = CommaExpressionNode::new(vec![
+            ExpressionNode::from(123),
+            ExpressionNode::from("foo"),
+            ExpressionNode::from(vec![ExpressionNode::from(666)]),
+        ]);
+
+        let _ = walker.visit_comma_expression(&mut expr);
+
+        let expected = vec![
+            IConst(Register(1), 123),
+            SConst(Register(2), 0),
+            IConst(Register(3), 666),
+            AConst(Register(4), vec![Register(3)]),
+        ];
+
+        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker.current_result, Register(4));
     }
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {

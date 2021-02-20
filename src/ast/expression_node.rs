@@ -19,6 +19,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -27,6 +28,7 @@ pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
     Call(CallNode),
+    CommaExpression(CommaExpressionNode),
     Float(FloatNode),
     Int(IntNode),
     Range(RangeNode),
@@ -41,6 +43,7 @@ impl ExpressionNode {
             ExpressionNode::Assignment(node) => node.span,
             ExpressionNode::BinaryOp(node) => node.span,
             ExpressionNode::Call(node) => node.span,
+            ExpressionNode::CommaExpression(node) => node.span,
             ExpressionNode::Float(node) => node.span,
             ExpressionNode::Int(node) => node.span,
             ExpressionNode::Range(node) => node.span,
@@ -89,6 +92,7 @@ delegated_traits!(
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Call,
+    ExpressionNode::CommaExpression,
     ExpressionNode::Float,
     ExpressionNode::Int,
     ExpressionNode::Range,

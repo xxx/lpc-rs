@@ -15,6 +15,7 @@ use crate::ast::var_node::VarNode;
 use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
+use crate::ast::comma_expression_node::CommaExpressionNode;
 use crate::semantic::lpc_type::LPCType;
 use crate::ast::ast_node::ASTNode;
 use crate::parser::collapse_expression::collapse_expression;
@@ -281,7 +282,21 @@ AssignmentExpression: ExpressionNode = {
 };
 
 pub Expression: ExpressionNode = {
-    <AssignmentExpression>
+    <AssignmentExpression>,
+    <l:@L> <e:Expression> "," <ass:AssignmentExpression> <r:@R> => {
+        let mut list = if let ExpressionNode::CommaExpression(ce) = e {
+            ce.value
+        } else {
+            vec![e]
+        };
+
+        list.extend_from_slice(&[ass]);
+
+        ExpressionNode::CommaExpression(CommaExpressionNode {
+            value: list,
+            span: Some(Span { l, r })
+        })
+    }
 };
 
 pub Return: ReturnNode = {
@@ -290,8 +305,8 @@ pub Return: ReturnNode = {
 }
 
 ExpressionList: Vec<ExpressionNode> = {
-    <Expression> => vec![<>],
-    <list:ExpressionList> "," <arg:Expression> => {
+    <AssignmentExpression> => vec![<>],
+    <list:ExpressionList> "," <arg:AssignmentExpression> => {
         let mut v = list;
         v.push(arg);
         v
