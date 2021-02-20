@@ -2,9 +2,9 @@ use crate::{
     asm::instruction::Instruction, interpreter::constant_pool::ConstantPool, parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
 };
-use std::collections::HashMap;
-use serde::Serialize;
 use rmp_serde::Serializer;
+use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Program {
@@ -49,7 +49,7 @@ impl From<Vec<u8>> for Program {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::{compile_string};
+    use crate::compiler::compile_string;
 
     fn test_serialization_and_deserialization() {
         let content = r#"

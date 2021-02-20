@@ -7,13 +7,13 @@ use lpc_rs::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
         tree_printer::TreePrinter, tree_walker::TreeWalker,
     },
+    compiler::compile_file,
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
     interpreter::{asm_interpreter::AsmInterpreter, program::Program},
     lpc_parser,
     semantic::scope_tree::ScopeTree,
 };
-use lpc_rs::compiler::compile_file;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 

@@ -1,11 +1,11 @@
 pub mod asm;
 pub mod ast;
 pub mod codegen;
+pub mod compiler;
 pub mod errors;
 pub mod interpreter;
 pub mod parser;
 pub mod semantic;
-pub mod compiler;
 
 #[macro_use]
 extern crate lalrpop_util;
