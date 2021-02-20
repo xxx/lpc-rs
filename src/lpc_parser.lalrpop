@@ -358,16 +358,16 @@ Var: ExpressionNode = <l:@L> <name:ID> <r:@R> => ExpressionNode::Var(
     }
 );
 
-Int: ExpressionNode = <l:@L> <s:r"-?[0-9]+"> <r:@R> => ExpressionNode::Int(
+Int: ExpressionNode = <l:@L> <s:r"-?[0-9][0-9_]*"> <r:@R> => ExpressionNode::Int(
     IntNode {
-        value: i64::from_str(s).unwrap(),
+        value: i64::from_str(&s.replace("_", "")).unwrap(),
         span: Some(Span { l, r })
     }
 );
 
-Float: ExpressionNode = <l:@L> <s:r"-?[0-9][0-9]*\.[0-9][0-9]*(?:[eE][-+]?[0-9]+)?"> <r:@R> => ExpressionNode::Float(
+Float: ExpressionNode = <l:@L> <s:r"-?[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"> <r:@R> => ExpressionNode::Float(
     FloatNode {
-        value: f64::from_str(s).unwrap(),
+        value: f64::from_str(&s.replace("_", "")).unwrap(),
         span: Some(Span { l, r })
     }
 );
@@ -399,6 +399,13 @@ StringLiteral: String = <s:r#""(\\.|[^"])*""#> => {
         let value = if s.len() < 3 { "" } else { &s[1..=(s.len() - 2)] };
 
         value.to_string()
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace("\\v", "\x0F")
+            .replace("\\f", "\x0C")
+            .replace("\\a", "\x07")
+            .replace("\\b", "\x08")
 };
 
 ID: String = r"[\p{Alphabetic}_]\w*" => String::from(<>);

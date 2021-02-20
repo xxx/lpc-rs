@@ -14,6 +14,7 @@ use lpc_rs::{
     parser::span::Span,
     semantic::lpc_type::LPCType,
 };
+use lpc_rs::ast::float_node::FloatNode;
 
 #[test]
 fn test_program_global_vars() {
@@ -115,6 +116,38 @@ fn test_int_literal_collapse() {
 
     let expected = ExpressionNode::Int(IntNode {
         value: 6,
+        span: Some(Span {
+            l: 0,
+            r: expr.len(),
+        }),
+    });
+
+    assert_eq!(node, expected);
+}
+
+#[test]
+fn test_int_literal_underscopes() {
+    let expr = "1_234_56___7890";
+    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+
+    let expected = ExpressionNode::Int(IntNode {
+        value: 1234567890,
+        span: Some(Span {
+            l: 0,
+            r: expr.len(),
+        }),
+    });
+
+    assert_eq!(node, expected);
+}
+
+#[test]
+fn test_float_literal_underscopes() {
+    let expr = "1_1.234_332e2_2";
+    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+
+    let expected = ExpressionNode::Float(FloatNode {
+        value: 112343320000000000000000.0,
         span: Some(Span {
             l: 0,
             r: expr.len(),
