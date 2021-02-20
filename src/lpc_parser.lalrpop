@@ -358,14 +358,42 @@ Var: ExpressionNode = <l:@L> <name:ID> <r:@R> => ExpressionNode::Var(
     }
 );
 
-Int: ExpressionNode = <l:@L> <s:r"-?[0-9][0-9_]*"> <r:@R> => ExpressionNode::Int(
-    IntNode {
-        value: i64::from_str(&s.replace("_", "")).unwrap(),
-        span: Some(Span { l, r })
-    }
-);
+Int: ExpressionNode = {
+    <l:@L> <s:r"[1-9][0-9_]*"> <r:@R> => ExpressionNode::Int(
+        IntNode {
+            value: i64::from_str(&s.replace("_", "")).unwrap(),
+            span: Some(Span { l, r })
+        }
+    ),
+    <l:@L> <s:r"0[xX][0-9a-fA-F][0-9a-fA-F_]*"> <r:@R> => ExpressionNode::Int(
+        IntNode {
+            value: i64::from_str_radix(
+                &s.replace("_", "")
+                  .trim_start_matches("0x")
+                  .trim_start_matches("0X"),
+                16).unwrap(),
+            span: Some(Span { l, r })
+        }
+    ),
+    <l:@L> <s:r"0[0-7][0-7_]*"> <r:@R> => ExpressionNode::Int(
+        IntNode {
+            value: i64::from_str_radix(&s.replace("_", ""), 8).unwrap(),
+            span: Some(Span { l, r })
+        }
+    ),
+    <l:@L> <s:r"0[bB][01][01_]*"> <r:@R> => ExpressionNode::Int(
+        IntNode {
+            value: i64::from_str_radix(
+                &s.replace("_", "")
+                  .trim_start_matches("0b")
+                  .trim_start_matches("0B"),
+                2).unwrap(),
+            span: Some(Span { l, r })
+        }
+    ),
+};
 
-Float: ExpressionNode = <l:@L> <s:r"-?[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"> <r:@R> => ExpressionNode::Float(
+Float: ExpressionNode = <l:@L> <s:r"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"> <r:@R> => ExpressionNode::Float(
     FloatNode {
         value: f64::from_str(&s.replace("_", "")).unwrap(),
         span: Some(Span { l, r })

@@ -58,7 +58,7 @@ macro_rules! string_constant {
 /// use lpc_rs::semantic::scope_tree::ScopeTree;
 /// use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
 ///
-/// let prog = r#"int main() { dump("hello, world"); int b = 123; return b; }"#;
+/// let prog = r#"int create() { dump("hello, world"); int b = 123; return b; }"#;
 /// let mut program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
 /// let filepath = "path/to/myfile.c";
 ///

@@ -16,6 +16,21 @@ use lpc_rs::{
 };
 use lpc_rs::ast::float_node::FloatNode;
 
+// just a helper for a very common pattern
+fn assert_int(value: i64, expr: &str) {
+    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+
+    let expected = ExpressionNode::Int(IntNode {
+        value,
+        span: Some(Span {
+            l: 0,
+            r: expr.len(),
+        }),
+    });
+
+    assert_eq!(node, expected);
+}
+
 #[test]
 fn test_program_global_vars() {
     let prog = "int i = 123; int j = i - 8; string *k;";
@@ -79,66 +94,40 @@ fn test_program_global_vars() {
 
 #[test]
 fn test_operator_precedence_add_first() {
-    let expr = "1 + 2 * 3";
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
-
-    let expected = ExpressionNode::Int(IntNode {
-        value: 7,
-        span: Some(Span {
-            l: 0,
-            r: expr.len(),
-        }),
-    });
-
-    assert_eq!(node, expected);
+    assert_int(7, "1 + 2 * 3");
 }
 
 #[test]
 fn test_operator_precedence_mul_first() {
-    let expr = "3 * 2 + 1";
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
-
-    let expected = ExpressionNode::Int(IntNode {
-        value: 7,
-        span: Some(Span {
-            l: 0,
-            r: expr.len(),
-        }),
-    });
-
-    assert_eq!(node, expected);
+    assert_int(7, "3 * 2 + 1");
 }
 
 #[test]
 fn test_int_literal_collapse() {
-    let expr = "10 - 3 * 2 + 4 / 2";
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
-
-    let expected = ExpressionNode::Int(IntNode {
-        value: 6,
-        span: Some(Span {
-            l: 0,
-            r: expr.len(),
-        }),
-    });
-
-    assert_eq!(node, expected);
+    assert_int(6, "10 - 3 * 2 + 4 / 2");
 }
 
 #[test]
-fn test_int_literal_underscopes() {
-    let expr = "1_234_56___7890";
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+fn test_int_literal_underscores() {
+    assert_int(1234567890, "1_234_56___7890");
+}
 
-    let expected = ExpressionNode::Int(IntNode {
-        value: 1234567890,
-        span: Some(Span {
-            l: 0,
-            r: expr.len(),
-        }),
-    });
+#[test]
+fn test_int_literal_hexadecimal() {
+    assert_int(1638, "0x66_6");
+    assert_int(0, "0X0");
+}
 
-    assert_eq!(node, expected);
+#[test]
+fn test_int_literal_octal() {
+    assert_int(272, "0420");
+    assert_int(0, "00");
+}
+
+#[test]
+fn test_int_literal_binary() {
+    assert_int(109, "0b1101101");
+    assert_int(0, "0B0");
 }
 
 #[test]
@@ -189,16 +178,17 @@ fn test_string_literal_repeat() {
     assert_eq!(node, expected);
 
     // test negative multiplier
-    let expr = r##""foo" * -3"##;
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
-
-    let expected = ExpressionNode::String(StringNode {
-        value: String::from(""),
-        span: Some(Span {
-            l: 0,
-            r: expr.len(),
-        }),
-    });
-
-    assert_eq!(node, expected);
+    // TODO: Once unary negatives are in, reenable this.
+    // let expr = r##""foo" * -3"##;
+    // let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+    //
+    // let expected = ExpressionNode::String(StringNode {
+    //     value: String::from(""),
+    //     span: Some(Span {
+    //         l: 0,
+    //         r: expr.len(),
+    //     }),
+    // });
+    //
+    // assert_eq!(node, expected);
 }
