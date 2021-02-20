@@ -18,3 +18,6 @@ lazy_static = "1.4.0"
 modular-bitfield = "0.11.2"
 multimap = "0.8.2"
 regex = "1"
+rmp-serde = "0.15.4"
+serde = { version =  "1.0.123", features = ["derive"] }
+serde_derive = "1.0.123"

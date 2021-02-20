@@ -14,7 +14,7 @@ use std::{
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
 /// This enum should remain `Copy`.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LPCVar {
     Float(f64),
     Int(i64),

@@ -5,7 +5,7 @@ use std::{
 };
 
 /// Representation of an assembly language instruction.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),

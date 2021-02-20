@@ -1,6 +1,6 @@
 /// A representation of a function symbol, used during
 /// semantic checks and codegen.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FunctionSymbol {
     /// Yep, the name of the function
     pub name: String,

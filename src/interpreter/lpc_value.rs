@@ -16,7 +16,7 @@ use std::{
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LPCValue {
     Float(f64),
     Int(i64),
