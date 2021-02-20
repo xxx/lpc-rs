@@ -1,5 +1,5 @@
 use crate::{errors::LPCError, parser::span::Span, semantic::lpc_type::LPCType};
-use codespan_reporting::diagnostic::{Diagnostic, Label};
+use codespan_reporting::diagnostic::{Diagnostic};
 use std::{
     fmt,
     fmt::{Display, Formatter},
