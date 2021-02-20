@@ -15,7 +15,7 @@ pub enum Instruction {
     ALoad(Register, Register, Register),
 
     /// Create an array from some range of another array
-    /// x.3 = x.1[x.2..x.3]
+    /// x.4 = x.1[x.2 .. x.3]
     ARange(Register, Register, Register, Register),
 
     /// Store a single item into an array
@@ -33,11 +33,11 @@ pub enum Instruction {
     FConst(Register, f64),
 
     /// Copy a global from the global registers, into the current stack frame.
-    /// Copies the global in x.0 to the local register x.1.
+    /// Copies *global* register x.0 to *local* register x.1.
     GLoad(Register, Register),
 
     /// Copy a variable from the current stack frame, to the global registers.
-    /// Copies a variable from the local register x.0, into the global register x.1.
+    /// Copies a variable from *local* register x.0, into the *global* register x.1.
     GStore(Register, Register),
 
     /// Integer addition - x.2 = x.0 + x.1
