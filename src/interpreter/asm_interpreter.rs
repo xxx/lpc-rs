@@ -161,16 +161,15 @@ impl AsmInterpreter {
 
     /// Dummy starter for the interpreter, to get the "main" stack frame setup
     pub fn exec(&mut self) -> Result<(), RuntimeError> {
-        let main = StackFrame::new(
-            FunctionSymbol {
-                name: "main".to_string(),
-                num_args: 0,
-                num_locals: 200,
-                address: 0,
-            },
+        let sym = self.program.functions.get("create").unwrap();
+        let address = sym.address;
+        let create = StackFrame::new(
+            sym.clone(),
             0,
         );
-        self.push_frame(main);
+        self.push_frame(create);
+
+        self.pc = address;
 
         self.is_halted = false;
 
