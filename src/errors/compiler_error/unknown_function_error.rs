@@ -4,6 +4,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::errors::default_diagnostic;
 
 /// Error for duplicate var definitions in a single local scope.
 #[derive(Debug, Clone)]
@@ -17,15 +18,7 @@ pub struct UnknownFunctionError {
 
 impl LPCError for UnknownFunctionError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
-        let mut labels = vec![];
-
-        if let Some(span) = self.span {
-            labels.push(Label::primary(file_id, span.l..span.r));
-            diagnostic = diagnostic.with_labels(labels);
-        }
-
-        vec![diagnostic]
+        default_diagnostic(format!("{}", self), file_id, self.span)
     }
 }
 

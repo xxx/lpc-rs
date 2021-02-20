@@ -3,6 +3,8 @@ use codespan_reporting::{
     files::SimpleFiles,
     term::termcolor::{ColorChoice, StandardStream},
 };
+use crate::parser::span::Span;
+use codespan_reporting::diagnostic::Label;
 
 pub mod compiler_error;
 pub mod runtime_error;
@@ -38,4 +40,18 @@ where
             eprintln!("error attempting to emit error: {:?}", e);
         };
     }
+}
+
+/// An extracted function that covers the most common use case for generating diagnostics.
+pub fn default_diagnostic(message: String, file_id: usize, span: Option<Span>) -> Vec<Diagnostic<usize>> {
+    let mut diagnostic = Diagnostic::error().with_message(message);
+    let mut labels = vec![];
+
+    if let Some(span) = span {
+        labels.push(Label::primary(file_id, span.l..span.r));
+        diagnostic = diagnostic.with_labels(labels);
+    }
+
+    vec![diagnostic]
+
 }

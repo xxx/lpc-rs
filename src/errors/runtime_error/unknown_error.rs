@@ -4,6 +4,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::errors::default_diagnostic;
 
 /// Errors for unknown issues at runtime. Anything that pops one of these should be
 /// fixed to use another error type.
@@ -15,15 +16,7 @@ pub struct UnknownError {
 
 impl LPCError for UnknownError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
-        let mut labels = vec![];
-
-        if let Some(span) = self.span {
-            labels.push(Label::primary(file_id, span.l..span.r));
-            diagnostic = diagnostic.with_labels(labels);
-        }
-
-        vec![diagnostic]
+        default_diagnostic(format!("{}", self), file_id, self.span)
     }
 }
 
