@@ -300,8 +300,7 @@ pub Expression: ExpressionNode = {
 };
 
 pub Return: ReturnNode = {
-    <l:@L> "return" <r:@R> => ReturnNode { value: None, span: Some(Span { l, r }) },
-    <l:@L> "return" <e:Expression> <r:@R> => ReturnNode { value: Some(e), span: Some(Span { l, r }) }
+    <l:@L> "return" <e:Expression?> <r:@R> => ReturnNode { value: e, span: Some(Span { l, r }) }
 }
 
 ExpressionList: Vec<ExpressionNode> = {
