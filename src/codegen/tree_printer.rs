@@ -1,17 +1,15 @@
 use crate::{
     ast::{
         array_node::ArrayNode, ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode,
-        call_node::CallNode, decl_node::DeclNode, float_node::FloatNode,
-        function_def_node::FunctionDefNode, int_node::IntNode, program_node::ProgramNode,
-        range_node::RangeNode, return_node::ReturnNode, var_init_node::VarInitNode,
-        var_node::VarNode,
+        call_node::CallNode, comma_expression_node::CommaExpressionNode, decl_node::DeclNode,
+        float_node::FloatNode, function_def_node::FunctionDefNode, int_node::IntNode,
+        program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
+        string_node::StringNode, var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker,
     errors::compiler_error::CompilerError,
 };
 use tree_walker::TreeWalker;
-use crate::ast::comma_expression_node::CommaExpressionNode;
-use crate::ast::string_node::StringNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -217,8 +215,10 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<(), CompilerError>
-    {
+    fn visit_comma_expression(
+        &mut self,
+        node: &mut CommaExpressionNode,
+    ) -> Result<(), CompilerError> {
         self.println_indented("Comma Expression");
         self.indent += 2;
         for expr in &mut node.value {

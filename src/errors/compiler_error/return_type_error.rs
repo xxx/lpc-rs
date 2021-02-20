@@ -1,10 +1,13 @@
-use crate::{errors::LPCError, parser::span::Span, semantic::lpc_type::LPCType};
-use codespan_reporting::diagnostic::{Diagnostic};
+use crate::{
+    errors::{default_diagnostic, LPCError},
+    parser::span::Span,
+    semantic::lpc_type::LPCType,
+};
+use codespan_reporting::diagnostic::Diagnostic;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::errors::default_diagnostic;
 
 #[derive(Debug, Clone)]
 pub struct ReturnTypeError {

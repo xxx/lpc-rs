@@ -163,10 +163,7 @@ impl AsmInterpreter {
     pub fn exec(&mut self) -> Result<(), RuntimeError> {
         let sym = self.program.functions.get("create").unwrap();
         let address = sym.address;
-        let create = StackFrame::new(
-            sym.clone(),
-            0,
-        );
+        let create = StackFrame::new(sym.clone(), 0);
         self.push_frame(create);
 
         self.pc = address;

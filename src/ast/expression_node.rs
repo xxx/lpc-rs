@@ -5,6 +5,7 @@ use crate::{
         ast_node::{ASTNode, ASTNodeTrait},
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
+        comma_expression_node::CommaExpressionNode,
         float_node::FloatNode,
         int_node::IntNode,
         range_node::RangeNode,
@@ -19,7 +20,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

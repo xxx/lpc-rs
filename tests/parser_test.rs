@@ -4,6 +4,7 @@ use lpc_rs::{
         binary_op_node::{BinaryOpNode, BinaryOperation},
         decl_node::DeclNode,
         expression_node::ExpressionNode,
+        float_node::FloatNode,
         int_node::IntNode,
         program_node::ProgramNode,
         string_node::StringNode,
@@ -14,7 +15,6 @@ use lpc_rs::{
     parser::span::Span,
     semantic::lpc_type::LPCType,
 };
-use lpc_rs::ast::float_node::FloatNode;
 
 // just a helper for a very common pattern
 fn assert_int(value: i64, expr: &str) {

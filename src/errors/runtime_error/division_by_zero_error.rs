@@ -1,10 +1,12 @@
-use crate::{errors::LPCError, parser::span::Span};
-use codespan_reporting::diagnostic::{Diagnostic};
+use crate::{
+    errors::{default_diagnostic, LPCError},
+    parser::span::Span,
+};
+use codespan_reporting::diagnostic::Diagnostic;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::errors::default_diagnostic;
 
 /// Errors for division by zero at runtime.
 #[derive(Debug)]

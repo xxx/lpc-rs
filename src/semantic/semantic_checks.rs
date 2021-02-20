@@ -3,6 +3,7 @@ use crate::{
         assignment_node::AssignmentNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
+        comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
         float_node::FloatNode,
         int_node::IntNode,
@@ -18,7 +19,6 @@ use errors::compiler_error::{
     binary_operation_error::BinaryOperationError, var_redefinition_error::VarRedefinitionError,
 };
 use std::collections::HashMap;
-use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// Utility functions for doing various semantic checks.
 
@@ -1094,10 +1094,8 @@ mod node_type_tests {
             let function_return_types = HashMap::new();
 
             let node = ExpressionNode::CommaExpression(CommaExpressionNode {
-                value: vec![
-                    ExpressionNode::from(123),
-                    ExpressionNode::from("foobar"),
-                ], span: None,
+                value: vec![ExpressionNode::from(123), ExpressionNode::from("foobar")],
+                span: None,
             });
 
             assert_eq!(

@@ -1,14 +1,14 @@
 use crate::{
     ast::{
         array_node::ArrayNode, assignment_node::AssignmentNode, ast_node::ASTNodeTrait,
-        binary_op_node::BinaryOpNode, call_node::CallNode, decl_node::DeclNode,
-        float_node::FloatNode, function_def_node::FunctionDefNode, int_node::IntNode,
-        program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
-        string_node::StringNode, var_init_node::VarInitNode, var_node::VarNode,
+        binary_op_node::BinaryOpNode, call_node::CallNode,
+        comma_expression_node::CommaExpressionNode, decl_node::DeclNode, float_node::FloatNode,
+        function_def_node::FunctionDefNode, int_node::IntNode, program_node::ProgramNode,
+        range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
+        var_init_node::VarInitNode, var_node::VarNode,
     },
     errors::compiler_error::CompilerError,
 };
-use crate::ast::comma_expression_node::CommaExpressionNode;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
@@ -168,7 +168,10 @@ pub trait TreeWalker {
     }
 
     /// Visit a comma expression
-    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<(), CompilerError>
+    fn visit_comma_expression(
+        &mut self,
+        node: &mut CommaExpressionNode,
+    ) -> Result<(), CompilerError>
     where
         Self: Sized,
     {

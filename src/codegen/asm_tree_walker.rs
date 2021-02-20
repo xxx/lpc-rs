@@ -685,14 +685,13 @@ mod tests {
         },
         ast::{
             assignment_node::AssignmentOperation, ast_node::ASTNode,
-            expression_node::ExpressionNode,
+            comma_expression_node::CommaExpressionNode, expression_node::ExpressionNode,
         },
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
         parser::span::Span,
         semantic::lpc_type::LPCType,
     };
-    use crate::ast::comma_expression_node::CommaExpressionNode;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {

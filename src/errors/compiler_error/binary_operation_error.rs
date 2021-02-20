@@ -1,13 +1,14 @@
 use crate::{
-    ast::binary_op_node::BinaryOperation, errors::LPCError, parser::span::Span,
+    ast::binary_op_node::BinaryOperation,
+    errors::{default_diagnostic, LPCError},
+    parser::span::Span,
     semantic::lpc_type::LPCType,
 };
-use codespan_reporting::diagnostic::{Diagnostic};
+use codespan_reporting::diagnostic::Diagnostic;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::errors::default_diagnostic;
 
 /// Error for mismatched types in binary operations
 #[derive(Debug, Clone)]
