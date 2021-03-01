@@ -1,8 +1,21 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, fs, path::Path, fmt};
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 
 /// Handle preprocessing
+
+#[derive(Debug)]
+pub struct PreprocessorError(String);
+
+impl Error for PreprocessorError {}
+
+impl Display for PreprocessorError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "PreprocessorError: {}", self.0)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -60,7 +73,7 @@ impl Preprocessor {
     //          emit the line
     //
 
-    pub fn scan<T>(&mut self, path: T, file_content: &str) -> Result<String, String>
+    pub fn scan<T>(&mut self, path: T, file_content: &str) -> Result<String, PreprocessorError>
     where
         T: AsRef<Path>,
     {
@@ -104,7 +117,7 @@ impl Preprocessor {
         Ok(output)
     }
 
-    fn include_local_file(&mut self, path: &str, cwd: &str) -> Result<String, String> {
+    fn include_local_file(&mut self, path: &str, cwd: &str) -> Result<String, PreprocessorError> {
         let root_path = String::from(Path::new(&self.root_dir).canonicalize().unwrap().to_str().unwrap());
         let sep = String::from(std::path::MAIN_SEPARATOR);
         // Do this the hard way because .join/.push overwrite if the arg starts with "/"
@@ -117,25 +130,25 @@ impl Preprocessor {
         let canon_include_path = match fs::canonicalize(&localized_path) {
             Ok(pathbuf) => pathbuf,
             Err(e) => {
-                return Err(format!(
+                return Err(PreprocessorError(format!(
                     "error canonicalizing the include file ({}): {:?}",
                     localized_path,
                     e
-                ))
+                )))
             }
         };
 
         let true_root = match fs::canonicalize(&self.root_dir) {
             Ok(pathbuf) => pathbuf,
-            Err(e) => return Err(format!("{:?}", e)),
+            Err(e) => return Err(PreprocessorError(format!("{:?}", e))),
         };
 
         if !canon_include_path.starts_with(true_root) {
-            return Err(format!(
+            return Err(PreprocessorError(format!(
                 "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
                 path,
                 canon_include_path.display()
-            ));
+            )));
         }
 
         let file_content = fs::read_to_string(&canon_include_path).unwrap();
