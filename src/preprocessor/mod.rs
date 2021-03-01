@@ -86,9 +86,8 @@ impl Preprocessor {
                 ));
             } else if let Some(captures) = LOCAL_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
-                let match_str = matched.as_str();
                 let cwd = path.as_ref().parent().unwrap().to_str().unwrap();
-                let included = self.include_local_file(match_str, cwd)?;
+                let included = self.include_local_file(matched.as_str(), cwd)?;
                 output.push_str(&included);
                 if !output.ends_with("\n") {
                     output.push_str("\n");
@@ -106,20 +105,21 @@ impl Preprocessor {
     }
 
     fn include_local_file(&mut self, path: &str, cwd: &str) -> Result<String, String> {
-        let root_path = Path::new(&self.root_dir).canonicalize().unwrap();
-        let localized_path = if path.starts_with("/") {
-            root_path.join(path)
+        let root_path = String::from(Path::new(&self.root_dir).canonicalize().unwrap().to_str().unwrap());
+        let sep = String::from(std::path::MAIN_SEPARATOR);
+        // Do this the hard way because .join/.push overwrite if the arg starts with "/"
+        let localized_path = if path.starts_with(&sep) {
+            root_path + &sep + path
         } else {
-            let path1 = root_path.join(cwd);
-            path1.join(path)
+            root_path + &sep + cwd + &sep + path
         };
 
-        let canon_include_path = match localized_path.canonicalize() {
+        let canon_include_path = match fs::canonicalize(&localized_path) {
             Ok(pathbuf) => pathbuf,
             Err(e) => {
                 return Err(format!(
                     "error canonicalizing the include file ({}): {:?}",
-                    localized_path.display(),
+                    localized_path,
                     e
                 ))
             }
@@ -211,6 +211,13 @@ mod tests {
             "#};
 
             test_include(input, expected);
+        }
+
+        #[test]
+        fn test_includes_absolute_paths() {
+            let input = r#"#include "/include/simple.h""#;
+
+            test_include(input, "1 + 2 + 3 + 4 + 5;\n");
         }
     }
 }
