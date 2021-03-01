@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::errors::preprocessor_error::PreprocessorError;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -18,10 +19,6 @@ pub enum PreprocessorDirective {
 
 #[derive(Debug)]
 pub struct Preprocessor {
-    /// The (relative to `root_dir`) path (including filename) of final file that we're emitting.
-    /// Even if this starts with a `/`, it remains relative to `root_dir`.
-    path: String,
-
     /// The true on-disk root dir, where in-game absolute paths point to.
     root_dir: String,
     include_dirs: Vec<String>,
@@ -35,11 +32,10 @@ pub struct Preprocessor {
 }
 
 impl Preprocessor {
-    pub fn new(path: &str, root_dir: &str, include_dirs: Vec<String>) -> Self {
+    pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
         Self {
-            path: path.to_string(),
             root_dir: root_dir.to_string(),
-            include_dirs,
+            include_dirs: include_dirs.iter().map(|i| String::from(*i)).collect(),
             ..Self::default()
         }
     }
@@ -58,6 +54,55 @@ impl Preprocessor {
     //          emit the line
     //
 
+    /// Convert an in-game path, relative or absolute, to a canonical on-server path.
+    /// This function is used for resolving included files.
+    /// # Arguments
+    /// `path` - An in-game path.
+    /// `cwd` - The current working directory, needed to resolve relative paths.
+    fn canonicalize_path(&self, path: &str, cwd: &str) -> Result<PathBuf, PreprocessorError> {
+        let root_path = String::from(Path::new(&self.root_dir).canonicalize().unwrap().to_str().unwrap());
+        let sep = String::from(std::path::MAIN_SEPARATOR);
+        // Do this the hard way because .join/.push overwrite if the arg starts with "/"
+        let localized_path = if path.starts_with(&sep) {
+            root_path + &sep + path
+        } else {
+            root_path + &sep + cwd + &sep + path
+        };
+
+        match fs::canonicalize(&localized_path) {
+            Ok(pathbuf) => Ok(pathbuf),
+            Err(e) => {
+                return Err(PreprocessorError(format!(
+                    "error canonicalizing the include file ({}): {:?}",
+                    localized_path,
+                    e
+                )))
+            }
+        }
+    }
+
+    /// Convert an in-game path, relative or absolute, to a canonical on-server path.
+    /// This function is used for resolving included files.
+    /// # Arguments
+    /// `path` - An in-game path to the file being scanned.
+    /// `file_content` - The actual content of the file to scan.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use lpc_rs::preprocessor::Preprocessor;
+    /// let mut preprocessor = Preprocessor::new("/user/mud/lib", vec!["/include", "/sys/include"]);
+    ///
+    /// let content = r#"
+    ///     #include "simple.h"
+    ///
+    ///     void main() {
+    ///         int a = 123;
+    ///     }
+    /// "#;
+    ///
+    /// let processed = preprocessor.scan("my/file/path", content);
+    /// ```
     pub fn scan<T>(&mut self, path: T, file_content: &str) -> Result<String, PreprocessorError>
     where
         T: AsRef<Path>,
@@ -106,25 +151,7 @@ impl Preprocessor {
     }
 
     fn include_local_file(&mut self, path: &str, cwd: &str) -> Result<String, PreprocessorError> {
-        let root_path = String::from(Path::new(&self.root_dir).canonicalize().unwrap().to_str().unwrap());
-        let sep = String::from(std::path::MAIN_SEPARATOR);
-        // Do this the hard way because .join/.push overwrite if the arg starts with "/"
-        let localized_path = if path.starts_with(&sep) {
-            root_path + &sep + path
-        } else {
-            root_path + &sep + cwd + &sep + path
-        };
-
-        let canon_include_path = match fs::canonicalize(&localized_path) {
-            Ok(pathbuf) => pathbuf,
-            Err(e) => {
-                return Err(PreprocessorError(format!(
-                    "error canonicalizing the include file ({}): {:?}",
-                    localized_path,
-                    e
-                )))
-            }
-        };
+        let canon_include_path = self.canonicalize_path(path, cwd)?;
 
         let true_root = match fs::canonicalize(&self.root_dir) {
             Ok(pathbuf) => pathbuf,
@@ -147,7 +174,6 @@ impl Preprocessor {
 impl Default for Preprocessor {
     fn default() -> Self {
         Self {
-            path: "UNSET".to_string(),
             root_dir: ".".to_string(),
             include_dirs: vec![],
             defines: HashMap::new(),
@@ -162,7 +188,7 @@ mod tests {
     use super::*;
 
     fn fixture() -> Preprocessor {
-        Preprocessor::new("test.c", "./tests/fixtures", vec![])
+        Preprocessor::new("./tests/fixtures", vec![])
     }
 
     mod test_local_includes {
