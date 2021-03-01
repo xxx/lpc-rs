@@ -314,8 +314,7 @@ mod tests {
 
         #[test]
         fn test_errors_for_traversal_attacks() {
-            // This needs to point to a real file, relative to the root dir of the fixture
-            let input = r#"#include "/../../Cargo.toml""#;
+            let input = r#"#include "/../../some_file.h""#;
 
             test_include_error(input, "Attempt to include a file outside the root");
         }
