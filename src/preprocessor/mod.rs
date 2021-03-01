@@ -21,7 +21,7 @@ pub enum PreprocessorDirective {
 pub struct Preprocessor {
     /// The true on-disk root dir, where in-game absolute paths point to.
     root_dir: PathBuf,
-    include_dirs: Vec<String>,
+    include_dirs: Vec<PathBuf>,
 
     defines: HashMap<String, String>,
 
@@ -43,7 +43,7 @@ impl Preprocessor {
 
         Self {
             root_dir: root_path,
-            include_dirs: include_dirs.iter().map(|i| String::from(*i)).collect(),
+            include_dirs: include_dirs.iter().map(|i| PathBuf::from(*i)).collect(),
             ..Self::default()
         }
     }
