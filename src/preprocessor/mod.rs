@@ -192,6 +192,20 @@ mod tests {
             }
         }
 
+        // `expected` is converted to a Regex, for easier matching on errors.
+        fn test_include_error(input: &str, expected: &str) {
+            let mut preprocessor = fixture();
+            match preprocessor.scan("test.c", input) {
+                Ok(result) => {
+                    panic!("Expected to fail, but passed with {}", result);
+                }
+                Err(e) => {
+                    let regex = Regex::new(expected).unwrap();
+                    assert!(regex.is_match(&e.to_string()));
+                }
+            }
+        }
+
         #[test]
         fn test_includes_the_file() {
             let input = r#"#include "include/simple.h""#;
@@ -228,6 +242,21 @@ mod tests {
             let input = r#"#include "/include/simple.h""#;
 
             test_include(input, "1 + 2 + 3 + 4 + 5;\n");
+        }
+
+        #[test]
+        fn test_errors_for_nonexistent_paths() {
+            let input = r#"#include "/askdf/foo.h""#;
+
+            test_include_error(input, "No such file or directory");
+        }
+
+        #[test]
+        fn test_errors_for_traversal_attacks() {
+            // This needs to point to a real file, relative to the root dir of the fixture
+            let input = r#"#include "/../../Cargo.toml""#;
+
+            test_include_error(input, "Attempt to include a file outside the root");
         }
     }
 }
