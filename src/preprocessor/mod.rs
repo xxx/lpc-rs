@@ -1,8 +1,6 @@
-use std::path::Path;
-use std::collections::HashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::fs;
+use std::{collections::HashMap, fs, path::Path};
 
 /// Handle preprocessing
 
@@ -35,7 +33,7 @@ pub struct Preprocessor {
     current_line: usize,
 
     /// Are we currently within a block that is `if`'d out?
-    skip_lines: bool
+    skip_lines: bool,
 }
 
 impl Preprocessor {
@@ -64,11 +62,13 @@ impl Preprocessor {
 
     pub fn scan<T>(&mut self, path: T, file_content: &str) -> Result<String, String>
     where
-        T: AsRef<Path>
+        T: AsRef<Path>,
     {
         lazy_static! {
-            static ref SYS_INCLUDE: Regex = Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
-            static ref LOCAL_INCLUDE: Regex = Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
+            static ref SYS_INCLUDE: Regex =
+                Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
+            static ref LOCAL_INCLUDE: Regex =
+                Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
         }
 
         self.current_path = String::from(path.as_ref().to_string_lossy());
@@ -80,9 +80,10 @@ impl Preprocessor {
             println!("ln {}, {:?}", self.current_line, line);
             if let Some(captures) = SYS_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
-                self.directives.push(
-                    PreprocessorDirective::SysInclude(String::from(matched.as_str()), self.current_line)
-                );
+                self.directives.push(PreprocessorDirective::SysInclude(
+                    String::from(matched.as_str()),
+                    self.current_line,
+                ));
             } else if let Some(captures) = LOCAL_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
                 let match_str = matched.as_str();
@@ -114,16 +115,26 @@ impl Preprocessor {
 
         let canon_include_path = match localized_path.canonicalize() {
             Ok(pathbuf) => pathbuf,
-            Err(e) => return Err(format!("error canonicalizing the include file ({}): {:?}", localized_path.display(), e))
+            Err(e) => {
+                return Err(format!(
+                    "error canonicalizing the include file ({}): {:?}",
+                    localized_path.display(),
+                    e
+                ))
+            }
         };
 
         let true_root = match fs::canonicalize(&self.root_dir) {
             Ok(pathbuf) => pathbuf,
-            Err(e) => return Err(format!("{:?}", e))
+            Err(e) => return Err(format!("{:?}", e)),
         };
 
         if !canon_include_path.starts_with(true_root) {
-            return Err(format!("Attempt to include a file outside the root: `{}` (expanded to `{}`)", path, canon_include_path.display()));
+            return Err(format!(
+                "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
+                path,
+                canon_include_path.display()
+            ));
         }
 
         let file_content = fs::read_to_string(&canon_include_path).unwrap();
@@ -141,7 +152,7 @@ impl Default for Preprocessor {
             directives: vec![],
             current_path: "UNSET".to_string(),
             current_line: 0,
-            skip_lines: false
+            skip_lines: false,
         }
     }
 }

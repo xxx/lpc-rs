@@ -10,8 +10,7 @@ use crate::{
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
     interpreter::program::Program,
-    lpc_parser,
-    lpc_preprocessor,
+    lpc_parser, lpc_preprocessor,
     semantic::scope_tree::ScopeTree,
 };
 
