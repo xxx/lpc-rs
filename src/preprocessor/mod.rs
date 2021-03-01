@@ -48,10 +48,8 @@ impl Preprocessor {
     /// let preprocessor = Preprocessor::new("/home/mud/lib", vec!["/include", "/sys"]);
     /// ```
     pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
-        let root_path = PathBuf::from(root_dir).absolutize().unwrap().to_path_buf();
-
         Self {
-            root_dir: root_path,
+            root_dir: PathBuf::from(root_dir).absolutize().unwrap().to_path_buf(),
             include_dirs: include_dirs.iter().map(|i| PathBuf::from(*i)).collect(),
             ..Self::default()
         }
