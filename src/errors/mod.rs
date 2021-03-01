@@ -6,6 +6,7 @@ use codespan_reporting::{
 };
 
 pub mod compiler_error;
+pub mod preprocessor_error;
 pub mod runtime_error;
 
 pub trait LPCError {

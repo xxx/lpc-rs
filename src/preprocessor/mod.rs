@@ -1,21 +1,9 @@
+use std::{collections::HashMap, fs, path::Path};
+
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{collections::HashMap, fs, path::Path, fmt};
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 
-/// Handle preprocessing
-
-#[derive(Debug)]
-pub struct PreprocessorError(String);
-
-impl Error for PreprocessorError {}
-
-impl Display for PreprocessorError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "PreprocessorError: {}", self.0)
-    }
-}
+use crate::errors::preprocessor_error::PreprocessorError;
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -41,9 +29,6 @@ pub struct Preprocessor {
     defines: HashMap<String, String>,
 
     directives: Vec<PreprocessorDirective>,
-
-    current_path: String,
-    current_line: usize,
 
     /// Are we currently within a block that is `if`'d out?
     skip_lines: bool,
@@ -84,17 +69,22 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
         }
 
-        self.current_path = String::from(path.as_ref().to_string_lossy());
-        self.current_line = 1;
+        let mut current_line = 1;
 
         let mut output = String::new();
+
+        let format_line = |current| {
+            format!("#line {} \"{}\"\n", current, path.as_ref().display())
+        };
+
+        output.push_str(&format_line(current_line));
 
         for line in file_content.lines() {
             if let Some(captures) = SYS_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
                 self.directives.push(PreprocessorDirective::SysInclude(
                     String::from(matched.as_str()),
-                    self.current_line,
+                    current_line,
                 ));
             } else if let Some(captures) = LOCAL_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
@@ -104,11 +94,12 @@ impl Preprocessor {
                 if !output.ends_with("\n") {
                     output.push_str("\n");
                 }
+                output.push_str(&format_line(current_line + 1));
             } else {
                 output.push_str(line);
                 output.push_str("\n");
             }
-            self.current_line += 1;
+            current_line += 1;
         }
 
         Ok(output)
@@ -161,8 +152,6 @@ impl Default for Preprocessor {
             include_dirs: vec![],
             defines: HashMap::new(),
             directives: vec![],
-            current_path: "UNSET".to_string(),
-            current_line: 0,
             skip_lines: false,
         }
     }
@@ -178,6 +167,7 @@ mod tests {
 
     mod test_local_includes {
         use indoc::indoc;
+
         use super::*;
 
         fn test_include(input: &str, expected: &str) {
@@ -210,14 +200,30 @@ mod tests {
         fn test_includes_the_file() {
             let input = r#"#include "include/simple.h""#;
 
-            test_include(input, "1 + 2 + 3 + 4 + 5;\n");
+            let expected = indoc! {r#"
+                #line 1 "test.c"
+                #line 1 "include/simple.h"
+                1 + 2 + 3 + 4 + 5;
+                #line 2 "test.c"
+            "#};
+
+            test_include(input, expected);
         }
 
         #[test]
         fn test_includes_multiple_levels() {
             let input = r#"#include "include/level_2/two_level.h""#;
 
-            test_include(input, "1 + 2 + 3 + 4 + 5;\n");
+            let expected = indoc! {r#"
+                #line 1 "test.c"
+                #line 1 "include/level_2/two_level.h"
+                #line 1 "../simple.h"
+                1 + 2 + 3 + 4 + 5;
+                #line 2 "include/level_2/two_level.h"
+                #line 2 "test.c"
+            "#};
+
+            test_include(input, expected);
         }
 
         #[test]
@@ -229,9 +235,16 @@ mod tests {
             "#};
 
             let expected = indoc! {r#"
+                #line 1 "test.c"
+                #line 1 "include/level_2/two_level.h"
+                #line 1 "../simple.h"
                 1 + 2 + 3 + 4 + 5;
+                #line 2 "include/level_2/two_level.h"
+                #line 2 "test.c"
                 int j = 123;
+                #line 1 "include/simple.h"
                 1 + 2 + 3 + 4 + 5;
+                #line 4 "test.c"
             "#};
 
             test_include(input, expected);
@@ -241,7 +254,14 @@ mod tests {
         fn test_includes_absolute_paths() {
             let input = r#"#include "/include/simple.h""#;
 
-            test_include(input, "1 + 2 + 3 + 4 + 5;\n");
+            let expected = indoc! {r#"
+                #line 1 "test.c"
+                #line 1 "/include/simple.h"
+                1 + 2 + 3 + 4 + 5;
+                #line 2 "test.c"
+            "#};
+
+            test_include(input, expected);
         }
 
         #[test]
