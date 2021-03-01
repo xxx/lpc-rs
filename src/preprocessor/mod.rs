@@ -85,7 +85,7 @@ impl Preprocessor {
         }
 
         self.current_path = String::from(path.as_ref().to_string_lossy());
-        self.current_line = 0; // Zero-indexed to match Ropey
+        self.current_line = 1;
 
         let mut output = String::new();
 
