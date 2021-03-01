@@ -1,0 +1,128 @@
+use std::str::FromStr;
+
+use crate::parser::span::Span;
+use crate::preprocessor::PreprocessorDirective;
+
+grammar;
+
+match {
+    r"[^\S\r\n]" => { }, // Don't skip newlines
+    r"//[^\r\n]*[\r/n]*" => { }, // Skip `// comments`
+    r"/\*([^*]*\*+[^*/])*([^*]*\*+|[^*])*\*/" => { },  // Skip `/* comments */`
+    _ // let everything else through
+}
+
+pub Program: Vec<PreprocessorDirective> = <body:Def*> => body.iter().map(|i| i.clone()).flatten().collect::<Vec<_>>();
+
+pub Def: Option<PreprocessorDirective> = {
+    <PreprocessorLine> => Some(<>),
+    <Token*> "\r"? "\n" => None,
+};
+
+pub PreprocessorLine: PreprocessorDirective = {
+    "#" "include" <name:r"<([^>]+)>"> "\n" => PreprocessorDirective::SysInclude(name.to_string(), 123),
+    "#" <name:r#"include\s+"([^"]+)""#> "\n" => PreprocessorDirective::LocalInclude(name.to_string(), 123)
+};
+
+Token: String = {
+    <ID> => <>.clone(),
+    <Operator> => <>.clone(),
+    <Keyword> => <>.clone(),
+    <Int> => <>.to_string(),
+    <Float> => <>.to_string(),
+    <StringLiteral> => <>.clone(),
+};
+
+Int: i64 = {
+    <l:@L> <s:r"[1-9][0-9_]*"> <r:@R> => i64::from_str(&s.replace("_", "")).unwrap(),
+    <l:@L> <s:r"0[xX][0-9a-fA-F][0-9a-fA-F_]*"> <r:@R> => i64::from_str_radix(
+                                                                          &s.replace("_", "")
+                                                                            .trim_start_matches("0x")
+                                                                            .trim_start_matches("0X"),
+                                                                          16).unwrap(),
+    <l:@L> <s:r"0[0-7][0-7_]*"> <r:@R> => i64::from_str_radix(&s.replace("_", ""), 8).unwrap(),
+    <l:@L> <s:r"0[bB][01][01_]*"> <r:@R> => i64::from_str_radix(
+                                                            &s.replace("_", "")
+                                                              .trim_start_matches("0b")
+                                                              .trim_start_matches("0B"),
+                                                            2).unwrap(),
+};
+
+Float: f64 = <l:@L> <s:r"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"> <r:@R> => f64::from_str(&s.replace("_", "")).unwrap();
+
+StringLiteral: String = <s:r#""(\\.|[^"])*""#> => {
+        s.clone()
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace("\\v", "\x0F")
+            .replace("\\f", "\x0C")
+            .replace("\\a", "\x07")
+            .replace("\\b", "\x08")
+};
+
+ID: String = r"[\p{Alphabetic}_]\w*" => String::from(<>);
+
+Operator: String = {
+    "+" => <>.to_string(),
+    "-" => <>.to_string(),
+    "*" => <>.to_string(),
+    "/" => <>.to_string(),
+    "%" => <>.to_string(),
+    "!" => <>.to_string(),
+    "^" => <>.to_string(),
+    "~" => <>.to_string(),
+    "&" => <>.to_string(),
+    "|" => <>.to_string(),
+    "=" => <>.to_string(),
+    "==" => <>.to_string(),
+    "!=" => <>.to_string(),
+    "+=" => <>.to_string(),
+    "-=" => <>.to_string(),
+    "*=" => <>.to_string(),
+    "&=" => <>.to_string(),
+    "|=" => <>.to_string(),
+    "&&=" => <>.to_string(),
+    "||=" => <>.to_string(),
+    "/=" => <>.to_string(),
+    "&&" => <>.to_string(),
+    "||" => <>.to_string(),
+    "<<" => <>.to_string(),
+    "<<=" => <>.to_string(),
+    ">>" => <>.to_string(),
+    ">>=" => <>.to_string(),
+    "[" => <>.to_string(),
+    "]" => <>.to_string(),
+    "(" => <>.to_string(),
+    ")" => <>.to_string(),
+    "{" => <>.to_string(),
+    "}" => <>.to_string(),
+    "," => <>.to_string(),
+    "<" => <>.to_string(),
+    ">" => <>.to_string(),
+    "?" => <>.to_string(),
+    ":" => <>.to_string(),
+    ";" => <>.to_string(),
+};
+
+Keyword: String = {
+    "if" => <>.to_string(),
+    "else" => <>.to_string(),
+    "while" => <>.to_string(),
+    "for" => <>.to_string(),
+    "inherit" => <>.to_string(),
+    "break" => <>.to_string(),
+    "continue" => <>.to_string(),
+    "case" => <>.to_string(),
+    "do" => <>.to_string(),
+    "int" => <>.to_string(),
+    "float" => <>.to_string(),
+    "string" => <>.to_string(),
+    "object" => <>.to_string(),
+    "mapping" => <>.to_string(),
+    "mixed" => <>.to_string(),
+    "void" => <>.to_string(),
+    "return" => <>.to_string(),
+    "static" => <>.to_string(),
+    "nomask" => <>.to_string(),
+};
