@@ -5,6 +5,8 @@ use regex::Regex;
 
 use crate::errors::preprocessor_error::PreprocessorError;
 use std::path::PathBuf;
+use path_absolutize::Absolutize;
+use std::io::Error;
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -38,8 +40,15 @@ impl Preprocessor {
     /// `root_dir` - The path to the root of the in-game filesystem (sometimes a.k.a `LIBDIR`, etc.)
     /// `include_dirs` - A vector of *in-game* paths to be used for searching for system includes.
     ///     Searches will be done in the order given by this vector.
+    ///
+    /// # Examples
+    /// ```
+    /// use lpc_rs::preprocessor::Preprocessor;
+    ///
+    /// let preprocessor = Preprocessor::new("/home/mud/lib", vec!["/include", "/sys"]);
+    /// ```
     pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
-        let root_path = Path::new(root_dir).canonicalize().unwrap();
+        let root_path = PathBuf::from(root_dir).absolutize().unwrap().to_path_buf();
 
         Self {
             root_dir: root_path,
@@ -77,16 +86,7 @@ impl Preprocessor {
             String::from(self.root_dir.to_str().unwrap()) + &sep + cwd + &sep + path
         };
 
-        match fs::canonicalize(&localized_path) {
-            Ok(pathbuf) => Ok(pathbuf),
-            Err(e) => {
-                return Err(PreprocessorError(format!(
-                    "error canonicalizing the include file ({}): {:?}",
-                    localized_path,
-                    e
-                )))
-            }
-        }
+        Ok(Path::new(&localized_path).absolutize().unwrap().to_path_buf())
     }
 
     /// Convert an in-game path, relative or absolute, to a canonical on-server path.
@@ -171,7 +171,17 @@ impl Preprocessor {
             )));
         }
 
-        let file_content = fs::read_to_string(&canon_include_path).unwrap();
+        let file_content = match fs::read_to_string(&canon_include_path) {
+            Ok(content) => content,
+            Err(e) => {
+                return Err(PreprocessorError(format!(
+                    "Error including file `{}`: {:?}",
+                    path,
+                    e
+                )))
+            }
+        };
+
         self.scan(path, &file_content)
     }
 }
