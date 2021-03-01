@@ -90,11 +90,12 @@ impl Preprocessor {
                 let cwd = path.as_ref().parent().unwrap().to_str().unwrap();
                 let included = self.include_local_file(match_str, cwd)?;
                 output.push_str(&included);
-                // self.directives.push(
-                //     PreprocessorDirective::LocalInclude(String::from(matched.as_str()), self.current_line)
-                // );
+                if !output.ends_with("\n") {
+                    output.push_str("\n");
+                }
             } else {
-                output.push_str(line)
+                output.push_str(line);
+                output.push_str("\n");
             }
             self.current_line += 1;
         }
@@ -166,16 +167,14 @@ mod tests {
     }
 
     mod test_local_includes {
+        use indoc::indoc;
         use super::*;
 
-        #[test]
-        fn test_includes_the_file() {
-            let input = r#"#include "include/simple.h""#;
-
+        fn test_include(input: &str, expected: &str) {
             let mut preprocessor = fixture();
             match preprocessor.scan("test.c", input) {
                 Ok(result) => {
-                    assert_eq!(result, "1 + 2 + 3 + 4 + 5;")
+                    assert_eq!(result, expected)
                 }
                 Err(e) => {
                     panic!(e)
@@ -184,18 +183,34 @@ mod tests {
         }
 
         #[test]
+        fn test_includes_the_file() {
+            let input = r#"#include "include/simple.h""#;
+
+            test_include(input, "1 + 2 + 3 + 4 + 5;\n");
+        }
+
+        #[test]
         fn test_includes_multiple_levels() {
             let input = r#"#include "include/level_2/two_level.h""#;
 
-            let mut preprocessor = fixture();
-            match preprocessor.scan("test.c", input) {
-                Ok(result) => {
-                    assert_eq!(result, "1 + 2 + 3 + 4 + 5;")
-                }
-                Err(e) => {
-                    panic!(e)
-                }
-            }
+            test_include(input, "1 + 2 + 3 + 4 + 5;\n");
+        }
+
+        #[test]
+        fn test_includes_multiple_files() {
+            let input = indoc! {r#"
+                #include "include/level_2/two_level.h"
+                int j = 123;
+                #include "include/simple.h"
+            "#};
+
+            let expected = indoc! {r#"
+                1 + 2 + 3 + 4 + 5;
+                int j = 123;
+                1 + 2 + 3 + 4 + 5;
+            "#};
+
+            test_include(input, expected);
         }
     }
 }

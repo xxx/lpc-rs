@@ -8,7 +8,7 @@ grammar;
 match {
     r"[^\S\r\n]" => { }, // Don't skip newlines
     r"//[^\r\n]*[\r/n]*" => { }, // Skip `// comments`
-    r"/\*([^*]*\*+[^*/])*([^*]*\*+|[^*])*\*/" => { },  // Skip `/* comments */`
+    r"/\*(?:[^*]*\*+[^*/])*(?:[^*]*\*+|[^*])*\*/" => { },  // Skip `/* comments */`
     _ // let everything else through
 }
 
