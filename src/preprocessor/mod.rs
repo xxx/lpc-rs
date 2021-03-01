@@ -90,7 +90,6 @@ impl Preprocessor {
         let mut output = String::new();
 
         for line in file_content.lines() {
-            println!("ln {}, {:?}", self.current_line, line);
             if let Some(captures) = SYS_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
                 self.directives.push(PreprocessorDirective::SysInclude(
@@ -111,8 +110,6 @@ impl Preprocessor {
             }
             self.current_line += 1;
         }
-
-        println!("self.dirs' {:?}", self.directives);
 
         Ok(output)
     }
