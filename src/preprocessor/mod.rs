@@ -33,8 +33,10 @@ pub struct Preprocessor {
 
 impl Preprocessor {
     pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
+        let root_path = String::from(Path::new(root_dir).canonicalize().unwrap().to_str().unwrap());
+
         Self {
-            root_dir: root_dir.to_string(),
+            root_dir: root_path,
             include_dirs: include_dirs.iter().map(|i| String::from(*i)).collect(),
             ..Self::default()
         }
@@ -60,13 +62,12 @@ impl Preprocessor {
     /// `path` - An in-game path.
     /// `cwd` - The current working directory, needed to resolve relative paths.
     fn canonicalize_path(&self, path: &str, cwd: &str) -> Result<PathBuf, PreprocessorError> {
-        let root_path = String::from(Path::new(&self.root_dir).canonicalize().unwrap().to_str().unwrap());
         let sep = String::from(std::path::MAIN_SEPARATOR);
         // Do this the hard way because .join/.push overwrite if the arg starts with "/"
         let localized_path = if path.starts_with(&sep) {
-            root_path + &sep + path
+            self.root_dir.clone() + &sep + path
         } else {
-            root_path + &sep + cwd + &sep + path
+            self.root_dir.clone() + &sep + cwd + &sep + path
         };
 
         match fs::canonicalize(&localized_path) {
@@ -153,10 +154,7 @@ impl Preprocessor {
     fn include_local_file(&mut self, path: &str, cwd: &str) -> Result<String, PreprocessorError> {
         let canon_include_path = self.canonicalize_path(path, cwd)?;
 
-        let true_root = match fs::canonicalize(&self.root_dir) {
-            Ok(pathbuf) => pathbuf,
-            Err(e) => return Err(PreprocessorError(format!("{:?}", e))),
-        };
+        let true_root = PathBuf::from(&self.root_dir);
 
         if !canon_include_path.starts_with(true_root) {
             return Err(PreprocessorError(format!(
