@@ -32,6 +32,12 @@ pub struct Preprocessor {
 }
 
 impl Preprocessor {
+    /// Create a new `Preprocessor`
+    ///
+    /// # Arguments
+    /// `root_dir` - The path to the root of the in-game filesystem (sometimes a.k.a `LIBDIR`, etc.)
+    /// `include_dirs` - A vector of *in-game* paths to be used for searching for system includes.
+    ///     Searches will be done in the order given by this vector.
     pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
         let root_path = String::from(Path::new(root_dir).canonicalize().unwrap().to_str().unwrap());
 
@@ -58,6 +64,7 @@ impl Preprocessor {
 
     /// Convert an in-game path, relative or absolute, to a canonical on-server path.
     /// This function is used for resolving included files.
+    ///
     /// # Arguments
     /// `path` - An in-game path.
     /// `cwd` - The current working directory, needed to resolve relative paths.
@@ -84,15 +91,15 @@ impl Preprocessor {
 
     /// Convert an in-game path, relative or absolute, to a canonical on-server path.
     /// This function is used for resolving included files.
+    ///
     /// # Arguments
     /// `path` - An in-game path to the file being scanned.
     /// `file_content` - The actual content of the file to scan.
     ///
     /// # Examples
-    ///
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
-    /// let mut preprocessor = Preprocessor::new("/user/mud/lib", vec!["/include", "/sys/include"]);
+    /// let mut preprocessor = Preprocessor::new(".", vec!["/include", "/sys/include"]);
     ///
     /// let content = r#"
     ///     #include "simple.h"
