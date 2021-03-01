@@ -20,7 +20,7 @@ pub enum PreprocessorDirective {
 #[derive(Debug)]
 pub struct Preprocessor {
     /// The true on-disk root dir, where in-game absolute paths point to.
-    root_dir: String,
+    root_dir: PathBuf,
     include_dirs: Vec<String>,
 
     defines: HashMap<String, String>,
@@ -39,7 +39,7 @@ impl Preprocessor {
     /// `include_dirs` - A vector of *in-game* paths to be used for searching for system includes.
     ///     Searches will be done in the order given by this vector.
     pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
-        let root_path = String::from(Path::new(root_dir).canonicalize().unwrap().to_str().unwrap());
+        let root_path = Path::new(root_dir).canonicalize().unwrap();
 
         Self {
             root_dir: root_path,
@@ -72,9 +72,9 @@ impl Preprocessor {
         let sep = String::from(std::path::MAIN_SEPARATOR);
         // Do this the hard way because .join/.push overwrite if the arg starts with "/"
         let localized_path = if path.starts_with(&sep) {
-            self.root_dir.clone() + &sep + path
+            String::from(self.root_dir.to_str().unwrap()) + &sep + path
         } else {
-            self.root_dir.clone() + &sep + cwd + &sep + path
+            String::from(self.root_dir.to_str().unwrap()) + &sep + cwd + &sep + path
         };
 
         match fs::canonicalize(&localized_path) {
@@ -179,7 +179,7 @@ impl Preprocessor {
 impl Default for Preprocessor {
     fn default() -> Self {
         Self {
-            root_dir: ".".to_string(),
+            root_dir: PathBuf::from("."),
             include_dirs: vec![],
             defines: HashMap::new(),
             directives: vec![],
