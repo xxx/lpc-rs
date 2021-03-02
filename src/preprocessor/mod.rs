@@ -6,6 +6,7 @@ use regex::Regex;
 use crate::errors::preprocessor_error::PreprocessorError;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
+use std::ffi::OsStr;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -183,7 +184,7 @@ impl Preprocessor {
                 ));
             } else if let Some(captures) = LOCAL_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
-                let included = self.include_local_file(matched.as_str(), &cwd)?;
+                let included = self.include_local_file(matched.as_str(), &cwd, current_line, filename)?;
                 output.push_str(&included);
                 if !output.ends_with("\n") {
                     output.push_str("\n");
@@ -199,7 +200,7 @@ impl Preprocessor {
         Ok(output)
     }
 
-    fn include_local_file<T, U>(&mut self, path: T, cwd: U) -> Result<String>
+    fn include_local_file<T, U>(&mut self, path: T, cwd: U, line_num: usize, filename: &OsStr) -> Result<String>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -208,21 +209,21 @@ impl Preprocessor {
         let true_root = PathBuf::from(&self.root_dir);
 
         if !canon_include_path.starts_with(true_root) {
-            return Err(PreprocessorError(format!(
+            return Err(PreprocessorError::new(&format!(
                 "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
                 path.as_ref().display(),
                 canon_include_path.display()
-            )));
+            ), line_num, &*filename.to_string_lossy()));
         }
 
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                return Err(PreprocessorError(format!(
+                return Err(PreprocessorError::new(&format!(
                     "Error including file `{}`: {:?}",
                     path.as_ref().display(),
                     e
-                )))
+                ), line_num, &*filename.to_string_lossy()))
             }
         };
 
