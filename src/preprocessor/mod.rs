@@ -6,6 +6,7 @@ use regex::Regex;
 use crate::errors::preprocessor_error::PreprocessorError;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
+use std::ffi::OsString;
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -79,17 +80,24 @@ impl Preprocessor {
         T: AsRef<Path>,
         U: AsRef<Path>,
     {
-        let path_ref = path.as_ref().to_str().unwrap();
+        let path_ref = path.as_ref().as_os_str();
         let sep = String::from(std::path::MAIN_SEPARATOR);
-        let root_string = String::from(self.root_dir.to_str().unwrap());
+        let os_sep = OsString::from(&sep);
+        let mut root_string = OsString::from(self.root_dir.to_str().unwrap());
         // Do this the hard way because .join/.push overwrite if the arg starts with "/"
-        let localized_path = if path_ref.starts_with(&sep) {
-            root_string + &sep + path_ref
+        let localized_path = if path_ref.to_string_lossy().starts_with(&sep) {
+            root_string.push(&os_sep);
+            root_string.push(&path_ref);
+            root_string
         } else {
-            root_string + &sep + cwd.as_ref().to_str().unwrap() + &sep + path_ref
+            root_string.push(&os_sep);
+            root_string.push(cwd.as_ref().as_os_str());
+            root_string.push(&os_sep);
+            root_string.push(&path_ref);
+            root_string
         };
 
-        Ok(Path::new(&localized_path.replace("//", "/"))
+        Ok(Path::new(&localized_path.to_string_lossy().replace("//", "/"))
             .absolutize()
             .unwrap()
             .to_path_buf())
@@ -105,20 +113,16 @@ impl Preprocessor {
         T: AsRef<Path>,
         U: AsRef<Path>,
     {
-        println!(
-            "canon local {}, {}",
-            path.as_ref().display(),
-            cwd.as_ref().display()
-        );
-        let canon = self.canonicalize_path(path, cwd).unwrap();
-        let buf = canon.to_str().unwrap();
-        let root_len = self.root_dir.to_str().unwrap().len();
+        let canon = self.canonicalize_path(path, cwd)?;
+        let buf = canon.as_os_str();
+        let root_len = self.root_dir.as_os_str().len();
 
         Ok(PathBuf::from(
-            &buf.chars()
+            &buf.to_string_lossy()
+                .chars()
                 .skip(root_len)
                 .collect::<String>()
-                .replace("//", "/"),
+                .replace("//", "/")
         ))
     }
 
@@ -165,8 +169,8 @@ impl Preprocessor {
 
         let mut output = String::new();
 
-        let filename = path.as_ref().file_name().unwrap().to_str().unwrap();
-        let canonical_path = self.canonicalize_local_path(filename, &cwd).unwrap();
+        let filename = path.as_ref().file_name().unwrap();
+        let canonical_path = self.canonicalize_local_path(filename, &cwd)?;
 
         let format_line = |current| format!("#line {} \"{}\"\n", current, canonical_path.display());
 
