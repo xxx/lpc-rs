@@ -32,10 +32,6 @@ pub struct Preprocessor {
     skip_lines: bool,
 }
 
-lazy_static! {
-    static ref DOUBLE_SLASHES: Regex = Regex::new(r"//").unwrap();
-}
-
 impl Preprocessor {
     /// Create a new `Preprocessor`
     ///
@@ -93,12 +89,10 @@ impl Preprocessor {
             root_string + &sep + cwd.as_ref().to_str().unwrap() + &sep + path_ref
         };
 
-        Ok(
-            Path::new(&*DOUBLE_SLASHES.replace_all(&localized_path, "/"))
-                .absolutize()
-                .unwrap()
-                .to_path_buf(),
-        )
+        Ok(Path::new(&localized_path.replace("//", "/"))
+            .absolutize()
+            .unwrap()
+            .to_path_buf())
     }
 
     /// Convert an in-game path, relative or absolute, to a canonical in-game path.
@@ -118,12 +112,14 @@ impl Preprocessor {
         );
         let canon = self.canonicalize_path(path, cwd).unwrap();
         let buf = canon.to_str().unwrap();
-        let root_str = self.root_dir.to_str().unwrap();
+        let root_len = self.root_dir.to_str().unwrap().len();
 
-        Ok(PathBuf::from(&*DOUBLE_SLASHES.replace_all(
-            &buf.chars().skip(root_str.len()).collect::<String>(),
-            "/",
-        )))
+        Ok(PathBuf::from(
+            &buf.chars()
+                .skip(root_len)
+                .collect::<String>()
+                .replace("//", "/"),
+        ))
     }
 
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
