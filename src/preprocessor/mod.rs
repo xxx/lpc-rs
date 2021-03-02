@@ -7,6 +7,9 @@ use crate::errors::preprocessor_error::PreprocessorError;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
 use std::ffi::OsString;
+use std::result;
+
+type Result<T> = result::Result<T, PreprocessorError>;
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -75,7 +78,7 @@ impl Preprocessor {
     /// # Arguments
     /// `path` - An in-game path.
     /// `cwd` - The current working directory, needed to resolve relative paths.
-    fn canonicalize_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf, PreprocessorError>
+    fn canonicalize_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -108,7 +111,7 @@ impl Preprocessor {
     /// # Arguments
     /// `path` - An in-game path.
     /// `cwd` - The current working directory, needed to resolve relative paths.
-    fn canonicalize_local_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf, PreprocessorError>
+    fn canonicalize_local_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -153,7 +156,7 @@ impl Preprocessor {
         path: T,
         cwd: U,
         file_content: &str,
-    ) -> Result<String, PreprocessorError>
+    ) -> Result<String>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -201,7 +204,7 @@ impl Preprocessor {
         Ok(output)
     }
 
-    fn include_local_file<T, U>(&mut self, path: T, cwd: U) -> Result<String, PreprocessorError>
+    fn include_local_file<T, U>(&mut self, path: T, cwd: U) -> Result<String>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -231,11 +234,8 @@ impl Preprocessor {
         let local_canon_include_path = self.canonicalize_local_path(&path, &cwd)?;
         let filename = local_canon_include_path
             .file_name()
-            .unwrap()
-            .to_str()
             .unwrap();
-        let cwd = local_canon_include_path.parent().unwrap().to_str().unwrap();
-        println!("about to scan {} {}", filename, cwd);
+        let cwd = local_canon_include_path.parent().unwrap();
         self.scan(filename, cwd, &file_content)
     }
 }
