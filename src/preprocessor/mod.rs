@@ -118,7 +118,7 @@ impl Preprocessor {
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
     ///
     /// # Arguments
-    /// `filename` - The name of the file being scanned.
+    /// `path` - The name of the file being scanned.
     /// `cwd` - The current working directory on-server, used to resolve relative links
     /// `file_content` - The actual content of the file to scan.
     ///
@@ -137,7 +137,7 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("file.c", "/", content);
     /// ```
-    pub fn scan<T, U>(&mut self, filename: T, cwd: U, file_content: &str) -> Result<String, PreprocessorError>
+    pub fn scan<T, U>(&mut self, path: T, cwd: U, file_content: &str) -> Result<String, PreprocessorError>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -153,8 +153,8 @@ impl Preprocessor {
 
         let mut output = String::new();
 
-        let p = filename.as_ref().file_name().unwrap().to_str().unwrap();
-        let canonical_path = self.canonicalize_local_path(p, &cwd).unwrap();
+        let filename = path.as_ref().file_name().unwrap().to_str().unwrap();
+        let canonical_path = self.canonicalize_local_path(filename, &cwd).unwrap();
 
         let format_line = |current| {
             format!("#line {} \"{}\"\n", current, canonical_path.display())
