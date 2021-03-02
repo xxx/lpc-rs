@@ -8,6 +8,7 @@ use codespan_reporting::{
 pub mod compiler_error;
 pub mod preprocessor_error;
 pub mod runtime_error;
+pub mod lazy_files;
 
 pub trait LPCError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>>;

@@ -1,28 +1,39 @@
+use crate::{
+    errors::{default_diagnostic, LPCError},
+    parser::span::Span,
+};
+use codespan_reporting::diagnostic::Diagnostic;
 use std::{
     error::Error,
     fmt,
     fmt::{Display, Formatter},
+    path::PathBuf,
 };
-use std::path::PathBuf;
 
 /// Handle preprocessing
 
 #[derive(Debug)]
 pub struct PreprocessorError {
     pub message: String,
-    pub line_num: usize,
-    pub filename: PathBuf
+    pub file_id: usize,
+    pub span: Option<Span>,
 }
 
 impl Error for PreprocessorError {}
 
 impl PreprocessorError {
-    pub fn new(e: &str, line_num: usize, f: &str) -> Self {
+    pub fn new(message: &str, file_id: usize, span: Span) -> Self {
         Self {
-            message: String::from(e),
-            line_num,
-            filename: PathBuf::from(f)
+            message: String::from(message),
+            file_id,
+            span: Some(span),
         }
+    }
+}
+
+impl LPCError for PreprocessorError {
+    fn to_diagnostics(&self, _file_id: usize) -> Vec<Diagnostic<usize>> {
+        default_diagnostic(format!("{}", self), self.file_id, self.span)
     }
 }
 

@@ -3,10 +3,14 @@ use std::{collections::HashMap, fs, path::Path};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::errors::preprocessor_error::PreprocessorError;
+use crate::{errors::preprocessor_error::PreprocessorError, parser::span::Span};
+use codespan_reporting::files::{Files, SimpleFiles};
 use path_absolutize::Absolutize;
-use std::{ffi::OsString, path::PathBuf, result};
-use std::ffi::OsStr;
+use std::{
+    ffi::{OsStr, OsString},
+    path::PathBuf,
+    result,
+};
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -26,6 +30,9 @@ pub struct Preprocessor {
     /// The true on-disk root dir, where in-game absolute paths point to.
     root_dir: PathBuf,
     include_dirs: Vec<PathBuf>,
+
+    /// Track the files we've seen
+    files: SimpleFiles<String, String>,
 
     defines: HashMap<String, String>,
 
@@ -164,6 +171,11 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
         }
 
+        let file_id = self.files.add(
+            String::from(path.as_ref().to_string_lossy()),
+            String::from(file_content),
+        );
+
         let mut current_line = 1;
 
         let mut output = String::new();
@@ -184,7 +196,8 @@ impl Preprocessor {
                 ));
             } else if let Some(captures) = LOCAL_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
-                let included = self.include_local_file(matched.as_str(), &cwd, current_line, filename)?;
+                let included =
+                    self.include_local_file(matched.as_str(), &cwd, current_line, file_id)?;
                 output.push_str(&included);
                 if !output.ends_with("\n") {
                     output.push_str("\n");
@@ -200,30 +213,60 @@ impl Preprocessor {
         Ok(output)
     }
 
-    fn include_local_file<T, U>(&mut self, path: T, cwd: U, line_num: usize, filename: &OsStr) -> Result<String>
+    /// Read in a local file, and scan it through this preprocessor.
+    ///
+    /// # Arguments
+    /// `path` - The path of the file we're going to scan. This is intended to be the file from
+    ///     the `#include` directive.
+    /// `cwd` - The current working directory. Used to resolving relative pathnames.
+    /// `parent_line` - The line number of the file where the include is happening.
+    /// `file_id` - The ID of the file from the preprocessor's `files` struct.
+    fn include_local_file<T, U>(
+        &mut self,
+        path: T,
+        cwd: U,
+        parent_line: usize,
+        file_id: usize,
+    ) -> Result<String>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
     {
         let canon_include_path = self.canonicalize_path(&path, &cwd)?;
-        let true_root = PathBuf::from(&self.root_dir);
 
-        if !canon_include_path.starts_with(true_root) {
-            return Err(PreprocessorError::new(&format!(
-                "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
-                path.as_ref().display(),
-                canon_include_path.display()
-            ), line_num, &*filename.to_string_lossy()));
+        if !canon_include_path.starts_with(&self.root_dir) {
+            let range = &self.files.line_range(file_id, parent_line - 1).unwrap();
+            return Err(PreprocessorError::new(
+                &format!(
+                    "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
+                    path.as_ref().display(),
+                    canon_include_path.display()
+                ),
+                file_id,
+                Span {
+                    l: range.start,
+                    r: range.end,
+                },
+            ));
         }
 
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                return Err(PreprocessorError::new(&format!(
-                    "Error including file `{}`: {:?}",
-                    path.as_ref().display(),
-                    e
-                ), line_num, &*filename.to_string_lossy()))
+                let range = &self.files.line_range(file_id, parent_line - 1).unwrap();
+
+                return Err(PreprocessorError::new(
+                    &format!(
+                        "Error including file `{}`: {:?}",
+                        path.as_ref().display(),
+                        e
+                    ),
+                    file_id,
+                    Span {
+                        l: range.start,
+                        r: range.end,
+                    },
+                ));
             }
         };
 
@@ -242,6 +285,7 @@ impl Default for Preprocessor {
             defines: HashMap::new(),
             directives: vec![],
             skip_lines: false,
+            files: SimpleFiles::new(),
         }
     }
 }
