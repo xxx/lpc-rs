@@ -5,9 +5,7 @@ use regex::Regex;
 
 use crate::errors::preprocessor_error::PreprocessorError;
 use path_absolutize::Absolutize;
-use std::path::PathBuf;
-use std::ffi::OsString;
-use std::result;
+use std::{ffi::OsString, path::PathBuf, result};
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -100,10 +98,12 @@ impl Preprocessor {
             root_string
         };
 
-        Ok(Path::new(&localized_path.to_string_lossy().replace("//", "/"))
-            .absolutize()
-            .unwrap()
-            .to_path_buf())
+        Ok(
+            Path::new(&localized_path.to_string_lossy().replace("//", "/"))
+                .absolutize()
+                .unwrap()
+                .to_path_buf(),
+        )
     }
 
     /// Convert an in-game path, relative or absolute, to a canonical in-game path.
@@ -125,7 +125,7 @@ impl Preprocessor {
                 .chars()
                 .skip(root_len)
                 .collect::<String>()
-                .replace("//", "/")
+                .replace("//", "/"),
         ))
     }
 
@@ -151,12 +151,7 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("file.c", "/", content);
     /// ```
-    pub fn scan<T, U>(
-        &mut self,
-        path: T,
-        cwd: U,
-        file_content: &str,
-    ) -> Result<String>
+    pub fn scan<T, U>(&mut self, path: T, cwd: U, file_content: &str) -> Result<String>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -232,9 +227,7 @@ impl Preprocessor {
         };
 
         let local_canon_include_path = self.canonicalize_local_path(&path, &cwd)?;
-        let filename = local_canon_include_path
-            .file_name()
-            .unwrap();
+        let filename = local_canon_include_path.file_name().unwrap();
         let cwd = local_canon_include_path.parent().unwrap();
         self.scan(filename, cwd, &file_content)
     }
