@@ -1,6 +1,8 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::fmt;
+use std::{
+    error::Error,
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 /// Handle preprocessing
 

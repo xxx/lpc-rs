@@ -4,9 +4,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::errors::preprocessor_error::PreprocessorError;
-use std::path::PathBuf;
 use path_absolutize::Absolutize;
-use std::io::Error;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum PreprocessorDirective {
@@ -82,7 +81,7 @@ impl Preprocessor {
     fn canonicalize_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf, PreprocessorError>
     where
         T: AsRef<Path>,
-        U: AsRef<Path>
+        U: AsRef<Path>,
     {
         let path_ref = path.as_ref().to_str().unwrap();
         let sep = String::from(std::path::MAIN_SEPARATOR);
@@ -94,7 +93,12 @@ impl Preprocessor {
             root_string + &sep + cwd.as_ref().to_str().unwrap() + &sep + path_ref
         };
 
-        Ok(Path::new(&*DOUBLE_SLASHES.replace_all(&localized_path, "/")).absolutize().unwrap().to_path_buf())
+        Ok(
+            Path::new(&*DOUBLE_SLASHES.replace_all(&localized_path, "/"))
+                .absolutize()
+                .unwrap()
+                .to_path_buf(),
+        )
     }
 
     /// Convert an in-game path, relative or absolute, to a canonical in-game path.
@@ -105,14 +109,21 @@ impl Preprocessor {
     fn canonicalize_local_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf, PreprocessorError>
     where
         T: AsRef<Path>,
-        U: AsRef<Path>
+        U: AsRef<Path>,
     {
-        println!("canon local {}, {}", path.as_ref().display(), cwd.as_ref().display());
+        println!(
+            "canon local {}, {}",
+            path.as_ref().display(),
+            cwd.as_ref().display()
+        );
         let canon = self.canonicalize_path(path, cwd).unwrap();
         let buf = canon.to_str().unwrap();
         let root_str = self.root_dir.to_str().unwrap();
 
-        Ok(PathBuf::from(&*DOUBLE_SLASHES.replace_all(&buf.chars().skip(root_str.len()).collect::<String>(), "/")))
+        Ok(PathBuf::from(&*DOUBLE_SLASHES.replace_all(
+            &buf.chars().skip(root_str.len()).collect::<String>(),
+            "/",
+        )))
     }
 
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
@@ -137,7 +148,12 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("file.c", "/", content);
     /// ```
-    pub fn scan<T, U>(&mut self, path: T, cwd: U, file_content: &str) -> Result<String, PreprocessorError>
+    pub fn scan<T, U>(
+        &mut self,
+        path: T,
+        cwd: U,
+        file_content: &str,
+    ) -> Result<String, PreprocessorError>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -156,9 +172,7 @@ impl Preprocessor {
         let filename = path.as_ref().file_name().unwrap().to_str().unwrap();
         let canonical_path = self.canonicalize_local_path(filename, &cwd).unwrap();
 
-        let format_line = |current| {
-            format!("#line {} \"{}\"\n", current, canonical_path.display())
-        };
+        let format_line = |current| format!("#line {} \"{}\"\n", current, canonical_path.display());
 
         output.push_str(&format_line(current_line));
 
@@ -190,7 +204,7 @@ impl Preprocessor {
     fn include_local_file<T, U>(&mut self, path: T, cwd: U) -> Result<String, PreprocessorError>
     where
         T: AsRef<Path>,
-        U: AsRef<Path>
+        U: AsRef<Path>,
     {
         let canon_include_path = self.canonicalize_path(&path, &cwd)?;
         let true_root = PathBuf::from(&self.root_dir);
@@ -215,7 +229,11 @@ impl Preprocessor {
         };
 
         let local_canon_include_path = self.canonicalize_local_path(&path, &cwd)?;
-        let filename = local_canon_include_path.file_name().unwrap().to_str().unwrap();
+        let filename = local_canon_include_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
         let cwd = local_canon_include_path.parent().unwrap().to_str().unwrap();
         println!("about to scan {} {}", filename, cwd);
         self.scan(filename, cwd, &file_content)
