@@ -1,14 +1,28 @@
 use std::{fs, fmt};
 use std::ops::Range;
 use cached::proc_macro::cached;
+use cached::SizedCache;
 use codespan_reporting::files::{Files, Error as CodespanError, SimpleFile};
 use std::path::Path;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
-use std::ffi::OsString;
+use std::ffi::{OsString, OsStr};
 
 /// A memoizing lazy-loaded Files store for `codespan-reporting`
+///
+/// # Examples
+///
+/// ```
+/// use lpc_rs::errors::lazy_files::LazyFiles;
+///
+/// let mut files: LazyFiles<&str, String> = LazyFiles::new();
+/// let path = "tests/fixtures/include/simple.h";
+/// let id = files.add(&path);
+///
+/// println!("contents: {}", files.get(id).unwrap().source());
+/// println!("contents: {}", files.get_by_path(&path).unwrap().source());
+/// ```
 #[derive(Debug)]
 pub struct LazyFiles<Name, Source>
 where
@@ -19,8 +33,8 @@ where
 }
 
 impl<'a, Name, Source> LazyFiles<Name, Source>
-    where
-        Name: AsRef<Path> + Clone + std::fmt::Display
+where
+    Name: AsRef<Path> + Clone + std::fmt::Display
 {
     pub fn new() -> Self {
         Self {
@@ -59,7 +73,7 @@ impl<'a, Name, Source> LazyFiles<Name, Source>
     where
         T: AsRef<Path>
     {
-        Ok(cached_file(OsString::from(path.as_ref().as_os_str()))?)
+        Ok(cached_file(path.as_ref().as_os_str())?)
     }
 }
 
@@ -68,9 +82,14 @@ impl<'a, Name, Source> LazyFiles<Name, Source>
 ///
 /// # Arguments
 /// `path` - An OsString representing a full path.
-#[cached(size = 3, result = true)]
-fn cached_file(path: OsString) -> Result<SimpleFile<String, String>, CodespanError> {
-    let source = match fs::read_to_string(&path) {
+#[cached(
+    result = true,
+    type = "SizedCache<OsString, SimpleFile<String, String>>",
+    create = "{ SizedCache::with_size(5) }",
+    convert = r#"{ OsString::from(path) }"#
+)]
+fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, CodespanError> {
+    let source = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(e) => return Err(CodespanError::from(e))
     };
@@ -105,3 +124,19 @@ where
         self.get(id)?.line_range((), line_index)
     }
 }
+//
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     #[test]
+//     fn test_cache_works() {
+//         let mut files: LazyFiles<&str, String> = LazyFiles::new();
+//         let file = "/etc/issue";
+//
+//         let id = files.add(file);
+//
+//         println!("{}", files.source(id).unwrap());
+//         println!("{}", files.source(id).unwrap());
+//     }
+// }
