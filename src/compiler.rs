@@ -30,7 +30,6 @@ pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 /// # Arguments
 /// `filename` - The name of the file being compiled. Used for error messaging.
 /// `code` - The actual code to be compiled.
-///
 pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerError> {
     let mut errors: Vec<CompilerError> = vec![];
 
