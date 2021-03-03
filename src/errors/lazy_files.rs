@@ -1,7 +1,7 @@
 use std::{fs, fmt};
 use std::ops::Range;
 use cached::proc_macro::cached;
-use codespan_reporting::files::{Files, Error as CodespanError};
+use codespan_reporting::files::{Files, Error as CodespanError, SimpleFile, SimpleFiles};
 use std::path::Path;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -17,12 +17,6 @@ impl<'a> Display for LazyFilesError<'a> {
 }
 
 impl<'a> Error for LazyFilesError<'a> {}
-
-// struct LazyFile<Name, Source> {
-//     paths: Name,
-//     source: Source,
-//     line_indexes: Vec<usize>
-// }
 
 /// A memoizing lazy-loaded Files store for `codespan-reporting`
 pub struct LazyFiles<Name, Source> {
@@ -53,11 +47,13 @@ impl<'a, Name, Source> LazyFiles<Name, Source> {
 
 /// Memoized function that simply stores the content of a file at the given path.
 #[cached(size = 3, result = true)]
-fn cached_source(path: String) -> Result<String, CodespanError> {
-    match fs::read_to_string(path) {
-        Ok(content) => Ok(content),
-        Err(e) => Err(CodespanError::from(e))
-    }
+fn cached_file(path: String) -> Result<SimpleFile<String, String>, CodespanError> {
+    let source = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(e) => return Err(CodespanError::from(e))
+    };
+
+    Ok(SimpleFile::new(path, source))
 }
 
 impl<'input, Name, Source> Files<'input> for LazyFiles<Name, Source>
@@ -78,8 +74,8 @@ where
     fn source(&self, id: Self::FileId) -> Result<Self::Source, CodespanError> {
         let name = self.name(id)?;
 
-        match cached_source(name.to_string()) {
-            Ok(s) => Ok(s),
+        match cached_file(name.to_string()) {
+            Ok(s) => Ok(s.source().parse().unwrap()),
             Err(err) => Err(err)
         }
     }
