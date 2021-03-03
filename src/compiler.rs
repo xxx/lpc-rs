@@ -57,7 +57,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
         Ok(prog) => prog,
         Err(e) => {
             errors.push(CompilerError::ParseError(ParseError::from(e)));
-            errors::emit_diagnostics(filename, &code, &errors);
+            errors::emit_diagnostics(filename, &errors);
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -90,7 +90,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
     }
 
     if !errors.is_empty() {
-        errors::emit_diagnostics(filename, &code, &errors);
+        errors::emit_diagnostics(filename, &errors);
         return Err(CompilerError::MultiError(errors));
     }
 

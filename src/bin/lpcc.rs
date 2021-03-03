@@ -22,7 +22,7 @@ fn main() {
             if let Err(e) = interpreter.exec() {
                 let file_content = fs::read_to_string(filename)
                     .unwrap_or_else(|_| panic!("cannot read file: {}", filename));
-                errors::emit_diagnostics(filename, &file_content, &[e]);
+                errors::emit_diagnostics(filename, &[e]);
             }
         }
         Err(e) => panic!("unable to compile {}: {:?}", filename, e),

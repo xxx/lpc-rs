@@ -1,9 +1,9 @@
 use crate::parser::span::Span;
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
-    files::SimpleFiles,
     term::termcolor::{ColorChoice, StandardStream},
 };
+use crate::errors::lazy_files::LazyFiles;
 
 pub mod compiler_error;
 pub mod lazy_files;
@@ -20,12 +20,12 @@ pub trait LPCError {
 /// * `filename` - The name of the file, for the messaging. In practice, this is the full filepath.
 /// * `file_content` - The actual content of the file, used for messaging.
 /// * `errors` - A slice of errors to display diagnostics for.
-pub fn emit_diagnostics<T>(filename: &str, file_content: &str, errors: &[T])
+pub fn emit_diagnostics<T>(filename: &str, errors: &[T])
 where
     T: LPCError,
 {
-    let mut files = SimpleFiles::new();
-    let file_id = files.add(filename, file_content);
+    let mut files: LazyFiles<&str, String> = LazyFiles::new();
+    let file_id = files.add(filename);
 
     let diagnostics: Vec<Diagnostic<usize>> = errors
         .iter()
