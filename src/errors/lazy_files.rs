@@ -1,13 +1,15 @@
-use std::{fs, fmt};
-use std::ops::Range;
-use cached::proc_macro::cached;
-use cached::SizedCache;
-use codespan_reporting::files::{Files, Error as CodespanError, SimpleFile};
-use std::path::Path;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::marker::PhantomData;
-use std::ffi::{OsString, OsStr};
+use cached::{proc_macro::cached, SizedCache};
+use codespan_reporting::files::{Error as CodespanError, Files, SimpleFile};
+use std::{
+    error::Error,
+    ffi::{OsStr, OsString},
+    fmt,
+    fmt::{Display, Formatter},
+    fs,
+    marker::PhantomData,
+    ops::Range,
+    path::Path,
+};
 
 /// A memoizing lazy-loaded Files store for `codespan-reporting`
 ///
@@ -26,25 +28,25 @@ use std::ffi::{OsString, OsStr};
 #[derive(Debug)]
 pub struct LazyFiles<Name, Source>
 where
-    Name: AsRef<Path> + Clone + std::fmt::Display
+    Name: AsRef<Path> + Clone + std::fmt::Display,
 {
     paths: Vec<Name>,
-    source: PhantomData<Source>
+    source: PhantomData<Source>,
 }
 
 impl<'a, Name, Source> LazyFiles<Name, Source>
 where
-    Name: AsRef<Path> + Clone + std::fmt::Display
+    Name: AsRef<Path> + Clone + std::fmt::Display,
 {
     pub fn new() -> Self {
         Self {
             paths: Vec::new(),
-            source: PhantomData
+            source: PhantomData,
         }
     }
 
     /// Add a new file to the cache
-    /// 
+    ///
     /// # Arguments
     /// `path` - The full path, including filename, to the file being added.
     ///     No canonicalization is done, so it's highly recommended to use
@@ -71,7 +73,7 @@ where
     /// `path` - The full path, including filename, so the file.
     pub fn get_by_path<T>(&self, path: T) -> Result<SimpleFile<String, String>, CodespanError>
     where
-        T: AsRef<Path>
+        T: AsRef<Path>,
     {
         Ok(cached_file(path.as_ref().as_os_str())?)
     }
@@ -91,15 +93,18 @@ where
 fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, CodespanError> {
     let source = match fs::read_to_string(path) {
         Ok(content) => content,
-        Err(e) => return Err(CodespanError::from(e))
+        Err(e) => return Err(CodespanError::from(e)),
     };
 
-    Ok(SimpleFile::new(String::from(path.to_string_lossy()), source))
+    Ok(SimpleFile::new(
+        String::from(path.to_string_lossy()),
+        source,
+    ))
 }
 
 impl<'input, Name, Source> Files<'input> for LazyFiles<Name, Source>
 where
-    Name: 'input + std::fmt::Display + Clone + AsRef<Path>
+    Name: 'input + std::fmt::Display + Clone + AsRef<Path>,
 {
     type FileId = usize;
     type Name = Name;
@@ -108,7 +113,7 @@ where
     fn name(&self, id: Self::FileId) -> Result<Self::Name, CodespanError> {
         match self.paths.get(id) {
             Some(s) => Ok(s.clone()),
-            _ => Err(CodespanError::FileMissing)
+            _ => Err(CodespanError::FileMissing),
         }
     }
 
@@ -120,7 +125,11 @@ where
         self.get(id)?.line_index((), byte_index)
     }
 
-    fn line_range(&self, id: Self::FileId, line_index: usize) -> Result<Range<usize>, CodespanError> {
+    fn line_range(
+        &self,
+        id: Self::FileId,
+        line_index: usize,
+    ) -> Result<Range<usize>, CodespanError> {
         self.get(id)?.line_range((), line_index)
     }
 }

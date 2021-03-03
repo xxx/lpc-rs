@@ -6,11 +6,7 @@ use regex::Regex;
 use crate::{errors::preprocessor_error::PreprocessorError, parser::span::Span};
 use codespan_reporting::files::{Files, SimpleFiles};
 use path_absolutize::Absolutize;
-use std::{
-    ffi::OsString,
-    path::PathBuf,
-    result,
-};
+use std::{ffi::OsString, path::PathBuf, result};
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
