@@ -3,8 +3,6 @@ use codespan_reporting::files::{Error as CodespanError, Files, SimpleFile};
 use std::{
     error::Error,
     ffi::{OsStr, OsString},
-    fmt,
-    fmt::{Display, Formatter},
     fs,
     marker::PhantomData,
     ops::Range,
