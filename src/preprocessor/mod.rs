@@ -7,7 +7,7 @@ use crate::{errors::preprocessor_error::PreprocessorError, parser::span::Span};
 use codespan_reporting::files::{Files, SimpleFiles};
 use path_absolutize::Absolutize;
 use std::{
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     path::PathBuf,
     result,
 };

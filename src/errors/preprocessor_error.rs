@@ -7,7 +7,6 @@ use std::{
     error::Error,
     fmt,
     fmt::{Display, Formatter},
-    path::PathBuf,
 };
 
 /// Handle preprocessing
