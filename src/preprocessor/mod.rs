@@ -80,7 +80,7 @@ impl Preprocessor {
     /// # Arguments
     /// `path` - An in-game path.
     /// `cwd` - The current working directory, needed to resolve relative paths.
-    fn canonicalize_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf>
+    fn canonicalize_path<T, U>(&self, path: T, cwd: U) -> PathBuf
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -102,12 +102,10 @@ impl Preprocessor {
             root_string
         };
 
-        Ok(
-            Path::new(&localized_path.to_string_lossy().replace("//", "/"))
-                .absolutize()
-                .unwrap()
-                .to_path_buf(),
-        )
+        Path::new(&localized_path.to_string_lossy().replace("//", "/"))
+            .absolutize()
+            .unwrap()
+            .to_path_buf()
     }
 
     /// Convert an in-game path, relative or absolute, to a canonical in-game path.
@@ -115,22 +113,22 @@ impl Preprocessor {
     /// # Arguments
     /// `path` - An in-game path.
     /// `cwd` - The current working directory, needed to resolve relative paths.
-    fn canonicalize_local_path<T, U>(&self, path: T, cwd: U) -> Result<PathBuf>
+    fn canonicalize_local_path<T, U>(&self, path: T, cwd: U) -> PathBuf
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
     {
-        let canon = self.canonicalize_path(path, cwd)?;
+        let canon = self.canonicalize_path(path, cwd);
         let buf = canon.as_os_str();
         let root_len = self.root_dir.as_os_str().len();
 
-        Ok(PathBuf::from(
+        PathBuf::from(
             &buf.to_string_lossy()
                 .chars()
                 .skip(root_len)
                 .collect::<String>()
                 .replace("//", "/"),
-        ))
+        )
     }
 
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
@@ -177,7 +175,7 @@ impl Preprocessor {
         let mut output = String::new();
 
         let filename = path.as_ref().file_name().unwrap();
-        let canonical_path = self.canonicalize_local_path(filename, &cwd)?;
+        let canonical_path = self.canonicalize_local_path(filename, &cwd);
 
         let format_line = |current| format!("#line {} \"{}\"\n", current, canonical_path.display());
 
@@ -195,13 +193,13 @@ impl Preprocessor {
                 let included =
                     self.include_local_file(matched.as_str(), &cwd, current_line, file_id)?;
                 output.push_str(&included);
-                if !output.ends_with("\n") {
-                    output.push_str("\n");
+                if !output.ends_with('\n') {
+                    output.push('\n');
                 }
                 output.push_str(&format_line(current_line + 1));
             } else {
                 output.push_str(line);
-                output.push_str("\n");
+                output.push('\n');
             }
             current_line += 1;
         }
@@ -228,7 +226,7 @@ impl Preprocessor {
         T: AsRef<Path>,
         U: AsRef<Path>,
     {
-        let canon_include_path = self.canonicalize_path(&path, &cwd)?;
+        let canon_include_path = self.canonicalize_path(&path, &cwd);
 
         if !canon_include_path.starts_with(&self.root_dir) {
             let range = &self.files.line_range(file_id, parent_line - 1).unwrap();
@@ -266,7 +264,7 @@ impl Preprocessor {
             }
         };
 
-        let local_canon_include_path = self.canonicalize_local_path(&path, &cwd)?;
+        let local_canon_include_path = self.canonicalize_local_path(&path, &cwd);
         let filename = local_canon_include_path.file_name().unwrap();
         let cwd = local_canon_include_path.parent().unwrap();
         self.scan(filename, cwd, &file_content)

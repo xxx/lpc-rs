@@ -1,7 +1,6 @@
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error as CodespanError, Files, SimpleFile};
 use std::{
-    error::Error,
     ffi::{OsStr, OsString},
     fs,
     marker::PhantomData,
@@ -37,10 +36,7 @@ where
     Name: AsRef<Path> + Clone + std::fmt::Display,
 {
     pub fn new() -> Self {
-        Self {
-            paths: Vec::new(),
-            source: PhantomData,
-        }
+        Self::default()
     }
 
     /// Add a new file to the cache
@@ -74,6 +70,18 @@ where
         T: AsRef<Path>,
     {
         Ok(cached_file(path.as_ref().as_os_str())?)
+    }
+}
+
+impl<Name, Source> Default for LazyFiles<Name, Source>
+where
+    Name: AsRef<Path> + Clone + std::fmt::Display,
+{
+    fn default() -> Self {
+        Self {
+            paths: Vec::new(),
+            source: PhantomData,
+        }
     }
 }
 
