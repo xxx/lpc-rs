@@ -10,7 +10,7 @@ use crate::{
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
     interpreter::program::Program,
-    lpc_parser, lpc_preprocessor,
+    lpc_parser,
     semantic::scope_tree::ScopeTree,
 };
 use crate::preprocessor::Preprocessor;
@@ -46,21 +46,6 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
         }
     };
 
-    //
-    // let preprocessed = lpc_preprocessor::ProgramParser::new().parse(&code);
-    // let mut preprocessed = match preprocessed {
-    //     Ok(prog) => prog,
-    //     Err(e) => {
-    //         errors.push(CompilerError::ParseError(ParseError::from(e)));
-    //         errors::emit_diagnostics(filename, &code, &errors);
-    //
-    //         return Err(CompilerError::MultiError(errors));
-    //     }
-    // };
-    // println!("output: {:?}", preprocessed);
-    //
-    // panic!("done here");
-    //
     let program = lpc_parser::ProgramParser::new().parse(&code);
 
     let mut program = match program {
