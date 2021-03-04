@@ -239,7 +239,7 @@ impl Preprocessor {
                 file_id,
                 Span {
                     l: range.start,
-                    r: range.end,
+                    r: range.end - 1,
                 },
             ));
         }
@@ -258,7 +258,7 @@ impl Preprocessor {
                     file_id,
                     Span {
                         l: range.start,
-                        r: range.end,
+                        r: range.end - 1,
                     },
                 ));
             }

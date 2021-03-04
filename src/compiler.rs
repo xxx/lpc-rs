@@ -39,7 +39,10 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
     let code = match preprocessor.scan(filename, ".", &code) {
         Ok(c) => c,
         Err(e) => {
-            return Err(CompilerError::PreprocessorError(e));
+            errors.push(CompilerError::PreprocessorError(e));
+            errors::emit_diagnostics(filename, &errors);
+
+            return Err(CompilerError::MultiError(errors));
         }
     };
 
