@@ -11,7 +11,7 @@ use std::{
 
 /// Handle preprocessing
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PreprocessorError {
     pub message: String,
     pub file_id: usize,

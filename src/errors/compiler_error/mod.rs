@@ -21,6 +21,7 @@ use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
 use var_redefinition_error::VarRedefinitionError;
+use crate::errors::preprocessor_error::PreprocessorError;
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
@@ -30,6 +31,7 @@ pub enum CompilerError {
     AssignmentError(AssignmentError),
     BinaryOperationError(BinaryOperationError),
     ParseError(ParseError),
+    PreprocessorError(PreprocessorError),
     UnknownFunctionError(UnknownFunctionError),
     VarRedefinitionError(VarRedefinitionError),
     RangeError(RangeError),
@@ -47,6 +49,7 @@ impl LPCError for CompilerError {
             CompilerError::AssignmentError(err) => err.to_diagnostics(file_id),
             CompilerError::BinaryOperationError(err) => err.to_diagnostics(file_id),
             CompilerError::ParseError(err) => err.to_diagnostics(file_id),
+            CompilerError::PreprocessorError(err) => err.to_diagnostics(file_id),
             CompilerError::UnknownFunctionError(err) => err.to_diagnostics(file_id),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
             CompilerError::RangeError(err) => err.to_diagnostics(file_id),

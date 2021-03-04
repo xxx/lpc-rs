@@ -13,6 +13,8 @@ use crate::{
     lpc_parser, lpc_preprocessor,
     semantic::scope_tree::ScopeTree,
 };
+use crate::preprocessor::Preprocessor;
+use crate::errors::compiler_error::CompilerError::PreprocessorError;
 
 /// Fully compile a file into a Program struct
 ///
@@ -33,8 +35,14 @@ pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerError> {
     let mut errors: Vec<CompilerError> = vec![];
 
-    // // let mut preprocessor = Preprocessor::new();
-    // // preprocessor.scan(filename, &code);
+    let mut preprocessor = Preprocessor::new(".", Vec::new());
+    let code = match preprocessor.scan(filename, ".", &code) {
+        Ok(c) => c,
+        Err(e) => {
+            return Err(CompilerError::PreprocessorError(e));
+        }
+    };
+
     //
     // let preprocessed = lpc_preprocessor::ProgramParser::new().parse(&code);
     // let mut preprocessed = match preprocessed {
