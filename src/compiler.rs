@@ -15,6 +15,7 @@ use crate::{
 };
 use crate::preprocessor::Preprocessor;
 use crate::errors::compiler_error::CompilerError::PreprocessorError;
+use crate::parser::lexer::{LexWrapper, LexError};
 
 /// Fully compile a file into a Program struct
 ///
@@ -46,7 +47,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
         }
     };
 
-    let program = lpc_parser::ProgramParser::new().parse(&code);
+    let program = lpc_parser::ProgramParser::new().parse(LexWrapper::new(&code));
 
     let mut program = match program {
         Ok(prog) => prog,

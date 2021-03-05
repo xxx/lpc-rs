@@ -15,10 +15,12 @@ use lpc_rs::{
     parser::span::Span,
     semantic::lpc_type::LPCType,
 };
+use lpc_rs::parser::lexer::LexWrapper;
 
 // just a helper for a very common pattern
 fn assert_int(value: i64, expr: &str) {
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+    let lexer = LexWrapper::new(expr);
+    let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
 
     let expected = ExpressionNode::Int(IntNode {
         value,
@@ -34,7 +36,8 @@ fn assert_int(value: i64, expr: &str) {
 #[test]
 fn test_program_global_vars() {
     let prog = "int i = 123; int j = i - 8; string *k;";
-    let node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
+    let lexer = LexWrapper::new(prog);
+    let node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
 
     let expected = ProgramNode {
         body: vec![
@@ -133,7 +136,8 @@ fn test_int_literal_binary() {
 #[test]
 fn test_float_literal_underscores() {
     let expr = "1_1.234_332e2_2";
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+    let lexer = LexWrapper::new(expr);
+    let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
 
     let expected = ExpressionNode::Float(FloatNode {
         value: 112343320000000000000000.0,
@@ -149,7 +153,8 @@ fn test_float_literal_underscores() {
 #[test]
 fn test_string_literal_concat() {
     let expr = r##""foo" + "bar" + "baz" + "quux""##;
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+    let lexer = LexWrapper::new(expr);
+    let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foobarbazquux"),
@@ -165,7 +170,8 @@ fn test_string_literal_concat() {
 #[test]
 fn test_string_literal_repeat() {
     let expr = r##""foo" * 3"##;
-    let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
+    let lexer = LexWrapper::new(expr);
+    let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foofoofoo"),

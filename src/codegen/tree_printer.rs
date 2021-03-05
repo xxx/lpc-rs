@@ -18,8 +18,11 @@ use tree_walker::TreeWalker;
 /// use lpc_rs::lpc_parser;
 /// use lpc_rs::codegen::tree_printer::TreePrinter;
 /// use lpc_rs::codegen::tree_walker::TreeWalker;
+/// use lpc_rs::parser::lexer::LexWrapper;
+///
 /// let prog = "int main() { int b = 123; return b; }";
-/// let mut program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
+/// let lexer = LexWrapper::new(prog);
+/// let mut program_node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
 /// let mut walker = TreePrinter::new();
 /// walker.visit_program(&mut program_node);
 /// ```

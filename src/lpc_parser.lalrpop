@@ -20,14 +20,90 @@ use crate::semantic::lpc_type::LPCType;
 use crate::ast::ast_node::ASTNode;
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
+use crate::parser::lexer::{LexError, Token};
 
 grammar;
 
-match {
-    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
-    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
-    r"/\*(?:[^*]*\*+[^*/])*(?:[^*]*\*+|[^*])*\*/" => { },  // Skip `/* comments */`
-    _ // let everything else through
+extern {
+    type Location = usize;
+    type Error = LexError;
+
+    enum Token {
+        "+" => Token::Plus,
+        "-" => Token::Minus,
+        "*" => Token::Mul,
+        "/" => Token::Div,
+        "%" => Token::Mod,
+        "!" => Token::Bang,
+        "^" => Token::Caret,
+        "~" => Token::Tilde,
+        "&" => Token::And,
+        "&&" => Token::AndAnd,
+        "|" => Token::Or,
+        "||" => Token::OrOr,
+        "<<" => Token::LeftShift,
+        ">>" => Token::RightShift,
+        "==" => Token::EqEq,
+        "!=" => Token::NotEq,
+        "<" => Token::LessThan,
+        "<=" => Token::LessThanEq,
+        ">" => Token::GreaterThan,
+        ">=" => Token::GreaterThanEq,
+
+        "=" => Token::Assign,
+        "+=" => Token::PlusEq,
+        "-=" => Token::MinusEq,
+        "*=" => Token::MulEq,
+        "/=" => Token::DivEq,
+        "%=" => Token::ModEq,
+        "^=" => Token::CaretEq,
+        "~=" => Token::TildeEq,
+        "&=" => Token::AndEq,
+        "&&=" => Token::AndAndEq,
+        "|=" => Token::OrEq,
+        "||=" => Token::OrOrEq,
+        "<<=" => Token::LeftShiftEq,
+        ">>=" => Token::RightShiftEq,
+
+        "if" => Token::If,
+        "else" => Token::Else,
+        "while" => Token::While,
+        "for" => Token::For,
+        "inherit" => Token::Inherit,
+        "break" => Token::Break,
+        "continue" => Token::Continue,
+        "case" => Token::Case,
+        "do" => Token::Do,
+        "int" => Token::Int,
+        "float" => Token::Float,
+        "string" => Token::String,
+        "object" => Token::Object,
+        "mapping" => Token::Mapping,
+        "mixed" => Token::Mixed,
+        "void" => Token::Void,
+        "return" => Token::Return,
+        "static" => Token::Static,
+        "nomask" => Token::Nomask,
+
+        "(" => Token::LParen,
+        ")" => Token::RParen,
+        "[" => Token::LBracket,
+        "]" => Token::RBracket,
+        "{" => Token::LBrace,
+        "}" => Token::RBrace,
+        "," => Token::Comma,
+        "->" => Token::CallOther,
+        "?" => Token::Question,
+        ":" => Token::Colon,
+        ";" => Token::Semi,
+        "..." => Token::Ellipsis,
+        ".." => Token::Range,
+
+        "StringLiteral" => Token::StringLiteral(<String>),
+        "IntLiteral" => Token::IntLiteral(<i64>),
+        "FloatLiteral" => Token::FloatLiteral(<f64>),
+        "ID" => Token::ID(<String>),
+    }
 }
 
 SemiSeq<T>: Vec<T> = {
@@ -56,7 +132,7 @@ pub Def: ASTNode = {
 };
 
 FunctionDef: FunctionDefNode = {
-    <l:@L> <r_type:Type?> <star:"*"?> <name:ID> <parameters:Parameters> <r:@R> "{" <body:SemiSeq<Statement>> "}" => {
+    <l:@L> <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> <r:@R> "{" <body:SemiSeq<Statement>> "}" => {
          let array = star.is_some();
 
          let return_type = if let Some(this_type) = r_type {
@@ -75,7 +151,7 @@ FunctionDef: FunctionDefNode = {
          };
 
         FunctionDefNode {
-            name,
+            name: name.to_string(),
             parameters,
             body,
             return_type,
@@ -116,11 +192,11 @@ ArgName: VarInitNode = {
 };
 
 Type: String = {
-    "int" => String::from(<>),
-    "float" => String::from(<>),
-    "string" => String::from(<>),
-    "mixed" => String::from(<>),
-    "void" => String::from(<>),
+    "int" => <>.to_string(),
+    "float" => <>.to_string(),
+    "string" => <>.to_string(),
+    "mixed" => <>.to_string(),
+    "void" => <>.to_string(),
 };
 
 pub Statement: ASTNode = {
@@ -130,10 +206,11 @@ pub Statement: ASTNode = {
 };
 
 VarInit: VarInitNode = {
-    <l:@L> <array:"*"?> <name:ID> <value:("=" <AssignmentExpression>)?> <r:@R> => {
+    <l:@L> <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> <r:@R> => {
+        println!("varinit {:?}", name);
         VarInitNode {
             type_: LPCType::Int(false), // placeholder. Corrected in Decl.
-            name,
+            name: name.to_string(),
             value,
             array: array.is_some(),
             global: false,
@@ -322,7 +399,7 @@ ArgumentExpressionList: Vec<ExpressionNode> = {
 };
 
 pub Call: CallNode = {
-    <l:@L> <name:ID> "(" <list:ArgumentExpressionList?> ")" <r:@R> => {
+    <l:@L> <name:"ID"> "(" <list:ArgumentExpressionList?> ")" <r:@R> => {
         let arguments = match list {
             Some(args) => args,
             None => vec![]
@@ -330,7 +407,7 @@ pub Call: CallNode = {
 
         CallNode {
             arguments,
-            name,
+            name: name.to_string(),
             span: Some(Span { l, r })
         }
     }
@@ -350,58 +427,32 @@ MultiplicitiveBinaryOp: BinaryOperation = {
     "/" => BinaryOperation::Div
 };
 
-Var: ExpressionNode = <l:@L> <name:ID> <r:@R> => ExpressionNode::Var(
+Var: ExpressionNode = <l:@L> <name:"ID"> <r:@R> => ExpressionNode::Var(
     VarNode {
-        name,
+        name: name.to_string(),
         span: Some(Span { l, r }),
         global: false
     }
 );
 
 Int: ExpressionNode = {
-    <l:@L> <s:r"[1-9][0-9_]*"> <r:@R> => ExpressionNode::Int(
+    <l:@L> <i:"IntLiteral"> <r:@R> => ExpressionNode::Int(
         IntNode {
-            value: i64::from_str(&s.replace("_", "")).unwrap(),
-            span: Some(Span { l, r })
-        }
-    ),
-    <l:@L> <s:r"0[xX][0-9a-fA-F][0-9a-fA-F_]*"> <r:@R> => ExpressionNode::Int(
-        IntNode {
-            value: i64::from_str_radix(
-                &s.replace("_", "")
-                  .trim_start_matches("0x")
-                  .trim_start_matches("0X"),
-                16).unwrap(),
-            span: Some(Span { l, r })
-        }
-    ),
-    <l:@L> <s:r"0[0-7][0-7_]*"> <r:@R> => ExpressionNode::Int(
-        IntNode {
-            value: i64::from_str_radix(&s.replace("_", ""), 8).unwrap(),
-            span: Some(Span { l, r })
-        }
-    ),
-    <l:@L> <s:r"0[bB][01][01_]*"> <r:@R> => ExpressionNode::Int(
-        IntNode {
-            value: i64::from_str_radix(
-                &s.replace("_", "")
-                  .trim_start_matches("0b")
-                  .trim_start_matches("0B"),
-                2).unwrap(),
+            value: i,
             span: Some(Span { l, r })
         }
     ),
 };
 
-Float: ExpressionNode = <l:@L> <s:r"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"> <r:@R> => ExpressionNode::Float(
+Float: ExpressionNode = <l:@L> <f:"FloatLiteral"> <r:@R> => ExpressionNode::Float(
     FloatNode {
-        value: f64::from_str(&s.replace("_", "")).unwrap(),
+        value: f,
         span: Some(Span { l, r })
     }
 );
 
 String: ExpressionNode = {
-    <l:@L> <s:StringLiteral> <r:@R> => {
+    <l:@L> <s:"StringLiteral"> <r:@R> => {
         ExpressionNode::String(
             StringNode {
                 value: s,
@@ -409,7 +460,7 @@ String: ExpressionNode = {
             }
         )
     },
-    <l:@L> <s1:StringLiteral> <s2:String> <r:@R> => {
+    <l:@L> <s1:"StringLiteral"> <s2:String> <r:@R> => {
         match s2 {
             ExpressionNode::String(node) => {
                 ExpressionNode::String(StringNode {
@@ -421,19 +472,3 @@ String: ExpressionNode = {
         }
     },
 };
-
-StringLiteral: String = <s:r#""(\\.|[^"])*""#> => {
-        // Strip the quotes at each end.
-        let value = if s.len() < 3 { "" } else { &s[1..=(s.len() - 2)] };
-
-        value.to_string()
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
-            .replace("\\v", "\x0F")
-            .replace("\\f", "\x0C")
-            .replace("\\a", "\x07")
-            .replace("\\b", "\x08")
-};
-
-ID: String = r"[\p{Alphabetic}_]\w*" => String::from(<>);

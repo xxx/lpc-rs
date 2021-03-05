@@ -57,9 +57,11 @@ macro_rules! string_constant {
 /// use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
 /// use lpc_rs::semantic::scope_tree::ScopeTree;
 /// use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
+/// use lpc_rs::parser::lexer::LexWrapper;
 ///
 /// let prog = r#"int create() { dump("hello, world"); int b = 123; return b; }"#;
-/// let mut program_node = lpc_parser::ProgramParser::new().parse(prog).unwrap();
+/// let lexer = LexWrapper::new(prog);
+/// let mut program_node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
 /// let filepath = "path/to/myfile.c";
 ///
 /// // Populate the symbol tables

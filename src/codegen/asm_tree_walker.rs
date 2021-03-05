@@ -692,6 +692,7 @@ mod tests {
         parser::span::Span,
         semantic::lpc_type::LPCType,
     };
+    use crate::parser::lexer::LexWrapper;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -703,7 +704,7 @@ mod tests {
                 print(4 + 5);
             }
         ";
-        let mut tree = lpc_parser::ProgramParser::new().parse(program).unwrap();
+        let mut tree = lpc_parser::ProgramParser::new().parse(LexWrapper::new(program)).unwrap();
 
         let _ = scope_walker.visit_program(&mut tree);
 
@@ -735,7 +736,7 @@ mod tests {
         fn test_visit_call_populates_the_instructions() {
             let mut walker = AsmTreeWalker::default();
             let call = "print(4 - 5)";
-            let mut tree = lpc_parser::CallParser::new().parse(call).unwrap();
+            let mut tree = lpc_parser::CallParser::new().parse(LexWrapper::new(call)).unwrap();
 
             let _ = walker.visit_call(&mut tree);
 
@@ -764,7 +765,7 @@ mod tests {
 
             let mut walker = AsmTreeWalker::new(scope_tree, functions);
             let call = "foo(666)";
-            let mut tree = lpc_parser::CallParser::new().parse(call).unwrap();
+            let mut tree = lpc_parser::CallParser::new().parse(LexWrapper::new(call)).unwrap();
 
             let _ = walker.visit_call(&mut tree);
 
@@ -1008,7 +1009,7 @@ mod tests {
         let mut scope_walker = ScopeWalker::default();
         let mut walker = AsmTreeWalker::default();
         let call = "int main(int i) { return i + 4; }";
-        let tree = lpc_parser::DefParser::new().parse(call).unwrap();
+        let tree = lpc_parser::DefParser::new().parse(LexWrapper::new(call)).unwrap();
 
         let mut node = if let ASTNode::FunctionDef(node) = tree {
             node
@@ -1074,7 +1075,7 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let mut scope_walker = ScopeWalker::default();
         let call = "int foo = 1, *bar = ({ 56 })";
-        let mut tree = lpc_parser::DeclParser::new().parse(call).unwrap();
+        let mut tree = lpc_parser::DeclParser::new().parse(LexWrapper::new(call)).unwrap();
 
         let _ = scope_walker.visit_decl(&mut tree);
 

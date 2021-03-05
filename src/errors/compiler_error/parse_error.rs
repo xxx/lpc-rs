@@ -1,10 +1,12 @@
 use crate::{errors::LPCError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use lalrpop_util::{lexer::Token, ParseError as LalrpopParseError};
+use lalrpop_util::{ParseError as LalrpopParseError};
+use crate::parser::lexer::Token;
 use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
 };
+use crate::parser::lexer::LexError;
 
 #[derive(Debug, Clone)]
 enum ParseErrorType {
@@ -25,7 +27,7 @@ struct ParseErrorToken(usize, String);
 pub struct ParseError {
     type_: ParseErrorType,
     location: Option<Span>,
-    token: Option<ParseErrorToken>,
+    token: Option<Token>,
     expected: Option<Vec<String>>,
 }
 
@@ -76,7 +78,7 @@ impl LPCError for ParseError {
                 };
 
                 diagnostic = Diagnostic::error()
-                    .with_message(format!("Unrecognized Token: {}", token.1))
+                    .with_message(format!("Unrecognized Token: {}", token))
                     .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
                     .with_notes(vec![format_expected(&expected)]);
             }
@@ -96,8 +98,8 @@ impl LPCError for ParseError {
     }
 }
 
-impl<'a, E> From<LalrpopParseError<usize, Token<'a>, E>> for ParseError {
-    fn from(err: LalrpopParseError<usize, Token<'a>, E>) -> Self {
+impl<'a, E> From<LalrpopParseError<usize, Token, E>> for ParseError {
+    fn from(err: LalrpopParseError<usize, Token, E>) -> Self {
         match err {
             LalrpopParseError::InvalidToken { location } => ParseError {
                 type_: ParseErrorType::InvalidToken,
@@ -123,13 +125,13 @@ impl<'a, E> From<LalrpopParseError<usize, Token<'a>, E>> for ParseError {
             } => ParseError {
                 type_: ParseErrorType::UnrecognizedToken,
                 location: Some(Span { l: start, r: end }),
-                token: Some(ParseErrorToken(token.0, token.1.to_string())),
+                token: Some(token.clone()),
                 expected: Some(expected.to_vec()),
             },
             LalrpopParseError::ExtraToken { ref token } => ParseError {
                 type_: ParseErrorType::ExtraToken,
                 location: None,
-                token: Some(ParseErrorToken(token.0, token.1.to_string())),
+                token: Some(token.1.clone()),
                 expected: None,
             },
 

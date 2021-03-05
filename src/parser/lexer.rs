@@ -3,15 +3,34 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::str::FromStr;
 use regex::internal::Input;
+use crate::errors::{LPCError, default_diagnostic};
+use codespan_reporting::diagnostic::Diagnostic;
+use std::fmt::{Display, Formatter};
+use std::fmt;
+use std::error::Error;
 
 pub type Spanned<T> = (usize, T, usize);
 
-#[derive(Debug)]
-struct LexError(String);
+#[derive(Debug, Clone)]
+pub struct LexError(pub String);
+
+impl Display for LexError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl LPCError for LexError {
+    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+        default_diagnostic(format!("{}", self), file_id, None)
+    }
+}
+
+impl Error for LexError {}
 
 /// A struct to store state during lexing.
 #[derive(Debug)]
-struct LexState {
+pub struct LexState {
     // TODO: remove the allocation for last_slice
     pub last_slice: String,
     pub current_file: String,
@@ -29,7 +48,7 @@ impl Default for LexState {
 }
 
 /// A wrapper to attach our `Iterator` implementation to.
-struct LexWrapper<'input> {
+pub struct LexWrapper<'input> {
     lexer: Lexer<'input, Token>,
 }
 
@@ -41,14 +60,14 @@ impl Iterator for LexWrapper<'_> {
         let span = self.lexer.span();
 
         match token {
-            Token::Error => Some(Err(LexError(format!("Invalid Token at {:?}", span)))),
+            Token::Error => Some(Err(LexError(format!("Invalid Token `{}`at {:?}", self.lexer.slice(), span)))),
             t => Some(Ok((span.start, t, span.end))),
         }
     }
 }
 
 impl<'input> LexWrapper<'input> {
-    fn new(prog: &'input str) -> LexWrapper<'input> {
+    pub fn new(prog: &'input str) -> LexWrapper<'input> {
         let lexer = Token::lexer(prog);
         Self { lexer }
     }
@@ -58,9 +77,9 @@ impl<'input> LexWrapper<'input> {
 #[derive(Debug, PartialEq, Eq)]
 struct LineDirective(String, usize);
 
-#[derive(Logos, Debug, PartialEq)]
+#[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = LexState)]
-enum Token {
+pub enum Token {
     #[token("+", track_slice)]
     Plus,
     #[token("-", track_slice)]
@@ -192,7 +211,11 @@ enum Token {
     Colon,
     #[token(";", track_slice)]
     Semi,
-    
+    #[token("...", track_slice)]
+    Ellipsis,
+    #[token("..", track_slice)]
+    Range,
+
     #[regex(r#""(\\.|[^"])*""#, string_literal)]
     StringLiteral(String),
 
@@ -211,7 +234,7 @@ enum Token {
             &lex.slice().replace("_", "")
                 .trim_start_matches("0o")
                 .trim_start_matches("0O"),
-        , 8).ok()
+            8).ok()
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
         i64::from_str_radix(
@@ -225,7 +248,7 @@ enum Token {
     #[regex(r#"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"#, float_literal)]
     FloatLiteral(f64),
 
-    #[regex(r"[\p{Alphabetic}_]\w*", string_literal, priority = 2)]
+    #[regex(r"[\p{Alphabetic}_]\w*", id, priority = 2)]
     ID(String),
 
     #[regex(".", track_slice)]
@@ -259,9 +282,22 @@ fn track_slice(lex: &mut Lexer<Token>) {
     lex.extras.last_slice = String::from(lex.slice());
 }
 
+fn id(lex: &mut Lexer<Token>) -> Option<String> {
+    track_slice(lex);
+    Some(lex.slice().to_string())
+}
+
 fn string_literal(lex: &mut Lexer<Token>) -> Option<String> {
     track_slice(lex);
-    Some(lex.extras.last_slice.clone())
+    let slice = &lex.extras.last_slice;
+    let value = if slice.len() < 3 { "" } else { &slice[1..=(slice.len() - 2)] };
+    Some(value.replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace("\\v", "\x0F")
+        .replace("\\f", "\x0C")
+        .replace("\\a", "\x07")
+        .replace("\\b", "\x08"))
 }
 
 fn float_literal(lex: &mut Lexer<Token>) -> Option<f64> {
@@ -298,6 +334,92 @@ fn line(lex: &mut Lexer<Token>) -> Option<()> {
         Some(())
     } else {
         None
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s: String;
+
+        let out = match self {
+            Token::Plus => "+",
+            Token::Minus => "-",
+            Token::Mul => "*",
+            Token::Div => "/",
+            Token::Mod => "%",
+            Token::Bang => "!",
+            Token::Caret => "^",
+            Token::Tilde => "~",
+            Token::And => "&",
+            Token::AndAnd => "&&",
+            Token::Or => "|",
+            Token::OrOr => "||",
+            Token::LeftShift => "<<",
+            Token::RightShift => ">>",
+            Token::EqEq => "==",
+            Token::NotEq => "!=",
+            Token::LessThan => "<",
+            Token::LessThanEq => "<=",
+            Token::GreaterThan => ">",
+            Token::GreaterThanEq => ">=",
+
+            Token::Assign => "=",
+            Token::PlusEq => "+=",
+            Token::MinusEq => "-=",
+            Token::MulEq => "||",
+            Token::DivEq => "/=",
+            Token::ModEq => "%=",
+            Token::CaretEq => "^=",
+            Token::TildeEq => "~=",
+            Token::AndEq => "&=",
+            Token::AndAndEq => "&&=",
+            Token::OrEq => "|=",
+            Token::OrOrEq => "||=",
+            Token::LeftShiftEq => "<<=",
+            Token::RightShiftEq => ">>=",
+
+            Token::If => "if",
+            Token::Else => "else",
+            Token::While => "while",
+            Token::For => "for",
+            Token::Inherit => "inherit",
+            Token::Break => "break",
+            Token::Continue => "continue",
+            Token::Case => "case",
+            Token::Do => "do",
+            Token::Int => "int",
+            Token::Float => "float",
+            Token::String => "string",
+            Token::Object => "object",
+            Token::Mapping => "mapping",
+            Token::Mixed => "mixed",
+            Token::Void => "void",
+            Token::Return => "return",
+            Token::Static => "static",
+            Token::Nomask => "nomask",
+
+            Token::LParen => "(",
+            Token::RParen => ")",
+            Token::LBracket => "[",
+            Token::RBracket => "]",
+            Token::LBrace => "{",
+            Token::RBrace => "}",
+            Token::Comma => ",",
+            Token::CallOther => "->",
+            Token::Question => "?",
+            Token::Colon => ":",
+            Token::Semi => ";",
+            Token::Ellipsis => "...",
+            Token::Range => "..",
+            Token::StringLiteral(s) => s,
+            Token::IntLiteral(i) => return write!(f, "{}", i),
+            Token::FloatLiteral(fl) => return write!(f, "{}", fl),
+            Token::ID(id) => id,
+            Token::Token => "Unknown token",
+            Token::Error => "Error token",
+        };
+
+        write!(f, "{}", out)
     }
 }
 
