@@ -339,7 +339,7 @@ fn line(lex: &mut Lexer<Token>) -> Option<()> {
 
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let s: String;
+        let _s: String;
 
         let out = match self {
             Token::Plus => "+",

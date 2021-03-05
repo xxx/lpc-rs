@@ -22,7 +22,7 @@ use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
 use var_redefinition_error::VarRedefinitionError;
 use crate::errors::preprocessor_error::PreprocessorError;
-use crate::parser::lexer::LexError;
+
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]

@@ -6,7 +6,7 @@ use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
 };
-use crate::parser::lexer::LexError;
+
 
 #[derive(Debug, Clone)]
 enum ParseErrorType {
