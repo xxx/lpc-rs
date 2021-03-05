@@ -193,6 +193,8 @@ pub enum Token {
     Static,
     #[token("nomask", track_slice)]
     Nomask,
+    #[token("efun", track_slice)]
+    Efun,
 
     #[token("(", track_slice)]
     LParen,
@@ -214,6 +216,8 @@ pub enum Token {
     Question,
     #[token(":", track_slice)]
     Colon,
+    #[token("::", track_slice)]
+    ColonColon,
     #[token(";", track_slice)]
     Semi,
     #[token("...", track_slice)]
@@ -408,6 +412,7 @@ impl Display for Token {
             Token::Return => "return",
             Token::Static => "static",
             Token::Nomask => "nomask",
+            Token::Efun => "efun",
 
             Token::LParen => "(",
             Token::RParen => ")",
@@ -419,6 +424,7 @@ impl Display for Token {
             Token::CallOther => "->",
             Token::Question => "?",
             Token::Colon => ":",
+            Token::ColonColon => "::",
             Token::Semi => ";",
             Token::Ellipsis => "...",
             Token::Range => "..",

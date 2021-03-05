@@ -84,6 +84,7 @@ extern {
         "return" => Token::Return,
         "static" => Token::Static,
         "nomask" => Token::Nomask,
+        "efun" => Token::Efun,
 
         "(" => Token::LParen,
         ")" => Token::RParen,
@@ -95,6 +96,7 @@ extern {
         "->" => Token::CallOther,
         "?" => Token::Question,
         ":" => Token::Colon,
+        "::" => Token::ColonColon,
         ";" => Token::Semi,
         "..." => Token::Ellipsis,
         ".." => Token::Range,
