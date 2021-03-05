@@ -9,6 +9,7 @@ pub type Spanned<T> = (usize, T, usize);
 #[derive(Debug)]
 struct LexError(String);
 
+/// A struct to store state during lexing.
 #[derive(Debug)]
 struct LexState {
     // TODO: remove the allocation for last_slice
@@ -24,6 +25,32 @@ impl Default for LexState {
             current_file: String::new(),
             current_line: 0
         }
+    }
+}
+
+/// A wrapper to attach our `Iterator` implementation to.
+struct LexWrapper<'input> {
+    lexer: Lexer<'input, Token>,
+}
+
+impl Iterator for LexWrapper<'_> {
+    type Item = Result<Spanned<Token>, LexError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.lexer.next()?;
+        let span = self.lexer.span();
+
+        match token {
+            Token::Error => Some(Err(LexError(format!("Invalid Token at {:?}", span)))),
+            t => Some(Ok((span.start, t, span.end))),
+        }
+    }
+}
+
+impl<'input> LexWrapper<'input> {
+    fn new(prog: &'input str) -> LexWrapper<'input> {
+        let lexer = Token::lexer(prog);
+        Self { lexer }
     }
 }
 
@@ -274,13 +301,13 @@ mod tests {
     use super::*;
     use indoc::indoc;
 
-    fn lex_vec(prog: &str) -> Vec<Token> {
-        let lexer = Token::lexer(prog);
+    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LexError>> {
+        let lexer = LexWrapper::new(prog);
         lexer.collect::<Vec<_>>()
     }
 
-    fn into_errors(v: Vec<Token>) -> Vec<Token> {
-        v.into_iter().filter(|i| *i == Token::Error).collect()
+    fn into_errors(v: Vec<Result<Spanned<Token>, LexError>>) -> Vec<Result<Spanned<Token>, LexError>> {
+        v.into_iter().filter(|i| matches!(*i, Err(LexError(_)))).collect()
     }
 
     fn assert_valid(prog: &str) {
