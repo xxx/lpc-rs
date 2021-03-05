@@ -207,7 +207,6 @@ pub Statement: ASTNode = {
 
 VarInit: VarInitNode = {
     <l:@L> <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> <r:@R> => {
-        println!("varinit {:?}", name);
         VarInitNode {
             type_: LPCType::Int(false), // placeholder. Corrected in Decl.
             name: name.to_string(),
