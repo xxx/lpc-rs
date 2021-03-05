@@ -4,6 +4,8 @@ use regex::Regex;
 use std::str::FromStr;
 use regex::internal::Input;
 
+pub type Spanned<T> = (usize, T, usize);
+
 #[derive(Debug)]
 struct LexError(String);
 
@@ -208,7 +210,8 @@ enum Token {
             Filter::Emit(())
         }
     })]
-    #[regex(r"[ \t\f\v]+", |lex| {
+    // Strip whitespace and comments
+    #[regex(r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", |lex| {
         track_slice(lex);
         logos::Skip
     }, priority = 2)]
@@ -322,5 +325,19 @@ mod tests {
         "#
         };
         assert_error(prog);
+    }
+
+    #[test]
+    fn test_strip_comments() {
+        let prog = r#"
+            // foo bar baz
+            /* foo bar
+                int j = 2342323;
+                */
+        "#;
+
+        let vec = lex_vec(prog);
+
+        assert!(vec.is_empty());
     }
 }
