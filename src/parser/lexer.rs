@@ -2,7 +2,7 @@ use crate::errors::{default_diagnostic, LPCError};
 use codespan_reporting::diagnostic::Diagnostic;
 use lazy_static::lazy_static;
 use logos::{Filter, Lexer, Logos};
-use regex::{internal::Input, Regex};
+use regex::{Regex};
 use std::{
     error::Error,
     fmt,
@@ -290,12 +290,12 @@ fn track_slice(lex: &mut Lexer<Token>) {
     lex.extras.last_slice = String::from(lex.slice());
 }
 
-fn id(lex: &mut Lexer<Token>) -> Option<String> {
+fn id(lex: &mut Lexer<Token>) -> String {
     track_slice(lex);
-    Some(lex.slice().to_string())
+    lex.slice().to_string()
 }
 
-fn string_literal(lex: &mut Lexer<Token>) -> Option<String> {
+fn string_literal(lex: &mut Lexer<Token>) -> String {
     track_slice(lex);
     let slice = &lex.extras.last_slice;
     let value = if slice.len() < 3 {
@@ -303,21 +303,19 @@ fn string_literal(lex: &mut Lexer<Token>) -> Option<String> {
     } else {
         &slice[1..=(slice.len() - 2)]
     };
-    Some(
-        value
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
-            .replace("\\v", "\x0F")
-            .replace("\\f", "\x0C")
-            .replace("\\a", "\x07")
-            .replace("\\b", "\x08"),
-    )
+    value
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace("\\v", "\x0F")
+        .replace("\\f", "\x0C")
+        .replace("\\a", "\x07")
+        .replace("\\b", "\x08")
 }
 
-fn float_literal(lex: &mut Lexer<Token>) -> Option<f64> {
+fn float_literal(lex: &mut Lexer<Token>) -> f64 {
     track_slice(lex);
-    Some(f64::from_str(&lex.slice().replace("_", "")).unwrap())
+    f64::from_str(&lex.slice().replace("_", "")).unwrap()
 }
 
 fn line(lex: &mut Lexer<Token>) -> Option<()> {
@@ -327,7 +325,7 @@ fn line(lex: &mut Lexer<Token>) -> Option<()> {
     }
 
     // test if '#' is exactly at the start of a line
-    if lex.extras.last_slice != "\n" && lex.extras.last_slice != "" && lex.span().start != 0 {
+    if lex.extras.last_slice != "\n" && !lex.extras.last_slice.is_empty() && lex.span().start != 0 {
         return None;
     }
 
