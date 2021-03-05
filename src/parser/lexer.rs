@@ -302,19 +302,19 @@ fn id(lex: &mut Lexer<Token>) -> String {
 fn string_literal(lex: &mut Lexer<Token>) -> String {
     track_slice(lex);
     let slice = &lex.extras.last_slice;
-    let value = if slice.len() < 3 {
-        ""
+
+    if slice.len() < 3 {
+        String::from("")
     } else {
-        &slice[1..=(slice.len() - 2)]
-    };
-    value
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-        .replace("\\v", "\x0F")
-        .replace("\\f", "\x0C")
-        .replace("\\a", "\x07")
-        .replace("\\b", "\x08")
+        slice[1..=(slice.len() - 2)]
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace("\\v", "\x0F")
+            .replace("\\f", "\x0C")
+            .replace("\\a", "\x07")
+            .replace("\\b", "\x08")
+    }
 }
 
 fn float_literal(lex: &mut Lexer<Token>) -> f64 {
