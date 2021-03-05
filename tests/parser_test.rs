@@ -12,10 +12,9 @@ use lpc_rs::{
         var_node::VarNode,
     },
     lpc_parser,
-    parser::span::Span,
+    parser::{lexer::LexWrapper, span::Span},
     semantic::lpc_type::LPCType,
 };
-use lpc_rs::parser::lexer::LexWrapper;
 
 // just a helper for a very common pattern
 fn assert_int(value: i64, expr: &str) {

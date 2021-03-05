@@ -1,9 +1,8 @@
-use crate::parser::span::Span;
+use crate::{errors::lazy_files::LazyFiles, parser::span::Span};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream},
 };
-use crate::errors::lazy_files::LazyFiles;
 
 pub mod compiler_error;
 pub mod lazy_files;

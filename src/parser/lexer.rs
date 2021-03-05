@@ -1,13 +1,14 @@
-use logos::{Logos, Lexer, Filter};
-use lazy_static::lazy_static;
-use regex::Regex;
-use std::str::FromStr;
-use regex::internal::Input;
-use crate::errors::{LPCError, default_diagnostic};
+use crate::errors::{default_diagnostic, LPCError};
 use codespan_reporting::diagnostic::Diagnostic;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use std::error::Error;
+use lazy_static::lazy_static;
+use logos::{Filter, Lexer, Logos};
+use regex::{internal::Input, Regex};
+use std::{
+    error::Error,
+    fmt,
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 pub type Spanned<T> = (usize, T, usize);
 
@@ -34,7 +35,7 @@ pub struct LexState {
     // TODO: remove the allocation for last_slice
     pub last_slice: String,
     pub current_file: String,
-    pub current_line: usize
+    pub current_line: usize,
 }
 
 impl Default for LexState {
@@ -42,7 +43,7 @@ impl Default for LexState {
         LexState {
             last_slice: String::from("\n"),
             current_file: String::new(),
-            current_line: 0
+            current_line: 0,
         }
     }
 }
@@ -60,7 +61,11 @@ impl Iterator for LexWrapper<'_> {
         let span = self.lexer.span();
 
         match token {
-            Token::Error => Some(Err(LexError(format!("Invalid Token `{}`at {:?}", self.lexer.slice(), span)))),
+            Token::Error => Some(Err(LexError(format!(
+                "Invalid Token `{}`at {:?}",
+                self.lexer.slice(),
+                span
+            )))),
             t => Some(Ok((span.start, t, span.end))),
         }
     }
@@ -245,7 +250,10 @@ pub enum Token {
     }, priority = 2)]
     IntLiteral(i64),
 
-    #[regex(r#"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"#, float_literal)]
+    #[regex(
+        r#"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"#,
+        float_literal
+    )]
     FloatLiteral(f64),
 
     #[regex(r"[\p{Alphabetic}_]\w*", id, priority = 2)]
@@ -290,14 +298,21 @@ fn id(lex: &mut Lexer<Token>) -> Option<String> {
 fn string_literal(lex: &mut Lexer<Token>) -> Option<String> {
     track_slice(lex);
     let slice = &lex.extras.last_slice;
-    let value = if slice.len() < 3 { "" } else { &slice[1..=(slice.len() - 2)] };
-    Some(value.replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-        .replace("\\v", "\x0F")
-        .replace("\\f", "\x0C")
-        .replace("\\a", "\x07")
-        .replace("\\b", "\x08"))
+    let value = if slice.len() < 3 {
+        ""
+    } else {
+        &slice[1..=(slice.len() - 2)]
+    };
+    Some(
+        value
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace("\\v", "\x0F")
+            .replace("\\f", "\x0C")
+            .replace("\\a", "\x07")
+            .replace("\\b", "\x08"),
+    )
 }
 
 fn float_literal(lex: &mut Lexer<Token>) -> Option<f64> {
@@ -307,10 +322,8 @@ fn float_literal(lex: &mut Lexer<Token>) -> Option<f64> {
 
 fn line(lex: &mut Lexer<Token>) -> Option<()> {
     lazy_static! {
-        static ref LINE: Regex =
-            Regex::new(r#"\A#\s*line\s+(\d+)\s+"([^"]+?)"\s*\z"#).unwrap();
-        static ref EOL: Regex =
-            Regex::new(r#"\s*?\n\s*\z"#).unwrap();
+        static ref LINE: Regex = Regex::new(r#"\A#\s*line\s+(\d+)\s+"([^"]+?)"\s*\z"#).unwrap();
+        static ref EOL: Regex = Regex::new(r#"\s*?\n\s*\z"#).unwrap();
     }
 
     // test if '#' is exactly at the start of a line
@@ -433,8 +446,12 @@ mod tests {
         lexer.collect::<Vec<_>>()
     }
 
-    fn into_errors(v: Vec<Result<Spanned<Token>, LexError>>) -> Vec<Result<Spanned<Token>, LexError>> {
-        v.into_iter().filter(|i| matches!(*i, Err(LexError(_)))).collect()
+    fn into_errors(
+        v: Vec<Result<Spanned<Token>, LexError>>,
+    ) -> Vec<Result<Spanned<Token>, LexError>> {
+        v.into_iter()
+            .filter(|i| matches!(*i, Err(LexError(_))))
+            .collect()
     }
 
     fn assert_valid(prog: &str) {
@@ -463,7 +480,7 @@ mod tests {
         let prog = indoc! { r#"
             a + 3 + as;
              #line 125 "foo.h""#
-         };
+        };
         assert_error(prog);
 
         // extraneous code after a #line directive - invalid

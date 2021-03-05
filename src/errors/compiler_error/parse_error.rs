@@ -1,12 +1,13 @@
-use crate::{errors::LPCError, parser::span::Span};
+use crate::{
+    errors::LPCError,
+    parser::{lexer::Token, span::Span},
+};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use lalrpop_util::{ParseError as LalrpopParseError};
-use crate::parser::lexer::Token;
+use lalrpop_util::ParseError as LalrpopParseError;
 use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
 };
-
 
 #[derive(Debug, Clone)]
 enum ParseErrorType {

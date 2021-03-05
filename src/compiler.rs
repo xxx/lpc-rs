@@ -4,17 +4,18 @@ use crate::{
     ast::ast_node::ASTNodeTrait,
     codegen::{
         asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
-        scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker, tree_walker::TreeWalker,
+        scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
+        tree_walker::TreeWalker,
     },
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
     interpreter::program::Program,
     lpc_parser,
+    preprocessor::Preprocessor,
     semantic::scope_tree::ScopeTree,
 };
-use crate::preprocessor::Preprocessor;
 
-use crate::parser::lexer::{LexWrapper};
+use crate::parser::lexer::LexWrapper;
 
 /// Fully compile a file into a Program struct
 ///

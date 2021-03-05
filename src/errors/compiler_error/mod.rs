@@ -11,7 +11,9 @@ pub mod var_redefinition_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
-use crate::errors::{compiler_error::range_error::RangeError, LPCError};
+use crate::errors::{
+    compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LPCError,
+};
 use arg_count_error::ArgCountError;
 use arg_type_error::ArgTypeError;
 use assignment_error::AssignmentError;
@@ -21,8 +23,6 @@ use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
 use var_redefinition_error::VarRedefinitionError;
-use crate::errors::preprocessor_error::PreprocessorError;
-
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
