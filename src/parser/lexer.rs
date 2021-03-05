@@ -204,17 +204,21 @@ enum Token {
             &lex.slice().replace("_", "")
                 .trim_start_matches("0x")
                 .trim_start_matches("0X"),
-                16).ok()
+            16).ok()
     }, priority = 2)]
-    #[regex(r"0[0-7][0-7_]*", |lex| {
-        i64::from_str_radix(&lex.slice().replace("_", ""), 8).ok()
+    #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
+        i64::from_str_radix(
+            &lex.slice().replace("_", "")
+                .trim_start_matches("0o")
+                .trim_start_matches("0O"),
+        , 8).ok()
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
         i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0b")
                 .trim_start_matches("0B"),
-                2).ok()
+            2).ok()
     }, priority = 2)]
     IntLiteral(i64),
 
@@ -231,6 +235,7 @@ enum Token {
     #[regex(r#"#\s*line\s+\d+\s+"[^"]+"\s*"#, |lex| {
         let l = line(lex);
         track_slice(lex);
+
         if l.is_some() {
             Filter::Skip
         } else {
