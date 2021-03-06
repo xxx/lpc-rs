@@ -6,6 +6,7 @@ use crate::errors::compiler_error::CompilerError;
 use crate::semantic::scope_tree::ScopeTree;
 use std::collections::HashMap;
 use crate::semantic::function_prototype::FunctionPrototype;
+use crate::ast::expression_node::ExpressionNode;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -32,6 +33,9 @@ pub struct Context {
     /// The map of function names, to their respective prototypes.
     /// Used for checking forward references.
     pub function_prototypes: HashMap<String, FunctionPrototype>,
+
+    /// Storage for default function params, for the functions that have them
+    pub function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Any errors that have been collected
     pub errors: Vec<CompilerError>,
@@ -76,6 +80,7 @@ impl Default for Context {
             files: LazyFiles::new(),
             errors: Vec::new(),
             scopes: ScopeTree::default(),
+            function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
         }
     }

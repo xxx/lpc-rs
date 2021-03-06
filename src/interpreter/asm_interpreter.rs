@@ -65,22 +65,27 @@ macro_rules! string_constant {
 /// let mut program_node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
 /// let filepath = "path/to/myfile.c";
 ///
+/// // Create a context to store various data that needs to be shared among multiple walkers.
 /// let context = Context::new(filepath, ".", vec!["/include", "/sys"]);
 ///
 /// // Populate the symbol tables
 /// let mut scope_walker = ScopeWalker::new(context);
 /// let scope_result = scope_walker.visit_program(&mut program_node);
 ///
+/// // Get our context back
+/// let mut context = scope_walker.into_context();
+///
 /// // Gather information about function default params
-/// let mut default_params_walker = DefaultParamsWalker::new();
+/// let mut default_params_walker = DefaultParamsWalker::new(context);
 /// let params_result = default_params_walker.visit_program(&mut program_node);
 ///
+/// let mut context = default_params_walker.into_context();
+///
 /// // Generate machine instructions
-/// let mut walker = AsmTreeWalker::new(
-///     ScopeTree::from(scope_walker),
-///     default_params_walker.into_functions()
-/// );
+/// let mut walker = AsmTreeWalker::new(context);
 /// walker.visit_program(&mut program_node);
+///
+/// // Generate our final `Program`.
 /// let mut program = walker.to_program(filepath);
 ///
 /// // Load the program and run it

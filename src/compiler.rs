@@ -80,35 +80,28 @@ where
 
     let _ = program.visit(&mut scope_walker);
 
-    // `scope_walker` errors are not fatal, so we can continue to see if more errors occur.
     let context = scope_walker.into_context();
 
-    // if !context.is_empty() {
-    //     // These errors are not fatal, so just stash them and move on.
-    //     errors.append(&mut conte.to_vec());
-    // }
-
-    let mut default_params_walker = DefaultParamsWalker::new();
+    let mut default_params_walker = DefaultParamsWalker::new(context);
     let _ = program.visit(&mut default_params_walker);
-    // DefaultParamsWalker currently has no errors
-    // if !default_params_walker.get_errors().is_empty() {
-    //     errors.append(&mut default_params_walker.get_errors().to_vec());
+
+    let context = default_params_walker.into_context();
+
+    let mut semantic_check_walker = SemanticCheckWalker::new(context);
+    let _ = program.visit(&mut semantic_check_walker);
+    // if !context.errors.is_empty() {
+    //     errors.append(&mut context.errors.to_vec());
     // }
 
-    let mut semantic_check_walker =
-        SemanticCheckWalker::new(&context.scopes, &context.function_prototypes);
-    let _ = program.visit(&mut semantic_check_walker);
-    if !semantic_check_walker.get_errors().is_empty() {
-        errors.append(&mut semantic_check_walker.get_errors().to_vec());
+    let context = semantic_check_walker.into_context();
+
+    if !context.errors.is_empty() {
+        errors::emit_diagnostics(&AsRef::<Path>::as_ref(&filename).to_string_lossy(), &context.errors);
+        return Err(CompilerError::MultiError(context.errors));
     }
 
-    if !errors.is_empty() {
-        errors::emit_diagnostics(&AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
-        return Err(CompilerError::MultiError(errors));
-    }
-
-    let scope_tree = ScopeTree::from(context);
-    let mut asm_walker = AsmTreeWalker::new(scope_tree, default_params_walker.into_functions());
+    // let scope_tree = ScopeTree::from(context);
+    let mut asm_walker = AsmTreeWalker::new(context);
     let _ = program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
     for s in asm_walker.listing() {

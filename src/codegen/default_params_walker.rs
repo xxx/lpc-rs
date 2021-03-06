@@ -4,23 +4,26 @@ use crate::{
     errors::compiler_error::CompilerError,
 };
 use std::collections::HashMap;
+use crate::context::Context;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DefaultParamsWalker {
-    functions: HashMap<String, Vec<Option<ExpressionNode>>>,
+    /// The compilation context
+    context: Context
 }
 
 impl DefaultParamsWalker {
-    pub fn new() -> Self {
+    pub fn new(context: Context) -> Self {
         Self {
-            functions: HashMap::new(),
+            context,
+            ..Self::default()
         }
     }
 
-    /// Consume this struct and return the functions
-    pub fn into_functions(self) -> HashMap<String, Vec<Option<ExpressionNode>>> {
-        self.functions
+    /// Consume this walker, and return its context, for use in the next step.
+    pub fn into_context(self) -> Context {
+        self.context
     }
 }
 
@@ -31,15 +34,9 @@ impl TreeWalker for DefaultParamsWalker {
             .iter()
             .map(|p| p.value.clone())
             .collect::<Vec<_>>();
-        self.functions.insert(node.name.clone(), vec);
+        self.context.function_params.insert(node.name.clone(), vec);
 
         Ok(())
-    }
-}
-
-impl Default for DefaultParamsWalker {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -50,7 +47,8 @@ mod tests {
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
-        let mut walker = DefaultParamsWalker::new();
+        let context = Context::default();
+        let mut walker = DefaultParamsWalker::new(context);
 
         let parameters = vec![
             VarInitNode {
@@ -81,7 +79,7 @@ mod tests {
 
         let _ = walker.visit_function_def(&mut node);
 
-        let params = walker.functions.get("foo").unwrap();
+        let params = walker.context.function_params.get("foo").unwrap();
 
         let expected = vec![None, Some(ExpressionNode::from("marf"))];
 

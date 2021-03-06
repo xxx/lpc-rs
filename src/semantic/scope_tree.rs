@@ -194,12 +194,6 @@ impl Default for ScopeTree {
     }
 }
 
-impl From<ScopeWalker> for ScopeTree {
-    fn from(walker: ScopeWalker) -> Self {
-        walker.into_context().scopes
-    }
-}
-
 impl From<Context> for ScopeTree {
     fn from(context: Context) -> Self {
         context.scopes

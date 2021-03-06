@@ -29,6 +29,7 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
+use crate::context::Context;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -57,35 +58,27 @@ pub struct AsmTreeWalker {
     /// Track where the result of a child branch is
     current_result: Register,
 
-    /// A mapping of function names to initializers, for use in dealing
-    /// with default parameters while generating code for calls
-    function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
-
     /// The internal counter to track which registers are used.
     register_counter: RegisterCounter,
 
     /// The counter for tracking globals
     global_counter: RegisterCounter,
 
-    /// The collection of scopes
-    scopes: ScopeTree,
-
     /// All constants (really only string literals) in the program
     constants: ConstantPool,
+
+    /// The compilation context
+    context: Context,
 }
 
 impl AsmTreeWalker {
     /// Create a new `AsmTreeWalker` that consumes the passed scopes
     ///
     /// # Arguments
-    /// `scopes` - The ScopeTree to use to resolve symbols and function calls.
-    pub fn new(
-        scopes: ScopeTree,
-        function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
-    ) -> Self {
+    /// `context` - A `Context` state.
+    pub fn new(context: Context) -> Self {
         Self {
-            scopes,
-            function_params,
+            context,
             ..Default::default()
         }
     }
@@ -149,11 +142,6 @@ impl AsmTreeWalker {
         v
     }
 
-    /// Setter for the scopes
-    pub fn set_scopes(&mut self, scopes: ScopeTree) {
-        self.scopes = scopes;
-    }
-
     /// Return a map of function names to their corresponding full symbol
     pub fn function_map(&self) -> HashMap<String, FunctionSymbol> {
         let mut map = HashMap::new();
@@ -183,17 +171,17 @@ impl AsmTreeWalker {
 
     /// Get a reference to a symbol in the current scope
     fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        self.scopes.lookup(name)
+        self.context.scopes.lookup(name)
     }
 
     /// Get a mutable reference to a symbol in the current scope
     fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        self.scopes.lookup_mut(name)
+        self.context.scopes.lookup_mut(name)
     }
 
     /// Check for a symbol in the global scope
     fn lookup_global(&self, name: &str) -> Option<&Symbol> {
-        self.scopes.lookup_global(name)
+        self.context.scopes.lookup_global(name)
     }
 
     /// encapsulate vars that can find themselves if they're global
@@ -350,11 +338,11 @@ impl AsmTreeWalker {
 
 impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<(), CompilerError> {
-        self.scopes.goto_root();
+        self.context.scopes.goto_root();
         for expr in &mut program.body {
             let _ = expr.visit(self);
         }
-        self.scopes.pop();
+        self.context.scopes.pop();
 
         Ok(())
     }
@@ -362,7 +350,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> {
         let mut arg_results = vec![];
 
-        let params = self.function_params.get(&node.name);
+        let params = self.context.function_params.get(&node.name);
 
         if let Some(function_args) = params {
             let mut function_args = function_args.to_vec();
@@ -478,7 +466,7 @@ impl TreeWalker for AsmTreeWalker {
         let return_address = self.instructions.len();
 
         let len = self.instructions.len();
-        self.scopes.goto_function(&node.name);
+        self.context.scopes.goto_function(&node.name);
         self.register_counter.reset();
 
         for parameter in &node.parameters {
@@ -497,7 +485,7 @@ impl TreeWalker for AsmTreeWalker {
             self.debug_spans.push(node.span.clone());
         }
 
-        self.scopes.pop();
+        self.context.scopes.pop();
 
         let num_args = node.parameters.len();
         self.functions.insert(
@@ -696,7 +684,6 @@ mod tests {
     #[test]
     fn test_walk_tree_populates_the_instructions() {
         let mut scope_walker = ScopeWalker::default();
-        let mut walker = AsmTreeWalker::default();
         let program = "
             int main() {
                 1 + 3 - 5;
@@ -708,10 +695,9 @@ mod tests {
             .unwrap();
 
         let _ = scope_walker.visit_program(&mut tree);
+        let mut context = scope_walker.into_context();
 
-        let scopes = ScopeTree::from(scope_walker);
-        walker.scopes = scopes;
-
+        let mut walker = AsmTreeWalker::new(context);
         let _ = tree.visit(&mut walker);
 
         let expected = vec![
@@ -758,15 +744,19 @@ mod tests {
 
         #[test]
         fn test_visit_call_populates_the_instructions_with_defaults() {
-            let scope_tree = ScopeTree::default();
-            let mut functions = HashMap::new();
+            let mut function_params = HashMap::new();
 
-            functions.insert(
+            function_params.insert(
                 String::from("foo"),
                 vec![None, Some(ExpressionNode::from("muffuns"))],
             );
 
-            let mut walker = AsmTreeWalker::new(scope_tree, functions);
+            let mut context = Context {
+                function_params,
+                ..Context::default()
+            };
+
+            let mut walker = AsmTreeWalker::new(context);
             let call = "foo(666)";
             let mut tree = lpc_parser::CallParser::new()
                 .parse(LexWrapper::new(call))
@@ -846,12 +836,13 @@ mod tests {
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_floats() {
-            let mut walker = AsmTreeWalker::default();
-            walker.scopes.push_new();
-
+            let mut context = Context::default();
+            context.scopes.push_new();
             let mut sym = Symbol::new("foo", LPCType::Float(false));
             sym.location = Some(Register(1));
-            walker.scopes.get_current_mut().unwrap().insert(sym);
+            context.scopes.get_current_mut().unwrap().insert(sym);
+
+            let mut walker = AsmTreeWalker::new(context);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::Float(FloatNode::new(123.45))),
@@ -937,7 +928,8 @@ mod tests {
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_indexes() {
-            let mut walker = AsmTreeWalker::default();
+            let mut context = Context::default();
+            let mut walker = AsmTreeWalker::new(context);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -1026,9 +1018,10 @@ mod tests {
 
         let _ = scope_walker.visit_function_def(&mut node);
 
-        let mut scopes = ScopeTree::from(scope_walker);
-        scopes.goto_root();
-        walker.scopes = scopes;
+        let mut context = scope_walker.into_context();
+        context.scopes.goto_root();
+
+        let mut walker = AsmTreeWalker::new(context);
         let _ = walker.visit_function_def(&mut node);
 
         let expected = vec![
@@ -1080,15 +1073,16 @@ mod tests {
 
     #[test]
     fn test_decl_sets_scope_and_instructions() {
-        let mut scope_walker = ScopeWalker::default();
         let call = "int foo = 1, *bar = ({ 56 })";
         let mut tree = lpc_parser::DeclParser::new()
             .parse(LexWrapper::new(call))
             .unwrap();
 
+        let mut scope_walker = ScopeWalker::default();
         let _ = scope_walker.visit_decl(&mut tree);
 
-        let mut walker = AsmTreeWalker::new(ScopeTree::from(scope_walker), HashMap::new());
+        let mut context = scope_walker.into_context();
+        let mut walker = AsmTreeWalker::new(context);
         let _ = walker.visit_decl(&mut tree);
 
         let expected = vec![
@@ -1101,7 +1095,7 @@ mod tests {
 
         assert_eq!(walker.instructions, expected);
 
-        let scope = walker.scopes.get_current().unwrap();
+        let scope = walker.context.scopes.get_current().unwrap();
         assert_eq!(
             scope.lookup("foo").unwrap(),
             Symbol {
@@ -1128,8 +1122,11 @@ mod tests {
 
     #[test]
     fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
-        let mut walker = AsmTreeWalker::default();
-        walker.scopes.push_new();
+        let mut context = Context::default();
+        context.scopes.push_new();
+
+        let mut walker = AsmTreeWalker::new(context);
+
         insert_symbol(
             &mut walker,
             Symbol {
@@ -1142,7 +1139,7 @@ mod tests {
             },
         );
         // push a local scope with a matching variable in a different location
-        walker.scopes.push_new();
+        walker.context.scopes.push_new();
         insert_symbol(
             &mut walker,
             Symbol {
@@ -1170,8 +1167,10 @@ mod tests {
 
     #[test]
     fn test_visit_var_sets_the_result_for_locals() {
-        let mut walker = AsmTreeWalker::default();
-        walker.scopes.push_new();
+        let mut context = Context::default();
+        context.scopes.push_new();
+        let mut walker = AsmTreeWalker::new(context);
+
         insert_symbol(
             &mut walker,
             // push a global marf to ensure we don't find it.
@@ -1184,7 +1183,7 @@ mod tests {
                 span: None,
             },
         );
-        walker.scopes.push_new(); // push a local scope
+        walker.context.scopes.push_new(); // push a local scope
         insert_symbol(
             &mut walker,
             Symbol {
@@ -1208,8 +1207,10 @@ mod tests {
 
     #[test]
     fn test_visit_assignment_populates_the_instructions_for_globals() {
-        let mut walker = AsmTreeWalker::default();
-        walker.scopes.push_new();
+        let mut context = Context::default();
+        context.scopes.push_new();
+        let mut walker = AsmTreeWalker::new(context);
+
         let sym = Symbol {
             name: "marf".to_string(),
             type_: LPCType::Int(false),
@@ -1221,7 +1222,7 @@ mod tests {
         insert_symbol(&mut walker, sym);
 
         // push a different, local `marf`, to ensure that we don't find it for this assignment.
-        walker.scopes.push_new();
+        walker.context.scopes.push_new();
         let sym = Symbol {
             name: "marf".to_string(),
             type_: LPCType::Int(false),
@@ -1257,9 +1258,11 @@ mod tests {
 
     #[test]
     fn test_visit_assignment_populates_the_instructions_for_locals() {
-        let mut walker = AsmTreeWalker::default();
-        walker.scopes.push_new();
-        walker.scopes.push_new();
+        let mut context = Context::default();
+        context.scopes.push_new();
+        context.scopes.push_new();
+        let mut walker = AsmTreeWalker::new(context);
+
         let sym = Symbol {
             name: "marf".to_string(),
             type_: LPCType::Int(false),
@@ -1290,9 +1293,11 @@ mod tests {
 
     #[test]
     fn test_visit_assignment_populates_the_instructions_for_array_items() {
-        let mut walker = AsmTreeWalker::default();
-        walker.scopes.push_new();
-        walker.scopes.push_new();
+        let mut context = Context::default();
+        context.scopes.push_new();
+        context.scopes.push_new();
+        let mut walker = AsmTreeWalker::new(context);
+
         let sym = Symbol {
             name: "marf".to_string(),
             type_: LPCType::Int(true),
@@ -1374,8 +1379,8 @@ mod tests {
     }
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {
-        if let Some(node_id) = walker.scopes.current_id {
-            walker.scopes.get_mut(node_id).unwrap().insert(symbol)
+        if let Some(node_id) = walker.context.scopes.current_id {
+            walker.context.scopes.get_mut(node_id).unwrap().insert(symbol)
         }
     }
 }

@@ -22,49 +22,58 @@ use crate::{
 use std::collections::HashMap;
 
 use crate::errors::compiler_error::range_error::RangeError;
+use crate::context::Context;
 
 /// A tree walker to handle various semantic & type checks
-pub struct SemanticCheckWalker<'a> {
-    /// The collection of scopes, to resolve var types
-    pub scopes: &'a ScopeTree,
+pub struct SemanticCheckWalker {
+    // /// The collection of scopes, to resolve var types
+    // pub scopes: &'a ScopeTree,
+    //
+    // /// The map of function names, to their respective prototypes.
+    // /// Used for checking forward references.
+    // pub function_prototypes: &'a HashMap<String, FunctionPrototype>,
 
-    /// The map of function names, to their respective prototypes.
-    /// Used for checking forward references.
-    pub function_prototypes: &'a HashMap<String, FunctionPrototype>,
-
-    /// The errors we collect as we traverse the tree
-    errors: Vec<CompilerError>,
+    // /// The errors we collect as we traverse the tree
+    // errors: Vec<CompilerError>,
 
     /// Track the current function, so we can type check returns.
     current_function: Option<FunctionDefNode>,
+
+    context: Context
 }
 
-impl<'a> SemanticCheckWalker<'a> {
+impl SemanticCheckWalker {
     pub fn new(
-        scopes: &'a ScopeTree,
-        function_prototypes: &'a HashMap<String, FunctionPrototype>,
+        context: Context,
     ) -> Self {
         Self {
-            scopes,
-            function_prototypes,
-            errors: vec![],
+            context,
             current_function: None,
         }
     }
 
     /// A transformation helper to get a map of function names to their return values.
     fn function_return_values(&self) -> HashMap<&str, LPCType> {
-        self.function_prototypes
+        self.context
+            .function_prototypes
             .keys()
             .map(|k| k.as_str())
-            .zip(self.function_prototypes.values().map(|v| v.return_type))
+            .zip(self.context.function_prototypes.values().map(|v| v.return_type))
             .collect::<HashMap<_, _>>()
+    }
+
+    /// Consume this walker, and return its `Context`.
+    ///
+    /// This is intended for use after preprocessing has completed, and
+    /// you're ready to re-take ownership of the context for the next step.
+    pub fn into_context(self) -> Context {
+        self.context
     }
 }
 
-impl<'a> TreeWalker for SemanticCheckWalker<'a> {
+impl TreeWalker for SemanticCheckWalker {
     fn get_errors(&self) -> Vec<CompilerError> {
-        self.errors.to_vec()
+        self.context.errors.to_vec()
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> {
@@ -73,19 +82,19 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         }
 
         // Check function existence.
-        if !self.function_prototypes.contains_key(&node.name)
+        if !self.context.function_prototypes.contains_key(&node.name)
             && !EFUNS.contains_key(node.name.as_str())
         {
             let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
                 name: node.name.clone(),
                 span: node.span.clone(),
             });
-            self.errors.push(e);
+            self.context.errors.push(e);
             // Non-fatal. Continue.
         }
 
         // Further checks require access to the function prototype for error messaging.
-        let proto_opt = if let Some(prototype) = self.function_prototypes.get(&node.name) {
+        let proto_opt = if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
             Some(prototype)
         } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
             Some(prototype)
@@ -107,7 +116,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     span: node.span.clone(),
                     prototype_span: prototype.span.clone(),
                 });
-                self.errors.push(e);
+                self.context.errors.push(e);
             }
 
             // Check argument types.
@@ -117,9 +126,9 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     if let ExpressionNode::Int(IntNode { value: 0, .. }) = *arg {
                         // sigh.
                     } else {
-                        let arg_type = node_type(arg, self.scopes, &self.function_return_values());
+                        let arg_type = node_type(arg, &self.context.scopes, &self.function_return_values());
                         if !ty.matches_type(arg_type) {
-                            self.errors.push(CompilerError::ArgTypeError(ArgTypeError {
+                            self.context.errors.push(CompilerError::ArgTypeError(ArgTypeError {
                                 name: node.name.clone(),
                                 type_: arg_type,
                                 expected: *ty,
@@ -144,11 +153,11 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
-        match check_binary_operation_types(node, self.scopes, &self.function_return_values()) {
+        match check_binary_operation_types(node, &self.context.scopes, &self.function_return_values()) {
             Ok(_) => Ok(()),
             Err(err) => {
                 let e = CompilerError::BinaryOperationError(err);
-                self.errors.push(e.clone());
+                self.context.errors.push(e.clone());
                 Err(e)
             }
         }
@@ -179,7 +188,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     // returning a literal 0 is allowable for any type, including void.
                 } else {
                     let return_type =
-                        node_type(expression, self.scopes, &self.function_return_values());
+                        node_type(expression, &self.context.scopes, &self.function_return_values());
 
                     if function_def.return_type == LPCType::Void
                         || !function_def.return_type.matches_type(return_type)
@@ -190,7 +199,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                             span: node.span.clone(),
                         });
 
-                        self.errors.push(error);
+                        self.context.errors.push(error);
                     }
                 }
             } else if function_def.return_type != LPCType::Void {
@@ -200,7 +209,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     span: node.span.clone(),
                 });
 
-                self.errors.push(error);
+                self.context.errors.push(error);
             }
         } // else warn?
 
@@ -211,7 +220,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            let expr_type = node_type(expression, self.scopes, &self.function_return_values());
+            let expr_type = node_type(expression, &self.context.scopes, &self.function_return_values());
 
             let ret = if node.type_.matches_type(expr_type) {
                 Ok(())
@@ -227,7 +236,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                     span: node.span.clone(),
                 });
 
-                self.errors.push(e.clone());
+                self.context.errors.push(e.clone());
 
                 Err(e)
             };
@@ -242,8 +251,8 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
-        let left_type = node_type(&node.lhs, self.scopes, &self.function_return_values());
-        let right_type = node_type(&node.rhs, self.scopes, &self.function_return_values());
+        let left_type = node_type(&node.lhs, &self.context.scopes, &self.function_return_values());
+        let right_type = node_type(&node.rhs, &self.context.scopes, &self.function_return_values());
 
         if left_type.matches_type(right_type) {
             Ok(())
@@ -259,7 +268,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 span: node.span.clone(),
             });
 
-            self.errors.push(e.clone());
+            self.context.errors.push(e.clone());
 
             Err(e)
         }
@@ -278,13 +287,13 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
         }
 
         let left_type = if let Some(left) = &*node.l {
-            node_type(left, self.scopes, &self.function_return_values())
+            node_type(left, &self.context.scopes, &self.function_return_values())
         } else {
             LPCType::Int(false)
         };
 
         let right_type = if let Some(right) = &*node.r {
-            node_type(right, self.scopes, &self.function_return_values())
+            node_type(right, &self.context.scopes, &self.function_return_values())
         } else {
             LPCType::Int(false)
         };
@@ -303,7 +312,7 @@ impl<'a> TreeWalker for SemanticCheckWalker<'a> {
                 span: node.span.clone(),
             });
 
-            self.errors.push(e.clone());
+            self.context.errors.push(e.clone());
 
             Err(e)
         }
@@ -332,8 +341,8 @@ mod tests {
                 span: None,
             });
 
-            let mut functions = HashMap::new();
-            functions.insert(
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
                 String::from("known"),
                 FunctionPrototype {
                     name: String::from("known"),
@@ -346,12 +355,18 @@ mod tests {
                 },
             );
 
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -362,13 +377,19 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -379,12 +400,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
-            assert_eq!(walker.errors.len(), 1);
+            assert_eq!(walker.context.errors.len(), 1);
         }
 
         #[test]
@@ -395,12 +422,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
-            assert_eq!(walker.errors.len(), 1);
+            assert_eq!(walker.context.errors.len(), 1);
         }
 
         #[test]
@@ -411,8 +444,8 @@ mod tests {
                 span: None,
             });
 
-            let mut functions = HashMap::new();
-            functions.insert(
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
                 String::from("my_func"),
                 FunctionPrototype {
                     name: String::from("my_func"),
@@ -425,11 +458,17 @@ mod tests {
                 },
             );
 
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -440,8 +479,8 @@ mod tests {
                 span: None,
             });
 
-            let mut functions = HashMap::new();
-            functions.insert(
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
                 String::from("my_func"),
                 FunctionPrototype {
                     name: String::from("my_func"),
@@ -454,11 +493,17 @@ mod tests {
                 },
             );
 
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
-            assert_eq!(walker.errors.len(), 1);
+            assert_eq!(walker.context.errors.len(), 1);
         }
 
         #[test]
@@ -469,8 +514,8 @@ mod tests {
                 span: None,
             });
 
-            let mut functions = HashMap::new();
-            functions.insert(
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
                 String::from("my_func"),
                 FunctionPrototype {
                     name: String::from("my_func"),
@@ -483,11 +528,17 @@ mod tests {
                 },
             );
 
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
     }
 
@@ -504,12 +555,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Int(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             node.visit(&mut walker)
         }
 
@@ -522,12 +579,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             assert!(node.visit(&mut walker).is_err());
         }
     }
@@ -545,12 +608,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Int(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             node.visit(&mut walker)
         }
 
@@ -563,12 +632,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             node.visit(&mut walker)
         }
 
@@ -581,12 +656,18 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             assert!(node.visit(&mut walker).is_err());
         }
 
@@ -610,20 +691,25 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Mixed(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
 
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = init_node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
 
             let _ = assignment_node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -651,20 +737,25 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Mixed(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
 
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = init_node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
 
             let _ = assignment_node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -696,20 +787,25 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Mixed(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
 
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = init_node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
 
             let _ = assignment_node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
     }
 
@@ -727,13 +823,19 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -747,13 +849,19 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -767,13 +875,19 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(!walker.errors.is_empty());
+            assert!(!walker.context.errors.is_empty());
         }
     }
 
@@ -808,31 +922,37 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
 
             // return void from void function
             walker.current_function = Some(void_function_def.clone());
             let _ = void_node.visit(&mut walker);
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
 
             // return void from non-void function
             walker.current_function = Some(int_function_def);
             let _ = void_node.visit(&mut walker);
-            assert!(!walker.errors.is_empty());
+            assert!(!walker.context.errors.is_empty());
 
-            walker.errors = vec![];
+            walker.context.errors = vec![];
 
             // return int from int function
             let _ = int_node.visit(&mut walker);
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
 
             // return int from void function
             walker.current_function = Some(void_function_def);
             let _ = int_node.visit(&mut walker);
-            assert!(!walker.errors.is_empty());
+            assert!(!walker.context.errors.is_empty());
         }
 
         #[test]
@@ -850,14 +970,20 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(void_function_def);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -875,14 +1001,20 @@ mod tests {
                 span: None,
             };
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(function_def);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
     }
 
@@ -897,15 +1029,21 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Int(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -916,15 +1054,21 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
-            scope_tree.get_current_mut().unwrap().insert(sym);
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            scopes.get_current_mut().unwrap().insert(sym);
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(!walker.errors.is_empty());
+            assert!(!walker.context.errors.is_empty());
         }
 
         #[test]
@@ -935,13 +1079,19 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -952,13 +1102,19 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
@@ -969,13 +1125,19 @@ mod tests {
                 span: None,
             });
 
-            let functions = HashMap::new();
-            let mut scope_tree = ScopeTree::default();
-            scope_tree.push_new();
-            let mut walker = SemanticCheckWalker::new(&scope_tree, &functions);
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
     }
 }
