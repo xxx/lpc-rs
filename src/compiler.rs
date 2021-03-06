@@ -56,7 +56,7 @@ where
         }
     };
 
-    let mut context = preprocessor.into_context();
+    let context = preprocessor.into_context();
 
     let program = lpc_parser::ProgramParser::new().parse(LexWrapper::new(&code));
 

@@ -23,7 +23,7 @@ use crate::{
     interpreter::{constant_pool::ConstantPool, lpc_value::LPCValue, program::Program},
     parser::span::Span,
     semantic::{
-        function_symbol::FunctionSymbol, lpc_type::LPCType, scope_tree::ScopeTree, symbol::Symbol,
+        function_symbol::FunctionSymbol, lpc_type::LPCType, symbol::Symbol,
     },
 };
 use multimap::MultiMap;
@@ -695,7 +695,7 @@ mod tests {
             .unwrap();
 
         let _ = scope_walker.visit_program(&mut tree);
-        let mut context = scope_walker.into_context();
+        let context = scope_walker.into_context();
 
         let mut walker = AsmTreeWalker::new(context);
         let _ = tree.visit(&mut walker);
@@ -751,7 +751,7 @@ mod tests {
                 vec![None, Some(ExpressionNode::from("muffuns"))],
             );
 
-            let mut context = Context {
+            let context = Context {
                 function_params,
                 ..Context::default()
             };
@@ -928,7 +928,7 @@ mod tests {
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_indexes() {
-            let mut context = Context::default();
+            let context = Context::default();
             let mut walker = AsmTreeWalker::new(context);
 
             let mut node = BinaryOpNode {
@@ -1004,7 +1004,7 @@ mod tests {
     #[test]
     fn test_visit_function_def_populates_the_data() {
         let mut scope_walker = ScopeWalker::default();
-        let mut walker = AsmTreeWalker::default();
+        let _walker = AsmTreeWalker::default();
         let call = "int main(int i) { return i + 4; }";
         let tree = lpc_parser::DefParser::new()
             .parse(LexWrapper::new(call))
@@ -1081,7 +1081,7 @@ mod tests {
         let mut scope_walker = ScopeWalker::default();
         let _ = scope_walker.visit_decl(&mut tree);
 
-        let mut context = scope_walker.into_context();
+        let context = scope_walker.into_context();
         let mut walker = AsmTreeWalker::new(context);
         let _ = walker.visit_decl(&mut tree);
 

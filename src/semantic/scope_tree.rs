@@ -1,5 +1,4 @@
 use crate::{
-    codegen::scope_walker::ScopeWalker,
     semantic::{local_scope::LocalScope, symbol::Symbol},
 };
 use indextree::{Arena, Node, NodeId};

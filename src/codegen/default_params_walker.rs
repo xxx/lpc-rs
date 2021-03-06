@@ -3,7 +3,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
 };
-use std::collections::HashMap;
+
 use crate::context::Context;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.

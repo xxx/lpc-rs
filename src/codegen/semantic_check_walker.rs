@@ -358,7 +358,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
 
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -380,7 +380,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -403,7 +403,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -425,7 +425,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -460,7 +460,7 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -495,7 +495,7 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -530,7 +530,7 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -560,7 +560,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -584,7 +584,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -613,7 +613,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -637,7 +637,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -661,7 +661,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -696,7 +696,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -742,7 +742,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -792,7 +792,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -826,7 +826,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -852,7 +852,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -878,7 +878,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -925,7 +925,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -973,7 +973,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -1004,7 +1004,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -1034,7 +1034,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -1059,7 +1059,7 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LPCType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -1082,7 +1082,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -1105,7 +1105,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()
@@ -1128,7 +1128,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let mut context = Context {
+            let context = Context {
                 scopes,
                 function_prototypes,
                 ..Context::default()

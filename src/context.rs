@@ -1,7 +1,7 @@
 use crate::errors::lazy_files::LazyFiles;
 use path_absolutize::Absolutize;
 use std::path::{PathBuf, Path};
-use crate::errors::LPCError;
+
 use crate::errors::compiler_error::CompilerError;
 use crate::semantic::scope_tree::ScopeTree;
 use std::collections::HashMap;

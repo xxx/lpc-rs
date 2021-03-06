@@ -6,11 +6,11 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::{undefined_var_error::UndefinedVarError, CompilerError},
     semantic::{
-        function_prototype::FunctionPrototype, scope_tree::ScopeTree,
+        function_prototype::FunctionPrototype,
         semantic_checks::check_var_redefinition, symbol::Symbol,
     },
 };
-use std::collections::HashMap;
+
 use crate::context::Context;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating

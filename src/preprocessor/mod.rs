@@ -7,7 +7,7 @@ use crate::{context::Context, errors::preprocessor_error::PreprocessorError, par
 use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
-use std::io::Error;
+
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
