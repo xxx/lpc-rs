@@ -6,8 +6,8 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::{undefined_var_error::UndefinedVarError, CompilerError},
     semantic::{
-        function_prototype::FunctionPrototype,
-        semantic_checks::check_var_redefinition, symbol::Symbol,
+        function_prototype::FunctionPrototype, semantic_checks::check_var_redefinition,
+        symbol::Symbol,
     },
 };
 
@@ -24,9 +24,7 @@ pub struct ScopeWalker {
 impl ScopeWalker {
     /// Create a new `ScopeWalker`, with `context` as the context.
     pub fn new(context: Context) -> Self {
-        Self {
-            context
-        }
+        Self { context }
     }
 
     /// Insert a new symbol into the current scope
@@ -105,7 +103,9 @@ impl TreeWalker for ScopeWalker {
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
         if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
-            self.context.errors.push(CompilerError::VarRedefinitionError(e));
+            self.context
+                .errors
+                .push(CompilerError::VarRedefinitionError(e));
         }
 
         if let Some(expr_node) = &mut node.value {
@@ -126,7 +126,8 @@ impl TreeWalker for ScopeWalker {
             }
         } else {
             // We check for undefined vars here in case a symbol is subsequently defined.
-            self.context.errors
+            self.context
+                .errors
                 .push(CompilerError::UndefinedVarError(UndefinedVarError {
                     name: node.name.clone(),
                     span: node.span.clone(),
@@ -143,9 +144,7 @@ impl Default for ScopeWalker {
         // Push a default global scope.
         context.scopes.push_new();
 
-        Self {
-            context,
-        }
+        Self { context }
     }
 }
 
@@ -247,7 +246,13 @@ mod tests {
 
             let _ = walker.visit_var_init(&mut node);
 
-            assert!(walker.context.scopes.get_current().unwrap().lookup("foo").is_some());
+            assert!(walker
+                .context
+                .scopes
+                .get_current()
+                .unwrap()
+                .lookup("foo")
+                .is_some());
         }
     }
 

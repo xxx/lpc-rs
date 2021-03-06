@@ -8,7 +8,6 @@ use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
-
 type Result<T> = result::Result<T, PreprocessorError>;
 
 #[derive(Debug, Clone)]
@@ -164,7 +163,7 @@ impl Preprocessor {
                 return Err(PreprocessorError {
                     message: format!("Unable to read `{}`: {}", canonical_path.display(), e),
                     file_id: id,
-                    span: None
+                    span: None,
                 });
             }
         };

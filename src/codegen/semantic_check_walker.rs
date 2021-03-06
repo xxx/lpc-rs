@@ -21,8 +21,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-use crate::errors::compiler_error::range_error::RangeError;
-use crate::context::Context;
+use crate::{context::Context, errors::compiler_error::range_error::RangeError};
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -35,17 +34,14 @@ pub struct SemanticCheckWalker {
 
     // /// The errors we collect as we traverse the tree
     // errors: Vec<CompilerError>,
-
     /// Track the current function, so we can type check returns.
     current_function: Option<FunctionDefNode>,
 
-    context: Context
+    context: Context,
 }
 
 impl SemanticCheckWalker {
-    pub fn new(
-        context: Context,
-    ) -> Self {
+    pub fn new(context: Context) -> Self {
         Self {
             context,
             current_function: None,
@@ -58,7 +54,12 @@ impl SemanticCheckWalker {
             .function_prototypes
             .keys()
             .map(|k| k.as_str())
-            .zip(self.context.function_prototypes.values().map(|v| v.return_type))
+            .zip(
+                self.context
+                    .function_prototypes
+                    .values()
+                    .map(|v| v.return_type),
+            )
             .collect::<HashMap<_, _>>()
     }
 
@@ -126,20 +127,24 @@ impl TreeWalker for SemanticCheckWalker {
                     if let ExpressionNode::Int(IntNode { value: 0, .. }) = *arg {
                         // sigh.
                     } else {
-                        let arg_type = node_type(arg, &self.context.scopes, &self.function_return_values());
+                        let arg_type =
+                            node_type(arg, &self.context.scopes, &self.function_return_values());
                         if !ty.matches_type(arg_type) {
-                            self.context.errors.push(CompilerError::ArgTypeError(ArgTypeError {
-                                name: node.name.clone(),
-                                type_: arg_type,
-                                expected: *ty,
-                                span: arg.span().clone(),
-                                declaration_span: if let Some(span) = prototype.arg_spans.get(index)
-                                {
-                                    Some(span.clone())
-                                } else {
-                                    None
-                                },
-                            }));
+                            self.context
+                                .errors
+                                .push(CompilerError::ArgTypeError(ArgTypeError {
+                                    name: node.name.clone(),
+                                    type_: arg_type,
+                                    expected: *ty,
+                                    span: arg.span().clone(),
+                                    declaration_span: if let Some(span) =
+                                        prototype.arg_spans.get(index)
+                                    {
+                                        Some(span.clone())
+                                    } else {
+                                        None
+                                    },
+                                }));
                         }
                     }
                 }
@@ -153,7 +158,11 @@ impl TreeWalker for SemanticCheckWalker {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
-        match check_binary_operation_types(node, &self.context.scopes, &self.function_return_values()) {
+        match check_binary_operation_types(
+            node,
+            &self.context.scopes,
+            &self.function_return_values(),
+        ) {
             Ok(_) => Ok(()),
             Err(err) => {
                 let e = CompilerError::BinaryOperationError(err);
@@ -187,8 +196,11 @@ impl TreeWalker for SemanticCheckWalker {
                 if let ExpressionNode::Int(IntNode { value: 0, .. }) = expression {
                     // returning a literal 0 is allowable for any type, including void.
                 } else {
-                    let return_type =
-                        node_type(expression, &self.context.scopes, &self.function_return_values());
+                    let return_type = node_type(
+                        expression,
+                        &self.context.scopes,
+                        &self.function_return_values(),
+                    );
 
                     if function_def.return_type == LPCType::Void
                         || !function_def.return_type.matches_type(return_type)
@@ -220,7 +232,11 @@ impl TreeWalker for SemanticCheckWalker {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            let expr_type = node_type(expression, &self.context.scopes, &self.function_return_values());
+            let expr_type = node_type(
+                expression,
+                &self.context.scopes,
+                &self.function_return_values(),
+            );
 
             let ret = if node.type_.matches_type(expr_type) {
                 Ok(())
@@ -251,8 +267,16 @@ impl TreeWalker for SemanticCheckWalker {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
-        let left_type = node_type(&node.lhs, &self.context.scopes, &self.function_return_values());
-        let right_type = node_type(&node.rhs, &self.context.scopes, &self.function_return_values());
+        let left_type = node_type(
+            &node.lhs,
+            &self.context.scopes,
+            &self.function_return_values(),
+        );
+        let right_type = node_type(
+            &node.rhs,
+            &self.context.scopes,
+            &self.function_return_values(),
+        );
 
         if left_type.matches_type(right_type) {
             Ok(())

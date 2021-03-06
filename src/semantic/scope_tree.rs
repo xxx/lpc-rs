@@ -1,9 +1,9 @@
 use crate::{
+    context::Context,
     semantic::{local_scope::LocalScope, symbol::Symbol},
 };
 use indextree::{Arena, Node, NodeId};
 use std::collections::HashMap;
-use crate::context::Context;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes

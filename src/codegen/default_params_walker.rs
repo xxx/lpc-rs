@@ -10,7 +10,7 @@ use crate::context::Context;
 #[derive(Debug, Default)]
 pub struct DefaultParamsWalker {
     /// The compilation context
-    context: Context
+    context: Context,
 }
 
 impl DefaultParamsWalker {

@@ -24,10 +24,14 @@ use std::path::Path;
 /// `filename` - The name of the file to compile. Also used for error messaging.
 pub fn compile_file<T>(filename: T) -> Result<Program, CompilerError>
 where
-    T: AsRef<Path> + AsRef<str>
+    T: AsRef<Path> + AsRef<str>,
 {
-    let file_content =
-        fs::read_to_string(&filename).unwrap_or_else(|_| panic!("cannot read file: {}", AsRef::<Path>::as_ref(&filename).display()));
+    let file_content = fs::read_to_string(&filename).unwrap_or_else(|_| {
+        panic!(
+            "cannot read file: {}",
+            AsRef::<Path>::as_ref(&filename).display()
+        )
+    });
 
     compile_string(filename, file_content)
 }
@@ -50,7 +54,10 @@ where
         Ok(c) => c,
         Err(e) => {
             errors.push(CompilerError::PreprocessorError(e));
-            errors::emit_diagnostics(&*AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
+            errors::emit_diagnostics(
+                &*AsRef::<Path>::as_ref(&filename).to_string_lossy(),
+                &errors,
+            );
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -64,7 +71,10 @@ where
         Ok(prog) => prog,
         Err(e) => {
             errors.push(CompilerError::ParseError(ParseError::from(e)));
-            errors::emit_diagnostics(&*AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
+            errors::emit_diagnostics(
+                &*AsRef::<Path>::as_ref(&filename).to_string_lossy(),
+                &errors,
+            );
 
             // Parse errors are fatal, so we're done here.
             return Err(CompilerError::MultiError(errors));
@@ -96,7 +106,10 @@ where
     let context = semantic_check_walker.into_context();
 
     if !context.errors.is_empty() {
-        errors::emit_diagnostics(&AsRef::<Path>::as_ref(&filename).to_string_lossy(), &context.errors);
+        errors::emit_diagnostics(
+            &AsRef::<Path>::as_ref(&filename).to_string_lossy(),
+            &context.errors,
+        );
         return Err(CompilerError::MultiError(context.errors));
     }
 

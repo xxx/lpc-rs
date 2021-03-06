@@ -19,17 +19,15 @@ use crate::{
         var_node::VarNode,
     },
     codegen::tree_walker,
+    context::Context,
     errors::compiler_error::CompilerError,
     interpreter::{constant_pool::ConstantPool, lpc_value::LPCValue, program::Program},
     parser::span::Span,
-    semantic::{
-        function_symbol::FunctionSymbol, lpc_type::LPCType, symbol::Symbol,
-    },
+    semantic::{function_symbol::FunctionSymbol, lpc_type::LPCType, symbol::Symbol},
 };
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
-use crate::context::Context;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -1380,7 +1378,12 @@ mod tests {
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {
         if let Some(node_id) = walker.context.scopes.current_id {
-            walker.context.scopes.get_mut(node_id).unwrap().insert(symbol)
+            walker
+                .context
+                .scopes
+                .get_mut(node_id)
+                .unwrap()
+                .insert(symbol)
         }
     }
 }

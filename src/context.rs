@@ -1,12 +1,13 @@
 use crate::errors::lazy_files::LazyFiles;
 use path_absolutize::Absolutize;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
-use crate::errors::compiler_error::CompilerError;
-use crate::semantic::scope_tree::ScopeTree;
+use crate::{
+    ast::expression_node::ExpressionNode,
+    errors::compiler_error::CompilerError,
+    semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
+};
 use std::collections::HashMap;
-use crate::semantic::function_prototype::FunctionPrototype;
-use crate::ast::expression_node::ExpressionNode;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -64,7 +65,10 @@ impl Context {
     {
         Self {
             filename: String::from(filename.as_ref()),
-            root_dir: PathBuf::from(root_dir.as_ref()).absolutize().unwrap().to_path_buf(),
+            root_dir: PathBuf::from(root_dir.as_ref())
+                .absolutize()
+                .unwrap()
+                .to_path_buf(),
             include_dirs: include_dirs.iter().map(|i| PathBuf::from(*i)).collect(),
             ..Self::default()
         }
