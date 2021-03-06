@@ -24,10 +24,10 @@ use std::path::Path;
 /// `filename` - The name of the file to compile. Also used for error messaging.
 pub fn compile_file<T>(filename: T) -> Result<Program, CompilerError>
 where
-    T: AsRef<Path>
+    T: AsRef<Path> + AsRef<str>
 {
     let file_content =
-        fs::read_to_string(&filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename.as_ref().display()));
+        fs::read_to_string(&filename).unwrap_or_else(|_| panic!("cannot read file: {}", AsRef::<Path>::as_ref(&filename).display()));
 
     compile_string(filename, file_content)
 }
@@ -39,18 +39,18 @@ where
 /// `code` - The actual code to be compiled.
 pub fn compile_string<T, U>(filename: T, code: U) -> Result<Program, CompilerError>
 where
-    T: AsRef<Path>,
+    T: AsRef<Path> + AsRef<str>,
     U: AsRef<str>,
 {
     let mut errors: Vec<CompilerError> = vec![];
 
-    let context = Context::new(".", Vec::new());
+    let context = Context::new(&filename, ".", Vec::new());
     let mut preprocessor = Preprocessor::new(context);
     let code = match preprocessor.scan(&filename, ".", &code) {
         Ok(c) => c,
         Err(e) => {
             errors.push(CompilerError::PreprocessorError(e));
-            errors::emit_diagnostics(&filename.as_ref().to_string_lossy(), &errors);
+            errors::emit_diagnostics(&*AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -62,7 +62,7 @@ where
         Ok(prog) => prog,
         Err(e) => {
             errors.push(CompilerError::ParseError(ParseError::from(e)));
-            errors::emit_diagnostics(&*filename.as_ref().to_string_lossy(), &errors);
+            errors::emit_diagnostics(&*AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -73,7 +73,7 @@ where
     // let mut printer = TreePrinter::new();
     // let _ = program.visit(&mut printer);
 
-    let mut scope_walker = ScopeWalker::new(&filename.as_ref().to_string_lossy());
+    let mut scope_walker = ScopeWalker::new(&AsRef::<Path>::as_ref(&filename).to_string_lossy());
 
     let _ = program.visit(&mut scope_walker);
 
@@ -95,7 +95,7 @@ where
     }
 
     if !errors.is_empty() {
-        errors::emit_diagnostics(&filename.as_ref().to_string_lossy(), &errors);
+        errors::emit_diagnostics(&AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
         return Err(CompilerError::MultiError(errors));
     }
 
@@ -107,7 +107,7 @@ where
         println!("{}", s);
     }
 
-    let program = asm_walker.to_program(&filename.as_ref().to_string_lossy());
+    let program = asm_walker.to_program(&AsRef::<Path>::as_ref(&filename).to_string_lossy());
 
     let msgpack = program.to_msgpack();
     println!("{:?}", msgpack.len());

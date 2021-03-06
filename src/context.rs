@@ -1,6 +1,6 @@
 use crate::errors::lazy_files::LazyFiles;
 use path_absolutize::Absolutize;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -34,11 +34,16 @@ impl Context {
     /// ```
     /// use lpc_rs::context::Context;
     ///
-    /// let context = Context::new("/home/mud/lib", vec!["/include", "/sys"]);
+    /// let context = Context::new("./test.c", "/home/mud/lib", vec!["/include", "/sys"]);
     /// ```
-    pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
+    pub fn new<T, U>(filename: T, root_dir: U, include_dirs: Vec<&str>) -> Self
+    where
+        T: AsRef<str>,
+        U: AsRef<Path>,
+    {
         Self {
-            root_dir: PathBuf::from(root_dir).absolutize().unwrap().to_path_buf(),
+            filename: String::from(filename.as_ref()),
+            root_dir: PathBuf::from(root_dir.as_ref()).absolutize().unwrap().to_path_buf(),
             include_dirs: include_dirs.iter().map(|i| PathBuf::from(*i)).collect(),
             ..Self::default()
         }

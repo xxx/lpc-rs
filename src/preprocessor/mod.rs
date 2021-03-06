@@ -7,6 +7,7 @@ use crate::{context::Context, errors::preprocessor_error::PreprocessorError, par
 use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
+use std::io::Error;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -47,7 +48,7 @@ impl Preprocessor {
     /// use lpc_rs::preprocessor::Preprocessor;
     /// use lpc_rs::context::Context;
     ///
-    /// let context = Context::new("/home/mud/lib", vec!["/include", "/sys"]);
+    /// let context = Context::new("test.c", "/home/mud/lib", vec!["/include", "/sys"]);
     /// let preprocessor = Preprocessor::new(context);
     /// ```
     pub fn new(context: Context) -> Self {
@@ -71,7 +72,7 @@ impl Preprocessor {
     //          emit the line
     //
 
-    /// Convert an in-game path, relative or absolute, to a canonical on-server path.
+    /// Convert an in-game path, relative or absolute, to a canonical, absolute on-server path.
     /// This function is used for resolving included files.
     ///
     /// # Arguments
@@ -105,7 +106,7 @@ impl Preprocessor {
             .to_path_buf()
     }
 
-    /// Convert an in-game path, relative or absolute, to a canonical in-game path.
+    /// Convert an in-game path, relative or absolute, to a canonical, absolute in-game path.
     ///
     /// # Arguments
     /// `path` - An in-game path.
@@ -128,10 +129,47 @@ impl Preprocessor {
         )
     }
 
+    /// Scan a file on disk, using the `filename` stored in `Context`.
+    /// This is a light wrapper around `scan()` for convenience to kick off a scan.
+    ///
+    /// # Arguments
+    /// `cwd` - The current working directory on-server, used to resolve relative links
+    ///
+    /// # Examples
+    /// ```
+    /// use lpc_rs::context::Context;
+    /// use lpc_rs::preprocessor::Preprocessor;
+    ///
+    /// let context = Context::new("./foo.c", ".", vec!["/include", "/sys/include"]);
+    /// let mut preprocessor = Preprocessor::new(context);
+    ///
+    /// let processed = preprocessor.scan_file("/");
+    /// ```
+    pub fn scan_file<T>(&mut self, cwd: T) -> Result<String>
+        where
+            T: AsRef<Path>,
+    {
+        let id = self.context.files.add(self.context.filename.clone());
+        let source = match self.context.files.source(id) {
+            Ok(x) => x,
+            Err(e) => {
+                let canonical_path = self.canonicalize_path(&self.context.filename, &cwd);
+
+                return Err(PreprocessorError {
+                    message: format!("Unable to read `{}`: {}", canonical_path.display(), e),
+                    file_id: id,
+                    span: None
+                });
+            }
+        };
+
+        self.scan(&self.context.filename.clone(), cwd, source)
+    }
+
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
     ///
     /// # Arguments
-    /// `path` - The name of the file being scanned.
+    /// `path` - The path + name of the file being scanned.
     /// `cwd` - The current working directory on-server, used to resolve relative links
     /// `file_content` - The actual content of the file to scan.
     ///
@@ -140,7 +178,7 @@ impl Preprocessor {
     /// use lpc_rs::preprocessor::Preprocessor;
     /// use lpc_rs::context::Context;
     ///
-    /// let context = Context::new(".", vec!["/include", "/sys/include"]);
+    /// let context = Context::new("./foo.c", ".", vec!["/include", "/sys/include"]);
     /// let mut preprocessor = Preprocessor::new(context);
     ///
     /// let content = r#"
@@ -297,7 +335,7 @@ mod tests {
     use super::*;
 
     fn fixture() -> Preprocessor {
-        let context = Context::new("./tests/fixtures", Vec::new());
+        let context = Context::new("test.c", "./tests/fixtures", Vec::new());
         Preprocessor::new(context)
     }
 
