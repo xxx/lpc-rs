@@ -4,9 +4,11 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::{errors::preprocessor_error::PreprocessorError, parser::span::Span};
-use codespan_reporting::files::{Files, SimpleFiles};
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
+use crate::errors::lazy_files::LazyFiles;
+use codespan_reporting::files::Files;
+use std::ffi::OsStr;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -28,7 +30,7 @@ pub struct Preprocessor {
     include_dirs: Vec<PathBuf>,
 
     /// Track the files we've seen
-    files: SimpleFiles<String, String>,
+    files: LazyFiles<String, String>,
 
     defines: HashMap<String, String>,
 
@@ -165,10 +167,7 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
         }
 
-        let file_id = self.files.add(
-            String::from(path.as_ref().to_string_lossy()),
-            String::from(file_content),
-        );
+        let file_id = self.files.add(String::from(path.as_ref().to_string_lossy()));
 
         let mut current_line = 1;
 
@@ -229,7 +228,12 @@ impl Preprocessor {
         let canon_include_path = self.canonicalize_path(&path, &cwd);
 
         if !canon_include_path.starts_with(&self.root_dir) {
-            let range = &self.files.line_range(file_id, parent_line - 1).unwrap();
+            let range = if let Ok(r) = self.files.line_range(file_id, parent_line - 1) {
+                r
+            } else {
+                0..1
+            };
+
             return Err(PreprocessorError::new(
                 &format!(
                     "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
@@ -247,11 +251,15 @@ impl Preprocessor {
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                let range = &self.files.line_range(file_id, parent_line - 1).unwrap();
+                let range = if let Ok(r) = self.files.line_range(file_id, parent_line - 1) {
+                    r
+                } else {
+                    0..1
+                };
 
                 return Err(PreprocessorError::new(
                     &format!(
-                        "Error including file `{}`: {:?}",
+                        "Unable to read include file `{}`: {:?}",
                         path.as_ref().display(),
                         e
                     ),
@@ -279,7 +287,7 @@ impl Default for Preprocessor {
             defines: HashMap::new(),
             directives: vec![],
             skip_lines: false,
-            files: SimpleFiles::new(),
+            files: LazyFiles::new(),
         }
     }
 }
