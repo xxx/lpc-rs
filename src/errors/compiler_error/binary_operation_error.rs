@@ -34,7 +34,7 @@ pub struct BinaryOperationError {
 
 impl LPCError for BinaryOperationError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        default_diagnostic(format!("{}", self), file_id, &self.span)
+        default_diagnostic(format!("{}", self), file_id, self.span)
     }
 }
 

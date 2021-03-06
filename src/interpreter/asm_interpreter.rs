@@ -570,13 +570,13 @@ impl AsmInterpreter {
     fn populate_error_span(&self, error: &mut RuntimeError) {
         match error {
             RuntimeError::BinaryOperationError(err) => {
-                err.span = self.program.debug_spans.get(self.pc).unwrap().clone()
+                err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }
             RuntimeError::DivisionByZeroError(err) => {
-                err.span = self.program.debug_spans.get(self.pc).unwrap().clone()
+                err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }
             RuntimeError::IndexError(err) => {
-                err.span = self.program.debug_spans.get(self.pc).unwrap().clone()
+                err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }
             RuntimeError::UnknownError(_) => unimplemented!(),
         }

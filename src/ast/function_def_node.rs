@@ -47,7 +47,7 @@ impl Clone for FunctionDefNode {
             name: self.name.clone(),
             parameters: self.parameters.to_vec(),
             body: self.body.to_vec(),
-            span: self.span.clone(),
+            span: self.span,
         }
     }
 }

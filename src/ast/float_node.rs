@@ -8,7 +8,7 @@ use std::{
 };
 
 /// A node representing a float literal
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FloatNode {
     pub value: f64,
 

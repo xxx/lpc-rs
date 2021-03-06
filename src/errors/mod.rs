@@ -47,7 +47,7 @@ where
 pub fn default_diagnostic(
     message: String,
     file_id: usize,
-    span: &Option<Span>,
+    span: Option<Span>,
 ) -> Vec<Diagnostic<usize>> {
     let mut diagnostic = Diagnostic::error().with_message(message);
 

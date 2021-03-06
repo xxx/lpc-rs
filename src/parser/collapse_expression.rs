@@ -215,7 +215,7 @@ mod tests {
         let op = BinaryOperation::Add;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -232,7 +232,7 @@ mod tests {
         let op = BinaryOperation::Sub;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -249,7 +249,7 @@ mod tests {
         let op = BinaryOperation::Mul;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -266,7 +266,7 @@ mod tests {
         let op = BinaryOperation::Div;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -283,7 +283,7 @@ mod tests {
         let op = BinaryOperation::Add;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {
@@ -300,7 +300,7 @@ mod tests {
         let op = BinaryOperation::Add;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {
@@ -317,7 +317,7 @@ mod tests {
         let op = BinaryOperation::Mul;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {
@@ -334,7 +334,7 @@ mod tests {
         let op = BinaryOperation::Mul;
         let span = Span { l: 0, r: 1 };
 
-        let result = collapse_expression(op, node1, node2, span.clone());
+        let result = collapse_expression(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {

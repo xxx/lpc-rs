@@ -86,7 +86,7 @@ impl TreeWalker for SemanticCheckWalker {
         {
             let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
                 name: node.name.clone(),
-                span: node.span.clone(),
+                span: node.span,
             });
             self.context.errors.push(e);
             // Non-fatal. Continue.
@@ -112,8 +112,8 @@ impl TreeWalker for SemanticCheckWalker {
                     name: node.name.clone(),
                     expected: prototype.num_args,
                     actual: arg_len,
-                    span: node.span.clone(),
-                    prototype_span: prototype.span.clone(),
+                    span: node.span,
+                    prototype_span: prototype.span,
                 });
                 self.context.errors.push(e);
             }
@@ -134,11 +134,11 @@ impl TreeWalker for SemanticCheckWalker {
                                     name: node.name.clone(),
                                     type_: arg_type,
                                     expected: *ty,
-                                    span: arg.span().clone(),
+                                    span: arg.span(),
                                     declaration_span: if let Some(span) =
                                         prototype.arg_spans.get(index)
                                     {
-                                        Some(span.clone())
+                                        Some(*span)
                                     } else {
                                         None
                                     },
@@ -206,7 +206,7 @@ impl TreeWalker for SemanticCheckWalker {
                         let error = CompilerError::ReturnTypeError(ReturnTypeError {
                             type_: return_type,
                             expected: function_def.return_type,
-                            span: node.span.clone(),
+                            span: node.span,
                         });
 
                         self.context.errors.push(error);
@@ -216,7 +216,7 @@ impl TreeWalker for SemanticCheckWalker {
                 let error = CompilerError::ReturnTypeError(ReturnTypeError {
                     type_: LPCType::Void,
                     expected: function_def.return_type,
-                    span: node.span.clone(),
+                    span: node.span,
                 });
 
                 self.context.errors.push(error);
@@ -247,7 +247,7 @@ impl TreeWalker for SemanticCheckWalker {
                     left_type: node.type_,
                     right_name: expression.to_string(),
                     right_type: expr_type,
-                    span: node.span.clone(),
+                    span: node.span,
                 });
 
                 self.context.errors.push(e.clone());
@@ -287,7 +287,7 @@ impl TreeWalker for SemanticCheckWalker {
                 left_type,
                 right_name: format!("{}", node.rhs),
                 right_type,
-                span: node.span.clone(),
+                span: node.span,
             });
 
             self.context.errors.push(e.clone());
@@ -331,7 +331,7 @@ impl TreeWalker for SemanticCheckWalker {
                 left_type,
                 right_name: format!("{:?}", node.r),
                 right_type,
-                span: node.span.clone(),
+                span: node.span,
             });
 
             self.context.errors.push(e.clone());

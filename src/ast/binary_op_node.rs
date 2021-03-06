@@ -70,7 +70,7 @@ impl Clone for BinaryOpNode {
             l: Box::new((*self.l).clone()),
             r: Box::new((*self.r).clone()),
             op: self.op,
-            span: self.span.clone(),
+            span: self.span,
         }
     }
 }

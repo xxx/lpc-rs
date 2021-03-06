@@ -88,11 +88,11 @@ impl TreeWalker for ScopeWalker {
                 num_args,
                 num_default_args,
                 arg_types,
-                span: node.span.clone(),
+                span: node.span,
                 arg_spans: {
                     node.parameters
                         .iter()
-                        .flat_map(|n| n.span.clone())
+                        .flat_map(|n| n.span)
                         .collect::<Vec<_>>()
                 },
             },
@@ -130,7 +130,7 @@ impl TreeWalker for ScopeWalker {
                 .errors
                 .push(CompilerError::UndefinedVarError(UndefinedVarError {
                     name: node.name.clone(),
-                    span: node.span.clone(),
+                    span: node.span,
                 }));
         }
 

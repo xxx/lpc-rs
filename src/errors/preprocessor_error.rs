@@ -32,7 +32,7 @@ impl PreprocessorError {
 
 impl LPCError for PreprocessorError {
     fn to_diagnostics(&self, _file_id: usize) -> Vec<Diagnostic<usize>> {
-        default_diagnostic(format!("{}", self), self.file_id, &self.span)
+        default_diagnostic(format!("{}", self), self.file_id, self.span)
     }
 }
 
