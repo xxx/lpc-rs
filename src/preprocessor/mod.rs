@@ -209,6 +209,8 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
             static ref DEFINE: Regex =
                 Regex::new(r#"\A\s*#\s*define\s+(\S+)(?:\s*(.*))?\z"#).unwrap();
+            static ref UNDEF: Regex =
+                Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
         }
 
         let file_id = self
@@ -274,6 +276,8 @@ impl Preprocessor {
                 };
 
                 self.defines.insert(name, convert_escapes(value));
+            } else if let Some(captures) = UNDEF.captures(line) {
+                self.defines.remove(&captures[1]);
             } else {
                 output.push_str(line);
                 output.push('\n');
@@ -533,6 +537,25 @@ mod tests {
                 }
                 Err(e) => {
                     assert_eq!(e.message, "Duplicate #define: `ASS`");
+                }
+            }
+        }
+
+        #[test]
+        fn test_duplicate_after_undef() {
+            let input = indoc! { r#"
+                #define ASS 123
+                #undef ASS
+                #define ASS 456
+            "# };
+            let mut preprocessor = fixture();
+
+            match preprocessor.scan("test.c", "/", input) {
+                Ok(_) => {
+                    assert_eq!(preprocessor.defines.get("ASS").unwrap(), "456");
+                }
+                Err(e) => {
+                    panic!("{:?}", e)
                 }
             }
         }
