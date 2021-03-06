@@ -22,7 +22,7 @@ pub enum PreprocessorDirective {
 }
 
 #[derive(Debug)]
-pub struct Preprocessor {
+pub struct Preprocessor<'a> {
     /// The compilation context
     context: Context,
 
@@ -32,9 +32,12 @@ pub struct Preprocessor {
 
     /// Are we currently within a block that is `if`'d out?
     skip_lines: bool,
+
+    /// Stack of ifdefs that are in play, so we can handle #endifs
+    ifdefs: Vec<&'a str>
 }
 
-impl Preprocessor {
+impl<'a> Preprocessor<'a> {
     /// Create a new `Preprocessor`
     ///
     /// # Arguments
@@ -211,6 +214,12 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*define\s+(\S+)(?:\s*(.*))?\z"#).unwrap();
             static ref UNDEF: Regex =
                 Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
+            static ref IFDEF: Regex =
+                Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
+            static ref IFDEFINED: Regex =
+                Regex::new(r#"\A\s*#\s*if\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
+            static ref ENDIF: Regex =
+                Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
         }
 
         let file_id = self
@@ -361,13 +370,14 @@ impl Preprocessor {
     }
 }
 
-impl Default for Preprocessor {
+impl<'a> Default for Preprocessor<'a> {
     fn default() -> Self {
         Self {
             context: Context::default(),
             defines: HashMap::new(),
-            directives: vec![],
+            directives: Vec::new(),
             skip_lines: false,
+            ifdefs: Vec::new(),
         }
     }
 }
@@ -376,7 +386,7 @@ impl Default for Preprocessor {
 mod tests {
     use super::*;
 
-    fn fixture() -> Preprocessor {
+    fn fixture<'a>() -> Preprocessor<'a> {
         let context = Context::new("test.c", "./tests/fixtures", Vec::new());
         Preprocessor::new(context)
     }
