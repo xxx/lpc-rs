@@ -51,7 +51,7 @@ macro_rules! string_constant {
 ///
 /// ```
 /// use lpc_rs::lpc_parser;
-/// use lpc_rs::codegen::tree_walker::TreeWalker;
+/// use lpc_rs::codegen::tree_walker::{TreeWalker, ContextHolder};
 /// use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
 /// use lpc_rs::codegen::scope_walker::ScopeWalker;
 /// use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;

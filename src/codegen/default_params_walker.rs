@@ -4,6 +4,7 @@ use crate::{
 };
 
 use crate::context::Context;
+use crate::codegen::tree_walker::ContextHolder;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
 #[derive(Debug, Default)]
@@ -18,11 +19,13 @@ impl DefaultParamsWalker {
     }
 }
 
-impl TreeWalker for DefaultParamsWalker {
+impl ContextHolder for DefaultParamsWalker {
     fn into_context(self) -> Context {
         self.context
     }
+}
 
+impl TreeWalker for DefaultParamsWalker {
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let vec = node
             .parameters

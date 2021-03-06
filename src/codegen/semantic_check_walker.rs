@@ -20,6 +20,7 @@ use crate::{
 use std::collections::HashMap;
 
 use crate::{context::Context, errors::compiler_error::range_error::RangeError};
+use crate::codegen::tree_walker::ContextHolder;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -62,11 +63,13 @@ impl SemanticCheckWalker {
     }
 }
 
-impl TreeWalker for SemanticCheckWalker {
+impl ContextHolder for SemanticCheckWalker {
     fn into_context(self) -> Context {
         self.context
     }
+}
 
+impl TreeWalker for SemanticCheckWalker {
     fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> {
         for argument in &mut node.arguments {
             argument.visit(self)?;

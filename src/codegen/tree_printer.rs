@@ -49,11 +49,6 @@ impl Default for TreePrinter {
 }
 
 impl TreeWalker for TreePrinter {
-    fn into_context(self) -> Context {
-        // Just a placeholder because the trait requires it.
-        Context::default()
-    }
-
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<(), CompilerError> {
         println!("Program");
         self.indent += 2;

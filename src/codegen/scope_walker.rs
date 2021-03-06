@@ -12,6 +12,7 @@ use crate::{
 };
 
 use crate::context::Context;
+use crate::codegen::tree_walker::ContextHolder;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -35,11 +36,13 @@ impl ScopeWalker {
     }
 }
 
-impl TreeWalker for ScopeWalker {
+impl ContextHolder for ScopeWalker {
     fn into_context(self) -> Context {
         self.context
     }
+}
 
+impl TreeWalker for ScopeWalker {
     fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> {
         // Push the global scope
         self.context.scopes.push_new();

@@ -28,6 +28,7 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
+use crate::codegen::tree_walker::ContextHolder;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -334,11 +335,13 @@ impl AsmTreeWalker {
     }
 }
 
-impl TreeWalker for AsmTreeWalker {
+impl ContextHolder for AsmTreeWalker {
     fn into_context(self) -> Context {
         self.context
     }
+}
 
+impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<(), CompilerError> {
         self.context.scopes.goto_root();
         for expr in &mut program.body {
