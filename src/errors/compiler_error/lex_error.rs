@@ -17,7 +17,7 @@ impl Display for LexError {
 
 impl LPCError for LexError {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        default_diagnostic(format!("Lex Error: {}", self), file_id, &None)
+        default_diagnostic(format!("Lex Error: {}", self), file_id, None)
     }
 }
 
