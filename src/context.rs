@@ -1,6 +1,8 @@
 use crate::errors::lazy_files::LazyFiles;
 use path_absolutize::Absolutize;
 use std::path::{PathBuf, Path};
+use crate::errors::LPCError;
+use crate::errors::compiler_error::CompilerError;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -22,7 +24,7 @@ pub struct Context {
     pub files: LazyFiles<String, String>,
 
     /// Any errors that have been collected
-    pub errors: Vec<LpcError>,
+    pub errors: Vec<CompilerError>,
 }
 
 impl Context {
