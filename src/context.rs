@@ -26,6 +26,8 @@ impl Context {
     /// Create a new `Context`
     ///
     /// # Arguments
+    ///
+    /// `filename` - The path to the file (from `root_dir`) this context will be collected for.
     /// `root_dir` - The path to the root of the in-game filesystem
     /// `include_dirs` - A vector of *in-game* paths to be used for searching for system includes.
     ///     Searches will be done in the order given by this vector.

@@ -39,9 +39,7 @@ impl Preprocessor {
     /// Create a new `Preprocessor`
     ///
     /// # Arguments
-    /// `root_dir` - The path to the root of the in-game filesystem (sometimes a.k.a `LIBDIR`, etc.)
-    /// `include_dirs` - A vector of *in-game* paths to be used for searching for system includes.
-    ///     Searches will be done in the order given by this vector.
+    /// `context` - A context object to store data, errors, etc., generated during the compile
     ///
     /// # Examples
     /// ```
