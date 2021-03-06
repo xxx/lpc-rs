@@ -246,6 +246,26 @@ impl Preprocessor {
                 }
                 output.push_str(&format_line(current_line + 1));
             } else if let Some(captures) = DEFINE.captures(line) {
+                if self.defines.contains_key(&captures[1]) {
+                    let range = if let Ok(r) = self.context.files.line_range(file_id, current_line) {
+                        r
+                    } else {
+                        0..1
+                    };
+
+                    return Err(PreprocessorError::new(
+                        &format!(
+                            "Duplicate #define: `{}`",
+                            &captures[1]
+                        ),
+                        file_id,
+                        Span {
+                            l: range.start,
+                            r: range.end - 1,
+                        },
+                    ));
+                }
+
                 let name = String::from(&captures[1]);
                 let value = if captures[2].is_empty() {
                     "0"
@@ -495,6 +515,24 @@ mod tests {
                 }
                 Err(e) => {
                     panic!(format!("{:?}", e))
+                }
+            }
+        }
+
+        #[test]
+        fn test_duplicate_define() {
+            let input = indoc! { r#"
+                #define ASS 123
+                #define ASS 456
+            "# };
+            let mut preprocessor = fixture();
+
+            match preprocessor.scan("test.c", "/", input) {
+                Ok(_) => {
+                    panic!("Expected an error due to duplicate definition.");
+                }
+                Err(e) => {
+                    assert_eq!(e.message, "Duplicate #define: `ASS`");
                 }
             }
         }
