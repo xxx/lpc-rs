@@ -3,13 +3,14 @@ use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream},
 };
+use std::fmt::Debug;
 
 pub mod compiler_error;
 pub mod lazy_files;
 pub mod preprocessor_error;
 pub mod runtime_error;
 
-pub trait LPCError {
+pub trait LPCError: Debug {
     fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>>;
 }
 
