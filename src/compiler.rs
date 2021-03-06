@@ -16,6 +16,7 @@ use crate::{
 };
 
 use crate::parser::lexer::LexWrapper;
+use crate::context::Context;
 
 /// Fully compile a file into a Program struct
 ///
@@ -36,7 +37,8 @@ pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerError> {
     let mut errors: Vec<CompilerError> = vec![];
 
-    let mut preprocessor = Preprocessor::new(".", Vec::new());
+    let context = Context::new(".", Vec::new());
+    let mut preprocessor = Preprocessor::new(context);
     let code = match preprocessor.scan(filename, ".", &code) {
         Ok(c) => c,
         Err(e) => {

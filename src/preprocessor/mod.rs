@@ -6,9 +6,8 @@ use regex::Regex;
 use crate::{errors::preprocessor_error::PreprocessorError, parser::span::Span};
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
-use crate::errors::lazy_files::LazyFiles;
+use crate::context::Context;
 use codespan_reporting::files::Files;
-use std::ffi::OsStr;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -25,12 +24,8 @@ pub enum PreprocessorDirective {
 
 #[derive(Debug)]
 pub struct Preprocessor {
-    /// The true on-disk root dir, where in-game absolute paths point to.
-    root_dir: PathBuf,
-    include_dirs: Vec<PathBuf>,
-
-    /// Track the files we've seen
-    files: LazyFiles<String, String>,
+    /// The compilation context
+    context: Context,
 
     defines: HashMap<String, String>,
 
@@ -51,13 +46,14 @@ impl Preprocessor {
     /// # Examples
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
+    /// use lpc_rs::context::Context;
     ///
-    /// let preprocessor = Preprocessor::new("/home/mud/lib", vec!["/include", "/sys"]);
+    /// let context = Context::new("/home/mud/lib", vec!["/include", "/sys"]);
+    /// let preprocessor = Preprocessor::new(context);
     /// ```
-    pub fn new(root_dir: &str, include_dirs: Vec<&str>) -> Self {
+    pub fn new(context: Context) -> Self {
         Self {
-            root_dir: PathBuf::from(root_dir).absolutize().unwrap().to_path_buf(),
-            include_dirs: include_dirs.iter().map(|i| PathBuf::from(*i)).collect(),
+            context,
             ..Self::default()
         }
     }
@@ -90,7 +86,7 @@ impl Preprocessor {
         let path_ref = path.as_ref().as_os_str();
         let sep = String::from(std::path::MAIN_SEPARATOR);
         let os_sep = OsString::from(&sep);
-        let mut root_string = OsString::from(self.root_dir.to_str().unwrap());
+        let mut root_string = OsString::from(self.context.root_dir.to_str().unwrap());
         // Do this the hard way because .join/.push overwrite if the arg starts with "/"
         let localized_path = if path_ref.to_string_lossy().starts_with(&sep) {
             root_string.push(&os_sep);
@@ -122,7 +118,7 @@ impl Preprocessor {
     {
         let canon = self.canonicalize_path(path, cwd);
         let buf = canon.as_os_str();
-        let root_len = self.root_dir.as_os_str().len();
+        let root_len = self.context.root_dir.as_os_str().len();
 
         PathBuf::from(
             &buf.to_string_lossy()
@@ -143,7 +139,10 @@ impl Preprocessor {
     /// # Examples
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
-    /// let mut preprocessor = Preprocessor::new(".", vec!["/include", "/sys/include"]);
+    /// use lpc_rs::context::Context;
+    ///
+    /// let context = Context::new(".", vec!["/include", "/sys/include"]);
+    /// let mut preprocessor = Preprocessor::new(context);
     ///
     /// let content = r#"
     ///     #include "include/simple.h"
@@ -167,7 +166,7 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
         }
 
-        let file_id = self.files.add(String::from(path.as_ref().to_string_lossy()));
+        let file_id = self.context.files.add(String::from(path.as_ref().to_string_lossy()));
 
         let mut current_line = 1;
 
@@ -227,8 +226,8 @@ impl Preprocessor {
     {
         let canon_include_path = self.canonicalize_path(&path, &cwd);
 
-        if !canon_include_path.starts_with(&self.root_dir) {
-            let range = if let Ok(r) = self.files.line_range(file_id, parent_line - 1) {
+        if !canon_include_path.starts_with(&self.context.root_dir) {
+            let range = if let Ok(r) = self.context.files.line_range(file_id, parent_line - 1) {
                 r
             } else {
                 0..1
@@ -251,7 +250,7 @@ impl Preprocessor {
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                let range = if let Ok(r) = self.files.line_range(file_id, parent_line - 1) {
+                let range = if let Ok(r) = self.context.files.line_range(file_id, parent_line - 1) {
                     r
                 } else {
                     0..1
@@ -282,12 +281,10 @@ impl Preprocessor {
 impl Default for Preprocessor {
     fn default() -> Self {
         Self {
-            root_dir: PathBuf::from("."),
-            include_dirs: vec![],
+            context: Context::default(),
             defines: HashMap::new(),
             directives: vec![],
             skip_lines: false,
-            files: LazyFiles::new(),
         }
     }
 }
@@ -297,7 +294,8 @@ mod tests {
     use super::*;
 
     fn fixture() -> Preprocessor {
-        Preprocessor::new("./tests/fixtures", vec![])
+        let context = Context::new("./tests/fixtures", Vec::new());
+        Preprocessor::new(context)
     }
 
     mod test_local_includes {
