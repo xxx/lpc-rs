@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use path_absolutize::Absolutize;
 
 /// A big, fat state object to store data created at various stages of compilation.
-/// The single one of these will be used for loading/compiling a single file (files `#include`d in
+/// A single one of these will be used for loading/compiling a single file (files `#include`d in
 /// that file will share this state object when they are compiled, as well.)
 #[derive(Debug)]
 pub struct Context {
