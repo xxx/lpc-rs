@@ -16,14 +16,18 @@ use crate::{
 };
 
 use crate::{context::Context, parser::lexer::LexWrapper};
+use std::path::Path;
 
 /// Fully compile a file into a Program struct
 ///
 /// # Arguments
 /// `filename` - The name of the file to compile. Also used for error messaging.
-pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
+pub fn compile_file<T>(filename: T) -> Result<Program, CompilerError>
+where
+    T: AsRef<Path>
+{
     let file_content =
-        fs::read_to_string(filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename));
+        fs::read_to_string(&filename).unwrap_or_else(|_| panic!("cannot read file: {}", filename.as_ref().display()));
 
     compile_string(filename, file_content)
 }
@@ -33,16 +37,20 @@ pub fn compile_file(filename: &str) -> Result<Program, CompilerError> {
 /// # Arguments
 /// `filename` - The name of the file being compiled. Used for error messaging.
 /// `code` - The actual code to be compiled.
-pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerError> {
+pub fn compile_string<T, U>(filename: T, code: U) -> Result<Program, CompilerError>
+where
+    T: AsRef<Path>,
+    U: AsRef<str>,
+{
     let mut errors: Vec<CompilerError> = vec![];
 
     let context = Context::new(".", Vec::new());
     let mut preprocessor = Preprocessor::new(context);
-    let code = match preprocessor.scan(filename, ".", &code) {
+    let code = match preprocessor.scan(&filename, ".", &code) {
         Ok(c) => c,
         Err(e) => {
             errors.push(CompilerError::PreprocessorError(e));
-            errors::emit_diagnostics(filename, &errors);
+            errors::emit_diagnostics(&filename.as_ref().to_string_lossy(), &errors);
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -54,7 +62,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
         Ok(prog) => prog,
         Err(e) => {
             errors.push(CompilerError::ParseError(ParseError::from(e)));
-            errors::emit_diagnostics(filename, &errors);
+            errors::emit_diagnostics(&*filename.as_ref().to_string_lossy(), &errors);
 
             return Err(CompilerError::MultiError(errors));
         }
@@ -65,7 +73,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
     // let mut printer = TreePrinter::new();
     // let _ = program.visit(&mut printer);
 
-    let mut scope_walker = ScopeWalker::new(filename);
+    let mut scope_walker = ScopeWalker::new(&filename.as_ref().to_string_lossy());
 
     let _ = program.visit(&mut scope_walker);
 
@@ -87,7 +95,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
     }
 
     if !errors.is_empty() {
-        errors::emit_diagnostics(filename, &errors);
+        errors::emit_diagnostics(&filename.as_ref().to_string_lossy(), &errors);
         return Err(CompilerError::MultiError(errors));
     }
 
@@ -99,7 +107,7 @@ pub fn compile_string(filename: &str, code: String) -> Result<Program, CompilerE
         println!("{}", s);
     }
 
-    let program = asm_walker.to_program(filename);
+    let program = asm_walker.to_program(&filename.as_ref().to_string_lossy());
 
     let msgpack = program.to_msgpack();
     println!("{:?}", msgpack.len());

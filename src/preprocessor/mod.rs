@@ -153,10 +153,11 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("file.c", "/", content);
     /// ```
-    pub fn scan<T, U>(&mut self, path: T, cwd: U, file_content: &str) -> Result<String>
+    pub fn scan<T, U, V>(&mut self, path: T, cwd: U, file_content: V) -> Result<String>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
+        V: AsRef<str>,
     {
         lazy_static! {
             static ref SYS_INCLUDE: Regex =
@@ -181,7 +182,7 @@ impl Preprocessor {
 
         output.push_str(&format_line(current_line));
 
-        for line in file_content.lines() {
+        for line in file_content.as_ref().lines() {
             if let Some(captures) = SYS_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
                 self.directives.push(PreprocessorDirective::SysInclude(
