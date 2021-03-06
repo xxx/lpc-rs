@@ -1,33 +1,14 @@
-use crate::errors::{default_diagnostic, LPCError};
-use codespan_reporting::diagnostic::Diagnostic;
 use lazy_static::lazy_static;
 use logos::{Filter, Lexer, Logos};
 use regex::{Regex};
 use std::{
-    error::Error,
     fmt,
     fmt::{Display, Formatter},
     str::FromStr,
 };
+use crate::errors::compiler_error::lex_error::LexError;
 
 pub type Spanned<T> = (usize, T, usize);
-
-#[derive(Debug, Clone)]
-pub struct LexError(pub String);
-
-impl Display for LexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl LPCError for LexError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        default_diagnostic(format!("{}", self), file_id, &None)
-    }
-}
-
-impl Error for LexError {}
 
 /// A struct to store state during lexing.
 #[derive(Debug)]

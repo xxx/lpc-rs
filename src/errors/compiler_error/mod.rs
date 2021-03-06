@@ -2,6 +2,7 @@ pub mod arg_count_error;
 pub mod arg_type_error;
 pub mod assignment_error;
 pub mod binary_operation_error;
+pub mod lex_error;
 pub mod parse_error;
 pub mod range_error;
 pub mod return_type_error;
