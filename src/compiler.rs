@@ -13,9 +13,8 @@ use crate::{
     preprocessor::Preprocessor,
 };
 
-use crate::{context::Context, parser::lexer::LexWrapper};
+use crate::{codegen::tree_walker::ContextHolder, context::Context, parser::lexer::LexWrapper};
 use std::path::Path;
-use crate::codegen::tree_walker::{TreeWalker, ContextHolder};
 
 /// Fully compile a file into a Program struct
 ///

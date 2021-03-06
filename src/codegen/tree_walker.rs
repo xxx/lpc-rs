@@ -7,9 +7,9 @@ use crate::{
         range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
         var_init_node::VarInitNode, var_node::VarNode,
     },
+    context::Context,
     errors::compiler_error::CompilerError,
 };
-use crate::context::Context;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.

@@ -10,7 +10,6 @@ use crate::{
     errors::compiler_error::CompilerError,
 };
 use tree_walker::TreeWalker;
-use crate::context::Context;
 
 /// A tree walker for pretty-printing an AST
 ///

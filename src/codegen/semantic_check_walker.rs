@@ -19,8 +19,10 @@ use crate::{
 };
 use std::collections::HashMap;
 
-use crate::{context::Context, errors::compiler_error::range_error::RangeError};
-use crate::codegen::tree_walker::ContextHolder;
+use crate::{
+    codegen::tree_walker::ContextHolder, context::Context,
+    errors::compiler_error::range_error::RangeError,
+};
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {

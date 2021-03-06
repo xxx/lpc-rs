@@ -11,8 +11,7 @@ use crate::{
     },
 };
 
-use crate::context::Context;
-use crate::codegen::tree_walker::ContextHolder;
+use crate::{codegen::tree_walker::ContextHolder, context::Context};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.

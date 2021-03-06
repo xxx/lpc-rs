@@ -3,8 +3,7 @@ use crate::{
     errors::compiler_error::CompilerError,
 };
 
-use crate::context::Context;
-use crate::codegen::tree_walker::ContextHolder;
+use crate::{codegen::tree_walker::ContextHolder, context::Context};
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
 #[derive(Debug, Default)]

@@ -18,7 +18,7 @@ use crate::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    codegen::tree_walker,
+    codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
     errors::compiler_error::CompilerError,
     interpreter::{constant_pool::ConstantPool, lpc_value::LPCValue, program::Program},
@@ -28,7 +28,6 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
-use crate::codegen::tree_walker::ContextHolder;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
