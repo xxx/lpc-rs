@@ -59,10 +59,6 @@ impl<'input> LexWrapper<'input> {
     }
 }
 
-/// This exists only because Logos doesn't handle fields with more than one member.
-#[derive(Debug, PartialEq, Eq)]
-struct LineDirective(String, usize);
-
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = LexState)]
 pub enum Token {
