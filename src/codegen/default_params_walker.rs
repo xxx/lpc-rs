@@ -1,5 +1,5 @@
 use crate::{
-    ast::{expression_node::ExpressionNode, function_def_node::FunctionDefNode},
+    ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
 };
@@ -16,8 +16,7 @@ pub struct DefaultParamsWalker {
 impl DefaultParamsWalker {
     pub fn new(context: Context) -> Self {
         Self {
-            context,
-            ..Self::default()
+            context
         }
     }
 
@@ -43,7 +42,11 @@ impl TreeWalker for DefaultParamsWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast::var_init_node::VarInitNode, semantic::lpc_type::LPCType};
+    use crate::{
+        ast::var_init_node::VarInitNode,
+        semantic::lpc_type::LPCType,
+        ast::expression_node::ExpressionNode
+    };
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {

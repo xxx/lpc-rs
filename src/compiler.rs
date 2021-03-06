@@ -12,7 +12,6 @@ use crate::{
     interpreter::program::Program,
     lpc_parser,
     preprocessor::Preprocessor,
-    semantic::scope_tree::ScopeTree,
 };
 
 use crate::{context::Context, parser::lexer::LexWrapper};
@@ -46,20 +45,21 @@ where
     T: AsRef<Path> + AsRef<str>,
     U: AsRef<str>,
 {
-    let mut errors: Vec<CompilerError> = vec![];
-
     let context = Context::new(&filename, ".", Vec::new());
+
     let mut preprocessor = Preprocessor::new(context);
     let code = match preprocessor.scan(&filename, ".", &code) {
         Ok(c) => c,
         Err(e) => {
-            errors.push(CompilerError::PreprocessorError(e));
+            let err = CompilerError::PreprocessorError(e);
+
             errors::emit_diagnostics(
                 &*AsRef::<Path>::as_ref(&filename).to_string_lossy(),
-                &errors,
+                &[err.clone()],
             );
 
-            return Err(CompilerError::MultiError(errors));
+            // Preprocessor errors are fatal.
+            return Err(err);
         }
     };
 
@@ -70,14 +70,14 @@ where
     let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            errors.push(CompilerError::ParseError(ParseError::from(e)));
+            let err = CompilerError::ParseError(ParseError::from(e));
             errors::emit_diagnostics(
                 &*AsRef::<Path>::as_ref(&filename).to_string_lossy(),
-                &errors,
+                &[err.clone()],
             );
 
             // Parse errors are fatal, so we're done here.
-            return Err(CompilerError::MultiError(errors));
+            return Err(err);
         }
     };
 
@@ -87,7 +87,6 @@ where
     // let _ = program.visit(&mut printer);
 
     let mut scope_walker = ScopeWalker::new(context);
-
     let _ = program.visit(&mut scope_walker);
 
     let context = scope_walker.into_context();
@@ -99,9 +98,6 @@ where
 
     let mut semantic_check_walker = SemanticCheckWalker::new(context);
     let _ = program.visit(&mut semantic_check_walker);
-    // if !context.errors.is_empty() {
-    //     errors.append(&mut context.errors.to_vec());
-    // }
 
     let context = semantic_check_walker.into_context();
 

@@ -13,9 +13,7 @@ use crate::{
     },
     interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
     semantic::{
-        function_prototype::FunctionPrototype,
         lpc_type::LPCType,
-        scope_tree::ScopeTree,
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
@@ -353,6 +351,8 @@ mod tests {
         },
         semantic::{lpc_type::LPCType, symbol::Symbol},
     };
+    use crate::semantic::function_prototype::FunctionPrototype;
+    use crate::semantic::scope_tree::ScopeTree;
 
     mod test_visit_call {
         use super::*;
