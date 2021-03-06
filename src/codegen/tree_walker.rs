@@ -9,6 +9,7 @@ use crate::{
     },
     errors::compiler_error::CompilerError,
 };
+use crate::context::Context;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
@@ -17,6 +18,12 @@ pub trait TreeWalker {
     fn get_errors(&self) -> Vec<CompilerError> {
         Vec::new()
     }
+
+    /// Consume this walker, and return its `Context`.
+    ///
+    /// This is intended for use after a walker has completed processing, and
+    /// you're ready to re-take ownership of the context for the next step.
+    fn into_context(self) -> Context;
 
     /// Visit a program node. This is the top-level translation unit.
     fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError>

@@ -16,14 +16,13 @@ impl DefaultParamsWalker {
     pub fn new(context: Context) -> Self {
         Self { context }
     }
-
-    /// Consume this walker, and return its context, for use in the next step.
-    pub fn into_context(self) -> Context {
-        self.context
-    }
 }
 
 impl TreeWalker for DefaultParamsWalker {
+    fn into_context(self) -> Context {
+        self.context
+    }
+
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let vec = node
             .parameters

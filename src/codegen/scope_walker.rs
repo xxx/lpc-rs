@@ -33,19 +33,15 @@ impl ScopeWalker {
             scope.insert(symbol)
         }
     }
-
-    /// Consume this walker, and return its `Context`.
-    ///
-    /// This is intended for use after preprocessing has completed, and
-    /// you're ready to re-take ownership of the context for the next step.
-    pub fn into_context(self) -> Context {
-        self.context
-    }
 }
 
 impl TreeWalker for ScopeWalker {
     fn get_errors(&self) -> Vec<CompilerError> {
         self.context.errors.to_vec()
+    }
+
+    fn into_context(self) -> Context {
+        self.context
     }
 
     fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> {

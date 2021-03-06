@@ -335,6 +335,10 @@ impl AsmTreeWalker {
 }
 
 impl TreeWalker for AsmTreeWalker {
+    fn into_context(self) -> Context {
+        self.context
+    }
+
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<(), CompilerError> {
         self.context.scopes.goto_root();
         for expr in &mut program.body {
