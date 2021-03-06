@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::Path};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::{context::Context, errors::preprocessor_error::PreprocessorError, parser::span::Span};
+use crate::{context::Context, errors::preprocessor_error::PreprocessorError, parser::span::Span, convert_escapes};
 use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
@@ -207,6 +207,8 @@ impl Preprocessor {
                 Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
             static ref LOCAL_INCLUDE: Regex =
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
+            static ref DEFINE: Regex =
+                Regex::new(r#"\A\s*#\s*define\s+(\S+)(?:\s*(.*))?\z"#).unwrap();
         }
 
         let file_id = self
@@ -221,13 +223,14 @@ impl Preprocessor {
         let filename = path.as_ref().file_name().unwrap();
         let canonical_path = self.canonicalize_local_path(filename, &cwd);
 
-        let format_line = |current| format!("#line {} \"{}\"\n", current, canonical_path.display());
+        let format_line = |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
 
         output.push_str(&format_line(current_line));
 
         for line in file_content.as_ref().lines() {
             if let Some(captures) = SYS_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
+
                 self.directives.push(PreprocessorDirective::SysInclude(
                     String::from(matched.as_str()),
                     current_line,
@@ -236,11 +239,21 @@ impl Preprocessor {
                 let matched = captures.get(1).unwrap();
                 let included =
                     self.include_local_file(matched.as_str(), &cwd, current_line, file_id)?;
+
                 output.push_str(&included);
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
                 output.push_str(&format_line(current_line + 1));
+            } else if let Some(captures) = DEFINE.captures(line) {
+                let name = String::from(&captures[1]);
+                let value = if captures[2].is_empty() {
+                    "0"
+                } else {
+                    &captures[2]
+                };
+
+                self.defines.insert(name, convert_escapes(value));
             } else {
                 output.push_str(line);
                 output.push('\n');
@@ -455,6 +468,35 @@ mod tests {
             let input = r#"#include "/../../some_file.h""#;
 
             test_include_error(input, "Attempt to include a file outside the root");
+        }
+    }
+
+    mod test_defines {
+        use indoc::indoc;
+
+        use super::*;
+
+        #[test]
+        fn test_object_define() {
+            let input = indoc! { r#"
+                #define ASS 1 2\n\n3 5 t ass
+                #define MAR
+                #define DOOD 666 + MAR
+                #define SNUH 0x123
+            "# };
+            let mut preprocessor = fixture();
+
+            match preprocessor.scan("test.c", "/", input) {
+                Ok(_) => {
+                    assert_eq!(preprocessor.defines.get("ASS").unwrap(), "1 2\n\n3 5 t ass");
+                    assert_eq!(preprocessor.defines.get("MAR").unwrap(), "0");
+                    assert_eq!(preprocessor.defines.get("DOOD").unwrap(), "666 + MAR");
+                    assert_eq!(preprocessor.defines.get("SNUH").unwrap(), "0x123");
+                }
+                Err(e) => {
+                    panic!(format!("{:?}", e))
+                }
+            }
         }
     }
 }

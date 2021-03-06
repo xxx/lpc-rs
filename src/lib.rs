@@ -16,3 +16,22 @@ lalrpop_mod!(#[allow(clippy::all)] pub lpc_parser);
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+
+/// Convert various literal escapes to actual escape characters
+///
+/// # Arguments
+///
+/// `s` - Something that can be represented as a `&str` through `as_ref`.
+pub fn convert_escapes<T>(s: T) -> String
+where
+    T: AsRef<str>
+{
+    s.as_ref()
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace("\\v", "\x0F")
+        .replace("\\f", "\x0C")
+        .replace("\\a", "\x07")
+        .replace("\\b", "\x08")
+}

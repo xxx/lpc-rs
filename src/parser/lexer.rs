@@ -7,6 +7,7 @@ use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
+use crate::convert_escapes;
 
 pub type Spanned<T> = (usize, T, usize);
 
@@ -283,14 +284,7 @@ fn string_literal(lex: &mut Lexer<Token>) -> String {
     if slice.len() < 3 {
         String::from("")
     } else {
-        slice[1..=(slice.len() - 2)]
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
-            .replace("\\v", "\x0F")
-            .replace("\\f", "\x0C")
-            .replace("\\a", "\x07")
-            .replace("\\b", "\x08")
+        convert_escapes(&slice[1..=(slice.len() - 2)])
     }
 }
 
