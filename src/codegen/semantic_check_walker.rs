@@ -63,10 +63,6 @@ impl SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
-    fn get_errors(&self) -> Vec<CompilerError> {
-        self.context.errors.to_vec()
-    }
-
     fn into_context(self) -> Context {
         self.context
     }

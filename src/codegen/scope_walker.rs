@@ -36,10 +36,6 @@ impl ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn get_errors(&self) -> Vec<CompilerError> {
-        self.context.errors.to_vec()
-    }
-
     fn into_context(self) -> Context {
         self.context
     }

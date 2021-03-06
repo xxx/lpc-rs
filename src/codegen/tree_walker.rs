@@ -13,12 +13,6 @@ use crate::context::Context;
 
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
-    /// Get collected errors, for nodes that track them.
-    /// These are cloned, as they are intended for error messaging that requires passing ownership.
-    fn get_errors(&self) -> Vec<CompilerError> {
-        Vec::new()
-    }
-
     /// Consume this walker, and return its `Context`.
     ///
     /// This is intended for use after a walker has completed processing, and
