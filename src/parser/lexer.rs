@@ -1,12 +1,12 @@
+use crate::errors::compiler_error::lex_error::LexError;
 use lazy_static::lazy_static;
 use logos::{Filter, Lexer, Logos};
-use regex::{Regex};
+use regex::Regex;
 use std::{
     fmt,
     fmt::{Display, Formatter},
     str::FromStr,
 };
-use crate::errors::compiler_error::lex_error::LexError;
 
 pub type Spanned<T> = (usize, T, usize);
 

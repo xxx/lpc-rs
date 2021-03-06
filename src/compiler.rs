@@ -15,8 +15,7 @@ use crate::{
     semantic::scope_tree::ScopeTree,
 };
 
-use crate::parser::lexer::LexWrapper;
-use crate::context::Context;
+use crate::{context::Context, parser::lexer::LexWrapper};
 
 /// Fully compile a file into a Program struct
 ///

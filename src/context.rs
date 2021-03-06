@@ -1,6 +1,6 @@
 use crate::errors::lazy_files::LazyFiles;
-use std::path::PathBuf;
 use path_absolutize::Absolutize;
+use std::path::PathBuf;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -47,7 +47,7 @@ impl Default for Context {
         Self {
             root_dir: PathBuf::from("."),
             include_dirs: vec![],
-            files: LazyFiles::new()
+            files: LazyFiles::new(),
         }
     }
 }

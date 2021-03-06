@@ -1,8 +1,10 @@
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use crate::errors::{LPCError, default_diagnostic};
+use crate::errors::{default_diagnostic, LPCError};
 use codespan_reporting::diagnostic::Diagnostic;
-use std::error::Error;
+use std::{
+    error::Error,
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 #[derive(Debug, Clone)]
 pub struct LexError(pub String);

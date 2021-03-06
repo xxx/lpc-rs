@@ -3,11 +3,10 @@ use std::{collections::HashMap, fs, path::Path};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::{errors::preprocessor_error::PreprocessorError, parser::span::Span};
+use crate::{context::Context, errors::preprocessor_error::PreprocessorError, parser::span::Span};
+use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
-use crate::context::Context;
-use codespan_reporting::files::Files;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -166,7 +165,10 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
         }
 
-        let file_id = self.context.files.add(String::from(path.as_ref().to_string_lossy()));
+        let file_id = self
+            .context
+            .files
+            .add(String::from(path.as_ref().to_string_lossy()));
 
         let mut current_line = 1;
 
