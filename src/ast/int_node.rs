@@ -8,7 +8,7 @@ use std::{
 };
 
 /// A node representing an integer literal
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct IntNode {
     pub value: i64,
 

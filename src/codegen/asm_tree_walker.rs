@@ -332,7 +332,7 @@ impl AsmTreeWalker {
             let register = self.register_counter.next().unwrap();
             let instruction = Instruction::IConst(register, -1);
             self.instructions.push(instruction);
-            self.debug_spans.push(node.span);
+            self.debug_spans.push(node.span.clone());
             register
         };
 
@@ -344,7 +344,7 @@ impl AsmTreeWalker {
             second_index,
             result,
         ));
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
     }
 }
 
@@ -392,7 +392,7 @@ impl TreeWalker for AsmTreeWalker {
         for result in &arg_results {
             self.instructions
                 .push(Instruction::RegCopy(*result, register.unwrap()));
-            self.debug_spans.push(node.span);
+            self.debug_spans.push(node.span.clone());
             register = self.register_counter.next();
         }
 
@@ -406,7 +406,7 @@ impl TreeWalker for AsmTreeWalker {
         };
 
         self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
         self.current_result = Register(0); // returned results are in r0
 
         Ok(())
@@ -421,7 +421,7 @@ impl TreeWalker for AsmTreeWalker {
             v => Instruction::IConst(register.unwrap(), v),
         };
         self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
 
         Ok(())
     }
@@ -431,7 +431,7 @@ impl TreeWalker for AsmTreeWalker {
         self.current_result = register.unwrap();
         let instruction = Instruction::FConst(self.current_result, node.value);
         self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
 
         Ok(())
     }
@@ -443,7 +443,7 @@ impl TreeWalker for AsmTreeWalker {
         let index = self.constants.insert(LPCValue::from(&node.value));
 
         self.instructions.push(Instruction::SConst(register, index));
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
 
         Ok(())
     }
@@ -469,7 +469,7 @@ impl TreeWalker for AsmTreeWalker {
 
         let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
         self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
 
         Ok(())
     }
@@ -494,7 +494,7 @@ impl TreeWalker for AsmTreeWalker {
         {
             // TODO: This should emit a warning unless the return type is void
             self.instructions.push(Instruction::Ret);
-            self.debug_spans.push(node.span);
+            self.debug_spans.push(node.span.clone());
         }
 
         self.scopes.pop();
@@ -518,11 +518,11 @@ impl TreeWalker for AsmTreeWalker {
             expression.visit(self)?;
             let copy = Instruction::RegCopy(self.current_result, Register(0));
             self.instructions.push(copy);
-            self.debug_spans.push(expression.span());
+            self.debug_spans.push(expression.span().clone());
         }
 
         self.instructions.push(Instruction::Ret);
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
 
         Ok(())
     }
@@ -565,7 +565,7 @@ impl TreeWalker for AsmTreeWalker {
             let instruction = Instruction::GStore(current_register, dest_register);
 
             self.instructions.push(instruction);
-            self.debug_spans.push(node.span);
+            self.debug_spans.push(node.span.clone());
         }
 
         let current_global_register = self.global_counter.current();
@@ -592,7 +592,7 @@ impl TreeWalker for AsmTreeWalker {
             let result_register = self.register_counter.next().unwrap();
             let instruction = Instruction::GLoad(sym_loc, result_register);
             self.instructions.push(instruction);
-            self.debug_spans.push(node.span);
+            self.debug_spans.push(node.span.clone());
 
             self.current_result = result_register;
         } else {
@@ -615,7 +615,7 @@ impl TreeWalker for AsmTreeWalker {
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
                 self.instructions.push(assign);
-                self.debug_spans.push(node.span);
+                self.debug_spans.push(node.span.clone());
 
                 // Copy over globals if necessary
                 if global {
@@ -627,7 +627,7 @@ impl TreeWalker for AsmTreeWalker {
                     {
                         let store = Instruction::GStore(lhs_result, *register);
                         self.instructions.push(store);
-                        self.debug_spans.push(node.span);
+                        self.debug_spans.push(node.span.clone());
                     }
                 }
 
@@ -647,7 +647,7 @@ impl TreeWalker for AsmTreeWalker {
                 let assign = Instruction::AStore(rhs_result, var_result, index_result);
 
                 self.instructions.push(assign);
-                self.debug_spans.push(node.span);
+                self.debug_spans.push(node.span.clone());
 
                 self.current_result = rhs_result;
             }
@@ -669,7 +669,7 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
         self.instructions.push(Instruction::AConst(register, items));
-        self.debug_spans.push(node.span);
+        self.debug_spans.push(node.span.clone());
 
         Ok(())
     }

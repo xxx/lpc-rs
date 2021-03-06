@@ -39,7 +39,7 @@ pub fn check_var_redefinition(
     if let Some(sym) = scope.lookup(&node.name) {
         Err(VarRedefinitionError {
             symbol: sym.clone(),
-            span: node.span,
+            span: node.span.clone(),
         })
     } else {
         Ok(())
@@ -70,7 +70,7 @@ pub fn check_binary_operation_types(
             left_type,
             right_name: format!("{}", node.r),
             right_type,
-            span: node.span,
+            span: node.span.clone(),
         }
     }
 

@@ -20,11 +20,11 @@ impl LPCError for VarRedefinitionError {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
-        if let Some(span) = self.span {
+        if let Some(span) = &self.span {
             labels.push(Label::primary(file_id, span.l..span.r));
         }
 
-        if let Some(span) = self.symbol.span {
+        if let Some(span) = &self.symbol.span {
             labels.push(
                 Label::secondary(file_id, span.l..span.r).with_message("Originally defined here."),
             );

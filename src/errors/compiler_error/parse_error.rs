@@ -46,13 +46,13 @@ impl LPCError for ParseError {
 
         match &self.type_ {
             ParseErrorType::InvalidToken => {
-                let loc = self.location.unwrap();
+                let loc = self.location.as_ref().unwrap();
                 diagnostic = Diagnostic::error()
                     .with_message("Invalid Token")
                     .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
             }
             ParseErrorType::UnrecognizedEOF => {
-                let loc = self.location.unwrap();
+                let loc = self.location.as_ref().unwrap();
                 let expected = if let Some(e) = &self.expected {
                     e.clone()
                 } else {
@@ -65,7 +65,7 @@ impl LPCError for ParseError {
                     .with_notes(vec![format_expected(&expected)]);
             }
             ParseErrorType::UnrecognizedToken => {
-                let loc = self.location.unwrap();
+                let loc = self.location.as_ref().unwrap();
                 let token = if let Some(t) = &self.token {
                     t
                 } else {

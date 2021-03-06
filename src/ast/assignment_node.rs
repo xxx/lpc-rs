@@ -54,7 +54,7 @@ impl Clone for AssignmentNode {
             lhs: self.lhs.clone(),
             rhs: self.rhs.clone(),
             op: self.op,
-            span: self.span,
+            span: self.span.clone(),
         }
     }
 }

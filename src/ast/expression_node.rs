@@ -38,18 +38,18 @@ pub enum ExpressionNode {
 }
 
 impl ExpressionNode {
-    pub fn span(&self) -> Option<Span> {
+    pub fn span(&self) -> &Option<Span> {
         match self {
-            ExpressionNode::Assignment(node) => node.span,
-            ExpressionNode::BinaryOp(node) => node.span,
-            ExpressionNode::Call(node) => node.span,
-            ExpressionNode::CommaExpression(node) => node.span,
-            ExpressionNode::Float(node) => node.span,
-            ExpressionNode::Int(node) => node.span,
-            ExpressionNode::Range(node) => node.span,
-            ExpressionNode::String(node) => node.span,
-            ExpressionNode::Var(node) => node.span,
-            ExpressionNode::Array(node) => node.span,
+            ExpressionNode::Assignment(node) => &node.span,
+            ExpressionNode::BinaryOp(node) => &node.span,
+            ExpressionNode::Call(node) => &node.span,
+            ExpressionNode::CommaExpression(node) => &node.span,
+            ExpressionNode::Float(node) => &node.span,
+            ExpressionNode::Int(node) => &node.span,
+            ExpressionNode::Range(node) => &node.span,
+            ExpressionNode::String(node) => &node.span,
+            ExpressionNode::Var(node) => &node.span,
+            ExpressionNode::Array(node) => &node.span,
         }
     }
 }

@@ -45,7 +45,7 @@ impl From<&mut VarInitNode> for Symbol {
         let s = Self::new(&node.name, node.type_);
 
         Self {
-            span: node.span,
+            span: node.span.clone(),
             ..s
         }
     }
