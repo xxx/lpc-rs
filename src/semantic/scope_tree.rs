@@ -4,6 +4,7 @@ use crate::{
 };
 use indextree::{Arena, Node, NodeId};
 use std::collections::HashMap;
+use crate::context::Context;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -195,7 +196,13 @@ impl Default for ScopeTree {
 
 impl From<ScopeWalker> for ScopeTree {
     fn from(walker: ScopeWalker) -> Self {
-        walker.scopes
+        walker.into_context().scopes
+    }
+}
+
+impl From<Context> for ScopeTree {
+    fn from(context: Context) -> Self {
+        context.scopes
     }
 }
 

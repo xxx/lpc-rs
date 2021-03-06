@@ -3,6 +3,9 @@ use path_absolutize::Absolutize;
 use std::path::{PathBuf, Path};
 use crate::errors::LPCError;
 use crate::errors::compiler_error::CompilerError;
+use crate::semantic::scope_tree::ScopeTree;
+use std::collections::HashMap;
+use crate::semantic::function_prototype::FunctionPrototype;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -22,6 +25,13 @@ pub struct Context {
 
     /// A filestore, used heavily to get code spans for error messages.
     pub files: LazyFiles<String, String>,
+
+    /// Our collection of scopes
+    pub scopes: ScopeTree,
+
+    /// The map of function names, to their respective prototypes.
+    /// Used for checking forward references.
+    pub function_prototypes: HashMap<String, FunctionPrototype>,
 
     /// Any errors that have been collected
     pub errors: Vec<CompilerError>,
@@ -64,7 +74,9 @@ impl Default for Context {
             root_dir: PathBuf::from("."),
             include_dirs: vec![],
             files: LazyFiles::new(),
-            errors: Vec::new()
+            errors: Vec::new(),
+            scopes: ScopeTree::default(),
+            function_prototypes: HashMap::new(),
         }
     }
 }

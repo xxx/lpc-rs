@@ -58,14 +58,17 @@ macro_rules! string_constant {
 /// use lpc_rs::semantic::scope_tree::ScopeTree;
 /// use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
 /// use lpc_rs::parser::lexer::LexWrapper;
+/// use lpc_rs::context::Context;
 ///
 /// let prog = r#"int create() { dump("hello, world"); int b = 123; return b; }"#;
 /// let lexer = LexWrapper::new(prog);
 /// let mut program_node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
 /// let filepath = "path/to/myfile.c";
 ///
+/// let context = Context::new(filepath, ".", vec!["/include", "/sys"]);
+///
 /// // Populate the symbol tables
-/// let mut scope_walker = ScopeWalker::new(filepath);
+/// let mut scope_walker = ScopeWalker::new(context);
 /// let scope_result = scope_walker.visit_program(&mut program_node);
 ///
 /// // Gather information about function default params

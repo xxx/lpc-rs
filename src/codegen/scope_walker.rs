@@ -11,53 +11,48 @@ use crate::{
     },
 };
 use std::collections::HashMap;
+use crate::context::Context;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
 #[derive(Debug)]
 pub struct ScopeWalker {
-    /// Store the path to the original file, used for error messaging.
-    filepath: String,
-
-    /// Our collection of scopes
-    pub scopes: ScopeTree,
-
-    /// The map of function names, to their respective prototypes.
-    /// Used for checking forward references.
-    pub function_prototypes: HashMap<String, FunctionPrototype>,
-
-    /// Collected errors
-    errors: Vec<CompilerError>,
+    /// The compilation context
+    context: Context,
 }
 
 impl ScopeWalker {
-    /// Create a new `ScopeWalker`, using the content at `filepath`
-    /// as the file to check for error messaging.
-    pub fn new(filepath: &str) -> Self {
+    /// Create a new `ScopeWalker`, with `context` as the context.
+    pub fn new(context: Context) -> Self {
         Self {
-            filepath: String::from(filepath),
-            scopes: ScopeTree::default(),
-            function_prototypes: HashMap::new(),
-            errors: vec![],
+            context
         }
     }
 
     /// Insert a new symbol into the current scope
     fn insert_symbol(&mut self, symbol: Symbol) {
-        if let Some(scope) = self.scopes.get_current_mut() {
+        if let Some(scope) = self.context.scopes.get_current_mut() {
             scope.insert(symbol)
         }
+    }
+
+    /// Consume this walker, and return its `Context`.
+    ///
+    /// This is intended for use after preprocessing has completed, and
+    /// you're ready to re-take ownership of the context for the next step.
+    pub fn into_context(self) -> Context {
+        self.context
     }
 }
 
 impl TreeWalker for ScopeWalker {
     fn get_errors(&self) -> Vec<CompilerError> {
-        self.errors.to_vec()
+        self.context.errors.to_vec()
     }
 
     fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> {
         // Push the global scope
-        self.scopes.push_new();
+        self.context.scopes.push_new();
 
         for expr in &mut node.body {
             expr.visit(self)?;
@@ -67,8 +62,8 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
-        let scope_id = self.scopes.push_new();
-        self.scopes.insert_function(&node.name, &scope_id);
+        let scope_id = self.context.scopes.push_new();
+        self.context.scopes.insert_function(&node.name, &scope_id);
 
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
 
@@ -87,7 +82,7 @@ impl TreeWalker for ScopeWalker {
             .iter()
             .map(|parm| parm.type_)
             .collect::<Vec<_>>();
-        self.function_prototypes.insert(
+        self.context.function_prototypes.insert(
             node.name.clone(),
             FunctionPrototype {
                 name: node.name.clone(),
@@ -109,8 +104,8 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
-        if let Err(e) = check_var_redefinition(&node, &self.scopes.get_current().unwrap()) {
-            self.errors.push(CompilerError::VarRedefinitionError(e));
+        if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
+            self.context.errors.push(CompilerError::VarRedefinitionError(e));
         }
 
         if let Some(expr_node) = &mut node.value {
@@ -123,7 +118,7 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<(), CompilerError> {
-        let sym = self.scopes.lookup(&node.name);
+        let sym = self.context.scopes.lookup(&node.name);
 
         if let Some(symbol) = sym {
             if symbol.is_global() {
@@ -131,7 +126,7 @@ impl TreeWalker for ScopeWalker {
             }
         } else {
             // We check for undefined vars here in case a symbol is subsequently defined.
-            self.errors
+            self.context.errors
                 .push(CompilerError::UndefinedVarError(UndefinedVarError {
                     name: node.name.clone(),
                     span: node.span.clone(),
@@ -144,15 +139,12 @@ impl TreeWalker for ScopeWalker {
 
 impl Default for ScopeWalker {
     fn default() -> Self {
+        let mut context = Context::default();
         // Push a default global scope.
-        let mut scopes = ScopeTree::default();
-        scopes.push_new();
+        context.scopes.push_new();
 
         Self {
-            filepath: String::new(),
-            scopes,
-            function_prototypes: HashMap::new(),
-            errors: vec![],
+            context,
         }
     }
 }
@@ -181,7 +173,7 @@ mod tests {
 
             let _ = walker.visit_function_def(&mut node);
 
-            if let Some(proto) = walker.function_prototypes.get("marf") {
+            if let Some(proto) = walker.context.function_prototypes.get("marf") {
                 assert_eq!(
                     *proto,
                     FunctionPrototype {
@@ -233,29 +225,29 @@ mod tests {
 
             let _ = walker.visit_var_init(&mut node);
 
-            assert!(!walker.errors.is_empty());
+            assert!(!walker.context.errors.is_empty());
         }
 
         #[test]
         fn test_does_not_error_for_var_shadow_in_different_scope() {
             let (mut walker, mut node) = setup();
 
-            walker.scopes.push_new();
+            walker.context.scopes.push_new();
 
             let _ = walker.visit_var_init(&mut node);
 
-            assert!(walker.errors.is_empty());
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]
         fn test_inserts_the_symbol() {
             let (mut walker, mut node) = setup();
 
-            walker.scopes.push_new();
+            walker.context.scopes.push_new();
 
             let _ = walker.visit_var_init(&mut node);
 
-            assert!(walker.scopes.get_current().unwrap().lookup("foo").is_some());
+            assert!(walker.context.scopes.get_current().unwrap().lookup("foo").is_some());
         }
     }
 
@@ -298,7 +290,7 @@ mod tests {
 
             let _ = walker.visit_var(&mut node);
 
-            assert!(!walker.errors.is_empty());
+            assert!(!walker.context.errors.is_empty());
         }
     }
 }

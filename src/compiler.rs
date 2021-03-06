@@ -56,6 +56,8 @@ where
         }
     };
 
+    let mut context = preprocessor.into_context();
+
     let program = lpc_parser::ProgramParser::new().parse(LexWrapper::new(&code));
 
     let mut program = match program {
@@ -64,6 +66,7 @@ where
             errors.push(CompilerError::ParseError(ParseError::from(e)));
             errors::emit_diagnostics(&*AsRef::<Path>::as_ref(&filename).to_string_lossy(), &errors);
 
+            // Parse errors are fatal, so we're done here.
             return Err(CompilerError::MultiError(errors));
         }
     };
@@ -73,22 +76,27 @@ where
     // let mut printer = TreePrinter::new();
     // let _ = program.visit(&mut printer);
 
-    let mut scope_walker = ScopeWalker::new(&AsRef::<Path>::as_ref(&filename).to_string_lossy());
+    let mut scope_walker = ScopeWalker::new(context);
 
     let _ = program.visit(&mut scope_walker);
 
-    if !scope_walker.get_errors().is_empty() {
-        errors.append(&mut scope_walker.get_errors().to_vec());
-    }
+    // `scope_walker` errors are not fatal, so we can continue to see if more errors occur.
+    let context = scope_walker.into_context();
+
+    // if !context.is_empty() {
+    //     // These errors are not fatal, so just stash them and move on.
+    //     errors.append(&mut conte.to_vec());
+    // }
 
     let mut default_params_walker = DefaultParamsWalker::new();
     let _ = program.visit(&mut default_params_walker);
-    if !default_params_walker.get_errors().is_empty() {
-        errors.append(&mut default_params_walker.get_errors().to_vec());
-    }
+    // DefaultParamsWalker currently has no errors
+    // if !default_params_walker.get_errors().is_empty() {
+    //     errors.append(&mut default_params_walker.get_errors().to_vec());
+    // }
 
     let mut semantic_check_walker =
-        SemanticCheckWalker::new(&scope_walker.scopes, &scope_walker.function_prototypes);
+        SemanticCheckWalker::new(&context.scopes, &context.function_prototypes);
     let _ = program.visit(&mut semantic_check_walker);
     if !semantic_check_walker.get_errors().is_empty() {
         errors.append(&mut semantic_check_walker.get_errors().to_vec());
@@ -99,7 +107,7 @@ where
         return Err(CompilerError::MultiError(errors));
     }
 
-    let scope_tree = ScopeTree::from(scope_walker);
+    let scope_tree = ScopeTree::from(context);
     let mut asm_walker = AsmTreeWalker::new(scope_tree, default_params_walker.into_functions());
     let _ = program.visit(&mut asm_walker);
     // print!("{:?}", asm_walker.instructions);
