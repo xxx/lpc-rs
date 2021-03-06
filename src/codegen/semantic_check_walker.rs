@@ -349,10 +349,11 @@ mod tests {
             assignment_node::AssignmentOperation, expression_node::ExpressionNode,
             var_node::VarNode,
         },
-        semantic::{lpc_type::LPCType, symbol::Symbol},
+        semantic::{
+            function_prototype::FunctionPrototype, lpc_type::LPCType, scope_tree::ScopeTree,
+            symbol::Symbol,
+        },
     };
-    use crate::semantic::function_prototype::FunctionPrototype;
-    use crate::semantic::scope_tree::ScopeTree;
 
     mod test_visit_call {
         use super::*;

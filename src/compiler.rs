@@ -5,7 +5,6 @@ use crate::{
     codegen::{
         asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
-        tree_walker::TreeWalker,
     },
     errors,
     errors::compiler_error::{parse_error::ParseError, CompilerError},
