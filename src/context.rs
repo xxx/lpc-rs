@@ -7,6 +7,9 @@ use std::path::PathBuf;
 /// that file will share this state object when they are compiled, as well.)
 #[derive(Debug)]
 pub struct Context {
+    /// The name of the main file being compiled.
+    pub filename: String,
+
     /// The true on-disk directory where the in-game root directory starts.
     /// (sometimes known as `LIBDIR`, etc.)
     pub root_dir: PathBuf,
@@ -45,6 +48,7 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
+            filename: String::from(""),
             root_dir: PathBuf::from("."),
             include_dirs: vec![],
             files: LazyFiles::new(),
