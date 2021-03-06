@@ -50,43 +50,12 @@ macro_rules! string_constant {
 /// # Examples
 ///
 /// ```
-/// use lpc_rs::lpc_parser;
-/// use lpc_rs::codegen::tree_walker::{TreeWalker, ContextHolder};
-/// use lpc_rs::codegen::asm_tree_walker::AsmTreeWalker;
-/// use lpc_rs::codegen::scope_walker::ScopeWalker;
 /// use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
-/// use lpc_rs::semantic::scope_tree::ScopeTree;
-/// use lpc_rs::codegen::default_params_walker::DefaultParamsWalker;
-/// use lpc_rs::parser::lexer::LexWrapper;
-/// use lpc_rs::context::Context;
+/// use lpc_rs::compiler::compile_string;
 ///
 /// let prog = r#"int create() { dump("hello, world"); int b = 123; return b; }"#;
-/// let lexer = LexWrapper::new(prog);
-/// let mut program_node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
-/// let filepath = "path/to/myfile.c";
-///
-/// // Create a context to store various data that needs to be shared among multiple walkers.
-/// let context = Context::new(filepath, ".", vec!["/include", "/sys"]);
-///
-/// // Populate the symbol tables
-/// let mut scope_walker = ScopeWalker::new(context);
-/// let scope_result = scope_walker.visit_program(&mut program_node);
-///
-/// // Get our context back
-/// let mut context = scope_walker.into_context();
-///
-/// // Gather information about function default params
-/// let mut default_params_walker = DefaultParamsWalker::new(context);
-/// let params_result = default_params_walker.visit_program(&mut program_node);
-///
-/// let mut context = default_params_walker.into_context();
-///
-/// // Generate machine instructions
-/// let mut walker = AsmTreeWalker::new(context);
-/// walker.visit_program(&mut program_node);
-///
-/// // Generate our final `Program`.
-/// let mut program = walker.to_program(filepath);
+/// // See also `compile_file` for compiling files from disk.
+/// let program = compile_string("my_prog.c", prog).expect("Unable to compile.");
 ///
 /// // Load the program and run it
 /// let mut interpreter = AsmInterpreter::new(program);
