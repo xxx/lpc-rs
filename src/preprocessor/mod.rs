@@ -56,6 +56,14 @@ impl Preprocessor {
         }
     }
 
+    /// Consume this preprocessor, and return its `Context`.
+    ///
+    /// This is intended for use after preprocessing has completed, and
+    /// you're ready to re-take ownership of the context for the next step.
+    pub fn into_context(self) -> Context {
+        self.context
+    }
+
     // read file into rope
     // for each line
     //   check for preprocessor lines
@@ -144,8 +152,8 @@ impl Preprocessor {
     /// let processed = preprocessor.scan_context("/");
     /// ```
     pub fn scan_context<T>(&mut self, cwd: T) -> Result<String>
-        where
-            T: AsRef<Path>,
+    where
+        T: AsRef<Path>,
     {
         let id = self.context.files.add(self.context.filename.clone());
         let source = match self.context.files.source(id) {
