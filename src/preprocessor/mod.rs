@@ -141,9 +141,9 @@ impl Preprocessor {
     /// let context = Context::new("./foo.c", ".", vec!["/include", "/sys/include"]);
     /// let mut preprocessor = Preprocessor::new(context);
     ///
-    /// let processed = preprocessor.scan_file("/");
+    /// let processed = preprocessor.scan_context("/");
     /// ```
-    pub fn scan_file<T>(&mut self, cwd: T) -> Result<String>
+    pub fn scan_context<T>(&mut self, cwd: T) -> Result<String>
         where
             T: AsRef<Path>,
     {

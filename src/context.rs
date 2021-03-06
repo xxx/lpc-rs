@@ -20,6 +20,9 @@ pub struct Context {
 
     /// A filestore, used heavily to get code spans for error messages.
     pub files: LazyFiles<String, String>,
+
+    /// Any errors that have been collected
+    pub errors: Vec<LpcError>,
 }
 
 impl Context {
@@ -59,6 +62,7 @@ impl Default for Context {
             root_dir: PathBuf::from("."),
             include_dirs: vec![],
             files: LazyFiles::new(),
+            errors: Vec::new()
         }
     }
 }
