@@ -16,6 +16,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::parser::span::Span;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
@@ -32,6 +33,11 @@ pub enum ASTNode {
 #[auto_impl(&mut)]
 pub trait ASTNodeTrait: PartialEq + Display {
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError>;
+}
+
+pub trait SpannedNode {
+    /// Return the implementing node's span.
+    fn span(&self) -> Option<Span>;
 }
 
 macro_rules! node_defs {

@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing an array literal
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +37,12 @@ impl CommaExpressionNode {
         };
 
         Self { value, span }
+    }
+}
+
+impl SpannedNode for CommaExpressionNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

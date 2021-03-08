@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// All possible assignment operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -33,6 +34,12 @@ pub struct AssignmentNode {
 
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>,
+}
+
+impl SpannedNode for AssignmentNode {
+    fn span(&self) -> Option<Span> {
+        self.span
+    }
 }
 
 impl ASTNodeTrait for AssignmentNode {

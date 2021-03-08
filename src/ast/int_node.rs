@@ -6,6 +6,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing an integer literal
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -19,6 +20,12 @@ pub struct IntNode {
 impl IntNode {
     pub fn new(value: i64) -> Self {
         Self { value, span: None }
+    }
+}
+
+impl SpannedNode for IntNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

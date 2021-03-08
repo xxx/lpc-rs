@@ -23,6 +23,7 @@ use crate::{
     codegen::tree_walker::ContextHolder, context::Context,
     errors::compiler_error::range_error::RangeError,
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {

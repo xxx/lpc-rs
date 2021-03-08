@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +23,12 @@ pub struct ReturnNode {
 impl ReturnNode {
     pub fn new(value: Option<ExpressionNode>) -> Self {
         Self { value, span: None }
+    }
+}
+
+impl SpannedNode for ReturnNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

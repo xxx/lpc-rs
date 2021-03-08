@@ -12,6 +12,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representation a function definition
 #[derive(Debug, PartialEq)]
@@ -21,6 +22,12 @@ pub struct FunctionDefNode {
     pub parameters: Vec<VarInitNode>,
     pub body: Vec<ASTNode>,
     pub span: Option<Span>,
+}
+
+impl SpannedNode for FunctionDefNode {
+    fn span(&self) -> Option<Span> {
+        self.span
+    }
 }
 
 impl ASTNodeTrait for FunctionDefNode {

@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// Representation of a Range, with optional ends.
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +30,12 @@ impl RangeNode {
             r: Box::new(r),
             span,
         }
+    }
+}
+
+impl SpannedNode for RangeNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

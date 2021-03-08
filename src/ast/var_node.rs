@@ -6,6 +6,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing the use of a variable.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -32,6 +33,12 @@ impl VarNode {
 
     pub fn set_global(&mut self, val: bool) {
         self.global = val;
+    }
+}
+
+impl SpannedNode for VarNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

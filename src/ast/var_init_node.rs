@@ -9,6 +9,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +59,12 @@ impl VarInitNode {
         };
 
         self.type_ = updated;
+    }
+}
+
+impl SpannedNode for VarInitNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

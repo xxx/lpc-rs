@@ -20,6 +20,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -37,8 +38,8 @@ pub enum ExpressionNode {
     Array(ArrayNode),
 }
 
-impl ExpressionNode {
-    pub fn span(&self) -> Option<Span> {
+impl SpannedNode for ExpressionNode {
+    fn span(&self) -> Option<Span> {
         match self {
             ExpressionNode::Assignment(node) => node.span,
             ExpressionNode::BinaryOp(node) => node.span,

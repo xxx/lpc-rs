@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// All possible binary operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -49,6 +50,12 @@ pub struct BinaryOpNode {
 
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>,
+}
+
+impl SpannedNode for BinaryOpNode {
+    fn span(&self) -> Option<Span> {
+        self.span
+    }
 }
 
 impl ASTNodeTrait for BinaryOpNode {

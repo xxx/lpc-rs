@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// Representation of a function call.
 #[derive(Debug, PartialEq, Clone)]
@@ -20,6 +21,12 @@ pub struct CallNode {
 
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>,
+}
+
+impl SpannedNode for CallNode {
+    fn span(&self) -> Option<Span> {
+        self.span
+    }
 }
 
 impl ASTNodeTrait for CallNode {

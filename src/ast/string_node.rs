@@ -6,6 +6,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing a string literal
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -22,6 +23,12 @@ impl StringNode {
             value: String::from(value),
             span: None,
         }
+    }
+}
+
+impl SpannedNode for StringNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

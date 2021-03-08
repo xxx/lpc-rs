@@ -6,6 +6,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing a float literal
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -19,6 +20,12 @@ pub struct FloatNode {
 impl FloatNode {
     pub fn new(value: f64) -> Self {
         Self { value, span: None }
+    }
+}
+
+impl SpannedNode for FloatNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

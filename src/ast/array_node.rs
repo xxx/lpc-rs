@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::ast::ast_node::SpannedNode;
 
 /// A node representing an array literal
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +37,12 @@ impl ArrayNode {
         };
 
         Self { value, span }
+    }
+}
+
+impl SpannedNode for ArrayNode {
+    fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 
