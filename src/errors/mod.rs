@@ -44,6 +44,11 @@ where
 }
 
 /// An extracted function that covers the most common use case for generating diagnostics.
+///
+/// # Arguments
+/// `message` - The main message for the error
+/// `file_id` - The file_id corresponding to the code that created this error
+/// `span` - The `Span` of the code that created this error
 pub fn default_diagnostic(
     message: String,
     file_id: usize,

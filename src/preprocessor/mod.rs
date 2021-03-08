@@ -7,6 +7,8 @@ use crate::{context::Context, errors::preprocessor_error::PreprocessorError, par
 use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
+use codespan_reporting::diagnostic::Label;
+use std::ops::Range;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -39,7 +41,8 @@ pub struct Preprocessor {
     ifdefs: Vec<(String, usize, usize)>,
 
     /// Have we seen an `#else` clause for the current `#if`?
-    seen_else: bool
+    /// Track the file_id and line number of it.
+    current_else: Option<(usize, usize)>,
 }
 
 impl Preprocessor {
@@ -162,16 +165,17 @@ impl Preprocessor {
     where
         T: AsRef<Path>,
     {
-        let id = self.context.files.add(self.context.filename.clone());
-        let source = match self.context.files.source(id) {
+        let file_id = self.context.files.add(self.context.filename.clone());
+        let source = match self.context.files.source(file_id) {
             Ok(x) => x,
             Err(e) => {
                 let canonical_path = self.canonicalize_path(&self.context.filename, &cwd);
 
                 return Err(PreprocessorError {
                     message: format!("Unable to read `{}`: {}", canonical_path.display(), e),
-                    file_id: id,
+                    file_id,
                     span: None,
+                    labels: Vec::new()
                 });
             }
         };
@@ -229,6 +233,8 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*if\s+not\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
             static ref ENDIF: Regex =
                 Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
+            static ref ELSE: Regex =
+                Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
         }
 
         let file_id = self
@@ -259,6 +265,33 @@ impl Preprocessor {
 
                 self.ifdefs.pop();
                 self.skip_lines.pop();
+                self.current_else = None;
+                current_line += 1;
+                continue;
+            } else if ELSE.is_match(line) {
+                if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                    return Err(PreprocessorError::new(
+                        "Found `#else` without a corresponding #if",
+                        file_id,
+                        self.context.files.file_line_span(file_id, current_line)
+                    ))
+                }
+
+                if let Some((else_file_id, else_line)) = &self.current_else {
+                    let mut err = PreprocessorError::new(
+                        "Duplicate #else found",
+                        file_id,
+                        self.context.files.file_line_span(file_id, current_line)
+                    );
+
+                    err.add_label("Originally defined here", *else_file_id, Range::from(self.context.files.file_line_span(*else_file_id, *else_line)));
+
+                    return Err(err);
+                }
+
+                self.current_else = Some((file_id, current_line));
+                let last = self.skip_lines.last_mut().unwrap();
+                *last = !*last;
                 current_line += 1;
                 continue;
             }
@@ -439,7 +472,7 @@ impl Default for Preprocessor {
             directives: Vec::new(),
             skip_lines: Vec::new(),
             ifdefs: Vec::new(),
-            seen_else: false
+            current_else: None
         }
     }
 }
@@ -715,6 +748,55 @@ mod tests {
             "# };
 
             test_invalid(prog, "Found `#if` without a corresponding #endif");
+        }
+    }
+
+    mod test_else {
+        use super::*;
+
+        #[test]
+        fn test_else() {
+            let prog = indoc! { r#"
+                #define FOO
+                #ifdef FOO
+                I should be rendered #1
+                #else
+                I should not be rendered #1
+                #endif
+                #ifndef FOO
+                I should not be rendered #2
+                #else
+                I should be rendered #2
+                #endif
+                #undef FOO
+                #ifndef FOO
+                I should be rendered #3
+                #else
+                I should not be rendered #3
+                #endif
+            "# };
+
+            let expected = indoc! { r#"
+                #line 1 "/test.c"
+                I should be rendered #1
+                I should be rendered #2
+                I should be rendered #3
+            "# };
+
+            test_valid(prog, expected);
+        }
+
+        #[test]
+        fn test_error_on_duplicate_else() {
+            let prog = indoc! { r#"
+                #ifndef FOO
+                #else
+                "this will error because of the duplicate #else";
+                #else
+                #endif
+            "# };
+
+            test_invalid(prog, "Duplicate #else");
         }
     }
 }
