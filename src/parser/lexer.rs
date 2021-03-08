@@ -1,4 +1,4 @@
-use crate::errors::compiler_error::lex_error::LexError;
+use crate::{convert_escapes, errors::compiler_error::lex_error::LexError};
 use lazy_static::lazy_static;
 use logos::{Filter, Lexer, Logos};
 use regex::Regex;
@@ -7,7 +7,6 @@ use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
-use crate::convert_escapes;
 
 pub type Spanned<T> = (usize, T, usize);
 

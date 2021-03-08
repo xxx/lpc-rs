@@ -3,11 +3,14 @@ use std::{collections::HashMap, fs, path::Path};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::{context::Context, errors::preprocessor_error::PreprocessorError, parser::span::Span, convert_escapes};
+use crate::{
+    context::Context, convert_escapes, errors::preprocessor_error::PreprocessorError,
+    parser::span::Span,
+};
 use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
-use codespan_reporting::diagnostic::Label;
+
 use std::ops::Range;
 
 type Result<T> = result::Result<T, PreprocessorError>;
@@ -175,7 +178,7 @@ impl Preprocessor {
                     message: format!("Unable to read `{}`: {}", canonical_path.display(), e),
                     file_id,
                     span: None,
-                    labels: Vec::new()
+                    labels: Vec::new(),
                 });
             }
         };
@@ -221,20 +224,15 @@ impl Preprocessor {
                 Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
             static ref DEFINE: Regex =
                 Regex::new(r#"\A\s*#\s*define\s+(\S+)(?:\s*(.*))?\z"#).unwrap();
-            static ref UNDEF: Regex =
-                Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
-            static ref IFDEF: Regex =
-                Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
+            static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
+            static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
             static ref IFDEFINED: Regex =
                 Regex::new(r#"\A\s*#\s*if\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
-            static ref IFNDEF: Regex =
-                Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
+            static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
             static ref IFNOTDEFINED: Regex =
                 Regex::new(r#"\A\s*#\s*if\s+not\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
-            static ref ENDIF: Regex =
-                Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
-            static ref ELSE: Regex =
-                Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
+            static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
+            static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
         }
 
         let file_id = self
@@ -249,7 +247,8 @@ impl Preprocessor {
         let filename = path.as_ref().file_name().unwrap();
         let canonical_path = self.canonicalize_local_path(filename, &cwd);
 
-        let format_line = |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
+        let format_line =
+            |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
 
         self.append_str(&mut output, &format_line(current_line));
 
@@ -259,8 +258,8 @@ impl Preprocessor {
                     return Err(PreprocessorError::new(
                         "Found `#endif` without a corresponding #if",
                         file_id,
-                        self.context.files.file_line_span(file_id, current_line)
-                    ))
+                        self.context.files.file_line_span(file_id, current_line),
+                    ));
                 }
 
                 self.ifdefs.pop();
@@ -273,18 +272,22 @@ impl Preprocessor {
                     return Err(PreprocessorError::new(
                         "Found `#else` without a corresponding #if",
                         file_id,
-                        self.context.files.file_line_span(file_id, current_line)
-                    ))
+                        self.context.files.file_line_span(file_id, current_line),
+                    ));
                 }
 
                 if let Some((else_file_id, else_line)) = &self.current_else {
                     let mut err = PreprocessorError::new(
                         "Duplicate #else found",
                         file_id,
-                        self.context.files.file_line_span(file_id, current_line)
+                        self.context.files.file_line_span(file_id, current_line),
                     );
 
-                    err.add_label("Originally defined here", *else_file_id, Range::from(self.context.files.file_line_span(*else_file_id, *else_line)));
+                    err.add_label(
+                        "Originally defined here",
+                        *else_file_id,
+                        Range::from(self.context.files.file_line_span(*else_file_id, *else_line)),
+                    );
 
                     return Err(err);
                 }
@@ -320,12 +323,9 @@ impl Preprocessor {
             } else if let Some(captures) = DEFINE.captures(line) {
                 if self.defines.contains_key(&captures[1]) {
                     return Err(PreprocessorError::new(
-                        &format!(
-                            "Duplicate #define: `{}`",
-                            &captures[1]
-                        ),
+                        &format!("Duplicate #define: `{}`", &captures[1]),
                         file_id,
-                        self.context.files.file_line_span(file_id, current_line)
+                        self.context.files.file_line_span(file_id, current_line),
                     ));
                 }
 
@@ -340,11 +340,15 @@ impl Preprocessor {
             } else if let Some(captures) = UNDEF.captures(line) {
                 self.defines.remove(&captures[1]);
             } else if let Some(captures) = IFDEF.captures(line) {
-                self.ifdefs.push((String::from(&captures[1]), file_id, current_line));
-                self.skip_lines.push(!self.defines.contains_key(&captures[1]));
+                self.ifdefs
+                    .push((String::from(&captures[1]), file_id, current_line));
+                self.skip_lines
+                    .push(!self.defines.contains_key(&captures[1]));
             } else if let Some(captures) = IFNDEF.captures(line) {
-                self.ifdefs.push((String::from(&captures[1]), file_id, current_line));
-                self.skip_lines.push(self.defines.contains_key(&captures[1]));
+                self.ifdefs
+                    .push((String::from(&captures[1]), file_id, current_line));
+                self.skip_lines
+                    .push(self.defines.contains_key(&captures[1]));
             } else {
                 self.append_str(&mut output, line);
                 self.append_char(&mut output, '\n');
@@ -357,11 +361,8 @@ impl Preprocessor {
             let (file_id, line_num) = (ifdef.1, ifdef.2);
             let span = self.context.files.file_line_span(file_id, line_num);
 
-            let e = PreprocessorError::new(
-                "Found `#if` without a corresponding #endif",
-                file_id,
-                span
-            );
+            let e =
+                PreprocessorError::new("Found `#if` without a corresponding #endif", file_id, span);
 
             return Err(e);
         }
@@ -472,7 +473,7 @@ impl Default for Preprocessor {
             directives: Vec::new(),
             skip_lines: Vec::new(),
             ifdefs: Vec::new(),
-            current_else: None
+            current_else: None,
         }
     }
 }

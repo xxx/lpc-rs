@@ -1,14 +1,11 @@
-use crate::{
-    errors::LPCError,
-    parser::span::Span,
-};
+use crate::{errors::LPCError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     error::Error,
     fmt,
     fmt::{Display, Formatter},
+    ops::Range,
 };
-use std::ops::Range;
 
 /// Handle preprocessing
 
@@ -17,7 +14,7 @@ pub struct PreprocessorError {
     pub message: String,
     pub file_id: usize,
     pub span: Option<Span>,
-    pub labels: Vec<Label<usize>>
+    pub labels: Vec<Label<usize>>,
 }
 
 impl Error for PreprocessorError {}
@@ -25,20 +22,21 @@ impl Error for PreprocessorError {}
 impl PreprocessorError {
     pub fn new<T>(message: T, file_id: usize, span: Span) -> Self
     where
-        T: Into<String>
+        T: Into<String>,
     {
         Self {
             message: message.into(),
             file_id,
             span: Some(span),
-            labels: Vec::new()
+            labels: Vec::new(),
         }
     }
 }
 
 impl PreprocessorError {
     pub fn add_label(&mut self, message: &str, file_id: usize, range: Range<usize>) {
-        self.labels.push(Label::secondary(file_id, range).with_message(message));
+        self.labels
+            .push(Label::secondary(file_id, range).with_message(message));
     }
 }
 

@@ -1,3 +1,4 @@
+use crate::parser::span::Span;
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error as CodespanError, Files, SimpleFile};
 use std::{
@@ -7,7 +8,6 @@ use std::{
     ops::Range,
     path::Path,
 };
-use crate::parser::span::Span;
 
 /// A memoizing lazy-loaded Files store for `codespan-reporting`
 ///
@@ -87,7 +87,7 @@ where
 
         Span {
             l: range.start,
-            r: range.end - 1
+            r: range.end - 1,
         }
     }
 }
