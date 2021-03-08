@@ -7,6 +7,7 @@ use std::{
     ops::Range,
     path::Path,
 };
+use crate::parser::span::Span;
 
 /// A memoizing lazy-loaded Files store for `codespan-reporting`
 ///
@@ -70,6 +71,24 @@ where
         T: AsRef<Path>,
     {
         Ok(cached_file(path.as_ref().as_os_str())?)
+    }
+
+    /// Get a `Span` for a specific file_id and line
+    ///
+    /// # Arguments
+    /// `file_id` - the file ID you're looking for
+    /// `line_num` - the line to get, `0`-indexed.
+    pub fn file_line_span(&self, file_id: usize, line_num: usize) -> Span {
+        let range = if let Ok(r) = self.line_range(file_id, line_num) {
+            r
+        } else {
+            0..1
+        };
+
+        Span {
+            l: range.start,
+            r: range.end - 1
+        }
     }
 }
 

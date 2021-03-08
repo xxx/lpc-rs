@@ -22,7 +22,7 @@ pub enum PreprocessorDirective {
 }
 
 #[derive(Debug)]
-pub struct Preprocessor<'a> {
+pub struct Preprocessor {
     /// The compilation context
     context: Context,
 
@@ -31,13 +31,18 @@ pub struct Preprocessor<'a> {
     directives: Vec<PreprocessorDirective>,
 
     /// Are we currently within a block that is `if`'d out?
-    skip_lines: bool,
+    /// We also track this as a stack.
+    skip_lines: Vec<bool>,
 
     /// Stack of ifdefs that are in play, so we can handle #endifs
-    ifdefs: Vec<&'a str>
+    /// This stores the def, along with the file_id and line of the directive.
+    ifdefs: Vec<(String, usize, usize)>,
+
+    /// Have we seen an `#else` clause for the current `#if`?
+    seen_else: bool
 }
 
-impl<'a> Preprocessor<'a> {
+impl Preprocessor {
     /// Create a new `Preprocessor`
     ///
     /// # Arguments
@@ -218,6 +223,10 @@ impl<'a> Preprocessor<'a> {
                 Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
             static ref IFDEFINED: Regex =
                 Regex::new(r#"\A\s*#\s*if\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
+            static ref IFNDEF: Regex =
+                Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
+            static ref IFNOTDEFINED: Regex =
+                Regex::new(r#"\A\s*#\s*if\s+not\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
             static ref ENDIF: Regex =
                 Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
         }
@@ -236,9 +245,28 @@ impl<'a> Preprocessor<'a> {
 
         let format_line = |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
 
-        output.push_str(&format_line(current_line));
+        self.append_str(&mut output, &format_line(current_line));
 
         for line in file_content.as_ref().lines() {
+            if ENDIF.is_match(line) {
+                if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                    return Err(PreprocessorError::new(
+                        "Found `#endif` without a corresponding #if",
+                        file_id,
+                        self.context.files.file_line_span(file_id, current_line)
+                    ))
+                }
+
+                self.ifdefs.pop();
+                self.skip_lines.pop();
+                current_line += 1;
+                continue;
+            }
+
+            if self.skipping_lines() {
+                continue;
+            }
+
             if let Some(captures) = SYS_INCLUDE.captures(line) {
                 let matched = captures.get(1).unwrap();
 
@@ -251,29 +279,20 @@ impl<'a> Preprocessor<'a> {
                 let included =
                     self.include_local_file(matched.as_str(), &cwd, current_line, file_id)?;
 
-                output.push_str(&included);
+                self.append_str(&mut output, &included);
                 if !output.ends_with('\n') {
-                    output.push('\n');
+                    self.append_char(&mut output, '\n');
                 }
-                output.push_str(&format_line(current_line + 1));
+                self.append_str(&mut output, &format_line(current_line + 1));
             } else if let Some(captures) = DEFINE.captures(line) {
                 if self.defines.contains_key(&captures[1]) {
-                    let range = if let Ok(r) = self.context.files.line_range(file_id, current_line) {
-                        r
-                    } else {
-                        0..1
-                    };
-
                     return Err(PreprocessorError::new(
                         &format!(
                             "Duplicate #define: `{}`",
                             &captures[1]
                         ),
                         file_id,
-                        Span {
-                            l: range.start,
-                            r: range.end - 1,
-                        },
+                        self.context.files.file_line_span(file_id, current_line)
                     ));
                 }
 
@@ -287,11 +306,31 @@ impl<'a> Preprocessor<'a> {
                 self.defines.insert(name, convert_escapes(value));
             } else if let Some(captures) = UNDEF.captures(line) {
                 self.defines.remove(&captures[1]);
+            } else if let Some(captures) = IFDEF.captures(line) {
+                self.ifdefs.push((String::from(&captures[1]), file_id, current_line));
+                self.skip_lines.push(!self.defines.contains_key(&captures[1]));
+            } else if let Some(captures) = IFNDEF.captures(line) {
+                self.ifdefs.push((String::from(&captures[1]), file_id, current_line));
+                self.skip_lines.push(self.defines.contains_key(&captures[1]));
             } else {
-                output.push_str(line);
-                output.push('\n');
+                self.append_str(&mut output, line);
+                self.append_char(&mut output, '\n');
             }
             current_line += 1;
+        }
+
+        if !self.ifdefs.is_empty() {
+            let ifdef = self.ifdefs.last().unwrap();
+            let (file_id, line_num) = (ifdef.1, ifdef.2);
+            let span = self.context.files.file_line_span(file_id, line_num);
+
+            let e = PreprocessorError::new(
+                "Found `#if` without a corresponding #endif",
+                file_id,
+                span
+            );
+
+            return Err(e);
         }
 
         Ok(output)
@@ -368,16 +407,39 @@ impl<'a> Preprocessor<'a> {
         let cwd = local_canon_include_path.parent().unwrap();
         self.scan(filename, cwd, &file_content)
     }
+
+    /// Are we skipping lines?
+    #[inline]
+    fn skipping_lines(&self) -> bool {
+        !self.skip_lines.is_empty() && *self.skip_lines.last().unwrap()
+    }
+
+    /// `skip_lines` aware way to append to the output
+    #[inline]
+    fn append_str(&self, output: &mut String, to_append: &str) {
+        if !self.skipping_lines() {
+            output.push_str(to_append);
+        }
+    }
+
+    /// `skip_lines` aware way to append to the output
+    #[inline]
+    fn append_char(&self, output: &mut String, to_append: char) {
+        if !self.skipping_lines() {
+            output.push(to_append);
+        }
+    }
 }
 
-impl<'a> Default for Preprocessor<'a> {
+impl Default for Preprocessor {
     fn default() -> Self {
         Self {
             context: Context::default(),
             defines: HashMap::new(),
             directives: Vec::new(),
-            skip_lines: false,
+            skip_lines: Vec::new(),
             ifdefs: Vec::new(),
+            seen_else: false
         }
     }
 }
@@ -385,42 +447,41 @@ impl<'a> Default for Preprocessor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
-    fn fixture<'a>() -> Preprocessor<'a> {
+    fn fixture() -> Preprocessor {
         let context = Context::new("test.c", "./tests/fixtures", Vec::new());
         Preprocessor::new(context)
     }
 
+    fn test_valid(input: &str, expected: &str) {
+        let mut preprocessor = fixture();
+        match preprocessor.scan("test.c", "/", input) {
+            Ok(result) => {
+                assert_eq!(result, expected)
+            }
+            Err(e) => {
+                panic!(format!("{:?}", e))
+            }
+        }
+    }
+
+    // `expected` is converted to a Regex, for easier matching on errors.
+    fn test_invalid(input: &str, expected: &str) {
+        let mut preprocessor = fixture();
+        match preprocessor.scan("test.c", "/", input) {
+            Ok(result) => {
+                panic!("Expected to fail, but passed with {}", result);
+            }
+            Err(e) => {
+                let regex = Regex::new(expected).unwrap();
+                assert!(regex.is_match(&e.to_string()));
+            }
+        }
+    }
+
     mod test_local_includes {
-        use indoc::indoc;
-
         use super::*;
-
-        fn test_include(input: &str, expected: &str) {
-            let mut preprocessor = fixture();
-            match preprocessor.scan("test.c", "/", input) {
-                Ok(result) => {
-                    assert_eq!(result, expected)
-                }
-                Err(e) => {
-                    panic!(format!("{:?}", e))
-                }
-            }
-        }
-
-        // `expected` is converted to a Regex, for easier matching on errors.
-        fn test_include_error(input: &str, expected: &str) {
-            let mut preprocessor = fixture();
-            match preprocessor.scan("test.c", "/", input) {
-                Ok(result) => {
-                    panic!("Expected to fail, but passed with {}", result);
-                }
-                Err(e) => {
-                    let regex = Regex::new(expected).unwrap();
-                    assert!(regex.is_match(&e.to_string()));
-                }
-            }
-        }
 
         #[test]
         fn test_includes_the_file() {
@@ -433,7 +494,7 @@ mod tests {
                 #line 2 "/test.c"
             "#};
 
-            test_include(input, expected);
+            test_valid(input, expected);
         }
 
         #[test]
@@ -449,7 +510,7 @@ mod tests {
                 #line 2 "/test.c"
             "#};
 
-            test_include(input, expected);
+            test_valid(input, expected);
         }
 
         #[test]
@@ -473,7 +534,7 @@ mod tests {
                 #line 4 "/test.c"
             "#};
 
-            test_include(input, expected);
+            test_valid(input, expected);
         }
 
         #[test]
@@ -487,27 +548,25 @@ mod tests {
                 #line 2 "/test.c"
             "#};
 
-            test_include(input, expected);
+            test_valid(input, expected);
         }
 
         #[test]
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
-            test_include_error(input, "No such file or directory");
+            test_invalid(input, "No such file or directory");
         }
 
         #[test]
         fn test_errors_for_traversal_attacks() {
             let input = r#"#include "/../../some_file.h""#;
 
-            test_include_error(input, "Attempt to include a file outside the root");
+            test_invalid(input, "Attempt to include a file outside the root");
         }
     }
 
     mod test_defines {
-        use indoc::indoc;
-
         use super::*;
 
         #[test]
@@ -568,6 +627,94 @@ mod tests {
                     panic!("{:?}", e)
                 }
             }
+        }
+    }
+
+    mod test_ifdef {
+        use super::*;
+
+        #[test]
+        fn test_with_defined() {
+            let prog = indoc! { r#"
+                #define FOO
+                #ifdef FOO
+                I should be rendered
+                #endif
+                #ifdef BAR
+                I should not be rendered
+                #endif
+                #undef FOO
+                #ifdef FOO
+                I also should not be rendered
+                #endif
+            "# };
+
+            let expected = indoc! { r#"
+                #line 1 "/test.c"
+                I should be rendered
+            "# };
+
+            test_valid(prog, expected);
+        }
+
+        #[test]
+        fn test_error_without_if() {
+            let prog = indoc! { r#"
+                #define FOO
+                "this will error because of the #endif without an #if or #ifdef";
+                #endif
+            "# };
+
+            test_invalid(prog, "Found `#endif` without a corresponding #if");
+        }
+
+        #[test]
+        fn test_error_without_endif() {
+            let prog = indoc! { r#"
+                #define FOO
+                #ifdef FOO
+                "this will error because there's no endif";
+            "# };
+
+            test_invalid(prog, "Found `#if` without a corresponding #endif");
+        }
+    }
+
+    mod test_ifndef {
+        use super::*;
+
+        #[test]
+        fn test_with_not_defined() {
+            let prog = indoc! { r#"
+                #define BAR
+                #ifndef FOO
+                I should be rendered
+                #endif
+                #ifndef BAR
+                I should not be rendered
+                #endif
+                #define FOO
+                #ifndef FOO
+                I also should not be rendered
+                #endif
+            "# };
+
+            let expected = indoc! { r#"
+                #line 1 "/test.c"
+                I should be rendered
+            "# };
+
+            test_valid(prog, expected);
+        }
+
+        #[test]
+        fn test_error_without_endif() {
+            let prog = indoc! { r#"
+                #ifndef FOO
+                "this will error because there's no endif";
+            "# };
+
+            test_invalid(prog, "Found `#if` without a corresponding #endif");
         }
     }
 }
