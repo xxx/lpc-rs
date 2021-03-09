@@ -1,33 +1,22 @@
-use crate::{convert_escapes, errors::compiler_error::lex_error::LexError};
-use lazy_static::lazy_static;
-use logos::{Filter, Lexer, Logos};
-use regex::Regex;
 use std::{
     fmt,
     fmt::{Display, Formatter},
     str::FromStr,
 };
 
+use lazy_static::lazy_static;
+use logos::{Filter, Lexer, Logos};
+use regex::Regex;
+
+use crate::{convert_escapes, errors::compiler_error::lex_error::LexError};
+use crate::errors::lazy_files::{FileId, add_file_to_cache};
+use crate::parser::lexer::logos_token::{FloatToken, IntToken, StringToken};
+use crate::parser::lexer::lex_state::LexState;
+
+pub mod lex_state;
+pub mod logos_token;
+
 pub type Spanned<T> = (usize, T, usize);
-
-/// A struct to store state during lexing.
-#[derive(Debug)]
-pub struct LexState {
-    // TODO: remove the allocation for last_slice
-    pub last_slice: String,
-    pub current_file: String,
-    pub current_line: usize,
-}
-
-impl Default for LexState {
-    fn default() -> Self {
-        LexState {
-            last_slice: String::from("\n"),
-            current_file: String::new(),
-            current_line: 0,
-        }
-    }
-}
 
 /// A wrapper to attach our `Iterator` implementation to.
 pub struct LexWrapper<'input> {
@@ -57,191 +46,214 @@ impl<'input> LexWrapper<'input> {
         let lexer = Token::lexer(prog);
         Self { lexer }
     }
+
+    #[inline]
+    pub fn set_current_file_id(&mut self, file_id: FileId) {
+        self.lexer.extras.current_file_id = file_id;
+    }
 }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = LexState)]
 pub enum Token {
     #[token("+", track_slice)]
-    Plus,
+    Plus(FileId),
     #[token("-", track_slice)]
-    Minus,
+    Minus(FileId),
     #[token("*", track_slice)]
-    Mul,
+    Mul(FileId),
     #[token("/", track_slice)]
-    Div,
+    Div(FileId),
     #[token("%", track_slice)]
-    Mod,
+    Mod(FileId),
     #[token("!", track_slice)]
-    Bang,
+    Bang(FileId),
     #[token("^", track_slice)]
-    Caret,
+    Caret(FileId),
     #[token("~", track_slice)]
-    Tilde,
+    Tilde(FileId),
     #[token("&", track_slice)]
-    And,
+    And(FileId),
     #[token("&&", track_slice)]
-    AndAnd,
+    AndAnd(FileId),
     #[token("|", track_slice)]
-    Or,
+    Or(FileId),
     #[token("||", track_slice)]
-    OrOr,
+    OrOr(FileId),
     #[token("<<", track_slice)]
-    LeftShift,
+    LeftShift(FileId),
     #[token(">>", track_slice)]
-    RightShift,
+    RightShift(FileId),
     #[token("==", track_slice)]
-    EqEq,
+    EqEq(FileId),
     #[token("!=", track_slice)]
-    NotEq,
+    NotEq(FileId),
     #[token("<", track_slice)]
-    LessThan,
+    LessThan(FileId),
     #[token("<=", track_slice)]
-    LessThanEq,
+    LessThanEq(FileId),
     #[token(">", track_slice)]
-    GreaterThan,
+    GreaterThan(FileId),
     #[token(">=", track_slice)]
-    GreaterThanEq,
+    GreaterThanEq(FileId),
 
     #[token("=", track_slice)]
-    Assign,
+    Assign(FileId),
     #[token("+=", track_slice)]
-    PlusEq,
+    PlusEq(FileId),
     #[token("-=", track_slice)]
-    MinusEq,
+    MinusEq(FileId),
     #[token("*=", track_slice)]
-    MulEq,
+    MulEq(FileId),
     #[token("/=", track_slice)]
-    DivEq,
+    DivEq(FileId),
     #[token("%=", track_slice)]
-    ModEq,
+    ModEq(FileId),
     #[token("^=", track_slice)]
-    CaretEq,
+    CaretEq(FileId),
     #[token("~=", track_slice)]
-    TildeEq,
+    TildeEq(FileId),
     #[token("&=", track_slice)]
-    AndEq,
+    AndEq(FileId),
     #[token("&&=", track_slice)]
-    AndAndEq,
+    AndAndEq(FileId),
     #[token("|=", track_slice)]
-    OrEq,
+    OrEq(FileId),
     #[token("||=", track_slice)]
-    OrOrEq,
+    OrOrEq(FileId),
     #[token("<<=", track_slice)]
-    LeftShiftEq,
+    LeftShiftEq(FileId),
     #[token(">>=", track_slice)]
-    RightShiftEq,
+    RightShiftEq(FileId),
 
     #[token("if", track_slice)]
-    If,
+    If(FileId),
     #[token("else", track_slice)]
-    Else,
+    Else(FileId),
     #[token("while", track_slice)]
-    While,
+    While(FileId),
     #[token("for", track_slice)]
-    For,
+    For(FileId),
     #[token("inherit", track_slice)]
-    Inherit,
+    Inherit(FileId),
     #[token("break", track_slice)]
-    Break,
+    Break(FileId),
     #[token("continue", track_slice)]
-    Continue,
+    Continue(FileId),
     #[token("case", track_slice)]
-    Case,
+    Case(FileId),
     #[token("do", track_slice)]
-    Do,
+    Do(FileId),
     #[token("int", track_slice)]
-    Int,
+    Int(FileId),
     #[token("float", track_slice)]
-    Float,
+    Float(FileId),
     #[token("string", track_slice)]
-    String,
+    String(FileId),
     #[token("object", track_slice)]
-    Object,
+    Object(FileId),
     #[token("mapping", track_slice)]
-    Mapping,
+    Mapping(FileId),
     #[token("mixed", track_slice)]
-    Mixed,
+    Mixed(FileId),
     #[token("void", track_slice)]
-    Void,
+    Void(FileId),
     #[token("return", track_slice)]
-    Return,
+    Return(FileId),
     #[token("static", track_slice)]
-    Static,
+    Static(FileId),
     #[token("nomask", track_slice)]
-    Nomask,
+    Nomask(FileId),
     #[token("efun", track_slice)]
-    Efun,
+    Efun(FileId),
 
     #[token("(", track_slice)]
-    LParen,
+    LParen(FileId),
     #[token(")", track_slice)]
-    RParen,
+    RParen(FileId),
     #[token("[", track_slice)]
-    LBracket,
+    LBracket(FileId),
     #[token("]", track_slice)]
-    RBracket,
+    RBracket(FileId),
     #[token("{", track_slice)]
-    LBrace,
+    LBrace(FileId),
     #[token("}", track_slice)]
-    RBrace,
+    RBrace(FileId),
     #[token(",", track_slice)]
-    Comma,
+    Comma(FileId),
     #[token("->", track_slice)]
-    CallOther,
+    CallOther(FileId),
     #[token("?", track_slice)]
-    Question,
+    Question(FileId),
     #[token(":", track_slice)]
-    Colon,
+    Colon(FileId),
     #[token("::", track_slice)]
-    ColonColon,
+    ColonColon(FileId),
     #[token(";", track_slice)]
-    Semi,
+    Semi(FileId),
     #[token("...", track_slice)]
-    Ellipsis,
+    Ellipsis(FileId),
     #[token("..", track_slice)]
-    Range,
+    Range(FileId),
 
     #[regex(r#""(\\.|[^"])*""#, string_literal)]
-    StringLiteral(String),
+    StringLiteral(StringToken),
 
     #[regex(r"[1-9][0-9_]*", |lex| {
-        i64::from_str(&lex.slice().replace("_", "")).ok()
+        match i64::from_str(&lex.slice().replace("_", "")) {
+            Ok(i) => Ok(IntToken(lex.extras.current_file_id, i)),
+            Err(e) => Err(e)
+        }
     }, priority = 2)]
     #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
-        i64::from_str_radix(
+        let r = i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0x")
                 .trim_start_matches("0X"),
-            16).ok()
+            16);
+
+        match r {
+            Ok(i) => Ok(IntToken(lex.extras.current_file_id, i)),
+            Err(e) => Err(e)
+        }
     }, priority = 2)]
     #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
-        i64::from_str_radix(
+        let r = i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0o")
                 .trim_start_matches("0O"),
-            8).ok()
+            8);
+
+        match r {
+            Ok(i) => Ok(IntToken(lex.extras.current_file_id, i)),
+            Err(e) => return Err(e)
+        }
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
-        i64::from_str_radix(
+        let r = i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0b")
                 .trim_start_matches("0B"),
-            2).ok()
+            2);
+
+        match r {
+            Ok(i) => Ok(IntToken(lex.extras.current_file_id, i)),
+            Err(e) => return Err(e)
+        }
     }, priority = 2)]
-    IntLiteral(i64),
+    IntLiteral(IntToken),
 
     #[regex(
         r#"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"#,
         float_literal
     )]
-    FloatLiteral(f64),
+    FloatLiteral(FloatToken),
 
     #[regex(r"[\p{Alphabetic}_]\w*", id, priority = 2)]
-    ID(String),
+    ID(StringToken),
 
     #[regex(".", track_slice)]
-    Token,
+    Token(FileId),
 
     #[error]
     #[regex(r#"#\s*line\s+\d+\s+"[^"]+"\s*"#, |lex| {
@@ -267,29 +279,34 @@ pub enum Token {
     Error,
 }
 
-fn track_slice(lex: &mut Lexer<Token>) {
+#[inline]
+fn track_slice(lex: &mut Lexer<Token>) -> FileId {
     lex.extras.last_slice = String::from(lex.slice());
+    lex.extras.current_file_id
 }
 
-fn id(lex: &mut Lexer<Token>) -> String {
+fn id(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
-    lex.slice().to_string()
+    StringToken(lex.extras.current_file_id, lex.slice().to_string())
 }
 
-fn string_literal(lex: &mut Lexer<Token>) -> String {
+fn string_literal(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
     let slice = &lex.extras.last_slice;
 
-    if slice.len() < 3 {
+    let s = if slice.len() < 3 {
         String::from("")
     } else {
         convert_escapes(&slice[1..=(slice.len() - 2)])
-    }
+    };
+
+    StringToken(lex.extras.current_file_id, s)
 }
 
-fn float_literal(lex: &mut Lexer<Token>) -> f64 {
+fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
     track_slice(lex);
-    f64::from_str(&lex.slice().replace("_", "")).unwrap()
+    let f = f64::from_str(&lex.slice().replace("_", "")).unwrap();
+    FloatToken(lex.extras.current_file_id, f)
 }
 
 fn line(lex: &mut Lexer<Token>) -> Option<()> {
@@ -313,7 +330,8 @@ fn line(lex: &mut Lexer<Token>) -> Option<()> {
     }
 
     if let Some(captures) = LINE.captures(slice) {
-        lex.extras.current_file = String::from(&captures[2]);
+        let id = add_file_to_cache(&captures[2]);
+        lex.extras.current_file_id = id;
         lex.extras.current_line = usize::from_str(&captures[1]).unwrap();
 
         Some(())
@@ -327,82 +345,82 @@ impl Display for Token {
         let _s: String;
 
         let out = match self {
-            Token::Plus => "+",
-            Token::Minus => "-",
-            Token::Mul => "*",
-            Token::Div => "/",
-            Token::Mod => "%",
-            Token::Bang => "!",
-            Token::Caret => "^",
-            Token::Tilde => "~",
-            Token::And => "&",
-            Token::AndAnd => "&&",
-            Token::Or => "|",
-            Token::OrOr => "||",
-            Token::LeftShift => "<<",
-            Token::RightShift => ">>",
-            Token::EqEq => "==",
-            Token::NotEq => "!=",
-            Token::LessThan => "<",
-            Token::LessThanEq => "<=",
-            Token::GreaterThan => ">",
-            Token::GreaterThanEq => ">=",
+            Token::Plus(_) => "+",
+            Token::Minus(_) => "-",
+            Token::Mul(_) => "*",
+            Token::Div(_) => "/",
+            Token::Mod(_) => "%",
+            Token::Bang(_) => "!",
+            Token::Caret(_) => "^",
+            Token::Tilde(_) => "~",
+            Token::And(_) => "&",
+            Token::AndAnd(_) => "&&",
+            Token::Or(_) => "|",
+            Token::OrOr(_) => "||",
+            Token::LeftShift(_) => "<<",
+            Token::RightShift(_) => ">>",
+            Token::EqEq(_) => "==",
+            Token::NotEq(_) => "!=",
+            Token::LessThan(_) => "<",
+            Token::LessThanEq(_) => "<=",
+            Token::GreaterThan(_) => ">",
+            Token::GreaterThanEq(_) => ">=",
 
-            Token::Assign => "=",
-            Token::PlusEq => "+=",
-            Token::MinusEq => "-=",
-            Token::MulEq => "||",
-            Token::DivEq => "/=",
-            Token::ModEq => "%=",
-            Token::CaretEq => "^=",
-            Token::TildeEq => "~=",
-            Token::AndEq => "&=",
-            Token::AndAndEq => "&&=",
-            Token::OrEq => "|=",
-            Token::OrOrEq => "||=",
-            Token::LeftShiftEq => "<<=",
-            Token::RightShiftEq => ">>=",
+            Token::Assign(_) => "=",
+            Token::PlusEq(_) => "+=",
+            Token::MinusEq(_) => "-=",
+            Token::MulEq(_) => "||",
+            Token::DivEq(_) => "/=",
+            Token::ModEq(_) => "%=",
+            Token::CaretEq(_) => "^=",
+            Token::TildeEq(_) => "~=",
+            Token::AndEq(_) => "&=",
+            Token::AndAndEq(_) => "&&=",
+            Token::OrEq(_) => "|=",
+            Token::OrOrEq(_) => "||=",
+            Token::LeftShiftEq(_) => "<<=",
+            Token::RightShiftEq(_) => ">>=",
 
-            Token::If => "if",
-            Token::Else => "else",
-            Token::While => "while",
-            Token::For => "for",
-            Token::Inherit => "inherit",
-            Token::Break => "break",
-            Token::Continue => "continue",
-            Token::Case => "case",
-            Token::Do => "do",
-            Token::Int => "int",
-            Token::Float => "float",
-            Token::String => "string",
-            Token::Object => "object",
-            Token::Mapping => "mapping",
-            Token::Mixed => "mixed",
-            Token::Void => "void",
-            Token::Return => "return",
-            Token::Static => "static",
-            Token::Nomask => "nomask",
-            Token::Efun => "efun",
+            Token::If(_) => "if",
+            Token::Else(_) => "else",
+            Token::While(_) => "while",
+            Token::For(_) => "for",
+            Token::Inherit(_) => "inherit",
+            Token::Break(_) => "break",
+            Token::Continue(_) => "continue",
+            Token::Case(_) => "case",
+            Token::Do(_) => "do",
+            Token::Int(_) => "int",
+            Token::Float(_) => "float",
+            Token::String(_) => "string",
+            Token::Object(_) => "object",
+            Token::Mapping(_) => "mapping",
+            Token::Mixed(_) => "mixed",
+            Token::Void(_) => "void",
+            Token::Return(_) => "return",
+            Token::Static(_) => "static",
+            Token::Nomask(_) => "nomask",
+            Token::Efun(_) => "efun",
 
-            Token::LParen => "(",
-            Token::RParen => ")",
-            Token::LBracket => "[",
-            Token::RBracket => "]",
-            Token::LBrace => "{",
-            Token::RBrace => "}",
-            Token::Comma => ",",
-            Token::CallOther => "->",
-            Token::Question => "?",
-            Token::Colon => ":",
-            Token::ColonColon => "::",
-            Token::Semi => ";",
-            Token::Ellipsis => "...",
-            Token::Range => "..",
-            Token::StringLiteral(s) => s,
-            Token::IntLiteral(i) => return write!(f, "{}", i),
-            Token::FloatLiteral(fl) => return write!(f, "{}", fl),
-            Token::ID(id) => id,
-            Token::Token => "Unknown token",
+            Token::LParen(_) => "(",
+            Token::RParen(_) => ")",
+            Token::LBracket(_) => "[",
+            Token::RBracket(_) => "]",
+            Token::LBrace(_) => "{",
+            Token::RBrace(_) => "}",
+            Token::Comma(_) => ",",
+            Token::CallOther(_) => "->",
+            Token::Question(_) => "?",
+            Token::Colon(_) => ":",
+            Token::ColonColon(_) => "::",
+            Token::Semi(_) => ";",
+            Token::Ellipsis(_) => "...",
+            Token::Range(_) => "..",
+            Token::StringLiteral(s) => &s.1,
+            Token::IntLiteral(i) => return write!(f, "{}", i.1),
+            Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
+            Token::ID(id) => &id.1,
+            Token::Token(_) => "Unknown token",
             Token::Error => "Error token",
         };
 
@@ -412,8 +430,9 @@ impl Display for Token {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use indoc::indoc;
+
+    use super::*;
 
     fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LexError>> {
         let lexer = LexWrapper::new(prog);

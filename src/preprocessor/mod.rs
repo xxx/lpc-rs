@@ -77,18 +77,15 @@ impl Preprocessor {
         self.context
     }
 
-    // read file into rope
-    // for each line
-    //   check for preprocessor lines
-    //     if so, process as necessary
-    //       strip escaped newlines
-    //       if include, insert file immediately, continue read with first line of inserted content
-    //       if define, store it, along with line number
-    //       if undef, remove define
-    //     if not, check if we're skipping lines
-    //       if so, skip the line
-    //       if not tokenize it through a parser, and check each token against defined items. replace as necessary
-    //          emit the line
+    // store file_id on token
+    // tokenize original file
+    // iterate tokens by lines
+    //   foreach line
+    //     if a preprocessor directive
+    //       if #include
+    //          scan file & emit to token stream
+    //     else
+    //       emit to token stream
     //
 
     /// Convert an in-game path, relative or absolute, to a canonical, absolute on-server path.

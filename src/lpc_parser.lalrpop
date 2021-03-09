@@ -20,6 +20,8 @@ use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
 use crate::parser::lexer::Token;
 use crate::errors::compiler_error::lex_error::LexError;
+use crate::errors::lazy_files::FileId;
+use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 
 grammar;
 
@@ -28,82 +30,82 @@ extern {
     type Error = LexError;
 
     enum Token {
-        "+" => Token::Plus,
-        "-" => Token::Minus,
-        "*" => Token::Mul,
-        "/" => Token::Div,
-        "%" => Token::Mod,
-        "!" => Token::Bang,
-        "^" => Token::Caret,
-        "~" => Token::Tilde,
-        "&" => Token::And,
-        "&&" => Token::AndAnd,
-        "|" => Token::Or,
-        "||" => Token::OrOr,
-        "<<" => Token::LeftShift,
-        ">>" => Token::RightShift,
-        "==" => Token::EqEq,
-        "!=" => Token::NotEq,
-        "<" => Token::LessThan,
-        "<=" => Token::LessThanEq,
-        ">" => Token::GreaterThan,
-        ">=" => Token::GreaterThanEq,
+        "+" => Token::Plus(<FileId>),
+        "-" => Token::Minus(<FileId>),
+        "*" => Token::Mul(<FileId>),
+        "/" => Token::Div(<FileId>),
+        "%" => Token::Mod(<FileId>),
+        "!" => Token::Bang(<FileId>),
+        "^" => Token::Caret(<FileId>),
+        "~" => Token::Tilde(<FileId>),
+        "&" => Token::And(<FileId>),
+        "&&" => Token::AndAnd(<FileId>),
+        "|" => Token::Or(<FileId>),
+        "||" => Token::OrOr(<FileId>),
+        "<<" => Token::LeftShift(<FileId>),
+        ">>" => Token::RightShift(<FileId>),
+        "==" => Token::EqEq(<FileId>),
+        "!=" => Token::NotEq(<FileId>),
+        "<" => Token::LessThan(<FileId>),
+        "<=" => Token::LessThanEq(<FileId>),
+        ">" => Token::GreaterThan(<FileId>),
+        ">=" => Token::GreaterThanEq(<FileId>),
 
-        "=" => Token::Assign,
-        "+=" => Token::PlusEq,
-        "-=" => Token::MinusEq,
-        "*=" => Token::MulEq,
-        "/=" => Token::DivEq,
-        "%=" => Token::ModEq,
-        "^=" => Token::CaretEq,
-        "~=" => Token::TildeEq,
-        "&=" => Token::AndEq,
-        "&&=" => Token::AndAndEq,
-        "|=" => Token::OrEq,
-        "||=" => Token::OrOrEq,
-        "<<=" => Token::LeftShiftEq,
-        ">>=" => Token::RightShiftEq,
+        "=" => Token::Assign(<FileId>),
+        "+=" => Token::PlusEq(<FileId>),
+        "-=" => Token::MinusEq(<FileId>),
+        "*=" => Token::MulEq(<FileId>),
+        "/=" => Token::DivEq(<FileId>),
+        "%=" => Token::ModEq(<FileId>),
+        "^=" => Token::CaretEq(<FileId>),
+        "~=" => Token::TildeEq(<FileId>),
+        "&=" => Token::AndEq(<FileId>),
+        "&&=" => Token::AndAndEq(<FileId>),
+        "|=" => Token::OrEq(<FileId>),
+        "||=" => Token::OrOrEq(<FileId>),
+        "<<=" => Token::LeftShiftEq(<FileId>),
+        ">>=" => Token::RightShiftEq(<FileId>),
 
-        "if" => Token::If,
-        "else" => Token::Else,
-        "while" => Token::While,
-        "for" => Token::For,
-        "inherit" => Token::Inherit,
-        "break" => Token::Break,
-        "continue" => Token::Continue,
-        "case" => Token::Case,
-        "do" => Token::Do,
-        "int" => Token::Int,
-        "float" => Token::Float,
-        "string" => Token::String,
-        "object" => Token::Object,
-        "mapping" => Token::Mapping,
-        "mixed" => Token::Mixed,
-        "void" => Token::Void,
-        "return" => Token::Return,
-        "static" => Token::Static,
-        "nomask" => Token::Nomask,
-        "efun" => Token::Efun,
+        "if" => Token::If(<FileId>),
+        "else" => Token::Else(<FileId>),
+        "while" => Token::While(<FileId>),
+        "for" => Token::For(<FileId>),
+        "inherit" => Token::Inherit(<FileId>),
+        "break" => Token::Break(<FileId>),
+        "continue" => Token::Continue(<FileId>),
+        "case" => Token::Case(<FileId>),
+        "do" => Token::Do(<FileId>),
+        "int" => Token::Int(<FileId>),
+        "float" => Token::Float(<FileId>),
+        "string" => Token::String(<FileId>),
+        "object" => Token::Object(<FileId>),
+        "mapping" => Token::Mapping(<FileId>),
+        "mixed" => Token::Mixed(<FileId>),
+        "void" => Token::Void(<FileId>),
+        "return" => Token::Return(<FileId>),
+        "static" => Token::Static(<FileId>),
+        "nomask" => Token::Nomask(<FileId>),
+        "efun" => Token::Efun(<FileId>),
 
-        "(" => Token::LParen,
-        ")" => Token::RParen,
-        "[" => Token::LBracket,
-        "]" => Token::RBracket,
-        "{" => Token::LBrace,
-        "}" => Token::RBrace,
-        "," => Token::Comma,
-        "->" => Token::CallOther,
-        "?" => Token::Question,
-        ":" => Token::Colon,
-        "::" => Token::ColonColon,
-        ";" => Token::Semi,
-        "..." => Token::Ellipsis,
-        ".." => Token::Range,
+        "(" => Token::LParen(<FileId>),
+        ")" => Token::RParen(<FileId>),
+        "[" => Token::LBracket(<FileId>),
+        "]" => Token::RBracket(<FileId>),
+        "{" => Token::LBrace(<FileId>),
+        "}" => Token::RBrace(<FileId>),
+        "," => Token::Comma(<FileId>),
+        "->" => Token::CallOther(<FileId>),
+        "?" => Token::Question(<FileId>),
+        ":" => Token::Colon(<FileId>),
+        "::" => Token::ColonColon(<FileId>),
+        ";" => Token::Semi(<FileId>),
+        "..." => Token::Ellipsis(<FileId>),
+        ".." => Token::Range(<FileId>),
 
-        "StringLiteral" => Token::StringLiteral(<String>),
-        "IntLiteral" => Token::IntLiteral(<i64>),
-        "FloatLiteral" => Token::FloatLiteral(<f64>),
-        "ID" => Token::ID(<String>),
+        "StringLiteral" => Token::StringLiteral(<StringToken>),
+        "IntLiteral" => Token::IntLiteral(<IntToken>),
+        "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
+        "ID" => Token::ID(<StringToken>),
     }
 }
 
@@ -152,7 +154,7 @@ FunctionDef: FunctionDefNode = {
          };
 
         FunctionDefNode {
-            name: name.to_string(),
+            name: name.1,
             parameters,
             body,
             return_type,
@@ -210,7 +212,7 @@ VarInit: VarInitNode = {
     <l:@L> <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> <r:@R> => {
         VarInitNode {
             type_: LPCType::Int(false), // placeholder. Corrected in Decl.
-            name: name.to_string(),
+            name: name.1,
             value,
             array: array.is_some(),
             global: false,
@@ -407,7 +409,7 @@ pub Call: CallNode = {
 
         CallNode {
             arguments,
-            name: name.to_string(),
+            name: name.1,
             span: Some(Span { l, r })
         }
     }
@@ -429,7 +431,7 @@ MultiplicitiveBinaryOp: BinaryOperation = {
 
 Var: ExpressionNode = <l:@L> <name:"ID"> <r:@R> => ExpressionNode::Var(
     VarNode {
-        name: name.to_string(),
+        name: name.1,
         span: Some(Span { l, r }),
         global: false
     }
@@ -438,7 +440,7 @@ Var: ExpressionNode = <l:@L> <name:"ID"> <r:@R> => ExpressionNode::Var(
 Int: ExpressionNode = {
     <l:@L> <i:"IntLiteral"> <r:@R> => ExpressionNode::Int(
         IntNode {
-            value: i,
+            value: i.1,
             span: Some(Span { l, r })
         }
     ),
@@ -446,7 +448,7 @@ Int: ExpressionNode = {
 
 Float: ExpressionNode = <l:@L> <f:"FloatLiteral"> <r:@R> => ExpressionNode::Float(
     FloatNode {
-        value: f,
+        value: f.1,
         span: Some(Span { l, r })
     }
 );
@@ -455,7 +457,7 @@ String: ExpressionNode = {
     <l:@L> <s:"StringLiteral"> <r:@R> => {
         ExpressionNode::String(
             StringNode {
-                value: s,
+                value: s.1,
                 span: Some(Span { l, r })
             }
         )
@@ -464,7 +466,7 @@ String: ExpressionNode = {
         match s2 {
             ExpressionNode::String(node) => {
                 ExpressionNode::String(StringNode {
-                    value: s1 + &node.value,
+                    value: s1.1 + &node.value,
                     span: Some(Span { l, r })
                 })
             }
