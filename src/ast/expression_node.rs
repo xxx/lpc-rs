@@ -2,7 +2,7 @@ use crate::{
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
-        ast_node::{ASTNode, ASTNodeTrait},
+        ast_node::{ASTNode, ASTNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
@@ -20,7 +20,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::ast::ast_node::SpannedNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

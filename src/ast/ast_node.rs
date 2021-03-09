@@ -6,6 +6,7 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
+    parser::span::Span,
 };
 use auto_impl::auto_impl;
 use core::fmt::Debug;
@@ -16,7 +17,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::parser::span::Span;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]

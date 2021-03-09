@@ -1,6 +1,8 @@
 use crate::parser::span::Span;
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error as CodespanError, Files, SimpleFile};
+use lazy_static::lazy_static;
+use parking_lot::RwLock;
 use std::{
     ffi::{OsStr, OsString},
     fs,
@@ -8,8 +10,6 @@ use std::{
     ops::Range,
     path::Path,
 };
-use lazy_static::lazy_static;
-use parking_lot::RwLock;
 
 lazy_static! {
     /// A global file cache for use in error reporting.
@@ -23,7 +23,7 @@ lazy_static! {
 /// `path` - The path of the file to add. It will be used as the key in the file cache.
 pub fn add_file_to_cache<T>(path: T) -> FileId
 where
-    T: std::fmt::Display
+    T: std::fmt::Display,
 {
     let mut cache = FILE_CACHE.write();
     cache.add(path.to_string())
@@ -100,8 +100,7 @@ where
     ///
     /// # Arguments
     /// `path` - The path of the file stored in the cache
-    pub fn get_id(&self, path: Name) -> Option<FileId>
-    {
+    pub fn get_id(&self, path: Name) -> Option<FileId> {
         self.paths.iter().position(|i| *i == path)
     }
 

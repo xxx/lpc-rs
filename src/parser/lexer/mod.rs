@@ -8,10 +8,17 @@ use lazy_static::lazy_static;
 use logos::{Filter, Lexer, Logos};
 use regex::Regex;
 
-use crate::{convert_escapes, errors::compiler_error::lex_error::LexError};
-use crate::errors::lazy_files::{FileId, add_file_to_cache};
-use crate::parser::lexer::logos_token::{FloatToken, IntToken, StringToken};
-use crate::parser::lexer::lex_state::LexState;
+use crate::{
+    convert_escapes,
+    errors::{
+        compiler_error::lex_error::LexError,
+        lazy_files::{add_file_to_cache, FileId},
+    },
+    parser::lexer::{
+        lex_state::LexState,
+        logos_token::{FloatToken, IntToken, StringToken},
+    },
+};
 
 pub mod lex_state;
 pub mod logos_token;

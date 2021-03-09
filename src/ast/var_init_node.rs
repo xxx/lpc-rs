@@ -1,5 +1,8 @@
 use crate::{
-    ast::{ast_node::ASTNodeTrait, expression_node::ExpressionNode},
+    ast::{
+        ast_node::{ASTNodeTrait, SpannedNode},
+        expression_node::ExpressionNode,
+    },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
     parser::span::Span,
@@ -9,7 +12,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::ast::ast_node::SpannedNode;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialEq)]

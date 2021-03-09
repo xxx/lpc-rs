@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        ast_node::{ASTNode, ASTNodeTrait},
+        ast_node::{ASTNode, ASTNodeTrait, SpannedNode},
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
@@ -12,7 +12,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::ast::ast_node::SpannedNode;
 
 /// A node representation a function definition
 #[derive(Debug, PartialEq)]

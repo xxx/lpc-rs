@@ -1,12 +1,13 @@
 use crate::{
-    ast::ast_node::ASTNodeTrait, codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError, parser::span::Span,
+    ast::ast_node::{ASTNodeTrait, SpannedNode},
+    codegen::tree_walker::TreeWalker,
+    errors::compiler_error::CompilerError,
+    parser::span::Span,
 };
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::ast::ast_node::SpannedNode;
 
 /// A node representing a string literal
 #[derive(Debug, Clone, Eq, PartialEq)]

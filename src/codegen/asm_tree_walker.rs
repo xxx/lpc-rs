@@ -3,7 +3,7 @@ use crate::{
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
-        ast_node::ASTNodeTrait,
+        ast_node::{ASTNodeTrait, SpannedNode},
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         decl_node::DeclNode,
@@ -28,7 +28,6 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
-use crate::ast::ast_node::SpannedNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
