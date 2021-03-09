@@ -233,7 +233,7 @@ pub enum Token {
 
         match r {
             Ok(i) => Ok(IntToken(lex.extras.current_file_id, i)),
-            Err(e) => return Err(e)
+            Err(e) => Err(e)
         }
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
@@ -245,7 +245,7 @@ pub enum Token {
 
         match r {
             Ok(i) => Ok(IntToken(lex.extras.current_file_id, i)),
-            Err(e) => return Err(e)
+            Err(e) => Err(e)
         }
     }, priority = 2)]
     IntLiteral(IntToken),
