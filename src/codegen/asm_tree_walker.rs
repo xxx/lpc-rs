@@ -1108,7 +1108,11 @@ mod tests {
                 static_: false,
                 location: Some(Register(1)),
                 scope_id: 0,
-                span: Some(Span { file_id: 0, l: 4, r: 11 })
+                span: Some(Span {
+                    file_id: 0,
+                    l: 4,
+                    r: 11
+                })
             }
         );
         assert_eq!(
@@ -1119,7 +1123,11 @@ mod tests {
                 static_: false,
                 location: Some(Register(3)),
                 scope_id: 0,
-                span: Some(Span { file_id: 0, l: 13, r: 25 })
+                span: Some(Span {
+                    file_id: 0,
+                    l: 13,
+                    r: 25
+                })
             }
         );
     }

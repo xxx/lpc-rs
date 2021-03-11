@@ -14,12 +14,14 @@ use crate::{
         compiler_error::lex_error::LexError,
         lazy_files::{add_file_to_cache, FileId},
     },
-    parser::lexer::{
-        lex_state::LexState,
-        logos_token::{FloatToken, IntToken, StringToken},
+    parser::{
+        lexer::{
+            lex_state::LexState,
+            logos_token::{FloatToken, IntToken, StringToken},
+        },
+        span::Span,
     },
 };
-use crate::parser::span::Span;
 
 pub mod lex_state;
 pub mod logos_token;
@@ -295,7 +297,10 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
 
 fn id(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
-    StringToken(Span::new(lex.extras.current_file_id, lex.span()), lex.slice().to_string())
+    StringToken(
+        Span::new(lex.extras.current_file_id, lex.span()),
+        lex.slice().to_string(),
+    )
 }
 
 fn string_literal(lex: &mut Lexer<Token>) -> StringToken {

@@ -1,5 +1,4 @@
-use crate::parser::span::Span;
-use crate::errors::lazy_files::FileId;
+use crate::{errors::lazy_files::FileId, parser::span::Span};
 
 /// Some small wrappers to store both a file id and a value for compatibility with Logos,
 /// which only allows a single field in token defs.

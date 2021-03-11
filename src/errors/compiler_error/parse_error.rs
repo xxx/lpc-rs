@@ -117,14 +117,12 @@ impl<'a, E> From<LalrpopParseError<usize, Token, E>> for ParseError {
             LalrpopParseError::UnrecognizedToken {
                 token: (_start, ref token, _end),
                 ref expected,
-            } => {
-                ParseError {
-                    type_: ParseErrorType::UnrecognizedToken,
-                    location: Some(token.span()),
-                    token: Some(token.clone()),
-                    expected: Some(expected.to_vec()),
-                }
-            }
+            } => ParseError {
+                type_: ParseErrorType::UnrecognizedToken,
+                location: Some(token.span()),
+                token: Some(token.clone()),
+                expected: Some(expected.to_vec()),
+            },
             LalrpopParseError::ExtraToken { ref token } => ParseError {
                 type_: ParseErrorType::ExtraToken,
                 location: None,

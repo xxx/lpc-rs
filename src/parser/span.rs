@@ -1,5 +1,5 @@
-use std::ops::Range;
 use crate::errors::lazy_files::FileId;
+use std::ops::Range;
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
@@ -12,7 +12,11 @@ pub struct Span {
 
 impl Span {
     pub fn new(file_id: FileId, range: Range<usize>) -> Self {
-        Self { file_id, l: range.start, r: range.end }
+        Self {
+            file_id,
+            l: range.start,
+            r: range.end,
+        }
     }
 }
 
