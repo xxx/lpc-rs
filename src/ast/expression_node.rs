@@ -49,7 +49,7 @@ pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
         }
     }
 
-    return Span::new(0, 0..0);
+    Span::new(0, 0..0)
 }
 
 impl SpannedNode for ExpressionNode {
