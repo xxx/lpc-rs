@@ -117,6 +117,7 @@ where
         };
 
         Span {
+            file_id,
             l: range.start,
             r: range.end - 1,
         }

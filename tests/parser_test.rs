@@ -24,6 +24,7 @@ fn assert_int(value: i64, expr: &str) {
     let expected = ExpressionNode::Int(IntNode {
         value,
         span: Some(Span {
+            file_id: 0,
             l: 0,
             r: expr.len(),
         }),
@@ -47,11 +48,11 @@ fn test_program_global_vars() {
                     name: "i".to_string(),
                     value: Some(ExpressionNode::Int(IntNode {
                         value: 123,
-                        span: Some(Span { l: 8, r: 11 }),
+                        span: Some(Span { file_id: 0, l: 8, r: 11 }),
                     })),
                     array: false,
                     global: true,
-                    span: Some(Span { l: 4, r: 11 }),
+                    span: Some(Span { file_id: 0, l: 4, r: 11 }),
                 }],
             }),
             ASTNode::from(DeclNode {
@@ -62,19 +63,19 @@ fn test_program_global_vars() {
                     value: Some(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(VarNode {
                             name: "i".to_string(),
-                            span: Some(Span { l: 21, r: 22 }),
+                            span: Some(Span { file_id: 0, l: 21, r: 22 }),
                             global: false,
                         })),
                         r: Box::new(ExpressionNode::Int(IntNode {
                             value: 8,
-                            span: Some(Span { l: 25, r: 26 }),
+                            span: Some(Span { file_id: 0, l: 25, r: 26 }),
                         })),
                         op: BinaryOperation::Sub,
-                        span: Some(Span { l: 21, r: 26 }),
+                        span: Some(Span { file_id: 0, l: 21, r: 26 }),
                     })),
                     array: false,
                     global: true,
-                    span: Some(Span { l: 17, r: 26 }),
+                    span: Some(Span { file_id: 0, l: 17, r: 26 }),
                 }],
             }),
             ASTNode::from(DeclNode {
@@ -85,7 +86,7 @@ fn test_program_global_vars() {
                     value: None,
                     array: true,
                     global: true,
-                    span: Some(Span { l: 35, r: 37 }),
+                    span: Some(Span { file_id: 0, l: 35, r: 37 }),
                 }],
             }),
         ],
@@ -141,6 +142,7 @@ fn test_float_literal_underscores() {
     let expected = ExpressionNode::Float(FloatNode {
         value: 112343320000000000000000.0,
         span: Some(Span {
+            file_id: 0,
             l: 0,
             r: expr.len(),
         }),
@@ -158,6 +160,7 @@ fn test_string_literal_concat() {
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foobarbazquux"),
         span: Some(Span {
+            file_id: 0,
             l: 0,
             r: expr.len(),
         }),
@@ -175,6 +178,7 @@ fn test_string_literal_repeat() {
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foofoofoo"),
         span: Some(Span {
+            file_id: 0,
             l: 0,
             r: expr.len(),
         }),

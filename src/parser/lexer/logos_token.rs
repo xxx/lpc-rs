@@ -1,10 +1,31 @@
+use crate::parser::span::Span;
 use crate::errors::lazy_files::FileId;
 
 /// Some small wrappers to store both a file id and a value for compatibility with Logos,
 /// which only allows a single field in token defs.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FloatToken(pub FileId, pub f64);
+pub struct FloatToken(pub Span, pub f64);
+
+impl FloatToken {
+    pub fn file_id(&self) -> FileId {
+        self.0.file_id
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct IntToken(pub FileId, pub i64);
+pub struct IntToken(pub Span, pub i64);
+
+impl IntToken {
+    pub fn file_id(&self) -> FileId {
+        self.0.file_id
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct StringToken(pub FileId, pub String);
+pub struct StringToken(pub Span, pub String);
+
+impl StringToken {
+    pub fn file_id(&self) -> FileId {
+        self.0.file_id
+    }
+}

@@ -1,6 +1,6 @@
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::BinaryOperation;
-use crate::ast::expression_node::ExpressionNode;
+use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::float_node::FloatNode;
@@ -15,12 +15,11 @@ use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
 use crate::semantic::lpc_type::LPCType;
-use crate::ast::ast_node::ASTNode;
+use crate::ast::ast_node::{ASTNode, SpannedNode};
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
 use crate::parser::lexer::Token;
 use crate::errors::compiler_error::lex_error::LexError;
-use crate::errors::lazy_files::FileId;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 
 grammar;
@@ -30,77 +29,77 @@ extern {
     type Error = LexError;
 
     enum Token {
-        "+" => Token::Plus(<FileId>),
-        "-" => Token::Minus(<FileId>),
-        "*" => Token::Mul(<FileId>),
-        "/" => Token::Div(<FileId>),
-        "%" => Token::Mod(<FileId>),
-        "!" => Token::Bang(<FileId>),
-        "^" => Token::Caret(<FileId>),
-        "~" => Token::Tilde(<FileId>),
-        "&" => Token::And(<FileId>),
-        "&&" => Token::AndAnd(<FileId>),
-        "|" => Token::Or(<FileId>),
-        "||" => Token::OrOr(<FileId>),
-        "<<" => Token::LeftShift(<FileId>),
-        ">>" => Token::RightShift(<FileId>),
-        "==" => Token::EqEq(<FileId>),
-        "!=" => Token::NotEq(<FileId>),
-        "<" => Token::LessThan(<FileId>),
-        "<=" => Token::LessThanEq(<FileId>),
-        ">" => Token::GreaterThan(<FileId>),
-        ">=" => Token::GreaterThanEq(<FileId>),
+        "+" => Token::Plus(<Span>),
+        "-" => Token::Minus(<Span>),
+        "*" => Token::Mul(<Span>),
+        "/" => Token::Div(<Span>),
+        "%" => Token::Mod(<Span>),
+        "!" => Token::Bang(<Span>),
+        "^" => Token::Caret(<Span>),
+        "~" => Token::Tilde(<Span>),
+        "&" => Token::And(<Span>),
+        "&&" => Token::AndAnd(<Span>),
+        "|" => Token::Or(<Span>),
+        "||" => Token::OrOr(<Span>),
+        "<<" => Token::LeftShift(<Span>),
+        ">>" => Token::RightShift(<Span>),
+        "==" => Token::EqEq(<Span>),
+        "!=" => Token::NotEq(<Span>),
+        "<" => Token::LessThan(<Span>),
+        "<=" => Token::LessThanEq(<Span>),
+        ">" => Token::GreaterThan(<Span>),
+        ">=" => Token::GreaterThanEq(<Span>),
 
-        "=" => Token::Assign(<FileId>),
-        "+=" => Token::PlusEq(<FileId>),
-        "-=" => Token::MinusEq(<FileId>),
-        "*=" => Token::MulEq(<FileId>),
-        "/=" => Token::DivEq(<FileId>),
-        "%=" => Token::ModEq(<FileId>),
-        "^=" => Token::CaretEq(<FileId>),
-        "~=" => Token::TildeEq(<FileId>),
-        "&=" => Token::AndEq(<FileId>),
-        "&&=" => Token::AndAndEq(<FileId>),
-        "|=" => Token::OrEq(<FileId>),
-        "||=" => Token::OrOrEq(<FileId>),
-        "<<=" => Token::LeftShiftEq(<FileId>),
-        ">>=" => Token::RightShiftEq(<FileId>),
+        "=" => Token::Assign(<Span>),
+        "+=" => Token::PlusEq(<Span>),
+        "-=" => Token::MinusEq(<Span>),
+        "*=" => Token::MulEq(<Span>),
+        "/=" => Token::DivEq(<Span>),
+        "%=" => Token::ModEq(<Span>),
+        "^=" => Token::CaretEq(<Span>),
+        "~=" => Token::TildeEq(<Span>),
+        "&=" => Token::AndEq(<Span>),
+        "&&=" => Token::AndAndEq(<Span>),
+        "|=" => Token::OrEq(<Span>),
+        "||=" => Token::OrOrEq(<Span>),
+        "<<=" => Token::LeftShiftEq(<Span>),
+        ">>=" => Token::RightShiftEq(<Span>),
 
-        "if" => Token::If(<FileId>),
-        "else" => Token::Else(<FileId>),
-        "while" => Token::While(<FileId>),
-        "for" => Token::For(<FileId>),
-        "inherit" => Token::Inherit(<FileId>),
-        "break" => Token::Break(<FileId>),
-        "continue" => Token::Continue(<FileId>),
-        "case" => Token::Case(<FileId>),
-        "do" => Token::Do(<FileId>),
-        "int" => Token::Int(<FileId>),
-        "float" => Token::Float(<FileId>),
-        "string" => Token::String(<FileId>),
-        "object" => Token::Object(<FileId>),
-        "mapping" => Token::Mapping(<FileId>),
-        "mixed" => Token::Mixed(<FileId>),
-        "void" => Token::Void(<FileId>),
-        "return" => Token::Return(<FileId>),
-        "static" => Token::Static(<FileId>),
-        "nomask" => Token::Nomask(<FileId>),
-        "efun" => Token::Efun(<FileId>),
+        "if" => Token::If(<Span>),
+        "else" => Token::Else(<Span>),
+        "while" => Token::While(<Span>),
+        "for" => Token::For(<Span>),
+        "inherit" => Token::Inherit(<Span>),
+        "break" => Token::Break(<Span>),
+        "continue" => Token::Continue(<Span>),
+        "case" => Token::Case(<Span>),
+        "do" => Token::Do(<Span>),
+        "int" => Token::Int(<Span>),
+        "float" => Token::Float(<Span>),
+        "string" => Token::String(<Span>),
+        "object" => Token::Object(<Span>),
+        "mapping" => Token::Mapping(<Span>),
+        "mixed" => Token::Mixed(<Span>),
+        "void" => Token::Void(<Span>),
+        "return" => Token::Return(<Span>),
+        "static" => Token::Static(<Span>),
+        "nomask" => Token::Nomask(<Span>),
+        "efun" => Token::Efun(<Span>),
 
-        "(" => Token::LParen(<FileId>),
-        ")" => Token::RParen(<FileId>),
-        "[" => Token::LBracket(<FileId>),
-        "]" => Token::RBracket(<FileId>),
-        "{" => Token::LBrace(<FileId>),
-        "}" => Token::RBrace(<FileId>),
-        "," => Token::Comma(<FileId>),
-        "->" => Token::CallOther(<FileId>),
-        "?" => Token::Question(<FileId>),
-        ":" => Token::Colon(<FileId>),
-        "::" => Token::ColonColon(<FileId>),
-        ";" => Token::Semi(<FileId>),
-        "..." => Token::Ellipsis(<FileId>),
-        ".." => Token::Range(<FileId>),
+        "(" => Token::LParen(<Span>),
+        ")" => Token::RParen(<Span>),
+        "[" => Token::LBracket(<Span>),
+        "]" => Token::RBracket(<Span>),
+        "{" => Token::LBrace(<Span>),
+        "}" => Token::RBrace(<Span>),
+        "," => Token::Comma(<Span>),
+        "->" => Token::CallOther(<Span>),
+        "?" => Token::Question(<Span>),
+        ":" => Token::Colon(<Span>),
+        "::" => Token::ColonColon(<Span>),
+        ";" => Token::Semi(<Span>),
+        "..." => Token::Ellipsis(<Span>),
+        ".." => Token::Range(<Span>),
 
         "StringLiteral" => Token::StringLiteral(<StringToken>),
         "IntLiteral" => Token::IntLiteral(<IntToken>),
@@ -135,11 +134,21 @@ pub Def: ASTNode = {
 };
 
 FunctionDef: FunctionDefNode = {
-    <l:@L> <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> <r:@R> "{" <body:SemiSeq<Statement>> "}" => {
-         let array = star.is_some();
+    <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:SemiSeq<Statement>> "}" => {
+        let array = star.is_some();
+
+        let l = if let Some((_, span)) = &r_type {
+           span.l
+        } else if let Some(span) = &star {
+           span.l
+        } else {
+           name.0.l
+        };
+
+        let r = name.0.r;
 
          let return_type = if let Some(this_type) = r_type {
-             match this_type.as_str() {
+             match this_type.0.as_str() {
                  "void" => LPCType::Void,
                  "int" => LPCType::Int(array),
                  "string" => LPCType::String(array),
@@ -153,12 +162,13 @@ FunctionDef: FunctionDefNode = {
              LPCType::Int(array)
          };
 
+        let file_id = name.file_id();
         FunctionDefNode {
             name: name.1,
             parameters,
             body,
             return_type,
-            span: Some(Span { l, r })
+            span: Some(Span::new(file_id, l..r))
         }
     },
 }
@@ -171,7 +181,7 @@ Parameters: Vec<VarInitNode> = {
 
 // TODO: ellipsis
 Parameter: Vec<VarInitNode> = {
-    <parms:ParameterList> <ellipsis:("," "...")?> => {
+    <parms:ParameterList> <_ellipsis:("," "...")?> => {
         parms
     }
 };
@@ -186,7 +196,7 @@ ParameterList: Vec<VarInitNode> = {
 
 ArgName: VarInitNode = {
     <var_type:Type> <mut init:VarInit> => {
-        let new_type = LPCType::from(var_type);
+        let new_type = LPCType::from(var_type.0);
 
         init.type_ = new_type.as_array(init.array);
 
@@ -194,12 +204,12 @@ ArgName: VarInitNode = {
     }
 };
 
-Type: String = {
-    "int" => <>.to_string(),
-    "float" => <>.to_string(),
-    "string" => <>.to_string(),
-    "mixed" => <>.to_string(),
-    "void" => <>.to_string(),
+Type: (String, Span) = {
+    "int" => (String::from("int"), <>),
+    "float" => (String::from("float"), <>),
+    "string" => (String::from("string"), <>),
+    "mixed" => (String::from("mixed"), <>),
+    "void" => (String::from("void"), <>),
 };
 
 pub Statement: ASTNode = {
@@ -209,21 +219,39 @@ pub Statement: ASTNode = {
 };
 
 VarInit: VarInitNode = {
-    <l:@L> <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> <r:@R> => {
+    <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> => {
+        let name_span = name.0;
+        let file_id = name_span.file_id;
+        let l = if let Some(span) = &array {
+            span.l
+        } else {
+            name_span.l
+        };
+        let r = if let Some(node) = &value {
+            if let Some(span) = &node.span() {
+                span.r
+            } else {
+                name_span.r
+            }
+        } else {
+            name_span.r
+        };
+
+
         VarInitNode {
             type_: LPCType::Int(false), // placeholder. Corrected in Decl.
             name: name.1,
             value,
             array: array.is_some(),
             global: false,
-            span: Some(Span { l, r })
+            span: Some(Span::new(file_id, l..r))
         }
     }
 }
 
 pub Decl: DeclNode = {
     <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> => {
-        let new_type = LPCType::from(var_type).as_array(init.array);
+        let new_type = LPCType::from(var_type.0).as_array(init.array);
         let mut initializations = vec![init];
 
         initializations.append(optional.to_vec().as_mut());
@@ -259,35 +287,63 @@ pub PrimaryExpression: ExpressionNode = {
 
 pub PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
-    <left:@L> <l:PostfixExpression> "[" <r:Expression> "]" <right:@R> => {
-        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+    <l:PostfixExpression> "[" <r:Expression> <right:"]"> => {
+        let file_id = first_span(&[&l, &r]).file_id;
+        let left = if let Some(span) = l.span() {
+            span.l
+        } else {
+            0
+        };
+
+        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    <left:@L> <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> "]" <right:@R> => {
+    <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> => {
+        let file_id = first_span(&[&l, &e1, &e2]).file_id;
+        let left = if let Some(span) = l.span() {
+            span.l
+        } else {
+            0
+        };
+
         let r = ExpressionNode::Range(RangeNode {
             l: Box::new(Some(e1)),
             r: Box::new(Some(e2)),
-            span: Some(Span { l: left, r: right })
+            span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    <left:@L> <l:PostfixExpression> "[" ".." <e:Expression> "]" <right:@R> => {
+    <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> => {
+        let file_id = first_span(&[&l, &e]).file_id;
+        let left = if let Some(span) = l.span() {
+            span.l
+        } else {
+            0
+        };
+
         let r = ExpressionNode::Range(RangeNode {
             l: Box::new(None),
             r: Box::new(Some(e)),
-            span: Some(Span { l: left, r: right })
+            span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    <left:@L> <l:PostfixExpression> "[" <e:Expression> ".." "]" <right:@R> => {
+    <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> => {
+        let file_id = first_span(&[&l, &e]).file_id;
+        let left = if let Some(span) = l.span() {
+            span.l
+        } else {
+            0
+        };
+
         let r = ExpressionNode::Range(RangeNode {
             l: Box::new(Some(e)),
             r: Box::new(None),
-            span: Some(Span { l: left, r: right })
+            span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { l: left, r: right })
+        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
     Call => ExpressionNode::Call(<>)
 };
@@ -302,15 +358,39 @@ pub CastExpression: ExpressionNode = {
 
 pub MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
-    <left:@L> <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> <right:@R> => {
-         collapse_expression(op, l, r, Span { l: left, r: right })
+    <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> => {
+         let file_id = first_span(&[&l, &r]).file_id;
+         let left = if let Some(span) = l.span() {
+             span.l
+         } else {
+             0
+         };
+         let right = if let Some(span) = r.span() {
+             span.r
+         } else {
+             0
+         };
+
+         collapse_expression(op, l, r, Span { file_id, l: left, r: right })
     },
 };
 
 pub AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
-    <left:@L> <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> <right:@R> => {
-        collapse_expression(op, l, r, Span { l: left, r: right })
+    <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
+        let file_id = first_span(&[&l, &r]).file_id;
+         let left = if let Some(span) = l.span() {
+             span.l
+         } else {
+             0
+         };
+         let right = if let Some(span) = r.span() {
+             span.r
+         } else {
+             0
+         };
+
+        collapse_expression(op, l, r, Span { file_id, l: left, r: right })
     }
 };
 
@@ -352,17 +432,50 @@ pub ConditionalExpression: ExpressionNode = {
 
 AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
-    <l:@L> <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> <r:@R> => ExpressionNode::Assignment(AssignmentNode {
-        lhs: Box::new(lhs),
-        rhs: Box::new(rhs),
-        op,
-        span: Some(Span { l, r })
-    })
+    <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => {
+        let file_id = first_span(&[&lhs, &rhs]).file_id;
+         let l = if let Some(span) = lhs.span() {
+             span.l
+         } else {
+             0
+         };
+         let r = if let Some(span) = rhs.span() {
+             span.r
+         } else {
+             0
+         };
+
+        ExpressionNode::Assignment(AssignmentNode {
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            op,
+            span: Some(Span { file_id, l, r }),
+        })
+    }
 };
 
 pub Expression: ExpressionNode = {
     <AssignmentExpression>,
-    <l:@L> <e:Expression> "," <ass:AssignmentExpression> <r:@R> => {
+    <e:Expression> <c:","> <ass:AssignmentExpression> => {
+        let file_id = if let Some(s) = e.span() {
+            s.file_id
+        } else if let Some(s) = ass.span() {
+            s.file_id
+        } else {
+            c.file_id
+        };
+
+        let l = if let Some(span) = e.span() {
+            span.l
+        } else {
+            c.l
+        };
+        let r = if let Some(span) = ass.span() {
+            span.r
+        } else {
+            c.r
+        };
+
         let mut list = if let ExpressionNode::CommaExpression(ce) = e {
             ce.value
         } else {
@@ -373,13 +486,25 @@ pub Expression: ExpressionNode = {
 
         ExpressionNode::CommaExpression(CommaExpressionNode {
             value: list,
-            span: Some(Span { l, r })
+            span: Some(Span { file_id, l, r })
         })
     }
 };
 
 pub Return: ReturnNode = {
-    <l:@L> "return" <e:Expression?> <r:@R> => ReturnNode { value: e, span: Some(Span { l, r }) }
+    <ret:"return"> <e:Expression?> => {
+        let r = if let Some(expr) = &e {
+            if let Some(span) = expr.span() {
+                span.r
+            } else {
+                ret.r
+            }
+        } else {
+            ret.r
+        };
+
+        ReturnNode { value: e, span: Some(Span { file_id: ret.file_id, l: ret.l, r }) }
+    }
 }
 
 ExpressionList: Vec<ExpressionNode> = {
@@ -401,16 +526,20 @@ ArgumentExpressionList: Vec<ExpressionNode> = {
 };
 
 pub Call: CallNode = {
-    <l:@L> <name:"ID"> "(" <list:ArgumentExpressionList?> ")" <r:@R> => {
+    <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
         let arguments = match list {
             Some(args) => args,
             None => vec![]
         };
 
+        let file_id = name.file_id();
+        let l = name.0.l;
+        let r = right.r;
+
         CallNode {
             arguments,
             name: name.1,
-            span: Some(Span { l, r })
+            span: Some(Span { file_id, l, r })
         }
     }
 };
@@ -429,45 +558,60 @@ MultiplicitiveBinaryOp: BinaryOperation = {
     "/" => BinaryOperation::Div
 };
 
-Var: ExpressionNode = <l:@L> <name:"ID"> <r:@R> => ExpressionNode::Var(
-    VarNode {
-        name: name.1,
-        span: Some(Span { l, r }),
-        global: false
-    }
-);
-
-Int: ExpressionNode = {
-    <l:@L> <i:"IntLiteral"> <r:@R> => ExpressionNode::Int(
-        IntNode {
-            value: i.1,
-            span: Some(Span { l, r })
+Var: ExpressionNode = <name:"ID"> => {
+    ExpressionNode::Var(
+        VarNode {
+            name: name.1,
+            span: Some(name.0),
+            global: false
         }
-    ),
+    )
 };
 
-Float: ExpressionNode = <l:@L> <f:"FloatLiteral"> <r:@R> => ExpressionNode::Float(
-    FloatNode {
-        value: f.1,
-        span: Some(Span { l, r })
-    }
-);
-
-String: ExpressionNode = {
-    <l:@L> <s:"StringLiteral"> <r:@R> => {
-        ExpressionNode::String(
-            StringNode {
-                value: s.1,
-                span: Some(Span { l, r })
+Int: ExpressionNode = {
+    <i:"IntLiteral"> => {
+        ExpressionNode::Int(
+            IntNode {
+                value: i.1,
+                span: Some(i.0),
             }
         )
     },
-    <l:@L> <s1:"StringLiteral"> <s2:String> <r:@R> => {
+};
+
+Float: ExpressionNode = <f:"FloatLiteral"> => {
+    ExpressionNode::Float(
+        FloatNode {
+            value: f.1,
+            span: Some(f.0)
+        }
+    )
+};
+
+String: ExpressionNode = {
+    <s:"StringLiteral"> => {
+        ExpressionNode::String(
+            StringNode {
+                value: s.1,
+                span: Some(s.0)
+            }
+        )
+    },
+    <s1:"StringLiteral"> <s2:String> => {
+        let span = s1.0;
+        let file_id = span.file_id;
+        let l = span.l;
+
         match s2 {
             ExpressionNode::String(node) => {
+                let r = if let Some(span) = &node.span {
+                    span.r
+                } else {
+                    l
+                };
                 ExpressionNode::String(StringNode {
                     value: s1.1 + &node.value,
-                    span: Some(Span { l, r })
+                    span: Some(Span { file_id, l, r })
                 })
             }
             _ => unimplemented!()

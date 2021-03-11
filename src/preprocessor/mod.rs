@@ -403,6 +403,7 @@ impl Preprocessor {
                 ),
                 file_id,
                 Span {
+                    file_id,
                     l: range.start,
                     r: range.end - 1,
                 },
@@ -426,6 +427,7 @@ impl Preprocessor {
                     ),
                     file_id,
                     Span {
+                        file_id,
                         l: range.start,
                         r: range.end - 1,
                     },

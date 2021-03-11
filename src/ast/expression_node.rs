@@ -37,6 +37,21 @@ pub enum ExpressionNode {
     Array(ArrayNode),
 }
 
+/// A convenience helper to get the first `span` we can find in a list of nodes.
+/// Returns 0 if no spans are found.
+///
+/// # Arguments
+/// `nodes` - A reference to a slice of Expression nodes.
+pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
+    for node in nodes {
+        if let Some(span) = node.span() {
+            return span;
+        }
+    }
+
+    return Span::new(0, 0..0);
+}
+
 impl SpannedNode for ExpressionNode {
     fn span(&self) -> Option<Span> {
         match self {

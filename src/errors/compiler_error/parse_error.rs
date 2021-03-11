@@ -102,33 +102,29 @@ impl LPCError for ParseError {
 impl<'a, E> From<LalrpopParseError<usize, Token, E>> for ParseError {
     fn from(err: LalrpopParseError<usize, Token, E>) -> Self {
         match err {
-            LalrpopParseError::InvalidToken { location } => ParseError {
+            LalrpopParseError::InvalidToken { .. } => ParseError {
                 type_: ParseErrorType::InvalidToken,
-                location: Some(Span {
-                    l: location,
-                    r: location,
-                }),
+                location: None,
                 token: None,
                 expected: None,
             },
-            LalrpopParseError::UnrecognizedEOF { location, expected } => ParseError {
+            LalrpopParseError::UnrecognizedEOF { expected, .. } => ParseError {
                 type_: ParseErrorType::UnrecognizedEOF,
-                location: Some(Span {
-                    l: location,
-                    r: location,
-                }),
+                location: None,
                 token: None,
                 expected: Some(expected),
             },
             LalrpopParseError::UnrecognizedToken {
-                token: (start, ref token, end),
+                token: (_start, ref token, _end),
                 ref expected,
-            } => ParseError {
-                type_: ParseErrorType::UnrecognizedToken,
-                location: Some(Span { l: start, r: end }),
-                token: Some(token.clone()),
-                expected: Some(expected.to_vec()),
-            },
+            } => {
+                ParseError {
+                    type_: ParseErrorType::UnrecognizedToken,
+                    location: Some(token.span()),
+                    token: Some(token.clone()),
+                    expected: Some(expected.to_vec()),
+                }
+            }
             LalrpopParseError::ExtraToken { ref token } => ParseError {
                 type_: ParseErrorType::ExtraToken,
                 location: None,

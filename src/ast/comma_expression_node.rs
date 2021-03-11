@@ -31,6 +31,7 @@ impl CommaExpressionNode {
             None
         } else if let (Some(node1), Some(node2)) = (value[0].span(), value.last().unwrap().span()) {
             Some(Span {
+                file_id: node1.file_id,
                 l: node1.l,
                 r: node2.r,
             })
