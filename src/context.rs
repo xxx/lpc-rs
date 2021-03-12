@@ -1,4 +1,3 @@
-use crate::errors::lazy_files::LazyFiles;
 use path_absolutize::Absolutize;
 use std::path::{Path, PathBuf};
 
@@ -24,9 +23,6 @@ pub struct Context {
     /// In-game directories that will be searched for system `#include`s.
     /// Searches will be done in the order given by this vector.
     pub include_dirs: Vec<PathBuf>,
-
-    /// A filestore, used heavily to get code spans for error messages.
-    pub files: LazyFiles<String, String>,
 
     /// Our collection of scopes
     pub scopes: ScopeTree,
@@ -81,7 +77,6 @@ impl Default for Context {
             filename: String::from(""),
             root_dir: PathBuf::from("."),
             include_dirs: vec![],
-            files: LazyFiles::new(),
             errors: Vec::new(),
             scopes: ScopeTree::default(),
             function_params: HashMap::new(),

@@ -167,8 +167,9 @@ impl Preprocessor {
     where
         T: AsRef<Path>,
     {
-        let file_id = self.context.files.add(self.context.filename.clone());
-        let source = match self.context.files.source(file_id) {
+        let file_id = add_file_to_cache(self.context.filename.clone());
+        let files = FILE_CACHE.read();
+        let source = match files.source(file_id) {
             Ok(x) => x,
             Err(e) => {
                 let canonical_path = self.canonicalize_path(&self.context.filename, &cwd);
@@ -233,11 +234,6 @@ impl Preprocessor {
             static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
         }
 
-        let file_id = self
-            .context
-            .files
-            .add(String::from(path.as_ref().to_string_lossy()));
-
         let mut current_line = 1;
 
         let mut output = String::new();
@@ -246,7 +242,7 @@ impl Preprocessor {
         let canonical_path = self.canonicalize_local_path(filename, &cwd);
 
         // Register the file-to-be-scanned with the global file cache
-        add_file_to_cache(self.canonicalize_path(filename, &cwd).display());
+        let file_id = add_file_to_cache(self.canonicalize_path(filename, &cwd).display());
 
         let format_line =
             |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
@@ -258,7 +254,7 @@ impl Preprocessor {
                 if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
                     return Err(PreprocessorError::new(
                         "Found `#endif` without a corresponding #if",
-                        self.context.files.file_line_span(file_id, current_line),
+                        FILE_CACHE.read().file_line_span(file_id, current_line),
                     ));
                 }
 
@@ -271,20 +267,20 @@ impl Preprocessor {
                 if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
                     return Err(PreprocessorError::new(
                         "Found `#else` without a corresponding #if",
-                        self.context.files.file_line_span(file_id, current_line),
+                        FILE_CACHE.read().file_line_span(file_id, current_line),
                     ));
                 }
 
                 if let Some((else_file_id, else_line)) = &self.current_else {
                     let mut err = PreprocessorError::new(
                         "Duplicate #else found",
-                        self.context.files.file_line_span(file_id, current_line),
+                        FILE_CACHE.read().file_line_span(file_id, current_line),
                     );
 
                     err.add_label(
                         "Originally defined here",
                         *else_file_id,
-                        Range::from(self.context.files.file_line_span(*else_file_id, *else_line)),
+                        Range::from(FILE_CACHE.read().file_line_span(*else_file_id, *else_line)),
                     );
 
                     return Err(err);
@@ -322,7 +318,7 @@ impl Preprocessor {
                 if self.defines.contains_key(&captures[1]) {
                     return Err(PreprocessorError::new(
                         &format!("Duplicate #define: `{}`", &captures[1]),
-                        self.context.files.file_line_span(file_id, current_line),
+                        FILE_CACHE.read().file_line_span(file_id, current_line),
                     ));
                 }
 
@@ -356,7 +352,7 @@ impl Preprocessor {
         if !self.ifdefs.is_empty() {
             let ifdef = self.ifdefs.last().unwrap();
             let (file_id, line_num) = (ifdef.1, ifdef.2);
-            let span = self.context.files.file_line_span(file_id, line_num);
+            let span = FILE_CACHE.read().file_line_span(file_id, line_num);
 
             let e =
                 PreprocessorError::new("Found `#if` without a corresponding #endif", span);
@@ -389,7 +385,7 @@ impl Preprocessor {
         let canon_include_path = self.canonicalize_path(&path, &cwd);
 
         if !canon_include_path.starts_with(&self.context.root_dir) {
-            let range = if let Ok(r) = self.context.files.line_range(file_id, parent_line - 1) {
+            let range = if let Ok(r) = FILE_CACHE.read().line_range(file_id, parent_line - 1) {
                 r
             } else {
                 0..1
@@ -412,7 +408,7 @@ impl Preprocessor {
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                let range = if let Ok(r) = self.context.files.line_range(file_id, parent_line - 1) {
+                let range = if let Ok(r) = FILE_CACHE.read().line_range(file_id, parent_line - 1) {
                     r
                 } else {
                     0..1

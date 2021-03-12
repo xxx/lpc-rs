@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env};
 
 use lpc_rs::{compiler::compile_file, errors, interpreter::asm_interpreter::AsmInterpreter};
 
