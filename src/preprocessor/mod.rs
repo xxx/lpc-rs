@@ -1,4 +1,5 @@
 use std::{collections::HashMap, fs, path::Path};
+use crate::errors::lazy_files::{FILE_CACHE, add_file_to_cache};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -116,7 +117,7 @@ impl Preprocessor {
             root_string
         };
 
-        Path::new(&localized_path.to_string_lossy().replace("//", "/"))
+        Path::new(&localized_path.to_string_lossy().replace("//", "/").replace("/./", "/"))
             .absolutize()
             .unwrap()
             .to_path_buf()
@@ -141,7 +142,8 @@ impl Preprocessor {
                 .chars()
                 .skip(root_len)
                 .collect::<String>()
-                .replace("//", "/"),
+                .replace("//", "/")
+                .replace("/./", "/"),
         )
     }
 
@@ -242,6 +244,9 @@ impl Preprocessor {
 
         let filename = path.as_ref().file_name().unwrap();
         let canonical_path = self.canonicalize_local_path(filename, &cwd);
+
+        // Register the file-to-be-scanned with the global file cache
+        add_file_to_cache(self.canonicalize_path(filename, &cwd).display());
 
         let format_line =
             |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
