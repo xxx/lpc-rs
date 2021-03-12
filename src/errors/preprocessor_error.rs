@@ -12,7 +12,6 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct PreprocessorError {
     pub message: String,
-    pub file_id: usize,
     pub span: Option<Span>,
     pub labels: Vec<Label<usize>>,
 }
@@ -20,13 +19,12 @@ pub struct PreprocessorError {
 impl Error for PreprocessorError {}
 
 impl PreprocessorError {
-    pub fn new<T>(message: T, file_id: usize, span: Span) -> Self
+    pub fn new<T>(message: T, span: Span) -> Self
     where
         T: Into<String>,
     {
         Self {
             message: message.into(),
-            file_id,
             span: Some(span),
             labels: Vec::new(),
         }
@@ -41,12 +39,12 @@ impl PreprocessorError {
 }
 
 impl LPCError for PreprocessorError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(&self.message);
         let mut labels = vec![];
 
         if let Some(span) = self.span {
-            labels.push(Label::primary(file_id, span.l..span.r));
+            labels.push(Label::primary(span.file_id, span.l..span.r));
         }
 
         for label in &self.labels {

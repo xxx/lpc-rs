@@ -44,22 +44,22 @@ pub enum CompilerError {
 
 impl LPCError for CompilerError {
     /// Get the error diagnostics for printing to the user.
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            CompilerError::ArgCountError(err) => err.to_diagnostics(file_id),
-            CompilerError::ArgTypeError(err) => err.to_diagnostics(file_id),
-            CompilerError::AssignmentError(err) => err.to_diagnostics(file_id),
-            CompilerError::BinaryOperationError(err) => err.to_diagnostics(file_id),
-            CompilerError::ParseError(err) => err.to_diagnostics(file_id),
-            CompilerError::PreprocessorError(err) => err.to_diagnostics(file_id),
-            CompilerError::UnknownFunctionError(err) => err.to_diagnostics(file_id),
-            CompilerError::VarRedefinitionError(err) => err.to_diagnostics(file_id),
-            CompilerError::RangeError(err) => err.to_diagnostics(file_id),
-            CompilerError::ReturnTypeError(err) => err.to_diagnostics(file_id),
-            CompilerError::UndefinedVarError(err) => err.to_diagnostics(file_id),
+            CompilerError::ArgCountError(err) => err.to_diagnostics(),
+            CompilerError::ArgTypeError(err) => err.to_diagnostics(),
+            CompilerError::AssignmentError(err) => err.to_diagnostics(),
+            CompilerError::BinaryOperationError(err) => err.to_diagnostics(),
+            CompilerError::ParseError(err) => err.to_diagnostics(),
+            CompilerError::PreprocessorError(err) => err.to_diagnostics(),
+            CompilerError::UnknownFunctionError(err) => err.to_diagnostics(),
+            CompilerError::VarRedefinitionError(err) => err.to_diagnostics(),
+            CompilerError::RangeError(err) => err.to_diagnostics(),
+            CompilerError::ReturnTypeError(err) => err.to_diagnostics(),
+            CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
             CompilerError::MultiError(errs) => errs
                 .iter()
-                .flat_map(|e| e.to_diagnostics(file_id))
+                .flat_map(|e| e.to_diagnostics())
                 .collect(),
         }
     }

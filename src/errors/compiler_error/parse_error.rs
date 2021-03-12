@@ -41,18 +41,30 @@ fn format_expected(expected: &[String]) -> String {
 }
 
 impl LPCError for ParseError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let diagnostic: Diagnostic<usize>;
 
         match &self.type_ {
             ParseErrorType::InvalidToken => {
-                let loc = self.location.unwrap();
+                let token = if let Some(t) = &self.token {
+                    t
+                } else {
+                    unreachable!()
+                };
+
+                let span = token.span();
                 diagnostic = Diagnostic::error()
                     .with_message("Invalid Token")
-                    .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
+                    .with_labels(vec![Label::primary(span.file_id, span.l..span.r)])
             }
             ParseErrorType::UnrecognizedEOF => {
-                let loc = self.location.unwrap();
+                let token = if let Some(t) = &self.token {
+                    t
+                } else {
+                    unreachable!()
+                };
+
+                let span = token.span();
                 let expected = if let Some(e) = &self.expected {
                     e.clone()
                 } else {
@@ -61,11 +73,10 @@ impl LPCError for ParseError {
 
                 diagnostic = Diagnostic::error()
                     .with_message("Unexpected EOF")
-                    .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
+                    .with_labels(vec![Label::primary(span.file_id, span.l..span.r)])
                     .with_notes(vec![format_expected(&expected)]);
             }
             ParseErrorType::UnrecognizedToken => {
-                let loc = self.location.unwrap();
                 let token = if let Some(t) = &self.token {
                     t
                 } else {
@@ -78,9 +89,11 @@ impl LPCError for ParseError {
                     unreachable!()
                 };
 
+                let span = token.span();
+
                 diagnostic = Diagnostic::error()
                     .with_message(format!("Unrecognized Token: {}", token))
-                    .with_labels(vec![Label::primary(file_id, loc.l..loc.r)])
+                    .with_labels(vec![Label::primary(span.file_id, span.l..span.r)])
                     .with_notes(vec![format_expected(&expected)]);
             }
             ParseErrorType::ExtraToken => {

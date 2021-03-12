@@ -52,10 +52,7 @@ where
         Err(e) => {
             let err = CompilerError::PreprocessorError(e);
 
-            errors::emit_diagnostics(
-                &*AsRef::<Path>::as_ref(&filename).to_string_lossy(),
-                &[err.clone()],
-            );
+            errors::emit_diagnostics(&[err.clone()]);
 
             // Preprocessor errors are fatal.
             return Err(err);
@@ -70,10 +67,7 @@ where
         Ok(prog) => prog,
         Err(e) => {
             let err = CompilerError::ParseError(ParseError::from(e));
-            errors::emit_diagnostics(
-                &*AsRef::<Path>::as_ref(&filename).to_string_lossy(),
-                &[err.clone()],
-            );
+            errors::emit_diagnostics(&[err.clone()]);
 
             // Parse errors are fatal, so we're done here.
             return Err(err);
@@ -101,10 +95,7 @@ where
     let context = semantic_check_walker.into_context();
 
     if !context.errors.is_empty() {
-        errors::emit_diagnostics(
-            &AsRef::<Path>::as_ref(&filename).to_string_lossy(),
-            &context.errors,
-        );
+        errors::emit_diagnostics(&context.errors);
         return Err(CompilerError::MultiError(context.errors));
     }
 

@@ -20,7 +20,7 @@ fn main() {
             interpreter.load(program);
 
             if let Err(e) = interpreter.exec() {
-                errors::emit_diagnostics(filename, &[e]);
+                errors::emit_diagnostics(&[e]);
             }
         }
         Err(e) => panic!("unable to compile {}: {:?}", filename, e),

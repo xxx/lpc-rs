@@ -173,7 +173,6 @@ impl Preprocessor {
 
                 return Err(PreprocessorError {
                     message: format!("Unable to read `{}`: {}", canonical_path.display(), e),
-                    file_id,
                     span: None,
                     labels: Vec::new(),
                 });
@@ -254,7 +253,6 @@ impl Preprocessor {
                 if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
                     return Err(PreprocessorError::new(
                         "Found `#endif` without a corresponding #if",
-                        file_id,
                         self.context.files.file_line_span(file_id, current_line),
                     ));
                 }
@@ -268,7 +266,6 @@ impl Preprocessor {
                 if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
                     return Err(PreprocessorError::new(
                         "Found `#else` without a corresponding #if",
-                        file_id,
                         self.context.files.file_line_span(file_id, current_line),
                     ));
                 }
@@ -276,7 +273,6 @@ impl Preprocessor {
                 if let Some((else_file_id, else_line)) = &self.current_else {
                     let mut err = PreprocessorError::new(
                         "Duplicate #else found",
-                        file_id,
                         self.context.files.file_line_span(file_id, current_line),
                     );
 
@@ -321,7 +317,6 @@ impl Preprocessor {
                 if self.defines.contains_key(&captures[1]) {
                     return Err(PreprocessorError::new(
                         &format!("Duplicate #define: `{}`", &captures[1]),
-                        file_id,
                         self.context.files.file_line_span(file_id, current_line),
                     ));
                 }
@@ -359,7 +354,7 @@ impl Preprocessor {
             let span = self.context.files.file_line_span(file_id, line_num);
 
             let e =
-                PreprocessorError::new("Found `#if` without a corresponding #endif", file_id, span);
+                PreprocessorError::new("Found `#if` without a corresponding #endif", span);
 
             return Err(e);
         }
@@ -401,7 +396,6 @@ impl Preprocessor {
                     path.as_ref().display(),
                     canon_include_path.display()
                 ),
-                file_id,
                 Span {
                     file_id,
                     l: range.start,
@@ -425,7 +419,6 @@ impl Preprocessor {
                         path.as_ref().display(),
                         e
                     ),
-                    file_id,
                     Span {
                         file_id,
                         l: range.start,

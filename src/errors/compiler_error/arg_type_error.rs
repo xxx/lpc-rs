@@ -24,16 +24,16 @@ pub struct ArgTypeError {
 }
 
 impl LPCError for ArgTypeError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {
-            labels.push(Label::primary(file_id, span.l..span.r));
+            labels.push(Label::primary(span.file_id, span.l..span.r));
         }
 
         if let Some(span) = self.declaration_span {
-            labels.push(Label::secondary(file_id, span.l..span.r).with_message("Declared here"));
+            labels.push(Label::secondary(span.file_id, span.l..span.r).with_message("Declared here"));
         }
 
         if !labels.is_empty() {

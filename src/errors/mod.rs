@@ -10,10 +10,9 @@ pub mod lazy_files;
 pub mod preprocessor_error;
 pub mod runtime_error;
 use crate::errors::lazy_files::FILE_CACHE;
-use parking_lot::RwLockWriteGuard;
 
 pub trait LPCError: Debug {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>>;
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>>;
 }
 
 /// Emit nice error messages to the console.
@@ -22,17 +21,15 @@ pub trait LPCError: Debug {
 /// * `filename` - The name of the file, for the messaging. In practice, this is the full filepath.
 /// * `file_content` - The actual content of the file, used for messaging.
 /// * `errors` - A slice of errors to display diagnostics for.
-pub fn emit_diagnostics<T>(filename: &str, errors: &[T])
+pub fn emit_diagnostics<T>(errors: &[T])
 where
     T: LPCError,
 {
-    let mut files = FILE_CACHE.write();
-    let file_id = files.add(String::from(filename));
-    let files = RwLockWriteGuard::downgrade(files);
+    let files = FILE_CACHE.read();
 
     let diagnostics: Vec<Diagnostic<usize>> = errors
         .iter()
-        .flat_map(|e| e.to_diagnostics(file_id))
+        .flat_map(|e| e.to_diagnostics())
         .collect();
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = codespan_reporting::term::Config::default();
@@ -54,14 +51,13 @@ where
 /// `span` - The `Span` of the code that created this error
 pub fn default_diagnostic(
     message: String,
-    file_id: usize,
     span: Option<Span>,
 ) -> Vec<Diagnostic<usize>> {
     let mut diagnostic = Diagnostic::error().with_message(message);
 
     if let Some(span) = span {
         let mut labels = vec![];
-        labels.push(Label::primary(file_id, span.l..span.r));
+        labels.push(Label::primary(span.file_id, span.l..span.r));
         diagnostic = diagnostic.with_labels(labels);
     }
 

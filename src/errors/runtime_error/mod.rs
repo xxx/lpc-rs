@@ -21,12 +21,12 @@ pub enum RuntimeError {
 }
 
 impl LPCError for RuntimeError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            RuntimeError::BinaryOperationError(err) => err.to_diagnostics(file_id),
-            RuntimeError::DivisionByZeroError(err) => err.to_diagnostics(file_id),
-            RuntimeError::IndexError(err) => err.to_diagnostics(file_id),
-            RuntimeError::UnknownError(err) => err.to_diagnostics(file_id),
+            RuntimeError::BinaryOperationError(err) => err.to_diagnostics(),
+            RuntimeError::DivisionByZeroError(err) => err.to_diagnostics(),
+            RuntimeError::IndexError(err) => err.to_diagnostics(),
+            RuntimeError::UnknownError(err) => err.to_diagnostics(),
         }
     }
 }

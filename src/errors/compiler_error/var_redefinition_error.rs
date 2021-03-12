@@ -16,17 +16,17 @@ pub struct VarRedefinitionError {
 }
 
 impl LPCError for VarRedefinitionError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 
         if let Some(span) = self.span {
-            labels.push(Label::primary(file_id, span.l..span.r));
+            labels.push(Label::primary(span.file_id, span.l..span.r));
         }
 
         if let Some(span) = self.symbol.span {
             labels.push(
-                Label::secondary(file_id, span.l..span.r).with_message("Originally defined here."),
+                Label::secondary(span.file_id, span.l..span.r).with_message("Originally defined here."),
             );
         }
 

@@ -22,8 +22,8 @@ pub struct IndexError {
 }
 
 impl LPCError for IndexError {
-    fn to_diagnostics(&self, file_id: usize) -> Vec<Diagnostic<usize>> {
-        default_diagnostic(format!("{}", self), file_id, self.span)
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
+        default_diagnostic(format!("{}", self), self.span)
     }
 }
 
