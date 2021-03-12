@@ -27,10 +27,8 @@ where
 {
     let files = FILE_CACHE.read();
 
-    let diagnostics: Vec<Diagnostic<usize>> = errors
-        .iter()
-        .flat_map(|e| e.to_diagnostics())
-        .collect();
+    let diagnostics: Vec<Diagnostic<usize>> =
+        errors.iter().flat_map(|e| e.to_diagnostics()).collect();
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = codespan_reporting::term::Config::default();
 
@@ -49,10 +47,7 @@ where
 /// `message` - The main message for the error
 /// `file_id` - The file_id corresponding to the code that created this error
 /// `span` - The `Span` of the code that created this error
-pub fn default_diagnostic(
-    message: String,
-    span: Option<Span>,
-) -> Vec<Diagnostic<usize>> {
+pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic<usize>> {
     let mut diagnostic = Diagnostic::error().with_message(message);
 
     if let Some(span) = span {

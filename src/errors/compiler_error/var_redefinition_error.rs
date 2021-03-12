@@ -26,7 +26,8 @@ impl LPCError for VarRedefinitionError {
 
         if let Some(span) = self.symbol.span {
             labels.push(
-                Label::secondary(span.file_id, span.l..span.r).with_message("Originally defined here."),
+                Label::secondary(span.file_id, span.l..span.r)
+                    .with_message("Originally defined here."),
             );
         }
 

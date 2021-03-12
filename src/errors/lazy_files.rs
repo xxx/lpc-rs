@@ -186,11 +186,7 @@ where
         self.get(id)?.line_index((), byte_index)
     }
 
-    fn line_range(
-        &self,
-        id: Self::FileId,
-        line_index: usize,
-    ) -> Result<Range<usize>, Error> {
+    fn line_range(&self, id: Self::FileId, line_index: usize) -> Result<Range<usize>, Error> {
         self.get(id)?.line_range((), line_index)
     }
 }

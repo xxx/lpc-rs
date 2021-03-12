@@ -33,7 +33,8 @@ impl LPCError for ArgCountError {
         }
 
         if let Some(span) = self.prototype_span {
-            labels.push(Label::secondary(span.file_id, span.l..span.r).with_message("Defined here"));
+            labels
+                .push(Label::secondary(span.file_id, span.l..span.r).with_message("Defined here"));
         }
 
         if !labels.is_empty() {

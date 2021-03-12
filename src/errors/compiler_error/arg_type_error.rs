@@ -33,7 +33,8 @@ impl LPCError for ArgTypeError {
         }
 
         if let Some(span) = self.declaration_span {
-            labels.push(Label::secondary(span.file_id, span.l..span.r).with_message("Declared here"));
+            labels
+                .push(Label::secondary(span.file_id, span.l..span.r).with_message("Declared here"));
         }
 
         if !labels.is_empty() {

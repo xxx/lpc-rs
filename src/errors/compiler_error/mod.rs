@@ -57,10 +57,9 @@ impl LPCError for CompilerError {
             CompilerError::RangeError(err) => err.to_diagnostics(),
             CompilerError::ReturnTypeError(err) => err.to_diagnostics(),
             CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
-            CompilerError::MultiError(errs) => errs
-                .iter()
-                .flat_map(|e| e.to_diagnostics())
-                .collect(),
+            CompilerError::MultiError(errs) => {
+                errs.iter().flat_map(|e| e.to_diagnostics()).collect()
+            }
         }
     }
 }

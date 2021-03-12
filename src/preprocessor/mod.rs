@@ -1,5 +1,5 @@
+use crate::errors::lazy_files::{add_file_to_cache, FILE_CACHE};
 use std::{collections::HashMap, fs, path::Path};
-use crate::errors::lazy_files::{FILE_CACHE, add_file_to_cache};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -117,10 +117,15 @@ impl Preprocessor {
             root_string
         };
 
-        Path::new(&localized_path.to_string_lossy().replace("//", "/").replace("/./", "/"))
-            .absolutize()
-            .unwrap()
-            .to_path_buf()
+        Path::new(
+            &localized_path
+                .to_string_lossy()
+                .replace("//", "/")
+                .replace("/./", "/"),
+        )
+        .absolutize()
+        .unwrap()
+        .to_path_buf()
     }
 
     /// Convert an in-game path, relative or absolute, to a canonical, absolute in-game path.
@@ -354,8 +359,7 @@ impl Preprocessor {
             let (file_id, line_num) = (ifdef.1, ifdef.2);
             let span = FILE_CACHE.read().file_line_span(file_id, line_num);
 
-            let e =
-                PreprocessorError::new("Found `#if` without a corresponding #endif", span);
+            let e = PreprocessorError::new("Found `#if` without a corresponding #endif", span);
 
             return Err(e);
         }
