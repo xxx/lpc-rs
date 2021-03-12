@@ -1,6 +1,6 @@
 use crate::parser::span::Span;
 use cached::{proc_macro::cached, SizedCache};
-use codespan_reporting::files::{Error as CodespanError, Files, SimpleFile};
+use codespan_reporting::files::{Error, Files, SimpleFile};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::{
@@ -69,7 +69,11 @@ where
     /// `path` - The full path, including filename, to the file being added.
     ///     No canonicalization is done, so it's highly recommended to use
     ///     absolute paths.
-    pub fn add(&mut self, path: Name) -> usize {
+    pub fn add(&mut self, path: Name) -> FileId {
+        if let Some(id) = self.get_id(&path) {
+            return id;
+        }
+
         let id = self.paths.len();
         self.paths.push(path);
         id
@@ -79,7 +83,7 @@ where
     ///
     /// # Arguments
     /// `id` - The ID of the file to get (IDs are returned by `add()`).
-    pub fn get(&self, id: FileId) -> Result<SimpleFile<String, String>, CodespanError> {
+    pub fn get(&self, id: FileId) -> Result<SimpleFile<String, String>, Error> {
         let path = self.name(id)?;
 
         self.get_by_path(path)
@@ -89,7 +93,7 @@ where
     ///
     /// # Arguments
     /// `path` - The full path, including filename, to the file.
-    pub fn get_by_path<T>(&self, path: T) -> Result<SimpleFile<String, String>, CodespanError>
+    pub fn get_by_path<T>(&self, path: T) -> Result<SimpleFile<String, String>, Error>
     where
         T: AsRef<Path>,
     {
@@ -100,8 +104,8 @@ where
     ///
     /// # Arguments
     /// `path` - The path of the file stored in the cache
-    pub fn get_id(&self, path: Name) -> Option<FileId> {
-        self.paths.iter().position(|i| *i == path)
+    pub fn get_id(&self, path: &Name) -> Option<FileId> {
+        self.paths.iter().position(|i| i == path)
     }
 
     /// Get a `Span` for a specific file_id and line
@@ -147,10 +151,10 @@ where
     create = "{ SizedCache::with_size(5) }",
     convert = r#"{ OsString::from(path) }"#
 )]
-fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, CodespanError> {
+fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, Error> {
     let source = match fs::read_to_string(path) {
         Ok(content) => content,
-        Err(e) => return Err(CodespanError::from(e)),
+        Err(e) => return Err(Error::from(e)),
     };
 
     Ok(SimpleFile::new(
@@ -167,18 +171,18 @@ where
     type Name = Name;
     type Source = String;
 
-    fn name(&self, id: Self::FileId) -> Result<Self::Name, CodespanError> {
+    fn name(&self, id: Self::FileId) -> Result<Self::Name, Error> {
         match self.paths.get(id) {
             Some(s) => Ok(s.clone()),
-            _ => Err(CodespanError::FileMissing),
+            _ => Err(Error::FileMissing),
         }
     }
 
-    fn source(&self, id: Self::FileId) -> Result<Self::Source, CodespanError> {
+    fn source(&self, id: Self::FileId) -> Result<Self::Source, Error> {
         Ok(String::from(self.get(id)?.source()))
     }
 
-    fn line_index(&self, id: Self::FileId, byte_index: usize) -> Result<usize, CodespanError> {
+    fn line_index(&self, id: Self::FileId, byte_index: usize) -> Result<usize, Error> {
         self.get(id)?.line_index((), byte_index)
     }
 
@@ -186,23 +190,21 @@ where
         &self,
         id: Self::FileId,
         line_index: usize,
-    ) -> Result<Range<usize>, CodespanError> {
+    ) -> Result<Range<usize>, Error> {
         self.get(id)?.line_range((), line_index)
     }
 }
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     #[test]
-//     fn test_cache_works() {
-//         let mut files: LazyFiles<&str, String> = LazyFiles::new();
-//         let file = "/etc/issue";
-//
-//         let id = files.add(file);
-//
-//         println!("{}", files.source(id).unwrap());
-//         println!("{}", files.source(id).unwrap());
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_does_not_duplicate() {
+        let mut files: LazyFiles<&str, String> = LazyFiles::new();
+        let file = "/foo/bar.c";
+
+        let id = files.add(file);
+        assert_eq!(id, files.add(file));
+    }
+}
