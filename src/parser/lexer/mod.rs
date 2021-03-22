@@ -8,10 +8,7 @@ use logos::{Lexer, Logos};
 
 use crate::{
     convert_escapes,
-    errors::{
-        compiler_error::lex_error::LexError,
-        lazy_files::{FileId},
-    },
+    errors::{compiler_error::lex_error::LexError, lazy_files::FileId},
     parser::{
         lexer::{
             lex_state::LexState,
@@ -63,7 +60,7 @@ impl Iterator for LexWrapper<'_> {
 /// A wrapper for vectors of tokens, for lalrpop compatibility
 pub struct TokenVecWrapper {
     vec: Vec<Spanned<Token>>,
-    count: usize
+    count: usize,
 }
 
 impl TokenVecWrapper {
@@ -80,7 +77,7 @@ impl Iterator for TokenVecWrapper {
 
         let token = match token {
             Some(t) => t,
-            _ => return None
+            _ => return None,
         };
 
         self.count += 1;
@@ -90,8 +87,7 @@ impl Iterator for TokenVecWrapper {
         match &token.1 {
             Token::Error => Some(Err(LexError(format!(
                 "Invalid Token `{}`at {:?}",
-                token.1,
-                span
+                token.1, span
             )))),
             t => Some(Ok((span.l, t.clone(), span.r))),
         }
@@ -344,7 +340,7 @@ pub enum Token {
 #[inline]
 fn strip_newlines<T: ?Sized>(slice: &T) -> String
 where
-    T: Display
+    T: Display,
 {
     let replaced_slice = slice.to_string().replace("\n", "");
 
@@ -368,10 +364,7 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {
     let span = track_slice(lex);
 
-    StringToken(
-        span,
-        lex.extras.last_slice.clone(),
-    )
+    StringToken(span, lex.extras.last_slice.clone())
 }
 
 /// Strip off the start and end characters of a string, then store the result in the token.
@@ -595,7 +588,9 @@ mod tests {
 
     fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LexError>> {
         let lexer = LexWrapper::new(prog);
-        lexer.filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _)))).collect::<Vec<_>>()
+        lexer
+            .filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _))))
+            .collect::<Vec<_>>()
     }
 
     // fn into_errors(

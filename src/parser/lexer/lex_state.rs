@@ -12,7 +12,7 @@ impl Default for LexState {
     fn default() -> Self {
         LexState {
             last_slice: String::from("\n"),
-            current_file_id: 0
+            current_file_id: 0,
         }
     }
 }

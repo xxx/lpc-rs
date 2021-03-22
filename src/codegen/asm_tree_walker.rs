@@ -680,12 +680,14 @@ mod tests {
             comma_expression_node::CommaExpressionNode, expression_node::ExpressionNode,
         },
         codegen::scope_walker::ScopeWalker,
+        compiler::preprocess_string,
         lpc_parser,
-        parser::{lexer::LexWrapper, span::Span},
+        parser::{
+            lexer::{LexWrapper, TokenVecWrapper},
+            span::Span,
+        },
         semantic::lpc_type::LPCType,
     };
-    use crate::compiler::preprocess_string;
-    use crate::parser::lexer::TokenVecWrapper;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {

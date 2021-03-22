@@ -13,9 +13,12 @@ use crate::{
     preprocessor::Preprocessor,
 };
 
-use crate::{codegen::tree_walker::ContextHolder, context::Context};
+use crate::{
+    codegen::tree_walker::ContextHolder,
+    context::Context,
+    parser::lexer::{Spanned, Token, TokenVecWrapper},
+};
 use std::path::Path;
-use crate::parser::lexer::{TokenVecWrapper, Spanned, Token};
 
 /// Fully compile a file into a Program struct
 ///
@@ -36,10 +39,13 @@ where
 }
 
 /// Take a string and preprocess it into a vector of Span tuples
-pub fn preprocess_string<T, U>(filename: T, code: U) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
-    where
-        T: AsRef<Path> + AsRef<str>,
-        U: AsRef<str>,
+pub fn preprocess_string<T, U>(
+    filename: T,
+    code: U,
+) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
+where
+    T: AsRef<Path> + AsRef<str>,
+    U: AsRef<str>,
 {
     let context = Context::new(&filename, ".", Vec::new());
 

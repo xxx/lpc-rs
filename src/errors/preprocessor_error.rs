@@ -1,4 +1,7 @@
-use crate::{errors::LPCError, parser::span::Span};
+use crate::{
+    errors::{compiler_error::lex_error::LexError, LPCError},
+    parser::span::Span,
+};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     error::Error,
@@ -6,7 +9,6 @@ use std::{
     fmt::{Display, Formatter},
     ops::Range,
 };
-use crate::errors::compiler_error::lex_error::LexError;
 
 /// Handle preprocessing
 
@@ -71,7 +73,7 @@ impl From<LexError> for PreprocessorError {
         Self {
             message: format!("{}", err),
             span: None,
-            labels: vec![]
+            labels: vec![],
         }
     }
 }

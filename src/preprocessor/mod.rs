@@ -12,8 +12,8 @@ use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
+use crate::parser::lexer::{LexWrapper, Spanned, Token};
 use std::ops::Range;
-use crate::parser::lexer::{Token, LexWrapper, Spanned};
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -36,7 +36,7 @@ pub struct Preprocessor {
     current_else: Option<Span>,
 
     /// We Track the last slice, because things like preprocessor directives need to check it.
-    last_slice: String
+    last_slice: String,
 }
 
 impl Preprocessor {
@@ -259,15 +259,13 @@ impl Preprocessor {
                             if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
                                 return Err(PreprocessorError::new(
                                     "Found `#else` without a corresponding #if",
-                                    *span
+                                    *span,
                                 ));
                             }
 
                             if let Some(else_span) = &self.current_else {
-                                let mut err = PreprocessorError::new(
-                                    "Duplicate `#else` found",
-                                    *span
-                                );
+                                let mut err =
+                                    PreprocessorError::new("Duplicate `#else` found", *span);
 
                                 err.add_label(
                                     "Originally defined here",
@@ -303,7 +301,7 @@ impl Preprocessor {
                                 if self.defines.contains_key(&captures[1]) {
                                     return Err(PreprocessorError::new(
                                         &format!("Duplicate `#define`: `{}`", &captures[1]),
-                                        t.0
+                                        t.0,
                                     ));
                                 }
 
@@ -328,8 +326,7 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = IFDEF.captures(&t.1) {
-                                self.ifdefs
-                                    .push((String::from(&captures[1]), t.0));
+                                self.ifdefs.push((String::from(&captures[1]), t.0));
                                 self.skip_lines
                                     .push(!self.defines.contains_key(&captures[1]));
                             }
@@ -338,8 +335,7 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = IFNDEF.captures(&t.1) {
-                                self.ifdefs
-                                    .push((String::from(&captures[1]), t.0));
+                                self.ifdefs.push((String::from(&captures[1]), t.0));
                                 self.skip_lines
                                     .push(self.defines.contains_key(&captures[1]));
                             }
@@ -361,7 +357,10 @@ impl Preprocessor {
         if !self.ifdefs.is_empty() {
             let ifdef = self.ifdefs.last().unwrap();
 
-            return Err(PreprocessorError::new("Found `#if` without a corresponding `#endif`", ifdef.1));
+            return Err(PreprocessorError::new(
+                "Found `#if` without a corresponding `#endif`",
+                ifdef.1,
+            ));
         }
 
         Ok(output)
@@ -379,7 +378,7 @@ impl Preprocessor {
         &mut self,
         path: T,
         cwd: U,
-        span: Span
+        span: Span,
     ) -> Result<Vec<Spanned<Token>>>
     where
         T: AsRef<Path>,
@@ -407,7 +406,7 @@ impl Preprocessor {
                         path.as_ref().display(),
                         e
                     ),
-                    span
+                    span,
                 ));
             }
         };
@@ -438,7 +437,7 @@ impl Preprocessor {
             return Err(PreprocessorError {
                 message: "Preprocessor directives must appear on their own line.".to_string(),
                 span: Some(span),
-                labels: vec![]
+                labels: vec![],
             });
         }
 
@@ -454,7 +453,7 @@ impl Default for Preprocessor {
             skip_lines: Vec::new(),
             ifdefs: Vec::new(),
             current_else: None,
-            last_slice: String::from("\n")
+            last_slice: String::from("\n"),
         }
     }
 }
@@ -492,7 +491,7 @@ mod tests {
             }
             Err(e) => {
                 let regex = Regex::new(expected).unwrap();
-                assert!(regex.is_match(&e.to_string()), "error = {:?}", e );
+                assert!(regex.is_match(&e.to_string()), "error = {:?}", e);
             }
         }
     }
@@ -504,18 +503,7 @@ mod tests {
         fn test_includes_the_file() {
             let input = r#"#include "include/simple.h""#;
 
-            let expected = vec![
-                "1",
-                "+",
-                "2",
-                "+",
-                "3",
-                "+",
-                "4",
-                "+",
-                "5",
-                ";"
-            ];
+            let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
             test_valid(input, &expected);
         }
@@ -524,18 +512,7 @@ mod tests {
         fn test_includes_multiple_levels() {
             let input = r#"#include "include/level_2/two_level.h""#;
 
-            let expected = vec![
-                "1",
-                "+",
-                "2",
-                "+",
-                "3",
-                "+",
-                "4",
-                "+",
-                "5",
-                ";"
-            ];
+            let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
             test_valid(input, &expected);
         }
@@ -549,31 +526,8 @@ mod tests {
             "#};
 
             let expected = vec![
-                "1",
-                "+",
-                "2",
-                "+",
-                "3",
-                "+",
-                "4",
-                "+",
-                "5",
-                ";",
-                "int",
-                "j",
-                "=",
-                "123",
-                ";",
-                "1",
-                "+",
-                "2",
-                "+",
-                "3",
-                "+",
-                "4",
-                "+",
-                "5",
-                ";"
+                "1", "+", "2", "+", "3", "+", "4", "+", "5", ";", "int", "j", "=", "123", ";", "1",
+                "+", "2", "+", "3", "+", "4", "+", "5", ";",
             ];
 
             test_valid(input, &expected);
@@ -583,18 +537,7 @@ mod tests {
         fn test_includes_absolute_paths() {
             let input = r#"#include "/include/simple.h""#;
 
-            let expected = vec![
-                "1",
-                "+",
-                "2",
-                "+",
-                "3",
-                "+",
-                "4",
-                "+",
-                "5",
-                ";"
-            ];
+            let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
             test_valid(input, &expected);
         }
@@ -697,12 +640,7 @@ mod tests {
                 #endif
             "# };
 
-            let expected = vec![
-                "I",
-                "should",
-                "be",
-                "rendered"
-            ];
+            let expected = vec!["I", "should", "be", "rendered"];
 
             test_valid(prog, &expected);
         }
@@ -749,12 +687,7 @@ mod tests {
                 #endif
             "# };
 
-            let expected = vec![
-                "I",
-                "should",
-                "be",
-                "rendered"
-            ];
+            let expected = vec!["I", "should", "be", "rendered"];
 
             test_valid(prog, &expected);
         }
@@ -796,21 +729,8 @@ mod tests {
             "# };
 
             let expected = vec![
-                "I",
-                "should",
-                "be",
-                "rendered",
-                "1",
-                "I",
-                "should",
-                "be",
-                "rendered",
-                "2",
-                "I",
-                "should",
-                "be",
-                "rendered",
-                "3"
+                "I", "should", "be", "rendered", "1", "I", "should", "be", "rendered", "2", "I",
+                "should", "be", "rendered", "3",
             ];
 
             test_valid(prog, &expected);
@@ -836,7 +756,10 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Preprocessor directives must appear on their own line");
+            test_invalid(
+                prog,
+                "Preprocessor directives must appear on their own line",
+            );
         }
     }
 }

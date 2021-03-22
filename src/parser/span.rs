@@ -27,5 +27,7 @@ impl From<&Span> for Range<usize> {
 }
 
 impl From<Span> for Range<usize> {
-    fn from(span: Span) -> Self { Self::from(&span) }
+    fn from(span: Span) -> Self {
+        Self::from(&span)
+    }
 }
