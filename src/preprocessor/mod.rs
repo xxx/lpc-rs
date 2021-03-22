@@ -204,9 +204,9 @@ impl Preprocessor {
             static ref SYS_INCLUDE: Regex =
                 Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
             static ref LOCAL_INCLUDE: Regex =
-                Regex::new(r#"\A\s*#\s*include\s+"([^"]+)"\s*\z"#).unwrap();
+                Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
             static ref DEFINE: Regex =
-                Regex::new(r#"\A\s*#\s*define\s+(\S+)(?:\s*(.*))?\z"#).unwrap();
+                Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
             static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
             static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
             static ref IFDEFINED: Regex =
@@ -232,6 +232,8 @@ impl Preprocessor {
                 Ok(spanned) => {
                     let (_l, token, _r) = &spanned;
 
+                    println!("token {:?}", token);
+
                     let token_string = token.to_string();
 
                     match token {
@@ -253,40 +255,44 @@ impl Preprocessor {
                         Token::SysInclude(t) => {
                             self.check_for_previous_newline(t.0)?;
                         }
-                        Token::PreprocessorElse(span) => {
-                            self.check_for_previous_newline(*span)?;
+                        Token::PreprocessorElse(t) => {
+                            self.check_for_previous_newline(t.0)?;
 
-                            if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
-                                return Err(PreprocessorError::new(
-                                    "Found `#else` without a corresponding #if",
-                                    *span,
-                                ));
+                            if ELSE.is_match(&t.1) {
+                                if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                                    return Err(PreprocessorError::new(
+                                        "Found `#else` without a corresponding #if",
+                                        t.0,
+                                    ));
+                                }
+
+                                if let Some(else_span) = &self.current_else {
+                                    let mut err =
+                                        PreprocessorError::new("Duplicate `#else` found", t.0);
+
+                                    err.add_label(
+                                        "Originally used here",
+                                        else_span.file_id,
+                                        Range::from(else_span),
+                                    );
+
+                                    return Err(err);
+                                }
+
+                                self.current_else = Some(t.0);
+                                let last = self.skip_lines.last_mut().unwrap();
+                                *last = !*last;
+                            } else {
+                                return Err(PreprocessorError::new("Invalid `#else`.", t.0));
                             }
-
-                            if let Some(else_span) = &self.current_else {
-                                let mut err =
-                                    PreprocessorError::new("Duplicate `#else` found", *span);
-
-                                err.add_label(
-                                    "Originally used here",
-                                    else_span.file_id,
-                                    Range::from(else_span),
-                                );
-
-                                return Err(err);
-                            }
-
-                            self.current_else = Some(*span);
-                            let last = self.skip_lines.last_mut().unwrap();
-                            *last = !*last;
                         }
-                        Token::Endif(span) => {
-                            self.check_for_previous_newline(*span)?;
+                        Token::Endif(t) => {
+                            self.check_for_previous_newline(t.0)?;
 
                             if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
                                 return Err(PreprocessorError::new(
                                     "Found `#endif` without a corresponding `#if`",
-                                    *span,
+                                    t.0,
                                 ));
                             }
 
@@ -313,6 +319,9 @@ impl Preprocessor {
                                 };
 
                                 self.defines.insert(name, convert_escapes(value));
+                            } else {
+                                println!("matching {} {:?}", *DEFINE, t);
+                                return Err(PreprocessorError::new("Invalid `#define`.", t.0));
                             }
                         }
                         Token::Undef(t) => {
@@ -329,6 +338,8 @@ impl Preprocessor {
                                 self.ifdefs.push((String::from(&captures[1]), t.0));
                                 self.skip_lines
                                     .push(!self.defines.contains_key(&captures[1]));
+                            } else {
+                                return Err(PreprocessorError::new("Invalid `#ifdef`.", t.0));
                             }
                         }
                         Token::IfNDef(t) => {
@@ -338,6 +349,8 @@ impl Preprocessor {
                                 self.ifdefs.push((String::from(&captures[1]), t.0));
                                 self.skip_lines
                                     .push(self.defines.contains_key(&captures[1]));
+                            } else {
+                                return Err(PreprocessorError::new("Invalid `#ifndef`.", t.0));
                             }
                         }
 
@@ -433,7 +446,8 @@ impl Preprocessor {
 
     /// A convenience function for checking if preprocessor directives follow a newline.
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
-        if self.last_slice != "\n" {
+        println!("last slice {:?}", self.last_slice);
+        if !self.last_slice.ends_with('\n') {
             return Err(PreprocessorError {
                 message: "Preprocessor directives must appear on their own line.".to_string(),
                 span: Some(span),
@@ -555,6 +569,32 @@ mod tests {
 
             test_invalid(input, "Attempt to include a file outside the root");
         }
+
+        #[test]
+        fn test_error_if_not_first_on_line() {
+            let prog = indoc! { r#"
+                a + 3 + as; #include "foo.h"
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Preprocessor directives must appear on their own line",
+            );
+        }
+
+        #[test]
+        fn test_error_if_invalid() {
+            let prog = indoc! { r#"
+                #include "./include/simple.h" klasjd
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Invalid `#include`",
+            );
+        }
     }
 
     mod test_defines {
@@ -572,6 +612,7 @@ mod tests {
 
             match preprocessor.scan("test.c", "/", input) {
                 Ok(_) => {
+                    println!("defs {:?}", preprocessor.defines);
                     assert_eq!(preprocessor.defines.get("ASS").unwrap(), "1 2\n\n3 5 t ass");
                     assert_eq!(preprocessor.defines.get("MAR").unwrap(), "0");
                     assert_eq!(preprocessor.defines.get("DOOD").unwrap(), "666 + MAR");
@@ -618,6 +659,32 @@ mod tests {
                     panic!("{:?}", e)
                 }
             }
+        }
+
+        #[test]
+        fn test_error_if_not_first_on_line() {
+            let prog = indoc! { r#"
+                a + 3 + as; #define LOL WUT
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Preprocessor directives must appear on their own line",
+            );
+        }
+
+        #[test]
+        fn test_error_if_invalid() {
+            let prog = indoc! { r#"
+                #define
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Invalid `#define`",
+            );
         }
     }
 
@@ -666,6 +733,34 @@ mod tests {
 
             test_invalid(prog, "Found `#if` without a corresponding `#endif`");
         }
+
+        #[test]
+        fn test_error_if_not_first_on_line() {
+            let prog = indoc! { r#"
+                a + 3 + as; #ifdef WUT
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Preprocessor directives must appear on their own line",
+            );
+        }
+
+        #[test]
+        fn test_error_if_invalid() {
+            let prog = indoc! { r#"
+                #ifdef
+                123;
+                #endif
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Invalid `#ifdef`",
+            );
+        }
     }
 
     mod test_ifndef {
@@ -700,6 +795,35 @@ mod tests {
             "# };
 
             test_invalid(prog, "Found `#if` without a corresponding `#endif`");
+        }
+
+        #[test]
+        fn test_error_if_not_first_on_line() {
+            let prog = indoc! { r#"
+                a + 3 + as; #ifndef HELLO
+                1 + 3;
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Preprocessor directives must appear on their own line",
+            );
+        }
+
+        #[test]
+        fn test_error_if_invalid() {
+            let prog = indoc! { r#"
+                #ifndef
+                123;
+                #endif
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Invalid `#ifndef`",
+            );
         }
     }
 
@@ -752,13 +876,28 @@ mod tests {
         #[test]
         fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
-                a + 3 + as; #include "foo.h"
+                a + 3 + as; #else
             "#
             };
 
             test_invalid(
                 prog,
                 "Preprocessor directives must appear on their own line",
+            );
+        }
+
+        #[test]
+        fn test_error_if_invalid() {
+            let prog = indoc! { r#"
+                #ifdef ASD
+                #else 1 + 4
+                #endif
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Invalid `#else`",
             );
         }
     }

@@ -48,7 +48,7 @@ impl Iterator for LexWrapper<'_> {
 
         match token {
             Token::Error => Some(Err(LexError(format!(
-                "Invalid Token `{}`at {:?}",
+                "Invalid Token `{}` at {:?}",
                 self.lexer.slice(),
                 span
             )))),
@@ -244,12 +244,16 @@ pub enum Token {
     StringLiteral(StringToken),
 
     #[regex(r"[1-9][0-9_]*", |lex| {
+        track_slice(lex);
+
         match i64::from_str(&lex.slice().replace("_", "")) {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
             Err(e) => Err(e)
         }
     }, priority = 2)]
     #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
+        track_slice(lex);
+
         let r = i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0x")
@@ -262,6 +266,8 @@ pub enum Token {
         }
     }, priority = 2)]
     #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
+        track_slice(lex);
+
         let r = i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0o")
@@ -274,6 +280,8 @@ pub enum Token {
         }
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
+        track_slice(lex);
+
         let r = i64::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0b")
@@ -296,33 +304,30 @@ pub enum Token {
     #[regex(r"[\p{Alphabetic}_]\w*", string_token, priority = 2)]
     ID(StringToken),
 
-    #[regex("#[^\n\\S]*include[^\n\\S]+\"[^\"]+\"[^\n\\S]*", string_token)]
+    // Preprocessor "tokens" just grab the entire line
+    #[regex("#[^\n\\S]*include[^\n\\S]+\"[^\"]+\"[^\n]*\n?", string_token)]
     LocalInclude(StringToken),
 
-    #[regex("#[^\n\\S]*include[^\n\\S]+<[^>]+>[^\n\\S]*", string_token)]
+    #[regex("#[^\n\\S]*include[^\n\\S]+<[^>]+>[^\n]*\n?", string_token)]
     SysInclude(StringToken),
 
-    #[regex("#[^\n\\S]*ifdef[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    #[regex("#[^\n\\S]*ifdef[^\n]*\n?", string_token)]
     IfDef(StringToken),
 
-    #[regex("#[^\n\\S]*ifndef[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    #[regex("#[^\n\\S]*ifndef[^\n]*\n?", string_token)]
     IfNDef(StringToken),
 
-    #[regex("#[^\n\\S]*else[^\n\\S]*", track_slice)]
-    PreprocessorElse(Span),
+    #[regex("#[^\n\\S]*else[^\n]*\n?", string_token)]
+    PreprocessorElse(StringToken),
 
-    #[regex("#[^\n\\S]*endif[^\n\\S]*", track_slice)]
-    Endif(Span),
+    #[regex("#[^\n\\S]*endif[^\n]*\n?", string_token)]
+    Endif(StringToken),
 
-    #[regex("#[^\n\\S]*define[^\n\\S]+\\S+[^\n\\S]+[^\n]*", string_token)]
-    #[regex("#[^\n\\S]*define[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    #[regex("#[^\n\\S]*define[^\n]*\n?", string_token)]
     Define(StringToken),
 
-    #[regex("#[^\n\\S]*undef[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    #[regex("#[^\n\\S]*undef[^\n]*\n?", string_token)]
     Undef(StringToken),
-
-    #[regex(".", track_slice)]
-    Token(Span),
 
     #[error]
     // Strip whitespace and comments
@@ -338,25 +343,16 @@ pub enum Token {
 }
 
 #[inline]
-fn strip_newlines<T: ?Sized>(slice: &T) -> String
-where
-    T: Display,
-{
-    slice.to_string().replace("\n", "")
-}
-
-#[inline]
 fn track_slice(lex: &mut Lexer<Token>) -> Span {
     let slice = lex.slice();
-    let slice_len = slice.len();
 
-    // Strip newlines for the preprocessor case.
-    let replaced_slice = strip_newlines(slice);
-    let diff = slice_len - replaced_slice.len();
+    // For the span, we do not want to include any trailing newlines,
+    // else they show up in error messages.
+    let newline_count = slice.to_string().matches('\n').count();
     let span = lex.span();
 
-    lex.extras.last_slice = replaced_slice;
-    Span::new(lex.extras.current_file_id, span.start..(span.end - diff))
+    lex.extras.last_slice = slice.to_string();
+    Span::new(lex.extras.current_file_id, span.start..(span.end - newline_count))
 }
 
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {
@@ -469,11 +465,10 @@ impl Token {
             Token::SysInclude(s) => s.0,
             Token::IfDef(s) => s.0,
             Token::IfNDef(s) => s.0,
-            Token::PreprocessorElse(s) => *s,
-            Token::Endif(s) => *s,
+            Token::PreprocessorElse(s) => s.0,
+            Token::Endif(s) => s.0,
             Token::Define(s) => s.0,
             Token::Undef(s) => s.0,
-            Token::Token(s) => *s,
             Token::Error => Span::new(0, 0..0),
         }
     }
@@ -567,12 +562,11 @@ impl Display for Token {
             Token::LocalInclude(s) => &s.1,
             Token::SysInclude(s) => &s.1,
             Token::IfDef(s) => &s.1,
-            Token::IfNDef(_) => "#ifndef",
-            Token::PreprocessorElse(_) => "#else",
-            Token::Endif(_) => "#endif",
-            Token::Define(s) => return write!(f, "{}", s.1),
-            Token::Undef(_) => "#undef",
-            Token::Token(_) => "Unknown token",
+            Token::IfNDef(s) => &s.1,
+            Token::PreprocessorElse(s) => &s.1,
+            Token::Endif(s) => &s.1,
+            Token::Define(s) => &s.1,
+            Token::Undef(s) => &s.1,
             Token::Error => "Error token",
         };
 
