@@ -13,40 +13,30 @@ use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
 use std::ops::Range;
+use crate::parser::lexer::{Token, LexWrapper, Spanned};
 
 type Result<T> = result::Result<T, PreprocessorError>;
-
-#[derive(Debug, Clone)]
-pub enum PreprocessorDirective {
-    LocalInclude(String, usize),
-    SysInclude(String, usize),
-    Define(String, usize),
-    Undef(String, usize),
-    // If
-    // Else
-    // Endif
-}
 
 #[derive(Debug)]
 pub struct Preprocessor {
     /// The compilation context
     context: Context,
 
+    /// We keep track of `#define`d things here.
     defines: HashMap<String, String>,
 
-    directives: Vec<PreprocessorDirective>,
-
     /// Are we currently within a block that is `if`'d out?
-    /// We also track this as a stack.
+    /// Tracked as a stack.
     skip_lines: Vec<bool>,
 
     /// Stack of ifdefs that are in play, so we can handle #endifs
-    /// This stores the def, along with the file_id and line of the directive.
-    ifdefs: Vec<(String, usize, usize)>,
+    ifdefs: Vec<(String, Span)>,
 
     /// Have we seen an `#else` clause for the current `#if`?
-    /// Track the file_id and line number of it.
-    current_else: Option<(usize, usize)>,
+    current_else: Option<Span>,
+
+    /// We Track the last slice, because things like preprocessor directives need to check it.
+    last_slice: String
 }
 
 impl Preprocessor {
@@ -77,17 +67,6 @@ impl Preprocessor {
     pub fn into_context(self) -> Context {
         self.context
     }
-
-    // store file_id on token
-    // tokenize original file
-    // iterate tokens by lines
-    //   foreach line
-    //     if a preprocessor directive
-    //       if #include
-    //          scan file & emit to token stream
-    //     else
-    //       emit to token stream
-    //
 
     /// Convert an in-game path, relative or absolute, to a canonical, absolute on-server path.
     /// This function is used for resolving included files.
@@ -168,7 +147,7 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan_context("/");
     /// ```
-    pub fn scan_context<T>(&mut self, cwd: T) -> Result<String>
+    pub fn scan_context<T>(&mut self, cwd: T) -> Result<Vec<Spanned<Token>>>
     where
         T: AsRef<Path>,
     {
@@ -215,7 +194,7 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("file.c", "/", content);
     /// ```
-    pub fn scan<T, U, V>(&mut self, path: T, cwd: U, file_content: V) -> Result<String>
+    pub fn scan<T, U, V>(&mut self, path: T, cwd: U, file_content: V) -> Result<Vec<Spanned<Token>>>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -239,129 +218,150 @@ impl Preprocessor {
             static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
         }
 
-        let mut current_line = 1;
-
-        let mut output = String::new();
-
-        let filename = path.as_ref().file_name().unwrap();
-        let canonical_path = self.canonicalize_local_path(filename, &cwd);
+        let mut output = Vec::new();
 
         // Register the file-to-be-scanned with the global file cache
+        let filename = path.as_ref().file_name().unwrap();
         let file_id = add_file_to_cache(self.canonicalize_path(filename, &cwd).display());
 
-        let format_line =
-            |line_num| format!("#line {} \"{}\"\n", line_num, canonical_path.display());
+        let mut token_stream = LexWrapper::new(file_content.as_ref());
+        token_stream.set_file_id(file_id);
 
-        self.append_str(&mut output, &format_line(current_line));
+        for spanned_result in token_stream {
+            match spanned_result {
+                Ok(spanned) => {
+                    let (_l, token, _r) = &spanned;
 
-        for line in file_content.as_ref().lines() {
-            if ENDIF.is_match(line) {
-                if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
-                    return Err(PreprocessorError::new(
-                        "Found `#endif` without a corresponding #if",
-                        FILE_CACHE.read().file_line_span(file_id, current_line),
-                    ));
+                    let token_string = token.to_string();
+
+                    match token {
+                        Token::LocalInclude(t) => {
+                            self.check_for_previous_newline(t.0)?;
+
+                            if let Some(captures) = LOCAL_INCLUDE.captures(&t.1) {
+                                let matched = captures.get(1).unwrap();
+                                let included =
+                                    self.include_local_file(matched.as_str(), &cwd, t.0)?;
+
+                                for spanned in included {
+                                    self.append_spanned(&mut output, spanned)
+                                }
+                            } else {
+                                return Err(PreprocessorError::new("Invalid `#include`.", t.0));
+                            }
+                        }
+                        Token::SysInclude(t) => {
+                            self.check_for_previous_newline(t.0)?;
+                        }
+                        Token::PreprocessorElse(span) => {
+                            self.check_for_previous_newline(*span)?;
+
+                            if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                                return Err(PreprocessorError::new(
+                                    "Found `#else` without a corresponding #if",
+                                    *span
+                                ));
+                            }
+
+                            if let Some(else_span) = &self.current_else {
+                                let mut err = PreprocessorError::new(
+                                    "Duplicate `#else` found",
+                                    *span
+                                );
+
+                                err.add_label(
+                                    "Originally defined here",
+                                    else_span.file_id,
+                                    Range::from(else_span),
+                                );
+
+                                return Err(err);
+                            }
+
+                            self.current_else = Some(*span);
+                            let last = self.skip_lines.last_mut().unwrap();
+                            *last = !*last;
+                        }
+                        Token::Endif(span) => {
+                            self.check_for_previous_newline(*span)?;
+
+                            if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                                return Err(PreprocessorError::new(
+                                    "Found `#endif` without a corresponding `#if`",
+                                    *span,
+                                ));
+                            }
+
+                            self.ifdefs.pop();
+                            self.skip_lines.pop();
+                            self.current_else = None;
+                        }
+                        Token::Define(t) => {
+                            self.check_for_previous_newline(t.0)?;
+
+                            if let Some(captures) = DEFINE.captures(&t.1) {
+                                if self.defines.contains_key(&captures[1]) {
+                                    return Err(PreprocessorError::new(
+                                        &format!("Duplicate `#define`: `{}`", &captures[1]),
+                                        t.0
+                                    ));
+                                }
+
+                                let name = String::from(&captures[1]);
+                                let value = if captures[2].is_empty() {
+                                    "0"
+                                } else {
+                                    &captures[2]
+                                };
+
+                                self.defines.insert(name, convert_escapes(value));
+                            }
+                        }
+                        Token::Undef(t) => {
+                            self.check_for_previous_newline(t.0)?;
+
+                            if let Some(captures) = UNDEF.captures(&t.1) {
+                                self.defines.remove(&captures[1]);
+                            }
+                        }
+                        Token::IfDef(t) => {
+                            self.check_for_previous_newline(t.0)?;
+
+                            if let Some(captures) = IFDEF.captures(&t.1) {
+                                self.ifdefs
+                                    .push((String::from(&captures[1]), t.0));
+                                self.skip_lines
+                                    .push(!self.defines.contains_key(&captures[1]));
+                            }
+                        }
+                        Token::IfNDef(t) => {
+                            self.check_for_previous_newline(t.0)?;
+
+                            if let Some(captures) = IFNDEF.captures(&t.1) {
+                                self.ifdefs
+                                    .push((String::from(&captures[1]), t.0));
+                                self.skip_lines
+                                    .push(self.defines.contains_key(&captures[1]));
+                            }
+                        }
+
+                        Token::NewLine(_) => { /* Ignore */ }
+
+                        _ => self.append_spanned(&mut output, spanned),
+                    }
+
+                    self.last_slice = token_string;
                 }
-
-                self.ifdefs.pop();
-                self.skip_lines.pop();
-                self.current_else = None;
-                current_line += 1;
-                continue;
-            } else if ELSE.is_match(line) {
-                if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
-                    return Err(PreprocessorError::new(
-                        "Found `#else` without a corresponding #if",
-                        FILE_CACHE.read().file_line_span(file_id, current_line),
-                    ));
+                Err(e) => {
+                    return Err(PreprocessorError::from(e));
                 }
-
-                if let Some((else_file_id, else_line)) = &self.current_else {
-                    let mut err = PreprocessorError::new(
-                        "Duplicate #else found",
-                        FILE_CACHE.read().file_line_span(file_id, current_line),
-                    );
-
-                    err.add_label(
-                        "Originally defined here",
-                        *else_file_id,
-                        Range::from(FILE_CACHE.read().file_line_span(*else_file_id, *else_line)),
-                    );
-
-                    return Err(err);
-                }
-
-                self.current_else = Some((file_id, current_line));
-                let last = self.skip_lines.last_mut().unwrap();
-                *last = !*last;
-                current_line += 1;
-                continue;
             }
-
-            if self.skipping_lines() {
-                continue;
-            }
-
-            if let Some(captures) = SYS_INCLUDE.captures(line) {
-                let matched = captures.get(1).unwrap();
-
-                self.directives.push(PreprocessorDirective::SysInclude(
-                    String::from(matched.as_str()),
-                    current_line,
-                ));
-            } else if let Some(captures) = LOCAL_INCLUDE.captures(line) {
-                let matched = captures.get(1).unwrap();
-                let included =
-                    self.include_local_file(matched.as_str(), &cwd, current_line, file_id)?;
-
-                self.append_str(&mut output, &included);
-                if !output.ends_with('\n') {
-                    self.append_char(&mut output, '\n');
-                }
-                self.append_str(&mut output, &format_line(current_line + 1));
-            } else if let Some(captures) = DEFINE.captures(line) {
-                if self.defines.contains_key(&captures[1]) {
-                    return Err(PreprocessorError::new(
-                        &format!("Duplicate #define: `{}`", &captures[1]),
-                        FILE_CACHE.read().file_line_span(file_id, current_line),
-                    ));
-                }
-
-                let name = String::from(&captures[1]);
-                let value = if captures[2].is_empty() {
-                    "0"
-                } else {
-                    &captures[2]
-                };
-
-                self.defines.insert(name, convert_escapes(value));
-            } else if let Some(captures) = UNDEF.captures(line) {
-                self.defines.remove(&captures[1]);
-            } else if let Some(captures) = IFDEF.captures(line) {
-                self.ifdefs
-                    .push((String::from(&captures[1]), file_id, current_line));
-                self.skip_lines
-                    .push(!self.defines.contains_key(&captures[1]));
-            } else if let Some(captures) = IFNDEF.captures(line) {
-                self.ifdefs
-                    .push((String::from(&captures[1]), file_id, current_line));
-                self.skip_lines
-                    .push(self.defines.contains_key(&captures[1]));
-            } else {
-                self.append_str(&mut output, line);
-                self.append_char(&mut output, '\n');
-            }
-            current_line += 1;
         }
 
         if !self.ifdefs.is_empty() {
             let ifdef = self.ifdefs.last().unwrap();
-            let (file_id, line_num) = (ifdef.1, ifdef.2);
-            let span = FILE_CACHE.read().file_line_span(file_id, line_num);
 
-            let e = PreprocessorError::new("Found `#if` without a corresponding #endif", span);
-
-            return Err(e);
+            return Err(PreprocessorError::new("Found `#if` without a corresponding `#endif`", ifdef.1));
         }
 
         Ok(output)
@@ -379,9 +379,8 @@ impl Preprocessor {
         &mut self,
         path: T,
         cwd: U,
-        parent_line: usize,
-        file_id: usize,
-    ) -> Result<String>
+        span: Span
+    ) -> Result<Vec<Spanned<Token>>>
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
@@ -389,46 +388,26 @@ impl Preprocessor {
         let canon_include_path = self.canonicalize_path(&path, &cwd);
 
         if !canon_include_path.starts_with(&self.context.root_dir) {
-            let range = if let Ok(r) = FILE_CACHE.read().line_range(file_id, parent_line - 1) {
-                r
-            } else {
-                0..1
-            };
-
             return Err(PreprocessorError::new(
                 &format!(
                     "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
                     path.as_ref().display(),
                     canon_include_path.display()
                 ),
-                Span {
-                    file_id,
-                    l: range.start,
-                    r: range.end - 1,
-                },
+                span,
             ));
         }
 
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                let range = if let Ok(r) = FILE_CACHE.read().line_range(file_id, parent_line - 1) {
-                    r
-                } else {
-                    0..1
-                };
-
                 return Err(PreprocessorError::new(
                     &format!(
                         "Unable to read include file `{}`: {:?}",
                         path.as_ref().display(),
                         e
                     ),
-                    Span {
-                        file_id,
-                        l: range.start,
-                        r: range.end - 1,
-                    },
+                    span
                 ));
             }
         };
@@ -445,20 +424,25 @@ impl Preprocessor {
         !self.skip_lines.is_empty() && *self.skip_lines.last().unwrap()
     }
 
-    /// `skip_lines` aware way to append to the output
+    /// `skip_lines`-aware way to append to the output
     #[inline]
-    fn append_str(&self, output: &mut String, to_append: &str) {
-        if !self.skipping_lines() {
-            output.push_str(to_append);
-        }
-    }
-
-    /// `skip_lines` aware way to append to the output
-    #[inline]
-    fn append_char(&self, output: &mut String, to_append: char) {
+    fn append_spanned(&self, output: &mut Vec<Spanned<Token>>, to_append: Spanned<Token>) {
         if !self.skipping_lines() {
             output.push(to_append);
         }
+    }
+
+    /// A convenience function for checking if preprocessor directives follow a newline.
+    fn check_for_previous_newline(&self, span: Span) -> Result<()> {
+        if self.last_slice != "\n" {
+            return Err(PreprocessorError {
+                message: "Preprocessor directives must appear on their own line.".to_string(),
+                span: Some(span),
+                labels: vec![]
+            });
+        }
+
+        Ok(())
     }
 }
 
@@ -467,10 +451,10 @@ impl Default for Preprocessor {
         Self {
             context: Context::default(),
             defines: HashMap::new(),
-            directives: Vec::new(),
             skip_lines: Vec::new(),
             ifdefs: Vec::new(),
             current_else: None,
+            last_slice: String::from("\n")
         }
     }
 }
@@ -485,11 +469,13 @@ mod tests {
         Preprocessor::new(context)
     }
 
-    fn test_valid(input: &str, expected: &str) {
+    fn test_valid(input: &str, expected: &[&str]) {
         let mut preprocessor = fixture();
         match preprocessor.scan("test.c", "/", input) {
             Ok(result) => {
-                assert_eq!(result, expected)
+                let mapped = result.iter().map(|i| i.1.to_string()).collect::<Vec<_>>();
+
+                assert_eq!(mapped, expected)
             }
             Err(e) => {
                 panic!(format!("{:?}", e))
@@ -502,11 +488,11 @@ mod tests {
         let mut preprocessor = fixture();
         match preprocessor.scan("test.c", "/", input) {
             Ok(result) => {
-                panic!("Expected to fail, but passed with {}", result);
+                panic!("Expected to fail, but passed with {:?}", result);
             }
             Err(e) => {
                 let regex = Regex::new(expected).unwrap();
-                assert!(regex.is_match(&e.to_string()));
+                assert!(regex.is_match(&e.to_string()), "error = {:?}", e );
             }
         }
     }
@@ -518,30 +504,40 @@ mod tests {
         fn test_includes_the_file() {
             let input = r#"#include "include/simple.h""#;
 
-            let expected = indoc! {r#"
-                #line 1 "/test.c"
-                #line 1 "/include/simple.h"
-                1 + 2 + 3 + 4 + 5;
-                #line 2 "/test.c"
-            "#};
+            let expected = vec![
+                "1",
+                "+",
+                "2",
+                "+",
+                "3",
+                "+",
+                "4",
+                "+",
+                "5",
+                ";"
+            ];
 
-            test_valid(input, expected);
+            test_valid(input, &expected);
         }
 
         #[test]
         fn test_includes_multiple_levels() {
             let input = r#"#include "include/level_2/two_level.h""#;
 
-            let expected = indoc! {r#"
-                #line 1 "/test.c"
-                #line 1 "/include/level_2/two_level.h"
-                #line 1 "/include/simple.h"
-                1 + 2 + 3 + 4 + 5;
-                #line 2 "/include/level_2/two_level.h"
-                #line 2 "/test.c"
-            "#};
+            let expected = vec![
+                "1",
+                "+",
+                "2",
+                "+",
+                "3",
+                "+",
+                "4",
+                "+",
+                "5",
+                ";"
+            ];
 
-            test_valid(input, expected);
+            test_valid(input, &expected);
         }
 
         #[test]
@@ -552,34 +548,55 @@ mod tests {
                 #include "include/simple.h"
             "#};
 
-            let expected = indoc! {r#"
-                #line 1 "/test.c"
-                #line 1 "/include/level_2/two_level.h"
-                #line 1 "/include/simple.h"
-                1 + 2 + 3 + 4 + 5;
-                #line 2 "/include/level_2/two_level.h"
-                #line 2 "/test.c"
-                int j = 123;
-                #line 1 "/include/simple.h"
-                1 + 2 + 3 + 4 + 5;
-                #line 4 "/test.c"
-            "#};
+            let expected = vec![
+                "1",
+                "+",
+                "2",
+                "+",
+                "3",
+                "+",
+                "4",
+                "+",
+                "5",
+                ";",
+                "int",
+                "j",
+                "=",
+                "123",
+                ";",
+                "1",
+                "+",
+                "2",
+                "+",
+                "3",
+                "+",
+                "4",
+                "+",
+                "5",
+                ";"
+            ];
 
-            test_valid(input, expected);
+            test_valid(input, &expected);
         }
 
         #[test]
         fn test_includes_absolute_paths() {
             let input = r#"#include "/include/simple.h""#;
 
-            let expected = indoc! {r#"
-                #line 1 "/test.c"
-                #line 1 "/include/simple.h"
-                1 + 2 + 3 + 4 + 5;
-                #line 2 "/test.c"
-            "#};
+            let expected = vec![
+                "1",
+                "+",
+                "2",
+                "+",
+                "3",
+                "+",
+                "4",
+                "+",
+                "5",
+                ";"
+            ];
 
-            test_valid(input, expected);
+            test_valid(input, &expected);
         }
 
         #[test]
@@ -636,7 +653,7 @@ mod tests {
                     panic!("Expected an error due to duplicate definition.");
                 }
                 Err(e) => {
-                    assert_eq!(e.message, "Duplicate #define: `ASS`");
+                    assert_eq!(e.message, "Duplicate `#define`: `ASS`");
                 }
             }
         }
@@ -680,12 +697,14 @@ mod tests {
                 #endif
             "# };
 
-            let expected = indoc! { r#"
-                #line 1 "/test.c"
-                I should be rendered
-            "# };
+            let expected = vec![
+                "I",
+                "should",
+                "be",
+                "rendered"
+            ];
 
-            test_valid(prog, expected);
+            test_valid(prog, &expected);
         }
 
         #[test]
@@ -696,7 +715,7 @@ mod tests {
                 #endif
             "# };
 
-            test_invalid(prog, "Found `#endif` without a corresponding #if");
+            test_invalid(prog, "Found `#endif` without a corresponding `#if`");
         }
 
         #[test]
@@ -707,7 +726,7 @@ mod tests {
                 "this will error because there's no endif";
             "# };
 
-            test_invalid(prog, "Found `#if` without a corresponding #endif");
+            test_invalid(prog, "Found `#if` without a corresponding `#endif`");
         }
     }
 
@@ -730,12 +749,14 @@ mod tests {
                 #endif
             "# };
 
-            let expected = indoc! { r#"
-                #line 1 "/test.c"
-                I should be rendered
-            "# };
+            let expected = vec![
+                "I",
+                "should",
+                "be",
+                "rendered"
+            ];
 
-            test_valid(prog, expected);
+            test_valid(prog, &expected);
         }
 
         #[test]
@@ -745,7 +766,7 @@ mod tests {
                 "this will error because there's no endif";
             "# };
 
-            test_invalid(prog, "Found `#if` without a corresponding #endif");
+            test_invalid(prog, "Found `#if` without a corresponding `#endif`");
         }
     }
 
@@ -757,31 +778,42 @@ mod tests {
             let prog = indoc! { r#"
                 #define FOO
                 #ifdef FOO
-                I should be rendered #1
+                I should be rendered 1
                 #else
-                I should not be rendered #1
+                I should not be rendered 1
                 #endif
                 #ifndef FOO
-                I should not be rendered #2
+                I should not be rendered 2
                 #else
-                I should be rendered #2
+                I should be rendered 2
                 #endif
                 #undef FOO
                 #ifndef FOO
-                I should be rendered #3
+                I should be rendered 3
                 #else
-                I should not be rendered #3
+                I should not be rendered 3
                 #endif
             "# };
 
-            let expected = indoc! { r#"
-                #line 1 "/test.c"
-                I should be rendered #1
-                I should be rendered #2
-                I should be rendered #3
-            "# };
+            let expected = vec![
+                "I",
+                "should",
+                "be",
+                "rendered",
+                "1",
+                "I",
+                "should",
+                "be",
+                "rendered",
+                "2",
+                "I",
+                "should",
+                "be",
+                "rendered",
+                "3"
+            ];
 
-            test_valid(prog, expected);
+            test_valid(prog, &expected);
         }
 
         #[test]
@@ -794,7 +826,17 @@ mod tests {
                 #endif
             "# };
 
-            test_invalid(prog, "Duplicate #else");
+            test_invalid(prog, "Duplicate `#else`");
+        }
+
+        #[test]
+        fn test_error_if_not_first_on_line() {
+            let prog = indoc! { r#"
+                a + 3 + as; #include "foo.h"
+            "#
+            };
+
+            test_invalid(prog, "Preprocessor directives must appear on their own line");
         }
     }
 }

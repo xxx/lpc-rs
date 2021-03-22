@@ -9,15 +9,15 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct LexError(pub String);
 
-impl Display for LexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+impl LPCError for LexError {
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
+        default_diagnostic(format!("{}", self), None)
     }
 }
 
-impl LPCError for LexError {
-    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
-        default_diagnostic(format!("Lex Error: {}", self), None)
+impl Display for LexError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Lex Error: {}", self.0)
     }
 }
 

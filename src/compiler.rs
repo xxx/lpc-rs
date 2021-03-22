@@ -13,8 +13,9 @@ use crate::{
     preprocessor::Preprocessor,
 };
 
-use crate::{codegen::tree_walker::ContextHolder, context::Context, parser::lexer::LexWrapper};
+use crate::{codegen::tree_walker::ContextHolder, context::Context};
 use std::path::Path;
+use crate::parser::lexer::{TokenVecWrapper, Spanned, Token};
 
 /// Fully compile a file into a Program struct
 ///
@@ -34,15 +35,11 @@ where
     compile_string(filename, file_content)
 }
 
-/// Compile a string containing an LPC program into a Program struct
-///
-/// # Arguments
-/// `filename` - The name of the file being compiled. Used for error messaging.
-/// `code` - The actual code to be compiled.
-pub fn compile_string<T, U>(filename: T, code: U) -> Result<Program, CompilerError>
-where
-    T: AsRef<Path> + AsRef<str>,
-    U: AsRef<str>,
+/// Take a string and preprocess it into a vector of Span tuples
+pub fn preprocess_string<T, U>(filename: T, code: U) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
+    where
+        T: AsRef<Path> + AsRef<str>,
+        U: AsRef<str>,
 {
     let context = Context::new(&filename, ".", Vec::new());
 
@@ -59,9 +56,25 @@ where
         }
     };
 
+    Ok((code, preprocessor))
+}
+
+/// Compile a string containing an LPC program into a Program struct
+///
+/// # Arguments
+/// `filename` - The name of the file being compiled. Used for error messaging.
+/// `code` - The actual code to be compiled.
+pub fn compile_string<T, U>(filename: T, code: U) -> Result<Program, CompilerError>
+where
+    T: AsRef<Path> + AsRef<str>,
+    U: AsRef<str>,
+{
+    let (code, preprocessor) = preprocess_string(&filename, code)?;
+
+    let code = TokenVecWrapper::new(code);
     let context = preprocessor.into_context();
 
-    let program = lpc_parser::ProgramParser::new().parse(LexWrapper::new(&code));
+    let program = lpc_parser::ProgramParser::new().parse(code);
 
     let mut program = match program {
         Ok(prog) => prog,

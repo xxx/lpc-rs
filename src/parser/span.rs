@@ -20,8 +20,12 @@ impl Span {
     }
 }
 
-impl From<Span> for Range<usize> {
-    fn from(span: Span) -> Self {
+impl From<&Span> for Range<usize> {
+    fn from(span: &Span) -> Self {
         span.l..span.r
     }
+}
+
+impl From<Span> for Range<usize> {
+    fn from(span: Span) -> Self { Self::from(&span) }
 }

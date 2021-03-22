@@ -684,6 +684,8 @@ mod tests {
         parser::{lexer::LexWrapper, span::Span},
         semantic::lpc_type::LPCType,
     };
+    use crate::compiler::preprocess_string;
+    use crate::parser::lexer::TokenVecWrapper;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -694,8 +696,11 @@ mod tests {
                 print(4 + 5);
             }
         ";
+
+        let (code, _) = preprocess_string("foo.c", program).unwrap();
+
         let mut tree = lpc_parser::ProgramParser::new()
-            .parse(LexWrapper::new(program))
+            .parse(TokenVecWrapper::new(code))
             .unwrap();
 
         let _ = scope_walker.visit_program(&mut tree);

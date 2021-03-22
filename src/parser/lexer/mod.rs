@@ -4,15 +4,13 @@ use std::{
     str::FromStr,
 };
 
-use lazy_static::lazy_static;
-use logos::{Filter, Lexer, Logos};
-use regex::Regex;
+use logos::{Lexer, Logos};
 
 use crate::{
     convert_escapes,
     errors::{
         compiler_error::lex_error::LexError,
-        lazy_files::{add_file_to_cache, FileId},
+        lazy_files::{FileId},
     },
     parser::{
         lexer::{
@@ -28,9 +26,20 @@ pub mod logos_token;
 
 pub type Spanned<T> = (usize, T, usize);
 
-/// A wrapper to attach our `Iterator` implementation to.
+/// A wrapper for the Lexer to attach our `Iterator` implementation to.
 pub struct LexWrapper<'input> {
     lexer: Lexer<'input, Token>,
+}
+
+impl<'input> LexWrapper<'input> {
+    pub fn new(prog: &'input str) -> LexWrapper<'input> {
+        let lexer = Token::lexer(prog);
+        Self { lexer }
+    }
+
+    pub fn set_file_id(&mut self, id: FileId) {
+        self.lexer.extras.current_file_id = id;
+    }
 }
 
 impl Iterator for LexWrapper<'_> {
@@ -51,15 +60,41 @@ impl Iterator for LexWrapper<'_> {
     }
 }
 
-impl<'input> LexWrapper<'input> {
-    pub fn new(prog: &'input str) -> LexWrapper<'input> {
-        let lexer = Token::lexer(prog);
-        Self { lexer }
-    }
+/// A wrapper for vectors of tokens, for lalrpop compatibility
+pub struct TokenVecWrapper {
+    vec: Vec<Spanned<Token>>,
+    count: usize
+}
 
-    #[inline]
-    pub fn set_current_file_id(&mut self, file_id: FileId) {
-        self.lexer.extras.current_file_id = file_id;
+impl TokenVecWrapper {
+    pub fn new(vec: Vec<Spanned<Token>>) -> Self {
+        Self { vec, count: 0 }
+    }
+}
+
+impl Iterator for TokenVecWrapper {
+    type Item = Result<Spanned<Token>, LexError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.vec.get(self.count);
+
+        let token = match token {
+            Some(t) => t,
+            _ => return None
+        };
+
+        self.count += 1;
+
+        let span = token.1.span();
+
+        match &token.1 {
+            Token::Error => Some(Err(LexError(format!(
+                "Invalid Token `{}`at {:?}",
+                token.1,
+                span
+            )))),
+            t => Some(Ok((span.l, t.clone(), span.r))),
+        }
     }
 }
 
@@ -206,7 +241,10 @@ pub enum Token {
     #[token("..", track_slice)]
     Range(Span),
 
-    #[regex(r#""(\\.|[^"])*""#, string_literal)]
+    #[token("\n", track_slice, priority = 3)]
+    NewLine(Span),
+
+    #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
     #[regex(r"[1-9][0-9_]*", |lex| {
@@ -259,30 +297,44 @@ pub enum Token {
     )]
     FloatLiteral(FloatToken),
 
-    #[regex(r"[\p{Alphabetic}_]\w*", id, priority = 2)]
+    #[regex(r"[\p{Alphabetic}_]\w*", string_token, priority = 2)]
     ID(StringToken),
+
+    #[regex("#[^\n\\S]*include[^\n\\S]+\"[^\"]+\"[^\n\\S]*", string_token)]
+    LocalInclude(StringToken),
+
+    #[regex("#[^\n\\S]*include[^\n\\S]+<[^>]+>[^\n\\S]*", string_token)]
+    SysInclude(StringToken),
+
+    #[regex("#[^\n\\S]*ifdef[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    IfDef(StringToken),
+
+    #[regex("#[^\n\\S]*ifndef[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    IfNDef(StringToken),
+
+    #[regex("#[^\n\\S]*else[^\n\\S]*", track_slice)]
+    PreprocessorElse(Span),
+
+    #[regex("#[^\n\\S]*endif[^\n\\S]*", track_slice)]
+    Endif(Span),
+
+    #[regex("#[^\n\\S]*define[^\n\\S]+\\S+[^\n\\S]+[^\n]*", string_token)]
+    #[regex("#[^\n\\S]*define[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    Define(StringToken),
+
+    #[regex("#[^\n\\S]*undef[^\n\\S]+\\S+[^\n\\S]*", string_token)]
+    Undef(StringToken),
 
     #[regex(".", track_slice)]
     Token(Span),
 
     #[error]
-    #[regex(r#"#\s*line\s+\d+\s+"[^"]+"\s*"#, |lex| {
-        let l = line(lex);
-        track_slice(lex);
-
-        if l.is_some() {
-            Filter::Skip
-        } else {
-            Filter::Emit(())
-        }
-    })]
     // Strip whitespace and comments
     #[regex(r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", |lex| {
         track_slice(lex);
         logos::Skip
     }, priority = 2)]
     #[token("\n", |lex| {
-        lex.extras.current_line += 1;
         track_slice(lex);
         logos::Skip
     })]
@@ -290,20 +342,41 @@ pub enum Token {
 }
 
 #[inline]
-fn track_slice(lex: &mut Lexer<Token>) -> Span {
-    lex.extras.last_slice = String::from(lex.slice());
-    Span::new(lex.extras.current_file_id, lex.span())
+fn strip_newlines<T: ?Sized>(slice: &T) -> String
+where
+    T: Display
+{
+    let replaced_slice = slice.to_string().replace("\n", "");
+
+    replaced_slice
 }
 
-fn id(lex: &mut Lexer<Token>) -> StringToken {
-    track_slice(lex);
+#[inline]
+fn track_slice(lex: &mut Lexer<Token>) -> Span {
+    let slice = lex.slice();
+    let slice_len = slice.len();
+
+    // Strip newlines for the preprocessor case.
+    let replaced_slice = strip_newlines(slice);
+    let diff = slice_len - replaced_slice.len();
+    let span = lex.span();
+
+    lex.extras.last_slice = replaced_slice;
+    Span::new(lex.extras.current_file_id, span.start..(span.end - diff))
+}
+
+fn string_token(lex: &mut Lexer<Token>) -> StringToken {
+    let span = track_slice(lex);
+
     StringToken(
-        Span::new(lex.extras.current_file_id, lex.span()),
-        lex.slice().to_string(),
+        span,
+        lex.extras.last_slice.clone(),
     )
 }
 
-fn string_literal(lex: &mut Lexer<Token>) -> StringToken {
+/// Strip off the start and end characters of a string, then store the result in the token.
+/// Used for processing string literals and include paths.
+fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
     let slice = &lex.extras.last_slice;
 
@@ -320,37 +393,6 @@ fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
     track_slice(lex);
     let f = f64::from_str(&lex.slice().replace("_", "")).unwrap();
     FloatToken(Span::new(lex.extras.current_file_id, lex.span()), f)
-}
-
-fn line(lex: &mut Lexer<Token>) -> Option<()> {
-    lazy_static! {
-        static ref LINE: Regex = Regex::new(r#"\A#\s*line\s+(\d+)\s+"([^"]+?)"\s*\z"#).unwrap();
-        static ref EOL: Regex = Regex::new(r#"\s*?\n\s*\z"#).unwrap();
-    }
-
-    // test if '#' is exactly at the start of a line
-    if lex.extras.last_slice != "\n" && !lex.extras.last_slice.is_empty() && lex.span().start != 0 {
-        return None;
-    }
-
-    let eof = lex.span().end == lex.source().len();
-
-    let slice = lex.slice();
-    let extra_junk = !EOL.is_match(slice) && !eof;
-
-    if extra_junk {
-        return None;
-    }
-
-    if let Some(captures) = LINE.captures(slice) {
-        let id = add_file_to_cache(&captures[2]);
-        lex.extras.current_file_id = id;
-        lex.extras.current_line = usize::from_str(&captures[1]).unwrap();
-
-        Some(())
-    } else {
-        None
-    }
 }
 
 impl Token {
@@ -427,10 +469,19 @@ impl Token {
             Token::Semi(s) => *s,
             Token::Ellipsis(s) => *s,
             Token::Range(s) => *s,
+            Token::NewLine(s) => *s,
             Token::StringLiteral(s) => s.0,
             Token::IntLiteral(i) => i.0,
             Token::FloatLiteral(fl) => fl.0,
             Token::ID(id) => id.0,
+            Token::LocalInclude(s) => s.0,
+            Token::SysInclude(s) => s.0,
+            Token::IfDef(s) => s.0,
+            Token::IfNDef(s) => s.0,
+            Token::PreprocessorElse(s) => *s,
+            Token::Endif(s) => *s,
+            Token::Define(s) => s.0,
+            Token::Undef(s) => s.0,
             Token::Token(s) => *s,
             Token::Error => Span::new(0, 0..0),
         }
@@ -517,10 +568,19 @@ impl Display for Token {
             Token::Semi(_) => ";",
             Token::Ellipsis(_) => "...",
             Token::Range(_) => "..",
+            Token::NewLine(_) => "\n",
             Token::StringLiteral(s) => &s.1,
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
             Token::ID(id) => &id.1,
+            Token::LocalInclude(s) => &s.1,
+            Token::SysInclude(s) => &s.1,
+            Token::IfDef(s) => &s.1,
+            Token::IfNDef(_) => "#ifndef",
+            Token::PreprocessorElse(_) => "#else",
+            Token::Endif(_) => "#endif",
+            Token::Define(s) => return write!(f, "{}", s.1),
+            Token::Undef(_) => "#undef",
             Token::Token(_) => "Unknown token",
             Token::Error => "Error token",
         };
@@ -531,66 +591,20 @@ impl Display for Token {
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
     use super::*;
 
     fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LexError>> {
         let lexer = LexWrapper::new(prog);
-        lexer.collect::<Vec<_>>()
+        lexer.filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _)))).collect::<Vec<_>>()
     }
 
-    fn into_errors(
-        v: Vec<Result<Spanned<Token>, LexError>>,
-    ) -> Vec<Result<Spanned<Token>, LexError>> {
-        v.into_iter()
-            .filter(|i| matches!(*i, Err(LexError(_))))
-            .collect()
-    }
-
-    fn assert_valid(prog: &str) {
-        let vec = lex_vec(prog);
-
-        assert!(into_errors(vec).is_empty());
-    }
-
-    fn assert_error(prog: &str) {
-        let vec = lex_vec(prog);
-
-        assert!(!into_errors(vec).is_empty());
-    }
-
-    #[test]
-    fn test_line() {
-        // valid code. Note that indoc will re-indent this code.
-        let prog = indoc! {r#"
-            #line 123 "snuh.h"
-            a + 3 + as;
-            #line 125 "foo.h""#
-        };
-        assert_valid(prog);
-
-        // "#" isn't the first char on a line - invalid
-        let prog = indoc! { r#"
-            a + 3 + as;
-             #line 125 "foo.h""#
-        };
-        assert_error(prog);
-
-        // extraneous code after a #line directive - invalid
-        let prog = indoc! { r#"
-            #line 123 "snuh.h" int a = 3;
-        "#
-        };
-        assert_error(prog);
-
-        // "#" appears on the same line as valid code - invalid
-        let prog = indoc! { r#"
-            a + 3 + as; #line 123 "foo"
-        "#
-        };
-        assert_error(prog);
-    }
+    // fn into_errors(
+    //     v: Vec<Result<Spanned<Token>, LexError>>,
+    // ) -> Vec<Result<Spanned<Token>, LexError>> {
+    //     v.into_iter()
+    //         .filter(|i| matches!(*i, Err(LexError(_))))
+    //         .collect()
+    // }
 
     #[test]
     fn test_strip_comments() {

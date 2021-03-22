@@ -6,6 +6,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::Range,
 };
+use crate::errors::compiler_error::lex_error::LexError;
 
 /// Handle preprocessing
 
@@ -61,6 +62,16 @@ impl LPCError for PreprocessorError {
 
 impl Display for PreprocessorError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "PreprocessorError: {}", self.message)
+        write!(f, "Preprocessor Error: {}", self.message)
+    }
+}
+
+impl From<LexError> for PreprocessorError {
+    fn from(err: LexError) -> Self {
+        Self {
+            message: format!("{}", err),
+            span: None,
+            labels: vec![]
+        }
     }
 }
