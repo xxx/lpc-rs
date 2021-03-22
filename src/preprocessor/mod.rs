@@ -233,8 +233,6 @@ impl Preprocessor {
                 Ok(spanned) => {
                     let (_l, token, _r) = &spanned;
 
-                    println!("token {:?}", token);
-
                     let token_string = token.to_string();
 
                     match token {
@@ -321,7 +319,6 @@ impl Preprocessor {
 
                                 self.defines.insert(name, convert_escapes(value));
                             } else {
-                                println!("matching {} {:?}", *DEFINE, t);
                                 return Err(PreprocessorError::new("Invalid `#define`.", t.0));
                             }
                         }
@@ -447,7 +444,6 @@ impl Preprocessor {
 
     /// A convenience function for checking if preprocessor directives follow a newline.
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
-        println!("last slice {:?}", self.last_slice);
         if !self.last_slice.ends_with('\n') {
             return Err(PreprocessorError {
                 message: "Preprocessor directives must appear on their own line.".to_string(),
@@ -610,7 +606,6 @@ mod tests {
 
             match preprocessor.scan("test.c", "/", input) {
                 Ok(_) => {
-                    println!("defs {:?}", preprocessor.defines);
                     assert_eq!(preprocessor.defines.get("ASS").unwrap(), "1 2\n\n3 5 t ass");
                     assert_eq!(preprocessor.defines.get("MAR").unwrap(), "0");
                     assert_eq!(preprocessor.defines.get("DOOD").unwrap(), "666 + MAR");
