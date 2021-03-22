@@ -352,7 +352,10 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
     let span = lex.span();
 
     lex.extras.last_slice = slice.to_string();
-    Span::new(lex.extras.current_file_id, span.start..(span.end - newline_count))
+    Span::new(
+        lex.extras.current_file_id,
+        span.start..(span.end - newline_count),
+    )
 }
 
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {

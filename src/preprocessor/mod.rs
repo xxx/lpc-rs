@@ -206,7 +206,8 @@ impl Preprocessor {
             static ref LOCAL_INCLUDE: Regex =
                 Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
             static ref DEFINE: Regex =
-                Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
+                Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z")
+                    .unwrap();
             static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
             static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
             static ref IFDEFINED: Regex =
@@ -590,10 +591,7 @@ mod tests {
             "#
             };
 
-            test_invalid(
-                prog,
-                "Invalid `#include`",
-            );
+            test_invalid(prog, "Invalid `#include`");
         }
     }
 
@@ -681,10 +679,7 @@ mod tests {
             "#
             };
 
-            test_invalid(
-                prog,
-                "Invalid `#define`",
-            );
+            test_invalid(prog, "Invalid `#define`");
         }
     }
 
@@ -756,10 +751,7 @@ mod tests {
             "#
             };
 
-            test_invalid(
-                prog,
-                "Invalid `#ifdef`",
-            );
+            test_invalid(prog, "Invalid `#ifdef`");
         }
     }
 
@@ -820,10 +812,7 @@ mod tests {
             "#
             };
 
-            test_invalid(
-                prog,
-                "Invalid `#ifndef`",
-            );
+            test_invalid(prog, "Invalid `#ifndef`");
         }
     }
 
@@ -895,10 +884,7 @@ mod tests {
             "#
             };
 
-            test_invalid(
-                prog,
-                "Invalid `#else`",
-            );
+            test_invalid(prog, "Invalid `#else`");
         }
     }
 }
