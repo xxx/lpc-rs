@@ -268,7 +268,7 @@ impl Preprocessor {
                                     PreprocessorError::new("Duplicate `#else` found", *span);
 
                                 err.add_label(
-                                    "Originally defined here",
+                                    "Originally used here",
                                     else_span.file_id,
                                     Range::from(else_span),
                                 );

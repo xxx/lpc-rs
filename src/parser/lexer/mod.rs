@@ -342,9 +342,7 @@ fn strip_newlines<T: ?Sized>(slice: &T) -> String
 where
     T: Display,
 {
-    let replaced_slice = slice.to_string().replace("\n", "");
-
-    replaced_slice
+    slice.to_string().replace("\n", "")
 }
 
 #[inline]
