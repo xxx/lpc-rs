@@ -12,15 +12,14 @@ pub mod runtime_error;
 use crate::errors::lazy_files::FILE_CACHE;
 
 pub trait LpcError: Debug {
+    /// Return a vector of [`Diagnostic`]s, to be emitted to the user.
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>>;
 }
 
 /// Emit nice error messages to the console.
 ///
 /// # Arguments
-/// * `filename` - The name of the file, for the messaging. In practice, this is the full filepath.
-/// * `file_content` - The actual content of the file, used for messaging.
-/// * `errors` - A slice of errors to display diagnostics for.
+/// * `errors` - A slice of [`LpcError`]s to display diagnostics for.
 pub fn emit_diagnostics<T>(errors: &[T])
 where
     T: LpcError,
@@ -45,8 +44,7 @@ where
 ///
 /// # Arguments
 /// `message` - The main message for the error
-/// `file_id` - The file_id corresponding to the code that created this error
-/// `span` - The `Span` of the code that created this error
+/// `span` - The [`Span`] of the code that created this error
 pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic<usize>> {
     let mut diagnostic = Diagnostic::error().with_message(message);
 

@@ -9,6 +9,9 @@ pub struct ConstantPool {
 
 impl ConstantPool {
     /// An insert that checks for duplicates
+    ///
+    /// # Arguments
+    /// `constant` - The [`LpcValue`] to insert into the pool.
     pub fn insert(&mut self, constant: LpcValue) -> usize {
         if let Some(idx) = self.constants.iter().position(|x| *x == constant) {
             return idx;

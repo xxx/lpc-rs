@@ -28,11 +28,13 @@ use crate::{
 use multimap::MultiMap;
 use std::collections::HashMap;
 use tree_walker::TreeWalker;
+use std::path::Path;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
 
-/// Partition on whether the value is stored in registers or memory, to help select instructions
+/// Partition on whether the value is stored in registers or memory, to help select instructions.
+/// tl;dr - Value types use `Register`, while reference types use `Memory`.
 enum OperationType {
     Register,
     Memory,
@@ -45,7 +47,7 @@ pub struct AsmTreeWalker {
     pub instructions: Vec<Instruction>,
 
     /// Code spans, corresponding to the instructions, for use in runtime error messaging
-    pub debug_spans: Vec<Option<Span>>,
+    debug_spans: Vec<Option<Span>>,
 
     /// The map of labels, to their respective addresses
     pub labels: HashMap<String, Address>,
@@ -70,10 +72,10 @@ pub struct AsmTreeWalker {
 }
 
 impl AsmTreeWalker {
-    /// Create a new `AsmTreeWalker` that consumes the passed scopes
+    /// Create a new [`AsmTreeWalker`] that consumes the passed scopes
     ///
     /// # Arguments
-    /// `context` - A `Context` state.
+    /// `context` - The [`Context`] state that this tree walker will use for its internal workings.
     pub fn new(context: Context) -> Self {
         Self {
             context,
@@ -152,14 +154,20 @@ impl AsmTreeWalker {
     }
 
     /// Convert this walker's data into a Program
-    pub fn to_program(&self, filepath: &str) -> Program {
+    ///
+    /// # Arguments
+    /// `path` - The path of the file that was turned into the program
+    pub fn to_program<T>(&self, path: T) -> Program
+    where
+        T: AsRef<Path>
+    {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         assert_eq!(self.instructions.len(), self.debug_spans.len());
 
         Program {
             instructions: self.instructions.to_vec(),
             debug_spans: self.debug_spans.to_vec(),
-            filename: filepath.to_string(),
+            filename: path.as_ref().to_string_lossy().into_owned(),
             labels: self.labels.clone(),
             functions: self.function_map(),
             constants: self.constants.clone(),

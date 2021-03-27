@@ -23,34 +23,61 @@ use std::path::Path;
 /// Fully compile a file into a Program struct
 ///
 /// # Arguments
-/// `filename` - The name of the file to compile. Also used for error messaging.
-pub fn compile_file<T>(filename: T) -> Result<Program, CompilerError>
+/// `path` - The path of the file to compile. Also used for error messaging.
+///
+/// # Examples
+/// ```
+/// use lpc_rs::compiler::compile_file;
+///
+/// let prog = compile_file("tests/fixtures/code/example.c").expect("Unable to compile.");
+/// ```
+pub fn compile_file<T>(path: T) -> Result<Program, CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
 {
-    let file_content = fs::read_to_string(&filename).unwrap_or_else(|_| {
+    let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
             "cannot read file: {}",
-            AsRef::<Path>::as_ref(&filename).display()
+            AsRef::<Path>::as_ref(&path).display()
         )
     });
 
-    compile_string(filename, file_content)
+    compile_string(path, file_content)
 }
 
-/// Take a string and preprocess it into a vector of Span tuples
+/// Take a str and preprocess it into a vector of Span tuples
+///
+/// # Arguments
+/// `path` - The path to the file being preprocessed. Used for resolving relative `#include` paths.
+/// `code` - The actual code to preprocess.
+///
+/// # Examples
+/// ```
+/// use lpc_rs::compiler::preprocess_string;
+///
+/// let code = r#"
+///     int j = 123;
+///
+///     int square() {
+///         return j * j;
+///     }
+/// "#;
+///
+/// let (tokens, preprocessor) = preprocess_string("~/my_file.c", code)
+///     .expect("Failed to preprocess.");
+/// ```
 pub fn preprocess_string<T, U>(
-    filename: T,
+    path: T,
     code: U,
 ) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
     U: AsRef<str>,
 {
-    let context = Context::new(&filename, ".", Vec::new());
+    let context = Context::new(&path, ".", Vec::new());
 
     let mut preprocessor = Preprocessor::new(context);
-    let code = match preprocessor.scan(&filename, ".", &code) {
+    let code = match preprocessor.scan(&path, ".", &code) {
         Ok(c) => c,
         Err(e) => {
             let err = CompilerError::PreprocessorError(e);
@@ -68,14 +95,29 @@ where
 /// Compile a string containing an LPC program into a Program struct
 ///
 /// # Arguments
-/// `filename` - The name of the file being compiled. Used for error messaging.
+/// `path` - The path of the file being compiled. Used for error messaging.
 /// `code` - The actual code to be compiled.
-pub fn compile_string<T, U>(filename: T, code: U) -> Result<Program, CompilerError>
+/// # Examples
+/// ```
+/// use lpc_rs::compiler::compile_string;
+///
+/// let code = r#"
+///     int j = 123;
+///
+///     int square() {
+///         return j * j;
+///     }
+/// "#;
+///
+/// let prog = compile_string("~/my_file.c", code).expect("Failed to compile.");
+/// ```
+
+pub fn compile_string<T, U>(path: T, code: U) -> Result<Program, CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
     U: AsRef<str>,
 {
-    let (code, preprocessor) = preprocess_string(&filename, code)?;
+    let (code, preprocessor) = preprocess_string(&path, code)?;
 
     let code = TokenVecWrapper::new(code);
     let context = preprocessor.into_context();
@@ -126,7 +168,7 @@ where
         println!("{}", s);
     }
 
-    let program = asm_walker.to_program(&AsRef::<Path>::as_ref(&filename).to_string_lossy());
+    let program = asm_walker.to_program(path);
 
     let msgpack = program.to_msgpack();
     println!("{:?}", msgpack.len());

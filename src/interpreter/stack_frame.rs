@@ -12,15 +12,16 @@ pub struct StackFrame {
 }
 
 impl StackFrame {
-    /// Create a new StackFrame instance
+    /// Create a new [`StackFrame`] instance
     ///
     /// # Arguments
     ///
     /// * `symbol` - The symbol representing the function being called
     /// * `return_address` - Where to return to after we return from this frame's function.
     pub fn new(symbol: FunctionSymbol, return_address: usize) -> Self {
-        // +1 for r0 (where return value is stored)
+        // add +1 for r0 (where return value is stored)
         let reg_len = symbol.num_args + symbol.num_locals + 1;
+
         Self {
             symbol,
             return_address,

@@ -31,7 +31,7 @@ pub struct Program {
 }
 
 impl Program {
-    /// Serialize the program for msgpack, suitable for saving to disk.
+    /// Serialize the program to msgpack format, suitable for saving to disk.
     pub fn to_msgpack(&self) -> Vec<u8> {
         let mut buf = vec![];
         self.serialize(&mut Serializer::new(&mut buf)).unwrap();

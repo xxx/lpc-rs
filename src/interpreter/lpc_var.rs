@@ -26,6 +26,7 @@ pub enum LpcVar {
 }
 
 impl LpcVar {
+    /// Get the type name of the underlying data of this var.
     pub fn type_name(&self) -> &str {
         match self {
             LpcVar::Float(_) => "float",

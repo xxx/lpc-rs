@@ -97,6 +97,8 @@ fn current_registers_mut(stack: &mut Vec<StackFrame>) -> &mut Vec<LpcVar> {
 /// Get a mutable reference to an array in memory, so writes can be made to it.
 /// # Arguments
 /// `index` - the register index to resolve
+/// `stack` - a reference to the execution stack
+/// `memory - a reference to the memory pool
 fn resolve_array_reference_mut<'a>(
     index: usize,
     stack: &[StackFrame],
@@ -122,6 +124,7 @@ fn resolve_array_reference_mut<'a>(
 }
 
 impl AsmInterpreter {
+    /// Create a new [`AsmInterpreter`]
     pub fn new(program: Program) -> Self {
         let mut s = Self::default();
         s.load(program);
@@ -138,7 +141,7 @@ impl AsmInterpreter {
         self.program = program;
     }
 
-    /// Dummy starter for the interpreter, to get the "main" stack frame setup
+    /// Dummy starter for the interpreter, to get the "create" stack frame setup
     pub fn exec(&mut self) -> Result<(), RuntimeError> {
         let sym = self.program.functions.get("create").unwrap();
         let address = sym.address;
@@ -163,6 +166,9 @@ impl AsmInterpreter {
     }
 
     /// Resolve an LpcVar into an LpcValue. This clones the value, so writes will not do anything.
+    ///
+    /// # Arguments
+    /// `var` - A reference to an [`LpcVar`] to resolve.
     pub fn resolve_var(&self, var: &LpcVar) -> LpcValue {
         match var {
             LpcVar::Int(v) => LpcValue::Int(*v),

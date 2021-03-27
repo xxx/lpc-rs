@@ -32,8 +32,7 @@ where
 /// For readability
 pub type FileId = usize;
 
-/// A memoizing lazy-loaded Files store for `codespan-reporting`
-///
+/// A memoizing lazy-loaded Files store for [`codespan-reporting`](codespan_reporting)
 /// # Examples
 ///
 /// ```
@@ -144,7 +143,7 @@ where
 /// Concrete types are used here because of memoization
 ///
 /// # Arguments
-/// `path` - An OsString representing a full path.
+/// `path` - An OsStr reference representing a full path.
 #[cached(
     result = true,
     type = "SizedCache<OsString, SimpleFile<String, String>>",

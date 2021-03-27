@@ -162,7 +162,7 @@ FunctionDef: FunctionDefNode = {
              LpcType::Int(array)
          };
 
-        let file_id = name.file_id();
+        let file_id = name.0.file_id;
         FunctionDefNode {
             name: name.1,
             parameters,
@@ -532,7 +532,7 @@ pub Call: CallNode = {
             None => vec![]
         };
 
-        let file_id = name.file_id();
+        let file_id = name.0.file_id;
         let l = name.0.l;
         let r = right.r;
 

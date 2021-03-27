@@ -364,7 +364,7 @@ fn string_token(lex: &mut Lexer<Token>) -> StringToken {
     StringToken(span, lex.extras.last_slice.clone())
 }
 
-/// Strip off the start and end characters of a string, then store the result in the token.
+/// Strip off the start and end characters of a string, then store the result in a [`StringToken`].
 /// Used for processing string literals and include paths.
 fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
@@ -379,6 +379,7 @@ fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     StringToken(Span::new(lex.extras.current_file_id, lex.span()), s)
 }
 
+/// Track and convert float literals to [`FloatToken`]s
 fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
     track_slice(lex);
     let f = f64::from_str(&lex.slice().replace("_", "")).unwrap();

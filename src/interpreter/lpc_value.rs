@@ -25,6 +25,7 @@ pub enum LpcValue {
 }
 
 impl LpcValue {
+    /// Get the type name of the value.
     pub fn type_name(&self) -> &str {
         match self {
             LpcValue::Float(_) => "float",
