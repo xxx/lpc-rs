@@ -14,8 +14,28 @@ use std::{ffi::OsString, path::PathBuf, result};
 
 use crate::parser::lexer::{LexWrapper, Spanned, Token};
 use std::ops::Range;
+use crate::parser::lexer::logos_token::StringToken;
 
 type Result<T> = result::Result<T, PreprocessorError>;
+
+lazy_static! {
+    static ref SYS_INCLUDE: Regex =
+        Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
+    static ref LOCAL_INCLUDE: Regex =
+        Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
+    static ref DEFINE: Regex =
+        Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z")
+            .unwrap();
+    static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
+    static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
+    static ref IFDEFINED: Regex =
+        Regex::new(r#"\A\s*#\s*if\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
+    static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
+    static ref IFNOTDEFINED: Regex =
+        Regex::new(r#"\A\s*#\s*if\s+not\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
+    static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
+    static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
+}
 
 #[derive(Debug)]
 struct IfDef {
@@ -209,25 +229,6 @@ impl Preprocessor {
         U: AsRef<Path>,
         V: AsRef<str>,
     {
-        lazy_static! {
-            static ref SYS_INCLUDE: Regex =
-                Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
-            static ref LOCAL_INCLUDE: Regex =
-                Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
-            static ref DEFINE: Regex =
-                Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z")
-                    .unwrap();
-            static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
-            static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
-            static ref IFDEFINED: Regex =
-                Regex::new(r#"\A\s*#\s*if\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
-            static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
-            static ref IFNOTDEFINED: Regex =
-                Regex::new(r#"\A\s*#\s*if\s+not\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
-            static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
-            static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
-        }
-
         let mut output = Vec::new();
 
         // Register the file-to-be-scanned with the global file cache
@@ -247,138 +248,16 @@ impl Preprocessor {
                     // println!("token: {:?}", token);
 
                     match token {
-                        Token::LocalInclude(t) => {
-                            if self.skipping_lines() {
-                                continue;
-                            }
-
-                            self.check_for_previous_newline(t.0)?;
-
-                            if let Some(captures) = LOCAL_INCLUDE.captures(&t.1) {
-                                let matched = captures.get(1).unwrap();
-                                let included =
-                                    self.include_local_file(matched.as_str(), &cwd, t.0)?;
-
-                                for spanned in included {
-                                    self.append_spanned(&mut output, spanned)
-                                }
-                            } else {
-                                return Err(PreprocessorError::new("Invalid `#include`.", t.0));
-                            }
-                        }
+                        Token::LocalInclude(t) => self.handle_local_include(t, &cwd, &mut output)?,
                         Token::SysInclude(t) => {
                             self.check_for_previous_newline(t.0)?;
                         }
-                        Token::PreprocessorElse(t) => {
-                            self.check_for_previous_newline(t.0)?;
-
-                            if ELSE.is_match(&t.1) {
-                                if self.ifdefs.is_empty() {
-                                    return Err(PreprocessorError::new(
-                                        "Found `#else` without a corresponding `#if` or `#ifdef`",
-                                        t.0,
-                                    ));
-                                }
-
-                                if let Some(else_span) = &self.current_else {
-                                    let mut err =
-                                        PreprocessorError::new("Duplicate `#else` found", t.0);
-
-                                    err.add_label(
-                                        "Originally used here",
-                                        else_span.file_id,
-                                        Range::from(else_span),
-                                    );
-
-                                    return Err(err);
-                                }
-
-                                self.current_else = Some(t.0);
-
-                                if !self.current_if_is_compiled_out() {
-                                    let last = self.ifdefs.last_mut().unwrap();
-                                    last.skipping_lines = !last.skipping_lines;
-                                }
-                            } else {
-                                return Err(PreprocessorError::new("Invalid `#else`.", t.0));
-                            }
-                        }
-                        Token::Endif(t) => {
-                            self.check_for_previous_newline(t.0)?;
-
-                            if self.ifdefs.is_empty() {
-                                return Err(PreprocessorError::new(
-                                    "Found `#endif` without a corresponding `#if`",
-                                    t.0,
-                                ));
-                            }
-
-                            self.ifdefs.pop();
-                            self.current_else = None;
-                        }
-                        Token::Define(t) => {
-                            if self.skipping_lines() {
-                                continue;
-                            }
-
-                            self.check_for_previous_newline(t.0)?;
-
-                            if let Some(captures) = DEFINE.captures(&t.1) {
-                                if !self.skipping_lines() && self.defines.contains_key(&captures[1])
-                                {
-                                    return Err(PreprocessorError::new(
-                                        &format!("Duplicate `#define`: `{}`", &captures[1]),
-                                        t.0,
-                                    ));
-                                }
-
-                                let name = String::from(&captures[1]);
-                                let value = if captures[2].is_empty() {
-                                    "0"
-                                } else {
-                                    &captures[2]
-                                };
-
-                                self.defines.insert(name, convert_escapes(value));
-                            } else {
-                                return Err(PreprocessorError::new("Invalid `#define`.", t.0));
-                            }
-                        }
-                        Token::Undef(t) => {
-                            self.check_for_previous_newline(t.0)?;
-
-                            if let Some(captures) = UNDEF.captures(&t.1) {
-                                self.defines.remove(&captures[1]);
-                            }
-                        }
-                        Token::IfDef(t) => {
-                            self.check_for_previous_newline(t.0)?;
-
-                            if let Some(captures) = IFDEF.captures(&t.1) {
-                                self.ifdefs.push(IfDef {
-                                    code: String::from(&captures[1]),
-                                    skipping_lines: !self.defines.contains_key(&captures[1]),
-                                    compiled_out: self.skipping_lines(),
-                                    span: t.0,
-                                });
-                            } else {
-                                return Err(PreprocessorError::new("Invalid `#ifdef`.", t.0));
-                            }
-                        }
-                        Token::IfNDef(t) => {
-                            self.check_for_previous_newline(t.0)?;
-
-                            if let Some(captures) = IFNDEF.captures(&t.1) {
-                                self.ifdefs.push(IfDef {
-                                    code: String::from(&captures[1]),
-                                    skipping_lines: self.defines.contains_key(&captures[1]),
-                                    compiled_out: self.skipping_lines(),
-                                    span: t.0,
-                                });
-                            } else {
-                                return Err(PreprocessorError::new("Invalid `#ifndef`.", t.0));
-                            }
-                        }
+                        Token::PreprocessorElse(t) => self.handle_else(t)?,
+                        Token::Endif(t) => self.handle_endif(t)?,
+                        Token::Define(t) => self.handle_define(t)?,
+                        Token::Undef(t) => self.handle_undef(t)?,
+                        Token::IfDef(t) => self.handle_ifdef(t)?,
+                        Token::IfNDef(t) => self.handle_ifndef(t)?,
 
                         Token::NewLine(_) => { /* Ignore */ }
 
@@ -403,6 +282,158 @@ impl Preprocessor {
         }
 
         Ok(output)
+    }
+
+    fn handle_define(&mut self, token: &StringToken) -> Result<()> {
+        if self.skipping_lines() {
+            return Ok(());
+        }
+
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = DEFINE.captures(&token.1) {
+            if !self.skipping_lines() && self.defines.contains_key(&captures[1])
+            {
+                return Err(PreprocessorError::new(
+                    &format!("Duplicate `#define`: `{}`", &captures[1]),
+                    token.0,
+                ));
+            }
+
+            let name = String::from(&captures[1]);
+            let value = if captures[2].is_empty() {
+                "0"
+            } else {
+                &captures[2]
+            };
+
+            self.defines.insert(name, convert_escapes(value));
+            Ok(())
+        } else {
+            Err(PreprocessorError::new("Invalid `#define`.", token.0))
+        }
+    }
+
+    fn handle_undef(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = UNDEF.captures(&token.1) {
+            self.defines.remove(&captures[1]);
+        }
+
+        Ok(())
+    }
+
+    fn handle_local_include<U>(&mut self, token: &StringToken, cwd: &U, mut output: &mut Vec<Spanned<Token>>) -> Result<()>
+    where
+        U: AsRef<Path>
+    {
+        if self.skipping_lines() {
+            return Ok(());
+        }
+
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
+            let matched = captures.get(1).unwrap();
+            let included =
+                self.include_local_file(matched.as_str(), &cwd, token.0)?;
+
+            for spanned in included {
+                self.append_spanned(&mut output, spanned)
+            }
+
+            Ok(())
+        } else {
+            Err(PreprocessorError::new("Invalid `#include`.", token.0))
+        }
+    }
+
+    fn handle_ifdef(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = IFDEF.captures(&token.1) {
+            self.ifdefs.push(IfDef {
+                code: String::from(&captures[1]),
+                skipping_lines: !self.defines.contains_key(&captures[1]),
+                compiled_out: self.skipping_lines(),
+                span: token.0,
+            });
+
+            Ok(())
+        } else {
+            Err(PreprocessorError::new("Invalid `#ifdef`.", token.0))
+        }
+    }
+
+    fn handle_ifndef(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = IFNDEF.captures(&token.1) {
+            self.ifdefs.push(IfDef {
+                code: String::from(&captures[1]),
+                skipping_lines: self.defines.contains_key(&captures[1]),
+                compiled_out: self.skipping_lines(),
+                span: token.0,
+            });
+
+            Ok(())
+        } else {
+            Err(PreprocessorError::new("Invalid `#ifndef`.", token.0))
+        }
+    }
+
+    fn handle_else(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if ELSE.is_match(&token.1) {
+            if self.ifdefs.is_empty() {
+                return Err(PreprocessorError::new(
+                    "Found `#else` without a corresponding `#if` or `#ifdef`",
+                    token.0,
+                ));
+            }
+
+            if let Some(else_span) = &self.current_else {
+                let mut err =
+                    PreprocessorError::new("Duplicate `#else` found", token.0);
+
+                err.add_label(
+                    "Originally used here",
+                    else_span.file_id,
+                    Range::from(else_span),
+                );
+
+                return Err(err);
+            }
+
+            self.current_else = Some(token.0);
+
+            if !self.current_if_is_compiled_out() {
+                let last = self.ifdefs.last_mut().unwrap();
+                last.skipping_lines = !last.skipping_lines;
+            }
+
+            Ok(())
+        } else {
+            Err(PreprocessorError::new("Invalid `#else`.", token.0))
+        }
+    }
+
+    fn handle_endif(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if self.ifdefs.is_empty() {
+            return Err(PreprocessorError::new(
+                "Found `#endif` without a corresponding `#if`",
+                token.0,
+            ));
+        }
+
+        self.ifdefs.pop();
+        self.current_else = None;
+
+        Ok(())
     }
 
     /// Read in a local file, and scan it through this preprocessor.
