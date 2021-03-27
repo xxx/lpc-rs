@@ -1,4 +1,4 @@
-use crate::{errors::LPCError, parser::span::Span};
+use crate::{errors::LpcError, parser::span::Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     fmt,
@@ -23,7 +23,7 @@ pub struct ArgCountError {
     pub prototype_span: Option<Span>,
 }
 
-impl LPCError for ArgCountError {
+impl LpcError for ArgCountError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];

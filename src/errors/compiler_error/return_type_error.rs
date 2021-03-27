@@ -1,7 +1,7 @@
 use crate::{
-    errors::{default_diagnostic, LPCError},
+    errors::{default_diagnostic, LpcError},
     parser::span::Span,
-    semantic::lpc_type::LPCType,
+    semantic::lpc_type::LpcType,
 };
 use codespan_reporting::diagnostic::Diagnostic;
 use std::{
@@ -12,16 +12,16 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct ReturnTypeError {
     /// The return type
-    pub type_: LPCType,
+    pub type_: LpcType,
 
     /// The expected return type
-    pub expected: LPCType,
+    pub expected: LpcType,
 
     /// The span of the call
     pub span: Option<Span>,
 }
 
-impl LPCError for ReturnTypeError {
+impl LpcError for ReturnTypeError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         default_diagnostic(format!("{}", self), self.span)
     }

@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        ast_node::ASTNodeTrait, function_def_node::FunctionDefNode, program_node::ProgramNode,
+        ast_node::AstNodeTrait, function_def_node::FunctionDefNode, program_node::ProgramNode,
         var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
@@ -148,17 +148,17 @@ mod tests {
 
     mod test_visit_function_def {
         use super::*;
-        use crate::semantic::lpc_type::LPCType;
+        use crate::semantic::lpc_type::LpcType;
 
         #[test]
         fn test_stores_the_prototype() {
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
-                return_type: LPCType::Mixed(false),
+                return_type: LpcType::Mixed(false),
                 name: "marf".to_string(),
                 parameters: vec![
-                    VarInitNode::new("foo", LPCType::Int(false)),
-                    VarInitNode::new("bar", LPCType::Mapping(true)),
+                    VarInitNode::new("foo", LpcType::Int(false)),
+                    VarInitNode::new("bar", LpcType::Mapping(true)),
                 ],
                 body: vec![],
                 span: None,
@@ -171,10 +171,10 @@ mod tests {
                     *proto,
                     FunctionPrototype {
                         name: "marf".to_string(),
-                        return_type: LPCType::Mixed(false),
+                        return_type: LpcType::Mixed(false),
                         num_args: 2,
                         num_default_args: 0,
-                        arg_types: vec![LPCType::Int(false), LPCType::Mapping(true)],
+                        arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
                         span: None,
                         arg_spans: vec![]
                     }
@@ -187,12 +187,12 @@ mod tests {
 
     mod test_visit_var_init {
         use super::*;
-        use crate::semantic::lpc_type::LPCType;
+        use crate::semantic::lpc_type::LpcType;
 
         fn setup() -> (ScopeWalker, VarInitNode) {
             let mut walker = ScopeWalker::default();
             let node = VarInitNode {
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 name: "foo".to_string(),
                 value: None,
                 array: false,
@@ -202,7 +202,7 @@ mod tests {
 
             walker.insert_symbol(Symbol {
                 name: "foo".to_string(),
-                type_: LPCType::String(false),
+                type_: LpcType::String(false),
                 static_: false,
                 location: None,
                 scope_id: 0,
@@ -252,7 +252,7 @@ mod tests {
 
     mod test_visit_var {
         use super::*;
-        use crate::semantic::lpc_type::LPCType;
+        use crate::semantic::lpc_type::LpcType;
 
         fn setup() -> (ScopeWalker, VarNode) {
             let walker = ScopeWalker::default();
@@ -271,7 +271,7 @@ mod tests {
 
             walker.insert_symbol(Symbol {
                 name: "foo".to_string(),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 static_: false,
                 location: None,
                 scope_id: 0, // denotes a global symbol

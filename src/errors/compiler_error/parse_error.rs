@@ -1,5 +1,5 @@
 use crate::{
-    errors::LPCError,
+    errors::LpcError,
     parser::{lexer::Token, span::Span},
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label};
@@ -12,7 +12,7 @@ use std::{
 #[derive(Debug, Clone)]
 enum ParseErrorType {
     InvalidToken,
-    UnrecognizedEOF,
+    UnrecognizedEof,
     UnrecognizedToken,
     ExtraToken,
     User,
@@ -40,7 +40,7 @@ fn format_expected(expected: &[String]) -> String {
     }
 }
 
-impl LPCError for ParseError {
+impl LpcError for ParseError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let diagnostic: Diagnostic<usize>;
 
@@ -57,7 +57,7 @@ impl LPCError for ParseError {
                     .with_message("Invalid Token")
                     .with_labels(vec![Label::primary(span.file_id, span.l..span.r)])
             }
-            ParseErrorType::UnrecognizedEOF => {
+            ParseErrorType::UnrecognizedEof => {
                 let token = if let Some(t) = &self.token {
                     t
                 } else {
@@ -122,7 +122,7 @@ impl<'a, E> From<LalrpopParseError<usize, Token, E>> for ParseError {
                 expected: None,
             },
             LalrpopParseError::UnrecognizedEOF { expected, .. } => ParseError {
-                type_: ParseErrorType::UnrecognizedEOF,
+                type_: ParseErrorType::UnrecognizedEof,
                 location: None,
                 token: None,
                 expected: Some(expected),

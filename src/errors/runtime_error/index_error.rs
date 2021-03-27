@@ -1,5 +1,5 @@
 use crate::{
-    errors::{default_diagnostic, LPCError},
+    errors::{default_diagnostic, LpcError},
     parser::span::Span,
 };
 use codespan_reporting::diagnostic::Diagnostic;
@@ -21,7 +21,7 @@ pub struct IndexError {
     pub span: Option<Span>,
 }
 
-impl LPCError for IndexError {
+impl LpcError for IndexError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         default_diagnostic(format!("{}", self), self.span)
     }

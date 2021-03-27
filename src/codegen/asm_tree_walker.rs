@@ -3,7 +3,7 @@ use crate::{
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
-        ast_node::{ASTNodeTrait, SpannedNode},
+        ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         decl_node::DeclNode,
@@ -21,9 +21,9 @@ use crate::{
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
     errors::compiler_error::CompilerError,
-    interpreter::{constant_pool::ConstantPool, lpc_value::LPCValue, program::Program},
+    interpreter::{constant_pool::ConstantPool, lpc_value::LpcValue, program::Program},
     parser::span::Span,
-    semantic::{function_symbol::FunctionSymbol, lpc_type::LPCType, symbol::Symbol},
+    semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use multimap::MultiMap;
 use std::collections::HashMap;
@@ -215,8 +215,8 @@ impl AsmTreeWalker {
                 let ty = self.lookup_var_symbol(&v).unwrap().type_;
 
                 match ty {
-                    LPCType::Int(false) => OperationType::Register,
-                    LPCType::Float(false) => OperationType::Register,
+                    LpcType::Int(false) => OperationType::Register,
+                    LpcType::Float(false) => OperationType::Register,
                     _ => OperationType::Memory,
                 }
             }
@@ -432,7 +432,7 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
-        let index = self.constants.insert(LPCValue::from(&node.value));
+        let index = self.constants.insert(LpcValue::from(&node.value));
 
         self.instructions.push(Instruction::SConst(register, index));
         self.debug_spans.push(node.span);
@@ -676,7 +676,7 @@ mod tests {
             SConst,
         },
         ast::{
-            assignment_node::AssignmentOperation, ast_node::ASTNode,
+            assignment_node::AssignmentOperation, ast_node::AstNode,
             comma_expression_node::CommaExpressionNode, expression_node::ExpressionNode,
         },
         codegen::scope_walker::ScopeWalker,
@@ -686,7 +686,7 @@ mod tests {
             lexer::{LexWrapper, TokenVecWrapper},
             span::Span,
         },
-        semantic::lpc_type::LPCType,
+        semantic::lpc_type::LpcType,
     };
 
     #[test]
@@ -849,7 +849,7 @@ mod tests {
         fn test_visit_binary_op_populates_the_instructions_for_floats() {
             let mut context = Context::default();
             context.scopes.push_new();
-            let mut sym = Symbol::new("foo", LPCType::Float(false));
+            let mut sym = Symbol::new("foo", LpcType::Float(false));
             sym.location = Some(Register(1));
             context.scopes.get_current_mut().unwrap().insert(sym);
 
@@ -1021,7 +1021,7 @@ mod tests {
             .parse(LexWrapper::new(call))
             .unwrap();
 
-        let mut node = if let ASTNode::FunctionDef(node) = tree {
+        let mut node = if let AstNode::FunctionDef(node) = tree {
             node
         } else {
             panic!("Didn't receive a function def?");
@@ -1111,7 +1111,7 @@ mod tests {
             scope.lookup("foo").unwrap(),
             Symbol {
                 name: String::from("foo"),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 static_: false,
                 location: Some(Register(1)),
                 scope_id: 0,
@@ -1126,7 +1126,7 @@ mod tests {
             scope.lookup("bar").unwrap(),
             Symbol {
                 name: String::from("bar"),
-                type_: LPCType::Int(true),
+                type_: LpcType::Int(true),
                 static_: false,
                 location: Some(Register(3)),
                 scope_id: 0,
@@ -1150,7 +1150,7 @@ mod tests {
             &mut walker,
             Symbol {
                 name: "marf".to_string(),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 static_: false,
                 location: Some(Register(666)),
                 scope_id: 0,
@@ -1163,7 +1163,7 @@ mod tests {
             &mut walker,
             Symbol {
                 name: "marf".to_string(),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 static_: false,
                 location: Some(Register(222)),
                 scope_id: 1,
@@ -1195,7 +1195,7 @@ mod tests {
             // push a global marf to ensure we don't find it.
             Symbol {
                 name: "marf".to_string(),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 static_: false,
                 location: Some(Register(444)),
                 scope_id: 0,
@@ -1207,7 +1207,7 @@ mod tests {
             &mut walker,
             Symbol {
                 name: "marf".to_string(),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 static_: false,
                 location: Some(Register(666)),
                 scope_id: 1,
@@ -1232,7 +1232,7 @@ mod tests {
 
         let sym = Symbol {
             name: "marf".to_string(),
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             static_: false,
             location: Some(Register(666)),
             scope_id: 0,
@@ -1244,7 +1244,7 @@ mod tests {
         walker.context.scopes.push_new();
         let sym = Symbol {
             name: "marf".to_string(),
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             static_: false,
             location: Some(Register(123)),
             scope_id: 1,
@@ -1284,7 +1284,7 @@ mod tests {
 
         let sym = Symbol {
             name: "marf".to_string(),
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             static_: false,
             location: Some(Register(666)),
             scope_id: 1,
@@ -1319,7 +1319,7 @@ mod tests {
 
         let sym = Symbol {
             name: "marf".to_string(),
-            type_: LPCType::Int(true),
+            type_: LpcType::Int(true),
             static_: false,
             location: Some(Register(666)),
             scope_id: 1,

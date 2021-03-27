@@ -14,8 +14,8 @@ use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
-use crate::semantic::lpc_type::LPCType;
-use crate::ast::ast_node::{ASTNode, SpannedNode};
+use crate::semantic::lpc_type::LpcType;
+use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
 use crate::parser::lexer::Token;
@@ -104,7 +104,7 @@ extern {
         "StringLiteral" => Token::StringLiteral(<StringToken>),
         "IntLiteral" => Token::IntLiteral(<IntToken>),
         "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
-        "ID" => Token::ID(<StringToken>),
+        "ID" => Token::Id(<StringToken>),
     }
 }
 
@@ -120,16 +120,16 @@ SemiSeq<T>: Vec<T> = {
 };
 
 pub Program: ProgramNode = <body:Def*> => ProgramNode {
-    body: body.iter().map(|i| ASTNode::from(i.clone())).collect::<Vec<_>>()
+    body: body.iter().map(|i| AstNode::from(i.clone())).collect::<Vec<_>>()
 };
 
-pub Def: ASTNode = {
-    <FunctionDef> => ASTNode::from(<>),
+pub Def: AstNode = {
+    <FunctionDef> => AstNode::from(<>),
     <decl:Decl> ";" => {
         let mut node = decl.clone();
         node.initializations.iter_mut().for_each(|i| i.global = true);
 
-        ASTNode::from(node)
+        AstNode::from(node)
     }
 };
 
@@ -149,17 +149,17 @@ FunctionDef: FunctionDefNode = {
 
          let return_type = if let Some(this_type) = r_type {
              match this_type.0.as_str() {
-                 "void" => LPCType::Void,
-                 "int" => LPCType::Int(array),
-                 "string" => LPCType::String(array),
-                 "float" => LPCType::Float(array),
-                 // "object" => LPCType::Object(array),
-                 // "mapping" => LPCType::Mapping(array),
-                 "mixed" => LPCType::Mixed(array),
+                 "void" => LpcType::Void,
+                 "int" => LpcType::Int(array),
+                 "string" => LpcType::String(array),
+                 "float" => LpcType::Float(array),
+                 // "object" => LpcType::Object(array),
+                 // "mapping" => LpcType::Mapping(array),
+                 "mixed" => LpcType::Mixed(array),
                  _ => unimplemented!()
              }
          } else {
-             LPCType::Int(array)
+             LpcType::Int(array)
          };
 
         let file_id = name.file_id();
@@ -196,7 +196,7 @@ ParameterList: Vec<VarInitNode> = {
 
 ArgName: VarInitNode = {
     <var_type:Type> <mut init:VarInit> => {
-        let new_type = LPCType::from(var_type.0);
+        let new_type = LpcType::from(var_type.0);
 
         init.type_ = new_type.as_array(init.array);
 
@@ -212,10 +212,10 @@ Type: (String, Span) = {
     "void" => (String::from("void"), <>),
 };
 
-pub Statement: ASTNode = {
-    <Expression> => ASTNode::from(<>),
-    <Return> => ASTNode::from(<>),
-    <Decl> => ASTNode::from(<>)
+pub Statement: AstNode = {
+    <Expression> => AstNode::from(<>),
+    <Return> => AstNode::from(<>),
+    <Decl> => AstNode::from(<>)
 };
 
 VarInit: VarInitNode = {
@@ -239,7 +239,7 @@ VarInit: VarInitNode = {
 
 
         VarInitNode {
-            type_: LPCType::Int(false), // placeholder. Corrected in Decl.
+            type_: LpcType::Int(false), // placeholder. Corrected in Decl.
             name: name.1,
             value,
             array: array.is_some(),
@@ -251,7 +251,7 @@ VarInit: VarInitNode = {
 
 pub Decl: DeclNode = {
     <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> => {
-        let new_type = LPCType::from(var_type.0).as_array(init.array);
+        let new_type = LpcType::from(var_type.0).as_array(init.array);
         let mut initializations = vec![init];
 
         initializations.append(optional.to_vec().as_mut());

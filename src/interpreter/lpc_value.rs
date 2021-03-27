@@ -4,7 +4,7 @@ use crate::{
         binary_operation_error::BinaryOperationError, division_by_zero_error::DivisionByZeroError,
         RuntimeError,
     },
-    interpreter::lpc_var::LPCVar,
+    interpreter::lpc_var::LpcVar,
 };
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{
@@ -17,25 +17,25 @@ use std::{
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum LPCValue {
+pub enum LpcValue {
     Float(f64),
     Int(i64),
     String(String),
-    Array(Vec<LPCVar>),
+    Array(Vec<LpcVar>),
 }
 
-impl LPCValue {
+impl LpcValue {
     pub fn type_name(&self) -> &str {
         match self {
-            LPCValue::Float(_) => "float",
-            LPCValue::Int(_) => "int",
-            LPCValue::String(_) => "string",
-            LPCValue::Array(_) => "array",
+            LpcValue::Float(_) => "float",
+            LpcValue::Int(_) => "int",
+            LpcValue::String(_) => "string",
+            LpcValue::Array(_) => "array",
         }
     }
 
     // Just a refactor of a common operation
-    fn to_binary_op_error(&self, op: BinaryOperation, right: &LPCValue) -> RuntimeError {
+    fn to_binary_op_error(&self, op: BinaryOperation, right: &LpcValue) -> RuntimeError {
         let e = BinaryOperationError {
             op,
             left_type: self.type_name().to_string(),
@@ -47,55 +47,55 @@ impl LPCValue {
     }
 }
 
-impl Display for LPCValue {
+impl Display for LpcValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LPCValue::Float(fl) => write!(f, "{}", fl),
-            LPCValue::Int(i) => write!(f, "{}", i),
-            LPCValue::String(s) => write!(f, "{}", s),
-            LPCValue::Array(a) => write!(f, "({{ {:?} }})", a),
+            LpcValue::Float(fl) => write!(f, "{}", fl),
+            LpcValue::Int(i) => write!(f, "{}", i),
+            LpcValue::String(s) => write!(f, "{}", s),
+            LpcValue::Array(a) => write!(f, "({{ {:?} }})", a),
         }
     }
 }
 
-impl From<&String> for LPCValue {
+impl From<&String> for LpcValue {
     fn from(s: &String) -> Self {
         Self::String(String::from(s))
     }
 }
 
-impl From<Vec<LPCVar>> for LPCValue {
-    fn from(v: Vec<LPCVar>) -> Self {
+impl From<Vec<LpcVar>> for LpcValue {
+    fn from(v: Vec<LpcVar>) -> Self {
         Self::Array(v)
     }
 }
 
-impl Add for &LPCValue {
-    type Output = Result<LPCValue, RuntimeError>;
+impl Add for &LpcValue {
+    type Output = Result<LpcValue, RuntimeError>;
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Float(f) => match rhs {
-                LPCValue::Float(f2) => Ok(LPCValue::Float(f + f2)),
-                LPCValue::Int(i) => Ok(LPCValue::Float(f + *i as f64)),
+            LpcValue::Float(f) => match rhs {
+                LpcValue::Float(f2) => Ok(LpcValue::Float(f + f2)),
+                LpcValue::Int(i) => Ok(LpcValue::Float(f + *i as f64)),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
             },
-            LPCValue::Int(i) => match rhs {
-                LPCValue::Float(f) => Ok(LPCValue::Float(*i as f64 + f)),
-                LPCValue::Int(i2) => Ok(LPCValue::Int(i + i2)),
-                LPCValue::String(s) => Ok(LPCValue::String(i.to_string() + &s)),
+            LpcValue::Int(i) => match rhs {
+                LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 + f)),
+                LpcValue::Int(i2) => Ok(LpcValue::Int(i + i2)),
+                LpcValue::String(s) => Ok(LpcValue::String(i.to_string() + &s)),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
             },
-            LPCValue::String(s) => match rhs {
-                LPCValue::String(s2) => Ok(LPCValue::String(s.clone() + s2)),
-                LPCValue::Int(i) => Ok(LPCValue::String(s.clone() + &i.to_string())),
+            LpcValue::String(s) => match rhs {
+                LpcValue::String(s2) => Ok(LpcValue::String(s.clone() + s2)),
+                LpcValue::Int(i) => Ok(LpcValue::String(s.clone() + &i.to_string())),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
             },
-            LPCValue::Array(vec) => match rhs {
-                LPCValue::Array(vec2) => {
+            LpcValue::Array(vec) => match rhs {
+                LpcValue::Array(vec2) => {
                     let mut new_vec = vec.to_vec();
                     new_vec.extend(&*vec2);
-                    Ok(LPCValue::Array(new_vec))
+                    Ok(LpcValue::Array(new_vec))
                 }
                 _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
             },
@@ -103,19 +103,19 @@ impl Add for &LPCValue {
     }
 }
 
-impl Sub for &LPCValue {
-    type Output = Result<LPCValue, RuntimeError>;
+impl Sub for &LpcValue {
+    type Output = Result<LpcValue, RuntimeError>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Int(i) => match rhs {
-                LPCValue::Float(f) => Ok(LPCValue::Float(*i as f64 - f)),
-                LPCValue::Int(i2) => Ok(LPCValue::Int(i - i2)),
+            LpcValue::Int(i) => match rhs {
+                LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 - f)),
+                LpcValue::Int(i2) => Ok(LpcValue::Int(i - i2)),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
             },
-            LPCValue::Float(f) => match rhs {
-                LPCValue::Float(f2) => Ok(LPCValue::Float(f - f2)),
-                LPCValue::Int(i) => Ok(LPCValue::Float(f - *i as f64)),
+            LpcValue::Float(f) => match rhs {
+                LpcValue::Float(f2) => Ok(LpcValue::Float(f - f2)),
+                LpcValue::Int(i) => Ok(LpcValue::Float(f - *i as f64)),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
             },
             _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
@@ -132,26 +132,26 @@ fn repeat_string(s: &str, i: &i64) -> String {
     }
 }
 
-impl Mul for &LPCValue {
-    type Output = Result<LPCValue, RuntimeError>;
+impl Mul for &LpcValue {
+    type Output = Result<LpcValue, RuntimeError>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Float(f) => match rhs {
-                LPCValue::Float(f2) => Ok(LPCValue::Float(f * f2)),
-                LPCValue::Int(i) => Ok(LPCValue::Float(f * *i as f64)),
+            LpcValue::Float(f) => match rhs {
+                LpcValue::Float(f2) => Ok(LpcValue::Float(f * f2)),
+                LpcValue::Int(i) => Ok(LpcValue::Float(f * *i as f64)),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
             },
-            LPCValue::Int(i) => match rhs {
-                LPCValue::Float(f) => Ok(LPCValue::Float(*i as f64 * f)),
-                LPCValue::Int(i2) => Ok(LPCValue::Int(i * i2)),
-                LPCValue::String(s) => Ok(LPCValue::String(repeat_string(s, i))),
+            LpcValue::Int(i) => match rhs {
+                LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 * f)),
+                LpcValue::Int(i2) => Ok(LpcValue::Int(i * i2)),
+                LpcValue::String(s) => Ok(LpcValue::String(repeat_string(s, i))),
                 _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
             },
-            LPCValue::String(s) => {
+            LpcValue::String(s) => {
                 match rhs {
                     // repeat the string `s`, `i` times
-                    LPCValue::Int(i) => Ok(LPCValue::String(repeat_string(s, i))),
+                    LpcValue::Int(i) => Ok(LpcValue::String(repeat_string(s, i))),
                     _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
                 }
             }
@@ -160,49 +160,49 @@ impl Mul for &LPCValue {
     }
 }
 
-impl Div for &LPCValue {
-    type Output = Result<LPCValue, RuntimeError>;
+impl Div for &LpcValue {
+    type Output = Result<LpcValue, RuntimeError>;
 
     fn div(self, rhs: Self) -> Self::Output {
         match self {
-            LPCValue::Float(f) => match rhs {
-                LPCValue::Float(f2) => {
+            LpcValue::Float(f) => match rhs {
+                LpcValue::Float(f2) => {
                     if *f2 == 0.0 {
                         Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
                             span: None,
                         }))
                     } else {
-                        Ok(LPCValue::Float(f / f2))
+                        Ok(LpcValue::Float(f / f2))
                     }
                 }
-                LPCValue::Int(i) => {
+                LpcValue::Int(i) => {
                     if *i == 0 {
                         Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
                             span: None,
                         }))
                     } else {
-                        Ok(LPCValue::Float(f / *i as f64))
+                        Ok(LpcValue::Float(f / *i as f64))
                     }
                 }
                 _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
             },
-            LPCValue::Int(i) => match rhs {
-                LPCValue::Float(f) => {
+            LpcValue::Int(i) => match rhs {
+                LpcValue::Float(f) => {
                     if *f == 0.0 {
                         Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
                             span: None,
                         }))
                     } else {
-                        Ok(LPCValue::Float(*i as f64 / f))
+                        Ok(LpcValue::Float(*i as f64 / f))
                     }
                 }
-                LPCValue::Int(i2) => {
+                LpcValue::Int(i2) => {
                     if *i2 == 0 {
                         Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
                             span: None,
                         }))
                     } else {
-                        Ok(LPCValue::Int(i / i2))
+                        Ok(LpcValue::Int(i / i2))
                     }
                 }
                 _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
@@ -221,10 +221,10 @@ mod tests {
 
         #[test]
         fn test_add_int_int() {
-            let int1 = LPCValue::Int(123);
-            let int2 = LPCValue::Int(456);
+            let int1 = LpcValue::Int(123);
+            let int2 = LpcValue::Int(456);
             let result = &int1 + &int2;
-            if let Ok(LPCValue::Int(x)) = result {
+            if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
                 panic!("no match")
@@ -233,10 +233,10 @@ mod tests {
 
         #[test]
         fn test_add_string_string() {
-            let string1 = LPCValue::String("foo".to_string());
-            let string2 = LPCValue::String("bar".to_string());
+            let string1 = LpcValue::String("foo".to_string());
+            let string2 = LpcValue::String("bar".to_string());
             let result = &string1 + &string2;
-            if let Ok(LPCValue::String(x)) = result {
+            if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foobar"))
             } else {
                 panic!("no match")
@@ -245,10 +245,10 @@ mod tests {
 
         #[test]
         fn test_add_string_int() {
-            let string = LPCValue::String("foo".to_string());
-            let int = LPCValue::Int(123);
+            let string = LpcValue::String("foo".to_string());
+            let int = LpcValue::Int(123);
             let result = &string + &int;
-            if let Ok(LPCValue::String(x)) = result {
+            if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foo123"))
             } else {
                 panic!("no match")
@@ -257,10 +257,10 @@ mod tests {
 
         #[test]
         fn test_add_int_string() {
-            let string = LPCValue::String("foo".to_string());
-            let int = LPCValue::Int(123);
+            let string = LpcValue::String("foo".to_string());
+            let int = LpcValue::Int(123);
             let result = &int + &string;
-            if let Ok(LPCValue::String(x)) = result {
+            if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("123foo"))
             } else {
                 panic!("no match")
@@ -269,10 +269,10 @@ mod tests {
 
         #[test]
         fn test_add_float_int() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &float + &int;
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
                 panic!("no match")
@@ -281,10 +281,10 @@ mod tests {
 
         #[test]
         fn test_add_int_float() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &int + &float;
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
                 panic!("no match")
@@ -293,12 +293,12 @@ mod tests {
 
         #[test]
         fn test_add_array_array() {
-            let array = LPCValue::from(vec![LPCVar::Int(123)]);
-            let array2 = LPCValue::from(vec![LPCVar::Int(4433)]);
+            let array = LpcValue::from(vec![LpcVar::Int(123)]);
+            let array2 = LpcValue::from(vec![LpcVar::Int(4433)]);
             let result = &array + &array2;
 
-            if let Ok(LPCValue::Array(a)) = result {
-                assert_eq!(a, vec![LPCVar::Int(123), LPCVar::Int(4433)])
+            if let Ok(LpcValue::Array(a)) = result {
+                assert_eq!(a, vec![LpcVar::Int(123), LpcVar::Int(4433)])
             } else {
                 panic!("no match")
             }
@@ -306,8 +306,8 @@ mod tests {
 
         #[test]
         fn test_add_mismatched() {
-            let int = LPCValue::Int(123);
-            let array = LPCValue::Array(vec![]);
+            let int = LpcValue::Int(123);
+            let array = LpcValue::Array(vec![]);
             let result = &int + &array;
 
             if let Ok(_) = result {
@@ -321,11 +321,11 @@ mod tests {
 
         #[test]
         fn test_sub_float_int() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &float - &int;
             println!("asdf {:?}", result);
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 543.66)
             } else {
                 panic!("no match")
@@ -334,10 +334,10 @@ mod tests {
 
         #[test]
         fn test_sub_int_float() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &int - &float;
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, -543.66)
             } else {
                 panic!("no match")
@@ -350,10 +350,10 @@ mod tests {
 
         #[test]
         fn test_mul_string_int() {
-            let string = LPCValue::String("foo".to_string());
-            let int = LPCValue::Int(4);
+            let string = LpcValue::String("foo".to_string());
+            let int = LpcValue::Int(4);
             let result = &string * &int;
-            if let Ok(LPCValue::String(x)) = result {
+            if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
                 panic!("no match")
@@ -362,10 +362,10 @@ mod tests {
 
         #[test]
         fn test_mul_int_string() {
-            let string = LPCValue::String("foo".to_string());
-            let int = LPCValue::Int(4);
+            let string = LpcValue::String("foo".to_string());
+            let int = LpcValue::Int(4);
             let result = &int * &string;
-            if let Ok(LPCValue::String(x)) = result {
+            if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
                 panic!("no match")
@@ -374,11 +374,11 @@ mod tests {
 
         #[test]
         fn test_mul_float_int() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &float * &int;
             println!("asdf {:?}", result);
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
                 panic!("no match")
@@ -387,10 +387,10 @@ mod tests {
 
         #[test]
         fn test_mul_int_float() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &int * &float;
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
                 panic!("no match")
@@ -403,11 +403,11 @@ mod tests {
 
         #[test]
         fn test_div_float_int() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &float / &int;
 
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 5.42)
             } else {
                 panic!("no match")
@@ -416,11 +416,11 @@ mod tests {
 
         #[test]
         fn test_div_int_float() {
-            let float = LPCValue::Float(666.66);
-            let int = LPCValue::Int(123);
+            let float = LpcValue::Float(666.66);
+            let int = LpcValue::Int(123);
             let result = &int / &float;
 
-            if let Ok(LPCValue::Float(x)) = result {
+            if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 0.18450184501845018)
             } else {
                 panic!("no match")
@@ -429,8 +429,8 @@ mod tests {
 
         #[test]
         fn test_div_by_zero() {
-            let int = LPCValue::Int(123);
-            let zero = LPCValue::Int(0);
+            let int = LpcValue::Int(123);
+            let zero = LpcValue::Int(0);
 
             assert!((&int / &zero).is_err());
         }

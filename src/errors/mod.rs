@@ -11,7 +11,7 @@ pub mod preprocessor_error;
 pub mod runtime_error;
 use crate::errors::lazy_files::FILE_CACHE;
 
-pub trait LPCError: Debug {
+pub trait LpcError: Debug {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>>;
 }
 
@@ -23,7 +23,7 @@ pub trait LPCError: Debug {
 /// * `errors` - A slice of errors to display diagnostics for.
 pub fn emit_diagnostics<T>(errors: &[T])
 where
-    T: LPCError,
+    T: LpcError,
 {
     let files = FILE_CACHE.read();
 
@@ -51,8 +51,7 @@ pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic
     let mut diagnostic = Diagnostic::error().with_message(message);
 
     if let Some(span) = span {
-        let mut labels = vec![];
-        labels.push(Label::primary(span.file_id, span.l..span.r));
+        let labels = vec![Label::primary(span.file_id, span.l..span.r)];
         diagnostic = diagnostic.with_labels(labels);
     }
 

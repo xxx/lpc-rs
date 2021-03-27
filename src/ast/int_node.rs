@@ -1,5 +1,5 @@
 use crate::{
-    ast::ast_node::{ASTNodeTrait, SpannedNode},
+    ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
     parser::span::Span,
@@ -30,7 +30,7 @@ impl SpannedNode for IntNode {
     }
 }
 
-impl ASTNodeTrait for IntNode {
+impl AstNodeTrait for IntNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_int(self)

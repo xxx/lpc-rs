@@ -302,7 +302,7 @@ pub enum Token {
     FloatLiteral(FloatToken),
 
     #[regex(r"[\p{Alphabetic}_]\w*", string_token, priority = 2)]
-    ID(StringToken),
+    Id(StringToken),
 
     // Preprocessor "tokens" just grab the entire line
     #[regex("#[^\n\\S]*include[^\n\\S]+\"[^\"]+\"[^\n]*\n?", string_token)]
@@ -463,7 +463,7 @@ impl Token {
             Token::StringLiteral(s) => s.0,
             Token::IntLiteral(i) => i.0,
             Token::FloatLiteral(fl) => fl.0,
-            Token::ID(id) => id.0,
+            Token::Id(id) => id.0,
             Token::LocalInclude(s) => s.0,
             Token::SysInclude(s) => s.0,
             Token::IfDef(s) => s.0,
@@ -561,7 +561,7 @@ impl Display for Token {
             Token::StringLiteral(s) => &s.1,
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
-            Token::ID(id) => &id.1,
+            Token::Id(id) => &id.1,
             Token::LocalInclude(s) => &s.1,
             Token::SysInclude(s) => &s.1,
             Token::IfDef(s) => &s.1,

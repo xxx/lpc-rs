@@ -1,4 +1,4 @@
-use crate::{parser::span::Span, semantic::lpc_type::LPCType};
+use crate::{parser::span::Span, semantic::lpc_type::LpcType};
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -7,7 +7,7 @@ pub struct FunctionPrototype {
     pub name: String,
 
     /// The return type
-    pub return_type: LPCType,
+    pub return_type: LpcType,
 
     /// The number of arguments this function accepts.
     /// Varargs are handled elsewhere and are ignored in this count.
@@ -18,7 +18,7 @@ pub struct FunctionPrototype {
     pub num_default_args: usize,
 
     /// Vector of argument types, used for type checking calls.
-    pub arg_types: Vec<LPCType>,
+    pub arg_types: Vec<LpcType>,
 
     /// The span of the definition of this function, for use in error messaging.
     /// When None, we assume this is an Efun prototype.

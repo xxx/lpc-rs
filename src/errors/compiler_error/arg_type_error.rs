@@ -1,4 +1,4 @@
-use crate::{errors::LPCError, parser::span::Span, semantic::lpc_type::LPCType};
+use crate::{errors::LpcError, parser::span::Span, semantic::lpc_type::LpcType};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     fmt,
@@ -11,10 +11,10 @@ pub struct ArgTypeError {
     pub name: String,
 
     /// The argument type
-    pub type_: LPCType,
+    pub type_: LpcType,
 
     /// The expected arg type
-    pub expected: LPCType,
+    pub expected: LpcType,
 
     /// The span of the call
     pub span: Option<Span>,
@@ -23,7 +23,7 @@ pub struct ArgTypeError {
     pub declaration_span: Option<Span>,
 }
 
-impl LPCError for ArgTypeError {
+impl LpcError for ArgTypeError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];

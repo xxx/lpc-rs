@@ -1,5 +1,5 @@
 use crate::{
-    ast::ast_node::{ASTNode, ASTNodeTrait},
+    ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
 };
@@ -12,10 +12,10 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct ProgramNode {
     /// The list of function defs for this program
-    pub body: Vec<ASTNode>,
+    pub body: Vec<AstNode>,
 }
 
-impl ASTNodeTrait for ProgramNode {
+impl AstNodeTrait for ProgramNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_program(self)

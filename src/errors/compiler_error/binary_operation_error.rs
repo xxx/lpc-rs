@@ -1,8 +1,8 @@
 use crate::{
     ast::binary_op_node::BinaryOperation,
-    errors::{default_diagnostic, LPCError},
+    errors::{default_diagnostic, LpcError},
     parser::span::Span,
-    semantic::lpc_type::LPCType,
+    semantic::lpc_type::LpcType,
 };
 use codespan_reporting::diagnostic::Diagnostic;
 use std::{
@@ -20,19 +20,19 @@ pub struct BinaryOperationError {
     pub left_name: String,
 
     /// Type of left-side term
-    pub left_type: LPCType,
+    pub left_type: LpcType,
 
     /// Name of left-hand term
     pub right_name: String,
 
     /// Type of right-side term
-    pub right_type: LPCType,
+    pub right_type: LpcType,
 
     /// The span of the operation
     pub span: Option<Span>,
 }
 
-impl LPCError for BinaryOperationError {
+impl LpcError for BinaryOperationError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         default_diagnostic(format!("{}", self), self.span)
     }

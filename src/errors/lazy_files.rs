@@ -97,7 +97,7 @@ where
     where
         T: AsRef<Path>,
     {
-        Ok(cached_file(path.as_ref().as_os_str())?)
+        cached_file(path.as_ref().as_os_str())
     }
 
     /// Get the FileId for the passed path

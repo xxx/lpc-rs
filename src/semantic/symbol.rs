@@ -1,6 +1,6 @@
 use crate::{
     asm::register::Register, ast::var_init_node::VarInitNode, parser::span::Span,
-    semantic::lpc_type::LPCType,
+    semantic::lpc_type::LpcType,
 };
 
 /// Representation of a Symbol, to be stored in the Scopes
@@ -9,7 +9,7 @@ pub struct Symbol {
     /// The name of this symbol
     pub name: String,
     /// The type of this var
-    pub type_: LPCType,
+    pub type_: LpcType,
     // pub privacy: LPCPrivacy,
     /// Is this var static?
     pub static_: bool,
@@ -23,7 +23,7 @@ pub struct Symbol {
 
 impl Symbol {
     /// Create a new, location-less Symbol
-    pub fn new(name: &str, type_: LPCType) -> Self {
+    pub fn new(name: &str, type_: LpcType) -> Self {
         Self {
             name: String::from(name),
             type_,

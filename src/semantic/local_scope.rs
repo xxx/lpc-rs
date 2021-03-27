@@ -57,7 +57,7 @@ impl Default for LocalScope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::lpc_type::LPCType;
+    use crate::semantic::lpc_type::LpcType;
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {
@@ -68,7 +68,7 @@ mod tests {
 
         let sym = Symbol {
             name: "foo".to_string(),
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             scope_id: 0,
             static_: false,
             location: None,
@@ -79,7 +79,7 @@ mod tests {
 
         if let Some(symbol) = scope.lookup("foo") {
             assert_eq!(symbol.name, "foo");
-            assert_eq!(symbol.type_, LPCType::Int(false));
+            assert_eq!(symbol.type_, LpcType::Int(false));
         } else {
             panic!("symbol not found");
         }

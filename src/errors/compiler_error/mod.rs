@@ -13,7 +13,7 @@ pub mod var_redefinition_error;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::errors::{
-    compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LPCError,
+    compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LpcError,
 };
 use arg_count_error::ArgCountError;
 use arg_type_error::ArgTypeError;
@@ -42,7 +42,7 @@ pub enum CompilerError {
     MultiError(Vec<CompilerError>),
 }
 
-impl LPCError for CompilerError {
+impl LpcError for CompilerError {
     /// Get the error diagnostics for printing to the user.
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {

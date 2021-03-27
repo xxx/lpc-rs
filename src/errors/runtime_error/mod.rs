@@ -3,7 +3,7 @@ use crate::errors::{
         binary_operation_error::BinaryOperationError, division_by_zero_error::DivisionByZeroError,
         index_error::IndexError, unknown_error::UnknownError,
     },
-    LPCError,
+    LpcError,
 };
 use codespan_reporting::diagnostic::Diagnostic;
 
@@ -20,7 +20,7 @@ pub enum RuntimeError {
     UnknownError(UnknownError),
 }
 
-impl LPCError for RuntimeError {
+impl LpcError for RuntimeError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
             RuntimeError::BinaryOperationError(err) => err.to_diagnostics(),

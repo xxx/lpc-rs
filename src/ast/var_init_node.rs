@@ -1,12 +1,12 @@
 use crate::{
     ast::{
-        ast_node::{ASTNodeTrait, SpannedNode},
+        ast_node::{AstNodeTrait, SpannedNode},
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
     parser::span::Span,
-    semantic::lpc_type::LPCType,
+    semantic::lpc_type::LpcType,
 };
 use std::{
     fmt,
@@ -17,7 +17,7 @@ use std::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarInitNode {
     /// The LPC type.
-    pub type_: LPCType,
+    pub type_: LpcType,
 
     /// The var name
     pub name: String,
@@ -36,7 +36,7 @@ pub struct VarInitNode {
 }
 
 impl VarInitNode {
-    pub fn new(name: &str, type_: LPCType) -> Self {
+    pub fn new(name: &str, type_: LpcType) -> Self {
         Self {
             name: name.to_string(),
             type_,
@@ -48,16 +48,16 @@ impl VarInitNode {
     }
 
     /// Set a new type on this node, in a way that maintains the array state
-    pub fn update_type(&mut self, new_type: LPCType) {
+    pub fn update_type(&mut self, new_type: LpcType) {
         let updated = match new_type {
-            LPCType::Void => LPCType::Void,
-            LPCType::Int(_) => LPCType::Int(self.array),
-            LPCType::String(_) => LPCType::String(self.array),
-            LPCType::Float(_) => LPCType::Float(self.array),
-            LPCType::Object(_) => LPCType::Object(self.array),
-            LPCType::Mapping(_) => LPCType::Mapping(self.array),
-            LPCType::Mixed(_) => LPCType::Mixed(self.array),
-            LPCType::Union(x) => LPCType::Union(x),
+            LpcType::Void => LpcType::Void,
+            LpcType::Int(_) => LpcType::Int(self.array),
+            LpcType::String(_) => LpcType::String(self.array),
+            LpcType::Float(_) => LpcType::Float(self.array),
+            LpcType::Object(_) => LpcType::Object(self.array),
+            LpcType::Mapping(_) => LpcType::Mapping(self.array),
+            LpcType::Mixed(_) => LpcType::Mixed(self.array),
+            LpcType::Union(x) => LpcType::Union(x),
         };
 
         self.type_ = updated;
@@ -70,7 +70,7 @@ impl SpannedNode for VarInitNode {
     }
 }
 
-impl ASTNodeTrait for VarInitNode {
+impl AstNodeTrait for VarInitNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_var_init(self)
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_update_type_maintains_the_array_state() {
         let mut node = VarInitNode {
-            type_: LPCType::Void,
+            type_: LpcType::Void,
             name: "marf".to_string(),
             value: None,
             array: true,
@@ -102,11 +102,11 @@ mod tests {
             span: None,
         };
 
-        node.update_type(LPCType::Int(false));
-        assert_eq!(node.type_, LPCType::Int(true));
+        node.update_type(LpcType::Int(false));
+        assert_eq!(node.type_, LpcType::Int(true));
 
         node.array = false;
-        node.update_type(LPCType::String(true));
-        assert_eq!(node.type_, LPCType::String(false));
+        node.update_type(LpcType::String(true));
+        assert_eq!(node.type_, LpcType::String(false));
     }
 }

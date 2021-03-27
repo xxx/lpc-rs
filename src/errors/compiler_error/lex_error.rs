@@ -1,4 +1,4 @@
-use crate::errors::{default_diagnostic, LPCError};
+use crate::errors::{default_diagnostic, LpcError};
 use codespan_reporting::diagnostic::Diagnostic;
 use std::{
     error::Error,
@@ -9,7 +9,7 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct LexError(pub String);
 
-impl LPCError for LexError {
+impl LpcError for LexError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         default_diagnostic(format!("{}", self), None)
     }

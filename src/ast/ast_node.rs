@@ -20,7 +20,7 @@ use std::{
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
-pub enum ASTNode {
+pub enum AstNode {
     Call(CallNode),
     Decl(DeclNode),
     Expression(ExpressionNode),
@@ -31,7 +31,7 @@ pub enum ASTNode {
 }
 
 #[auto_impl(&mut)]
-pub trait ASTNodeTrait: PartialEq + Display {
+pub trait AstNodeTrait: PartialEq + Display {
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError>;
 }
 
@@ -42,11 +42,11 @@ pub trait SpannedNode {
 
 macro_rules! node_defs {
     ( $( $x:ident ),+ ) => {
-        impl ASTNodeTrait for ASTNode {
+        impl AstNodeTrait for AstNode {
             fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
                 match self {
                  $(
-                    ASTNode::$x(y) => y.visit(tree_walker),
+                    AstNode::$x(y) => y.visit(tree_walker),
                  )*
                 }
             }
@@ -64,77 +64,77 @@ node_defs!(
     VarInit
 );
 
-impl Display for ASTNode {
+impl Display for AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl From<ExpressionNode> for ASTNode {
+impl From<ExpressionNode> for AstNode {
     fn from(node: ExpressionNode) -> Self {
-        ASTNode::Expression(node)
+        AstNode::Expression(node)
     }
 }
 
-impl From<FunctionDefNode> for ASTNode {
+impl From<FunctionDefNode> for AstNode {
     fn from(node: FunctionDefNode) -> Self {
-        ASTNode::FunctionDef(node)
+        AstNode::FunctionDef(node)
     }
 }
 
-impl From<IntNode> for ASTNode {
+impl From<IntNode> for AstNode {
     fn from(node: IntNode) -> Self {
-        ASTNode::Expression(ExpressionNode::Int(node))
+        AstNode::Expression(ExpressionNode::Int(node))
     }
 }
 
-impl From<BinaryOpNode> for ASTNode {
+impl From<BinaryOpNode> for AstNode {
     fn from(node: BinaryOpNode) -> Self {
-        ASTNode::Expression(ExpressionNode::BinaryOp(node))
+        AstNode::Expression(ExpressionNode::BinaryOp(node))
     }
 }
 
-impl From<ProgramNode> for ASTNode {
+impl From<ProgramNode> for AstNode {
     fn from(node: ProgramNode) -> Self {
-        ASTNode::Program(node)
+        AstNode::Program(node)
     }
 }
 
-impl From<ReturnNode> for ASTNode {
+impl From<ReturnNode> for AstNode {
     fn from(node: ReturnNode) -> Self {
-        ASTNode::Return(node)
+        AstNode::Return(node)
     }
 }
 
-impl From<DeclNode> for ASTNode {
+impl From<DeclNode> for AstNode {
     fn from(node: DeclNode) -> Self {
-        ASTNode::Decl(node)
+        AstNode::Decl(node)
     }
 }
 
-impl From<VarInitNode> for ASTNode {
+impl From<VarInitNode> for AstNode {
     fn from(node: VarInitNode) -> Self {
-        ASTNode::VarInit(node)
+        AstNode::VarInit(node)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast::binary_op_node::BinaryOperation, semantic::lpc_type::LPCType};
+    use crate::{ast::binary_op_node::BinaryOperation, semantic::lpc_type::LpcType};
 
     #[test]
     fn test_from_expression_node() {
         let node = ExpressionNode::Int(IntNode::new(123));
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::Expression(clone));
+        assert_eq!(AstNode::from(node), AstNode::Expression(clone));
     }
 
     #[test]
     fn test_from_function_def_node() {
         let node = FunctionDefNode {
-            return_type: LPCType::Void,
+            return_type: LpcType::Void,
             name: "foo".to_string(),
             parameters: vec![],
             body: vec![],
@@ -142,7 +142,7 @@ mod tests {
         };
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::FunctionDef(clone));
+        assert_eq!(AstNode::from(node), AstNode::FunctionDef(clone));
     }
 
     #[test]
@@ -151,8 +151,8 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(
-            ASTNode::from(node),
-            ASTNode::Expression(ExpressionNode::Int(clone))
+            AstNode::from(node),
+            AstNode::Expression(ExpressionNode::Int(clone))
         );
     }
 
@@ -167,8 +167,8 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(
-            ASTNode::from(node),
-            ASTNode::Expression(ExpressionNode::BinaryOp(clone))
+            AstNode::from(node),
+            AstNode::Expression(ExpressionNode::BinaryOp(clone))
         );
     }
 
@@ -177,7 +177,7 @@ mod tests {
         let node = ProgramNode::default();
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::Program(clone));
+        assert_eq!(AstNode::from(node), AstNode::Program(clone));
     }
 
     #[test]
@@ -188,24 +188,24 @@ mod tests {
         };
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::Return(clone));
+        assert_eq!(AstNode::from(node), AstNode::Return(clone));
     }
 
     #[test]
     fn test_from_decl_node() {
         let node = DeclNode {
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             initializations: vec![],
         };
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::Decl(clone));
+        assert_eq!(AstNode::from(node), AstNode::Decl(clone));
     }
 
     #[test]
     fn test_from_var_init_node() {
         let node = VarInitNode {
-            type_: LPCType::String(true),
+            type_: LpcType::String(true),
             name: "tacos".to_string(),
             value: None,
             array: false,
@@ -214,6 +214,6 @@ mod tests {
         };
         let clone = node.clone();
 
-        assert_eq!(ASTNode::from(node), ASTNode::VarInit(clone));
+        assert_eq!(AstNode::from(node), AstNode::VarInit(clone));
     }
 }

@@ -1,7 +1,7 @@
 use std::fs;
 
 use crate::{
-    ast::ast_node::ASTNodeTrait,
+    ast::ast_node::AstNodeTrait,
     codegen::{
         asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,

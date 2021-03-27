@@ -1,12 +1,12 @@
 use crate::{
     ast::{
-        ast_node::{ASTNode, ASTNodeTrait, SpannedNode},
+        ast_node::{AstNode, AstNodeTrait, SpannedNode},
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::CompilerError,
     parser::span::Span,
-    semantic::lpc_type::LPCType,
+    semantic::lpc_type::LpcType,
 };
 use std::{
     fmt,
@@ -16,10 +16,10 @@ use std::{
 /// A node representation a function definition
 #[derive(Debug, PartialEq)]
 pub struct FunctionDefNode {
-    pub return_type: LPCType,
+    pub return_type: LpcType,
     pub name: String,
     pub parameters: Vec<VarInitNode>,
-    pub body: Vec<ASTNode>,
+    pub body: Vec<AstNode>,
     pub span: Option<Span>,
 }
 
@@ -29,7 +29,7 @@ impl SpannedNode for FunctionDefNode {
     }
 }
 
-impl ASTNodeTrait for FunctionDefNode {
+impl AstNodeTrait for FunctionDefNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_function_def(self)

@@ -1,5 +1,5 @@
 use crate::{
-    errors::{compiler_error::lex_error::LexError, LPCError},
+    errors::{compiler_error::lex_error::LexError, LpcError},
     parser::span::Span,
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label};
@@ -41,7 +41,7 @@ impl PreprocessorError {
     }
 }
 
-impl LPCError for PreprocessorError {
+impl LpcError for PreprocessorError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(&self.message);
         let mut labels = vec![];

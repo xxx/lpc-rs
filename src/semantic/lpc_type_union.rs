@@ -1,4 +1,4 @@
-use crate::semantic::lpc_type::LPCType;
+use crate::semantic::lpc_type::LpcType;
 use modular_bitfield::{prelude::*, private::static_assertions::_core::fmt::Formatter};
 use std::{convert::TryInto, fmt, fmt::Display, ops::BitOr};
 
@@ -6,7 +6,7 @@ use std::{convert::TryInto, fmt, fmt::Display, ops::BitOr};
 /// I hate it.
 #[bitfield(filled = false)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct LPCTypeUnion {
+pub struct LpcTypeUnion {
     pub void: bool,
     pub int: bool,
     pub int_array: bool,
@@ -22,99 +22,99 @@ pub struct LPCTypeUnion {
     pub mixed_array: bool,
 }
 
-impl LPCTypeUnion {
+impl LpcTypeUnion {
     /// Insert a new type into the union
-    pub fn insert(&mut self, type_: LPCType) {
+    pub fn insert(&mut self, type_: LpcType) {
         match type_ {
-            LPCType::Void => self.set_void(true),
-            LPCType::Int(array) => {
+            LpcType::Void => self.set_void(true),
+            LpcType::Int(array) => {
                 if array {
                     self.set_int_array(true)
                 } else {
                     self.set_int(true)
                 }
             }
-            LPCType::String(array) => {
+            LpcType::String(array) => {
                 if array {
                     self.set_string_array(true)
                 } else {
                     self.set_string(true)
                 }
             }
-            LPCType::Float(array) => {
+            LpcType::Float(array) => {
                 if array {
                     self.set_float_array(true)
                 } else {
                     self.set_float(true)
                 }
             }
-            LPCType::Object(array) => {
+            LpcType::Object(array) => {
                 if array {
                     self.set_object_array(true)
                 } else {
                     self.set_object(true)
                 }
             }
-            LPCType::Mapping(array) => {
+            LpcType::Mapping(array) => {
                 if array {
                     self.set_mapping_array(true)
                 } else {
                     self.set_mapping(true)
                 }
             }
-            LPCType::Mixed(array) => {
+            LpcType::Mixed(array) => {
                 if array {
                     self.set_mixed_array(true)
                 } else {
                     self.set_mixed(true)
                 }
             }
-            LPCType::Union(_) => panic!(
+            LpcType::Union(_) => panic!(
                 "Cannot insert LPCTypeUnion into another LPCTypeUnion. It makes no sense to do so."
             ),
         }
     }
 
     /// Do we match against another type?
-    pub fn matches_type(&self, other: LPCType) -> bool {
+    pub fn matches_type(&self, other: LpcType) -> bool {
         match other {
-            LPCType::Void => self.void(),
-            LPCType::Int(array) => {
+            LpcType::Void => self.void(),
+            LpcType::Int(array) => {
                 if array {
                     self.int_array()
                 } else {
                     self.int()
                 }
             }
-            LPCType::String(array) => {
+            LpcType::String(array) => {
                 if array {
                     self.string_array()
                 } else {
                     self.string()
                 }
             }
-            LPCType::Float(array) => {
+            LpcType::Float(array) => {
                 if array {
                     self.float_array()
                 } else {
                     self.float()
                 }
             }
-            LPCType::Object(array) => {
+            LpcType::Object(array) => {
                 if array {
                     self.object_array()
                 } else {
                     self.object()
                 }
             }
-            LPCType::Mapping(array) => {
+            LpcType::Mapping(array) => {
                 if array {
                     self.mapping_array()
                 } else {
                     self.mapping()
                 }
             }
-            LPCType::Mixed(array) => {
+            LpcType::Mixed(array) => {
                 if array {
                     self.is_array()
                 } else {
@@ -126,7 +126,7 @@ impl LPCTypeUnion {
                         || self.mixed()
                 }
             }
-            LPCType::Union(other_union) => self.into_bytes() == other_union.into_bytes(),
+            LpcType::Union(other_union) => self.into_bytes() == other_union.into_bytes(),
         }
     }
 
@@ -141,62 +141,62 @@ impl LPCTypeUnion {
     }
 }
 
-impl Display for LPCTypeUnion {
+impl Display for LpcTypeUnion {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut vec = vec![];
 
         // facepalm.
 
         if self.void() {
-            vec.push(LPCType::Void)
+            vec.push(LpcType::Void)
         }
 
         if self.int() {
-            vec.push(LPCType::Int(false));
+            vec.push(LpcType::Int(false));
         }
 
         if self.int_array() {
-            vec.push(LPCType::Int(true));
+            vec.push(LpcType::Int(true));
         }
 
         if self.string() {
-            vec.push(LPCType::String(false));
+            vec.push(LpcType::String(false));
         }
 
         if self.string_array() {
-            vec.push(LPCType::String(true));
+            vec.push(LpcType::String(true));
         }
 
         if self.float() {
-            vec.push(LPCType::Float(false));
+            vec.push(LpcType::Float(false));
         }
 
         if self.float_array() {
-            vec.push(LPCType::Float(true));
+            vec.push(LpcType::Float(true));
         }
 
         if self.object() {
-            vec.push(LPCType::Object(false));
+            vec.push(LpcType::Object(false));
         }
 
         if self.object_array() {
-            vec.push(LPCType::Object(true));
+            vec.push(LpcType::Object(true));
         }
 
         if self.mapping() {
-            vec.push(LPCType::Mapping(false));
+            vec.push(LpcType::Mapping(false));
         }
 
         if self.mapping_array() {
-            vec.push(LPCType::Mapping(true));
+            vec.push(LpcType::Mapping(true));
         }
 
         if self.mixed() {
-            vec.push(LPCType::Mixed(false));
+            vec.push(LpcType::Mixed(false));
         }
 
         if self.mixed_array() {
-            vec.push(LPCType::Mixed(true));
+            vec.push(LpcType::Mixed(true));
         }
 
         let s = vec
@@ -209,8 +209,8 @@ impl Display for LPCTypeUnion {
     }
 }
 
-impl BitOr for LPCTypeUnion {
-    type Output = LPCTypeUnion;
+impl BitOr for LpcTypeUnion {
+    type Output = LpcTypeUnion;
 
     fn bitor(self, rhs: Self) -> Self::Output {
         let my_bytes = self.into_bytes();
@@ -231,14 +231,14 @@ impl BitOr for LPCTypeUnion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::lpc_type::LPCType;
+    use crate::semantic::lpc_type::LpcType;
 
     #[test]
     fn test_bitor() {
-        let lpc_u = LPCType::Int(false) | LPCType::Int(true) | LPCType::Void;
-        let lpc_u2 = LPCType::String(true) | LPCType::Object(false);
+        let lpc_u = LpcType::Int(false) | LpcType::Int(true) | LpcType::Void;
+        let lpc_u2 = LpcType::String(true) | LpcType::Object(false);
 
-        if let (LPCType::Union(u1), LPCType::Union(u2)) = (lpc_u, lpc_u2) {
+        if let (LpcType::Union(u1), LpcType::Union(u2)) = (lpc_u, lpc_u2) {
             let union = u1 | u2;
 
             assert!(union.int());
@@ -260,14 +260,14 @@ mod tests {
 
     #[test]
     fn test_matches_type() {
-        let mut union = LPCTypeUnion::new();
+        let mut union = LpcTypeUnion::new();
         union.set_string_array(true);
         union.set_void(true);
 
-        assert!(union.matches_type(LPCType::String(true)));
-        assert!(!union.matches_type(LPCType::String(false)));
-        assert!(union.matches_type(LPCType::Void));
-        assert!(!union.matches_type(LPCType::Int(false)));
-        assert!(!union.matches_type(LPCType::Mapping(true)));
+        assert!(union.matches_type(LpcType::String(true)));
+        assert!(!union.matches_type(LpcType::String(false)));
+        assert!(union.matches_type(LpcType::Void));
+        assert!(!union.matches_type(LpcType::Int(false)));
+        assert!(!union.matches_type(LpcType::Mapping(true)));
     }
 }

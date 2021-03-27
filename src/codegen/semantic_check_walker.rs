@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        assignment_node::AssignmentNode, ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode,
+        assignment_node::AssignmentNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
         call_node::CallNode, expression_node::ExpressionNode, function_def_node::FunctionDefNode,
         int_node::IntNode, range_node::RangeNode, return_node::ReturnNode,
         var_init_node::VarInitNode,
@@ -13,7 +13,7 @@ use crate::{
     },
     interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
     semantic::{
-        lpc_type::LPCType,
+        lpc_type::LpcType,
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
@@ -50,7 +50,7 @@ impl SemanticCheckWalker {
     }
 
     /// A transformation helper to get a map of function names to their return values.
-    fn function_return_values(&self) -> HashMap<&str, LPCType> {
+    fn function_return_values(&self) -> HashMap<&str, LpcType> {
         self.context
             .function_prototypes
             .keys()
@@ -197,7 +197,7 @@ impl TreeWalker for SemanticCheckWalker {
                         &self.function_return_values(),
                     );
 
-                    if function_def.return_type == LPCType::Void
+                    if function_def.return_type == LpcType::Void
                         || !function_def.return_type.matches_type(return_type)
                     {
                         let error = CompilerError::ReturnTypeError(ReturnTypeError {
@@ -209,9 +209,9 @@ impl TreeWalker for SemanticCheckWalker {
                         self.context.errors.push(error);
                     }
                 }
-            } else if function_def.return_type != LPCType::Void {
+            } else if function_def.return_type != LpcType::Void {
                 let error = CompilerError::ReturnTypeError(ReturnTypeError {
-                    type_: LPCType::Void,
+                    type_: LpcType::Void,
                     expected: function_def.return_type,
                     span: node.span,
                 });
@@ -308,17 +308,17 @@ impl TreeWalker for SemanticCheckWalker {
         let left_type = if let Some(left) = &*node.l {
             node_type(left, &self.context.scopes, &self.function_return_values())
         } else {
-            LPCType::Int(false)
+            LpcType::Int(false)
         };
 
         let right_type = if let Some(right) = &*node.r {
             node_type(right, &self.context.scopes, &self.function_return_values())
         } else {
-            LPCType::Int(false)
+            LpcType::Int(false)
         };
 
         // These must resolve to ints at some point.
-        let required_types = LPCType::Int(false) | LPCType::Mixed(false);
+        let required_types = LpcType::Int(false) | LpcType::Mixed(false);
 
         if left_type.matches_type(required_types) && right_type.matches_type(required_types) {
             Ok(())
@@ -347,7 +347,7 @@ mod tests {
             var_node::VarNode,
         },
         semantic::{
-            function_prototype::FunctionPrototype, lpc_type::LPCType, scope_tree::ScopeTree,
+            function_prototype::FunctionPrototype, lpc_type::LpcType, scope_tree::ScopeTree,
             symbol::Symbol,
         },
     };
@@ -368,7 +368,7 @@ mod tests {
                 String::from("known"),
                 FunctionPrototype {
                     name: String::from("known"),
-                    return_type: LPCType::Int(false),
+                    return_type: LpcType::Int(false),
                     num_args: 0,
                     num_default_args: 0,
                     arg_types: vec![],
@@ -471,10 +471,10 @@ mod tests {
                 String::from("my_func"),
                 FunctionPrototype {
                     name: String::from("my_func"),
-                    return_type: LPCType::Int(false),
+                    return_type: LpcType::Int(false),
                     num_args: 1,
                     num_default_args: 1,
-                    arg_types: vec![LPCType::String(false)],
+                    arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
                 },
@@ -506,10 +506,10 @@ mod tests {
                 String::from("my_func"),
                 FunctionPrototype {
                     name: String::from("my_func"),
-                    return_type: LPCType::Int(false),
+                    return_type: LpcType::Int(false),
                     num_args: 1,
                     num_default_args: 0,
-                    arg_types: vec![LPCType::String(false)],
+                    arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
                 },
@@ -541,10 +541,10 @@ mod tests {
                 String::from("my_func"),
                 FunctionPrototype {
                     name: String::from("my_func"),
-                    return_type: LPCType::String(false),
+                    return_type: LpcType::String(false),
                     num_args: 1,
                     num_default_args: 0,
-                    arg_types: vec![LPCType::String(false)],
+                    arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
                 },
@@ -580,7 +580,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::Int(false));
+            let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -604,7 +604,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::String(false));
+            let sym = Symbol::new("foo", LpcType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -633,7 +633,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::Int(false));
+            let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -657,7 +657,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::String(false));
+            let sym = Symbol::new("foo", LpcType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -681,7 +681,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::String(false));
+            let sym = Symbol::new("foo", LpcType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -696,7 +696,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_allows_mixed() {
             let mut init_node = VarInitNode {
-                type_: LPCType::Mixed(false),
+                type_: LpcType::Mixed(false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
@@ -716,7 +716,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::Mixed(false));
+            let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -737,7 +737,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_allows_array_items() {
             let mut init_node = VarInitNode {
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
@@ -762,7 +762,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::Mixed(false));
+            let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -783,7 +783,7 @@ mod tests {
         #[test]
         fn test_visit_assignment_allows_array_ranges() {
             let mut init_node = VarInitNode {
-                type_: LPCType::Int(true),
+                type_: LpcType::Int(true),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(vec![324])),
                 array: false,
@@ -812,7 +812,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::Mixed(false));
+            let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -838,7 +838,7 @@ mod tests {
         fn test_visit_var_init_validates_both_sides() {
             let mut node = VarInitNode {
                 name: "foo".to_string(),
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
@@ -863,7 +863,7 @@ mod tests {
         #[test]
         fn test_visit_var_init_always_allows_0() {
             let mut node = VarInitNode {
-                type_: LPCType::String(false),
+                type_: LpcType::String(false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
@@ -889,7 +889,7 @@ mod tests {
         #[test]
         fn test_visit_var_init_disallows_differing_types() {
             let mut node = VarInitNode {
-                type_: LPCType::String(false),
+                type_: LpcType::String(false),
                 name: "foo".to_string(),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -929,7 +929,7 @@ mod tests {
             };
 
             let void_function_def = FunctionDefNode {
-                return_type: LPCType::Void,
+                return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -937,7 +937,7 @@ mod tests {
             };
 
             let int_function_def = FunctionDefNode {
-                return_type: LPCType::Int(false),
+                return_type: LpcType::Int(false),
                 name: "snuh".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -985,7 +985,7 @@ mod tests {
             };
 
             let void_function_def = FunctionDefNode {
-                return_type: LPCType::Void,
+                return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -1016,7 +1016,7 @@ mod tests {
             };
 
             let function_def = FunctionDefNode {
-                return_type: LPCType::Mixed(false),
+                return_type: LpcType::Mixed(false),
                 name: "foo".to_string(),
                 parameters: vec![],
                 body: vec![],
@@ -1054,7 +1054,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::Int(false));
+            let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
@@ -1079,7 +1079,7 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let sym = Symbol::new("foo", LPCType::String(false));
+            let sym = Symbol::new("foo", LpcType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,

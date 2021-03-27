@@ -1,6 +1,6 @@
 use lpc_rs::{
     ast::{
-        ast_node::ASTNode,
+        ast_node::AstNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
         decl_node::DeclNode,
         expression_node::ExpressionNode,
@@ -13,7 +13,7 @@ use lpc_rs::{
     },
     lpc_parser,
     parser::{lexer::LexWrapper, span::Span},
-    semantic::lpc_type::LPCType,
+    semantic::lpc_type::LpcType,
 };
 
 // just a helper for a very common pattern
@@ -41,10 +41,10 @@ fn test_program_global_vars() {
 
     let expected = ProgramNode {
         body: vec![
-            ASTNode::from(DeclNode {
-                type_: LPCType::Int(false),
+            AstNode::from(DeclNode {
+                type_: LpcType::Int(false),
                 initializations: vec![VarInitNode {
-                    type_: LPCType::Int(false),
+                    type_: LpcType::Int(false),
                     name: "i".to_string(),
                     value: Some(ExpressionNode::Int(IntNode {
                         value: 123,
@@ -63,10 +63,10 @@ fn test_program_global_vars() {
                     }),
                 }],
             }),
-            ASTNode::from(DeclNode {
-                type_: LPCType::Int(false),
+            AstNode::from(DeclNode {
+                type_: LpcType::Int(false),
                 initializations: vec![VarInitNode {
-                    type_: LPCType::Int(false),
+                    type_: LpcType::Int(false),
                     name: "j".to_string(),
                     value: Some(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(VarNode {
@@ -102,10 +102,10 @@ fn test_program_global_vars() {
                     }),
                 }],
             }),
-            ASTNode::from(DeclNode {
-                type_: LPCType::String(true),
+            AstNode::from(DeclNode {
+                type_: LpcType::String(true),
                 initializations: vec![VarInitNode {
-                    type_: LPCType::String(true),
+                    type_: LpcType::String(true),
                     name: "k".to_string(),
                     value: None,
                     array: true,

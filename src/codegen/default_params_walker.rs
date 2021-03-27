@@ -42,7 +42,7 @@ mod tests {
     use super::*;
     use crate::{
         ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
-        semantic::lpc_type::LPCType,
+        semantic::lpc_type::LpcType,
     };
 
     #[test]
@@ -52,7 +52,7 @@ mod tests {
 
         let parameters = vec![
             VarInitNode {
-                type_: LPCType::Int(false),
+                type_: LpcType::Int(false),
                 name: "i".to_string(),
                 value: None,
                 array: false,
@@ -60,7 +60,7 @@ mod tests {
                 span: None,
             },
             VarInitNode {
-                type_: LPCType::String(false),
+                type_: LpcType::String(false),
                 name: "s".to_string(),
                 value: Some(ExpressionNode::from("marf")),
                 array: false,
@@ -70,7 +70,7 @@ mod tests {
         ];
 
         let mut node = FunctionDefNode {
-            return_type: LPCType::Void,
+            return_type: LpcType::Void,
             name: "foo".to_string(),
             parameters,
             body: vec![],

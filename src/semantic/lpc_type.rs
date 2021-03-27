@@ -1,11 +1,11 @@
-use crate::semantic::lpc_type_union::LPCTypeUnion;
+use crate::semantic::lpc_type_union::LpcTypeUnion;
 use fmt::{Display, Formatter};
 use std::{fmt, ops::BitOr};
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum LPCType {
+pub enum LpcType {
     Void,
     Int(bool),
     Float(bool),
@@ -15,45 +15,45 @@ pub enum LPCType {
     Mixed(bool),
 
     // To allow efuns to declare prototypes with multiple allowed types
-    Union(LPCTypeUnion),
+    Union(LpcTypeUnion),
 }
 
-impl LPCType {
+impl LpcType {
     /// See if I match another type. Handles unions seamlessly.
     /// This is the main type-checking routine.
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
-    pub fn matches_type(&self, other: LPCType) -> bool {
-        fn array_value(t: &LPCType) -> bool {
+    pub fn matches_type(&self, other: LpcType) -> bool {
+        fn array_value(t: &LpcType) -> bool {
             match t {
-                LPCType::Void => false,
-                LPCType::Int(arr) => *arr,
-                LPCType::String(arr) => *arr,
-                LPCType::Float(arr) => *arr,
-                LPCType::Object(arr) => *arr,
-                LPCType::Mapping(arr) => *arr,
-                LPCType::Mixed(arr) => *arr,
+                LpcType::Void => false,
+                LpcType::Int(arr) => *arr,
+                LpcType::String(arr) => *arr,
+                LpcType::Float(arr) => *arr,
+                LpcType::Object(arr) => *arr,
+                LpcType::Mapping(arr) => *arr,
+                LpcType::Mixed(arr) => *arr,
                 _ => unimplemented!(),
             }
         }
 
-        if let LPCType::Union(self_union) = self {
+        if let LpcType::Union(self_union) = self {
             self_union.matches_type(other)
-        } else if let LPCType::Union(other_union) = other {
+        } else if let LpcType::Union(other_union) = other {
             other_union.matches_type(*self)
-        } else if let LPCType::Mixed(array) = self {
+        } else if let LpcType::Mixed(array) = self {
             // "mixed *" only matches arrays (but the elements can be any type)
             // "mixed" is a literal wildcard.
             if *array {
                 array_value(&other)
             } else {
-                !matches!(other, LPCType::Void)
+                !matches!(other, LpcType::Void)
             }
-        } else if let LPCType::Mixed(array) = other {
+        } else if let LpcType::Mixed(array) = other {
             if array {
                 array_value(self)
             } else {
-                !matches!(other, LPCType::Void)
+                !matches!(other, LpcType::Void)
             }
         } else {
             *self == other
@@ -63,55 +63,55 @@ impl LPCType {
     /// Return if we're an array or not
     pub fn is_array(&self) -> bool {
         match self {
-            LPCType::Void => false,
-            LPCType::Int(arr) => *arr,
-            LPCType::String(arr) => *arr,
-            LPCType::Float(arr) => *arr,
-            LPCType::Object(arr) => *arr,
-            LPCType::Mapping(arr) => *arr,
-            LPCType::Mixed(arr) => *arr,
-            LPCType::Union(union) => union.is_array(),
+            LpcType::Void => false,
+            LpcType::Int(arr) => *arr,
+            LpcType::String(arr) => *arr,
+            LpcType::Float(arr) => *arr,
+            LpcType::Object(arr) => *arr,
+            LpcType::Mapping(arr) => *arr,
+            LpcType::Mixed(arr) => *arr,
+            LpcType::Union(union) => union.is_array(),
         }
     }
 
     /// Return a copy of me, with the array flag set to `arr`.
-    pub fn as_array(&self, arr: bool) -> LPCType {
+    pub fn as_array(&self, arr: bool) -> LpcType {
         match self {
-            LPCType::Int(_) => LPCType::Int(arr),
-            LPCType::String(_) => LPCType::String(arr),
-            LPCType::Float(_) => LPCType::Float(arr),
-            LPCType::Mapping(_) => LPCType::Mapping(arr),
-            LPCType::Mixed(_) => LPCType::Mixed(arr),
+            LpcType::Int(_) => LpcType::Int(arr),
+            LpcType::String(_) => LpcType::String(arr),
+            LpcType::Float(_) => LpcType::Float(arr),
+            LpcType::Mapping(_) => LpcType::Mapping(arr),
+            LpcType::Mixed(_) => LpcType::Mixed(arr),
             x => *x,
         }
     }
 }
 
-impl BitOr for LPCType {
-    type Output = LPCType;
+impl BitOr for LpcType {
+    type Output = LpcType;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        let mut union = if let LPCType::Union(u) = self {
+        let mut union = if let LpcType::Union(u) = self {
             u
         } else {
-            let mut u = LPCTypeUnion::new();
+            let mut u = LpcTypeUnion::new();
             u.insert(self);
             u
         };
 
         let final_union = match rhs {
-            LPCType::Union(u) => union | u,
+            LpcType::Union(u) => union | u,
             x => {
                 union.insert(x);
                 union
             }
         };
 
-        LPCType::Union(final_union)
+        LpcType::Union(final_union)
     }
 }
 
-impl Display for LPCType {
+impl Display for LpcType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let to_star = |array: &bool| -> &str {
             if *array {
@@ -122,31 +122,31 @@ impl Display for LPCType {
         };
 
         let type_ = match self {
-            LPCType::Void => String::from("void"),
-            LPCType::Int(array) => format!("int{}", to_star(array)),
-            LPCType::Float(array) => format!("float{}", to_star(array)),
-            LPCType::String(array) => format!("string{}", to_star(array)),
-            LPCType::Object(array) => format!("object{}", to_star(array)),
-            LPCType::Mapping(array) => format!("mapping{}", to_star(array)),
-            LPCType::Mixed(array) => format!("mixed{}", to_star(array)),
-            LPCType::Union(union) => format!("{}", union),
+            LpcType::Void => String::from("void"),
+            LpcType::Int(array) => format!("int{}", to_star(array)),
+            LpcType::Float(array) => format!("float{}", to_star(array)),
+            LpcType::String(array) => format!("string{}", to_star(array)),
+            LpcType::Object(array) => format!("object{}", to_star(array)),
+            LpcType::Mapping(array) => format!("mapping{}", to_star(array)),
+            LpcType::Mixed(array) => format!("mixed{}", to_star(array)),
+            LpcType::Union(union) => format!("{}", union),
         };
 
         write!(f, "{}", type_)
     }
 }
 
-impl From<String> for LPCType {
+impl From<String> for LpcType {
     fn from(str: String) -> Self {
         match str.as_str() {
-            "void" => LPCType::Void,
-            "int" => LPCType::Int(false),
-            "float" => LPCType::Float(false),
-            "string" => LPCType::String(false),
-            "object" => LPCType::Object(false),
-            "mapping" => LPCType::Mapping(false),
-            "mixed" => LPCType::Mixed(false),
-            _ => panic!("Unknown LPCType. Cannot convert."),
+            "void" => LpcType::Void,
+            "int" => LpcType::Int(false),
+            "float" => LpcType::Float(false),
+            "string" => LpcType::String(false),
+            "object" => LpcType::Object(false),
+            "mapping" => LpcType::Mapping(false),
+            "mixed" => LpcType::Mixed(false),
+            _ => panic!("Unknown LpcType. Cannot convert."),
         }
     }
 }
@@ -157,9 +157,9 @@ mod tests {
 
     #[test]
     fn test_bitor() {
-        let lpc_u = LPCType::Int(false) | LPCType::Int(true) | LPCType::Void;
+        let lpc_u = LpcType::Int(false) | LpcType::Int(true) | LpcType::Void;
 
-        if let LPCType::Union(union) = lpc_u {
+        if let LpcType::Union(union) = lpc_u {
             assert!(union.int());
             assert!(union.int_array());
             assert!(union.void());
@@ -181,81 +181,81 @@ mod tests {
 
     #[test]
     fn test_matches_type() {
-        assert!(LPCType::Void.matches_type(LPCType::Void));
-        assert!(!LPCType::Void.matches_type(LPCType::Int(true)));
+        assert!(LpcType::Void.matches_type(LpcType::Void));
+        assert!(!LpcType::Void.matches_type(LpcType::Int(true)));
 
-        let union = LPCType::Void | LPCType::Int(false);
-        assert!(LPCType::Void.matches_type(union));
+        let union = LpcType::Void | LpcType::Int(false);
+        assert!(LpcType::Void.matches_type(union));
 
         // Void only matches void.
-        assert!(!LPCType::Mixed(false).matches_type(LPCType::Void));
+        assert!(!LpcType::Mixed(false).matches_type(LpcType::Void));
 
         // non-array mixed against non-arrays
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Int(false)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::String(false)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Float(false)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Object(false)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Mapping(false)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Int(false)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::String(false)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Float(false)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Object(false)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Mapping(false)));
 
         // non-arrays against non-array mixed
-        assert!(LPCType::Int(false).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::String(false).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Float(false).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Object(false).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Mapping(false).matches_type(LPCType::Mixed(false)));
+        assert!(LpcType::Int(false).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::String(false).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Float(false).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Object(false).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Mapping(false).matches_type(LpcType::Mixed(false)));
 
         // non-array mixed against arrays
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Int(true)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::String(true)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Float(true)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Object(true)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Mapping(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Int(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::String(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Float(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Object(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Mapping(true)));
 
         // arrays against non-array mixed
-        assert!(LPCType::Int(true).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::String(true).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Float(true).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Object(true).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Mapping(true).matches_type(LPCType::Mixed(false)));
+        assert!(LpcType::Int(true).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::String(true).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Float(true).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Object(true).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Mapping(true).matches_type(LpcType::Mixed(false)));
 
         // array mixed against non-arrays
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::Int(false)));
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::String(false)));
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::Float(false)));
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::Object(false)));
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::Mapping(false)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::Int(false)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::String(false)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::Float(false)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::Object(false)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::Mapping(false)));
 
         // non-arrays against array mixed
-        assert!(!LPCType::Int(false).matches_type(LPCType::Mixed(true)));
-        assert!(!LPCType::String(false).matches_type(LPCType::Mixed(true)));
-        assert!(!LPCType::Float(false).matches_type(LPCType::Mixed(true)));
-        assert!(!LPCType::Object(false).matches_type(LPCType::Mixed(true)));
-        assert!(!LPCType::Mapping(false).matches_type(LPCType::Mixed(true)));
+        assert!(!LpcType::Int(false).matches_type(LpcType::Mixed(true)));
+        assert!(!LpcType::String(false).matches_type(LpcType::Mixed(true)));
+        assert!(!LpcType::Float(false).matches_type(LpcType::Mixed(true)));
+        assert!(!LpcType::Object(false).matches_type(LpcType::Mixed(true)));
+        assert!(!LpcType::Mapping(false).matches_type(LpcType::Mixed(true)));
 
         // array mixed against arrays
-        assert!(LPCType::Mixed(true).matches_type(LPCType::Int(true)));
-        assert!(LPCType::Mixed(true).matches_type(LPCType::String(true)));
-        assert!(LPCType::Mixed(true).matches_type(LPCType::Float(true)));
-        assert!(LPCType::Mixed(true).matches_type(LPCType::Object(true)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Int(true)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::String(true)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Float(true)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Object(true)));
 
         // arrays against array mixed
-        assert!(LPCType::Int(true).matches_type(LPCType::Mixed(true)));
-        assert!(LPCType::String(true).matches_type(LPCType::Mixed(true)));
-        assert!(LPCType::Float(true).matches_type(LPCType::Mixed(true)));
-        assert!(LPCType::Object(true).matches_type(LPCType::Mixed(true)));
-        assert!(LPCType::Mapping(true).matches_type(LPCType::Mixed(true)));
+        assert!(LpcType::Int(true).matches_type(LpcType::Mixed(true)));
+        assert!(LpcType::String(true).matches_type(LpcType::Mixed(true)));
+        assert!(LpcType::Float(true).matches_type(LpcType::Mixed(true)));
+        assert!(LpcType::Object(true).matches_type(LpcType::Mixed(true)));
+        assert!(LpcType::Mapping(true).matches_type(LpcType::Mixed(true)));
 
         // mixed vs. mixed
-        assert!(LPCType::Mixed(true).matches_type(LPCType::Mapping(true)));
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::Mixed(false)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Mixed(true)));
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Mixed(false)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Mapping(true)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::Mixed(false)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Mixed(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Mixed(false)));
 
         // unions
-        assert!(LPCType::Mixed(false).matches_type(LPCType::Int(false) | LPCType::String(true)));
-        assert!(!LPCType::Mixed(false).matches_type(LPCType::Int(true) | LPCType::String(true)));
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Int(false) | LpcType::String(true)));
+        assert!(!LpcType::Mixed(false).matches_type(LpcType::Int(true) | LpcType::String(true)));
 
-        assert!(LPCType::Mixed(true).matches_type(LPCType::Int(false) | LPCType::String(true)));
-        assert!(!LPCType::Mixed(true).matches_type(LPCType::Int(false) | LPCType::String(false)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Int(false) | LpcType::String(true)));
+        assert!(!LpcType::Mixed(true).matches_type(LpcType::Int(false) | LpcType::String(false)));
     }
 }

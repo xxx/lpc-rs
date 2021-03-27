@@ -13,7 +13,7 @@ use crate::{
         var_node::VarNode,
     },
     errors,
-    semantic::{local_scope::LocalScope, lpc_type::LPCType, scope_tree::ScopeTree},
+    semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use errors::compiler_error::{
     binary_operation_error::BinaryOperationError, var_redefinition_error::VarRedefinitionError,
@@ -56,13 +56,13 @@ pub fn check_var_redefinition(
 pub fn check_binary_operation_types(
     node: &BinaryOpNode,
     scope_tree: &ScopeTree,
-    function_return_types: &HashMap<&str, LPCType>,
+    function_return_types: &HashMap<&str, LpcType>,
 ) -> Result<(), BinaryOperationError> {
     fn create_error(
         node: &BinaryOpNode,
         op: BinaryOperation,
-        left_type: LPCType,
-        right_type: LPCType,
+        left_type: LpcType,
+        right_type: LpcType,
     ) -> BinaryOperationError {
         BinaryOperationError {
             op,
@@ -79,7 +79,7 @@ pub fn check_binary_operation_types(
     let tuple = (left_type, right_type);
 
     if node.op != BinaryOperation::Index {
-        let handle = |tuple: (LPCType, LPCType), node| {
+        let handle = |tuple: (LpcType, LpcType), node| {
             if tuple.0.matches_type(tuple.1) {
                 Ok(())
             } else {
@@ -87,9 +87,9 @@ pub fn check_binary_operation_types(
             }
         };
 
-        if let LPCType::Mixed(_) = tuple.0 {
+        if let LpcType::Mixed(_) = tuple.0 {
             return handle(tuple, node);
-        } else if let LPCType::Mixed(_) = tuple.1 {
+        } else if let LpcType::Mixed(_) = tuple.1 {
             return handle(tuple, node);
         }
     }
@@ -102,13 +102,13 @@ pub fn check_binary_operation_types(
             }
 
             match tuple {
-                (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
-                (LPCType::String(false), LPCType::Int(false)) => Ok(()),
-                (LPCType::Int(false), LPCType::String(false)) => Ok(()),
-                (LPCType::String(false), LPCType::String(false)) => Ok(()),
-                (LPCType::Float(false), LPCType::Float(false)) => Ok(()),
-                (LPCType::Float(false), LPCType::Int(false)) => Ok(()),
-                (LPCType::Int(false), LPCType::Float(false)) => Ok(()),
+                (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+                (LpcType::String(false), LpcType::Int(false)) => Ok(()),
+                (LpcType::Int(false), LpcType::String(false)) => Ok(()),
+                (LpcType::String(false), LpcType::String(false)) => Ok(()),
+                (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
+                (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
+                (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(
                     node,
                     BinaryOperation::Add,
@@ -118,10 +118,10 @@ pub fn check_binary_operation_types(
             }
         }
         BinaryOperation::Sub => match tuple {
-            (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
-            (LPCType::Float(false), LPCType::Float(false)) => Ok(()),
-            (LPCType::Int(false), LPCType::Float(false)) => Ok(()),
-            (LPCType::Float(false), LPCType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
                 BinaryOperation::Sub,
@@ -130,12 +130,12 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Mul => match tuple {
-            (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
-            (LPCType::String(false), LPCType::Int(false)) => Ok(()),
-            (LPCType::Int(false), LPCType::String(false)) => Ok(()),
-            (LPCType::Float(false), LPCType::Float(false)) => Ok(()),
-            (LPCType::Int(false), LPCType::Float(false)) => Ok(()),
-            (LPCType::Float(false), LPCType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::String(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::String(false)) => Ok(()),
+            (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
                 BinaryOperation::Mul,
@@ -144,10 +144,10 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Div => match tuple {
-            (LPCType::Int(false), LPCType::Int(false)) => Ok(()),
-            (LPCType::Float(false), LPCType::Float(false)) => Ok(()),
-            (LPCType::Int(false), LPCType::Float(false)) => Ok(()),
-            (LPCType::Float(false), LPCType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
                 BinaryOperation::Div,
@@ -157,7 +157,7 @@ pub fn check_binary_operation_types(
         },
         BinaryOperation::Index => {
             if left_type.is_array()
-                && (right_type == LPCType::Int(false)
+                && (right_type == LpcType::Int(false)
                     || matches!(*node.r, ExpressionNode::Range(_)))
             {
                 Ok(())
@@ -175,7 +175,7 @@ pub fn check_binary_operation_types(
 
 /// Check two types, and return the promotion if one occurs (or the same type if both are the same)
 /// Returns the first type if no promotion is possible.
-fn combine_types(type1: LPCType, type2: LPCType, op: BinaryOperation) -> LPCType {
+fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
     if op == BinaryOperation::Index {
         return type1.as_array(type2.is_array());
     }
@@ -189,12 +189,12 @@ fn combine_types(type1: LPCType, type2: LPCType, op: BinaryOperation) -> LPCType
 
     // array <op> array is always a mixed array
     if type1.is_array() && type2.is_array() {
-        return LPCType::Mixed(true);
+        return LpcType::Mixed(true);
     }
 
     match (type1, type2) {
-        (LPCType::Int(false), LPCType::String(false)) => LPCType::String(false),
-        (LPCType::String(false), LPCType::Int(false)) => LPCType::String(false),
+        (LpcType::Int(false), LpcType::String(false)) => LpcType::String(false),
+        (LpcType::String(false), LpcType::Int(false)) => LpcType::String(false),
         (x, _) => x,
     }
 }
@@ -209,12 +209,12 @@ fn combine_types(type1: LPCType, type2: LPCType, op: BinaryOperation) -> LPCType
 /// `function_return_types` - A `HashMap` of function names, to the type they return
 ///
 /// # Returns
-/// The `LPCType` of the passed node.
+/// The `LpcType` of the passed node.
 pub fn node_type(
     node: &ExpressionNode,
     scope_tree: &ScopeTree,
-    function_return_types: &HashMap<&str, LPCType>,
-) -> LPCType {
+    function_return_types: &HashMap<&str, LpcType>,
+) -> LpcType {
     match node {
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
@@ -223,7 +223,7 @@ pub fn node_type(
             if let Some(return_type) = function_return_types.get(name.as_str()) {
                 *return_type
             } else {
-                LPCType::Int(false)
+                LpcType::Int(false)
             }
         }
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
@@ -234,10 +234,10 @@ pub fn node_type(
                 panic!("We've somehow created an empty CommaExpression node")
             }
         }
-        ExpressionNode::Float(FloatNode { .. }) => LPCType::Float(false),
-        ExpressionNode::Int(IntNode { .. }) => LPCType::Int(false),
-        ExpressionNode::Range(RangeNode { .. }) => LPCType::Int(true),
-        ExpressionNode::String(StringNode { .. }) => LPCType::String(false),
+        ExpressionNode::Float(FloatNode { .. }) => LpcType::Float(false),
+        ExpressionNode::Int(IntNode { .. }) => LpcType::Int(false),
+        ExpressionNode::Range(RangeNode { .. }) => LpcType::Int(true),
+        ExpressionNode::String(StringNode { .. }) => LpcType::String(false),
         ExpressionNode::Var(VarNode { name, .. }) => match scope_tree.lookup(name) {
             Some(sym) => sym.type_,
             _ => panic!("undefined symbol {}", name),
@@ -249,7 +249,7 @@ pub fn node_type(
         ),
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
-                return LPCType::Mixed(true);
+                return LpcType::Mixed(true);
             }
 
             let value_types = node
@@ -259,19 +259,19 @@ pub fn node_type(
                 .collect::<Vec<_>>();
 
             if value_types.iter().any(|ty| match *ty {
-                LPCType::Int(arr) => arr,
-                LPCType::String(arr) => arr,
-                LPCType::Float(arr) => arr,
-                LPCType::Object(arr) => arr,
-                LPCType::Mapping(arr) => arr,
-                LPCType::Mixed(arr) => arr,
+                LpcType::Int(arr) => arr,
+                LpcType::String(arr) => arr,
+                LpcType::Float(arr) => arr,
+                LpcType::Object(arr) => arr,
+                LpcType::Mapping(arr) => arr,
+                LpcType::Mixed(arr) => arr,
                 _ => unimplemented!(), // ExpressionNodes have a concrete type.
             }) {
-                LPCType::Mixed(true)
+                LpcType::Mixed(true)
             } else if value_types.windows(2).all(|w| w[0] == w[1]) {
                 value_types[0].as_array(true)
             } else {
-                LPCType::Mixed(true)
+                LpcType::Mixed(true)
             }
         }
     }
@@ -285,7 +285,7 @@ mod check_binary_operation_tests {
     fn setup() -> ScopeTree {
         let int1 = Symbol {
             name: "int1".to_string(),
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             static_: false,
             location: None,
             scope_id: 0,
@@ -293,7 +293,7 @@ mod check_binary_operation_tests {
         };
         let int2 = Symbol {
             name: "int2".to_string(),
-            type_: LPCType::Int(false),
+            type_: LpcType::Int(false),
             static_: false,
             location: None,
             scope_id: 0,
@@ -301,7 +301,7 @@ mod check_binary_operation_tests {
         };
         let string1 = Symbol {
             name: "string1".to_string(),
-            type_: LPCType::String(false),
+            type_: LpcType::String(false),
             static_: false,
             location: None,
             scope_id: 0,
@@ -309,7 +309,7 @@ mod check_binary_operation_tests {
         };
         let string2 = Symbol {
             name: "string2".to_string(),
-            type_: LPCType::String(false),
+            type_: LpcType::String(false),
             static_: false,
             location: None,
             scope_id: 0,
@@ -317,7 +317,7 @@ mod check_binary_operation_tests {
         };
         let array1 = Symbol {
             name: "array1".to_string(),
-            type_: LPCType::Int(true),
+            type_: LpcType::Int(true),
             static_: false,
             location: None,
             scope_id: 0,
@@ -325,7 +325,7 @@ mod check_binary_operation_tests {
         };
         let array2 = Symbol {
             name: "array2".to_string(),
-            type_: LPCType::Int(true),
+            type_: LpcType::Int(true),
             static_: false,
             location: None,
             scope_id: 0,
@@ -333,7 +333,7 @@ mod check_binary_operation_tests {
         };
         let float1 = Symbol {
             name: "float1".to_string(),
-            type_: LPCType::Float(false),
+            type_: LpcType::Float(false),
             static_: false,
             location: None,
             scope_id: 0,
@@ -341,7 +341,7 @@ mod check_binary_operation_tests {
         };
         let float2 = Symbol {
             name: "float2".to_string(),
-            type_: LPCType::Float(false),
+            type_: LpcType::Float(false),
             static_: false,
             location: None,
             scope_id: 0,
@@ -1013,7 +1013,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::Mixed(true)
+                LpcType::Mixed(true)
             );
         }
 
@@ -1031,7 +1031,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::Int(true)
+                LpcType::Int(true)
             );
         }
 
@@ -1048,7 +1048,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::Mixed(true)
+                LpcType::Mixed(true)
             );
         }
 
@@ -1066,7 +1066,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::String(false)
+                LpcType::String(false)
             );
         }
 
@@ -1084,7 +1084,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::String(false)
+                LpcType::String(false)
             );
         }
 
@@ -1100,7 +1100,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::String(false)
+                LpcType::String(false)
             );
         }
     }
@@ -1116,7 +1116,7 @@ mod node_type_tests {
             let scope = scope_tree.get_mut(id).unwrap();
             scope.insert(Symbol {
                 name: "foo".to_string(),
-                type_: LPCType::Int(true),
+                type_: LpcType::Int(true),
                 static_: false,
                 location: None,
                 scope_id: 0,
@@ -1140,7 +1140,7 @@ mod node_type_tests {
 
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
-                LPCType::Int(false)
+                LpcType::Int(false)
             );
         }
     }

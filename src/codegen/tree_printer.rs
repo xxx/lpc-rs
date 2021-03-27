@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        array_node::ArrayNode, ast_node::ASTNodeTrait, binary_op_node::BinaryOpNode,
+        array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
         call_node::CallNode, comma_expression_node::CommaExpressionNode, decl_node::DeclNode,
         float_node::FloatNode, function_def_node::FunctionDefNode, int_node::IntNode,
         program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,

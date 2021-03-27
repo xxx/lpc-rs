@@ -1,4 +1,4 @@
-use crate::{errors::LPCError, parser::span::Span, semantic::symbol::Symbol};
+use crate::{errors::LpcError, parser::span::Span, semantic::symbol::Symbol};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use std::{
     fmt,
@@ -15,7 +15,7 @@ pub struct VarRedefinitionError {
     pub span: Option<Span>,
 }
 
-impl LPCError for VarRedefinitionError {
+impl LpcError for VarRedefinitionError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];

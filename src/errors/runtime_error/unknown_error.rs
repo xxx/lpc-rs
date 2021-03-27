@@ -1,5 +1,5 @@
 use crate::{
-    errors::{default_diagnostic, LPCError},
+    errors::{default_diagnostic, LpcError},
     parser::span::Span,
 };
 use codespan_reporting::diagnostic::Diagnostic;
@@ -16,7 +16,7 @@ pub struct UnknownError {
     pub span: Option<Span>,
 }
 
-impl LPCError for UnknownError {
+impl LpcError for UnknownError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         default_diagnostic(format!("{}", self), self.span)
     }

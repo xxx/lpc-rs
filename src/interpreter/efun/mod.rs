@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::{
     interpreter::{asm_interpreter::AsmInterpreter, stack_frame::StackFrame},
-    semantic::{function_prototype::FunctionPrototype, lpc_type::LPCType},
+    semantic::{function_prototype::FunctionPrototype, lpc_type::LpcType},
 };
 use dump::dump;
 
@@ -25,10 +25,10 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert("dump", FunctionPrototype {
             name: String::from("dump"),
-            return_type: LPCType::Int(false),
+            return_type: LpcType::Int(false),
             num_args: 1,
             num_default_args: 0,
-            arg_types: vec![LPCType::Mixed(false)],
+            arg_types: vec![LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![]
         });

@@ -2,7 +2,7 @@ use crate::{
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
-        ast_node::{ASTNode, ASTNodeTrait, SpannedNode},
+        ast_node::{AstNode, AstNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
@@ -71,7 +71,7 @@ impl SpannedNode for ExpressionNode {
 
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
-        impl ASTNodeTrait for ExpressionNode {
+        impl AstNodeTrait for ExpressionNode {
             fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
                 match self {
                 $(
@@ -152,12 +152,12 @@ impl From<RangeNode> for ExpressionNode {
     }
 }
 
-impl From<ASTNode> for ExpressionNode {
-    fn from(node: ASTNode) -> Self {
+impl From<AstNode> for ExpressionNode {
+    fn from(node: AstNode) -> Self {
         match node {
-            ASTNode::Expression(x) => x,
+            AstNode::Expression(x) => x,
             x => panic!(
-                "unimplemented From<ASTNode> for ExpressionNode arm: {:?}",
+                "unimplemented From<AstNode> for ExpressionNode arm: {:?}",
                 x
             ),
         }
@@ -284,7 +284,7 @@ mod tests {
 
     mod from_ast_node {
         use crate::ast::{
-            ast_node::ASTNode, expression_node::ExpressionNode, int_node::IntNode,
+            ast_node::AstNode, expression_node::ExpressionNode, int_node::IntNode,
             program_node::ProgramNode,
         };
 
@@ -292,7 +292,7 @@ mod tests {
         fn test_from_ast_node_is_ok_for_expressions() {
             let expression_node = ExpressionNode::Int(IntNode::new(666));
             let clone = expression_node.clone();
-            let ast_node = ASTNode::Expression(expression_node);
+            let ast_node = AstNode::Expression(expression_node);
 
             assert_eq!(ExpressionNode::from(ast_node), clone);
         }
@@ -301,7 +301,7 @@ mod tests {
         #[should_panic]
         fn test_from_ast_node_is_panics_for_non_expressions() {
             let node = ProgramNode::default();
-            let ast_node = ASTNode::Program(node);
+            let ast_node = AstNode::Program(node);
 
             ExpressionNode::from(ast_node);
         }
