@@ -238,7 +238,7 @@ impl Preprocessor {
         for spanned_result in token_stream {
             match spanned_result {
                 Ok(spanned) => {
-                    let (_l, token, _r) = &spanned;
+                    let (l, token, r) = &spanned;
 
                     let token_string = token.to_string();
 
@@ -260,6 +260,19 @@ impl Preprocessor {
 
                         Token::NewLine(_) => { /* Ignore */ }
 
+                        // Handle macro expansion
+                        Token::Id(t) => {
+                            let str = token.to_string();
+
+                            match self.defines.get(&str) {
+                                Some(string) => {
+                                    let st = StringToken(t.0, string.clone());
+                                    let new_spanned = (*l, Token::Id(st), *r);
+                                    self.append_spanned(&mut output, new_spanned)
+                                }
+                                None => self.append_spanned(&mut output, spanned)
+                            }
+                        }
                         _ => self.append_spanned(&mut output, spanned),
                     }
 
@@ -1023,6 +1036,35 @@ mod tests {
             };
 
             test_invalid(prog, "Invalid `#else`");
+        }
+    }
+
+    mod test_object_expansion {
+        use super::*;
+
+        #[test]
+        fn test_simple_replacement() {
+            let prog = indoc! { r#"
+                #define FOO 666
+
+                int a = 1 + 5 + FOO + 3;
+            "# };
+
+            let expected = vec![
+                "int",
+                "a",
+                "=",
+                "1",
+                "+",
+                "5",
+                "+",
+                "666",
+                "+",
+                "3",
+                ";",
+            ];
+
+            test_valid(prog, &expected);
         }
     }
 }
