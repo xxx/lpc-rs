@@ -12,20 +12,17 @@ use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
-use crate::parser::lexer::{LexWrapper, Spanned, Token};
+use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
 use std::ops::Range;
-use crate::parser::lexer::logos_token::StringToken;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
 lazy_static! {
-    static ref SYS_INCLUDE: Regex =
-        Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
+    static ref SYS_INCLUDE: Regex = Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
     static ref LOCAL_INCLUDE: Regex =
         Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
     static ref DEFINE: Regex =
-        Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z")
-            .unwrap();
+        Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
     static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
     static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
     static ref IFDEFINED: Regex =
@@ -248,7 +245,9 @@ impl Preprocessor {
                     // println!("token: {:?}", token);
 
                     match token {
-                        Token::LocalInclude(t) => self.handle_local_include(t, &cwd, &mut output)?,
+                        Token::LocalInclude(t) => {
+                            self.handle_local_include(t, &cwd, &mut output)?
+                        }
                         Token::SysInclude(t) => {
                             self.check_for_previous_newline(t.0)?;
                         }
@@ -292,8 +291,7 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         if let Some(captures) = DEFINE.captures(&token.1) {
-            if !self.skipping_lines() && self.defines.contains_key(&captures[1])
-            {
+            if !self.skipping_lines() && self.defines.contains_key(&captures[1]) {
                 return Err(PreprocessorError::new(
                     &format!("Duplicate `#define`: `{}`", &captures[1]),
                     token.0,
@@ -324,9 +322,14 @@ impl Preprocessor {
         Ok(())
     }
 
-    fn handle_local_include<U>(&mut self, token: &StringToken, cwd: &U, mut output: &mut Vec<Spanned<Token>>) -> Result<()>
+    fn handle_local_include<U>(
+        &mut self,
+        token: &StringToken,
+        cwd: &U,
+        mut output: &mut Vec<Spanned<Token>>,
+    ) -> Result<()>
     where
-        U: AsRef<Path>
+        U: AsRef<Path>,
     {
         if self.skipping_lines() {
             return Ok(());
@@ -336,8 +339,7 @@ impl Preprocessor {
 
         if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
-            let included =
-                self.include_local_file(matched.as_str(), &cwd, token.0)?;
+            let included = self.include_local_file(matched.as_str(), &cwd, token.0)?;
 
             for spanned in included {
                 self.append_spanned(&mut output, spanned)
@@ -395,8 +397,7 @@ impl Preprocessor {
             }
 
             if let Some(else_span) = &self.current_else {
-                let mut err =
-                    PreprocessorError::new("Duplicate `#else` found", token.0);
+                let mut err = PreprocessorError::new("Duplicate `#else` found", token.0);
 
                 err.add_label(
                     "Originally used here",
