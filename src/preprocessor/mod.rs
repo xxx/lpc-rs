@@ -18,6 +18,19 @@ use std::ops::Range;
 type Result<T> = result::Result<T, PreprocessorError>;
 
 #[derive(Debug)]
+struct IfDef {
+    pub code: String,
+    pub span: Span,
+
+    /// This field on the top IfDef in the stack indicates if we're currently in a
+    /// section that's conditionally compiled out. We mutate this field when we see #else.
+    pub skipping_lines: bool,
+
+    /// Is this `#ifdef` itself conditionally compiled out?
+    pub compiled_out: bool,
+}
+
+#[derive(Debug)]
 pub struct Preprocessor {
     /// The compilation context
     context: Context,
@@ -25,12 +38,8 @@ pub struct Preprocessor {
     /// We keep track of `#define`d things here.
     defines: HashMap<String, String>,
 
-    /// Are we currently within a block that is `if`'d out?
-    /// Tracked as a stack.
-    skip_lines: Vec<bool>,
-
-    /// Stack of ifdefs that are in play, so we can handle #endifs
-    ifdefs: Vec<(String, Span)>,
+    /// Stack of ifdefs that are in play, so we can handle `#else` and `#endif`s
+    ifdefs: Vec<IfDef>,
 
     /// Have we seen an `#else` clause for the current `#if`?
     current_else: Option<Span>,
@@ -235,8 +244,14 @@ impl Preprocessor {
 
                     let token_string = token.to_string();
 
+                    // println!("token: {:?}", token);
+
                     match token {
                         Token::LocalInclude(t) => {
+                            if self.skipping_lines() {
+                                continue;
+                            }
+
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = LOCAL_INCLUDE.captures(&t.1) {
@@ -258,9 +273,9 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if ELSE.is_match(&t.1) {
-                                if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                                if self.ifdefs.is_empty() {
                                     return Err(PreprocessorError::new(
-                                        "Found `#else` without a corresponding #if",
+                                        "Found `#else` without a corresponding `#if` or `#ifdef`",
                                         t.0,
                                     ));
                                 }
@@ -279,8 +294,11 @@ impl Preprocessor {
                                 }
 
                                 self.current_else = Some(t.0);
-                                let last = self.skip_lines.last_mut().unwrap();
-                                *last = !*last;
+
+                                if !self.current_if_is_compiled_out() {
+                                    let last = self.ifdefs.last_mut().unwrap();
+                                    last.skipping_lines = !last.skipping_lines;
+                                }
                             } else {
                                 return Err(PreprocessorError::new("Invalid `#else`.", t.0));
                             }
@@ -288,7 +306,7 @@ impl Preprocessor {
                         Token::Endif(t) => {
                             self.check_for_previous_newline(t.0)?;
 
-                            if self.ifdefs.is_empty() || self.skip_lines.is_empty() {
+                            if self.ifdefs.is_empty() {
                                 return Err(PreprocessorError::new(
                                     "Found `#endif` without a corresponding `#if`",
                                     t.0,
@@ -296,14 +314,17 @@ impl Preprocessor {
                             }
 
                             self.ifdefs.pop();
-                            self.skip_lines.pop();
                             self.current_else = None;
                         }
                         Token::Define(t) => {
+                            if self.skipping_lines() {
+                                continue;
+                            }
+
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = DEFINE.captures(&t.1) {
-                                if self.defines.contains_key(&captures[1]) {
+                                if !self.skipping_lines() && self.defines.contains_key(&captures[1]) {
                                     return Err(PreprocessorError::new(
                                         &format!("Duplicate `#define`: `{}`", &captures[1]),
                                         t.0,
@@ -333,9 +354,14 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = IFDEF.captures(&t.1) {
-                                self.ifdefs.push((String::from(&captures[1]), t.0));
-                                self.skip_lines
-                                    .push(!self.defines.contains_key(&captures[1]));
+                                self.ifdefs.push(
+                                    IfDef {
+                                        code: String::from(&captures[1]),
+                                        skipping_lines: !self.defines.contains_key(&captures[1]),
+                                        compiled_out: self.skipping_lines(),
+                                        span: t.0
+                                    }
+                                );
                             } else {
                                 return Err(PreprocessorError::new("Invalid `#ifdef`.", t.0));
                             }
@@ -344,9 +370,14 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = IFNDEF.captures(&t.1) {
-                                self.ifdefs.push((String::from(&captures[1]), t.0));
-                                self.skip_lines
-                                    .push(self.defines.contains_key(&captures[1]));
+                                self.ifdefs.push(
+                                    IfDef {
+                                        code: String::from(&captures[1]),
+                                        skipping_lines: self.defines.contains_key(&captures[1]),
+                                        compiled_out: self.skipping_lines(),
+                                        span: t.0
+                                    }
+                                );
                             } else {
                                 return Err(PreprocessorError::new("Invalid `#ifndef`.", t.0));
                             }
@@ -370,7 +401,7 @@ impl Preprocessor {
 
             return Err(PreprocessorError::new(
                 "Found `#if` without a corresponding `#endif`",
-                ifdef.1,
+                ifdef.span,
             ));
         }
 
@@ -428,13 +459,25 @@ impl Preprocessor {
         self.scan(filename, cwd, &file_content)
     }
 
-    /// Are we skipping lines?
+    /// Are we skipping lines right now due to `#if`s?
     #[inline]
     fn skipping_lines(&self) -> bool {
-        !self.skip_lines.is_empty() && *self.skip_lines.last().unwrap()
+        match self.ifdefs.last() {
+            Some(ifdef) => ifdef.skipping_lines || ifdef.compiled_out,
+            None => false,
+        }
     }
 
-    /// `skip_lines`-aware way to append to the output
+    /// Is the entire current `#ifdef` compiled out?
+    #[inline]
+    fn current_if_is_compiled_out(&self) -> bool {
+        match self.ifdefs.last() {
+            Some(ifdef) => ifdef.compiled_out,
+            None => false,
+        }
+    }
+
+    /// skip-aware way to append to the output
     #[inline]
     fn append_spanned(&self, output: &mut Vec<Spanned<Token>>, to_append: Spanned<Token>) {
         if !self.skipping_lines() {
@@ -461,7 +504,6 @@ impl Default for Preprocessor {
         Self {
             context: Context::default(),
             defines: HashMap::new(),
-            skip_lines: Vec::new(),
             ifdefs: Vec::new(),
             current_else: None,
             last_slice: String::from("\n"),
@@ -488,7 +530,7 @@ mod tests {
                 assert_eq!(mapped, expected)
             }
             Err(e) => {
-                panic!(format!("{:?}", e))
+                panic!("{:?}", e)
             }
         }
     }
@@ -554,6 +596,17 @@ mod tests {
         }
 
         #[test]
+        fn test_ifdefed_out() {
+            let input = indoc! { r#"
+                #ifdef FOO
+                #include "./simple.h"
+                #endif
+            "# };
+
+            test_valid(input, &vec![]);
+        }
+
+        #[test]
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
@@ -612,7 +665,7 @@ mod tests {
                     assert_eq!(preprocessor.defines.get("SNUH").unwrap(), "0x123");
                 }
                 Err(e) => {
-                    panic!(format!("{:?}", e))
+                    panic!("{:?}", e)
                 }
             }
         }
@@ -647,6 +700,26 @@ mod tests {
             match preprocessor.scan("test.c", "/", input) {
                 Ok(_) => {
                     assert_eq!(preprocessor.defines.get("ASS").unwrap(), "456");
+                }
+                Err(e) => {
+                    panic!("{:?}", e)
+                }
+            }
+        }
+
+        #[test]
+        fn test_duplicate_ifdefed_out() {
+            let input = indoc! { r#"
+                #define HELLO 123
+                #ifdef FOO
+                #define HELLO 456
+                #endif
+            "# };
+            let mut preprocessor = fixture();
+
+            match preprocessor.scan("test.c", "/", input) {
+                Ok(_) => {
+                    assert_eq!(preprocessor.defines.get("HELLO").unwrap(), "123");
                 }
                 Err(e) => {
                     panic!("{:?}", e)
@@ -700,6 +773,20 @@ mod tests {
             let expected = vec!["I", "should", "be", "rendered"];
 
             test_valid(prog, &expected);
+        }
+
+        #[test]
+        fn test_ifdefed_out() {
+            let input = indoc! { r#"
+                #define BAR
+                #ifdef FOO
+                #ifdef BAR
+                i should not be rendered
+                #endif
+                #endif
+            "# };
+
+            test_valid(input, &vec![]);
         }
 
         #[test]
@@ -775,6 +862,19 @@ mod tests {
         }
 
         #[test]
+        fn test_ifdefed_out() {
+            let input = indoc! { r#"
+                #ifdef FOO
+                #ifndef BAR
+                i should not be rendered
+                #endif
+                #endif
+            "# };
+
+            test_valid(input, &vec![]);
+        }
+
+        #[test]
         fn test_error_without_endif() {
             let prog = indoc! { r#"
                 #ifndef FOO
@@ -842,6 +942,21 @@ mod tests {
             ];
 
             test_valid(prog, &expected);
+        }
+
+        #[test]
+        fn test_ifdefed_out() {
+            let input = indoc! { r#"
+                #ifdef FOO
+                #ifndef BAR
+                i should not be rendered
+                #else
+                i also should not be rendered
+                #endif
+                #endif
+            "# };
+
+            test_valid(input, &vec![]);
         }
 
         #[test]
