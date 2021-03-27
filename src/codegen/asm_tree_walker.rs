@@ -26,9 +26,8 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use multimap::MultiMap;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 use tree_walker::TreeWalker;
-use std::path::Path;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -159,7 +158,7 @@ impl AsmTreeWalker {
     /// `path` - The path of the file that was turned into the program
     pub fn to_program<T>(&self, path: T) -> Program
     where
-        T: AsRef<Path>
+        T: AsRef<Path>,
     {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         assert_eq!(self.instructions.len(), self.debug_spans.len());
