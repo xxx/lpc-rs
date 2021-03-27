@@ -496,7 +496,7 @@ impl Preprocessor {
         }
     }
 
-    /// Is the entire current `#ifdef` compiled out?
+    /// Is the current `#if` / `#ifdef` entirely compiled out?
     #[inline]
     fn current_if_is_compiled_out(&self) -> bool {
         match self.ifdefs.last() {
