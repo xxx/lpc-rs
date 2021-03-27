@@ -400,7 +400,7 @@ impl Preprocessor {
                 let mut err = PreprocessorError::new("Duplicate `#else` found", token.0);
 
                 err.add_label(
-                    "Originally used here",
+                    "First used here",
                     else_span.file_id,
                     Range::from(else_span),
                 );
