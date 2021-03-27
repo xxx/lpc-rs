@@ -442,9 +442,8 @@ impl Preprocessor {
     /// # Arguments
     /// `path` - The path of the file we're going to scan. This is intended to be the file from
     ///     the `#include` directive.
-    /// `cwd` - The current working directory. Used to resolving relative pathnames.
-    /// `parent_line` - The line number of the file where the include is happening.
-    /// `file_id` - The ID of the file from the preprocessor's `files` struct.
+    /// `cwd` - The current working directory. Used for resolving relative pathnames.
+    /// `span` - The [`Span`] of the `#include` token.
     fn include_local_file<T, U>(
         &mut self,
         path: T,
