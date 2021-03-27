@@ -26,7 +26,7 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use multimap::MultiMap;
-use std::{collections::HashMap, path::Path};
+use std::collections::HashMap;
 use tree_walker::TreeWalker;
 
 /// Really just a `pc` index in the vm.
@@ -152,21 +152,15 @@ impl AsmTreeWalker {
         map
     }
 
-    /// Convert this walker's data into a Program
-    ///
-    /// # Arguments
-    /// `path` - The path of the file that was turned into the program
-    pub fn to_program<T>(&self, path: T) -> Program
-    where
-        T: AsRef<Path>,
-    {
+    /// Convert this walker's data into a [`Program`]
+    pub fn to_program(&self) -> Program {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         assert_eq!(self.instructions.len(), self.debug_spans.len());
 
         Program {
             instructions: self.instructions.to_vec(),
             debug_spans: self.debug_spans.to_vec(),
-            filename: path.as_ref().to_string_lossy().into_owned(),
+            filename: self.context.filename.clone(),
             labels: self.labels.clone(),
             functions: self.function_map(),
             constants: self.constants.clone(),

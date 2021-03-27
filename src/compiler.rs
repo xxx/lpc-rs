@@ -168,7 +168,7 @@ where
         println!("{}", s);
     }
 
-    let program = asm_walker.to_program(path);
+    let program = asm_walker.to_program();
 
     let msgpack = program.to_msgpack();
     println!("{:?}", msgpack.len());
