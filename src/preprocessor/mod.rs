@@ -324,7 +324,8 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = DEFINE.captures(&t.1) {
-                                if !self.skipping_lines() && self.defines.contains_key(&captures[1]) {
+                                if !self.skipping_lines() && self.defines.contains_key(&captures[1])
+                                {
                                     return Err(PreprocessorError::new(
                                         &format!("Duplicate `#define`: `{}`", &captures[1]),
                                         t.0,
@@ -354,14 +355,12 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = IFDEF.captures(&t.1) {
-                                self.ifdefs.push(
-                                    IfDef {
-                                        code: String::from(&captures[1]),
-                                        skipping_lines: !self.defines.contains_key(&captures[1]),
-                                        compiled_out: self.skipping_lines(),
-                                        span: t.0
-                                    }
-                                );
+                                self.ifdefs.push(IfDef {
+                                    code: String::from(&captures[1]),
+                                    skipping_lines: !self.defines.contains_key(&captures[1]),
+                                    compiled_out: self.skipping_lines(),
+                                    span: t.0,
+                                });
                             } else {
                                 return Err(PreprocessorError::new("Invalid `#ifdef`.", t.0));
                             }
@@ -370,14 +369,12 @@ impl Preprocessor {
                             self.check_for_previous_newline(t.0)?;
 
                             if let Some(captures) = IFNDEF.captures(&t.1) {
-                                self.ifdefs.push(
-                                    IfDef {
-                                        code: String::from(&captures[1]),
-                                        skipping_lines: self.defines.contains_key(&captures[1]),
-                                        compiled_out: self.skipping_lines(),
-                                        span: t.0
-                                    }
-                                );
+                                self.ifdefs.push(IfDef {
+                                    code: String::from(&captures[1]),
+                                    skipping_lines: self.defines.contains_key(&captures[1]),
+                                    compiled_out: self.skipping_lines(),
+                                    span: t.0,
+                                });
                             } else {
                                 return Err(PreprocessorError::new("Invalid `#ifndef`.", t.0));
                             }
