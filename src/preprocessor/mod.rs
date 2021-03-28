@@ -14,6 +14,7 @@ use std::{ffi::OsString, path::PathBuf, result};
 
 use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
 use std::ops::Range;
+use crate::errors::compiler_error::lex_error::LexError;
 
 type Result<T> = result::Result<T, PreprocessorError>;
 
@@ -262,15 +263,26 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let str = token.to_string();
+                            let str = &t.1;
 
-                            match self.defines.get(&str) {
+                            match self.defines.get(str) {
                                 Some(string) => {
-                                    let st = StringToken(t.0, string.clone());
-                                    let new_spanned = (*l, Token::Id(st), *r);
-                                    self.append_spanned(&mut output, new_spanned)
+                                    let mut def_lexer = LexWrapper::new(string);
+                                    def_lexer.set_file_id(file_id);
+                                    let def_tokens = def_lexer.collect::<std::result::Result<Vec<_>, LexError>>();
+
+                                    if let Err(e) = def_tokens {
+                                        return Err(PreprocessorError::from(e));
+                                    }
+
+                                    for (_tl, mut tok, _tr) in def_tokens.unwrap() {
+                                        // Set the span to that of the token before its replacement.
+                                        tok.set_span_range(*l, *r);
+                                        let new_spanned = (*l, tok, *r);
+                                        self.append_spanned(&mut output, new_spanned)
+                                    }
                                 }
-                                None => self.append_spanned(&mut output, spanned)
+                                None => self.append_spanned(&mut output, spanned),
                             }
                         }
                         _ => self.append_spanned(&mut output, spanned),
@@ -412,11 +424,7 @@ impl Preprocessor {
             if let Some(else_span) = &self.current_else {
                 let mut err = PreprocessorError::new("Duplicate `#else` found", token.0);
 
-                err.add_label(
-                    "First used here",
-                    else_span.file_id,
-                    Range::from(else_span),
-                );
+                err.add_label("First used here", else_span.file_id, Range::from(else_span));
 
                 return Err(err);
             }
@@ -1050,21 +1058,33 @@ mod tests {
                 int a = 1 + 5 + FOO + 3;
             "# };
 
-            let expected = vec![
-                "int",
-                "a",
-                "=",
-                "1",
-                "+",
-                "5",
-                "+",
-                "666",
-                "+",
-                "3",
-                ";",
-            ];
+            let expected = vec!["int", "a", "=", "1", "+", "5", "+", "666", "+", "3", ";"];
 
             test_valid(prog, &expected);
+        }
+
+        #[test]
+        fn test_multi_token_replacement() {
+            let prog = indoc! { r#"
+                #define FOO 666 + 54
+
+                int a = 1 + 5 + FOO + 3;
+            "# };
+
+            let expected = vec!["int", "a", "=", "1", "+", "5", "+", "666", "+", "54", "+", "3", ";"];
+
+            test_valid(prog, &expected);
+        }
+
+        #[test]
+        fn test_unknown_replacement_token() {
+            let prog = indoc! { r#"
+                #define FOO 666 ` 54
+
+                int a = 1 + 5 + FOO + 3;
+            "# };
+
+            test_invalid(prog, "Lex Error: Invalid Token ```");
         }
     }
 }

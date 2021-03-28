@@ -480,6 +480,106 @@ impl Token {
     pub fn file_id(&self) -> FileId {
         self.span().file_id
     }
+
+    /// A helper to allow us to correct spans, for cases when we lex `#define`d
+    /// values for macro expansion.
+    fn span_ref(&mut self) -> Option<&mut Span> {
+        let span = match self {
+            Token::Plus(s) => s,
+            Token::Minus(s) => s,
+            Token::Mul(s) => s,
+            Token::Div(s) => s,
+            Token::Mod(s) => s,
+            Token::Bang(s) => s,
+            Token::Caret(s) => s,
+            Token::Tilde(s) => s,
+            Token::And(s) => s,
+            Token::AndAnd(s) => s,
+            Token::Or(s) => s,
+            Token::OrOr(s) => s,
+            Token::LeftShift(s) => s,
+            Token::RightShift(s) => s,
+            Token::EqEq(s) => s,
+            Token::NotEq(s) => s,
+            Token::LessThan(s) => s,
+            Token::LessThanEq(s) => s,
+            Token::GreaterThan(s) => s,
+            Token::GreaterThanEq(s) => s,
+            Token::Assign(s) => s,
+            Token::PlusEq(s) => s,
+            Token::MinusEq(s) => s,
+            Token::MulEq(s) => s,
+            Token::DivEq(s) => s,
+            Token::ModEq(s) => s,
+            Token::CaretEq(s) => s,
+            Token::TildeEq(s) => s,
+            Token::AndEq(s) => s,
+            Token::AndAndEq(s) => s,
+            Token::OrEq(s) => s,
+            Token::OrOrEq(s) => s,
+            Token::LeftShiftEq(s) => s,
+            Token::RightShiftEq(s) => s,
+            Token::If(s) => s,
+            Token::Else(s) => s,
+            Token::While(s) => s,
+            Token::For(s) => s,
+            Token::Inherit(s) => s,
+            Token::Break(s) => s,
+            Token::Continue(s) => s,
+            Token::Case(s) => s,
+            Token::Do(s) => s,
+            Token::Int(s) => s,
+            Token::Float(s) => s,
+            Token::String(s) => s,
+            Token::Object(s) => s,
+            Token::Mapping(s) => s,
+            Token::Mixed(s) => s,
+            Token::Void(s) => s,
+            Token::Return(s) => s,
+            Token::Static(s) => s,
+            Token::Nomask(s) => s,
+            Token::Efun(s) => s,
+            Token::LParen(s) => s,
+            Token::RParen(s) => s,
+            Token::LBracket(s) => s,
+            Token::RBracket(s) => s,
+            Token::LBrace(s) => s,
+            Token::RBrace(s) => s,
+            Token::Comma(s) => s,
+            Token::CallOther(s) => s,
+            Token::Question(s) => s,
+            Token::Colon(s) => s,
+            Token::ColonColon(s) => s,
+            Token::Semi(s) => s,
+            Token::Ellipsis(s) => s,
+            Token::Range(s) => s,
+            Token::NewLine(s) => s,
+            Token::StringLiteral(StringToken(s, _)) => s,
+            Token::IntLiteral(IntToken(s, _)) => s,
+            Token::FloatLiteral(FloatToken(s, _)) => s,
+            Token::Id(StringToken(s, _)) => s,
+            Token::LocalInclude(StringToken(s, _)) => s,
+            Token::SysInclude(StringToken(s, _)) => s,
+            Token::IfDef(StringToken(s, _)) => s,
+            Token::IfNDef(StringToken(s, _)) => s,
+            Token::PreprocessorElse(StringToken(s, _)) => s,
+            Token::Endif(StringToken(s, _)) => s,
+            Token::Define(StringToken(s, _)) => s,
+            Token::Undef(StringToken(s, _)) => s,
+            Token::Error => return None
+        };
+
+        Some(span)
+    }
+
+    /// A helper to allow us to correct spans, for cases when we lex `#define`d
+    /// values for macro expansion.
+    pub fn set_span_range(&mut self, l: usize, r: usize) {
+        if let Some(span) = self.span_ref() {
+            span.l = l;
+            span.r = r;
+        }
+    }
 }
 
 impl Display for Token {
