@@ -477,10 +477,6 @@ impl Token {
         }
     }
 
-    pub fn file_id(&self) -> FileId {
-        self.span().file_id
-    }
-
     /// A helper to allow us to correct spans, for cases when we lex `#define`d
     /// values for macro expansion.
     fn span_ref(&mut self) -> Option<&mut Span> {
