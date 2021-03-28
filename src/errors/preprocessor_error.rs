@@ -35,9 +35,16 @@ impl PreprocessorError {
 }
 
 impl PreprocessorError {
-    pub fn add_label(&mut self, message: &str, file_id: usize, range: Range<usize>) {
+    /// Builder interface to add labels for reporting
+    ///
+    /// # Arguments
+    /// `message` - The message that will be printed for the error
+    /// `span` - A reference to the [`Span`] for the message.
+    pub fn with_label(mut self, message: &str, span: &Span) -> Self {
         self.labels
-            .push(Label::secondary(file_id, range).with_message(message));
+            .push(Label::secondary(span.file_id, Range::from(span)).with_message(message));
+
+        self
     }
 }
 

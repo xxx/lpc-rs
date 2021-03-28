@@ -13,7 +13,6 @@ use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
 use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
-use std::ops::Range;
 use crate::errors::compiler_error::lex_error::LexError;
 
 type Result<T> = result::Result<T, PreprocessorError>;
@@ -422,9 +421,8 @@ impl Preprocessor {
             }
 
             if let Some(else_span) = &self.current_else {
-                let mut err = PreprocessorError::new("Duplicate `#else` found", token.0);
-
-                err.add_label("First used here", else_span.file_id, Range::from(else_span));
+                let err = PreprocessorError::new("Duplicate `#else` found", token.0)
+                    .with_label("First used here", else_span);
 
                 return Err(err);
             }
