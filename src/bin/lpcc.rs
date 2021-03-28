@@ -2,7 +2,7 @@ use std::env;
 
 use lpc_rs::{compiler::compile_file, errors, interpreter::asm_interpreter::AsmInterpreter};
 
-const DEFAULT_FILE: &str = "mathfile.c";
+const DEFAULT_FILE: &str = "local/mathfile.c";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -23,6 +23,6 @@ fn main() {
                 errors::emit_diagnostics(&[e]);
             }
         }
-        Err(e) => panic!("unable to compile {}: {:?}", filename, e),
+        Err(e) => eprintln!("unable to compile {}: {:?}", filename, e),
     }
 }
