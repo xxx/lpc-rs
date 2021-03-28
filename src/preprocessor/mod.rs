@@ -493,7 +493,7 @@ impl Preprocessor {
             Err(e) => {
                 return Err(PreprocessorError::new(
                     &format!(
-                        "Unable to read include file `{}`: {:?} (cwd {})",
+                        "Unable to read include file `{}`: {:?} (cwd `{}`)",
                         path.as_ref().display(),
                         cwd.as_ref().display(),
                         e
