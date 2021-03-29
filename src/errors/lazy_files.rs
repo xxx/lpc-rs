@@ -58,6 +58,7 @@ impl<'a, Name, Source> LazyFiles<Name, Source>
 where
     Name: AsRef<Path> + Clone + std::fmt::Display + std::cmp::PartialEq,
 {
+    /// Create a new [`LazyFiles`] instance
     pub fn new() -> Self {
         Self::default()
     }
