@@ -7,6 +7,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Errors for indexing into an array when it isn't long enough.
 #[derive(Debug)]
@@ -36,3 +37,5 @@ impl Display for IndexError {
         )
     }
 }
+
+impl Error for IndexError {}

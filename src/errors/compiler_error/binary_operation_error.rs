@@ -9,6 +9,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Error for mismatched types in binary operations
 #[derive(Debug, Clone)]
@@ -47,3 +48,5 @@ impl Display for BinaryOperationError {
         )
     }
 }
+
+impl Error for BinaryOperationError {}

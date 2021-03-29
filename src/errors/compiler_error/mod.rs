@@ -24,6 +24,9 @@ use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
 use var_redefinition_error::VarRedefinitionError;
+use std::fmt::Display;
+use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+use std::error::Error;
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
@@ -63,3 +66,27 @@ impl LpcError for CompilerError {
         }
     }
 }
+
+impl Display for CompilerError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompilerError::ArgCountError(err) => write!(f, "{}", err),
+            CompilerError::ArgTypeError(err) => write!(f, "{}", err),
+            CompilerError::AssignmentError(err) => write!(f, "{}", err),
+            CompilerError::BinaryOperationError(err) => write!(f, "{}", err),
+            CompilerError::ParseError(err) => write!(f, "{}", err),
+            CompilerError::PreprocessorError(err) => write!(f, "{}", err),
+            CompilerError::UnknownFunctionError(err) => write!(f, "{}", err),
+            CompilerError::VarRedefinitionError(err) => write!(f, "{}", err),
+            CompilerError::RangeError(err) => write!(f, "{}", err),
+            CompilerError::ReturnTypeError(err) => write!(f, "{}", err),
+            CompilerError::UndefinedVarError(err) => write!(f, "{}", err),
+            CompilerError::MultiError(errs) => {
+                let s = errs.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(" ");
+                write!(f, "{}", s)
+            }
+        }
+    }
+}
+
+impl Error for CompilerError {}

@@ -7,6 +7,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Errors for unknown issues at runtime. Anything that pops one of these should be
 /// fixed to use another error type.
@@ -27,3 +28,5 @@ impl Display for UnknownError {
         write!(f, "Runtime Error: Unknown error. This is a fallback for when another error handler fails.")
     }
 }
+
+impl Error for UnknownError {}

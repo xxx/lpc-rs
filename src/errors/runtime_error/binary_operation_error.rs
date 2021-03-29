@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Errors for mismatched binary operations at runtime.
 #[derive(Debug)]
@@ -40,3 +41,5 @@ impl Display for BinaryOperationError {
         )
     }
 }
+
+impl Error for BinaryOperationError {}

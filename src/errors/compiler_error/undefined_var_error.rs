@@ -7,6 +7,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Error for duplicate var definitions in a single local scope.
 #[derive(Debug, Clone)]
@@ -29,3 +30,5 @@ impl Display for UndefinedVarError {
         write!(f, "Undefined variable `{}`", self.name)
     }
 }
+
+impl Error for UndefinedVarError {}

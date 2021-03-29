@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
 };
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 enum ParseErrorType {
@@ -163,3 +164,5 @@ impl Display for ParseError {
         )
     }
 }
+
+impl Error for ParseError {}

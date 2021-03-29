@@ -7,6 +7,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Errors for division by zero at runtime.
 #[derive(Debug)]
@@ -26,3 +27,5 @@ impl Display for DivisionByZeroError {
         write!(f, "Runtime Error: Division by zero")
     }
 }
+
+impl Error for DivisionByZeroError {}

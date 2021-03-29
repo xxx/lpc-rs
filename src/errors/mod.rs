@@ -10,8 +10,9 @@ pub mod lazy_files;
 pub mod preprocessor_error;
 pub mod runtime_error;
 use crate::errors::lazy_files::FILE_CACHE;
+use std::error::Error;
 
-pub trait LpcError: Debug {
+pub trait LpcError: Debug + Error {
     /// Return a vector of [`Diagnostic`]s, to be emitted to the user.
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>>;
 }

@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct ReturnTypeError {
@@ -36,3 +37,5 @@ impl Display for ReturnTypeError {
         )
     }
 }
+
+impl Error for ReturnTypeError {}

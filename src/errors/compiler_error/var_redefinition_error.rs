@@ -4,11 +4,12 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Error for duplicate var definitions in a single local scope.
 #[derive(Debug, Clone)]
 pub struct VarRedefinitionError {
-    /// Reference to the original symbol
+    /// The original symbol
     pub symbol: Symbol,
 
     /// The span of the *re*definition
@@ -44,3 +45,5 @@ impl Display for VarRedefinitionError {
         write!(f, "Redefinition of `{}`", self.symbol.name)
     }
 }
+
+impl Error for VarRedefinitionError {}

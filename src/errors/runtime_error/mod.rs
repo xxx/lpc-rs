@@ -6,6 +6,9 @@ use crate::errors::{
     LpcError,
 };
 use codespan_reporting::diagnostic::Diagnostic;
+use std::error::Error;
+use std::fmt::Display;
+use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
 pub mod binary_operation_error;
 pub mod division_by_zero_error;
@@ -30,3 +33,16 @@ impl LpcError for RuntimeError {
         }
     }
 }
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeError::BinaryOperationError(e) => write!(f, "{}", e),
+            RuntimeError::DivisionByZeroError(e) => write!(f, "{}", e),
+            RuntimeError::IndexError(e) => write!(f, "{}", e),
+            RuntimeError::UnknownError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl Error for RuntimeError {}

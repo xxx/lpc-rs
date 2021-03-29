@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 /// Error for mismatched types in Ranges
 #[derive(Debug, Clone)]
@@ -43,3 +44,5 @@ impl Display for RangeError {
         )
     }
 }
+
+impl Error for RangeError {}

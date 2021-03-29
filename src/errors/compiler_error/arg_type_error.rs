@@ -4,6 +4,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct ArgTypeError {
@@ -54,3 +55,5 @@ impl Display for ArgTypeError {
         )
     }
 }
+
+impl Error for ArgTypeError {}
