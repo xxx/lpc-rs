@@ -16,17 +16,22 @@ lazy_static! {
     pub static ref FILE_CACHE: RwLock<LazyFiles<String, String>> = RwLock::new(LazyFiles::new());
 }
 
-/// A convenience helper to add a file to the mutexed global file cache.
-/// This function will block if it needs to wait for the mutex.
-///
-/// # Arguments
-/// `path` - The path of the file to add. It will be used as the key in the file cache.
-pub fn add_file_to_cache<T>(path: T) -> FileId
-where
-    T: std::fmt::Display,
-{
-    let mut cache = FILE_CACHE.write();
-    cache.add(path.to_string())
+/// A wrapper type for the global [`FILE_CACHE`](struct@crate::errors::lazy_files::FILE_CACHE)
+pub struct FileCache;
+
+impl FileCache {
+    /// A convenience helper to add a file to the mutexed global file cache.
+    /// This function will block if it needs to wait for the mutex.
+    ///
+    /// # Arguments
+    /// `path` - The path of the file to add. It will be used as the key in the file cache.
+    pub fn insert<T>(path: T) -> FileId
+        where
+            T: std::fmt::Display,
+    {
+        let mut cache = FILE_CACHE.write();
+        cache.add(path.to_string())
+    }
 }
 
 /// For readability

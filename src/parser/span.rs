@@ -23,10 +23,10 @@ impl Span {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::errors::lazy_files::add_file_to_cache;
+    /// use lpc_rs::errors::lazy_files::FileCache;
     /// use lpc_rs::parser::span::Span;
     ///
-    /// let file_id = add_file_to_cache("tests/fixtures/code/example.c");
+    /// let file_id = FileCache::insert("tests/fixtures/code/example.c");
     /// let span = Span::new(file_id, 1..8);
     /// ```
     pub fn new(file_id: FileId, range: Range<usize>) -> Self {

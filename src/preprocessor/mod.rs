@@ -1,4 +1,4 @@
-use crate::errors::lazy_files::{add_file_to_cache, FILE_CACHE};
+use crate::errors::lazy_files::{FileCache, FILE_CACHE};
 use std::{collections::HashMap, fs, path::Path};
 
 use lazy_static::lazy_static;
@@ -177,7 +177,7 @@ impl Preprocessor {
     where
         T: AsRef<Path>,
     {
-        let file_id = add_file_to_cache(self.context.filename.clone());
+        let file_id = FileCache::insert(self.context.filename.clone());
         let files = FILE_CACHE.read();
         let source = match files.source(file_id) {
             Ok(x) => x,
@@ -230,7 +230,7 @@ impl Preprocessor {
 
         // Register the file-to-be-scanned with the global file cache
         let filename = path.as_ref().file_name().unwrap();
-        let file_id = add_file_to_cache(self.canonicalize_path(filename, &cwd).display());
+        let file_id = FileCache::insert(self.canonicalize_path(filename, &cwd).display());
 
         let mut token_stream = LexWrapper::new(file_content.as_ref());
         token_stream.set_file_id(file_id);
