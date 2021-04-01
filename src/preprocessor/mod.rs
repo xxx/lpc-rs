@@ -249,7 +249,7 @@ impl Preprocessor {
                             self.handle_local_include(t, &cwd, &mut output)?
                         }
                         Token::SysInclude(t) => {
-                            self.check_for_previous_newline(t.0)?;
+                            self.handle_sys_include(t, &cwd, &mut output)?
                         }
                         Token::PreprocessorElse(t) => self.handle_else(t)?,
                         Token::Endif(t) => self.handle_endif(t)?,
@@ -344,6 +344,47 @@ impl Preprocessor {
         }
 
         Ok(())
+    }
+
+    fn handle_sys_include<U>(
+        &mut self,
+        token: &StringToken,
+        cwd: &U,
+        mut output: &mut Vec<Spanned<Token>>,
+    ) -> Result<()>
+    where
+        U: AsRef<Path>,
+    {
+        if self.skipping_lines() {
+            return Ok(());
+        }
+
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = SYS_INCLUDE.captures(&token.1) {
+            let matched = captures.get(1).unwrap();
+
+            for dir in self.context.include_dirs.to_vec() {
+                if let Ok(included) = self.include_local_file(matched.as_str(), dir, token.0) {
+                    for spanned in included {
+                        self.append_spanned(&mut output, spanned)
+                    }
+
+                    return Ok(())
+                }
+            }
+
+            // Fall back to trying local paths
+            let included = self.include_local_file(matched.as_str(), &cwd, token.0)?;
+
+            for spanned in included {
+                self.append_spanned(&mut output, spanned)
+            }
+
+            Ok(())
+        } else {
+            Err(PreprocessorError::new("Invalid `#include`.", token.0))
+        }
     }
 
     fn handle_local_include<U>(
@@ -565,7 +606,7 @@ mod tests {
     use indoc::indoc;
 
     fn fixture() -> Preprocessor {
-        let context = Context::new("test.c", "./tests/fixtures", Vec::new());
+        let context = Context::new("test.c", "./tests/fixtures/code", vec!["/sys", "sys2"]);
         Preprocessor::new(context)
     }
 
@@ -594,6 +635,92 @@ mod tests {
                 let regex = Regex::new(expected).unwrap();
                 assert!(regex.is_match(&e.to_string()), "error = {:?}", e);
             }
+        }
+    }
+
+    mod test_system_includes {
+        use super::*;
+
+        #[test]
+        fn test_includes_the_file() {
+            let input = r#"#include <sys_include1.h>"#;
+
+            let expected = vec!["sys_include1.h"];
+
+            test_valid(input, &expected);
+        }
+
+        #[test]
+        fn test_includes_multiple_levels() {
+            let input = r#"#include <sys_include2.h>"#;
+
+            let expected = vec!["sys_include1.h", "sys_include2.h"];
+
+            test_valid(input, &expected);
+        }
+
+        #[test]
+        fn test_includes_multiple_files() {
+            let input = indoc! {r#"
+                #include <sys_include2.h>
+                int j = 123;
+                #include <sys_include1.h>
+            "#};
+
+            let expected = vec![
+                "sys_include1.h" , "sys_include2.h", "int", "j", "=", "123", ";", "sys_include1.h"
+            ];
+
+            test_valid(input, &expected);
+        }
+
+        #[test]
+        fn test_ifdefed_out() {
+            let input = indoc! { r#"
+                #ifdef FOO
+                #include <sys_include1.h>
+                #include <nonexistent.h>
+                #endif
+            "# };
+
+            test_valid(input, &vec![]);
+        }
+
+        #[test]
+        fn test_errors_for_nonexistent_paths() {
+            let input = r#"#include <nonexistent.h>"#;
+
+            test_invalid(input, "No such file or directory");
+        }
+
+        #[test]
+        fn test_errors_for_traversal_attacks() {
+            let input = r#"#include </../../some_file.h>"#;
+
+            test_invalid(input, "Attempt to include a file outside the root");
+        }
+
+        #[test]
+        fn test_error_if_not_first_on_line() {
+            let prog = indoc! { r#"
+                a + 3 + as; #include <sys_include1.h>
+            "#
+            };
+
+            test_invalid(
+                prog,
+                "Preprocessor directives must appear on their own line",
+            );
+        }
+
+        #[test]
+        fn test_error_if_invalid() {
+            let prog = indoc! { r#"
+                #include <sys_include1.h> klasjd
+            "#
+            };
+
+            test_invalid(prog, "Invalid `#include`");
         }
     }
 

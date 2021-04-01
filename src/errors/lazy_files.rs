@@ -44,7 +44,7 @@ pub type FileId = usize;
 /// use lpc_rs::errors::lazy_files::LazyFiles;
 ///
 /// let mut files: LazyFiles<&str, String> = LazyFiles::new();
-/// let path = "tests/fixtures/include/simple.h";
+/// let path = "tests/fixtures/code/include/simple.h";
 /// let id = files.add(&path);
 ///
 /// println!("contents: {}", files.get(id).unwrap().source());
