@@ -17,7 +17,8 @@ use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 pub struct NewError {
     message: String,
     span: Option<Span>,
-    labels: Vec<Label<usize>>
+    labels: Vec<Label<usize>>,
+    notes: Vec<String>
 }
 
 impl NewError {
@@ -29,7 +30,8 @@ impl NewError {
         Self {
             message: message.into(),
             span: None,
-            labels: Vec::new()
+            labels: Vec::new(),
+            notes: Vec::new(),
         }
     }
 
@@ -54,6 +56,16 @@ impl NewError {
         self
     }
 
+    /// Add some notes the diagnostic
+    pub fn with_note<T>(mut self, note: T) -> Self
+    where
+        T: Into<String>
+    {
+        self.notes.push(note.into());
+
+        self
+    }
+
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
@@ -68,6 +80,10 @@ impl NewError {
 
         if !labels.is_empty() {
             diagnostic = diagnostic.with_labels(labels);
+        }
+
+        if !self.notes.is_empty() {
+            diagnostic = diagnostic.with_notes(self.notes.to_vec())
         }
 
         vec![diagnostic]

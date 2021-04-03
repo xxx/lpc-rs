@@ -7,11 +7,12 @@ use crate::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
     },
     errors,
-    errors::compiler_error::{parse_error::ParseError, CompilerError},
+    errors::compiler_error::CompilerError,
     interpreter::program::Program,
     lpc_parser,
     preprocessor::Preprocessor,
 };
+use crate::errors::NewError;
 
 use crate::{
     codegen::tree_walker::ContextHolder,
@@ -129,7 +130,7 @@ where
     let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            let err = CompilerError::ParseError(ParseError::from(e));
+            let err = CompilerError::NewError(NewError::from(e));
             errors::emit_diagnostics(&[err.clone()]);
 
             // Parse errors are fatal, so we're done here.

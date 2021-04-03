@@ -9,7 +9,6 @@ pub mod var_redefinition_error;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::errors::{compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LpcError, NewError};
-use parse_error::ParseError;
 use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
@@ -21,7 +20,6 @@ use std::error::Error;
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
 pub enum CompilerError {
-    ParseError(ParseError),
     PreprocessorError(PreprocessorError),
     UnknownFunctionError(UnknownFunctionError),
     VarRedefinitionError(VarRedefinitionError),
@@ -37,7 +35,6 @@ impl LpcError for CompilerError {
     /// Get the error diagnostics for printing to the user.
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            CompilerError::ParseError(err) => err.to_diagnostics(),
             CompilerError::PreprocessorError(err) => err.to_diagnostics(),
             CompilerError::UnknownFunctionError(err) => err.to_diagnostics(),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(),
@@ -55,7 +52,6 @@ impl LpcError for CompilerError {
 impl Display for CompilerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CompilerError::ParseError(err) => write!(f, "{}", err),
             CompilerError::PreprocessorError(err) => write!(f, "{}", err),
             CompilerError::UnknownFunctionError(err) => write!(f, "{}", err),
             CompilerError::VarRedefinitionError(err) => write!(f, "{}", err),
