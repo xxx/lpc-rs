@@ -8,7 +8,8 @@ use logos::{Lexer, Logos};
 
 use crate::{
     convert_escapes,
-    errors::{compiler_error::lex_error::LexError, lazy_files::FileId},
+    errors::NewError,
+    errors::lazy_files::FileId,
     parser::{
         lexer::{
             lex_state::LexState,
@@ -40,18 +41,17 @@ impl<'input> LexWrapper<'input> {
 }
 
 impl Iterator for LexWrapper<'_> {
-    type Item = Result<Spanned<Token>, LexError>;
+    type Item = Result<Spanned<Token>, NewError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.lexer.next()?;
         let span = self.lexer.span();
 
         match token {
-            Token::Error => Some(Err(LexError(format!(
-                "Invalid Token `{}` at {:?}",
-                self.lexer.slice(),
-                span
-            )))),
+            Token::Error => Some(Err(NewError::new(format!(
+                "Lex Error: Invalid Token `{}`  at {:?}",
+                self.lexer.slice(), span)),
+            )),
             t => Some(Ok((span.start, t, span.end))),
         }
     }
@@ -70,7 +70,7 @@ impl TokenVecWrapper {
 }
 
 impl Iterator for TokenVecWrapper {
-    type Item = Result<Spanned<Token>, LexError>;
+    type Item = Result<Spanned<Token>, NewError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.vec.get(self.count);
@@ -85,8 +85,8 @@ impl Iterator for TokenVecWrapper {
         let span = token.1.span();
 
         match &token.1 {
-            Token::Error => Some(Err(LexError(format!(
-                "Invalid Token `{}`at {:?}",
+            Token::Error => Some(Err(NewError::new(format!(
+                "Lex Error: Invalid Token `{}`at {:?}",
                 token.1, span
             )))),
             t => Some(Ok((span.l, t.clone(), span.r))),
@@ -678,7 +678,7 @@ impl Display for Token {
 mod tests {
     use super::*;
 
-    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LexError>> {
+    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, NewError>> {
         let lexer = LexWrapper::new(prog);
         lexer
             .filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _))))

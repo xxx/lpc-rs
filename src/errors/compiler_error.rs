@@ -1,5 +1,3 @@
-pub mod lex_error;
-
 use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::errors::{LpcError, NewError};

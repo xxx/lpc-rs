@@ -6,7 +6,7 @@ use codespan_reporting::{
 use std::fmt::{Debug, Display};
 use crate::parser::lexer::Token;
 use lalrpop_util::ParseError as LalrpopParseError;
-use crate::errors::{compiler_error::lex_error::LexError, lazy_files::FILE_CACHE};
+use crate::errors::lazy_files::FILE_CACHE;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::error::Error;
 
@@ -91,12 +91,6 @@ impl NewError {
         }
 
         vec![diagnostic]
-    }
-}
-
-impl From<LexError> for NewError {
-    fn from(err: LexError) -> Self {
-        Self::new(format!("{}", err))
     }
 }
 

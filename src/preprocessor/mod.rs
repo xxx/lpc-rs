@@ -10,7 +10,6 @@ use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
 use crate::{
-    errors::compiler_error::lex_error::LexError,
     parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
 };
 
@@ -266,10 +265,10 @@ impl Preprocessor {
                                     let mut def_lexer = LexWrapper::new(string);
                                     def_lexer.set_file_id(file_id);
                                     let def_tokens = def_lexer
-                                        .collect::<std::result::Result<Vec<_>, LexError>>();
+                                        .collect::<std::result::Result<Vec<_>, NewError>>();
 
-                                    if let Err(e) = def_tokens {
-                                        return Err(NewError::from(e));
+                                    if def_tokens.is_err() {
+                                        return def_tokens;
                                     }
 
                                     for (_tl, mut tok, _tr) in def_tokens.unwrap() {
@@ -288,7 +287,7 @@ impl Preprocessor {
                     self.last_slice = token_string;
                 }
                 Err(e) => {
-                    return Err(NewError::from(e));
+                    return Err(e);
                 }
             }
         }
