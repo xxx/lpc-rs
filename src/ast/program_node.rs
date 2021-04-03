@@ -7,7 +7,7 @@ use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
 };
-use crate::compiler::compiler_error::CompilerError;
+
 use crate::errors::LpcError;
 
 /// A node representing a full object. This is the top-level translation unit.

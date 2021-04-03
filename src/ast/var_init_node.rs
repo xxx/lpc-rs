@@ -12,7 +12,7 @@ use crate::{
     parser::span::Span,
     semantic::lpc_type::LpcType,
 };
-use crate::compiler::compiler_error::CompilerError;
+
 use crate::errors::LpcError;
 
 /// A node representing a variable definition, with optional initialization

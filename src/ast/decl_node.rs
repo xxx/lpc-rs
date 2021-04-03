@@ -8,7 +8,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     semantic::lpc_type::LpcType,
 };
-use crate::compiler::compiler_error::CompilerError;
+
 use crate::errors::LpcError;
 
 /// A container for a set of variable declarations.

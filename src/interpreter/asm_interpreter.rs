@@ -363,7 +363,7 @@ impl AsmInterpreter {
                     let registers = current_registers_mut(&mut self.stack);
                     match registers[r1.index()] + registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -388,7 +388,7 @@ impl AsmInterpreter {
                     let registers = current_registers_mut(&mut self.stack);
                     match registers[r1.index()] / registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -397,7 +397,7 @@ impl AsmInterpreter {
                     let registers = current_registers_mut(&mut self.stack);
                     match registers[r1.index()] * registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -406,7 +406,7 @@ impl AsmInterpreter {
                     let registers = current_registers_mut(&mut self.stack);
                     match registers[r1.index()] - registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -430,7 +430,7 @@ impl AsmInterpreter {
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -448,7 +448,7 @@ impl AsmInterpreter {
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -466,7 +466,7 @@ impl AsmInterpreter {
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
@@ -484,7 +484,7 @@ impl AsmInterpreter {
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
-                        Err(mut e) => {
+                        Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }

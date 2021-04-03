@@ -8,7 +8,7 @@ use codespan_reporting::{
 use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
-use crate::compiler::compiler_error::CompilerError;
+
 use crate::errors::lazy_files::FILE_CACHE;
 use crate::parser::lexer::Token;
 use crate::parser::span::Span;

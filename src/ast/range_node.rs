@@ -11,7 +11,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
 };
-use crate::compiler::compiler_error::CompilerError;
+
 use crate::errors::LpcError;
 
 /// Representation of a Range, with optional ends.
