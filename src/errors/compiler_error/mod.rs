@@ -1,6 +1,5 @@
 pub mod lex_error;
 pub mod parse_error;
-pub mod range_error;
 pub mod return_type_error;
 pub mod undefined_var_error;
 pub mod unknown_function_error;
@@ -8,7 +7,7 @@ pub mod var_redefinition_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
-use crate::errors::{compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LpcError, NewError};
+use crate::errors::{preprocessor_error::PreprocessorError, LpcError, NewError};
 use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
@@ -23,7 +22,6 @@ pub enum CompilerError {
     PreprocessorError(PreprocessorError),
     UnknownFunctionError(UnknownFunctionError),
     VarRedefinitionError(VarRedefinitionError),
-    RangeError(RangeError),
     ReturnTypeError(ReturnTypeError),
     UndefinedVarError(UndefinedVarError),
     MultiError(Vec<CompilerError>),
@@ -38,7 +36,6 @@ impl LpcError for CompilerError {
             CompilerError::PreprocessorError(err) => err.to_diagnostics(),
             CompilerError::UnknownFunctionError(err) => err.to_diagnostics(),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(),
-            CompilerError::RangeError(err) => err.to_diagnostics(),
             CompilerError::ReturnTypeError(err) => err.to_diagnostics(),
             CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
             CompilerError::MultiError(errs) => {
@@ -55,7 +52,6 @@ impl Display for CompilerError {
             CompilerError::PreprocessorError(err) => write!(f, "{}", err),
             CompilerError::UnknownFunctionError(err) => write!(f, "{}", err),
             CompilerError::VarRedefinitionError(err) => write!(f, "{}", err),
-            CompilerError::RangeError(err) => write!(f, "{}", err),
             CompilerError::ReturnTypeError(err) => write!(f, "{}", err),
             CompilerError::UndefinedVarError(err) => write!(f, "{}", err),
             CompilerError::MultiError(errs) => {

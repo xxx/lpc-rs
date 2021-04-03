@@ -20,7 +20,6 @@ use std::collections::HashMap;
 
 use crate::{
     ast::ast_node::SpannedNode, codegen::tree_walker::ContextHolder, context::Context,
-    errors::compiler_error::range_error::RangeError,
 };
 use crate::errors::NewError;
 
@@ -304,13 +303,19 @@ impl TreeWalker for SemanticCheckWalker {
         if left_type.matches_type(required_types) && right_type.matches_type(required_types) {
             Ok(())
         } else {
-            let e = CompilerError::RangeError(RangeError {
-                left_name: format!("{:?}", node.l),
-                left_type,
-                right_name: format!("{:?}", node.r),
-                right_type,
-                span: node.span,
-            });
+            let left_val = if let Some(node) = &*node.l {
+                format!("{}", node)
+            } else {
+                String::from("0")
+            };
+
+            let right_val = if let Some(node) = &*node.r {
+                format!("{}", node)
+            } else {
+                String::from("-1")
+            };
+
+            let e = CompilerError::NewError(NewError::new(format!("Invalid range types: `{}` ({}) .. `{}` ({})", left_val, left_type, right_val, right_type)).with_span(node.span));
 
             self.context.errors.push(e.clone());
 
