@@ -12,7 +12,6 @@ use crate::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    errors,
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
