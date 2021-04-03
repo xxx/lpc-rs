@@ -4,7 +4,7 @@ use crate::{
         var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::{undefined_var_error::UndefinedVarError, CompilerError},
+    errors::compiler_error::CompilerError,
     semantic::{
         function_prototype::FunctionPrototype, semantic_checks::check_var_redefinition,
         symbol::Symbol,
@@ -12,6 +12,7 @@ use crate::{
 };
 
 use crate::{codegen::tree_walker::ContextHolder, context::Context};
+use crate::errors::NewError;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -119,13 +120,12 @@ impl TreeWalker for ScopeWalker {
                 node.set_global(true);
             }
         } else {
+            let e = CompilerError::NewError(NewError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span));
+
             // We check for undefined vars here in case a symbol is subsequently defined.
             self.context
                 .errors
-                .push(CompilerError::UndefinedVarError(UndefinedVarError {
-                    name: node.name.clone(),
-                    span: node.span,
-                }));
+                .push(e);
         }
 
         Ok(())

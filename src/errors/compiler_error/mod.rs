@@ -1,12 +1,10 @@
 pub mod lex_error;
 pub mod parse_error;
-pub mod undefined_var_error;
 pub mod var_redefinition_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::errors::{LpcError, NewError};
-use undefined_var_error::UndefinedVarError;
 use var_redefinition_error::VarRedefinitionError;
 use std::fmt::{Display, Formatter};
 use std::error::Error;
@@ -15,7 +13,6 @@ use std::error::Error;
 #[derive(Debug, Clone)]
 pub enum CompilerError {
     VarRedefinitionError(VarRedefinitionError),
-    UndefinedVarError(UndefinedVarError),
     MultiError(Vec<CompilerError>),
 
     NewError(NewError)
@@ -26,7 +23,6 @@ impl LpcError for CompilerError {
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(),
-            CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
             CompilerError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
             },
@@ -39,7 +35,6 @@ impl Display for CompilerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             CompilerError::VarRedefinitionError(err) => write!(f, "{}", err),
-            CompilerError::UndefinedVarError(err) => write!(f, "{}", err),
             CompilerError::MultiError(errs) => {
                 let s = errs.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(" ");
                 write!(f, "{}", s)
