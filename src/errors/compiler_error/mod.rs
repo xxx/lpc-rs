@@ -1,6 +1,3 @@
-pub mod arg_count_error;
-pub mod arg_type_error;
-pub mod assignment_error;
 pub mod binary_operation_error;
 pub mod lex_error;
 pub mod parse_error;
@@ -12,12 +9,7 @@ pub mod var_redefinition_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
-use crate::errors::{
-    compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LpcError,
-};
-use arg_count_error::ArgCountError;
-use arg_type_error::ArgTypeError;
-use assignment_error::AssignmentError;
+use crate::errors::{compiler_error::range_error::RangeError, preprocessor_error::PreprocessorError, LpcError, NewError};
 use binary_operation_error::BinaryOperationError;
 use parse_error::ParseError;
 use return_type_error::ReturnTypeError;
@@ -31,9 +23,6 @@ use std::error::Error;
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
 pub enum CompilerError {
-    ArgCountError(ArgCountError),
-    ArgTypeError(ArgTypeError),
-    AssignmentError(AssignmentError),
     BinaryOperationError(BinaryOperationError),
     ParseError(ParseError),
     PreprocessorError(PreprocessorError),
@@ -43,15 +32,14 @@ pub enum CompilerError {
     ReturnTypeError(ReturnTypeError),
     UndefinedVarError(UndefinedVarError),
     MultiError(Vec<CompilerError>),
+
+    NewError(NewError)
 }
 
 impl LpcError for CompilerError {
     /// Get the error diagnostics for printing to the user.
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            CompilerError::ArgCountError(err) => err.to_diagnostics(),
-            CompilerError::ArgTypeError(err) => err.to_diagnostics(),
-            CompilerError::AssignmentError(err) => err.to_diagnostics(),
             CompilerError::BinaryOperationError(err) => err.to_diagnostics(),
             CompilerError::ParseError(err) => err.to_diagnostics(),
             CompilerError::PreprocessorError(err) => err.to_diagnostics(),
@@ -62,7 +50,8 @@ impl LpcError for CompilerError {
             CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
             CompilerError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
-            }
+            },
+            CompilerError::NewError(err) => err.to_diagnostics(),
         }
     }
 }
@@ -70,9 +59,6 @@ impl LpcError for CompilerError {
 impl Display for CompilerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CompilerError::ArgCountError(err) => write!(f, "{}", err),
-            CompilerError::ArgTypeError(err) => write!(f, "{}", err),
-            CompilerError::AssignmentError(err) => write!(f, "{}", err),
             CompilerError::BinaryOperationError(err) => write!(f, "{}", err),
             CompilerError::ParseError(err) => write!(f, "{}", err),
             CompilerError::PreprocessorError(err) => write!(f, "{}", err),
@@ -85,6 +71,7 @@ impl Display for CompilerError {
                 let s = errs.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(" ");
                 write!(f, "{}", s)
             }
+            CompilerError::NewError(err) => write!(f, "{}", err),
         }
     }
 }

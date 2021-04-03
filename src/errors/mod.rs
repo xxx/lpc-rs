@@ -3,7 +3,7 @@ use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream},
 };
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 pub mod compiler_error;
 pub mod lazy_files;
@@ -11,6 +11,76 @@ pub mod preprocessor_error;
 pub mod runtime_error;
 use crate::errors::lazy_files::FILE_CACHE;
 use std::error::Error;
+use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+
+#[derive(Debug, Clone)]
+pub struct NewError {
+    message: String,
+    span: Option<Span>,
+    labels: Vec<Label<usize>>
+}
+
+impl NewError {
+    /// Create a new LpcError, with a message
+    pub fn new<T>(message: T) -> Self
+    where
+        T: Into<String>
+    {
+        Self {
+            message: message.into(),
+            span: None,
+            labels: Vec::new()
+        }
+    }
+
+    /// Set the primary span for this error
+    pub fn with_span(mut self, span: Option<Span>) -> Self {
+        self.span = span;
+
+        self
+    }
+
+    /// Add a secondary label for this error
+    pub fn with_label<T>(mut self, message: T, span: Option<Span>) -> Self
+    where
+        T: AsRef<str>
+    {
+        if let Some(s) = span {
+            self.labels.push(
+                Label::secondary(s.file_id, s.l..s.r).with_message(message.as_ref())
+            );
+        }
+
+        self
+    }
+
+    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
+        let mut labels = vec![];
+
+        if let Some(span) = self.span {
+            labels.push(Label::primary(span.file_id, span.l..span.r));
+        }
+
+        for label in &self.labels {
+            labels.push(label.clone());
+        }
+
+        if !labels.is_empty() {
+            diagnostic = diagnostic.with_labels(labels);
+        }
+
+        vec![diagnostic]
+    }
+}
+
+impl Display for NewError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for NewError {}
 
 pub trait LpcError: Debug + Error {
     /// Return a vector of [`Diagnostic`]s, to be emitted to the user.
