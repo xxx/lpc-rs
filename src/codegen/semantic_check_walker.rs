@@ -148,7 +148,7 @@ impl TreeWalker for SemanticCheckWalker {
         ) {
             Ok(_) => Ok(()),
             Err(err) => {
-                let e = CompilerError::BinaryOperationError(err);
+                let e = CompilerError::NewError(err);
                 self.context.errors.push(e.clone());
                 Err(e)
             }
