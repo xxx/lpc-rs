@@ -83,7 +83,7 @@ where
     let code = match preprocessor.scan(&path, cwd, &code) {
         Ok(c) => c,
         Err(e) => {
-            let err = CompilerError::PreprocessorError(e);
+            let err = CompilerError::NewError(e);
 
             errors::emit_diagnostics(&[err.clone()]);
 
@@ -173,8 +173,8 @@ where
 
     let program = asm_walker.to_program();
 
-    let msgpack = program.to_msgpack();
-    println!("{:?}", msgpack.len());
-    println!("{:?}", Program::from(msgpack));
+    // let msgpack = program.to_msgpack();
+    // println!("{:?}", msgpack.len());
+    // println!("{:?}", Program::from(msgpack));
     Ok(program)
 }

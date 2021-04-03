@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::{
-    context::Context, convert_escapes, errors::preprocessor_error::PreprocessorError,
+    context::Context, convert_escapes, errors::NewError,
     parser::span::Span,
 };
 use codespan_reporting::files::Files;
@@ -15,7 +15,7 @@ use std::{ffi::OsString, path::PathBuf, result};
 use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
 use crate::errors::compiler_error::lex_error::LexError;
 
-type Result<T> = result::Result<T, PreprocessorError>;
+type Result<T> = result::Result<T, NewError>;
 
 lazy_static! {
     static ref SYS_INCLUDE: Regex = Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
@@ -184,11 +184,7 @@ impl Preprocessor {
             Err(e) => {
                 let canonical_path = self.canonicalize_path(&self.context.filename, &cwd);
 
-                return Err(PreprocessorError {
-                    message: format!("Unable to read `{}`: {}", canonical_path.display(), e),
-                    span: None,
-                    labels: Vec::new(),
-                });
+                return Err(NewError::new(format!("Unable to read `{}`: {}", canonical_path.display(), e)));
             }
         };
 
@@ -271,7 +267,7 @@ impl Preprocessor {
                                     let def_tokens = def_lexer.collect::<std::result::Result<Vec<_>, LexError>>();
 
                                     if let Err(e) = def_tokens {
-                                        return Err(PreprocessorError::from(e));
+                                        return Err(NewError::from(e));
                                     }
 
                                     for (_tl, mut tok, _tr) in def_tokens.unwrap() {
@@ -290,7 +286,7 @@ impl Preprocessor {
                     self.last_slice = token_string;
                 }
                 Err(e) => {
-                    return Err(PreprocessorError::from(e));
+                    return Err(NewError::from(e));
                 }
             }
         }
@@ -298,9 +294,8 @@ impl Preprocessor {
         if !self.ifdefs.is_empty() {
             let ifdef = self.ifdefs.last().unwrap();
 
-            return Err(PreprocessorError::new(
-                "Found `#if` without a corresponding `#endif`",
-                ifdef.span,
+            return Err(NewError::new("Found `#if` without a corresponding `#endif`")
+                           .with_span(Some(ifdef.span),
             ));
         }
 
@@ -316,10 +311,9 @@ impl Preprocessor {
 
         if let Some(captures) = DEFINE.captures(&token.1) {
             if !self.skipping_lines() && self.defines.contains_key(&captures[1]) {
-                return Err(PreprocessorError::new(
-                    &format!("Duplicate `#define`: `{}`", &captures[1]),
-                    token.0,
-                ));
+                return Err(NewError::new(format!("Duplicate `#define`: `{}`", &captures[1]))
+                               .with_span(Some(token.0))
+                );
             }
 
             let name = String::from(&captures[1]);
@@ -332,7 +326,7 @@ impl Preprocessor {
             self.defines.insert(name, convert_escapes(value));
             Ok(())
         } else {
-            Err(PreprocessorError::new("Invalid `#define`.", token.0))
+            Err(NewError::new("Invalid `#define`.").with_span(Some(token.0)))
         }
     }
 
@@ -383,7 +377,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(PreprocessorError::new("Invalid `#include`.", token.0))
+            Err(NewError::new("Invalid `#include`.").with_span(Some(token.0)))
         }
     }
 
@@ -412,7 +406,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(PreprocessorError::new("Invalid `#include`.", token.0))
+            Err(NewError::new("Invalid `#include`.").with_span(Some(token.0)))
         }
     }
 
@@ -429,7 +423,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(PreprocessorError::new("Invalid `#ifdef`.", token.0))
+            Err(NewError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
         }
     }
 
@@ -446,7 +440,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(PreprocessorError::new("Invalid `#ifndef`.", token.0))
+            Err(NewError::new("Invalid `#ifndef`.").with_span(Some(token.0)))
         }
     }
 
@@ -455,15 +449,14 @@ impl Preprocessor {
 
         if ELSE.is_match(&token.1) {
             if self.ifdefs.is_empty() {
-                return Err(PreprocessorError::new(
-                    "Found `#else` without a corresponding `#if` or `#ifdef`",
-                    token.0,
-                ));
+                return Err(NewError::new(
+                    "Found `#else` without a corresponding `#if` or `#ifdef`"
+                ).with_span(Some(token.0)));
             }
 
             if let Some(else_span) = &self.current_else {
-                let err = PreprocessorError::new("Duplicate `#else` found", token.0)
-                    .with_label("First used here", else_span);
+                let err = NewError::new("Duplicate `#else` found").with_span(Some(token.0))
+                    .with_label("First used here", Some(*else_span));
 
                 return Err(err);
             }
@@ -477,7 +470,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(PreprocessorError::new("Invalid `#else`.", token.0))
+            Err(NewError::new("Invalid `#else`.").with_span(Some(token.0)))
         }
     }
 
@@ -485,10 +478,9 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         if self.ifdefs.is_empty() {
-            return Err(PreprocessorError::new(
-                "Found `#endif` without a corresponding `#if`",
-                token.0,
-            ));
+            return Err(NewError::new("Found `#endif` without a corresponding `#if`")
+                           .with_span(Some(token.0))
+            );
         }
 
         self.ifdefs.pop();
@@ -517,28 +509,25 @@ impl Preprocessor {
         let canon_include_path = self.canonicalize_path(&path, &cwd);
 
         if !canon_include_path.starts_with(&self.context.root_dir) {
-            return Err(PreprocessorError::new(
+            return Err(NewError::new(
                 &format!(
                     "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
                     path.as_ref().display(),
                     canon_include_path.display()
-                ),
-                span,
-            ));
+                )).with_span(Some(span)));
         }
 
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                return Err(PreprocessorError::new(
+                return Err(NewError::new(
                     &format!(
                         "Unable to read include file `{}`: {:?} (cwd `{}`)",
                         path.as_ref().display(),
                         cwd.as_ref().display(),
                         e
-                    ),
-                    span,
-                ));
+                    )).with_span(Some(span))
+                );
             }
         };
 
@@ -577,11 +566,8 @@ impl Preprocessor {
     /// A convenience function for checking if preprocessor directives follow a newline.
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
         if !self.last_slice.ends_with('\n') {
-            return Err(PreprocessorError {
-                message: "Preprocessor directives must appear on their own line.".to_string(),
-                span: Some(span),
-                labels: vec![],
-            });
+            return Err(NewError::new("Preprocessor directives must appear on their own line.".to_string())
+                           .with_span(Some(span)));
         }
 
         Ok(())
@@ -858,7 +844,7 @@ mod tests {
                     panic!("Expected an error due to duplicate definition.");
                 }
                 Err(e) => {
-                    assert_eq!(e.message, "Duplicate `#define`: `ASS`");
+                    assert_eq!(e.to_string(), "Duplicate `#define`: `ASS`");
                 }
             }
         }

@@ -7,11 +7,11 @@ use std::fmt::{Debug, Display};
 
 pub mod compiler_error;
 pub mod lazy_files;
-pub mod preprocessor_error;
 pub mod runtime_error;
 use crate::errors::lazy_files::FILE_CACHE;
 use std::error::Error;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+use crate::errors::compiler_error::lex_error::LexError;
 
 #[derive(Debug, Clone)]
 pub struct NewError {
@@ -87,6 +87,12 @@ impl NewError {
         }
 
         vec![diagnostic]
+    }
+}
+
+impl From<LexError> for NewError {
+    fn from(err: LexError) -> Self {
+        Self::new(format!("{}", err))
     }
 }
 
