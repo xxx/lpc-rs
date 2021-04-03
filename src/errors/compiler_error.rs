@@ -8,27 +8,27 @@ use std::{
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
-pub enum LpcError {
+pub enum CompilerError {
     NewError(NewError),
-    Collection(Vec<LpcError>),
+    Collection(Vec<CompilerError>),
 }
 
-impl LpcError {
+impl CompilerError {
     /// Get the error diagnostics for printing to the user.
     pub fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            LpcError::Collection(errs) => {
+            CompilerError::Collection(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
             }
-            LpcError::NewError(err) => err.to_diagnostics(),
+            CompilerError::NewError(err) => err.to_diagnostics(),
         }
     }
 }
 
-impl Display for LpcError {
+impl Display for CompilerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LpcError::Collection(errs) => {
+            CompilerError::Collection(errs) => {
                 let s = errs
                     .iter()
                     .map(|e| format!("{}", e))
@@ -36,9 +36,9 @@ impl Display for LpcError {
                     .join(" ");
                 write!(f, "{}", s)
             }
-            LpcError::NewError(err) => write!(f, "{}", err),
+            CompilerError::NewError(err) => write!(f, "{}", err),
         }
     }
 }
 
-impl Error for LpcError {}
+impl Error for CompilerError {}

@@ -1,7 +1,7 @@
 use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::LpcError,
+    errors::compiler_error::CompilerError,
     parser::span::Span,
 };
 use std::{
@@ -44,7 +44,7 @@ impl SpannedNode for VarNode {
 }
 
 impl AstNodeTrait for VarNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_var(self)
     }
 }

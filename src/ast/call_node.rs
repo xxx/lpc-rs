@@ -4,7 +4,7 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::LpcError,
+    errors::compiler_error::CompilerError,
     parser::span::Span,
 };
 use std::{
@@ -32,7 +32,7 @@ impl SpannedNode for CallNode {
 }
 
 impl AstNodeTrait for CallNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_call(self)
     }
 }

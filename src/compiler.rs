@@ -7,7 +7,7 @@ use crate::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
     },
     errors,
-    errors::{compiler_error::LpcError, NewError},
+    errors::{compiler_error::CompilerError, NewError},
     interpreter::program::Program,
     lpc_parser,
     preprocessor::Preprocessor,
@@ -31,7 +31,7 @@ use std::path::Path;
 ///
 /// let prog = compile_file("tests/fixtures/code/example.c").expect("Unable to compile.");
 /// ```
-pub fn compile_file<T>(path: T) -> Result<Program, LpcError>
+pub fn compile_file<T>(path: T) -> Result<Program, CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
 {
@@ -69,7 +69,7 @@ where
 pub fn preprocess_string<T, U>(
     path: T,
     code: U,
-) -> Result<(Vec<Spanned<Token>>, Preprocessor), LpcError>
+) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
     U: AsRef<str>,
@@ -84,7 +84,7 @@ where
     let code = match preprocessor.scan(&path, cwd, &code) {
         Ok(c) => c,
         Err(e) => {
-            let err = LpcError::NewError(e);
+            let err = CompilerError::NewError(e);
 
             errors::emit_diagnostics(&[err.clone()]);
 
@@ -116,7 +116,7 @@ where
 /// let prog = compile_string("~/my_file.c", code).expect("Failed to compile.");
 /// ```
 
-pub fn compile_string<T, U>(path: T, code: U) -> Result<Program, LpcError>
+pub fn compile_string<T, U>(path: T, code: U) -> Result<Program, CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
     U: AsRef<str>,
@@ -131,7 +131,7 @@ where
     let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            let err = LpcError::NewError(NewError::from(e));
+            let err = CompilerError::NewError(NewError::from(e));
             errors::emit_diagnostics(&[err.clone()]);
 
             // Parse errors are fatal, so we're done here.
@@ -161,7 +161,7 @@ where
 
     if !context.errors.is_empty() {
         errors::emit_diagnostics(&context.errors);
-        return Err(LpcError::Collection(context.errors));
+        return Err(CompilerError::Collection(context.errors));
     }
 
     // let scope_tree = ScopeTree::from(context);

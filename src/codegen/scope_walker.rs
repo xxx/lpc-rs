@@ -4,7 +4,7 @@ use crate::{
         var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::LpcError,
+    errors::compiler_error::CompilerError,
     semantic::{
         function_prototype::FunctionPrototype, semantic_checks::check_var_redefinition,
         symbol::Symbol,
@@ -42,7 +42,7 @@ impl ContextHolder for ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), LpcError> {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> {
         // Push the global scope
         self.context.scopes.push_new();
 
@@ -53,7 +53,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
@@ -95,9 +95,9 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
         if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
-            self.context.errors.push(LpcError::NewError(e));
+            self.context.errors.push(CompilerError::NewError(e));
         }
 
         if let Some(expr_node) = &mut node.value {
@@ -109,7 +109,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), LpcError> {
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), CompilerError> {
         let sym = self.context.scopes.lookup(&node.name);
 
         if let Some(symbol) = sym {
@@ -117,7 +117,7 @@ impl TreeWalker for ScopeWalker {
                 node.set_global(true);
             }
         } else {
-            let e = LpcError::NewError(
+            let e = CompilerError::NewError(
                 NewError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span),
             );
 

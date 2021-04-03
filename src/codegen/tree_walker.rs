@@ -8,7 +8,7 @@ use crate::{
         var_init_node::VarInitNode, var_node::VarNode,
     },
     context::Context,
-    errors::compiler_error::LpcError,
+    errors::compiler_error::CompilerError,
 };
 
 pub trait ContextHolder {
@@ -22,7 +22,7 @@ pub trait ContextHolder {
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
     /// Visit a program node. This is the top-level translation unit.
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), LpcError>
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -34,7 +34,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a function call node
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), LpcError>
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -46,22 +46,22 @@ pub trait TreeWalker {
     }
 
     /// Visit an int (literal) node
-    fn visit_int(&mut self, _node: &mut IntNode) -> Result<(), LpcError> {
+    fn visit_int(&mut self, _node: &mut IntNode) -> Result<(), CompilerError> {
         Ok(())
     }
 
     /// Visit a float (literal) node
-    fn visit_float(&mut self, _node: &mut FloatNode) -> Result<(), LpcError> {
+    fn visit_float(&mut self, _node: &mut FloatNode) -> Result<(), CompilerError> {
         Ok(())
     }
 
     /// Visit a string (literal) node
-    fn visit_string(&mut self, _node: &mut StringNode) -> Result<(), LpcError> {
+    fn visit_string(&mut self, _node: &mut StringNode) -> Result<(), CompilerError> {
         Ok(())
     }
 
     /// Visit a binary operation node
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), LpcError>
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -72,7 +72,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a function definition node
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError>
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -88,7 +88,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a function return node
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), LpcError>
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -100,7 +100,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable declaration node
-    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<(), LpcError>
+    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -112,7 +112,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable initialization node
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError>
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -124,7 +124,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable use node
-    fn visit_var(&mut self, _node: &mut VarNode) -> Result<(), LpcError>
+    fn visit_var(&mut self, _node: &mut VarNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -132,7 +132,7 @@ pub trait TreeWalker {
     }
 
     /// Visit an assignment node
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), LpcError>
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -143,7 +143,7 @@ pub trait TreeWalker {
     }
 
     /// Visit an array literal node
-    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<(), LpcError>
+    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -155,7 +155,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a range literal
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), LpcError>
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), CompilerError>
     where
         Self: Sized,
     {
@@ -174,7 +174,7 @@ pub trait TreeWalker {
     fn visit_comma_expression(
         &mut self,
         node: &mut CommaExpressionNode,
-    ) -> Result<(), LpcError>
+    ) -> Result<(), CompilerError>
     where
         Self: Sized,
     {

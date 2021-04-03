@@ -4,7 +4,7 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::LpcError,
+    errors::compiler_error::CompilerError,
     parser::span::Span,
 };
 use std::{
@@ -51,7 +51,7 @@ impl SpannedNode for CommaExpressionNode {
 
 impl AstNodeTrait for CommaExpressionNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
         tree_walker.visit_comma_expression(self)
     }
 }
