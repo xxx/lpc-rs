@@ -1,6 +1,6 @@
 use codespan_reporting::diagnostic::Diagnostic;
 
-use crate::errors::{NewError};
+use crate::errors::{LpcError};
 use std::{
     error::Error,
     fmt::{Display, Formatter},
@@ -9,7 +9,7 @@ use std::{
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
 pub enum CompilerError {
-    NewError(NewError),
+    LpcError(LpcError),
     Collection(Vec<CompilerError>),
 }
 
@@ -20,7 +20,7 @@ impl CompilerError {
             CompilerError::Collection(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
             }
-            CompilerError::NewError(err) => err.to_diagnostics(),
+            CompilerError::LpcError(err) => err.to_diagnostics(),
         }
     }
 }
@@ -36,7 +36,7 @@ impl Display for CompilerError {
                     .join(" ");
                 write!(f, "{}", s)
             }
-            CompilerError::NewError(err) => write!(f, "{}", err),
+            CompilerError::LpcError(err) => write!(f, "{}", err),
         }
     }
 }

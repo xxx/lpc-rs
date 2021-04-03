@@ -12,7 +12,7 @@ use crate::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    errors::NewError,
+    errors::LpcError,
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
@@ -32,9 +32,9 @@ use std::collections::HashMap;
 pub fn check_var_redefinition(
     node: &'_ VarInitNode,
     scope: &'_ LocalScope,
-) -> Result<(), NewError> {
+) -> Result<(), LpcError> {
     if let Some(sym) = scope.lookup(&node.name) {
-        Err(NewError::new(format!("Redefinition of `{}`", sym.name)).with_span(node.span))
+        Err(LpcError::new(format!("Redefinition of `{}`", sym.name)).with_span(node.span))
     } else {
         Ok(())
     }
@@ -51,14 +51,14 @@ pub fn check_binary_operation_types(
     node: &BinaryOpNode,
     scope_tree: &ScopeTree,
     function_return_types: &HashMap<&str, LpcType>,
-) -> Result<(), NewError> {
+) -> Result<(), LpcError> {
     fn create_error(
         node: &BinaryOpNode,
         op: BinaryOperation,
         left_type: LpcType,
         right_type: LpcType,
-    ) -> NewError {
-        NewError::new(format!(
+    ) -> LpcError {
+        LpcError::new(format!(
             "Mismatched types: `{}` ({}) {} `{}` ({})",
             node.l, left_type, op, node.r, right_type
         ))
@@ -359,7 +359,7 @@ mod check_binary_operation_tests {
         left_node: ExpressionNode,
         right_node: ExpressionNode,
         scope_tree: &ScopeTree,
-    ) -> Result<(), NewError> {
+    ) -> Result<(), LpcError> {
         let node = BinaryOpNode {
             l: Box::new(left_node),
             r: Box::new(right_node),
@@ -371,7 +371,7 @@ mod check_binary_operation_tests {
         check_binary_operation_types(&node, &scope_tree, &function_return_types)
     }
 
-    fn int_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn int_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(123),
@@ -380,7 +380,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn string_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn string_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from("foo"),
@@ -389,7 +389,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn int_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn int_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(123),
@@ -398,7 +398,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn string_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn string_string_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from("asdf"),
@@ -407,7 +407,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn int_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn int_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("int1")),
@@ -416,7 +416,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn string_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn string_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("string2")),
@@ -425,7 +425,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn int_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn int_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("int2")),
@@ -434,7 +434,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn string_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn string_string_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("string1")),
@@ -443,7 +443,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn array_array_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn array_array_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(vec!["asdf", "bar", "hi"]),
@@ -452,7 +452,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn array_array_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn array_array_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("array1")),
@@ -461,7 +461,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn array_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn array_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(vec!["asdf", "bar", "hi"]),
@@ -470,7 +470,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn array_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn array_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("array1")),
@@ -479,7 +479,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn array_range_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn array_range_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(vec![666, 2]),
@@ -488,7 +488,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn array_range_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn array_range_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("array1")),
@@ -501,7 +501,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn float_float_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn float_float_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(123.45),
@@ -510,7 +510,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn float_float_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn float_float_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("float1")),
@@ -519,7 +519,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn float_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn float_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(123.45),
@@ -528,7 +528,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn float_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn float_int_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("float1")),
@@ -537,7 +537,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn int_float_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn int_float_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(-123),
@@ -546,7 +546,7 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn int_float_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), NewError> {
+    fn int_float_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("int1")),

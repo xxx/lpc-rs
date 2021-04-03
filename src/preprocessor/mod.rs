@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs, path::Path};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::{context::Context, convert_escapes, errors::NewError, parser::span::Span};
+use crate::{context::Context, convert_escapes, errors::LpcError, parser::span::Span};
 use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
@@ -13,7 +13,7 @@ use crate::{
     parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
 };
 
-type Result<T> = result::Result<T, NewError>;
+type Result<T> = result::Result<T, LpcError>;
 
 lazy_static! {
     static ref SYS_INCLUDE: Regex = Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
@@ -182,7 +182,7 @@ impl Preprocessor {
             Err(e) => {
                 let canonical_path = self.canonicalize_path(&self.context.filename, &cwd);
 
-                return Err(NewError::new(format!(
+                return Err(LpcError::new(format!(
                     "Unable to read `{}`: {}",
                     canonical_path.display(),
                     e
@@ -265,7 +265,7 @@ impl Preprocessor {
                                     let mut def_lexer = LexWrapper::new(string);
                                     def_lexer.set_file_id(file_id);
                                     let def_tokens = def_lexer
-                                        .collect::<std::result::Result<Vec<_>, NewError>>();
+                                        .collect::<std::result::Result<Vec<_>, LpcError>>();
 
                                     if def_tokens.is_err() {
                                         return def_tokens;
@@ -296,7 +296,7 @@ impl Preprocessor {
             let ifdef = self.ifdefs.last().unwrap();
 
             return Err(
-                NewError::new("Found `#if` without a corresponding `#endif`")
+                LpcError::new("Found `#if` without a corresponding `#endif`")
                     .with_span(Some(ifdef.span)),
             );
         }
@@ -314,7 +314,7 @@ impl Preprocessor {
         if let Some(captures) = DEFINE.captures(&token.1) {
             if !self.skipping_lines() && self.defines.contains_key(&captures[1]) {
                 return Err(
-                    NewError::new(format!("Duplicate `#define`: `{}`", &captures[1]))
+                    LpcError::new(format!("Duplicate `#define`: `{}`", &captures[1]))
                         .with_span(Some(token.0)),
                 );
             }
@@ -329,7 +329,7 @@ impl Preprocessor {
             self.defines.insert(name, convert_escapes(value));
             Ok(())
         } else {
-            Err(NewError::new("Invalid `#define`.").with_span(Some(token.0)))
+            Err(LpcError::new("Invalid `#define`.").with_span(Some(token.0)))
         }
     }
 
@@ -380,7 +380,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(NewError::new("Invalid `#include`.").with_span(Some(token.0)))
+            Err(LpcError::new("Invalid `#include`.").with_span(Some(token.0)))
         }
     }
 
@@ -409,7 +409,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(NewError::new("Invalid `#include`.").with_span(Some(token.0)))
+            Err(LpcError::new("Invalid `#include`.").with_span(Some(token.0)))
         }
     }
 
@@ -426,7 +426,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(NewError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
+            Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
         }
     }
 
@@ -443,7 +443,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(NewError::new("Invalid `#ifndef`.").with_span(Some(token.0)))
+            Err(LpcError::new("Invalid `#ifndef`.").with_span(Some(token.0)))
         }
     }
 
@@ -452,14 +452,14 @@ impl Preprocessor {
 
         if ELSE.is_match(&token.1) {
             if self.ifdefs.is_empty() {
-                return Err(NewError::new(
+                return Err(LpcError::new(
                     "Found `#else` without a corresponding `#if` or `#ifdef`",
                 )
                 .with_span(Some(token.0)));
             }
 
             if let Some(else_span) = &self.current_else {
-                let err = NewError::new("Duplicate `#else` found")
+                let err = LpcError::new("Duplicate `#else` found")
                     .with_span(Some(token.0))
                     .with_label("First used here", Some(*else_span));
 
@@ -475,7 +475,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(NewError::new("Invalid `#else`.").with_span(Some(token.0)))
+            Err(LpcError::new("Invalid `#else`.").with_span(Some(token.0)))
         }
     }
 
@@ -484,7 +484,7 @@ impl Preprocessor {
 
         if self.ifdefs.is_empty() {
             return Err(
-                NewError::new("Found `#endif` without a corresponding `#if`")
+                LpcError::new("Found `#endif` without a corresponding `#if`")
                     .with_span(Some(token.0)),
             );
         }
@@ -515,7 +515,7 @@ impl Preprocessor {
         let canon_include_path = self.canonicalize_path(&path, &cwd);
 
         if !canon_include_path.starts_with(&self.context.root_dir) {
-            return Err(NewError::new(&format!(
+            return Err(LpcError::new(&format!(
                 "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
                 path.as_ref().display(),
                 canon_include_path.display()
@@ -526,7 +526,7 @@ impl Preprocessor {
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                return Err(NewError::new(&format!(
+                return Err(LpcError::new(&format!(
                     "Unable to read include file `{}`: {:?} (cwd `{}`)",
                     path.as_ref().display(),
                     cwd.as_ref().display(),
@@ -571,7 +571,7 @@ impl Preprocessor {
     /// A convenience function for checking if preprocessor directives follow a newline.
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
         if !self.last_slice.ends_with('\n') {
-            return Err(NewError::new(
+            return Err(LpcError::new(
                 "Preprocessor directives must appear on their own line.".to_string(),
             )
             .with_span(Some(span)));

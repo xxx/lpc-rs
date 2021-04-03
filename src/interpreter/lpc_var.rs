@@ -6,7 +6,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::{Add, Div, Mul, Sub},
 };
-use crate::errors::NewError;
+use crate::errors::LpcError;
 use crate::compiler::compiler_error::CompilerError;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
@@ -36,9 +36,9 @@ impl LpcVar {
     }
 
     fn to_error(&self, op: BinaryOperation, right: &LpcVar) -> CompilerError {
-        let e = NewError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()));
+        let e = LpcError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()));
 
-        CompilerError::NewError(e)
+        CompilerError::LpcError(e)
     }
 }
 
@@ -114,25 +114,25 @@ impl Div for LpcVar {
     fn div(self, rhs: Self) -> Self::Output {
         if let (LpcVar::Int(x), LpcVar::Int(y)) = (self, rhs) {
             if y == 0 {
-                Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Int(x / y))
             }
         } else if let (LpcVar::Float(x), LpcVar::Float(y)) = (self, rhs) {
             if y == 0.0 {
-                Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Float(x / y))
             }
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             if y == 0 {
-                Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Float(x / y as f64))
             }
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
             if y == 0.0 {
-                Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Float(x as f64 / y))
             }

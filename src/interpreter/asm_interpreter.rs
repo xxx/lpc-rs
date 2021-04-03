@@ -6,7 +6,7 @@ use crate::{
     },
     semantic::function_symbol::FunctionSymbol,
 };
-use crate::errors::NewError;
+use crate::errors::LpcError;
 use crate::compiler::compiler_error::CompilerError;
 
 /// The initial size (in frames) of the call stack
@@ -545,7 +545,7 @@ impl AsmInterpreter {
     #[doc(hidden)]
     fn populate_error_span(&self, error: &mut CompilerError) {
         match error {
-            CompilerError::NewError(err) => {
+            CompilerError::LpcError(err) => {
                 err.span = *self.program.debug_spans.get(self.pc).unwrap()
             },
             _ => unimplemented!()
@@ -554,10 +554,10 @@ impl AsmInterpreter {
 
     #[doc(hidden)]
     fn make_index_error(&self, index: i64, length: usize) -> CompilerError {
-        let e = NewError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
+        let e = LpcError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
                                       index, length));
 
-        let mut e = CompilerError::NewError(e);
+        let mut e = CompilerError::LpcError(e);
 
         self.populate_error_span(&mut e);
 

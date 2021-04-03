@@ -8,7 +8,7 @@ use logos::{Lexer, Logos};
 
 use crate::{
     convert_escapes,
-    errors::NewError,
+    errors::LpcError,
     errors::lazy_files::FileId,
     parser::{
         lexer::{
@@ -41,14 +41,14 @@ impl<'input> LexWrapper<'input> {
 }
 
 impl Iterator for LexWrapper<'_> {
-    type Item = Result<Spanned<Token>, NewError>;
+    type Item = Result<Spanned<Token>, LpcError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.lexer.next()?;
         let span = self.lexer.span();
 
         match token {
-            Token::Error => Some(Err(NewError::new(format!(
+            Token::Error => Some(Err(LpcError::new(format!(
                 "Lex Error: Invalid Token `{}`  at {:?}",
                 self.lexer.slice(), span)),
             )),
@@ -70,7 +70,7 @@ impl TokenVecWrapper {
 }
 
 impl Iterator for TokenVecWrapper {
-    type Item = Result<Spanned<Token>, NewError>;
+    type Item = Result<Spanned<Token>, LpcError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.vec.get(self.count);
@@ -85,7 +85,7 @@ impl Iterator for TokenVecWrapper {
         let span = token.1.span();
 
         match &token.1 {
-            Token::Error => Some(Err(NewError::new(format!(
+            Token::Error => Some(Err(LpcError::new(format!(
                 "Lex Error: Invalid Token `{}`at {:?}",
                 token.1, span
             )))),
@@ -678,7 +678,7 @@ impl Display for Token {
 mod tests {
     use super::*;
 
-    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, NewError>> {
+    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LpcError>> {
         let lexer = LexWrapper::new(prog);
         lexer
             .filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _))))

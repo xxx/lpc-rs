@@ -19,14 +19,14 @@ use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
 use crate::parser::lexer::Token;
-use crate::errors::NewError;
+use crate::errors::LpcError;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 
 grammar;
 
 extern {
     type Location = usize;
-    type Error = NewError;
+    type Error = LpcError;
 
     enum Token {
         "+" => Token::Plus(<Span>),

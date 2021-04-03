@@ -10,7 +10,7 @@ use crate::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
     },
     errors,
-    errors::NewError,
+    errors::LpcError,
     interpreter::program::Program,
     lpc_parser,
     preprocessor::Preprocessor,
@@ -87,7 +87,7 @@ where
     let code = match preprocessor.scan(&path, cwd, &code) {
         Ok(c) => c,
         Err(e) => {
-            let err = CompilerError::NewError(e);
+            let err = CompilerError::LpcError(e);
 
             errors::emit_diagnostics(&[err.clone()]);
 
@@ -134,7 +134,7 @@ where
     let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            let err = CompilerError::NewError(NewError::from(e));
+            let err = CompilerError::LpcError(LpcError::from(e));
             errors::emit_diagnostics(&[err.clone()]);
 
             // Parse errors are fatal, so we're done here.

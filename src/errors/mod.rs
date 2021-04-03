@@ -16,7 +16,7 @@ use crate::parser::span::Span;
 pub mod lazy_files;
 
 #[derive(Debug, Clone)]
-pub struct NewError {
+pub struct LpcError {
     /// The main message to be printed out
     message: String,
     /// The primary span causing this error
@@ -27,7 +27,7 @@ pub struct NewError {
     notes: Vec<String>,
 }
 
-impl NewError {
+impl LpcError {
     /// Create a new LpcError, with a message
     pub fn new<T>(message: T) -> Self
     where
@@ -95,16 +95,16 @@ impl NewError {
     }
 }
 
-impl Display for NewError {
+impl Display for LpcError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl Error for NewError {}
+impl Error for LpcError {}
 
 /// Map LALRpop's parse errors into our local error type
-impl<'a, E> From<LalrpopParseError<usize, Token, E>> for NewError
+impl<'a, E> From<LalrpopParseError<usize, Token, E>> for LpcError
     where
         E: Display,
 {
@@ -118,20 +118,20 @@ impl<'a, E> From<LalrpopParseError<usize, Token, E>> for NewError
         };
 
         match err {
-            LalrpopParseError::InvalidToken { .. } => NewError::new("Invalid token"),
+            LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
             LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
-                NewError::new("Unexpected EOF").with_note(format_expected(expected))
+                LpcError::new("Unexpected EOF").with_note(format_expected(expected))
             }
             LalrpopParseError::UnrecognizedToken {
                 token: (_start, ref token, _end),
                 ref expected,
-            } => NewError::new(format!("Unrecognized Token: {}", token))
+            } => LpcError::new(format!("Unrecognized Token: {}", token))
                 .with_span(Some(token.span()))
                 .with_note(format_expected(expected)),
             LalrpopParseError::ExtraToken {
                 token: (_start, ref token, _end),
-            } => NewError::new(format!("Extra Token: `{}`", token)).with_span(Some(token.span())),
-            LalrpopParseError::User { error } => NewError::new(format!("User error: {}", error)),
+            } => LpcError::new(format!("Extra Token: `{}`", token)).with_span(Some(token.span())),
+            LalrpopParseError::User { error } => LpcError::new(format!("User error: {}", error)),
         }
     }
 }
