@@ -9,16 +9,15 @@ use std::{
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
 pub enum LpcError {
-    MultiError(Vec<LpcError>),
-
     NewError(NewError),
+    Collection(Vec<LpcError>),
 }
 
 impl LpcError {
     /// Get the error diagnostics for printing to the user.
     pub fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            LpcError::MultiError(errs) => {
+            LpcError::Collection(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
             }
             LpcError::NewError(err) => err.to_diagnostics(),
@@ -29,7 +28,7 @@ impl LpcError {
 impl Display for LpcError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LpcError::MultiError(errs) => {
+            LpcError::Collection(errs) => {
                 let s = errs
                     .iter()
                     .map(|e| format!("{}", e))

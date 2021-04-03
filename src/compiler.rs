@@ -161,7 +161,7 @@ where
 
     if !context.errors.is_empty() {
         errors::emit_diagnostics(&context.errors);
-        return Err(LpcError::MultiError(context.errors));
+        return Err(LpcError::Collection(context.errors));
     }
 
     // let scope_tree = ScopeTree::from(context);
