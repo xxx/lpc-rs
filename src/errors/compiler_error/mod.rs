@@ -1,6 +1,5 @@
 pub mod lex_error;
 pub mod parse_error;
-pub mod return_type_error;
 pub mod undefined_var_error;
 pub mod unknown_function_error;
 pub mod var_redefinition_error;
@@ -8,7 +7,6 @@ pub mod var_redefinition_error;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::errors::{LpcError, NewError};
-use return_type_error::ReturnTypeError;
 use undefined_var_error::UndefinedVarError;
 use unknown_function_error::UnknownFunctionError;
 use var_redefinition_error::VarRedefinitionError;
@@ -21,7 +19,6 @@ use std::error::Error;
 pub enum CompilerError {
     UnknownFunctionError(UnknownFunctionError),
     VarRedefinitionError(VarRedefinitionError),
-    ReturnTypeError(ReturnTypeError),
     UndefinedVarError(UndefinedVarError),
     MultiError(Vec<CompilerError>),
 
@@ -34,7 +31,6 @@ impl LpcError for CompilerError {
         match self {
             CompilerError::UnknownFunctionError(err) => err.to_diagnostics(),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(),
-            CompilerError::ReturnTypeError(err) => err.to_diagnostics(),
             CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
             CompilerError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
@@ -49,7 +45,6 @@ impl Display for CompilerError {
         match self {
             CompilerError::UnknownFunctionError(err) => write!(f, "{}", err),
             CompilerError::VarRedefinitionError(err) => write!(f, "{}", err),
-            CompilerError::ReturnTypeError(err) => write!(f, "{}", err),
             CompilerError::UndefinedVarError(err) => write!(f, "{}", err),
             CompilerError::MultiError(errs) => {
                 let s = errs.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(" ");

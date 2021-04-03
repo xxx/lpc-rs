@@ -7,7 +7,6 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     errors::compiler_error::{
-        return_type_error::ReturnTypeError,
         unknown_function_error::UnknownFunctionError, CompilerError,
     },
     interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
@@ -187,21 +186,19 @@ impl TreeWalker for SemanticCheckWalker {
                     if function_def.return_type == LpcType::Void
                         || !function_def.return_type.matches_type(return_type)
                     {
-                        let error = CompilerError::ReturnTypeError(ReturnTypeError {
-                            type_: return_type,
-                            expected: function_def.return_type,
-                            span: node.span,
-                        });
+                        let error = CompilerError::NewError(NewError::new(
+                            format!("Invalid return type {}. Expected {}.", return_type, function_def.return_type))
+                            .with_span(node.span)
+                        );
 
                         self.context.errors.push(error);
                     }
                 }
             } else if function_def.return_type != LpcType::Void {
-                let error = CompilerError::ReturnTypeError(ReturnTypeError {
-                    type_: LpcType::Void,
-                    expected: function_def.return_type,
-                    span: node.span,
-                });
+                let error = CompilerError::NewError(NewError::new(
+                    format!("Invalid return type {}. Expected {}.", LpcType::Void, function_def.return_type))
+                    .with_span(node.span)
+                );
 
                 self.context.errors.push(error);
             }
