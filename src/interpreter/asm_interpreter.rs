@@ -7,6 +7,7 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use crate::errors::LpcError;
+use crate::parser::span::Span;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -363,9 +364,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] + registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -390,9 +389,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] / registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -401,9 +398,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] * registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -412,9 +407,7 @@ impl AsmInterpreter {
                     match registers[r1.index()] - registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = result,
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -438,9 +431,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -458,9 +449,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -478,9 +467,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -498,9 +485,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = var
                         }
                         Err(mut e) => {
-                            self.populate_error_span(&mut e);
-
-                            return Err(e);
+                            return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
@@ -541,19 +526,15 @@ impl AsmInterpreter {
         }
     }
 
-    #[doc(hidden)]
-    fn populate_error_span(&self, error: &mut LpcError) {
-        error.span = *self.program.debug_spans.get(self.pc).unwrap();
+    #[inline]
+    fn current_debug_span(&self) -> &Option<Span> {
+        self.program.debug_spans.get(self.pc).unwrap()
     }
 
-    #[doc(hidden)]
     fn make_index_error(&self, index: i64, length: usize) -> LpcError {
-        let mut e = LpcError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
-                                      index, length));
-
-        self.populate_error_span(&mut e);
-
-        e
+        LpcError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
+                              index, length))
+            .with_span(*self.current_debug_span())
     }
 }
 
