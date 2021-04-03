@@ -1,7 +1,7 @@
 use crate::{
     ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
+    errors::compiler_error::LpcError,
     semantic::lpc_type::LpcType,
 };
 use std::{
@@ -29,7 +29,7 @@ impl DeclNode {
 
 impl AstNodeTrait for DeclNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_decl(self)
     }
 }

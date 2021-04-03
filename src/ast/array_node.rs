@@ -4,7 +4,7 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
+    errors::compiler_error::LpcError,
     parser::span::Span,
 };
 use std::{
@@ -52,7 +52,7 @@ impl SpannedNode for ArrayNode {
 
 impl AstNodeTrait for ArrayNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_array(self)
     }
 }

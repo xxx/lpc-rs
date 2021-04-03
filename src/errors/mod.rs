@@ -9,6 +9,7 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use crate::errors::lazy_files::FILE_CACHE;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::error::Error;
+use crate::errors::compiler_error::LpcError;
 
 pub mod compiler_error;
 pub mod lazy_files;
@@ -134,19 +135,11 @@ impl<'a, E> From<LalrpopParseError<usize, Token, E>> for NewError
     }
 }
 
-pub trait LpcError: Debug + Error {
-    /// Return a vector of [`Diagnostic`]s, to be emitted to the user.
-    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>>;
-}
-
 /// Emit nice error messages to the console.
 ///
 /// # Arguments
 /// * `errors` - A slice of [`LpcError`]s to display diagnostics for.
-pub fn emit_diagnostics<T>(errors: &[T])
-where
-    T: LpcError,
-{
+pub fn emit_diagnostics(errors: &[LpcError]) {
     let files = FILE_CACHE.read();
 
     let diagnostics: Vec<Diagnostic<usize>> =

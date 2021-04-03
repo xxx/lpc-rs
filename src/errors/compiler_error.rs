@@ -1,6 +1,6 @@
 use codespan_reporting::diagnostic::Diagnostic;
 
-use crate::errors::{LpcError, NewError};
+use crate::errors::{NewError};
 use std::{
     error::Error,
     fmt::{Display, Formatter},
@@ -8,28 +8,28 @@ use std::{
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
-pub enum CompilerError {
-    MultiError(Vec<CompilerError>),
+pub enum LpcError {
+    MultiError(Vec<LpcError>),
 
     NewError(NewError),
 }
 
-impl LpcError for CompilerError {
+impl LpcError {
     /// Get the error diagnostics for printing to the user.
-    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
+    pub fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            CompilerError::MultiError(errs) => {
+            LpcError::MultiError(errs) => {
                 errs.iter().flat_map(|e| e.to_diagnostics()).collect()
             }
-            CompilerError::NewError(err) => err.to_diagnostics(),
+            LpcError::NewError(err) => err.to_diagnostics(),
         }
     }
 }
 
-impl Display for CompilerError {
+impl Display for LpcError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CompilerError::MultiError(errs) => {
+            LpcError::MultiError(errs) => {
                 let s = errs
                     .iter()
                     .map(|e| format!("{}", e))
@@ -37,9 +37,9 @@ impl Display for CompilerError {
                     .join(" ");
                 write!(f, "{}", s)
             }
-            CompilerError::NewError(err) => write!(f, "{}", err),
+            LpcError::NewError(err) => write!(f, "{}", err),
         }
     }
 }
 
-impl Error for CompilerError {}
+impl Error for LpcError {}

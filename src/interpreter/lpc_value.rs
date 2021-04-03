@@ -10,7 +10,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 use crate::errors::NewError;
-use crate::errors::compiler_error::CompilerError;
+use crate::errors::compiler_error::LpcError;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -34,10 +34,10 @@ impl LpcValue {
     }
 
     /// Just a refactor of a common operation
-    fn to_error(&self, op: BinaryOperation, right: &LpcValue) -> CompilerError {
+    fn to_error(&self, op: BinaryOperation, right: &LpcValue) -> LpcError {
         let e = NewError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()));
 
-        CompilerError::NewError(e)
+        LpcError::NewError(e)
     }
 }
 
@@ -65,7 +65,7 @@ impl From<Vec<LpcVar>> for LpcValue {
 }
 
 impl Add for &LpcValue {
-    type Output = Result<LpcValue, CompilerError>;
+    type Output = Result<LpcValue, LpcError>;
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
@@ -98,7 +98,7 @@ impl Add for &LpcValue {
 }
 
 impl Sub for &LpcValue {
-    type Output = Result<LpcValue, CompilerError>;
+    type Output = Result<LpcValue, LpcError>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
@@ -127,7 +127,7 @@ fn repeat_string(s: &str, i: &i64) -> String {
 }
 
 impl Mul for &LpcValue {
-    type Output = Result<LpcValue, CompilerError>;
+    type Output = Result<LpcValue, LpcError>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
@@ -155,21 +155,21 @@ impl Mul for &LpcValue {
 }
 
 impl Div for &LpcValue {
-    type Output = Result<LpcValue, CompilerError>;
+    type Output = Result<LpcValue, LpcError>;
 
     fn div(self, rhs: Self) -> Self::Output {
         match self {
             LpcValue::Float(f) => match rhs {
                 LpcValue::Float(f2) => {
                     if *f2 == 0.0 {
-                        Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                        Err(LpcError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Float(f / f2))
                     }
                 }
                 LpcValue::Int(i) => {
                     if *i == 0 {
-                        Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                        Err(LpcError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Float(f / *i as f64))
                     }
@@ -179,14 +179,14 @@ impl Div for &LpcValue {
             LpcValue::Int(i) => match rhs {
                 LpcValue::Float(f) => {
                     if *f == 0.0 {
-                        Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                        Err(LpcError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Float(*i as f64 / f))
                     }
                 }
                 LpcValue::Int(i2) => {
                     if *i2 == 0 {
-                        Err(CompilerError::NewError(NewError::new("Runtime Error: Division by zero")))
+                        Err(LpcError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Int(i / i2))
                     }

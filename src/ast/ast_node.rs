@@ -5,7 +5,7 @@ use crate::{
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
+    errors::compiler_error::LpcError,
     parser::span::Span,
 };
 use auto_impl::auto_impl;
@@ -32,7 +32,7 @@ pub enum AstNode {
 
 #[auto_impl(&mut)]
 pub trait AstNodeTrait: PartialEq + Display {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError>;
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError>;
 }
 
 pub trait SpannedNode {
@@ -43,7 +43,7 @@ pub trait SpannedNode {
 macro_rules! node_defs {
     ( $( $x:ident ),+ ) => {
         impl AstNodeTrait for AstNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
                 match self {
                  $(
                     AstNode::$x(y) => y.visit(tree_walker),

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     ast::expression_node::ExpressionNode,
-    errors::compiler_error::CompilerError,
+    errors::compiler_error::LpcError,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
@@ -35,7 +35,7 @@ pub struct Context {
     pub function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Any errors that have been collected
-    pub errors: Vec<CompilerError>,
+    pub errors: Vec<LpcError>,
 }
 
 impl Context {

@@ -1,6 +1,6 @@
 use crate::{
     ast::function_def_node::FunctionDefNode, codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
+    errors::compiler_error::LpcError,
 };
 
 use crate::{codegen::tree_walker::ContextHolder, context::Context};
@@ -25,7 +25,7 @@ impl ContextHolder for DefaultParamsWalker {
 }
 
 impl TreeWalker for DefaultParamsWalker {
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
         let vec = node
             .parameters
             .iter()
