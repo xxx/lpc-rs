@@ -1,7 +1,6 @@
 use crate::{
     ast::binary_op_node::BinaryOperation,
     errors::runtime_error::{
-        division_by_zero_error::DivisionByZeroError,
         RuntimeError,
     },
     interpreter::lpc_var::LpcVar,
@@ -165,18 +164,14 @@ impl Div for &LpcValue {
             LpcValue::Float(f) => match rhs {
                 LpcValue::Float(f2) => {
                     if *f2 == 0.0 {
-                        Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                            span: None,
-                        }))
+                        Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Float(f / f2))
                     }
                 }
                 LpcValue::Int(i) => {
                     if *i == 0 {
-                        Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                            span: None,
-                        }))
+                        Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Float(f / *i as f64))
                     }
@@ -186,18 +181,14 @@ impl Div for &LpcValue {
             LpcValue::Int(i) => match rhs {
                 LpcValue::Float(f) => {
                     if *f == 0.0 {
-                        Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                            span: None,
-                        }))
+                        Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Float(*i as f64 / f))
                     }
                 }
                 LpcValue::Int(i2) => {
                     if *i2 == 0 {
-                        Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                            span: None,
-                        }))
+                        Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
                     } else {
                         Ok(LpcValue::Int(i / i2))
                     }

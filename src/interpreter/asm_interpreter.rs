@@ -547,9 +547,6 @@ impl AsmInterpreter {
             RuntimeError::NewError(err) => {
                 err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }
-            RuntimeError::DivisionByZeroError(err) => {
-                err.span = *self.program.debug_spans.get(self.pc).unwrap()
-            }
             RuntimeError::IndexError(err) => {
                 err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }

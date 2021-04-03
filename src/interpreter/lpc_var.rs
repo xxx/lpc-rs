@@ -1,7 +1,6 @@
 use crate::{
     ast::binary_op_node::BinaryOperation,
     errors::runtime_error::{
-        division_by_zero_error::DivisionByZeroError,
         RuntimeError,
     },
 };
@@ -117,33 +116,25 @@ impl Div for LpcVar {
     fn div(self, rhs: Self) -> Self::Output {
         if let (LpcVar::Int(x), LpcVar::Int(y)) = (self, rhs) {
             if y == 0 {
-                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                    span: None,
-                }))
+                Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Int(x / y))
             }
         } else if let (LpcVar::Float(x), LpcVar::Float(y)) = (self, rhs) {
             if y == 0.0 {
-                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                    span: None,
-                }))
+                Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Float(x / y))
             }
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             if y == 0 {
-                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                    span: None,
-                }))
+                Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Float(x / y as f64))
             }
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
             if y == 0.0 {
-                Err(RuntimeError::DivisionByZeroError(DivisionByZeroError {
-                    span: None,
-                }))
+                Err(RuntimeError::NewError(NewError::new("Runtime Error: Division by zero")))
             } else {
                 Ok(LpcVar::Float(x as f64 / y))
             }
