@@ -6,9 +6,7 @@ use crate::{
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::{
-        unknown_function_error::UnknownFunctionError, CompilerError,
-    },
+    errors::compiler_error::CompilerError,
     interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
     semantic::{
         lpc_type::LpcType,
@@ -79,10 +77,9 @@ impl TreeWalker for SemanticCheckWalker {
         if !self.context.function_prototypes.contains_key(&node.name)
             && !EFUNS.contains_key(node.name.as_str())
         {
-            let e = CompilerError::UnknownFunctionError(UnknownFunctionError {
-                name: node.name.clone(),
-                span: node.span,
-            });
+            let e = CompilerError::NewError(NewError::new(
+                format!("Call to unknown function `{}`", node.name)
+            ).with_span(node.span));
             self.context.errors.push(e);
             // Non-fatal. Continue.
         }

@@ -1,23 +1,19 @@
 pub mod lex_error;
 pub mod parse_error;
 pub mod undefined_var_error;
-pub mod unknown_function_error;
 pub mod var_redefinition_error;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::errors::{LpcError, NewError};
 use undefined_var_error::UndefinedVarError;
-use unknown_function_error::UnknownFunctionError;
 use var_redefinition_error::VarRedefinitionError;
-use std::fmt::Display;
-use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::error::Error;
 
 /// General error wrapper type for the compiler
 #[derive(Debug, Clone)]
 pub enum CompilerError {
-    UnknownFunctionError(UnknownFunctionError),
     VarRedefinitionError(VarRedefinitionError),
     UndefinedVarError(UndefinedVarError),
     MultiError(Vec<CompilerError>),
@@ -29,7 +25,6 @@ impl LpcError for CompilerError {
     /// Get the error diagnostics for printing to the user.
     fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         match self {
-            CompilerError::UnknownFunctionError(err) => err.to_diagnostics(),
             CompilerError::VarRedefinitionError(err) => err.to_diagnostics(),
             CompilerError::UndefinedVarError(err) => err.to_diagnostics(),
             CompilerError::MultiError(errs) => {
@@ -43,7 +38,6 @@ impl LpcError for CompilerError {
 impl Display for CompilerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CompilerError::UnknownFunctionError(err) => write!(f, "{}", err),
             CompilerError::VarRedefinitionError(err) => write!(f, "{}", err),
             CompilerError::UndefinedVarError(err) => write!(f, "{}", err),
             CompilerError::MultiError(errs) => {
