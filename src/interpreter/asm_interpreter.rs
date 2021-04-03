@@ -1,12 +1,13 @@
 use crate::{
     asm::instruction::Instruction,
-    errors::runtime_error::{index_error::IndexError, RuntimeError},
+    errors::runtime_error::RuntimeError,
     interpreter::{
         efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
         stack_frame::StackFrame,
     },
     semantic::function_symbol::FunctionSymbol,
 };
+use crate::errors::NewError;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -547,22 +548,16 @@ impl AsmInterpreter {
             RuntimeError::NewError(err) => {
                 err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }
-            RuntimeError::IndexError(err) => {
-                err.span = *self.program.debug_spans.get(self.pc).unwrap()
-            }
             RuntimeError::UnknownError(_) => unimplemented!(),
         }
     }
 
     #[doc(hidden)]
     fn make_index_error(&self, index: i64, length: usize) -> RuntimeError {
-        let e = IndexError {
-            index,
-            length,
-            span: None,
-        };
+        let e = NewError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
+                                      index, length));
 
-        let mut e = RuntimeError::IndexError(e);
+        let mut e = RuntimeError::NewError(e);
 
         self.populate_error_span(&mut e);
 
