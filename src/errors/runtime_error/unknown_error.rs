@@ -4,10 +4,10 @@ use crate::{
 };
 use codespan_reporting::diagnostic::Diagnostic;
 use std::{
+    error::Error,
     fmt,
     fmt::{Display, Formatter},
 };
-use std::error::Error;
 
 /// Errors for unknown issues at runtime. Anything that pops one of these should be
 /// fixed to use another error type.

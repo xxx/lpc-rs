@@ -17,8 +17,8 @@ use std::collections::HashMap;
 
 use crate::{
     ast::ast_node::SpannedNode, codegen::tree_walker::ContextHolder, context::Context,
+    errors::NewError,
 };
-use crate::errors::NewError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -77,9 +77,10 @@ impl TreeWalker for SemanticCheckWalker {
         if !self.context.function_prototypes.contains_key(&node.name)
             && !EFUNS.contains_key(node.name.as_str())
         {
-            let e = CompilerError::NewError(NewError::new(
-                format!("Call to unknown function `{}`", node.name)
-            ).with_span(node.span));
+            let e = CompilerError::NewError(
+                NewError::new(format!("Call to unknown function `{}`", node.name))
+                    .with_span(node.span),
+            );
             self.context.errors.push(e);
             // Non-fatal. Continue.
         }
@@ -100,9 +101,12 @@ impl TreeWalker for SemanticCheckWalker {
             if !((prototype.num_args - prototype.num_default_args)..=prototype.num_args)
                 .contains(&arg_len)
             {
-                let e = NewError::new(format!("Incorrect argument count in call to `{}`: expected: {}, received: {}", node.name, prototype.num_args, arg_len))
-                    .with_span(node.span)
-                    .with_label("Defined here", prototype.span);
+                let e = NewError::new(format!(
+                    "Incorrect argument count in call to `{}`: expected: {}, received: {}",
+                    node.name, prototype.num_args, arg_len
+                ))
+                .with_span(node.span)
+                .with_label("Defined here", prototype.span);
                 self.context.errors.push(CompilerError::NewError(e));
             }
 
@@ -116,13 +120,14 @@ impl TreeWalker for SemanticCheckWalker {
                         let arg_type =
                             node_type(arg, &self.context.scopes, &self.function_return_values());
                         if !ty.matches_type(arg_type) {
-                            let e = NewError::new(format!("Unexpected argument type to `{}`: {}. Expected {}.", node.name, arg_type, ty))
-                                .with_span(arg.span())
-                                .with_label("Declared here", prototype.arg_spans.get(index).cloned());
+                            let e = NewError::new(format!(
+                                "Unexpected argument type to `{}`: {}. Expected {}.",
+                                node.name, arg_type, ty
+                            ))
+                            .with_span(arg.span())
+                            .with_label("Declared here", prototype.arg_spans.get(index).cloned());
 
-                            self.context
-                                .errors
-                                .push(CompilerError::NewError(e));
+                            self.context.errors.push(CompilerError::NewError(e));
                         }
                     }
                 }
@@ -183,18 +188,25 @@ impl TreeWalker for SemanticCheckWalker {
                     if function_def.return_type == LpcType::Void
                         || !function_def.return_type.matches_type(return_type)
                     {
-                        let error = CompilerError::NewError(NewError::new(
-                            format!("Invalid return type {}. Expected {}.", return_type, function_def.return_type))
-                            .with_span(node.span)
+                        let error = CompilerError::NewError(
+                            NewError::new(format!(
+                                "Invalid return type {}. Expected {}.",
+                                return_type, function_def.return_type
+                            ))
+                            .with_span(node.span),
                         );
 
                         self.context.errors.push(error);
                     }
                 }
             } else if function_def.return_type != LpcType::Void {
-                let error = CompilerError::NewError(NewError::new(
-                    format!("Invalid return type {}. Expected {}.", LpcType::Void, function_def.return_type))
-                    .with_span(node.span)
+                let error = CompilerError::NewError(
+                    NewError::new(format!(
+                        "Invalid return type {}. Expected {}.",
+                        LpcType::Void,
+                        function_def.return_type
+                    ))
+                    .with_span(node.span),
                 );
 
                 self.context.errors.push(error);
@@ -220,8 +232,11 @@ impl TreeWalker for SemanticCheckWalker {
                 // The integer 0 is always a valid assignment.
                 Ok(())
             } else {
-                let e = NewError::new(format!("Mismatched types: `{}` ({}) = `{}` ({})", node.name, node.type_, expression, expr_type))
-                    .with_span(node.span);
+                let e = NewError::new(format!(
+                    "Mismatched types: `{}` ({}) = `{}` ({})",
+                    node.name, node.type_, expression, expr_type
+                ))
+                .with_span(node.span);
 
                 let ce = CompilerError::NewError(e);
                 self.context.errors.push(ce.clone());
@@ -256,8 +271,11 @@ impl TreeWalker for SemanticCheckWalker {
             // The integer 0 is always a valid assignment.
             Ok(())
         } else {
-            let e = NewError::new(format!("Mismatched types: `{}` ({}) = `{}` ({})", node.lhs, left_type, node.rhs, right_type))
-                .with_span(node.span);
+            let e = NewError::new(format!(
+                "Mismatched types: `{}` ({}) = `{}` ({})",
+                node.lhs, left_type, node.rhs, right_type
+            ))
+            .with_span(node.span);
 
             let ce = CompilerError::NewError(e);
 
@@ -309,7 +327,13 @@ impl TreeWalker for SemanticCheckWalker {
                 String::from("-1")
             };
 
-            let e = CompilerError::NewError(NewError::new(format!("Invalid range types: `{}` ({}) .. `{}` ({})", left_val, left_type, right_val, right_type)).with_span(node.span));
+            let e = CompilerError::NewError(
+                NewError::new(format!(
+                    "Invalid range types: `{}` ({}) .. `{}` ({})",
+                    left_val, left_type, right_val, right_type
+                ))
+                .with_span(node.span),
+            );
 
             self.context.errors.push(e.clone());
 

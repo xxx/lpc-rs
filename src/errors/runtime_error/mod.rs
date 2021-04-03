@@ -6,9 +6,8 @@ use crate::errors::{
     LpcError,
 };
 use codespan_reporting::diagnostic::Diagnostic;
-use std::error::Error;
-use std::fmt::Display;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
+use std::{error::Error, fmt::Display};
 
 pub mod binary_operation_error;
 pub mod division_by_zero_error;

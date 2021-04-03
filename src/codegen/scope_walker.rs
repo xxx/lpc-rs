@@ -11,8 +11,7 @@ use crate::{
     },
 };
 
-use crate::{codegen::tree_walker::ContextHolder, context::Context};
-use crate::errors::NewError;
+use crate::{codegen::tree_walker::ContextHolder, context::Context, errors::NewError};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -98,9 +97,7 @@ impl TreeWalker for ScopeWalker {
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
         if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
-            self.context
-                .errors
-                .push(CompilerError::NewError(e));
+            self.context.errors.push(CompilerError::NewError(e));
         }
 
         if let Some(expr_node) = &mut node.value {
@@ -120,12 +117,12 @@ impl TreeWalker for ScopeWalker {
                 node.set_global(true);
             }
         } else {
-            let e = CompilerError::NewError(NewError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span));
+            let e = CompilerError::NewError(
+                NewError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span),
+            );
 
             // We check for undefined vars here in case a symbol is subsequently defined.
-            self.context
-                .errors
-                .push(e);
+            self.context.errors.push(e);
         }
 
         Ok(())

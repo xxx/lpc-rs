@@ -8,24 +8,23 @@ use std::fmt::{Debug, Display};
 pub mod compiler_error;
 pub mod lazy_files;
 pub mod runtime_error;
-use crate::errors::lazy_files::FILE_CACHE;
-use std::error::Error;
+use crate::errors::{compiler_error::lex_error::LexError, lazy_files::FILE_CACHE};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use crate::errors::compiler_error::lex_error::LexError;
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct NewError {
     message: String,
     span: Option<Span>,
     labels: Vec<Label<usize>>,
-    notes: Vec<String>
+    notes: Vec<String>,
 }
 
 impl NewError {
     /// Create a new LpcError, with a message
     pub fn new<T>(message: T) -> Self
     where
-        T: Into<String>
+        T: Into<String>,
     {
         Self {
             message: message.into(),
@@ -45,12 +44,11 @@ impl NewError {
     /// Add a secondary label for this error
     pub fn with_label<T>(mut self, message: T, span: Option<Span>) -> Self
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         if let Some(s) = span {
-            self.labels.push(
-                Label::secondary(s.file_id, s.l..s.r).with_message(message.as_ref())
-            );
+            self.labels
+                .push(Label::secondary(s.file_id, s.l..s.r).with_message(message.as_ref()));
         }
 
         self
@@ -59,7 +57,7 @@ impl NewError {
     /// Add some notes the diagnostic
     pub fn with_note<T>(mut self, note: T) -> Self
     where
-        T: Into<String>
+        T: Into<String>,
     {
         self.notes.push(note.into());
 

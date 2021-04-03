@@ -26,8 +26,8 @@ impl FileCache {
     /// # Arguments
     /// `path` - The path of the file to add. It will be used as the key in the file cache.
     pub fn insert<T>(path: T) -> FileId
-        where
-            T: std::fmt::Display,
+    where
+        T: std::fmt::Display,
     {
         let mut cache = FILE_CACHE.write();
         cache.add(path.to_string())

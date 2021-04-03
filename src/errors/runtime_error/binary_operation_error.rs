@@ -5,10 +5,10 @@ use crate::{
 };
 use codespan_reporting::diagnostic::Diagnostic;
 use std::{
+    error::Error,
     fmt,
     fmt::{Display, Formatter},
 };
-use std::error::Error;
 
 /// Errors for mismatched binary operations at runtime.
 #[derive(Debug)]

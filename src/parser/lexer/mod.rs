@@ -562,7 +562,7 @@ impl Token {
             Token::Endif(StringToken(s, _)) => s,
             Token::Define(StringToken(s, _)) => s,
             Token::Undef(StringToken(s, _)) => s,
-            Token::Error => return None
+            Token::Error => return None,
         };
 
         Some(span)

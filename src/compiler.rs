@@ -7,12 +7,11 @@ use crate::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
     },
     errors,
-    errors::compiler_error::CompilerError,
+    errors::{compiler_error::CompilerError, NewError},
     interpreter::program::Program,
     lpc_parser,
     preprocessor::Preprocessor,
 };
-use crate::errors::NewError;
 
 use crate::{
     codegen::tree_walker::ContextHolder,
@@ -77,7 +76,9 @@ where
 {
     let context = Context::new(&path, ".", Vec::new());
 
-    let cwd = AsRef::<Path>::as_ref(&path).parent().unwrap_or(Path::new("/"));
+    let cwd = AsRef::<Path>::as_ref(&path)
+        .parent()
+        .unwrap_or(Path::new("/"));
 
     let mut preprocessor = Preprocessor::new(context);
     let code = match preprocessor.scan(&path, cwd, &code) {
