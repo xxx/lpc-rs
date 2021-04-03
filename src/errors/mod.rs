@@ -140,7 +140,7 @@ impl<'a, E> From<LalrpopParseError<usize, Token, E>> for LpcError
 ///
 /// # Arguments
 /// * `errors` - A slice of [`LpcError`]s to display diagnostics for.
-pub fn emit_diagnostics(errors: &[CompilerError]) {
+pub fn emit_diagnostics(errors: &[LpcError]) {
     let files = FILE_CACHE.read();
 
     let diagnostics: Vec<Diagnostic<usize>> =

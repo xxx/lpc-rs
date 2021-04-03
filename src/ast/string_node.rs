@@ -9,6 +9,7 @@ use crate::{
     parser::span::Span,
 };
 use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A node representing a string literal
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -36,7 +37,7 @@ impl SpannedNode for StringNode {
 
 impl AstNodeTrait for StringNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_string(self)
     }
 }

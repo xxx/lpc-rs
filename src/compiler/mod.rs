@@ -87,12 +87,12 @@ where
     let code = match preprocessor.scan(&path, cwd, &code) {
         Ok(c) => c,
         Err(e) => {
-            let err = CompilerError::LpcError(e);
+            let err = e;
 
             errors::emit_diagnostics(&[err.clone()]);
 
             // Preprocessor errors are fatal.
-            return Err(err);
+            return Err(CompilerError::LpcError(err));
         }
     };
 
@@ -134,11 +134,11 @@ where
     let mut program = match program {
         Ok(prog) => prog,
         Err(e) => {
-            let err = CompilerError::LpcError(LpcError::from(e));
+            let err = LpcError::from(e);
             errors::emit_diagnostics(&[err.clone()]);
 
             // Parse errors are fatal, so we're done here.
-            return Err(err);
+            return Err(CompilerError::LpcError(err));
         }
     };
 

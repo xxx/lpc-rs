@@ -12,6 +12,7 @@ use crate::{
     parser::span::Span,
 };
 use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// Representation of a Range, with optional ends.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +45,7 @@ impl SpannedNode for RangeNode {
 
 impl AstNodeTrait for RangeNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_range(self)
     }
 }

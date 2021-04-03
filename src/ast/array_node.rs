@@ -11,7 +11,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
 };
-use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A node representing an array literal
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +53,7 @@ impl SpannedNode for ArrayNode {
 
 impl AstNodeTrait for ArrayNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_array(self)
     }
 }

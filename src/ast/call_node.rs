@@ -11,7 +11,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
 };
-use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// Representation of a function call.
 #[derive(Debug, PartialEq, Clone)]
@@ -33,7 +33,7 @@ impl SpannedNode for CallNode {
 }
 
 impl AstNodeTrait for CallNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_call(self)
     }
 }

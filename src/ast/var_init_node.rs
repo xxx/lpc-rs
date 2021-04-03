@@ -13,6 +13,7 @@ use crate::{
     semantic::lpc_type::LpcType,
 };
 use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialEq)]
@@ -73,7 +74,7 @@ impl SpannedNode for VarInitNode {
 
 impl AstNodeTrait for VarInitNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_var_init(self)
     }
 }

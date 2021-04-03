@@ -7,7 +7,6 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 use crate::errors::LpcError;
-use crate::compiler::compiler_error::CompilerError;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
@@ -35,10 +34,8 @@ impl LpcVar {
         }
     }
 
-    fn to_error(&self, op: BinaryOperation, right: &LpcVar) -> CompilerError {
-        let e = LpcError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()));
-
-        CompilerError::LpcError(e)
+    fn to_error(&self, op: BinaryOperation, right: &LpcVar) -> LpcError {
+        LpcError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()))
     }
 }
 
@@ -55,7 +52,7 @@ impl Display for LpcVar {
 }
 
 impl Add for LpcVar {
-    type Output = Result<LpcVar, CompilerError>;
+    type Output = Result<LpcVar, LpcError>;
 
     fn add(self, rhs: Self) -> Self::Output {
         if let (LpcVar::Int(x), LpcVar::Int(y)) = (self, rhs) {
@@ -73,7 +70,7 @@ impl Add for LpcVar {
 }
 
 impl Sub for LpcVar {
-    type Output = Result<LpcVar, CompilerError>;
+    type Output = Result<LpcVar, LpcError>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         if let (LpcVar::Int(x), LpcVar::Int(y)) = (self, rhs) {
@@ -91,7 +88,7 @@ impl Sub for LpcVar {
 }
 
 impl Mul for LpcVar {
-    type Output = Result<LpcVar, CompilerError>;
+    type Output = Result<LpcVar, LpcError>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         if let (LpcVar::Int(x), LpcVar::Int(y)) = (self, rhs) {
@@ -109,30 +106,30 @@ impl Mul for LpcVar {
 }
 
 impl Div for LpcVar {
-    type Output = Result<LpcVar, CompilerError>;
+    type Output = Result<LpcVar, LpcError>;
 
     fn div(self, rhs: Self) -> Self::Output {
         if let (LpcVar::Int(x), LpcVar::Int(y)) = (self, rhs) {
             if y == 0 {
-                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
+                Err(LpcError::new("Runtime Error: Division by zero"))
             } else {
                 Ok(LpcVar::Int(x / y))
             }
         } else if let (LpcVar::Float(x), LpcVar::Float(y)) = (self, rhs) {
             if y == 0.0 {
-                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
+                Err(LpcError::new("Runtime Error: Division by zero"))
             } else {
                 Ok(LpcVar::Float(x / y))
             }
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             if y == 0 {
-                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
+                Err(LpcError::new("Runtime Error: Division by zero"))
             } else {
                 Ok(LpcVar::Float(x / y as f64))
             }
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
             if y == 0.0 {
-                Err(CompilerError::LpcError(LpcError::new("Runtime Error: Division by zero")))
+                Err(LpcError::new("Runtime Error: Division by zero"))
             } else {
                 Ok(LpcVar::Float(x as f64 / y))
             }

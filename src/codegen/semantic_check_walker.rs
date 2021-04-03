@@ -18,7 +18,6 @@ use crate::{
     ast::ast_node::SpannedNode, codegen::tree_walker::ContextHolder, context::Context,
     errors::LpcError,
 };
-use crate::compiler::compiler_error::CompilerError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -59,7 +58,7 @@ impl ContextHolder for SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), CompilerError> {
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), LpcError> {
         for argument in &mut node.arguments {
             argument.visit(self)?;
         }
@@ -68,10 +67,8 @@ impl TreeWalker for SemanticCheckWalker {
         if !self.context.function_prototypes.contains_key(&node.name)
             && !EFUNS.contains_key(node.name.as_str())
         {
-            let e = CompilerError::LpcError(
-                LpcError::new(format!("Call to unknown function `{}`", node.name))
-                    .with_span(node.span),
-            );
+            let e = LpcError::new(format!("Call to unknown function `{}`", node.name))
+                    .with_span(node.span);
             self.context.errors.push(e);
             // Non-fatal. Continue.
         }
@@ -98,7 +95,7 @@ impl TreeWalker for SemanticCheckWalker {
                 ))
                 .with_span(node.span)
                 .with_label("Defined here", prototype.span);
-                self.context.errors.push(CompilerError::LpcError(e));
+                self.context.errors.push(e);
             }
 
             // Check argument types.
@@ -118,7 +115,7 @@ impl TreeWalker for SemanticCheckWalker {
                             .with_span(arg.span())
                             .with_label("Declared here", prototype.arg_spans.get(index).cloned());
 
-                            self.context.errors.push(CompilerError::LpcError(e));
+                            self.context.errors.push(e);
                         }
                     }
                 }
@@ -128,7 +125,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), CompilerError> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), LpcError> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
@@ -139,14 +136,13 @@ impl TreeWalker for SemanticCheckWalker {
         ) {
             Ok(_) => Ok(()),
             Err(err) => {
-                let e = CompilerError::LpcError(err);
-                self.context.errors.push(e.clone());
-                Err(e)
+                self.context.errors.push(err.clone());
+                Err(err)
             }
         }
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
         self.current_function = Some(node.clone());
 
         for parameter in &mut node.parameters {
@@ -160,7 +156,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), CompilerError> {
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), LpcError> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
         }
@@ -179,26 +175,22 @@ impl TreeWalker for SemanticCheckWalker {
                     if function_def.return_type == LpcType::Void
                         || !function_def.return_type.matches_type(return_type)
                     {
-                        let error = CompilerError::LpcError(
-                            LpcError::new(format!(
+                        let error = LpcError::new(format!(
                                 "Invalid return type {}. Expected {}.",
                                 return_type, function_def.return_type
                             ))
-                            .with_span(node.span),
-                        );
+                            .with_span(node.span);
 
                         self.context.errors.push(error);
                     }
                 }
             } else if function_def.return_type != LpcType::Void {
-                let error = CompilerError::LpcError(
-                    LpcError::new(format!(
+                let error = LpcError::new(format!(
                         "Invalid return type {}. Expected {}.",
                         LpcType::Void,
                         function_def.return_type
                     ))
-                    .with_span(node.span),
-                );
+                    .with_span(node.span);
 
                 self.context.errors.push(error);
             }
@@ -207,7 +199,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
@@ -229,10 +221,9 @@ impl TreeWalker for SemanticCheckWalker {
                 ))
                 .with_span(node.span);
 
-                let ce = CompilerError::LpcError(e);
-                self.context.errors.push(ce.clone());
+                self.context.errors.push(e.clone());
 
-                Err(ce)
+                Err(e)
             };
 
             return ret;
@@ -241,7 +232,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), CompilerError> {
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), LpcError> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
@@ -268,15 +259,13 @@ impl TreeWalker for SemanticCheckWalker {
             ))
             .with_span(node.span);
 
-            let ce = CompilerError::LpcError(e);
+            self.context.errors.push(e.clone());
 
-            self.context.errors.push(ce.clone());
-
-            Err(ce)
+            Err(e)
         }
     }
 
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), CompilerError>
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), LpcError>
     where
         Self: Sized,
     {
@@ -318,13 +307,11 @@ impl TreeWalker for SemanticCheckWalker {
                 String::from("-1")
             };
 
-            let e = CompilerError::LpcError(
-                LpcError::new(format!(
+            let e = LpcError::new(format!(
                     "Invalid range types: `{}` ({}) .. `{}` ({})",
                     left_val, left_type, right_val, right_type
                 ))
-                .with_span(node.span),
-            );
+                .with_span(node.span);
 
             self.context.errors.push(e.clone());
 
@@ -566,7 +553,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_binary_op_validates_both_sides() -> Result<(), CompilerError> {
+        fn test_visit_binary_op_validates_both_sides() -> Result<(), LpcError> {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
@@ -620,7 +607,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {
+        fn test_visit_assignment_validates_both_sides() -> Result<(), LpcError> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
@@ -644,7 +631,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_always_allows_0() -> Result<(), CompilerError> {
+        fn test_visit_assignment_always_allows_0() -> Result<(), LpcError> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),

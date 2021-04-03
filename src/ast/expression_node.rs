@@ -20,7 +20,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
 };
-use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -73,7 +73,7 @@ impl SpannedNode for ExpressionNode {
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl AstNodeTrait for ExpressionNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
                 match self {
                 $(
                     $x(y) => y.visit(tree_walker),

@@ -13,6 +13,7 @@ use crate::{
     semantic::lpc_type::LpcType,
 };
 use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A node representation a function definition
 #[derive(Debug, PartialEq)]
@@ -32,7 +33,7 @@ impl SpannedNode for FunctionDefNode {
 
 impl AstNodeTrait for FunctionDefNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_function_def(self)
     }
 }

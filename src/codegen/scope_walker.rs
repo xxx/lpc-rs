@@ -10,7 +10,6 @@ use crate::{
     },
 };
 use crate::{codegen::tree_walker::ContextHolder, context::Context, errors::LpcError};
-use crate::compiler::compiler_error::CompilerError;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -41,7 +40,7 @@ impl ContextHolder for ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), CompilerError> {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), LpcError> {
         // Push the global scope
         self.context.scopes.push_new();
 
@@ -52,7 +51,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), CompilerError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
@@ -94,9 +93,9 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), CompilerError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError> {
         if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
-            self.context.errors.push(CompilerError::LpcError(e));
+            self.context.errors.push(e);
         }
 
         if let Some(expr_node) = &mut node.value {
@@ -108,7 +107,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), CompilerError> {
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), LpcError> {
         let sym = self.context.scopes.lookup(&node.name);
 
         if let Some(symbol) = sym {
@@ -116,9 +115,7 @@ impl TreeWalker for ScopeWalker {
                 node.set_global(true);
             }
         } else {
-            let e = CompilerError::LpcError(
-                LpcError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span),
-            );
+            let e = LpcError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span);
 
             // We check for undefined vars here in case a symbol is subsequently defined.
             self.context.errors.push(e);

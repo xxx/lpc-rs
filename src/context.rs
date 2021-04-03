@@ -8,6 +8,7 @@ use crate::{
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -36,7 +37,7 @@ pub struct Context {
     pub function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Any errors that have been collected
-    pub errors: Vec<CompilerError>,
+    pub errors: Vec<LpcError>,
 }
 
 impl Context {

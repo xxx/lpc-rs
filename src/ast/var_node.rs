@@ -9,6 +9,7 @@ use crate::{
     parser::span::Span,
 };
 use crate::compiler::compiler_error::CompilerError;
+use crate::errors::LpcError;
 
 /// A node representing the use of a variable.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -45,7 +46,7 @@ impl SpannedNode for VarNode {
 }
 
 impl AstNodeTrait for VarNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), CompilerError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
         tree_walker.visit_var(self)
     }
 }

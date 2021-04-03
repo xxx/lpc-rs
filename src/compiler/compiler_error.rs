@@ -10,7 +10,7 @@ use std::{
 #[derive(Debug, Clone)]
 pub enum CompilerError {
     LpcError(LpcError),
-    Collection(Vec<CompilerError>),
+    Collection(Vec<LpcError>),
 }
 
 impl CompilerError {
