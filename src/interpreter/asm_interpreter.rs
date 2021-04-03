@@ -544,7 +544,7 @@ impl AsmInterpreter {
     #[doc(hidden)]
     fn populate_error_span(&self, error: &mut RuntimeError) {
         match error {
-            RuntimeError::BinaryOperationError(err) => {
+            RuntimeError::NewError(err) => {
                 err.span = *self.program.debug_spans.get(self.pc).unwrap()
             }
             RuntimeError::DivisionByZeroError(err) => {

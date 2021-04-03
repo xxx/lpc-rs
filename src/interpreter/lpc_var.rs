@@ -1,7 +1,7 @@
 use crate::{
     ast::binary_op_node::BinaryOperation,
     errors::runtime_error::{
-        binary_operation_error::BinaryOperationError, division_by_zero_error::DivisionByZeroError,
+        division_by_zero_error::DivisionByZeroError,
         RuntimeError,
     },
 };
@@ -10,6 +10,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::{Add, Div, Mul, Sub},
 };
+use crate::errors::NewError;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
@@ -37,15 +38,10 @@ impl LpcVar {
         }
     }
 
-    fn to_binary_op_error(&self, op: BinaryOperation, right: &LpcVar) -> RuntimeError {
-        let e = BinaryOperationError {
-            op,
-            left_type: self.type_name().to_string(),
-            right_type: right.type_name().to_string(),
-            span: None,
-        };
+    fn to_error(&self, op: BinaryOperation, right: &LpcVar) -> RuntimeError {
+        let e = NewError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()));
 
-        RuntimeError::BinaryOperationError(e)
+        RuntimeError::NewError(e)
     }
 }
 
@@ -74,7 +70,7 @@ impl Add for LpcVar {
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
             Ok(LpcVar::Float(x as f64 + y))
         } else {
-            Err(self.to_binary_op_error(BinaryOperation::Add, &rhs))
+            Err(self.to_error(BinaryOperation::Add, &rhs))
         }
     }
 }
@@ -92,7 +88,7 @@ impl Sub for LpcVar {
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
             Ok(LpcVar::Float(x as f64 - y))
         } else {
-            Err(self.to_binary_op_error(BinaryOperation::Sub, &rhs))
+            Err(self.to_error(BinaryOperation::Sub, &rhs))
         }
     }
 }
@@ -110,7 +106,7 @@ impl Mul for LpcVar {
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
             Ok(LpcVar::Float(x as f64 * y))
         } else {
-            Err(self.to_binary_op_error(BinaryOperation::Mul, &rhs))
+            Err(self.to_error(BinaryOperation::Mul, &rhs))
         }
     }
 }
@@ -152,7 +148,7 @@ impl Div for LpcVar {
                 Ok(LpcVar::Float(x as f64 / y))
             }
         } else {
-            Err(self.to_binary_op_error(BinaryOperation::Div, &rhs))
+            Err(self.to_error(BinaryOperation::Div, &rhs))
         }
     }
 }

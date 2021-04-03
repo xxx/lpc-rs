@@ -19,7 +19,7 @@ pub struct NewError {
     /// The main message to be printed out
     message: String,
     /// The primary span causing this error
-    span: Option<Span>,
+    pub span: Option<Span>,
     /// Any secondary labels that are additionally printed with the error
     labels: Vec<Label<usize>>,
     /// Additional text notes, suggestions, etc. to be printed to the user.

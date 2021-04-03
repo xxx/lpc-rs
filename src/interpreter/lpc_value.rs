@@ -1,7 +1,7 @@
 use crate::{
     ast::binary_op_node::BinaryOperation,
     errors::runtime_error::{
-        binary_operation_error::BinaryOperationError, division_by_zero_error::DivisionByZeroError,
+        division_by_zero_error::DivisionByZeroError,
         RuntimeError,
     },
     interpreter::lpc_var::LpcVar,
@@ -13,6 +13,7 @@ use std::{
     iter::repeat,
     ops::{Add, Div, Mul, Sub},
 };
+use crate::errors::NewError;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -35,16 +36,11 @@ impl LpcValue {
         }
     }
 
-    // Just a refactor of a common operation
-    fn to_binary_op_error(&self, op: BinaryOperation, right: &LpcValue) -> RuntimeError {
-        let e = BinaryOperationError {
-            op,
-            left_type: self.type_name().to_string(),
-            right_type: right.type_name().to_string(),
-            span: None,
-        };
+    /// Just a refactor of a common operation
+    fn to_error(&self, op: BinaryOperation, right: &LpcValue) -> RuntimeError {
+        let e = NewError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()));
 
-        RuntimeError::BinaryOperationError(e)
+        RuntimeError::NewError(e)
     }
 }
 
@@ -79,18 +75,18 @@ impl Add for &LpcValue {
             LpcValue::Float(f) => match rhs {
                 LpcValue::Float(f2) => Ok(LpcValue::Float(f + f2)),
                 LpcValue::Int(i) => Ok(LpcValue::Float(f + *i as f64)),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcValue::Int(i) => match rhs {
                 LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 + f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i + i2)),
                 LpcValue::String(s) => Ok(LpcValue::String(i.to_string() + &s)),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcValue::String(s) => match rhs {
                 LpcValue::String(s2) => Ok(LpcValue::String(s.clone() + s2)),
                 LpcValue::Int(i) => Ok(LpcValue::String(s.clone() + &i.to_string())),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcValue::Array(vec) => match rhs {
                 LpcValue::Array(vec2) => {
@@ -98,7 +94,7 @@ impl Add for &LpcValue {
                     new_vec.extend(&*vec2);
                     Ok(LpcValue::Array(new_vec))
                 }
-                _ => Err(self.to_binary_op_error(BinaryOperation::Add, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
         }
     }
@@ -112,14 +108,14 @@ impl Sub for &LpcValue {
             LpcValue::Int(i) => match rhs {
                 LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 - f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i - i2)),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
             },
             LpcValue::Float(f) => match rhs {
                 LpcValue::Float(f2) => Ok(LpcValue::Float(f - f2)),
                 LpcValue::Int(i) => Ok(LpcValue::Float(f - *i as f64)),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
             },
-            _ => Err(self.to_binary_op_error(BinaryOperation::Sub, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
     }
 }
@@ -141,22 +137,22 @@ impl Mul for &LpcValue {
             LpcValue::Float(f) => match rhs {
                 LpcValue::Float(f2) => Ok(LpcValue::Float(f * f2)),
                 LpcValue::Int(i) => Ok(LpcValue::Float(f * *i as f64)),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
             },
             LpcValue::Int(i) => match rhs {
                 LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 * f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i * i2)),
                 LpcValue::String(s) => Ok(LpcValue::String(repeat_string(s, i))),
-                _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
             },
             LpcValue::String(s) => {
                 match rhs {
                     // repeat the string `s`, `i` times
                     LpcValue::Int(i) => Ok(LpcValue::String(repeat_string(s, i))),
-                    _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
+                    _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
                 }
             }
-            _ => Err(self.to_binary_op_error(BinaryOperation::Mul, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
     }
 }
@@ -185,7 +181,7 @@ impl Div for &LpcValue {
                         Ok(LpcValue::Float(f / *i as f64))
                     }
                 }
-                _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Div, rhs)),
             },
             LpcValue::Int(i) => match rhs {
                 LpcValue::Float(f) => {
@@ -206,9 +202,9 @@ impl Div for &LpcValue {
                         Ok(LpcValue::Int(i / i2))
                     }
                 }
-                _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
+                _ => Err(self.to_error(BinaryOperation::Div, rhs)),
             },
-            _ => Err(self.to_binary_op_error(BinaryOperation::Div, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
 }
