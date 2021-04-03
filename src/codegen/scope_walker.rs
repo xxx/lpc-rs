@@ -100,7 +100,7 @@ impl TreeWalker for ScopeWalker {
         if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
             self.context
                 .errors
-                .push(CompilerError::VarRedefinitionError(e));
+                .push(CompilerError::NewError(e));
         }
 
         if let Some(expr_node) = &mut node.value {

@@ -15,9 +15,6 @@ use crate::{
     errors,
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
-use errors::compiler_error::{
-    var_redefinition_error::VarRedefinitionError,
-};
 use std::collections::HashMap;
 use crate::errors::NewError;
 
@@ -36,12 +33,9 @@ use crate::errors::NewError;
 pub fn check_var_redefinition(
     node: &'_ VarInitNode,
     scope: &'_ LocalScope,
-) -> Result<(), VarRedefinitionError> {
+) -> Result<(), NewError> {
     if let Some(sym) = scope.lookup(&node.name) {
-        Err(VarRedefinitionError {
-            symbol: sym.clone(),
-            span: node.span,
-        })
+        Err(NewError::new(format!("Redefinition of `{}`", sym.name)).with_span(node.span))
     } else {
         Ok(())
     }
