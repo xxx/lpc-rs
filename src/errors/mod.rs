@@ -12,7 +12,6 @@ use std::error::Error;
 
 pub mod compiler_error;
 pub mod lazy_files;
-pub mod runtime_error;
 
 #[derive(Debug, Clone)]
 pub struct NewError {

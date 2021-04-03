@@ -1,6 +1,5 @@
 use crate::{
     asm::instruction::Instruction,
-    errors::runtime_error::RuntimeError,
     interpreter::{
         efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
         stack_frame::StackFrame,
@@ -8,6 +7,7 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use crate::errors::NewError;
+use crate::errors::compiler_error::CompilerError;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -143,7 +143,7 @@ impl AsmInterpreter {
     }
 
     /// Dummy starter for the interpreter, to get the "create" stack frame setup
-    pub fn exec(&mut self) -> Result<(), RuntimeError> {
+    pub fn exec(&mut self) -> Result<(), CompilerError> {
         let sym = self.program.functions.get("create").unwrap();
         let address = sym.address;
         let create = StackFrame::new(sym.clone(), 0);
@@ -194,7 +194,7 @@ impl AsmInterpreter {
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
-    fn eval(&mut self) -> Result<(), RuntimeError> {
+    fn eval(&mut self) -> Result<(), CompilerError> {
         while let Some(instruction) = self.program.instructions.get(self.pc) {
             if self.is_halted {
                 break;
@@ -543,20 +543,21 @@ impl AsmInterpreter {
     }
 
     #[doc(hidden)]
-    fn populate_error_span(&self, error: &mut RuntimeError) {
+    fn populate_error_span(&self, error: &mut CompilerError) {
         match error {
-            RuntimeError::NewError(err) => {
+            CompilerError::NewError(err) => {
                 err.span = *self.program.debug_spans.get(self.pc).unwrap()
-            }
+            },
+            _ => unimplemented!()
         }
     }
 
     #[doc(hidden)]
-    fn make_index_error(&self, index: i64, length: usize) -> RuntimeError {
+    fn make_index_error(&self, index: i64, length: usize) -> CompilerError {
         let e = NewError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
                                       index, length));
 
-        let mut e = RuntimeError::NewError(e);
+        let mut e = CompilerError::NewError(e);
 
         self.populate_error_span(&mut e);
 
