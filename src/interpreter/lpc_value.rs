@@ -10,7 +10,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 use crate::errors::NewError;
-use crate::errors::compiler_error::CompilerError;
+use crate::compiler::compiler_error::CompilerError;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.

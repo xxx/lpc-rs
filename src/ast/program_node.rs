@@ -1,12 +1,13 @@
-use crate::{
-    ast::ast_node::{AstNode, AstNodeTrait},
-    codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
-};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use crate::{
+    ast::ast_node::{AstNode, AstNodeTrait},
+    codegen::tree_walker::TreeWalker,
+};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, Clone, Default)]

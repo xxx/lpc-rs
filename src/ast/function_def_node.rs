@@ -1,17 +1,18 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use crate::{
     ast::{
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
     parser::span::Span,
     semantic::lpc_type::LpcType,
 };
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
-};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A node representation a function definition
 #[derive(Debug, PartialEq)]

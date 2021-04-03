@@ -1,13 +1,14 @@
-use crate::{
-    ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
-    codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
-    semantic::lpc_type::LpcType,
-};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use crate::{
+    ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
+    codegen::tree_walker::TreeWalker,
+    semantic::lpc_type::LpcType,
+};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A container for a set of variable declarations.
 #[derive(Debug, Clone, PartialEq)]

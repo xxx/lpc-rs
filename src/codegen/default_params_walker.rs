@@ -1,9 +1,8 @@
 use crate::{
     ast::function_def_node::FunctionDefNode, codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
 };
-
 use crate::{codegen::tree_walker::ContextHolder, context::Context};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
 #[derive(Debug, Default)]
@@ -39,11 +38,12 @@ impl TreeWalker for DefaultParamsWalker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
         ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
         semantic::lpc_type::LpcType,
     };
+
+    use super::*;
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {

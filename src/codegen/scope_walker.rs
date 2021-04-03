@@ -4,14 +4,13 @@ use crate::{
         var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
     semantic::{
         function_prototype::FunctionPrototype, semantic_checks::check_var_redefinition,
         symbol::Symbol,
     },
 };
-
 use crate::{codegen::tree_walker::ContextHolder, context::Context, errors::NewError};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -144,8 +143,9 @@ mod tests {
     use super::*;
 
     mod test_visit_function_def {
-        use super::*;
         use crate::semantic::lpc_type::LpcType;
+
+        use super::*;
 
         #[test]
         fn test_stores_the_prototype() {
@@ -183,8 +183,9 @@ mod tests {
     }
 
     mod test_visit_var_init {
-        use super::*;
         use crate::semantic::lpc_type::LpcType;
+
+        use super::*;
 
         fn setup() -> (ScopeWalker, VarInitNode) {
             let mut walker = ScopeWalker::default();
@@ -248,8 +249,9 @@ mod tests {
     }
 
     mod test_visit_var {
-        use super::*;
         use crate::semantic::lpc_type::LpcType;
+
+        use super::*;
 
         fn setup() -> (ScopeWalker, VarNode) {
             let walker = ScopeWalker::default();

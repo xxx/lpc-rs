@@ -1,3 +1,8 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use crate::{
     ast::{
         array_node::ArrayNode,
@@ -13,13 +18,9 @@ use crate::{
         var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
     parser::span::Span,
 };
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
-};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -213,8 +214,9 @@ impl From<Vec<i64>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::ast::{assignment_node::AssignmentOperation, binary_op_node::BinaryOperation};
+
+    use super::*;
 
     #[test]
     fn test_from_binary_op_node() {

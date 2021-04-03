@@ -1,3 +1,15 @@
+use core::fmt::Debug;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
+use auto_impl::auto_impl;
+
+use expression_node::ExpressionNode;
+use int_node::IntNode;
+use program_node::ProgramNode;
+
 use crate::{
     ast::{
         binary_op_node::BinaryOpNode, call_node::CallNode, decl_node::DeclNode, expression_node,
@@ -5,18 +17,9 @@ use crate::{
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
     parser::span::Span,
 };
-use auto_impl::auto_impl;
-use core::fmt::Debug;
-use expression_node::ExpressionNode;
-use int_node::IntNode;
-use program_node::ProgramNode;
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
-};
+use crate::compiler::compiler_error::CompilerError;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
@@ -120,8 +123,9 @@ impl From<VarInitNode> for AstNode {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{ast::binary_op_node::BinaryOperation, semantic::lpc_type::LpcType};
+
+    use super::*;
 
     #[test]
     fn test_from_expression_node() {

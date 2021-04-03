@@ -1,12 +1,13 @@
-use path_absolutize::Absolutize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+use path_absolutize::Absolutize;
 
 use crate::{
     ast::expression_node::ExpressionNode,
-    errors::compiler_error::CompilerError,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
-use std::collections::HashMap;
+use crate::compiler::compiler_error::CompilerError;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in

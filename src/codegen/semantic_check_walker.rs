@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     ast::{
         assignment_node::AssignmentNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
@@ -6,19 +8,17 @@ use crate::{
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
-    interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
+    interpreter::efun::{EFUN_PROTOTYPES, EFUNS},
     semantic::{
         lpc_type::LpcType,
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
-use std::collections::HashMap;
-
 use crate::{
     ast::ast_node::SpannedNode, codegen::tree_walker::ContextHolder, context::Context,
     errors::NewError,
 };
+use crate::compiler::compiler_error::CompilerError;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -335,7 +335,6 @@ impl TreeWalker for SemanticCheckWalker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
         ast::{
             assignment_node::AssignmentOperation, expression_node::ExpressionNode,
@@ -346,6 +345,8 @@ mod tests {
             symbol::Symbol,
         },
     };
+
+    use super::*;
 
     mod test_visit_call {
         use super::*;
@@ -560,8 +561,9 @@ mod tests {
     }
 
     mod test_visit_binary_op {
-        use super::*;
         use crate::ast::binary_op_node::BinaryOperation;
+
+        use super::*;
 
         #[test]
         fn test_visit_binary_op_validates_both_sides() -> Result<(), CompilerError> {
@@ -613,8 +615,9 @@ mod tests {
     }
 
     mod test_visit_assignment {
-        use super::*;
         use crate::ast::binary_op_node::BinaryOperation;
+
+        use super::*;
 
         #[test]
         fn test_visit_assignment_validates_both_sides() -> Result<(), CompilerError> {

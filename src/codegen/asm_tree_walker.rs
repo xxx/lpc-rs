@@ -1,10 +1,16 @@
+use std::collections::HashMap;
+
+use multimap::MultiMap;
+
+use tree_walker::TreeWalker;
+
 use crate::{
     asm::{instruction::Instruction, register::Register, register_counter::RegisterCounter},
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOpNode, BinaryOperation},
+        binary_op_node::{BinaryOperation, BinaryOpNode},
         call_node::CallNode,
         decl_node::DeclNode,
         expression_node::ExpressionNode,
@@ -20,14 +26,11 @@ use crate::{
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
-    errors::compiler_error::CompilerError,
     interpreter::{constant_pool::ConstantPool, lpc_value::LpcValue, program::Program},
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
-use multimap::MultiMap;
-use std::collections::HashMap;
-use tree_walker::TreeWalker;
+use crate::compiler::compiler_error::CompilerError;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -670,7 +673,6 @@ impl TreeWalker for AsmTreeWalker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
         asm::instruction::Instruction::{
             AConst, AStore, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret,
@@ -689,6 +691,8 @@ mod tests {
         },
         semantic::lpc_type::LpcType,
     };
+
+    use super::*;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -728,8 +732,9 @@ mod tests {
     }
 
     mod test_visit_call {
-        use super::*;
         use crate::asm::instruction::Instruction::Call;
+
+        use super::*;
 
         #[test]
         fn test_visit_call_populates_the_instructions() {
@@ -814,8 +819,9 @@ mod tests {
     }
 
     mod test_binary_op {
-        use super::*;
         use crate::asm::instruction::Instruction::{ALoad, ARange, FConst, IConst0, IMul, MAdd};
+
+        use super::*;
 
         #[test]
         fn test_visit_binary_op_populates_the_instructions_for_ints() {

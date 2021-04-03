@@ -1,17 +1,18 @@
-use crate::parser::span::Span;
+use std::error::Error;
+use std::fmt::{Debug, Display};
+
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream},
 };
-use std::fmt::{Debug, Display};
-use crate::parser::lexer::Token;
 use lalrpop_util::ParseError as LalrpopParseError;
-use crate::errors::lazy_files::FILE_CACHE;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use std::error::Error;
-use crate::errors::compiler_error::CompilerError;
 
-pub mod compiler_error;
+use crate::compiler::compiler_error::CompilerError;
+use crate::errors::lazy_files::FILE_CACHE;
+use crate::parser::lexer::Token;
+use crate::parser::span::Span;
+
 pub mod lazy_files;
 
 #[derive(Debug, Clone)]
@@ -70,7 +71,7 @@ impl NewError {
         self
     }
 
-    fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
+    pub fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
         let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
         let mut labels = vec![];
 

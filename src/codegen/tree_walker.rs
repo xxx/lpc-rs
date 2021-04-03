@@ -8,8 +8,8 @@ use crate::{
         var_init_node::VarInitNode, var_node::VarNode,
     },
     context::Context,
-    errors::compiler_error::CompilerError,
 };
+use crate::compiler::compiler_error::CompilerError;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.

@@ -1,3 +1,5 @@
+use tree_walker::TreeWalker;
+
 use crate::{
     ast::{
         array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
@@ -7,9 +9,8 @@ use crate::{
         string_node::StringNode, var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker,
-    errors::compiler_error::CompilerError,
 };
-use tree_walker::TreeWalker;
+use crate::compiler::compiler_error::CompilerError;
 
 /// A tree walker for pretty-printing an AST
 ///

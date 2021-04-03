@@ -7,7 +7,7 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use crate::errors::NewError;
-use crate::errors::compiler_error::CompilerError;
+use crate::compiler::compiler_error::CompilerError;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;

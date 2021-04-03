@@ -1,4 +1,7 @@
 use std::fs;
+use std::path::Path;
+
+use compiler_error::CompilerError;
 
 use crate::{
     ast::ast_node::AstNodeTrait,
@@ -7,18 +10,18 @@ use crate::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
     },
     errors,
-    errors::{compiler_error::CompilerError, NewError},
+    errors::NewError,
     interpreter::program::Program,
     lpc_parser,
     preprocessor::Preprocessor,
 };
-
 use crate::{
     codegen::tree_walker::ContextHolder,
     context::Context,
     parser::lexer::{Spanned, Token, TokenVecWrapper},
 };
-use std::path::Path;
+
+pub mod compiler_error;
 
 /// Fully compile a file into a Program struct
 ///

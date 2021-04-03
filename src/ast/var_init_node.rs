@@ -1,17 +1,18 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use crate::{
     ast::{
         ast_node::{AstNodeTrait, SpannedNode},
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
     parser::span::Span,
     semantic::lpc_type::LpcType,
 };
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
-};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialEq)]

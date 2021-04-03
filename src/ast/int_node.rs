@@ -1,13 +1,14 @@
-use crate::{
-    ast::ast_node::{AstNodeTrait, SpannedNode},
-    codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
-    parser::span::Span,
-};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use crate::{
+    ast::ast_node::{AstNodeTrait, SpannedNode},
+    codegen::tree_walker::TreeWalker,
+    parser::span::Span,
+};
+use crate::compiler::compiler_error::CompilerError;
 
 /// A node representing an integer literal
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

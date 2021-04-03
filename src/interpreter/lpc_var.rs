@@ -7,7 +7,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 use crate::errors::NewError;
-use crate::errors::compiler_error::CompilerError;
+use crate::compiler::compiler_error::CompilerError;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).

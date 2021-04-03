@@ -1,16 +1,17 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use crate::{
     ast::{
         ast_node::{AstNodeTrait, SpannedNode},
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::compiler_error::CompilerError,
     parser::span::Span,
 };
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
-};
+use crate::compiler::compiler_error::CompilerError;
 
 /// All possible assignment operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
