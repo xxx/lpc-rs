@@ -3,13 +3,14 @@ use crate::{
         ast_node::AstNodeTrait, function_def_node::FunctionDefNode, program_node::ProgramNode,
         var_init_node::VarInitNode, var_node::VarNode,
     },
-    codegen::tree_walker::TreeWalker,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    context::Context,
+    errors::LpcError,
     semantic::{
         function_prototype::FunctionPrototype, semantic_checks::check_var_redefinition,
         symbol::Symbol,
     },
 };
-use crate::{codegen::tree_walker::ContextHolder, context::Context, errors::LpcError};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -115,7 +116,8 @@ impl TreeWalker for ScopeWalker {
                 node.set_global(true);
             }
         } else {
-            let e = LpcError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span);
+            let e =
+                LpcError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span);
 
             // We check for undefined vars here in case a symbol is subsequently defined.
             self.context.errors.push(e);

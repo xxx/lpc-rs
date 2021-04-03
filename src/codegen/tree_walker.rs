@@ -8,8 +8,8 @@ use crate::{
         var_init_node::VarInitNode, var_node::VarNode,
     },
     context::Context,
+    errors::LpcError,
 };
-use crate::errors::LpcError;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -171,10 +171,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a comma expression
-    fn visit_comma_expression(
-        &mut self,
-        node: &mut CommaExpressionNode,
-    ) -> Result<(), LpcError>
+    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<(), LpcError>
     where
         Self: Sized,
     {

@@ -9,9 +9,7 @@ use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
-use crate::{
-    parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
-};
+use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
 
 type Result<T> = result::Result<T, LpcError>;
 

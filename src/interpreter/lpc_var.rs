@@ -1,12 +1,9 @@
-use crate::{
-    ast::binary_op_node::BinaryOperation,
-};
+use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError};
 use std::{
     fmt,
     fmt::{Display, Formatter},
     ops::{Add, Div, Mul, Sub},
 };
-use crate::errors::LpcError;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
@@ -35,7 +32,12 @@ impl LpcVar {
     }
 
     fn to_error(&self, op: BinaryOperation, right: &LpcVar) -> LpcError {
-        LpcError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()))
+        LpcError::new(format!(
+            "Runtime Error: Mismatched types: ({}) {} ({})",
+            self.type_name(),
+            op,
+            right.type_name()
+        ))
     }
 }
 

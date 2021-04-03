@@ -9,8 +9,8 @@ use crate::{
         string_node::StringNode, var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker,
+    errors::LpcError,
 };
-use crate::errors::LpcError;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -219,10 +219,7 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_comma_expression(
-        &mut self,
-        node: &mut CommaExpressionNode,
-    ) -> Result<(), LpcError> {
+    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<(), LpcError> {
         self.println_indented("Comma Expression");
         self.indent += 2;
         for expr in &mut node.value {

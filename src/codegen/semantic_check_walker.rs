@@ -2,21 +2,25 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{
-        assignment_node::AssignmentNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
-        call_node::CallNode, expression_node::ExpressionNode, function_def_node::FunctionDefNode,
-        int_node::IntNode, range_node::RangeNode, return_node::ReturnNode,
+        assignment_node::AssignmentNode,
+        ast_node::{AstNodeTrait, SpannedNode},
+        binary_op_node::BinaryOpNode,
+        call_node::CallNode,
+        expression_node::ExpressionNode,
+        function_def_node::FunctionDefNode,
+        int_node::IntNode,
+        range_node::RangeNode,
+        return_node::ReturnNode,
         var_init_node::VarInitNode,
     },
-    codegen::tree_walker::TreeWalker,
-    interpreter::efun::{EFUN_PROTOTYPES, EFUNS},
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    context::Context,
+    errors::LpcError,
+    interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
     semantic::{
         lpc_type::LpcType,
         semantic_checks::{check_binary_operation_types, node_type},
     },
-};
-use crate::{
-    ast::ast_node::SpannedNode, codegen::tree_walker::ContextHolder, context::Context,
-    errors::LpcError,
 };
 
 /// A tree walker to handle various semantic & type checks
@@ -68,7 +72,7 @@ impl TreeWalker for SemanticCheckWalker {
             && !EFUNS.contains_key(node.name.as_str())
         {
             let e = LpcError::new(format!("Call to unknown function `{}`", node.name))
-                    .with_span(node.span);
+                .with_span(node.span);
             self.context.errors.push(e);
             // Non-fatal. Continue.
         }
@@ -176,21 +180,21 @@ impl TreeWalker for SemanticCheckWalker {
                         || !function_def.return_type.matches_type(return_type)
                     {
                         let error = LpcError::new(format!(
-                                "Invalid return type {}. Expected {}.",
-                                return_type, function_def.return_type
-                            ))
-                            .with_span(node.span);
+                            "Invalid return type {}. Expected {}.",
+                            return_type, function_def.return_type
+                        ))
+                        .with_span(node.span);
 
                         self.context.errors.push(error);
                     }
                 }
             } else if function_def.return_type != LpcType::Void {
                 let error = LpcError::new(format!(
-                        "Invalid return type {}. Expected {}.",
-                        LpcType::Void,
-                        function_def.return_type
-                    ))
-                    .with_span(node.span);
+                    "Invalid return type {}. Expected {}.",
+                    LpcType::Void,
+                    function_def.return_type
+                ))
+                .with_span(node.span);
 
                 self.context.errors.push(error);
             }
@@ -308,10 +312,10 @@ impl TreeWalker for SemanticCheckWalker {
             };
 
             let e = LpcError::new(format!(
-                    "Invalid range types: `{}` ({}) .. `{}` ({})",
-                    left_val, left_type, right_val, right_type
-                ))
-                .with_span(node.span);
+                "Invalid range types: `{}` ({}) .. `{}` ({})",
+                left_val, left_type, right_val, right_type
+            ))
+            .with_span(node.span);
 
             self.context.errors.push(e.clone());
 

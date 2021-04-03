@@ -1,7 +1,4 @@
-use crate::{
-    ast::binary_op_node::BinaryOperation,
-    interpreter::lpc_var::LpcVar,
-};
+use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{
     fmt,
@@ -9,7 +6,6 @@ use std::{
     iter::repeat,
     ops::{Add, Div, Mul, Sub},
 };
-use crate::errors::LpcError;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -34,7 +30,12 @@ impl LpcValue {
 
     /// Just a refactor of a common operation
     fn to_error(&self, op: BinaryOperation, right: &LpcValue) -> LpcError {
-        LpcError::new(format!("Runtime Error: Mismatched types: ({}) {} ({})", self.type_name(), op, right.type_name()))
+        LpcError::new(format!(
+            "Runtime Error: Mismatched types: ({}) {} ({})",
+            self.type_name(),
+            op,
+            right.type_name()
+        ))
     }
 }
 

@@ -17,9 +17,9 @@ use crate::{
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
+    errors::LpcError,
     parser::span::Span,
 };
-use crate::errors::LpcError;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]

@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
+    errors::LpcError,
     parser::span::Span,
 };
-use crate::errors::LpcError;
 
 /// A node representing an array literal
 #[derive(Debug, Clone, PartialEq)]

@@ -18,9 +18,9 @@ use crate::{
         var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
+    errors::LpcError,
     parser::span::Span,
 };
-use crate::errors::LpcError;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

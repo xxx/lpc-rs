@@ -10,7 +10,7 @@ use crate::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOperation, BinaryOpNode},
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         decl_node::DeclNode,
         expression_node::ExpressionNode,
@@ -26,11 +26,11 @@ use crate::{
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
+    errors::LpcError,
     interpreter::{constant_pool::ConstantPool, lpc_value::LpcValue, program::Program},
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
-use crate::errors::LpcError;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;

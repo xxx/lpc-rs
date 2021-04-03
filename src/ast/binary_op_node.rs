@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
+    errors::LpcError,
     parser::span::Span,
 };
-use crate::errors::LpcError;
 
 /// All possible binary operations
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

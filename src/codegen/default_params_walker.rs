@@ -1,8 +1,9 @@
 use crate::{
-    ast::function_def_node::FunctionDefNode, codegen::tree_walker::TreeWalker,
+    ast::function_def_node::FunctionDefNode,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    context::Context,
+    errors::LpcError,
 };
-use crate::{codegen::tree_walker::ContextHolder, context::Context};
-use crate::errors::LpcError;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
 #[derive(Debug, Default)]

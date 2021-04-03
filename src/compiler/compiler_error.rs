@@ -1,6 +1,6 @@
 use codespan_reporting::diagnostic::Diagnostic;
 
-use crate::errors::{LpcError};
+use crate::errors::LpcError;
 use std::{
     error::Error,
     fmt::{Display, Formatter},

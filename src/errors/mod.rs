@@ -1,5 +1,7 @@
-use std::error::Error;
-use std::fmt::{Debug, Display};
+use std::{
+    error::Error,
+    fmt::{Debug, Display},
+};
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
@@ -8,10 +10,10 @@ use codespan_reporting::{
 use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
-
-use crate::errors::lazy_files::FILE_CACHE;
-use crate::parser::lexer::Token;
-use crate::parser::span::Span;
+use crate::{
+    errors::lazy_files::FILE_CACHE,
+    parser::{lexer::Token, span::Span},
+};
 
 pub mod lazy_files;
 
@@ -105,8 +107,8 @@ impl Error for LpcError {}
 
 /// Map LALRpop's parse errors into our local error type
 impl<'a, E> From<LalrpopParseError<usize, Token, E>> for LpcError
-    where
-        E: Display,
+where
+    E: Display,
 {
     fn from(err: LalrpopParseError<usize, Token, E>) -> Self {
         let format_expected = |expected: &[String]| -> String {

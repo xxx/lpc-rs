@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
+    errors::LpcError,
     parser::span::Span,
 };
-use crate::errors::LpcError;
 
 /// Representation of a function call.
 #[derive(Debug, PartialEq, Clone)]

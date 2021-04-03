@@ -8,8 +8,7 @@ use logos::{Lexer, Logos};
 
 use crate::{
     convert_escapes,
-    errors::LpcError,
-    errors::lazy_files::FileId,
+    errors::{lazy_files::FileId, LpcError},
     parser::{
         lexer::{
             lex_state::LexState,
@@ -50,8 +49,9 @@ impl Iterator for LexWrapper<'_> {
         match token {
             Token::Error => Some(Err(LpcError::new(format!(
                 "Lex Error: Invalid Token `{}`  at {:?}",
-                self.lexer.slice(), span)),
-            )),
+                self.lexer.slice(),
+                span
+            )))),
             t => Some(Ok((span.start, t, span.end))),
         }
     }

@@ -1,5 +1,4 @@
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
 use compiler_error::CompilerError;
 
@@ -8,17 +7,15 @@ use crate::{
     codegen::{
         asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
+        tree_walker::ContextHolder,
     },
+    context::Context,
     errors,
     errors::LpcError,
     interpreter::program::Program,
     lpc_parser,
-    preprocessor::Preprocessor,
-};
-use crate::{
-    codegen::tree_walker::ContextHolder,
-    context::Context,
     parser::lexer::{Spanned, Token, TokenVecWrapper},
+    preprocessor::Preprocessor,
 };
 
 pub mod compiler_error;

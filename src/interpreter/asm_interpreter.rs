@@ -1,13 +1,13 @@
 use crate::{
     asm::instruction::Instruction,
+    errors::LpcError,
     interpreter::{
         efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
         stack_frame::StackFrame,
     },
+    parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
 };
-use crate::errors::LpcError;
-use crate::parser::span::Span;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -532,9 +532,11 @@ impl AsmInterpreter {
     }
 
     fn make_index_error(&self, index: i64, length: usize) -> LpcError {
-        LpcError::new(format!("Runtime Error: Attempting to access index {} in an array of length {}",
-                              index, length))
-            .with_span(*self.current_debug_span())
+        LpcError::new(format!(
+            "Runtime Error: Attempting to access index {} in an array of length {}",
+            index, length
+        ))
+        .with_span(*self.current_debug_span())
     }
 }
 
