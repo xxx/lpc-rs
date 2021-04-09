@@ -33,6 +33,8 @@ pub fn collapse_expression(
             op,
             span: Some(span),
         }),
+        BinaryOperation::AndAnd => todo!(),
+        BinaryOperation::OrOr => todo!(),
     }
 }
 

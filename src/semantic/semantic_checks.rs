@@ -160,7 +160,9 @@ pub fn check_binary_operation_types(
                     right_type,
                 ))
             }
-        }
+        },
+        BinaryOperation::AndAnd => todo!(),
+        BinaryOperation::OrOr => todo!(),
     }
 }
 

@@ -245,6 +245,8 @@ impl AsmTreeWalker {
             }
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
             BinaryOperation::Index => Instruction::ALoad(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::AndAnd => todo!(),
+            BinaryOperation::OrOr => todo!(),
         }
     }
 

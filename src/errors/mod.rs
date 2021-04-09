@@ -111,14 +111,6 @@ where
     E: Display,
 {
     fn from(err: LalrpopParseError<usize, Token, E>) -> Self {
-        let format_expected = |expected: &[String]| -> String {
-            if expected.len() == 1 {
-                format!("expected: {}", expected[0])
-            } else {
-                format!("expected one of: {}", expected.join(", "))
-            }
-        };
-
         match err {
             LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
             LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
@@ -137,6 +129,7 @@ where
         }
     }
 }
+
 
 /// Emit nice error messages to the console.
 ///
@@ -173,4 +166,13 @@ pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic
     }
 
     vec![diagnostic]
+}
+
+/// Just a shared helper.
+pub fn format_expected(expected: &[String]) -> String {
+    if expected.len() == 1 {
+        format!("expected: {}", expected[0])
+    } else {
+        format!("expected one of: {}", expected.join(", "))
+    }
 }

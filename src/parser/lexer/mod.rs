@@ -311,6 +311,9 @@ pub enum Token {
     #[regex("#[^\n\\S]*include[^\n\\S]+<[^>]+>[^\n]*\n?", string_token)]
     SysInclude(StringToken),
 
+    #[regex("#[^\n\\S]*if[^\n]*\n?", string_token)]
+    PreprocessorIf(StringToken),
+
     #[regex("#[^\n\\S]*ifdef[^\n]*\n?", string_token)]
     IfDef(StringToken),
 
@@ -467,6 +470,7 @@ impl Token {
             Token::Id(id) => id.0,
             Token::LocalInclude(s) => s.0,
             Token::SysInclude(s) => s.0,
+            Token::PreprocessorIf(s) => s.0,
             Token::IfDef(s) => s.0,
             Token::IfNDef(s) => s.0,
             Token::PreprocessorElse(s) => s.0,
@@ -556,6 +560,7 @@ impl Token {
             Token::Id(StringToken(s, _)) => s,
             Token::LocalInclude(StringToken(s, _)) => s,
             Token::SysInclude(StringToken(s, _)) => s,
+            Token::PreprocessorIf(StringToken(s, _)) => s,
             Token::IfDef(StringToken(s, _)) => s,
             Token::IfNDef(StringToken(s, _)) => s,
             Token::PreprocessorElse(StringToken(s, _)) => s,
@@ -661,6 +666,7 @@ impl Display for Token {
             Token::Id(id) => &id.1,
             Token::LocalInclude(s) => &s.1,
             Token::SysInclude(s) => &s.1,
+            Token::PreprocessorIf(s) => &s.1,
             Token::IfDef(s) => &s.1,
             Token::IfNDef(s) => &s.1,
             Token::PreprocessorElse(s) => &s.1,

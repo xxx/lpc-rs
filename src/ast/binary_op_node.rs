@@ -23,6 +23,9 @@ pub enum BinaryOperation {
 
     /// Index into an array or mapping
     Index,
+
+    AndAnd,
+    OrOr,
 }
 
 impl Display for BinaryOperation {
@@ -33,6 +36,8 @@ impl Display for BinaryOperation {
             BinaryOperation::Mul => "*",
             BinaryOperation::Div => "/",
             BinaryOperation::Index => "[]",
+            BinaryOperation::AndAnd => "&&",
+            BinaryOperation::OrOr => "||",
         };
 
         write!(f, "{}", s)

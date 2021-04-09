@@ -1,5 +1,9 @@
+pub mod preprocessor_node;
+
+use crate::preprocessor_parser;
 use crate::errors::lazy_files::{FileCache, FILE_CACHE};
 use std::{collections::HashMap, fs, path::Path};
+use lalrpop_util::ParseError as LalrpopParseError;
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -10,6 +14,7 @@ use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
 use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
+use crate::errors::format_expected;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -20,12 +25,9 @@ lazy_static! {
     static ref DEFINE: Regex =
         Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
     static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
+    static ref IF: Regex = Regex::new(r#"\A\s*#\s*if\s+(\S+)\s*\z"#).unwrap();
     static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
-    static ref IFDEFINED: Regex =
-        Regex::new(r#"\A\s*#\s*if\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
     static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
-    static ref IFNOTDEFINED: Regex =
-        Regex::new(r#"\A\s*#\s*if\s+not\s+defined\s+\(\s*(\S+?)\s*\)\s*\z"#).unwrap();
     static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
     static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
 }
@@ -249,6 +251,7 @@ impl Preprocessor {
                         Token::Endif(t) => self.handle_endif(t)?,
                         Token::Define(t) => self.handle_define(t)?,
                         Token::Undef(t) => self.handle_undef(t)?,
+                        Token::PreprocessorIf(t) => self.handle_if(t)?,
                         Token::IfDef(t) => self.handle_ifdef(t)?,
                         Token::IfNDef(t) => self.handle_ifndef(t)?,
 
@@ -408,6 +411,52 @@ impl Preprocessor {
             Ok(())
         } else {
             Err(LpcError::new("Invalid `#include`.").with_span(Some(token.0)))
+        }
+    }
+
+    fn handle_if(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = IF.captures(&token.1) {
+            // parse the captures into an expression, then evaluate it.
+            match preprocessor_parser::ExpressionParser::new().parse(&captures[1]) {
+                Ok(expr) => {
+                    println!("exper! {:?}", expr);
+                }
+                Err(e) => {
+                    // This is awkward due to being almost identical to the From<ParseError> impl,
+                    // but we need to use our `token` parameter's span for the errors, rather than
+                    // pulling it from the error's token.
+                    // Is there a better way?
+                    let err = match e {
+                        LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
+                        LalrpopParseError::UnrecognizedEOF { expected, .. } => {
+                            LpcError::new("Unexpected EOF").with_note(format_expected(&expected))
+                        }
+                        LalrpopParseError::UnrecognizedToken {
+                            expected,
+                            ..
+                        } => LpcError::new(format!("Unrecognized Token: {}", token.1))
+                            .with_span(Some(token.0))
+                            .with_note(format_expected(&expected)),
+                        LalrpopParseError::ExtraToken { .. } => LpcError::new(format!("Extra Token: `{}`", token.1)).with_span(Some(token.0)),
+                        LalrpopParseError::User { error } => LpcError::new(format!("User error: {}", error)),
+                    };
+
+                    return Err(err);
+                }
+            }
+
+            self.ifdefs.push(IfDef {
+                code: String::from(&captures[1]),
+                skipping_lines: !self.defines.contains_key(&captures[1]),
+                compiled_out: self.skipping_lines(),
+                span: token.0,
+            });
+
+            Ok(())
+        } else {
+            Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
         }
     }
 
@@ -1211,6 +1260,118 @@ mod tests {
             "# };
 
             test_invalid(prog, "Lex Error: Invalid Token ```");
+        }
+    }
+
+    mod test_if {
+        use super::*;
+
+        #[test]
+        fn test_simple_if() {
+            let prog = indoc! { r##"
+                #define FOO 1
+                #define BAR
+                #define BAZ 0
+                #if FOO
+                    "#if FOO works"
+                #endif
+                #if BAR
+                    "#if BAR works, but should not"
+                #endif
+                #if BAZ
+                    "#if BAZ works, but should not"
+                #endif
+                #if QUUX
+                    "#if QUUX works, but should not"
+                #endif
+            "## };
+
+            test_valid(prog, &vec!["#if FOO works"])
+        }
+
+        #[test]
+        fn test_simple_if_defined() {
+            let prog = indoc! { r##"
+                #define FOO 1
+                #define BAR
+                #define BAZ 0
+                #if defined(FOO)
+                    "#if defined(FOO) works"
+                #endif
+                #if defined (BAR)
+                    "#if defined (BAR) works"
+                #endif
+                #if defined(BAZ)
+                    "#if defined(BAZ) works"
+                #endif
+                #if defined(QUUX)
+                    "#if QUUX works, but should not"
+                #endif
+            "## };
+
+            test_valid(prog, &vec!["#if defined(FOO) works", "#if defined (BAR) works", "#if defined(BAZ) works"])
+        }
+
+        #[test]
+        fn test_if_expressions() {
+            let prog = indoc! { r##"
+                #define FOO 1
+                #define BAR
+                #define BAZ 0
+
+                #if defined(FOO) || defined (BAR)
+                    "first test passes"
+                #endif
+
+                #if defined(BAR) || 1
+                    "second test passes"
+                #endif
+
+                #if 1 || 0
+                    "third test passes"
+                #endif
+
+                #if defined(QUUX) || BAZ
+                    "this should not be printed"
+                #endif
+
+                #if defined(BAZ) && defined(FOO)
+                    "fourth test passes"
+                #endif
+
+                #if FOO && defined (QUUX)
+                    "this should not be printed"
+                #endif
+
+                #if defined(FOO) && BAR
+                    "this should not be printed"
+                #endif
+
+                #if defined(FOO) && (BAR || defined(BAZ))
+                    "fifth test passes"
+                #endif
+            "## };
+
+            test_valid(prog, &vec![
+                "first test passes",
+                "second test passes",
+                "third test passes",
+                "fourth test passes",
+                "fifth test passes",
+            ]);
+        }
+
+        #[test]
+        fn test_macro_expansion() {
+            let prog = indoc! { r##"
+                #define FOO 1
+                #define BAR (FOO - 1)
+                #if BAR
+                    "#if BAR works, but should not"
+                #endif
+            "## };
+
+            test_valid(prog, &vec![])
         }
     }
 }
