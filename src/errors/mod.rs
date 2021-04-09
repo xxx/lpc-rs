@@ -130,7 +130,6 @@ where
     }
 }
 
-
 /// Emit nice error messages to the console.
 ///
 /// # Arguments

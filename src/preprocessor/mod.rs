@@ -1,9 +1,11 @@
 pub mod preprocessor_node;
 
-use crate::preprocessor_parser;
-use crate::errors::lazy_files::{FileCache, FILE_CACHE};
-use std::{collections::HashMap, fs, path::Path};
+use crate::{
+    errors::lazy_files::{FileCache, FILE_CACHE},
+    preprocessor_parser,
+};
 use lalrpop_util::ParseError as LalrpopParseError;
+use std::{collections::HashMap, fs, path::Path};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -13,8 +15,10 @@ use codespan_reporting::files::Files;
 use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
-use crate::parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token};
-use crate::errors::format_expected;
+use crate::{
+    errors::format_expected,
+    parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
+};
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -433,14 +437,18 @@ impl Preprocessor {
                         LalrpopParseError::UnrecognizedEOF { expected, .. } => {
                             LpcError::new("Unexpected EOF").with_note(format_expected(&expected))
                         }
-                        LalrpopParseError::UnrecognizedToken {
-                            expected,
-                            ..
-                        } => LpcError::new(format!("Unrecognized Token: {}", token.1))
-                            .with_span(Some(token.0))
-                            .with_note(format_expected(&expected)),
-                        LalrpopParseError::ExtraToken { .. } => LpcError::new(format!("Extra Token: `{}`", token.1)).with_span(Some(token.0)),
-                        LalrpopParseError::User { error } => LpcError::new(format!("User error: {}", error)),
+                        LalrpopParseError::UnrecognizedToken { expected, .. } => {
+                            LpcError::new(format!("Unrecognized Token: {}", token.1))
+                                .with_span(Some(token.0))
+                                .with_note(format_expected(&expected))
+                        }
+                        LalrpopParseError::ExtraToken { .. } => {
+                            LpcError::new(format!("Extra Token: `{}`", token.1))
+                                .with_span(Some(token.0))
+                        }
+                        LalrpopParseError::User { error } => {
+                            LpcError::new(format!("User error: {}", error))
+                        }
                     };
 
                     return Err(err);
@@ -1309,7 +1317,14 @@ mod tests {
                 #endif
             "## };
 
-            test_valid(prog, &vec!["#if defined(FOO) works", "#if defined (BAR) works", "#if defined(BAZ) works"])
+            test_valid(
+                prog,
+                &vec![
+                    "#if defined(FOO) works",
+                    "#if defined (BAR) works",
+                    "#if defined(BAZ) works",
+                ],
+            )
         }
 
         #[test]
@@ -1352,13 +1367,16 @@ mod tests {
                 #endif
             "## };
 
-            test_valid(prog, &vec![
-                "first test passes",
-                "second test passes",
-                "third test passes",
-                "fourth test passes",
-                "fifth test passes",
-            ]);
+            test_valid(
+                prog,
+                &vec![
+                    "first test passes",
+                    "second test passes",
+                    "third test passes",
+                    "fourth test passes",
+                    "fifth test passes",
+                ],
+            );
         }
 
         #[test]

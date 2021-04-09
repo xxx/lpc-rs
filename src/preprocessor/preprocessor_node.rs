@@ -8,5 +8,9 @@ pub enum PreprocessorNode {
     // Macro(String),
     Int(i64),
     Defined(String),
-    BinaryOp(BinaryOperation, Box<PreprocessorNode>, Box<PreprocessorNode>)
+    BinaryOp(
+        BinaryOperation,
+        Box<PreprocessorNode>,
+        Box<PreprocessorNode>,
+    ),
 }
