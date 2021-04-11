@@ -477,7 +477,7 @@ impl Preprocessor {
     }
 
     /// Determine if a particular node will enable line skipping or not.
-    /// Returns true if we should print lines, and false if they should be skipped.
+    /// Returns `true` if we should print lines, and `false` if they should be skipped.
     fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
         match expr {
             PreprocessorNode::Var(x) => {
