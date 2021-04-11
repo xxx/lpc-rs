@@ -4,28 +4,29 @@ use crate::ast::binary_op_node::BinaryOperation;
 
 grammar;
 
-pub PrimaryExpression: PreprocessorNode = {
+PrimaryExpression: PreprocessorNode = {
     <Int> => PreprocessorNode::Int(<>),
     <Var> => PreprocessorNode::Var(<>),
     "(" <Expression> ")",
     "defined" "(" <Var> ")" => PreprocessorNode::Defined(<>),
+    "defined(" <Var> ")" => PreprocessorNode::Defined(<>),
 };
 
-pub AdditiveExpression: PreprocessorNode = {
+AdditiveExpression: PreprocessorNode = {
     <PrimaryExpression>,
     <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:PrimaryExpression> => {
          PreprocessorNode::BinaryOp(op, Box::new(l), Box::new(r))
     }
 };
 
-pub LogicalAndExpression: PreprocessorNode = {
+LogicalAndExpression: PreprocessorNode = {
     <AdditiveExpression>,
     <l:LogicalAndExpression> <op:"&&"> <r:AdditiveExpression> => {
         PreprocessorNode::BinaryOp(BinaryOperation::AndAnd, Box::new(l), Box::new(r))
     }
 };
 
-pub LogicalOrExpression: PreprocessorNode = {
+LogicalOrExpression: PreprocessorNode = {
     <LogicalAndExpression>,
     <l:LogicalOrExpression> <op:"||"> <r:LogicalAndExpression> => {
         PreprocessorNode::BinaryOp(BinaryOperation::OrOr, Box::new(l), Box::new(r))
@@ -40,23 +41,23 @@ Var: String = <r"[\p{Alphabetic}_]\w*"> => {
     String::from(<>)
 };
 
-Int: i64 = {
-    <s:r"[1-9][0-9_]*"> => i64::from_str(&s.replace("_", "")).unwrap(),
+pub Int: i64 = {
+    <s:r"[1-9][0-9_]*|0"> => i64::from_str(&s.replace("_", "")).unwrap(),
     <s:r"0[xX][0-9a-fA-F][0-9a-fA-F_]*"> => i64::from_str_radix(
                                                 &s.replace("_", "")
                                                   .trim_start_matches("0x")
                                                   .trim_start_matches("0X"),
                                                 16).unwrap(),
-    <l:@L> <s:r"0[oO]?[0-7][0-7_]*"> <r:@R> => i64::from_str_radix(
-                                                &s.replace("_", "")
-                                                  .trim_start_matches("0o")
-                                                  .trim_start_matches("0O"),
-                                                8).unwrap(),
-    <l:@L> <s:r"0[bB][01][01_]*"> <r:@R> => i64::from_str_radix(
-                                                &s.replace("_", "")
-                                                  .trim_start_matches("0b")
-                                                  .trim_start_matches("0B"),
-                                                2).unwrap(),
+    <s:r"0[oO]?[0-7][0-7_]*"> => i64::from_str_radix(
+                                     &s.replace("_", "")
+                                       .trim_start_matches("0o")
+                                       .trim_start_matches("0O"),
+                                     8).unwrap(),
+    <s:r"0[bB][01][01_]*"> => i64::from_str_radix(
+                                  &s.replace("_", "")
+                                    .trim_start_matches("0b")
+                                    .trim_start_matches("0B"),
+                                  2).unwrap(),
 };
 
 AdditiveBinaryOp: BinaryOperation = {

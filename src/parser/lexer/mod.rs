@@ -243,7 +243,7 @@ pub enum Token {
     #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
-    #[regex(r"[1-9][0-9_]*", |lex| {
+    #[regex(r"[1-9][0-9_]*|0", |lex| {
         track_slice(lex);
 
         match i64::from_str(&lex.slice().replace("_", "")) {

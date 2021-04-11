@@ -19,6 +19,8 @@ use crate::{
     errors::format_expected,
     parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
 };
+use crate::preprocessor::preprocessor_node::PreprocessorNode;
+use crate::ast::binary_op_node::BinaryOperation;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -29,7 +31,8 @@ lazy_static! {
     static ref DEFINE: Regex =
         Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
     static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
-    static ref IF: Regex = Regex::new(r#"\A\s*#\s*if\s+(\S+)\s*\z"#).unwrap();
+    // static ref IF: Regex = Regex::new(r#"\A\s*#\s*if\s+(\S+)\s*\z"#).unwrap();
+    static ref IF: Regex = Regex::new("\\A\\s*#\\s*if\\s+([^\n]*)\\s*\\z").unwrap();
     static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
     static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
     static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
@@ -238,6 +241,7 @@ impl Preprocessor {
         token_stream.set_file_id(file_id);
 
         for spanned_result in token_stream {
+            // println!("token {:?}", spanned_result);
             match spanned_result {
                 Ok(spanned) => {
                     let (l, token, r) = &spanned;
@@ -423,9 +427,18 @@ impl Preprocessor {
 
         if let Some(captures) = IF.captures(&token.1) {
             // parse the captures into an expression, then evaluate it.
+            // println!("captured {:?}", &captures[1]);
             match preprocessor_parser::ExpressionParser::new().parse(&captures[1]) {
                 Ok(expr) => {
-                    println!("exper! {:?}", expr);
+                    // println!("exper! {:?} || {:?}", expr, &captures[1]);
+                    let printing_lines = self.eval_expr_for_skipping(&expr, Some(token.0))?;
+
+                    self.ifdefs.push(IfDef {
+                        code: String::from(&captures[1]),
+                        skipping_lines: !printing_lines,
+                        compiled_out: self.skipping_lines(),
+                        span: token.0,
+                    });
                 }
                 Err(e) => {
                     // This is awkward due to being almost identical to the From<ParseError> impl,
@@ -433,7 +446,7 @@ impl Preprocessor {
                     // pulling it from the error's token.
                     // Is there a better way?
                     let err = match e {
-                        LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
+                        LalrpopParseError::InvalidToken { location } => LpcError::new(format!("Invalid token `{}` at {}", token.1, location)),
                         LalrpopParseError::UnrecognizedEOF { expected, .. } => {
                             LpcError::new("Unexpected EOF").with_note(format_expected(&expected))
                         }
@@ -455,16 +468,56 @@ impl Preprocessor {
                 }
             }
 
-            self.ifdefs.push(IfDef {
-                code: String::from(&captures[1]),
-                skipping_lines: !self.defines.contains_key(&captures[1]),
-                compiled_out: self.skipping_lines(),
-                span: token.0,
-            });
-
             Ok(())
         } else {
             Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
+        }
+    }
+
+    /// Determine if a particular node will enable line skipping or not.
+    /// Returns true if we should print lines, and false if they should be skipped.
+    fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
+        match expr {
+            PreprocessorNode::Var(x) => {
+                if let Some(val) = self.defines.get(x) {
+                    Ok(val != "0")
+                } else {
+                    Ok(false)
+                }
+            },
+            PreprocessorNode::Int(i) => {
+                Ok(i != &0)
+            }
+            PreprocessorNode::Defined(x) => {
+                Ok(self.defines.get(x).is_some())
+            }
+            PreprocessorNode::BinaryOp(op, l, r) => {
+                match op {
+                    BinaryOperation::Add => Ok(self.resolve_int(&*l, span)? + self.resolve_int(&*r, span)? != 0),
+                    BinaryOperation::Sub => Ok(self.resolve_int(&*l, span)? - self.resolve_int(&*r, span)? != 0),
+                    BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(&*l, span)? && self.eval_expr_for_skipping(&*r, span)?),
+                    BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(&*l, span)? || self.eval_expr_for_skipping(&*r, span)?),
+                    _ => unimplemented!()
+                }
+            }
+        }
+    }
+
+    /// Resolve a PreprocessorNode to an Int if possible.
+    fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<i64> {
+        match expr {
+            PreprocessorNode::Var(x) => {
+                if let Some(val) = self.defines.get(x) {
+                    match preprocessor_parser::ExpressionParser::new().parse(val) {
+                        Ok(i) => self.resolve_int(&i, span),
+                        Err(_) => Err(LpcError::new("Invalid expression").with_span(span))
+                    }
+                } else {
+                    Err(LpcError::new("Invalid expression").with_span(span))
+                }
+            }
+            PreprocessorNode::Int(i) => Ok(*i),
+            _ => Err(LpcError::new("Invalid expression").with_span(span))
         }
     }
 
@@ -684,6 +737,18 @@ mod tests {
                 assert!(regex.is_match(&e.to_string()), "error = {:?}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_ignored_if_commented() {
+        let input = indoc! { r#"
+                /* #defoon laksdjfalskdj */
+                // #if 0
+                    "This should be printed"
+                // #endif
+            "# };
+
+        test_valid(input, &vec!["This should be printed"]);
     }
 
     mod test_system_includes {
