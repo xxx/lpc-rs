@@ -16,11 +16,11 @@ use path_absolutize::Absolutize;
 use std::{ffi::OsString, path::PathBuf, result};
 
 use crate::{
+    ast::binary_op_node::BinaryOperation,
     errors::format_expected,
     parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
+    preprocessor::preprocessor_node::PreprocessorNode,
 };
-use crate::preprocessor::preprocessor_node::PreprocessorNode;
-use crate::ast::binary_op_node::BinaryOperation;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -446,7 +446,9 @@ impl Preprocessor {
                     // pulling it from the error's token.
                     // Is there a better way?
                     let err = match e {
-                        LalrpopParseError::InvalidToken { location } => LpcError::new(format!("Invalid token `{}` at {}", token.1, location)),
+                        LalrpopParseError::InvalidToken { location } => {
+                            LpcError::new(format!("Invalid token `{}` at {}", token.1, location))
+                        }
                         LalrpopParseError::UnrecognizedEOF { expected, .. } => {
                             LpcError::new("Unexpected EOF").with_note(format_expected(&expected))
                         }
@@ -484,22 +486,22 @@ impl Preprocessor {
                 } else {
                     Ok(false)
                 }
-            },
-            PreprocessorNode::Int(i) => {
-                Ok(i != &0)
             }
-            PreprocessorNode::Defined(x) => {
-                Ok(self.defines.get(x).is_some())
-            }
-            PreprocessorNode::BinaryOp(op, l, r) => {
-                match op {
-                    BinaryOperation::Add => Ok(self.resolve_int(&*l, span)? + self.resolve_int(&*r, span)? != 0),
-                    BinaryOperation::Sub => Ok(self.resolve_int(&*l, span)? - self.resolve_int(&*r, span)? != 0),
-                    BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(&*l, span)? && self.eval_expr_for_skipping(&*r, span)?),
-                    BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(&*l, span)? || self.eval_expr_for_skipping(&*r, span)?),
-                    _ => unimplemented!()
+            PreprocessorNode::Int(i) => Ok(i != &0),
+            PreprocessorNode::Defined(x) => Ok(self.defines.get(x).is_some()),
+            PreprocessorNode::BinaryOp(op, l, r) => match op {
+                BinaryOperation::Add => {
+                    Ok(self.resolve_int(&*l, span)? + self.resolve_int(&*r, span)? != 0)
                 }
-            }
+                BinaryOperation::Sub => {
+                    Ok(self.resolve_int(&*l, span)? - self.resolve_int(&*r, span)? != 0)
+                }
+                BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(&*l, span)?
+                    && self.eval_expr_for_skipping(&*r, span)?),
+                BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(&*l, span)?
+                    || self.eval_expr_for_skipping(&*r, span)?),
+                _ => unimplemented!(),
+            },
         }
     }
 
@@ -510,14 +512,14 @@ impl Preprocessor {
                 if let Some(val) = self.defines.get(x) {
                     match preprocessor_parser::ExpressionParser::new().parse(val) {
                         Ok(i) => self.resolve_int(&i, span),
-                        Err(_) => Err(LpcError::new("Invalid expression").with_span(span))
+                        Err(_) => Err(LpcError::new("Invalid expression").with_span(span)),
                     }
                 } else {
                     Err(LpcError::new("Invalid expression").with_span(span))
                 }
             }
             PreprocessorNode::Int(i) => Ok(*i),
-            _ => Err(LpcError::new("Invalid expression").with_span(span))
+            _ => Err(LpcError::new("Invalid expression").with_span(span)),
         }
     }
 
