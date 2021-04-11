@@ -78,7 +78,7 @@ where
 
     let cwd = AsRef::<Path>::as_ref(&path)
         .parent()
-        .unwrap_or(Path::new("/"));
+        .unwrap_or_else(|| Path::new("/"));
 
     let mut preprocessor = Preprocessor::new(context);
     let code = match preprocessor.scan(&path, cwd, &code) {
