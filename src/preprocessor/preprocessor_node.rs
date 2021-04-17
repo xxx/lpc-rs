@@ -22,7 +22,7 @@ impl Display for PreprocessorNode {
             PreprocessorNode::Var(v) => write!(f, "{}", v),
             PreprocessorNode::Int(i) => write!(f, "{}", i),
             PreprocessorNode::Defined(d) => write!(f, "defined({})", d),
-            PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{} {} {}", l, op, r)
+            PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{} {} {}", l, op, r),
         }
     }
 }

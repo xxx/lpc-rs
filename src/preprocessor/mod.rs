@@ -18,10 +18,12 @@ use std::{ffi::OsString, path::PathBuf, result};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     errors::format_expected,
-    parser::lexer::{logos_token::StringToken, LexWrapper, Spanned, Token},
+    parser::lexer::{
+        logos_token::{IntToken, StringToken},
+        LexWrapper, Spanned, Token,
+    },
     preprocessor::preprocessor_node::PreprocessorNode,
 };
-use crate::parser::lexer::logos_token::IntToken;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -56,7 +58,7 @@ struct IfDef {
 #[derive(Debug)]
 struct Define {
     pub tokens: Vec<Spanned<Token>>,
-    pub expr: PreprocessorNode
+    pub expr: PreprocessorNode,
 }
 
 #[derive(Debug)]
@@ -328,7 +330,11 @@ impl Preprocessor {
 
             let name = String::from(&captures[1]);
             let value = if captures[2].is_empty() {
-                vec![(token.0.l, Token::IntLiteral(IntToken(token.0, 0)) , token.0.r)]
+                vec![(
+                    token.0.l,
+                    Token::IntLiteral(IntToken(token.0, 0)),
+                    token.0.r,
+                )]
             } else {
                 // tokenize captures[2] with our full language lexer, so we can do macro expansion
                 let unescaped = convert_escapes(&captures[2]);
@@ -346,14 +352,14 @@ impl Preprocessor {
                                         Some(value) => {
                                             // tokenize value
                                             tokens.append(&mut value.tokens.to_vec());
-                                        },
-                                        None => tokens.push((l, tok, r))
+                                        }
+                                        None => tokens.push((l, tok, r)),
                                     }
                                 }
-                                _ => tokens.push((l, tok, r))
+                                _ => tokens.push((l, tok, r)),
                             }
                         }
-                        Err(e) => return Err(e)
+                        Err(e) => return Err(e),
                     };
                 }
 
@@ -363,15 +369,23 @@ impl Preprocessor {
             let expr = if captures[2].is_empty() {
                 PreprocessorNode::Int(0)
             } else {
-                match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[2])) {
+                match preprocessor_parser::ExpressionParser::new()
+                    .parse(LexWrapper::new(&captures[2]))
+                {
                     Ok(i) => i,
-                    Err(e) => return Err(LpcError::new(format!("Parse Error ({}) for expression `{}`", e, &captures[2])).with_span(Some(token.0))),
+                    Err(e) => {
+                        return Err(LpcError::new(format!(
+                            "Parse Error ({}) for expression `{}`",
+                            e, &captures[2]
+                        ))
+                        .with_span(Some(token.0)))
+                    }
                 }
             };
 
             let define = Define {
                 tokens: value,
-                expr
+                expr,
             };
 
             self.defines.insert(name, define);
@@ -467,7 +481,8 @@ impl Preprocessor {
         if let Some(captures) = IF.captures(&token.1) {
             // parse the captures into an expression, then evaluate it.
             // println!("captured {:?}", &captures[1]);
-            match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[1])) {
+            match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[1]))
+            {
                 Ok(expr) => {
                     // println!("exper! {:?} || {:?}", expr, &captures[1]);
                     let printing_lines = self.eval_expr_for_skipping(&expr, Some(token.0))?;
@@ -552,7 +567,10 @@ impl Preprocessor {
                 if let Some(val) = self.defines.get(x) {
                     self.resolve_int(&val.expr, span)
                 } else {
-                    Err(LpcError::new(format!("Unable to resolve into an int: `{}`", x)).with_span(span))
+                    Err(
+                        LpcError::new(format!("Unable to resolve into an int: `{}`", x))
+                            .with_span(span),
+                    )
                 }
             }
             PreprocessorNode::Int(i) => Ok(*i),
@@ -563,17 +581,21 @@ impl Preprocessor {
                 match op {
                     BinaryOperation::Add => Ok(li + ri),
                     BinaryOperation::Sub => Ok(li - ri),
-                    BinaryOperation::AndAnd => {
-                        Ok(((li != 0) && (ri != 0)) as i64)
-                    }
-                    BinaryOperation::OrOr => {
-                        Ok(((li != 0) || (ri != 0)) as i64)
-                    }
+                    BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as i64),
+                    BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as i64),
 
-                    operation => Err(LpcError::new(format!("Unknown binary operation `{}` in expression `{}`", operation, expr)).with_span(span)),
+                    operation => Err(LpcError::new(format!(
+                        "Unknown binary operation `{}` in expression `{}`",
+                        operation, expr
+                    ))
+                    .with_span(span)),
                 }
             }
-            _ => Err(LpcError::new(format!("Attempt to convert unknown node type to int: `{}`", expr)).with_span(span)),
+            _ => Err(LpcError::new(format!(
+                "Attempt to convert unknown node type to int: `{}`",
+                expr
+            ))
+            .with_span(span)),
         }
     }
 
@@ -1010,10 +1032,35 @@ mod tests {
 
             match preprocessor.scan("test.c", "/", input) {
                 Ok(_) => {
-                    assert!(matches!(preprocessor.defines.get("ASS").unwrap(), Define { expr: PreprocessorNode::Int(1234), .. }));
-                    assert!(matches!(preprocessor.defines.get("MAR").unwrap(), Define { expr: PreprocessorNode::Int(0), .. }));
-                    assert_eq!(preprocessor.defines.get("DOOD").unwrap().expr, PreprocessorNode::BinaryOp(BinaryOperation::Add, Box::new(PreprocessorNode::Int(666)), Box::new(PreprocessorNode::Var(String::from("MAR")))));
-                    assert!(matches!(preprocessor.defines.get("SNUH").unwrap(), Define { expr: PreprocessorNode::Int(291), .. }));
+                    assert!(matches!(
+                        preprocessor.defines.get("ASS").unwrap(),
+                        Define {
+                            expr: PreprocessorNode::Int(1234),
+                            ..
+                        }
+                    ));
+                    assert!(matches!(
+                        preprocessor.defines.get("MAR").unwrap(),
+                        Define {
+                            expr: PreprocessorNode::Int(0),
+                            ..
+                        }
+                    ));
+                    assert_eq!(
+                        preprocessor.defines.get("DOOD").unwrap().expr,
+                        PreprocessorNode::BinaryOp(
+                            BinaryOperation::Add,
+                            Box::new(PreprocessorNode::Int(666)),
+                            Box::new(PreprocessorNode::Var(String::from("MAR")))
+                        )
+                    );
+                    assert!(matches!(
+                        preprocessor.defines.get("SNUH").unwrap(),
+                        Define {
+                            expr: PreprocessorNode::Int(291),
+                            ..
+                        }
+                    ));
                 }
                 Err(e) => {
                     panic!("{:?}", e)
@@ -1050,7 +1097,13 @@ mod tests {
 
             match preprocessor.scan("test.c", "/", input) {
                 Ok(_) => {
-                    assert!(matches!(preprocessor.defines.get("ASS").unwrap(), Define { expr: PreprocessorNode::Int(456), ..}));
+                    assert!(matches!(
+                        preprocessor.defines.get("ASS").unwrap(),
+                        Define {
+                            expr: PreprocessorNode::Int(456),
+                            ..
+                        }
+                    ));
                 }
                 Err(e) => {
                     panic!("{:?}", e)
@@ -1070,7 +1123,13 @@ mod tests {
 
             match preprocessor.scan("test.c", "/", input) {
                 Ok(_) => {
-                    assert!(matches!(preprocessor.defines.get("HELLO").unwrap(), Define { expr: PreprocessorNode::Int(123), .. }));
+                    assert!(matches!(
+                        preprocessor.defines.get("HELLO").unwrap(),
+                        Define {
+                            expr: PreprocessorNode::Int(123),
+                            ..
+                        }
+                    ));
                 }
                 Err(e) => {
                     panic!("{:?}", e)
