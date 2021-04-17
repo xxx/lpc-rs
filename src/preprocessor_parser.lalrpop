@@ -1,8 +1,98 @@
-use std::str::FromStr;
 use crate::preprocessor::preprocessor_node::PreprocessorNode;
 use crate::ast::binary_op_node::BinaryOperation;
+use crate::parser::lexer::Token;
+use crate::errors::LpcError;
+use crate::parser::span::Span;
+use crate::parser::lexer::logos_token::{StringToken, IntToken};
 
 grammar;
+
+extern {
+    type Location = usize;
+    type Error = LpcError;
+
+    enum Token {
+        "+" => Token::Plus(<Span>),
+        "-" => Token::Minus(<Span>),
+        "*" => Token::Mul(<Span>),
+        "/" => Token::Div(<Span>),
+        "%" => Token::Mod(<Span>),
+        "!" => Token::Bang(<Span>),
+        "^" => Token::Caret(<Span>),
+        "~" => Token::Tilde(<Span>),
+        "&" => Token::And(<Span>),
+        "&&" => Token::AndAnd(<Span>),
+        "|" => Token::Or(<Span>),
+        "||" => Token::OrOr(<Span>),
+        "<<" => Token::LeftShift(<Span>),
+        ">>" => Token::RightShift(<Span>),
+        "==" => Token::EqEq(<Span>),
+        "!=" => Token::NotEq(<Span>),
+        "<" => Token::LessThan(<Span>),
+        "<=" => Token::LessThanEq(<Span>),
+        ">" => Token::GreaterThan(<Span>),
+        ">=" => Token::GreaterThanEq(<Span>),
+
+        "=" => Token::Assign(<Span>),
+        "+=" => Token::PlusEq(<Span>),
+        "-=" => Token::MinusEq(<Span>),
+        "*=" => Token::MulEq(<Span>),
+        "/=" => Token::DivEq(<Span>),
+        "%=" => Token::ModEq(<Span>),
+        "^=" => Token::CaretEq(<Span>),
+        "~=" => Token::TildeEq(<Span>),
+        "&=" => Token::AndEq(<Span>),
+        "&&=" => Token::AndAndEq(<Span>),
+        "|=" => Token::OrEq(<Span>),
+        "||=" => Token::OrOrEq(<Span>),
+        "<<=" => Token::LeftShiftEq(<Span>),
+        ">>=" => Token::RightShiftEq(<Span>),
+
+        "if" => Token::If(<Span>),
+        "else" => Token::Else(<Span>),
+        "while" => Token::While(<Span>),
+        "for" => Token::For(<Span>),
+        "inherit" => Token::Inherit(<Span>),
+        "break" => Token::Break(<Span>),
+        "continue" => Token::Continue(<Span>),
+        "case" => Token::Case(<Span>),
+        "do" => Token::Do(<Span>),
+        "int" => Token::Int(<Span>),
+        "float" => Token::Float(<Span>),
+        "string" => Token::String(<Span>),
+        "object" => Token::Object(<Span>),
+        "mapping" => Token::Mapping(<Span>),
+        "mixed" => Token::Mixed(<Span>),
+        "void" => Token::Void(<Span>),
+        "return" => Token::Return(<Span>),
+        "static" => Token::Static(<Span>),
+        "nomask" => Token::Nomask(<Span>),
+        "efun" => Token::Efun(<Span>),
+
+        "(" => Token::LParen(<Span>),
+        ")" => Token::RParen(<Span>),
+        "[" => Token::LBracket(<Span>),
+        "]" => Token::RBracket(<Span>),
+        "{" => Token::LBrace(<Span>),
+        "}" => Token::RBrace(<Span>),
+        "," => Token::Comma(<Span>),
+        "->" => Token::CallOther(<Span>),
+        "?" => Token::Question(<Span>),
+        ":" => Token::Colon(<Span>),
+        "::" => Token::ColonColon(<Span>),
+        ";" => Token::Semi(<Span>),
+        "..." => Token::Ellipsis(<Span>),
+        ".." => Token::Range(<Span>),
+
+        "defined" => Token::Defined(<Span>),
+        "defined(" => Token::DefinedParen(<Span>),
+
+        "StringLiteral" => Token::StringLiteral(<StringToken>),
+        "IntLiteral" => Token::IntLiteral(<IntToken>),
+//        "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
+        "ID" => Token::Id(<StringToken>),
+    }
+}
 
 PrimaryExpression: PreprocessorNode = {
     <Int> => PreprocessorNode::Int(<>),
@@ -21,14 +111,14 @@ AdditiveExpression: PreprocessorNode = {
 
 LogicalAndExpression: PreprocessorNode = {
     <AdditiveExpression>,
-    <l:LogicalAndExpression> <op:"&&"> <r:AdditiveExpression> => {
+    <l:LogicalAndExpression> "&&" <r:AdditiveExpression> => {
         PreprocessorNode::BinaryOp(BinaryOperation::AndAnd, Box::new(l), Box::new(r))
     }
 };
 
 LogicalOrExpression: PreprocessorNode = {
     <LogicalAndExpression>,
-    <l:LogicalOrExpression> <op:"||"> <r:LogicalAndExpression> => {
+    <l:LogicalOrExpression> "||" <r:LogicalAndExpression> => {
         PreprocessorNode::BinaryOp(BinaryOperation::OrOr, Box::new(l), Box::new(r))
     }
 };
@@ -37,28 +127,9 @@ pub Expression: PreprocessorNode = {
     <LogicalOrExpression>,
 };
 
-Var: String = <r"[\p{Alphabetic}_]\w*"> => {
-    String::from(<>)
-};
+Var: String = <"ID"> => <>.1;
 
-pub Int: i64 = {
-    <s:r"[1-9][0-9_]*|0"> => i64::from_str(&s.replace("_", "")).unwrap(),
-    <s:r"0[xX][0-9a-fA-F][0-9a-fA-F_]*"> => i64::from_str_radix(
-                                                &s.replace("_", "")
-                                                  .trim_start_matches("0x")
-                                                  .trim_start_matches("0X"),
-                                                16).unwrap(),
-    <s:r"0[oO]?[0-7][0-7_]*"> => i64::from_str_radix(
-                                     &s.replace("_", "")
-                                       .trim_start_matches("0o")
-                                       .trim_start_matches("0O"),
-                                     8).unwrap(),
-    <s:r"0[bB][01][01_]*"> => i64::from_str_radix(
-                                  &s.replace("_", "")
-                                    .trim_start_matches("0b")
-                                    .trim_start_matches("0B"),
-                                  2).unwrap(),
-};
+Int: i64 = <"IntLiteral"> => <>.1;
 
 AdditiveBinaryOp: BinaryOperation = {
     "+" => BinaryOperation::Add,
