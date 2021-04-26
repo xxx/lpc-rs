@@ -453,7 +453,7 @@ impl Preprocessor {
                                             // todo: does this need multi level expand?
                                             token_vec.append(&mut object.tokens.to_vec());
                                         }
-                                        Some(Define::Function(function)) => {
+                                        Some(Define::Function(_function)) => {
                                             todo!()
                                         }
                                         None => token_vec.push((l, tok, r)),
@@ -505,7 +505,7 @@ impl Preprocessor {
                                             // todo: does this need multi level expand?
                                             token_vec.append(&mut object.tokens.to_vec());
                                         }
-                                        Some(Define::Function(function)) => {
+                                        Some(Define::Function(_function)) => {
                                             todo!()
                                         }
                                         None => token_vec.push((l, tok, r)),
