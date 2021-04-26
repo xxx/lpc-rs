@@ -123,7 +123,7 @@ where
 {
     let (code, preprocessor) = preprocess_string(&path, code)?;
 
-    let code = TokenVecWrapper::new(code);
+    let code = TokenVecWrapper::new(&code);
     let context = preprocessor.into_context();
 
     let program = lpc_parser::ProgramParser::new().parse(code);

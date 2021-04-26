@@ -60,18 +60,18 @@ impl Iterator for LexWrapper<'_> {
 }
 
 /// A wrapper for vectors of tokens, for lalrpop compatibility
-pub struct TokenVecWrapper {
-    vec: Vec<Spanned<Token>>,
+pub struct TokenVecWrapper<'a> {
+    vec: &'a Vec<Spanned<Token>>,
     count: usize,
 }
 
-impl TokenVecWrapper {
-    pub fn new(vec: Vec<Spanned<Token>>) -> Self {
+impl<'a> TokenVecWrapper<'a> {
+    pub fn new(vec: &'a Vec<Spanned<Token>>) -> Self {
         Self { vec, count: 0 }
     }
 }
 
-impl Iterator for TokenVecWrapper {
+impl<'a> Iterator for TokenVecWrapper<'a> {
     type Item = Result<Spanned<Token>, LpcError>;
 
     fn next(&mut self) -> Option<Self::Item> {

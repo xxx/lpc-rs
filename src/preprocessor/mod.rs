@@ -1,5 +1,4 @@
 use codespan_reporting::files::Files;
-use itertools::{Itertools, MultiPeek};
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
 use path_absolutize::Absolutize;
@@ -12,7 +11,7 @@ use std::{
     result,
 };
 
-use define::{Define, FunctionMacro, ObjectMacro};
+use define::{Define, ObjectMacro};
 
 use crate::{
     ast::binary_op_node::BinaryOperation,
@@ -33,6 +32,8 @@ use crate::{
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
 };
+use crate::parser::lexer::TokenVecWrapper;
+use std::iter::Peekable;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -266,7 +267,7 @@ impl Preprocessor {
         // let mut spanned_results = Arc::new(token_stream.peekable());
 
         // let mut peekable = spanned_results.clone();
-        let mut iter = token_stream.into_iter().multipeek();
+        let mut iter = token_stream.into_iter().peekable();
         while let Some(spanned_result) = iter.next() {
             match spanned_result {
                 Ok(spanned) => {
@@ -326,11 +327,14 @@ impl Preprocessor {
     }
 
     /// Expand a `#define`d token, if necessary
-    fn expand_token(
+    fn expand_token<T>(
         &self,
         token: &StringToken,
-        iter: &mut MultiPeek<LexWrapper>,
-    ) -> Result<Option<Vec<Spanned<Token>>>> {
+        iter: &mut Peekable<T>,
+    ) -> Result<Option<Vec<Spanned<Token>>>>
+    where
+        T: Iterator<Item=Result<Spanned<Token>>>
+    {
         let span = token.0;
         let name = &token.1;
 
@@ -367,18 +371,20 @@ impl Preprocessor {
                     .collect::<HashMap<_, _>>();
 
                 let mut replacements = Vec::with_capacity(function.tokens.len());
+                let mut iter = TokenVecWrapper::new(&function.tokens).peekable();
 
-                for replacement in &function.tokens {
+                while let Some(Ok(replacement)) = iter.next() {
                     if let (tl, Token::Id(s), tr) = replacement {
                         if let Some(arg_tokens) = arg_map.get(&s.1) {
                             replacements.append(&mut arg_tokens.to_vec());
                         } else {
-                            match self.defines.get(&s.1) {
-                                Some(Define::Object(ObjectMacro { tokens, .. })) |
-                                Some(Define::Function(FunctionMacro { tokens, .. })) => {
-                                    replacements.append(&mut tokens.to_vec());
+                            match self.expand_token(&s, &mut iter)? {
+                                Some(mut vec) => {
+                                    replacements.append(&mut vec)
                                 }
-                                None => replacements.push((*tl, Token::Id(s.clone()), *tr)),
+                                None => {
+                                    replacements.push((tl, Token::Id(s.clone()), tr))
+                                }
                             }
                         }
                     } else {
@@ -396,10 +402,13 @@ impl Preprocessor {
     /// a vector-per-argument.
     /// Assumes the next token in the iterator is the opening left parenthesis, and has already
     /// been checked for its presence.
-    fn consume_macro_arguments(
-        iter: &mut MultiPeek<LexWrapper>,
+    fn consume_macro_arguments<T>(
+        iter: &mut Peekable<T>,
         span: Span,
-    ) -> Result<Vec<Vec<Spanned<Token>>>> {
+    ) -> Result<Vec<Vec<Spanned<Token>>>>
+    where
+        T: Iterator<Item=Result<Spanned<Token>>>
+    {
         iter.next(); // consume the opening paren
 
         let mut parens = 1;

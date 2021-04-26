@@ -709,7 +709,7 @@ mod tests {
         let (code, _) = preprocess_string("foo.c", program).unwrap();
 
         let mut tree = lpc_parser::ProgramParser::new()
-            .parse(TokenVecWrapper::new(code))
+            .parse(TokenVecWrapper::new(&code))
             .unwrap();
 
         let _ = scope_walker.visit_program(&mut tree);
