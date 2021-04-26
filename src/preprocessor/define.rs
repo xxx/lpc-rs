@@ -1,22 +1,24 @@
-use crate::parser::lexer::{Spanned, Token};
-use crate::preprocessor::preprocessor_node::PreprocessorNode;
+use crate::{
+    parser::lexer::{Spanned, Token},
+    preprocessor::preprocessor_node::PreprocessorNode,
+};
 
 #[derive(Debug)]
 pub struct ObjectMacro {
     pub tokens: Vec<Spanned<Token>>,
-    pub expr: PreprocessorNode
+    pub expr: PreprocessorNode,
 }
 
 #[derive(Debug)]
 pub struct FunctionMacro {
     pub tokens: Vec<Spanned<Token>>,
-    pub args: Vec<String>
+    pub args: Vec<String>,
 }
 
 #[derive(Debug)]
 pub enum Define {
     Object(ObjectMacro),
-    Function(FunctionMacro)
+    Function(FunctionMacro),
 }
 
 impl Define {
