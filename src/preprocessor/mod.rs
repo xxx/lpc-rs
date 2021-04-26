@@ -25,14 +25,13 @@ use crate::{
     parser::{
         lexer::{
             logos_token::{IntToken, StringToken},
-            LexWrapper, Spanned, Token,
+            LexWrapper, Spanned, Token, TokenVecWrapper,
         },
         span::Span,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
 };
-use crate::parser::lexer::TokenVecWrapper;
 use std::iter::Peekable;
 
 pub mod define;
@@ -333,7 +332,7 @@ impl Preprocessor {
         iter: &mut Peekable<T>,
     ) -> Result<Option<Vec<Spanned<Token>>>>
     where
-        T: Iterator<Item=Result<Spanned<Token>>>
+        T: Iterator<Item = Result<Spanned<Token>>>,
     {
         let span = token.0;
         let name = &token.1;
@@ -379,12 +378,8 @@ impl Preprocessor {
                             replacements.append(&mut arg_tokens.to_vec());
                         } else {
                             match self.expand_token(&s, &mut iter)? {
-                                Some(mut vec) => {
-                                    replacements.append(&mut vec)
-                                }
-                                None => {
-                                    replacements.push((tl, Token::Id(s.clone()), tr))
-                                }
+                                Some(mut vec) => replacements.append(&mut vec),
+                                None => replacements.push((tl, Token::Id(s.clone()), tr)),
                             }
                         }
                     } else {
@@ -407,7 +402,7 @@ impl Preprocessor {
         span: Span,
     ) -> Result<Vec<Vec<Spanned<Token>>>>
     where
-        T: Iterator<Item=Result<Spanned<Token>>>
+        T: Iterator<Item = Result<Spanned<Token>>>,
     {
         iter.next(); // consume the opening paren
 
