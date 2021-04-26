@@ -1825,7 +1825,7 @@ mod tests {
         fn test_errors_if_mismatched_parens() {
             let prog = indoc! { r##"
                 #define BAR(a, b) (a - b)
-                BAR(;
+                BAR(dump("asdf");
             "## };
 
             test_invalid(prog, "Mismatched parentheses");
