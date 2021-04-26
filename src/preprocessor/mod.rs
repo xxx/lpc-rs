@@ -291,14 +291,14 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let appends = self.expand_token(&mut iter, &t)?;
+                            let appends = self.expand_token(&t, &mut iter)?;
 
                             match appends {
                                 Some(mut vec) => {
                                     if !self.skipping_lines() {
                                         output.append(&mut vec)
                                     }
-                                },
+                                }
                                 None => self.append_spanned(&mut output, spanned),
                             }
                         }
@@ -326,9 +326,13 @@ impl Preprocessor {
     }
 
     /// Expand a `#define`d token, if necessary
-    fn expand_token(&mut self, iter: &mut MultiPeek<LexWrapper>, t: &StringToken) -> Result<Option<Vec<Spanned<Token>>>> {
-        let span = t.0;
-        let name = &t.1;
+    fn expand_token(
+        &self,
+        token: &StringToken,
+        iter: &mut MultiPeek<LexWrapper>,
+    ) -> Result<Option<Vec<Spanned<Token>>>> {
+        let span = token.0;
+        let name = &token.1;
 
         match self.defines.get(name) {
             Some(Define::Object(object)) => {
@@ -343,72 +347,16 @@ impl Preprocessor {
             }
             Some(Define::Function(function)) => {
                 if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
-                    return Err(LpcError::new(
-                        "Functional macro call missing arguments.",
-                    )
-                        .with_span(Some(t.0)));
+                    return Err(LpcError::new("Functional macro call missing arguments.")
+                        .with_span(Some(token.0)));
                 }
 
-                iter.next(); // consume the opening paren
-
-                let mut parens = 1;
-                let mut args: Vec<Vec<Spanned<Token>>> = Vec::new();
-                let mut arg = Vec::new();
-
-                while parens != 0 {
-                    let next = iter.next();
-
-                    match next {
-                        Some(Ok(t)) => {
-                            let (_, arg_tok, _) = &t;
-                            match &arg_tok {
-                                Token::LParen(_) => {
-                                    parens += 1;
-                                    arg.push(t);
-                                }
-                                Token::RParen(_) => {
-                                    parens -= 1;
-
-                                    if parens == 0 {
-                                        args.push(arg);
-                                        arg = Vec::new();
-                                    } else {
-                                        arg.push(t);
-                                    }
-                                }
-                                Token::Comma(_) => {
-                                    if parens == 1 {
-                                        args.push(arg);
-                                        arg = Vec::new();
-                                    } else {
-                                        arg.push(t)
-                                    }
-                                }
-                                Token::Error => {
-                                    return Err(LpcError::new("Invalid token")
-                                        .with_span(Some(span)))
-                                }
-                                Token::NewLine(_) => { /* ignore */ }
-                                _ => {
-                                    arg.push(t);
-                                }
-                            }
-                        }
-                        Some(Err(e)) => return Err(e),
-                        None => break,
-                    }
-                }
-
-                if parens != 0 {
-                    return Err(LpcError::new("Mismatched parentheses")
-                        .with_span(Some(span)));
-                }
+                let args = Preprocessor::consume_macro_arguments(iter, span)?;
 
                 if args.len() != function.args.len() {
-                    return Err(LpcError::new(
-                        "Incorrect number of macro arguments",
-                    )
-                        .with_span(Some(span)));
+                    return Err(
+                        LpcError::new("Incorrect number of macro arguments").with_span(Some(span))
+                    );
                 }
 
                 let arg_map = function
@@ -426,16 +374,8 @@ impl Preprocessor {
                             replacements.append(&mut arg_tokens.to_vec());
                         } else {
                             match self.defines.get(&s.1) {
-                                Some(Define::Object(ObjectMacro {
-                                                        tokens,
-                                                        ..
-                                                    })) => {
-                                    replacements.append(&mut tokens.to_vec());
-                                }
-                                Some(Define::Function(FunctionMacro {
-                                                          tokens,
-                                                          ..
-                                                      })) => {
+                                Some(Define::Object(ObjectMacro { tokens, .. })) |
+                                Some(Define::Function(FunctionMacro { tokens, .. })) => {
                                     replacements.append(&mut tokens.to_vec());
                                 }
                                 None => replacements.push((*tl, Token::Id(s.clone()), *tr)),
@@ -450,6 +390,70 @@ impl Preprocessor {
             }
             None => Ok(None),
         }
+    }
+
+    /// Consume tokens until the end of the arguments list, then collect them into
+    /// a vector-per-argument.
+    /// Assumes the next token in the iterator is the opening left parenthesis, and has already
+    /// been checked for its presence.
+    fn consume_macro_arguments(
+        iter: &mut MultiPeek<LexWrapper>,
+        span: Span,
+    ) -> Result<Vec<Vec<Spanned<Token>>>> {
+        iter.next(); // consume the opening paren
+
+        let mut parens = 1;
+        let mut args: Vec<Vec<Spanned<Token>>> = Vec::new();
+        let mut arg = Vec::new();
+
+        while parens != 0 {
+            let next = iter.next();
+
+            match next {
+                Some(Ok(t)) => {
+                    let (_, arg_tok, _) = &t;
+                    match &arg_tok {
+                        Token::LParen(_) => {
+                            parens += 1;
+                            arg.push(t);
+                        }
+                        Token::RParen(_) => {
+                            parens -= 1;
+
+                            if parens == 0 {
+                                args.push(arg);
+                                arg = Vec::new();
+                            } else {
+                                arg.push(t);
+                            }
+                        }
+                        Token::Comma(_) => {
+                            if parens == 1 {
+                                args.push(arg);
+                                arg = Vec::new();
+                            } else {
+                                arg.push(t)
+                            }
+                        }
+                        Token::Error => {
+                            return Err(LpcError::new("Invalid token").with_span(Some(span)))
+                        }
+                        Token::NewLine(_) => { /* ignore */ }
+                        _ => {
+                            arg.push(t);
+                        }
+                    }
+                }
+                Some(Err(e)) => return Err(e),
+                None => break,
+            }
+        }
+
+        if parens != 0 {
+            return Err(LpcError::new("Mismatched parentheses").with_span(Some(span)));
+        }
+
+        Ok(args)
     }
 
     fn handle_define(&mut self, token: &StringToken) -> Result<()> {
