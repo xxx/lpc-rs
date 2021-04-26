@@ -1,5 +1,5 @@
 use codespan_reporting::files::Files;
-use itertools::Itertools;
+use itertools::{Itertools, MultiPeek};
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
 use path_absolutize::Absolutize;
@@ -270,11 +270,9 @@ impl Preprocessor {
         while let Some(spanned_result) = iter.next() {
             match spanned_result {
                 Ok(spanned) => {
-                    let (l, token, r) = &spanned;
+                    let (_l, token, _r) = &spanned;
 
                     let token_string = token.to_string();
-
-                    // println!("token: {:?}", token);
 
                     match token {
                         Token::LocalInclude(t) => {
@@ -293,136 +291,14 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let name = &t.1;
+                            let appends = self.expand_token(&mut iter, &t)?;
 
-                            match self.defines.get(name) {
-                                Some(Define::Object(object)) => {
-                                    for (_tl, mut tok, _tr) in object.tokens.to_vec() {
-                                        // Set the span to that of the token before its replacement.
-                                        tok.set_span_range(*l, *r);
-                                        let new_spanned = (*l, tok, *r);
-                                        self.append_spanned(&mut output, new_spanned)
+                            match appends {
+                                Some(mut vec) => {
+                                    if !self.skipping_lines() {
+                                        output.append(&mut vec)
                                     }
-                                }
-                                Some(Define::Function(function)) => {
-                                    if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
-                                        return Err(LpcError::new(
-                                            "Functional macro call missing arguments.",
-                                        )
-                                        .with_span(Some(t.0)));
-                                    }
-
-                                    iter.next(); // consume the opening paren
-
-                                    let mut parens = 1;
-                                    let mut args: Vec<Vec<Spanned<Token>>> = Vec::new();
-                                    let mut arg = Vec::new();
-
-                                    while parens != 0 {
-                                        let next = iter.next();
-
-                                        match next {
-                                            Some(Ok(t)) => {
-                                                let (_, arg_tok, _) = &t;
-                                                match &arg_tok {
-                                                    Token::LParen(_) => {
-                                                        parens += 1;
-                                                        arg.push(t);
-                                                    }
-                                                    Token::RParen(_) => {
-                                                        parens -= 1;
-
-                                                        if parens == 0 {
-                                                            args.push(arg);
-                                                            arg = Vec::new();
-                                                            arg = Vec::new();
-                                                        } else {
-                                                            arg.push(t);
-                                                        }
-                                                    }
-                                                    Token::Comma(_) => {
-                                                        if parens == 1 {
-                                                            args.push(arg);
-                                                            arg = Vec::new();
-                                                        } else {
-                                                            arg.push(t)
-                                                        }
-                                                    }
-                                                    Token::Error => {
-                                                        return Err(LpcError::new("Invalid token")
-                                                            .with_span(Some(token.span())))
-                                                    }
-                                                    Token::NewLine(_) => { /* ignore */ }
-                                                    _ => {
-                                                        arg.push(t);
-                                                    }
-                                                }
-                                            }
-                                            Some(Err(e)) => return Err(e),
-                                            None => break,
-                                        }
-                                    }
-
-                                    if parens != 0 {
-                                        return Err(LpcError::new("Mismatched parentheses")
-                                            .with_span(Some(token.span())));
-                                    }
-
-                                    if args.len() != function.args.len() {
-                                        return Err(LpcError::new(
-                                            "Incorrect number of macro arguments",
-                                        )
-                                        .with_span(Some(token.span())));
-                                    }
-
-                                    let arg_map = function
-                                        .args
-                                        .iter()
-                                        .cloned()
-                                        .zip(args)
-                                        .collect::<HashMap<_, _>>();
-
-                                    for replacement in &function.tokens {
-                                        if let (tl, Token::Id(s), tr) = replacement {
-                                            if let Some(arg_tokens) = arg_map.get(&s.1) {
-                                                for arg_token in arg_tokens.iter().cloned() {
-                                                    self.append_spanned(&mut output, arg_token);
-                                                }
-                                            } else {
-                                                match self.defines.get(&s.1) {
-                                                    Some(Define::Object(ObjectMacro {
-                                                        tokens,
-                                                        ..
-                                                    })) => {
-                                                        for o_token in tokens.iter().cloned() {
-                                                            self.append_spanned(
-                                                                &mut output,
-                                                                o_token,
-                                                            );
-                                                        }
-                                                    }
-                                                    Some(Define::Function(FunctionMacro {
-                                                        tokens,
-                                                        ..
-                                                    })) => {
-                                                        for o_token in tokens.iter().cloned() {
-                                                            self.append_spanned(
-                                                                &mut output,
-                                                                o_token,
-                                                            );
-                                                        }
-                                                    }
-                                                    None => self.append_spanned(
-                                                        &mut output,
-                                                        (*tl, Token::Id(s.clone()), *tr),
-                                                    ),
-                                                }
-                                            }
-                                        } else {
-                                            self.append_spanned(&mut output, replacement.clone());
-                                        }
-                                    }
-                                }
+                                },
                                 None => self.append_spanned(&mut output, spanned),
                             }
                         }
@@ -447,6 +323,133 @@ impl Preprocessor {
         }
 
         Ok(output)
+    }
+
+    /// Expand a `#define`d token, if necessary
+    fn expand_token(&mut self, iter: &mut MultiPeek<LexWrapper>, t: &StringToken) -> Result<Option<Vec<Spanned<Token>>>> {
+        let span = t.0;
+        let name = &t.1;
+
+        match self.defines.get(name) {
+            Some(Define::Object(object)) => {
+                let mut tokens = Vec::with_capacity(object.tokens.len());
+                for (_tl, mut tok, _tr) in object.tokens.to_vec() {
+                    // Set the span to that of the token before its replacement.
+                    tok.set_span_range(span.l, span.r);
+                    let new_spanned = (span.l, tok, span.r);
+                    tokens.push(new_spanned);
+                }
+                Ok(Some(tokens))
+            }
+            Some(Define::Function(function)) => {
+                if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
+                    return Err(LpcError::new(
+                        "Functional macro call missing arguments.",
+                    )
+                        .with_span(Some(t.0)));
+                }
+
+                iter.next(); // consume the opening paren
+
+                let mut parens = 1;
+                let mut args: Vec<Vec<Spanned<Token>>> = Vec::new();
+                let mut arg = Vec::new();
+
+                while parens != 0 {
+                    let next = iter.next();
+
+                    match next {
+                        Some(Ok(t)) => {
+                            let (_, arg_tok, _) = &t;
+                            match &arg_tok {
+                                Token::LParen(_) => {
+                                    parens += 1;
+                                    arg.push(t);
+                                }
+                                Token::RParen(_) => {
+                                    parens -= 1;
+
+                                    if parens == 0 {
+                                        args.push(arg);
+                                        arg = Vec::new();
+                                    } else {
+                                        arg.push(t);
+                                    }
+                                }
+                                Token::Comma(_) => {
+                                    if parens == 1 {
+                                        args.push(arg);
+                                        arg = Vec::new();
+                                    } else {
+                                        arg.push(t)
+                                    }
+                                }
+                                Token::Error => {
+                                    return Err(LpcError::new("Invalid token")
+                                        .with_span(Some(span)))
+                                }
+                                Token::NewLine(_) => { /* ignore */ }
+                                _ => {
+                                    arg.push(t);
+                                }
+                            }
+                        }
+                        Some(Err(e)) => return Err(e),
+                        None => break,
+                    }
+                }
+
+                if parens != 0 {
+                    return Err(LpcError::new("Mismatched parentheses")
+                        .with_span(Some(span)));
+                }
+
+                if args.len() != function.args.len() {
+                    return Err(LpcError::new(
+                        "Incorrect number of macro arguments",
+                    )
+                        .with_span(Some(span)));
+                }
+
+                let arg_map = function
+                    .args
+                    .iter()
+                    .cloned()
+                    .zip(args)
+                    .collect::<HashMap<_, _>>();
+
+                let mut replacements = Vec::with_capacity(function.tokens.len());
+
+                for replacement in &function.tokens {
+                    if let (tl, Token::Id(s), tr) = replacement {
+                        if let Some(arg_tokens) = arg_map.get(&s.1) {
+                            replacements.append(&mut arg_tokens.to_vec());
+                        } else {
+                            match self.defines.get(&s.1) {
+                                Some(Define::Object(ObjectMacro {
+                                                        tokens,
+                                                        ..
+                                                    })) => {
+                                    replacements.append(&mut tokens.to_vec());
+                                }
+                                Some(Define::Function(FunctionMacro {
+                                                          tokens,
+                                                          ..
+                                                      })) => {
+                                    replacements.append(&mut tokens.to_vec());
+                                }
+                                None => replacements.push((*tl, Token::Id(s.clone()), *tr)),
+                            }
+                        }
+                    } else {
+                        replacements.push(replacement.clone())
+                    }
+                }
+
+                Ok(Some(replacements))
+            }
+            None => Ok(None),
+        }
     }
 
     fn handle_define(&mut self, token: &StringToken) -> Result<()> {
@@ -515,8 +518,6 @@ impl Preprocessor {
 
                 token_vec
             };
-
-            println!("macro captures {:?}, {:?}", captures, tokens);
 
             let define = Define::new_function(tokens, args);
 
