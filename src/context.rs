@@ -11,6 +11,7 @@ use crate::{
 };
 
 use crate::errors::LpcError;
+use std::sync::Arc;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -26,7 +27,7 @@ pub struct Context {
 
     /// In-game directories that will be searched for system `#include`s.
     /// Searches will be done in the order given by this vector.
-    pub include_dirs: Vec<PathBuf>,
+    pub include_dirs: Arc<Vec<PathBuf>>,
 
     /// Our collection of scopes
     pub scopes: ScopeTree,
@@ -69,7 +70,7 @@ impl Context {
                 .absolutize()
                 .unwrap()
                 .to_path_buf(),
-            include_dirs: include_dirs.iter().map(|i| PathBuf::from(*i)).collect(),
+            include_dirs: Arc::new(include_dirs.iter().map(|i| PathBuf::from(*i)).collect()),
             ..Self::default()
         }
     }
@@ -80,7 +81,7 @@ impl Default for Context {
         Self {
             filename: String::from(""),
             root_dir: PathBuf::from("."),
-            include_dirs: vec![],
+            include_dirs: Arc::new(Vec::new()),
             errors: Vec::new(),
             scopes: ScopeTree::default(),
             function_params: HashMap::new(),

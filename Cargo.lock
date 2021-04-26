@@ -574,6 +574,7 @@ dependencies = [
  "enum_dispatch",
  "indextree",
  "indoc",
+ "itertools",
  "lalrpop",
  "lalrpop-util",
  "lazy_static",

@@ -1,29 +1,31 @@
-pub mod preprocessor_node;
-
-use crate::{
-    errors::lazy_files::{FileCache, FILE_CACHE},
-    preprocessor_parser,
-};
-use lalrpop_util::ParseError as LalrpopParseError;
 use std::{collections::HashMap, fs, path::Path};
-
+use std::{ffi::OsString, path::PathBuf, result};
+use itertools::Itertools;
+use codespan_reporting::files::Files;
+use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
+use path_absolutize::Absolutize;
 use regex::Regex;
 
-use crate::{context::Context, convert_escapes, errors::LpcError, parser::span::Span};
-use codespan_reporting::files::Files;
-use path_absolutize::Absolutize;
-use std::{ffi::OsString, path::PathBuf, result};
+use define::{Define, ObjectMacro, FunctionMacro};
 
+use crate::{
+    errors::lazy_files::{FILE_CACHE, FileCache},
+    preprocessor_parser,
+};
+use crate::{context::Context, convert_escapes, errors::LpcError, parser::span::Span};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     errors::format_expected,
     parser::lexer::{
-        logos_token::{IntToken, StringToken},
-        LexWrapper, Spanned, Token,
+        LexWrapper,
+        logos_token::{IntToken, StringToken}, Spanned, Token,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
 };
+
+pub mod preprocessor_node;
+pub mod define;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -32,12 +34,13 @@ lazy_static! {
     static ref LOCAL_INCLUDE: Regex =
         Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
     static ref DEFINE: Regex =
-        Regex::new("\\A\\s*#\\s*define\\s+(\\S+)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
-    static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+(\S+)\s*\z"#).unwrap();
-    // static ref IF: Regex = Regex::new(r#"\A\s*#\s*if\s+(\S+)\s*\z"#).unwrap();
+        Regex::new("\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z").unwrap();
+    static ref DEFINEMACRO: Regex =
+        Regex::new("\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)\\(([^)]*)\\)\\s*((?:\\\\.|[^\n])*)\n?\\z").unwrap();
+    static ref UNDEF: Regex = Regex::new(r#"\A\s*#\s*undef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
     static ref IF: Regex = Regex::new("\\A\\s*#\\s*if\\s+([^\n]*)\\s*\\z").unwrap();
-    static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+(\S+)\s*\z"#).unwrap();
-    static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+(\S+)\s*\z"#).unwrap();
+    static ref IFDEF: Regex = Regex::new(r#"\A\s*#\s*ifdef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
+    static ref IFNDEF: Regex = Regex::new(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
     static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
     static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
 }
@@ -53,12 +56,6 @@ struct IfDef {
 
     /// Is this `#ifdef` itself conditionally compiled out?
     pub compiled_out: bool,
-}
-
-#[derive(Debug)]
-struct Define {
-    pub tokens: Vec<Spanned<Token>>,
-    pub expr: PreprocessorNode,
 }
 
 #[derive(Debug)]
@@ -248,9 +245,12 @@ impl Preprocessor {
 
         let mut token_stream = LexWrapper::new(file_content.as_ref());
         token_stream.set_file_id(file_id);
+        // let tokens = token_stream.collect::<Vec<_>>().iter().peekable();
+        // let mut spanned_results = Arc::new(token_stream.peekable());
 
-        for spanned_result in token_stream {
-            // println!("token {:?}", spanned_result);
+        // let mut peekable = spanned_results.clone();
+        let mut iter = token_stream.into_iter().multipeek();
+        while let Some(spanned_result) = iter.next() {
             match spanned_result {
                 Ok(spanned) => {
                     let (l, token, r) = &spanned;
@@ -276,15 +276,106 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let str = &t.1;
+                            let name = &t.1;
 
-                            match self.defines.get(str) {
-                                Some(define) => {
-                                    for (_tl, mut tok, _tr) in define.tokens.to_vec() {
+                            match self.defines.get(name) {
+                                Some(Define::Object(object)) => {
+                                    for (_tl, mut tok, _tr) in object.tokens.to_vec() {
                                         // Set the span to that of the token before its replacement.
                                         tok.set_span_range(*l, *r);
                                         let new_spanned = (*l, tok, *r);
                                         self.append_spanned(&mut output, new_spanned)
+                                    }
+                                }
+                                Some(Define::Function(function)) => {
+                                    if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
+                                        return Err(
+                                            LpcError::new("Functional macro call missing arguments.")
+                                                .with_span(Some(t.0)),
+                                        );
+                                    }
+
+                                    iter.next(); // consume the opening paren
+
+                                    let mut parens = 1;
+                                    let mut args: Vec<Vec<Spanned<Token>>> = Vec::new();
+                                    let mut arg = Vec::new();
+
+                                    while parens != 0 {
+                                        let next = iter.next();
+
+                                        match next {
+                                            Some(Ok(t)) => {
+                                                let (_, arg_tok, _) = &t;
+                                                match &arg_tok {
+                                                    Token::LParen(_) => {
+                                                        parens += 1;
+                                                        arg.push(t);
+                                                    }
+                                                    Token::RParen(_) => {
+                                                        parens -= 1;
+
+                                                        if parens == 0 {
+                                                            args.push(arg);                                                            arg = Vec::new();
+                                                            arg = Vec::new();
+                                                        } else {
+                                                            arg.push(t);
+                                                        }
+                                                    }
+                                                    Token::Comma(_) => {
+                                                        if parens == 1 {
+                                                            args.push(arg);
+                                                            arg = Vec::new();
+                                                        } else {
+                                                            arg.push(t)
+                                                        }
+                                                    }
+                                                    Token::Error => return Err(LpcError::new("Invalid token").with_span(Some(token.span()))),
+                                                    Token::NewLine(_) => { /* ignore */ },
+                                                    _ => {
+                                                        arg.push(t);
+                                                    }
+                                                }
+                                            }
+                                            Some(Err(e)) => return Err(e),
+                                            None => break,
+                                        }
+                                    }
+
+                                    if parens != 0 {
+                                        return Err(LpcError::new("Mismatched parentheses").with_span(Some(token.span())));
+                                    }
+
+                                    if args.len() != function.args.len() {
+                                        return Err(LpcError::new("Incorrect number of macro arguments").with_span(Some(token.span())));
+                                    }
+
+                                    let arg_map = function.args.iter().cloned().zip(args).collect::<HashMap<_, _>>();
+
+                                    for replacement in &function.tokens {
+                                        if let (tl, Token::Id(s), tr) = replacement {
+                                            if let Some(arg_tokens) = arg_map.get(&s.1) {
+                                                for arg_token in arg_tokens.iter().cloned() {
+                                                    self.append_spanned(&mut output, arg_token);
+                                                }
+                                            } else {
+                                                match self.defines.get(&s.1) {
+                                                    Some(Define::Object(ObjectMacro { tokens, .. })) => {
+                                                        for o_token in tokens.iter().cloned() {
+                                                            self.append_spanned(&mut output, o_token);
+                                                        }
+                                                    }
+                                                    Some(Define::Function(FunctionMacro { tokens, .. })) => {
+                                                        for o_token in tokens.iter().cloned() {
+                                                            self.append_spanned(&mut output, o_token);
+                                                        }
+                                                    }
+                                                    None => self.append_spanned(&mut output, (*tl, Token::Id(s.clone()), *tr))
+                                                }
+                                            }
+                                        } else {
+                                            self.append_spanned(&mut output, replacement.clone());
+                                        }
                                     }
                                 }
                                 None => self.append_spanned(&mut output, spanned),
@@ -320,16 +411,76 @@ impl Preprocessor {
 
         self.check_for_previous_newline(token.0)?;
 
-        if let Some(captures) = DEFINE.captures(&token.1) {
-            if !self.skipping_lines() && self.defines.contains_key(&captures[1]) {
+        let check_duplicate = |key, span| {
+            if !self.skipping_lines() && self.defines.contains_key(key) {
                 return Err(
-                    LpcError::new(format!("Duplicate `#define`: `{}`", &captures[1]))
-                        .with_span(Some(token.0)),
+                    LpcError::new(format!("Duplicate `#define`: `{}`", key))
+                        .with_span(Some(span)),
                 );
             }
 
+            Ok(())
+        };
+
+        if let Some(captures) = DEFINEMACRO.captures(&token.1) {
+            check_duplicate(&captures[1], token.0)?;
+
+            lazy_static! {
+                static ref COMMA_SEPARATOR: Regex = Regex::new(r"\s*,\s*").unwrap();
+            }
+
             let name = String::from(&captures[1]);
-            let value = if captures[2].is_empty() {
+            let args: Vec<String> = COMMA_SEPARATOR.split(&captures[2]).map(|s| String::from(s)).collect();
+            let body = &captures[3];
+            // get arg vector
+            // tokenize / parse body with full language parser
+
+            let tokens = {
+                let unescaped = convert_escapes(body);
+                let lexer = LexWrapper::new(&unescaped);
+
+                let mut token_vec = Vec::new();
+
+                for lex_tok in lexer {
+                    match lex_tok {
+                        Ok((l, tok, r)) => {
+                            match &tok {
+                                // We only expand IDs, to maintain some semblance of sanity.
+                                Token::Id(s) => {
+                                    match self.defines.get(&s.1) {
+                                        Some(Define::Object(object)) => {
+                                            // tokenize value
+                                            // todo: does this need multi level expand?
+                                            token_vec.append(&mut object.tokens.to_vec());
+                                        }
+                                        Some(Define::Function(function)) => {
+                                            todo!()
+                                        }
+                                        None => token_vec.push((l, tok, r)),
+                                    }
+                                }
+                                _ => token_vec.push((l, tok, r)),
+                            }
+                        }
+                        Err(e) => return Err(e),
+                    };
+                }
+
+                token_vec
+            };
+
+            println!("macro captures {:?}, {:?}", captures, tokens);
+
+            let define = Define::new_function(tokens, args);
+
+            self.defines.insert(name, define);
+
+            Ok(())
+        } else if let Some(captures) = DEFINE.captures(&token.1) {
+            check_duplicate(&captures[1], token.0)?;
+
+            let name = String::from(&captures[1]);
+            let tokens = if captures[2].is_empty() {
                 vec![(
                     token.0.l,
                     Token::IntLiteral(IntToken(token.0, 0)),
@@ -340,7 +491,7 @@ impl Preprocessor {
                 let unescaped = convert_escapes(&captures[2]);
                 let lexer = LexWrapper::new(&unescaped);
 
-                let mut tokens = Vec::with_capacity(1);
+                let mut token_vec = Vec::new();
 
                 for lex_tok in lexer {
                     match lex_tok {
@@ -349,21 +500,25 @@ impl Preprocessor {
                                 // We only expand IDs, to maintain some semblance of sanity.
                                 Token::Id(s) => {
                                     match self.defines.get(&s.1) {
-                                        Some(value) => {
+                                        Some(Define::Object(object)) => {
                                             // tokenize value
-                                            tokens.append(&mut value.tokens.to_vec());
+                                            // todo: does this need multi level expand?
+                                            token_vec.append(&mut object.tokens.to_vec());
                                         }
-                                        None => tokens.push((l, tok, r)),
+                                        Some(Define::Function(function)) => {
+                                            todo!()
+                                        }
+                                        None => token_vec.push((l, tok, r)),
                                     }
                                 }
-                                _ => tokens.push((l, tok, r)),
+                                _ => token_vec.push((l, tok, r)),
                             }
                         }
                         Err(e) => return Err(e),
                     };
                 }
 
-                tokens
+                token_vec
             };
 
             let expr = if captures[2].is_empty() {
@@ -383,10 +538,7 @@ impl Preprocessor {
                 }
             };
 
-            let define = Define {
-                tokens: value,
-                expr,
-            };
+            let define = Define::new_object(tokens, expr);
 
             self.defines.insert(name, define);
             Ok(())
@@ -423,7 +575,7 @@ impl Preprocessor {
         if let Some(captures) = SYS_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
 
-            for dir in self.context.include_dirs.to_vec() {
+            for dir in &*self.context.include_dirs.clone() {
                 if let Ok(included) = self.include_local_file(matched.as_str(), dir, token.0) {
                     for spanned in included {
                         self.append_spanned(&mut output, spanned)
@@ -535,8 +687,8 @@ impl Preprocessor {
     fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
         match expr {
             PreprocessorNode::Var(x) => {
-                if let Some(val) = self.defines.get(x) {
-                    let int_val = self.resolve_int(&val.expr, span)?;
+                if let Some(Define::Object(ObjectMacro { expr, .. })) = self.defines.get(x) {
+                    let int_val = self.resolve_int(expr, span)?;
                     Ok(int_val != 0)
                 } else {
                     Ok(false)
@@ -565,7 +717,10 @@ impl Preprocessor {
         match expr {
             PreprocessorNode::Var(x) => {
                 if let Some(val) = self.defines.get(x) {
-                    self.resolve_int(&val.expr, span)
+                    match val {
+                        Define::Object(ObjectMacro { expr, .. }) => self.resolve_int(expr, span),
+                        Define::Function(_) => Ok(0)
+                    }
                 } else {
                     Err(
                         LpcError::new(format!("Unable to resolve into an int: `{}`", x))
@@ -781,8 +936,9 @@ impl Default for Preprocessor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use indoc::indoc;
+
+    use super::*;
 
     fn fixture() -> Preprocessor {
         let context = Context::new("test.c", "./tests/fixtures/code", vec!["/sys", "sys2"]);
@@ -1034,32 +1190,36 @@ mod tests {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
-                        Define {
+                        Define::Object(ObjectMacro {
                             expr: PreprocessorNode::Int(1234),
                             ..
-                        }
+                        })
                     ));
                     assert!(matches!(
                         preprocessor.defines.get("MAR").unwrap(),
-                        Define {
+                        Define::Object(ObjectMacro {
                             expr: PreprocessorNode::Int(0),
                             ..
-                        }
+                        })
                     ));
-                    assert_eq!(
-                        preprocessor.defines.get("DOOD").unwrap().expr,
-                        PreprocessorNode::BinaryOp(
-                            BinaryOperation::Add,
-                            Box::new(PreprocessorNode::Int(666)),
-                            Box::new(PreprocessorNode::Var(String::from("MAR")))
-                        )
-                    );
+                    if let Define::Object(ObjectMacro { expr, .. }) = preprocessor.defines.get("DOOD").unwrap() {
+                        assert_eq!(
+                            expr,
+                            &PreprocessorNode::BinaryOp(
+                                BinaryOperation::Add,
+                                Box::new(PreprocessorNode::Int(666)),
+                                Box::new(PreprocessorNode::Var(String::from("MAR")))
+                            )
+                        );
+                    } else {
+                        panic!("Failed to match.")
+                    }
                     assert!(matches!(
                         preprocessor.defines.get("SNUH").unwrap(),
-                        Define {
+                        Define::Object(ObjectMacro {
                             expr: PreprocessorNode::Int(291),
                             ..
-                        }
+                        })
                     ));
                 }
                 Err(e) => {
@@ -1099,10 +1259,10 @@ mod tests {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
-                        Define {
+                        Define::Object(ObjectMacro {
                             expr: PreprocessorNode::Int(456),
                             ..
-                        }
+                        })
                     ));
                 }
                 Err(e) => {
@@ -1125,10 +1285,10 @@ mod tests {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("HELLO").unwrap(),
-                        Define {
+                        Define::Object(ObjectMacro {
                             expr: PreprocessorNode::Int(123),
                             ..
-                        }
+                        })
                     ));
                 }
                 Err(e) => {
@@ -1570,6 +1730,54 @@ mod tests {
             "## };
 
             test_valid(prog, &vec![])
+        }
+    }
+
+    mod test_macros {
+        use super::*;
+
+        #[test]
+        fn test_functional_macros() {
+            let prog = indoc! { r##"
+                #define FOO 1234
+                #define BAR(a, b) (a + b + FOO)
+                #if BAR
+                    "should not print. Functional macros themselves have a defined value of 0"
+                #endif
+                666 + BAR(5, 7)
+            "## };
+
+            test_valid(prog, &vec!["666", "+", "(", "5", "+", "7", "+", "1234", ")"])
+        }
+
+        #[test]
+        fn test_errors_if_no_args() {
+            let prog = indoc! { r##"
+                #define BAR(a, b) (a - b)
+                BAR;
+            "## };
+
+            test_invalid(prog, "Functional macro call missing arguments.");
+        }
+
+        #[test]
+        fn test_errors_if_mismatched_parens() {
+            let prog = indoc! { r##"
+                #define BAR(a, b) (a - b)
+                BAR(;
+            "## };
+
+            test_invalid(prog, "Mismatched parentheses");
+        }
+
+        #[test]
+        fn test_errors_if_wrong_arg_count() {
+            let prog = indoc! { r##"
+                #define BAR(a, b) (a - b)
+                BAR(34);
+            "## };
+
+            test_invalid(prog, "Incorrect number of macro arguments");
         }
     }
 }
