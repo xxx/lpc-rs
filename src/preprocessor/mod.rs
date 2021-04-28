@@ -340,11 +340,24 @@ impl Preprocessor {
         match self.defines.get(name) {
             Some(Define::Object(object)) => {
                 let mut tokens = Vec::with_capacity(object.tokens.len());
-                for (_tl, mut tok, _tr) in object.tokens.to_vec() {
-                    // Set the span to that of the token before its replacement.
-                    tok.set_span_range(span.l, span.r);
-                    let new_spanned = (span.l, tok, span.r);
-                    tokens.push(new_spanned);
+
+                for (tl, mut tok, tr) in object.tokens.to_vec() {
+                    match &tok {
+                        Token::Id(s) => {
+                            let mut iter = TokenVecWrapper::new(&object.tokens).peekable();
+
+                            match self.expand_token(s, &mut iter)? {
+                                Some(mut vec) => tokens.append(&mut vec),
+                                None => tokens.push((tl, Token::Id(s.clone()), tr)),
+                            }
+                        },
+                        _ => {
+                            // Set the span to that of the token before its replacement.
+                            tok.set_span_range(span.l, span.r);
+                            let new_spanned = (span.l, tok, span.r);
+                            tokens.push(new_spanned);
+                        }
+                    }
                 }
                 Ok(Some(tokens))
             }
@@ -477,6 +490,17 @@ impl Preprocessor {
             Ok(())
         };
 
+        let lex_vec = |input| {
+            let lexer = LexWrapper::new(input);
+
+            let result: Result<Vec<Spanned<Token>>> = lexer.collect();
+
+            match result {
+                Ok(vec) => Ok(vec),
+                Err(e) => Err(e)
+            }
+        };
+
         if let Some(captures) = DEFINEMACRO.captures(&token.1) {
             check_duplicate(&captures[1], token.0)?;
 
@@ -490,42 +514,7 @@ impl Preprocessor {
                 .map(|s| String::from(s))
                 .collect();
             let body = &captures[3];
-            // get arg vector
-            // tokenize / parse body with full language parser
-
-            let tokens = {
-                let unescaped = convert_escapes(body);
-                let lexer = LexWrapper::new(&unescaped);
-
-                let mut token_vec = Vec::new();
-
-                for lex_tok in lexer {
-                    match lex_tok {
-                        Ok((l, tok, r)) => {
-                            match &tok {
-                                // We only expand IDs, to maintain some semblance of sanity.
-                                Token::Id(s) => {
-                                    match self.defines.get(&s.1) {
-                                        Some(Define::Object(object)) => {
-                                            // tokenize value
-                                            // todo: does this need multi level expand?
-                                            token_vec.append(&mut object.tokens.to_vec());
-                                        }
-                                        Some(Define::Function(_function)) => {
-                                            todo!()
-                                        }
-                                        None => token_vec.push((l, tok, r)),
-                                    }
-                                }
-                                _ => token_vec.push((l, tok, r)),
-                            }
-                        }
-                        Err(e) => return Err(e),
-                    };
-                }
-
-                token_vec
-            };
+            let tokens = lex_vec(&convert_escapes(body))?;
 
             let define = Define::new_function(tokens, args);
 
@@ -543,38 +532,8 @@ impl Preprocessor {
                     token.0.r,
                 )]
             } else {
-                // tokenize captures[2] with our full language lexer, so we can do macro expansion
-                let unescaped = convert_escapes(&captures[2]);
-                let lexer = LexWrapper::new(&unescaped);
-
-                let mut token_vec = Vec::new();
-
-                for lex_tok in lexer {
-                    match lex_tok {
-                        Ok((l, tok, r)) => {
-                            match &tok {
-                                // We only expand IDs, to maintain some semblance of sanity.
-                                Token::Id(s) => {
-                                    match self.defines.get(&s.1) {
-                                        Some(Define::Object(object)) => {
-                                            // tokenize value
-                                            // todo: does this need multi level expand?
-                                            token_vec.append(&mut object.tokens.to_vec());
-                                        }
-                                        Some(Define::Function(_function)) => {
-                                            todo!()
-                                        }
-                                        None => token_vec.push((l, tok, r)),
-                                    }
-                                }
-                                _ => token_vec.push((l, tok, r)),
-                            }
-                        }
-                        Err(e) => return Err(e),
-                    };
-                }
-
-                token_vec
+                // tokenize captures[2] with our full language lexer, so we can store it
+                lex_vec(&convert_escapes(&captures[2]))?
             };
 
             let expr = if captures[2].is_empty() {
@@ -1808,6 +1767,23 @@ mod tests {
             test_valid(
                 prog,
                 &vec!["666", "+", "(", "5", "+", "7", "+", "1234", ")"],
+            )
+        }
+
+        #[test]
+        fn test_uses_latest_value() {
+            let prog = indoc! { r##"
+                #define FOO 1234
+                #define BAR FOO
+                BAR
+                #undef FOO
+                #define FOO 4567
+                BAR
+            "## };
+
+            test_valid(
+                prog,
+                &vec!["1234", "4567"],
             )
         }
 
