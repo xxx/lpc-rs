@@ -339,6 +339,9 @@ pub enum Token {
     #[token("defined(", track_slice)]
     DefinedParen(Span),
 
+    #[token("not", track_slice)]
+    Not(Span),
+
     #[error]
     // Strip whitespace and comments
     #[regex(r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", |lex| {
@@ -486,6 +489,7 @@ impl Token {
             Token::Undef(s) => s.0,
             Token::Defined(s) => *s,
             Token::DefinedParen(s) => *s,
+            Token::Not(s) => *s,
             Token::Error => Span::new(0, 0..0),
         }
     }
@@ -578,6 +582,7 @@ impl Token {
             Token::Undef(StringToken(s, _)) => s,
             Token::Defined(s) => s,
             Token::DefinedParen(s) => s,
+            Token::Not(s) => s,
             Token::Error => return None,
         };
 
@@ -686,6 +691,7 @@ impl Display for Token {
             Token::Undef(s) => &s.1,
             Token::Defined(_) => "defined",
             Token::DefinedParen(_) => "defined(",
+            Token::Not(_) => "defined(",
             Token::Error => "Error token",
         };
 

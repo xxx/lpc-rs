@@ -710,7 +710,10 @@ impl Preprocessor {
                 }
             }
             PreprocessorNode::Int(i) => Ok(i != &0),
-            PreprocessorNode::Defined(x) => Ok(self.defines.get(x).is_some()),
+            PreprocessorNode::Defined(x, negated) => {
+                let option = self.defines.get(x);
+                Ok(if *negated { option.is_none() } else { option.is_some() })
+            },
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 BinaryOperation::Add => {
                     Ok(self.resolve_int(&*l, span)? + self.resolve_int(&*r, span)? != 0)
@@ -1722,6 +1725,10 @@ mod tests {
                 #if defined(FOO) && (BAR || defined(BAZ))
                     "fifth test passes"
                 #endif
+
+                #if not defined(FOO) || not defined(UNDEFINED)
+                    "sixth test passes"
+                #endif
             "## };
 
             test_valid(
@@ -1732,6 +1739,7 @@ mod tests {
                     "third test passes",
                     "fourth test passes",
                     "fifth test passes",
+                    "sixth test passes",
                 ],
             );
         }

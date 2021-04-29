@@ -86,6 +86,7 @@ extern {
 
         "defined" => Token::Defined(<Span>),
         "defined(" => Token::DefinedParen(<Span>),
+        "not" => Token::Not(<Span>),
 
         "StringLiteral" => Token::StringLiteral(<StringToken>),
         "IntLiteral" => Token::IntLiteral(<IntToken>),
@@ -98,8 +99,8 @@ PrimaryExpression: PreprocessorNode = {
     <Int> => PreprocessorNode::Int(<>),
     <Var> => PreprocessorNode::Var(<>),
     "(" <Expression> ")",
-    "defined" "(" <Var> ")" => PreprocessorNode::Defined(<>),
-    "defined(" <Var> ")" => PreprocessorNode::Defined(<>),
+    <not:"not"?> "defined" "(" <var:Var> ")" => PreprocessorNode::Defined(var, not.is_some()),
+    <not:"not"?> "defined(" <var:Var> ")" => PreprocessorNode::Defined(var, not.is_some()),
 };
 
 AdditiveExpression: PreprocessorNode = {

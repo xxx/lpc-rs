@@ -8,7 +8,8 @@ pub enum PreprocessorNode {
     // Char(char),
     // Macro(String),
     Int(i64),
-    Defined(String),
+    /// `bool` denotes whether this is negated or not
+    Defined(String, bool),
     BinaryOp(
         BinaryOperation,
         Box<PreprocessorNode>,
@@ -21,7 +22,15 @@ impl Display for PreprocessorNode {
         match self {
             PreprocessorNode::Var(v) => write!(f, "{}", v),
             PreprocessorNode::Int(i) => write!(f, "{}", i),
-            PreprocessorNode::Defined(d) => write!(f, "defined({})", d),
+            PreprocessorNode::Defined(d, negated) => {
+                let not = if *negated {
+                    "not "
+                } else {
+                    ""
+                };
+
+                write!(f, "{}defined({})", not, d)
+            },
             PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{} {} {}", l, op, r),
         }
     }
