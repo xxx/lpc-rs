@@ -350,7 +350,7 @@ impl Preprocessor {
                                 Some(mut vec) => tokens.append(&mut vec),
                                 None => tokens.push((tl, Token::Id(s.clone()), tr)),
                             }
-                        },
+                        }
                         _ => {
                             // Set the span to that of the token before its replacement.
                             // let new_spanned = (span.l, tok.with_span(span), span.r);
@@ -445,7 +445,8 @@ impl Preprocessor {
                             }
                         }
                         Token::Comma(_) => {
-                            if parens == 1 { // we're inside only the outermost parens
+                            if parens == 1 {
+                                // we're inside only the outermost parens
                                 args.push(arg);
                                 arg = Vec::new();
                             } else {
@@ -484,9 +485,8 @@ impl Preprocessor {
 
         let check_duplicate = |key, error_span| {
             if !self.skipping_lines() && self.defines.contains_key(key) {
-                return Err(
-                    LpcError::new(format!("Duplicate `#define`: `{}`", key)).with_span(Some(error_span))
-                );
+                return Err(LpcError::new(format!("Duplicate `#define`: `{}`", key))
+                    .with_span(Some(error_span)));
             }
 
             Ok(())
@@ -499,7 +499,7 @@ impl Preprocessor {
 
             match result {
                 Ok(vec) => Ok(vec),
-                Err(e) => Err(e)
+                Err(e) => Err(e),
             }
         };
 
@@ -520,9 +520,8 @@ impl Preprocessor {
             // re-span these tokens to just be the entire #define line
             let tokens = lex_vec(&convert_escapes(body))?
                 .into_iter()
-                .map(|(_, t, _)| {
-                    (span.l, t.with_span(span), span.r)
-                }).collect::<Vec<_>>();
+                .map(|(_, t, _)| (span.l, t.with_span(span), span.r))
+                .collect::<Vec<_>>();
 
             let define = Define::new_function(tokens, args);
 
@@ -534,17 +533,13 @@ impl Preprocessor {
 
             let name = String::from(&captures[1]);
             let tokens = if captures[2].is_empty() {
-                vec![(
-                    span.l,
-                    Token::IntLiteral(IntToken(span, 0)),
-                    span.r,
-                )]
+                vec![(span.l, Token::IntLiteral(IntToken(span, 0)), span.r)]
             } else {
                 // tokenize captures[2] with our full language lexer, so we can store it
                 lex_vec(&convert_escapes(&captures[2]))?
-                    .into_iter().map(|(_, t, _)| {
-                    (span.l, t.with_span(span), span.r)
-                }).collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|(_, t, _)| (span.l, t.with_span(span), span.r))
+                    .collect::<Vec<_>>()
             };
 
             let expr = if captures[2].is_empty() {
@@ -723,8 +718,12 @@ impl Preprocessor {
             PreprocessorNode::Int(i) => Ok(i != &0),
             PreprocessorNode::Defined(x, negated) => {
                 let option = self.defines.get(x);
-                Ok(if *negated { option.is_none() } else { option.is_some() })
-            },
+                Ok(if *negated {
+                    option.is_none()
+                } else {
+                    option.is_some()
+                })
+            }
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 BinaryOperation::Add => {
                     Ok(self.resolve_int(&*l, span)? + self.resolve_int(&*r, span)? != 0)
@@ -1800,10 +1799,7 @@ mod tests {
                 BAR
             "## };
 
-            test_valid(
-                prog,
-                &vec!["1234", "4567"],
-            )
+            test_valid(prog, &vec!["1234", "4567"])
         }
 
         #[test]

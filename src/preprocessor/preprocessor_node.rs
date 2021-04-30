@@ -23,14 +23,10 @@ impl Display for PreprocessorNode {
             PreprocessorNode::Var(v) => write!(f, "{}", v),
             PreprocessorNode::Int(i) => write!(f, "{}", i),
             PreprocessorNode::Defined(d, negated) => {
-                let not = if *negated {
-                    "not "
-                } else {
-                    ""
-                };
+                let not = if *negated { "not " } else { "" };
 
                 write!(f, "{}defined({})", not, d)
-            },
+            }
             PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{} {} {}", l, op, r),
         }
     }
