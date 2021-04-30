@@ -341,7 +341,7 @@ impl Preprocessor {
             Some(Define::Object(object)) => {
                 let mut tokens = Vec::with_capacity(object.tokens.len());
 
-                for (tl, mut tok, tr) in object.tokens.to_vec() {
+                for (tl, tok, tr) in object.tokens.to_vec() {
                     match &tok {
                         Token::Id(s) => {
                             let mut iter = TokenVecWrapper::new(&object.tokens).peekable();
@@ -353,9 +353,9 @@ impl Preprocessor {
                         },
                         _ => {
                             // Set the span to that of the token before its replacement.
-                            tok.set_span_range(span.l, span.r);
-                            let new_spanned = (span.l, tok, span.r);
-                            tokens.push(new_spanned);
+                            // let new_spanned = (span.l, tok.with_span(span), span.r);
+                            // tokens.push(new_spanned);
+                            tokens.push((span.l, tok, span.r));
                         }
                     }
                 }
@@ -445,7 +445,7 @@ impl Preprocessor {
                             }
                         }
                         Token::Comma(_) => {
-                            if parens == 1 {
+                            if parens == 1 { // we're inside only the outermost parens
                                 args.push(arg);
                                 arg = Vec::new();
                             } else {
@@ -478,12 +478,14 @@ impl Preprocessor {
             return Ok(());
         }
 
-        self.check_for_previous_newline(token.0)?;
+        let span = token.0;
 
-        let check_duplicate = |key, span| {
+        self.check_for_previous_newline(span)?;
+
+        let check_duplicate = |key, error_span| {
             if !self.skipping_lines() && self.defines.contains_key(key) {
                 return Err(
-                    LpcError::new(format!("Duplicate `#define`: `{}`", key)).with_span(Some(span))
+                    LpcError::new(format!("Duplicate `#define`: `{}`", key)).with_span(Some(error_span))
                 );
             }
 
@@ -502,7 +504,7 @@ impl Preprocessor {
         };
 
         if let Some(captures) = DEFINEMACRO.captures(&token.1) {
-            check_duplicate(&captures[1], token.0)?;
+            check_duplicate(&captures[1], span)?;
 
             lazy_static! {
                 static ref COMMA_SEPARATOR: Regex = Regex::new(r"\s*,\s*").unwrap();
@@ -514,7 +516,13 @@ impl Preprocessor {
                 .map(|s| String::from(s))
                 .collect();
             let body = &captures[3];
-            let tokens = lex_vec(&convert_escapes(body))?;
+
+            // re-span these tokens to just be the entire #define line
+            let tokens = lex_vec(&convert_escapes(body))?
+                .into_iter()
+                .map(|(_, t, _)| {
+                    (span.l, t.with_span(span), span.r)
+                }).collect::<Vec<_>>();
 
             let define = Define::new_function(tokens, args);
 
@@ -527,13 +535,16 @@ impl Preprocessor {
             let name = String::from(&captures[1]);
             let tokens = if captures[2].is_empty() {
                 vec![(
-                    token.0.l,
-                    Token::IntLiteral(IntToken(token.0, 0)),
-                    token.0.r,
+                    span.l,
+                    Token::IntLiteral(IntToken(span, 0)),
+                    span.r,
                 )]
             } else {
                 // tokenize captures[2] with our full language lexer, so we can store it
                 lex_vec(&convert_escapes(&captures[2]))?
+                    .into_iter().map(|(_, t, _)| {
+                    (span.l, t.with_span(span), span.r)
+                }).collect::<Vec<_>>()
             };
 
             let expr = if captures[2].is_empty() {
