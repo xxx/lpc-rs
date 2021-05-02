@@ -5,13 +5,13 @@ use crate::{
         array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
         call_node::CallNode, comma_expression_node::CommaExpressionNode, decl_node::DeclNode,
         float_node::FloatNode, function_def_node::FunctionDefNode, int_node::IntNode,
-        program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
-        string_node::StringNode, var_init_node::VarInitNode, var_node::VarNode,
+        mapping_node::MappingNode, program_node::ProgramNode, range_node::RangeNode,
+        return_node::ReturnNode, string_node::StringNode, var_init_node::VarInitNode,
+        var_node::VarNode,
     },
     codegen::tree_walker,
     errors::LpcError,
 };
-use crate::ast::mapping_node::MappingNode;
 
 /// A tree walker for pretty-printing an AST
 ///

@@ -5,7 +5,6 @@ use crate::{
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
-        range_node::RangeNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
@@ -264,16 +263,14 @@ pub fn node_type(
                 LpcType::Mixed(true)
             }
         }
-        ExpressionNode::Mapping(_) => {
-            LpcType::Mapping(false)
-        }
+        ExpressionNode::Mapping(_) => LpcType::Mapping(false),
     }
 }
 
 #[cfg(test)]
 mod check_binary_operation_tests {
     use super::*;
-    use crate::semantic::symbol::Symbol;
+    use crate::{ast::range_node::RangeNode, semantic::symbol::Symbol};
 
     fn setup() -> ScopeTree {
         let int1 = Symbol {

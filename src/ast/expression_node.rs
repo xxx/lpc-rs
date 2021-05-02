@@ -13,6 +13,7 @@ use crate::{
         comma_expression_node::CommaExpressionNode,
         float_node::FloatNode,
         int_node::IntNode,
+        mapping_node::MappingNode,
         range_node::RangeNode,
         string_node::StringNode,
         var_node::VarNode,
@@ -21,7 +22,6 @@ use crate::{
     errors::LpcError,
     parser::span::Span,
 };
-use crate::ast::mapping_node::MappingNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

@@ -64,12 +64,9 @@ impl Hash for MappingNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
         "MappingNode".hash(state);
 
-        self.
-            value
-            .iter()
-            .for_each(|(key, value)| {
-                key.hash(state);
-                value.hash(state)
-            })
+        self.value.iter().for_each(|(key, value)| {
+            key.hash(state);
+            value.hash(state)
+        })
     }
 }

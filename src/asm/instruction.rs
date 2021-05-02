@@ -1,9 +1,9 @@
 use crate::asm::register::Register;
+use decorum::Total;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use decorum::Total;
 
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

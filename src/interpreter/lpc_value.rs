@@ -1,13 +1,13 @@
 use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar};
+use decorum::Total;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{
+    collections::HashMap,
     fmt,
     fmt::Display,
     iter::repeat,
     ops::{Add, Div, Mul, Sub},
 };
-use std::collections::HashMap;
-use decorum::Total;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -87,10 +87,10 @@ impl PartialEq for LpcValue {
             (LpcValue::String(s), LpcValue::String(s2)) => s == s2,
             (LpcValue::Array(v), LpcValue::Array(v2)) => v == v2,
             (LpcValue::Mapping(m), LpcValue::Mapping(m2)) => {
-                m.keys().collect::<Vec<_>>() == m2.keys().collect::<Vec<_>>() &&
-                    m.values().collect::<Vec<_>>() == m2.values().collect::<Vec<_>>()
-            },
-            _ => false
+                m.keys().collect::<Vec<_>>() == m2.keys().collect::<Vec<_>>()
+                    && m.values().collect::<Vec<_>>() == m2.values().collect::<Vec<_>>()
+            }
+            _ => false,
         }
     }
 }

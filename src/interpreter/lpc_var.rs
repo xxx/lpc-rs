@@ -1,10 +1,10 @@
 use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError};
+use decorum::Total;
 use std::{
     fmt,
     fmt::{Display, Formatter},
     ops::{Add, Div, Mul, Sub},
 };
-use decorum::Total;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).

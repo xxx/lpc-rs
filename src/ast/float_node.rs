@@ -24,13 +24,12 @@ pub struct FloatNode {
 impl FloatNode {
     pub fn new(v: f64) -> Self {
         // avoid any potential issues
-        let value: f64 = if v.is_nan() {
-            0 as f64
-        } else {
-            v
-        };
+        let value: f64 = if v.is_nan() { 0 as f64 } else { v };
 
-        Self { value: Total::from(value), span: None }
+        Self {
+            value: Total::from(value),
+            span: None,
+        }
     }
 }
 
