@@ -174,11 +174,9 @@ impl AsmInterpreter {
         match var {
             LpcVar::Int(v) => LpcValue::Int(*v),
             LpcVar::Float(v) => LpcValue::Float(*v),
-            LpcVar::String(i) => self.memory.get(*i).unwrap().clone(),
-            LpcVar::Array(i) => {
-                // not recursive
-                self.memory.get(*i).unwrap().clone()
-            }
+            LpcVar::String(i) |
+            LpcVar::Array(i) | // not recursive
+            LpcVar::Mapping(i) => self.memory.get(*i).unwrap().clone(), // not recursive
             LpcVar::StringConstant(i) => self.program.constants.get(*i).unwrap().clone(),
         }
     }
@@ -424,6 +422,7 @@ impl AsmInterpreter {
                                 LpcValue::Array(_) => LpcVar::Array(index),
                                 LpcValue::Int(_) => unimplemented!(),
                                 LpcValue::Float(_) => unimplemented!(),
+                                LpcValue::Mapping(_) => LpcVar::Mapping(index),
                             };
 
                             self.memory.push(result);

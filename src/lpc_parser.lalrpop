@@ -14,8 +14,9 @@ use crate::ast::string_node::StringNode;
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
-use crate::semantic::lpc_type::LpcType;
+use crate::ast::mapping_node::MappingNode;
 use crate::ast::ast_node::{AstNode, SpannedNode};
+use crate::semantic::lpc_type::LpcType;
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
 use crate::parser::lexer::Token;
@@ -282,6 +283,20 @@ pub PrimaryExpression: ExpressionNode = {
         };
 
         ExpressionNode::Array(ArrayNode::new(vec))
+    },
+    <l:"("> "[" <list:MappingExpressionList?> "]" <r:")"> => {
+         let vec = if let Some(v) = list {
+             v
+         } else {
+             Vec::new()
+         };
+
+         let span = Span {
+            r: r.r,
+            ..l
+         };
+
+         ExpressionNode::Mapping(MappingNode::new(vec, Some(span)))
     }
 };
 
@@ -524,6 +539,23 @@ ArgumentExpressionList: Vec<ExpressionNode> = {
         v
     }
 };
+
+MappingExpressionList: Vec<(ExpressionNode, ExpressionNode)> = {
+    <MappingInitializer> => {
+        vec![(<>.0, <>.1)]
+    },
+    <vec:MappingExpressionList> "," <arg:MappingInitializer> => {
+        let mut v = vec;
+        v.push((arg.0, arg.1));
+        v
+    }
+};
+
+MappingInitializer: (ExpressionNode, ExpressionNode) = {
+    <a:AssignmentExpression> ":" <b:AssignmentExpression> => {
+        (a, b)
+    }
+}
 
 pub Call: CallNode = {
     <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {

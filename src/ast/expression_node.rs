@@ -21,10 +21,11 @@ use crate::{
     errors::LpcError,
     parser::span::Span,
 };
+use crate::ast::mapping_node::MappingNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
-#[derive(Debug, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
@@ -36,6 +37,7 @@ pub enum ExpressionNode {
     String(StringNode),
     Var(VarNode),
     Array(ArrayNode),
+    Mapping(MappingNode),
 }
 
 /// A convenience helper to get the first `span` we can find in a list of nodes.
@@ -66,6 +68,7 @@ impl SpannedNode for ExpressionNode {
             ExpressionNode::String(node) => node.span,
             ExpressionNode::Var(node) => node.span,
             ExpressionNode::Array(node) => node.span,
+            ExpressionNode::Mapping(node) => node.span,
         }
     }
 }
@@ -114,7 +117,8 @@ delegated_traits!(
     ExpressionNode::Range,
     ExpressionNode::String,
     ExpressionNode::Var,
-    ExpressionNode::Array
+    ExpressionNode::Array,
+    ExpressionNode::Mapping
 );
 
 impl From<BinaryOpNode> for ExpressionNode {
@@ -153,6 +157,7 @@ impl From<RangeNode> for ExpressionNode {
     }
 }
 
+// TODO: this should be TryInto
 impl From<AstNode> for ExpressionNode {
     fn from(node: AstNode) -> Self {
         match node {

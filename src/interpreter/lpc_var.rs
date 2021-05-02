@@ -4,16 +4,18 @@ use std::{
     fmt::{Display, Formatter},
     ops::{Add, Div, Mul, Sub},
 };
+use decorum::Total;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
 /// This enum should remain `Copy`.
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Hash, Eq, Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LpcVar {
-    Float(f64),
+    Float(Total<f64>),
     Int(i64),
     String(usize),
     Array(usize),
+    Mapping(usize),
 
     /// Stores an index into the program's `ConstantPool`, rather than memory.
     StringConstant(usize),
@@ -27,6 +29,7 @@ impl LpcVar {
             LpcVar::Int(_) => "int",
             LpcVar::String(_) => "string",
             LpcVar::Array(_) => "array",
+            LpcVar::Mapping(_) => "mapping",
             LpcVar::StringConstant(_) => "string",
         }
     }
@@ -48,6 +51,7 @@ impl Display for LpcVar {
             LpcVar::Int(x) => write!(f, "{}", x),
             LpcVar::String(x) => write!(f, "string with index {}", x),
             LpcVar::Array(x) => write!(f, "array with index {}", x),
+            LpcVar::Mapping(x) => write!(f, "mapping with index {}", x),
             LpcVar::StringConstant(x) => write!(f, "string (constant) with index {}", x),
         }
     }
@@ -64,7 +68,7 @@ impl Add for LpcVar {
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             Ok(LpcVar::Float(x + y as f64))
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
-            Ok(LpcVar::Float(x as f64 + y))
+            Ok(LpcVar::Float(Total::from(x as f64) + y))
         } else {
             Err(self.to_error(BinaryOperation::Add, &rhs))
         }
@@ -82,7 +86,7 @@ impl Sub for LpcVar {
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             Ok(LpcVar::Float(x - y as f64))
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
-            Ok(LpcVar::Float(x as f64 - y))
+            Ok(LpcVar::Float(Total::from(x as f64) - y))
         } else {
             Err(self.to_error(BinaryOperation::Sub, &rhs))
         }
@@ -100,7 +104,7 @@ impl Mul for LpcVar {
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             Ok(LpcVar::Float(x * y as f64))
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
-            Ok(LpcVar::Float(x as f64 * y))
+            Ok(LpcVar::Float(Total::from(x as f64) * y))
         } else {
             Err(self.to_error(BinaryOperation::Mul, &rhs))
         }
@@ -133,7 +137,7 @@ impl Div for LpcVar {
             if y == 0.0 {
                 Err(LpcError::new("Runtime Error: Division by zero"))
             } else {
-                Ok(LpcVar::Float(x as f64 / y))
+                Ok(LpcVar::Float(Total::from(x as f64) / y))
             }
         } else {
             Err(self.to_error(BinaryOperation::Div, &rhs))

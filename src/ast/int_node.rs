@@ -12,7 +12,7 @@ use crate::{
 use crate::errors::LpcError;
 
 /// A node representing an integer literal
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct IntNode {
     pub value: i64,
 

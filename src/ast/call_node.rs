@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Representation of a function call.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone)]
 pub struct CallNode {
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,

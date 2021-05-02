@@ -11,6 +11,7 @@ use crate::{
     codegen::tree_walker,
     errors::LpcError,
 };
+use crate::ast::mapping_node::MappingNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -190,6 +191,20 @@ impl TreeWalker for TreePrinter {
         }
         self.indent -= 2;
         self.println_indented("})");
+
+        Ok(())
+    }
+
+    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<(), LpcError> {
+        self.println_indented("Mapping ([");
+        self.indent += 2;
+        for (key, value) in &mut node.value {
+            key.visit(self)?;
+            self.println_indented(": ");
+            value.visit(self)?;
+        }
+        self.indent -= 2;
+        self.println_indented("])");
 
         Ok(())
     }

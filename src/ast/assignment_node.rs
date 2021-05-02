@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// All possible assignment operations
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AssignmentOperation {
     /// Simple assignment - `var = 2;`
     Simple,
@@ -24,7 +24,7 @@ pub enum AssignmentOperation {
 }
 
 /// A node representing an assignment.
-#[derive(Debug, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq)]
 pub struct AssignmentNode {
     /// left-hand side
     pub lhs: Box<ExpressionNode>,

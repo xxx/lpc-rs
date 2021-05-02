@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// A node representing an array literal
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct ArrayNode {
     pub value: Vec<ExpressionNode>,
 

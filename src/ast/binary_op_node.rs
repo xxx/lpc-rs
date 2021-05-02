@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// All possible binary operations
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BinaryOperation {
     Add,
     Sub,
@@ -45,7 +45,7 @@ impl Display for BinaryOperation {
 }
 
 /// Representation of a binary operation
-#[derive(Debug, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq)]
 pub struct BinaryOpNode {
     /// Left-hand side
     pub l: Box<ExpressionNode>,

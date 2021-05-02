@@ -5,10 +5,7 @@ use crate::{
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
-        float_node::FloatNode,
-        int_node::IntNode,
         range_node::RangeNode,
-        string_node::StringNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
@@ -227,10 +224,10 @@ pub fn node_type(
                 panic!("We've somehow created an empty CommaExpression node")
             }
         }
-        ExpressionNode::Float(FloatNode { .. }) => LpcType::Float(false),
-        ExpressionNode::Int(IntNode { .. }) => LpcType::Int(false),
-        ExpressionNode::Range(RangeNode { .. }) => LpcType::Int(true),
-        ExpressionNode::String(StringNode { .. }) => LpcType::String(false),
+        ExpressionNode::Float(_) => LpcType::Float(false),
+        ExpressionNode::Int(_) => LpcType::Int(false),
+        ExpressionNode::Range(_) => LpcType::Int(true),
+        ExpressionNode::String(_) => LpcType::String(false),
         ExpressionNode::Var(VarNode { name, .. }) => match scope_tree.lookup(name) {
             Some(sym) => sym.type_,
             _ => panic!("undefined symbol {}", name),
@@ -266,6 +263,9 @@ pub fn node_type(
             } else {
                 LpcType::Mixed(true)
             }
+        }
+        ExpressionNode::Mapping(_) => {
+            LpcType::Mapping(false)
         }
     }
 }

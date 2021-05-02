@@ -10,6 +10,7 @@ use crate::{
     context::Context,
     errors::LpcError,
 };
+use crate::ast::mapping_node::MappingNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -149,6 +150,19 @@ pub trait TreeWalker {
     {
         for node in &mut node.value {
             node.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    /// Visit a mapping literal node
+    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<(), LpcError>
+    where
+        Self: Sized,
+    {
+        for (key, value) in &mut node.value {
+            key.visit(self)?;
+            value.visit(self)?;
         }
 
         Ok(())

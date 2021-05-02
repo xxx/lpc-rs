@@ -31,6 +31,7 @@ use crate::{
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
+use decorum::Total;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -202,6 +203,7 @@ impl AsmTreeWalker {
             ExpressionNode::Float(_) => OperationType::Register,
             ExpressionNode::String(_) => OperationType::Memory,
             ExpressionNode::Array(_) => OperationType::Memory,
+            ExpressionNode::Mapping(_) => OperationType::Memory,
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs),
             ExpressionNode::BinaryOp(node) => {
                 let left_type = self.to_operation_type(&node.l);
@@ -427,7 +429,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<(), LpcError> {
         let register = self.register_counter.next();
         self.current_result = register.unwrap();
-        let instruction = Instruction::FConst(self.current_result, node.value);
+        let instruction = Instruction::FConst(self.current_result, Total::from(node.value));
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
 
@@ -883,7 +885,7 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                FConst(Register(1), 123.45),
+                FConst(Register(1), Total::from(123.45)),
                 GLoad(Register(1), Register(2)),
                 IConst(Register(3), 456),
                 IMul(Register(2), Register(3), Register(4)),

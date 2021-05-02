@@ -15,7 +15,7 @@ use crate::{
 use crate::errors::LpcError;
 
 /// Representation of a Range, with optional ends.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct RangeNode {
     /// Left-hand side
     pub l: Box<Option<ExpressionNode>>,

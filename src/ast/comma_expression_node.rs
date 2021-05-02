@@ -15,7 +15,7 @@ use crate::{
 use crate::errors::LpcError;
 
 /// A node representing an array literal
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct CommaExpressionNode {
     pub value: Vec<ExpressionNode>,
 

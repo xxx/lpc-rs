@@ -12,7 +12,7 @@ use crate::{
 use crate::errors::LpcError;
 
 /// A node representing a string literal
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct StringNode {
     pub value: String,
 

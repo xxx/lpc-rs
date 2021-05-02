@@ -6,15 +6,18 @@ use std::{
     iter::repeat,
     ops::{Add, Div, Mul, Sub},
 };
+use std::collections::HashMap;
+use decorum::Total;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum LpcValue {
-    Float(f64),
+    Float(Total<f64>),
     Int(i64),
     String(String),
     Array(Vec<LpcVar>),
+    Mapping(HashMap<LpcVar, LpcVar>),
 }
 
 impl LpcValue {
@@ -25,6 +28,7 @@ impl LpcValue {
             LpcValue::Int(_) => "int",
             LpcValue::String(_) => "string",
             LpcValue::Array(_) => "array",
+            LpcValue::Mapping(_) => "mapping",
         }
     }
 
@@ -46,7 +50,14 @@ impl Display for LpcValue {
             LpcValue::Int(i) => write!(f, "{}", i),
             LpcValue::String(s) => write!(f, "{}", s),
             LpcValue::Array(a) => write!(f, "({{ {:?} }})", a),
+            LpcValue::Mapping(a) => write!(f, "([ {:?} ])", a),
         }
+    }
+}
+
+impl From<f64> for LpcValue {
+    fn from(f: f64) -> Self {
+        Self::Float(Total::from(f))
     }
 }
 
@@ -62,18 +73,40 @@ impl From<Vec<LpcVar>> for LpcValue {
     }
 }
 
+impl From<HashMap<LpcVar, LpcVar>> for LpcValue {
+    fn from(m: HashMap<LpcVar, LpcVar>) -> Self {
+        Self::Mapping(m)
+    }
+}
+
+impl PartialEq for LpcValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (LpcValue::Float(f), LpcValue::Float(f2)) => f == f2,
+            (LpcValue::Int(i), LpcValue::Int(i2)) => i == i2,
+            (LpcValue::String(s), LpcValue::String(s2)) => s == s2,
+            (LpcValue::Array(v), LpcValue::Array(v2)) => v == v2,
+            (LpcValue::Mapping(m), LpcValue::Mapping(m2)) => {
+                m.keys().collect::<Vec<_>>() == m2.keys().collect::<Vec<_>>() &&
+                    m.values().collect::<Vec<_>>() == m2.values().collect::<Vec<_>>()
+            },
+            _ => false
+        }
+    }
+}
+
 impl Add for &LpcValue {
     type Output = Result<LpcValue, LpcError>;
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
             LpcValue::Float(f) => match rhs {
-                LpcValue::Float(f2) => Ok(LpcValue::Float(f + f2)),
-                LpcValue::Int(i) => Ok(LpcValue::Float(f + *i as f64)),
+                LpcValue::Float(f2) => Ok(LpcValue::Float(*f + *f2)),
+                LpcValue::Int(i) => Ok(LpcValue::Float(*f + *i as f64)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcValue::Int(i) => match rhs {
-                LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 + f)),
+                LpcValue::Float(f) => Ok(LpcValue::Float(Total::from(*i as f64) + *f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i + i2)),
                 LpcValue::String(s) => Ok(LpcValue::String(i.to_string() + &s)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
@@ -91,6 +124,14 @@ impl Add for &LpcValue {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
+            LpcValue::Mapping(map) => match rhs {
+                LpcValue::Mapping(map2) => {
+                    let mut new_map = map.clone();
+                    new_map.extend(map2.clone().into_iter());
+                    Ok(LpcValue::Mapping(new_map))
+                }
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
+            },
         }
     }
 }
@@ -101,13 +142,13 @@ impl Sub for &LpcValue {
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
             LpcValue::Int(i) => match rhs {
-                LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 - f)),
+                LpcValue::Float(f) => Ok(LpcValue::Float(Total::from(*i as f64) - *f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i - i2)),
                 _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
             },
             LpcValue::Float(f) => match rhs {
-                LpcValue::Float(f2) => Ok(LpcValue::Float(f - f2)),
-                LpcValue::Int(i) => Ok(LpcValue::Float(f - *i as f64)),
+                LpcValue::Float(f2) => Ok(LpcValue::Float(*f - *f2)),
+                LpcValue::Int(i) => Ok(LpcValue::Float(*f - *i as f64)),
                 _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
             },
             _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
@@ -130,12 +171,12 @@ impl Mul for &LpcValue {
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
             LpcValue::Float(f) => match rhs {
-                LpcValue::Float(f2) => Ok(LpcValue::Float(f * f2)),
-                LpcValue::Int(i) => Ok(LpcValue::Float(f * *i as f64)),
+                LpcValue::Float(f2) => Ok(LpcValue::Float(*f * *f2)),
+                LpcValue::Int(i) => Ok(LpcValue::Float(*f * *i as f64)),
                 _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
             },
             LpcValue::Int(i) => match rhs {
-                LpcValue::Float(f) => Ok(LpcValue::Float(*i as f64 * f)),
+                LpcValue::Float(f) => Ok(LpcValue::Float(Total::from(*i as f64) * *f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i * i2)),
                 LpcValue::String(s) => Ok(LpcValue::String(repeat_string(s, i))),
                 _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
@@ -162,14 +203,14 @@ impl Div for &LpcValue {
                     if *f2 == 0.0 {
                         Err(LpcError::new("Runtime Error: Division by zero"))
                     } else {
-                        Ok(LpcValue::Float(f / f2))
+                        Ok(LpcValue::Float(*f / *f2))
                     }
                 }
                 LpcValue::Int(i) => {
                     if *i == 0 {
                         Err(LpcError::new("Runtime Error: Division by zero"))
                     } else {
-                        Ok(LpcValue::Float(f / *i as f64))
+                        Ok(LpcValue::Float(*f / *i as f64))
                     }
                 }
                 _ => Err(self.to_error(BinaryOperation::Div, rhs)),
@@ -179,7 +220,7 @@ impl Div for &LpcValue {
                     if *f == 0.0 {
                         Err(LpcError::new("Runtime Error: Division by zero"))
                     } else {
-                        Ok(LpcValue::Float(*i as f64 / f))
+                        Ok(LpcValue::Float(Total::from(*i as f64) / *f))
                     }
                 }
                 LpcValue::Int(i2) => {
@@ -253,7 +294,7 @@ mod tests {
 
         #[test]
         fn test_add_float_int() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &float + &int;
             if let Ok(LpcValue::Float(x)) = result {
@@ -265,7 +306,7 @@ mod tests {
 
         #[test]
         fn test_add_int_float() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &int + &float;
             if let Ok(LpcValue::Float(x)) = result {
@@ -289,6 +330,35 @@ mod tests {
         }
 
         #[test]
+        fn test_add_mapping_mapping() {
+            let key1 = LpcVar::String(0);
+            let value1 = LpcVar::String(1);
+            let key2 = LpcVar::String(2);
+            let value2 = LpcVar::Int(666);
+
+            let mut hash1 = HashMap::new();
+            hash1.insert(key1, value1);
+
+            let mut hash2 = HashMap::new();
+            hash2.insert(key2, value2);
+
+            let map = LpcValue::from(hash1);
+            let map2 = LpcValue::from(hash2);
+
+            let result = &map + &map2;
+
+            let mut expected = HashMap::new();
+            expected.insert(LpcVar::String(2), LpcVar::Int(666));
+            expected.insert(LpcVar::String(0), LpcVar::String(1));
+
+            if let Ok(LpcValue::Mapping(m)) = result {
+                assert_eq!(m, expected)
+            } else {
+                panic!("no match. received: {:?}", result)
+            }
+        }
+
+        #[test]
         fn test_add_mismatched() {
             let int = LpcValue::Int(123);
             let array = LpcValue::Array(vec![]);
@@ -305,7 +375,7 @@ mod tests {
 
         #[test]
         fn test_sub_float_int() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &float - &int;
             println!("asdf {:?}", result);
@@ -318,7 +388,7 @@ mod tests {
 
         #[test]
         fn test_sub_int_float() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &int - &float;
             if let Ok(LpcValue::Float(x)) = result {
@@ -358,10 +428,9 @@ mod tests {
 
         #[test]
         fn test_mul_float_int() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &float * &int;
-            println!("asdf {:?}", result);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -371,7 +440,7 @@ mod tests {
 
         #[test]
         fn test_mul_int_float() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &int * &float;
             if let Ok(LpcValue::Float(x)) = result {
@@ -387,7 +456,7 @@ mod tests {
 
         #[test]
         fn test_div_float_int() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &float / &int;
 
@@ -400,7 +469,7 @@ mod tests {
 
         #[test]
         fn test_div_int_float() {
-            let float = LpcValue::Float(666.66);
+            let float = LpcValue::from(666.66);
             let int = LpcValue::Int(123);
             let result = &int / &float;
 

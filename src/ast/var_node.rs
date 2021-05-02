@@ -12,7 +12,7 @@ use crate::{
 use crate::errors::LpcError;
 
 /// A node representing the use of a variable.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct VarNode {
     /// The name of the variable.
     pub name: String,

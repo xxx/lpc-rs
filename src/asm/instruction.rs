@@ -3,6 +3,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use decorum::Total;
 
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -30,7 +31,7 @@ pub enum Instruction {
     },
 
     /// Float Constant
-    FConst(Register, f64),
+    FConst(Register, Total<f64>),
 
     /// Copy a global from the global registers, into the current stack frame.
     /// Copies *global* register x.0 to *local* register x.1.
