@@ -1,3 +1,4 @@
+use decorum::Total;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::ast::expression_node::{ExpressionNode, first_span};
@@ -614,7 +615,7 @@ Int: ExpressionNode = {
 Float: ExpressionNode = <f:"FloatLiteral"> => {
     ExpressionNode::Float(
         FloatNode {
-            value: f.1,
+            value: Total::from(f.1),
             span: Some(f.0)
         }
     )

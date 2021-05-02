@@ -10,12 +10,12 @@ use crate::{
 };
 
 use crate::errors::LpcError;
-use std::hash::{Hash, Hasher};
+use decorum::Total;
 
 /// A node representing a float literal
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct FloatNode {
-    pub value: f64,
+    pub value: Total<f64>,
 
     /// The span of the string in the original file
     pub span: Option<Span>,
@@ -30,7 +30,7 @@ impl FloatNode {
             v
         };
 
-        Self { value, span: None }
+        Self { value: Total::from(value), span: None }
     }
 }
 
@@ -51,13 +51,3 @@ impl Display for FloatNode {
         write!(f, "FloatNode[{}]", self.value)
     }
 }
-
-/// We implement this to allow any [`ExpressionNode`] to be used as a mapping key,
-/// but seriously, think very hard before using a float as one.
-impl Hash for FloatNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value.to_bits().hash(state)
-    }
-}
-
-impl Eq for FloatNode { }
