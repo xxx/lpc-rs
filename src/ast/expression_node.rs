@@ -219,8 +219,10 @@ impl From<Vec<i64>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{assignment_node::AssignmentOperation, binary_op_node::BinaryOperation};
-    use decorum::Total;
+    use crate::{
+        ast::{assignment_node::AssignmentOperation, binary_op_node::BinaryOperation},
+        LpcFloat,
+    };
 
     use super::*;
 
@@ -335,7 +337,7 @@ mod tests {
         assert_eq!(
             ExpressionNode::from(f),
             ExpressionNode::Float(FloatNode {
-                value: Total::from(f),
+                value: LpcFloat::from(f),
                 span: None
             })
         );

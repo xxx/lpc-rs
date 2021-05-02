@@ -1,4 +1,3 @@
-use decorum::Total;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::ast::expression_node::{ExpressionNode, first_span};
@@ -23,6 +22,7 @@ use crate::parser::span::Span;
 use crate::parser::lexer::Token;
 use crate::errors::LpcError;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
+use crate::LpcFloat;
 
 grammar;
 
@@ -615,7 +615,7 @@ Int: ExpressionNode = {
 Float: ExpressionNode = <f:"FloatLiteral"> => {
     ExpressionNode::Float(
         FloatNode {
-            value: Total::from(f.1),
+            value: LpcFloat::from(f.1),
             span: Some(f.0)
         }
     )

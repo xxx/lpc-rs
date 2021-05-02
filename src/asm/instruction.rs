@@ -1,5 +1,4 @@
-use crate::asm::register::Register;
-use decorum::Total;
+use crate::{asm::register::Register, LpcFloat};
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -31,7 +30,7 @@ pub enum Instruction {
     },
 
     /// Float Constant
-    FConst(Register, Total<f64>),
+    FConst(Register, LpcFloat),
 
     /// Copy a global from the global registers, into the current stack frame.
     /// Copies *global* register x.0 to *local* register x.1.

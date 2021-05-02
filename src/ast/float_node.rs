@@ -7,15 +7,15 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
+    LpcFloat,
 };
 
 use crate::errors::LpcError;
-use decorum::Total;
 
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct FloatNode {
-    pub value: Total<f64>,
+    pub value: LpcFloat,
 
     /// The span of the string in the original file
     pub span: Option<Span>,
@@ -24,10 +24,14 @@ pub struct FloatNode {
 impl FloatNode {
     pub fn new(v: f64) -> Self {
         // avoid any potential issues
-        let value: f64 = if v.is_nan() || v.is_infinite() { 0 as f64 } else { v };
+        let value: f64 = if v.is_nan() || v.is_infinite() {
+            0 as f64
+        } else {
+            v
+        };
 
         Self {
-            value: Total::from(value),
+            value: LpcFloat::from(value),
             span: None,
         }
     }

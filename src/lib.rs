@@ -18,6 +18,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+use decorum::Total;
+
+pub type LpcFloat = Total<f64>;
+
 /// Convert various literal escapes to actual escape characters
 ///
 /// # Arguments

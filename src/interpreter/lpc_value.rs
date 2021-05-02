@@ -1,5 +1,6 @@
-use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar};
-use decorum::Total;
+use crate::{
+    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar, LpcFloat,
+};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{
     collections::HashMap,
@@ -13,7 +14,7 @@ use std::{
 /// They are only used in the interpreter.
 #[derive(Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum LpcValue {
-    Float(Total<f64>),
+    Float(LpcFloat),
     Int(i64),
     String(String),
     Array(Vec<LpcVar>),
@@ -57,7 +58,7 @@ impl Display for LpcValue {
 
 impl From<f64> for LpcValue {
     fn from(f: f64) -> Self {
-        Self::Float(Total::from(f))
+        Self::Float(LpcFloat::from(f))
     }
 }
 
@@ -106,7 +107,7 @@ impl Add for &LpcValue {
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcValue::Int(i) => match rhs {
-                LpcValue::Float(f) => Ok(LpcValue::Float(Total::from(*i as f64) + *f)),
+                LpcValue::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) + *f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i + i2)),
                 LpcValue::String(s) => Ok(LpcValue::String(i.to_string() + &s)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
@@ -142,7 +143,7 @@ impl Sub for &LpcValue {
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
             LpcValue::Int(i) => match rhs {
-                LpcValue::Float(f) => Ok(LpcValue::Float(Total::from(*i as f64) - *f)),
+                LpcValue::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) - *f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i - i2)),
                 _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
             },
@@ -176,7 +177,7 @@ impl Mul for &LpcValue {
                 _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
             },
             LpcValue::Int(i) => match rhs {
-                LpcValue::Float(f) => Ok(LpcValue::Float(Total::from(*i as f64) * *f)),
+                LpcValue::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) * *f)),
                 LpcValue::Int(i2) => Ok(LpcValue::Int(i * i2)),
                 LpcValue::String(s) => Ok(LpcValue::String(repeat_string(s, i))),
                 _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
@@ -220,7 +221,7 @@ impl Div for &LpcValue {
                     if *f == 0.0 {
                         Err(LpcError::new("Runtime Error: Division by zero"))
                     } else {
-                        Ok(LpcValue::Float(Total::from(*i as f64) / *f))
+                        Ok(LpcValue::Float(LpcFloat::from(*i as f64) / *f))
                     }
                 }
                 LpcValue::Int(i2) => {

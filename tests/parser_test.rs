@@ -1,4 +1,3 @@
-use decorum::Total;
 use lpc_rs::{
     ast::{
         ast_node::AstNode,
@@ -15,6 +14,7 @@ use lpc_rs::{
     lpc_parser,
     parser::{lexer::LexWrapper, span::Span},
     semantic::lpc_type::LpcType,
+    LpcFloat,
 };
 
 // just a helper for a very common pattern
@@ -169,7 +169,7 @@ fn test_float_literal_underscores() {
     let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
 
     let expected = ExpressionNode::Float(FloatNode {
-        value: Total::from(112343320000000000000000.0),
+        value: LpcFloat::from(112343320000000000000000.0),
         span: Some(Span {
             file_id: 0,
             l: 0,

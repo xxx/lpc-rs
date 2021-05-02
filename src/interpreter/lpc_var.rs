@@ -1,5 +1,4 @@
-use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError};
-use decorum::Total;
+use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, LpcFloat};
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -11,7 +10,7 @@ use std::{
 /// This enum should remain `Copy`.
 #[derive(Hash, Eq, Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LpcVar {
-    Float(Total<f64>),
+    Float(LpcFloat),
     Int(i64),
     String(usize),
     Array(usize),
@@ -68,7 +67,7 @@ impl Add for LpcVar {
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             Ok(LpcVar::Float(x + y as f64))
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
-            Ok(LpcVar::Float(Total::from(x as f64) + y))
+            Ok(LpcVar::Float(LpcFloat::from(x as f64) + y))
         } else {
             Err(self.to_error(BinaryOperation::Add, &rhs))
         }
@@ -86,7 +85,7 @@ impl Sub for LpcVar {
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             Ok(LpcVar::Float(x - y as f64))
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
-            Ok(LpcVar::Float(Total::from(x as f64) - y))
+            Ok(LpcVar::Float(LpcFloat::from(x as f64) - y))
         } else {
             Err(self.to_error(BinaryOperation::Sub, &rhs))
         }
@@ -104,7 +103,7 @@ impl Mul for LpcVar {
         } else if let (LpcVar::Float(x), LpcVar::Int(y)) = (self, rhs) {
             Ok(LpcVar::Float(x * y as f64))
         } else if let (LpcVar::Int(x), LpcVar::Float(y)) = (self, rhs) {
-            Ok(LpcVar::Float(Total::from(x as f64) * y))
+            Ok(LpcVar::Float(LpcFloat::from(x as f64) * y))
         } else {
             Err(self.to_error(BinaryOperation::Mul, &rhs))
         }
@@ -137,7 +136,7 @@ impl Div for LpcVar {
             if y == 0.0 {
                 Err(LpcError::new("Runtime Error: Division by zero"))
             } else {
-                Ok(LpcVar::Float(Total::from(x as f64) / y))
+                Ok(LpcVar::Float(LpcFloat::from(x as f64) / y))
             }
         } else {
             Err(self.to_error(BinaryOperation::Div, &rhs))
