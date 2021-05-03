@@ -32,6 +32,7 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
     LpcFloat,
 };
+use crate::ast::mapping_node::MappingNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -669,6 +670,24 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
         self.instructions.push(Instruction::AConst(register, items));
+        self.debug_spans.push(node.span);
+
+        Ok(())
+    }
+
+    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<(), LpcError> {
+        let mut map = HashMap::new();
+        for (key, value) in &mut node.value {
+            key.visit(self)?;
+            let key_result = self.current_result;
+            value.visit(self)?;
+
+            map.insert(key_result, self.current_result);
+        }
+
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+        self.instructions.push(Instruction::MapConst(register, map));
         self.debug_spans.push(node.span);
 
         Ok(())

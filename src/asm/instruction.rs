@@ -3,6 +3,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::collections::HashMap;
 
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,6 +52,9 @@ pub enum Instruction {
 
     /// Integer constant 1
     IConst1(Register),
+
+    /// Create a mapping from the keys and values in the hashmap
+    MapConst(Register, HashMap<Register, Register>),
 
     /// String constant.
     /// Store an index into the program's ConstantPool in the passed register
@@ -129,11 +133,18 @@ impl Display for Instruction {
             Instruction::IConst0(r) => {
                 write!(f, "iconst0 {}", r)
             }
+            Instruction::IConst1(r) => {
+                write!(f, "iconst1 {}", r)
+            }
             Instruction::SConst(r, i) => {
                 write!(f, "sconst {}, {}", r, i)
             }
-            Instruction::IConst1(r) => {
-                write!(f, "iconst1 {}", r)
+            Instruction::MapConst(r, i) => {
+                let str = i.iter().map(|(key, value)| {
+                    format!("{}: {}", key, value)
+                }).collect::<Vec<_>>()
+                .join(", ");
+                write!(f, "mapconst {}, {}", r, str)
             }
             Instruction::IDiv(r1, r2, r3) => {
                 write!(f, "idiv {}, {}, {}", r1, r2, r3)

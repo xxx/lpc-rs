@@ -9,6 +9,7 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
     LpcInt,
 };
+use std::collections::HashMap;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -46,6 +47,14 @@ macro_rules! string_constant {
         LpcVar::StringConstant($x)
     };
 }
+
+/// Convenience helper for registers
+macro_rules! mapping {
+    ($x:expr) => {
+        LpcVar::Mapping($x)
+    };
+}
+
 
 /// An interpreter that executes instructions
 ///
@@ -205,7 +214,6 @@ impl AsmInterpreter {
                     let vars = vec.iter().map(|i| registers[i.index()]).collect::<Vec<_>>();
                     let index = self.memory.len();
                     self.memory.push(LpcValue::from(vars));
-                    let registers = current_registers_mut(&mut self.stack);
                     registers[r.index()] = array!(index);
                 }
                 Instruction::ALoad(r1, r2, r3) => {
@@ -434,6 +442,16 @@ impl AsmInterpreter {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
+                }
+                Instruction::MapConst(r, map) => {
+                    let registers = current_registers_mut(&mut self.stack);
+                    let mut register_map = HashMap::new();
+                    for (key, value) in map {
+                        register_map.insert(registers[key.index()], registers[value.index()]);
+                    }
+                    let index = self.memory.len();
+                    self.memory.push(LpcValue::from(register_map));
+                    registers[r.index()] = mapping!(index);
                 }
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.

@@ -50,7 +50,7 @@ impl Display for LpcValue {
         match self {
             LpcValue::Float(fl) => write!(f, "{}", fl),
             LpcValue::Int(i) => write!(f, "{}", i),
-            LpcValue::String(s) => write!(f, "{}", s),
+            LpcValue::String(s) => write!(f, "\"{}\"", s),
             LpcValue::Array(a) => write!(f, "({{ {:?} }})", a),
             LpcValue::Mapping(a) => write!(f, "([ {:?} ])", a),
         }
