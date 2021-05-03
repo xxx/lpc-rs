@@ -23,6 +23,7 @@ use crate::{
     parser::span::Span,
     LpcInt,
 };
+use std::collections::HashMap;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -201,8 +202,8 @@ impl From<Vec<ExpressionNode>> for ExpressionNode {
 impl From<Vec<&str>> for ExpressionNode {
     fn from(vec: Vec<&str>) -> Self {
         let value = vec
-            .iter()
-            .map(|i| ExpressionNode::from(*i))
+            .into_iter()
+            .map(|i| ExpressionNode::from(i))
             .collect::<Vec<_>>();
         Self::Array(ArrayNode { value, span: None })
     }
@@ -211,10 +212,20 @@ impl From<Vec<&str>> for ExpressionNode {
 impl From<Vec<LpcInt>> for ExpressionNode {
     fn from(vec: Vec<LpcInt>) -> Self {
         let value = vec
-            .iter()
-            .map(|i| ExpressionNode::from(*i))
+            .into_iter()
+            .map(|i| ExpressionNode::from(i))
             .collect::<Vec<_>>();
         Self::Array(ArrayNode { value, span: None })
+    }
+}
+
+impl From<HashMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
+    fn from(map: HashMap<ExpressionNode, ExpressionNode>) -> Self {
+        let value = map
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        Self::Mapping(MappingNode { value, span: None })
     }
 }
 

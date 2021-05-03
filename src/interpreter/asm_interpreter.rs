@@ -10,6 +10,7 @@ use crate::{
     LpcInt,
 };
 use std::collections::HashMap;
+use std::fmt::Display;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -191,14 +192,22 @@ impl AsmInterpreter {
         }
     }
 
-    /// Resolve the passed index within the current stack frame's registers
+    /// Resolve the passed index within the current stack frame's down to an LpcVar
     /// # Arguments
     /// `index` - the register index to resolve
-    pub fn resolve_register(&self, index: usize) -> LpcValue {
+    pub fn register_to_lpc_var(&self, index: usize) -> LpcVar {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
 
-        self.resolve_var(registers.get(index).unwrap())
+        *registers.get(index).unwrap()
+    }
+
+    /// Resolve the passed index within the current stack frame's registers,
+    /// all the way to its final LpcValue
+    /// # Arguments
+    /// `index` - the register index to resolve
+    pub fn register_to_lpc_value(&self, index: usize) -> LpcValue {
+        self.resolve_var(&self.register_to_lpc_var(index))
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
@@ -217,24 +226,40 @@ impl AsmInterpreter {
                     registers[r.index()] = array!(index);
                 }
                 Instruction::ALoad(r1, r2, r3) => {
-                    let arr = self.resolve_register(r1.index());
-                    let index = self.resolve_register(r2.index());
-                    let registers = current_registers_mut(&mut self.stack);
+                    let container = self.register_to_lpc_value(r1.index());
 
-                    if let (LpcValue::Array(vec), LpcValue::Int(i)) = (arr, index) {
-                        let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+                    match container {
+                        LpcValue::Array(vec) => {
+                            let index = self.register_to_lpc_value(r2.index());
+                            let registers = current_registers_mut(&mut self.stack);
 
-                        if idx >= 0 {
-                            if let Some(v) = vec.get(idx as usize) {
+                            if let LpcValue::Int(i) = index {
+                                let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+
+                                if idx >= 0 {
+                                    if let Some(v) = vec.get(idx as usize) {
+                                        registers[r3.index()] = *v;
+                                    } else {
+                                        return Err(self.make_array_index_error(idx, vec.len()));
+                                    }
+                                } else {
+                                    return Err(self.make_array_index_error(idx, vec.len()));
+                                }
+                            } else {
+                                return Err(self.make_array_index_error(index, vec.len()));
+                            }
+                        }
+                        LpcValue::Mapping(map) => {
+                            let index = self.register_to_lpc_var(r2.index());
+                            let registers = current_registers_mut(&mut self.stack);
+
+                            if let Some(v) = map.get(&index) {
                                 registers[r3.index()] = *v;
                             } else {
-                                return Err(self.make_index_error(idx, vec.len()));
+                                registers[r3.index()] = LpcVar::Int(0);
                             }
-                        } else {
-                            return Err(self.make_index_error(idx, vec.len()));
                         }
-                    } else {
-                        panic!("This shouldn't have passed type checks.")
+                        _ => panic!("This shouldn't have passed type checks.")
                     }
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
@@ -247,14 +272,14 @@ impl AsmInterpreter {
                             registers[r4.index()] = array!(index);
                         };
 
-                    let value = self.resolve_register(r1.index());
+                    let value = self.register_to_lpc_value(r1.index());
                     if let LpcValue::Array(vec) = value {
                         if vec.is_empty() {
                             return_array(vec![], &mut self.memory, &mut self.stack);
                         }
 
-                        let index1 = self.resolve_register(r2.index());
-                        let index2 = self.resolve_register(r3.index());
+                        let index1 = self.register_to_lpc_value(r2.index());
+                        let index2 = self.register_to_lpc_value(r3.index());
 
                         if let (LpcValue::Int(start), LpcValue::Int(end)) = (index1, index2) {
                             let to_idx = |i: LpcInt| {
@@ -290,7 +315,7 @@ impl AsmInterpreter {
                 Instruction::AStore(r1, r2, r3) => {
                     // r2[r3] = r1;
 
-                    let index = self.resolve_register(r3.index());
+                    let index = self.register_to_lpc_value(r3.index());
 
                     if let LpcValue::Int(i) = index {
                         // update the vector in memory directly
@@ -303,7 +328,7 @@ impl AsmInterpreter {
                         if (0..len).contains(&(idx as usize)) {
                             vec[idx as usize] = current_registers(&self.stack)[r1.index()];
                         } else {
-                            return Err(self.make_index_error(idx, len));
+                            return Err(self.make_array_index_error(idx, len));
                         }
                     } else {
                         panic!("This shouldn't have passed type checks.")
@@ -420,8 +445,8 @@ impl AsmInterpreter {
                 }
                 Instruction::MAdd(r1, r2, r3) => {
                     // look up vals, add, store result.
-                    let val1 = &self.resolve_register(r1.index());
-                    let val2 = &self.resolve_register(r2.index());
+                    let val1 = &self.register_to_lpc_value(r1.index());
+                    let val2 = &self.register_to_lpc_value(r2.index());
 
                     match val1 + val2 {
                         Ok(result) => {
@@ -455,8 +480,8 @@ impl AsmInterpreter {
                 }
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.
-                    let val1 = &self.resolve_register(r1.index());
-                    let val2 = &self.resolve_register(r2.index());
+                    let val1 = &self.register_to_lpc_value(r1.index());
+                    let val2 = &self.register_to_lpc_value(r2.index());
                     match val1 / val2 {
                         Ok(result) => {
                             let index = self.memory.len();
@@ -473,8 +498,8 @@ impl AsmInterpreter {
                 }
                 Instruction::MMul(r1, r2, r3) => {
                     // look up vals, multiply, store result.
-                    let val1 = &self.resolve_register(r1.index());
-                    let val2 = &self.resolve_register(r2.index());
+                    let val1 = &self.register_to_lpc_value(r1.index());
+                    let val2 = &self.register_to_lpc_value(r2.index());
                     match val1 * val2 {
                         Ok(result) => {
                             let index = self.memory.len();
@@ -491,8 +516,8 @@ impl AsmInterpreter {
                 }
                 Instruction::MSub(r1, r2, r3) => {
                     // look up vals, subtract, store result.
-                    let val1 = &self.resolve_register(r1.index());
-                    let val2 = &self.resolve_register(r2.index());
+                    let val1 = &self.register_to_lpc_value(r1.index());
+                    let val2 = &self.register_to_lpc_value(r2.index());
                     match val1 - val2 {
                         Ok(result) => {
                             let index = self.memory.len();
@@ -549,7 +574,7 @@ impl AsmInterpreter {
         self.program.debug_spans.get(self.pc).unwrap()
     }
 
-    fn make_index_error(&self, index: LpcInt, length: usize) -> LpcError {
+    fn make_array_index_error<T: Display>(&self, index: T, length: usize) -> LpcError {
         LpcError::new(format!(
             "Runtime Error: Attempting to access index {} in an array of length {}",
             index, length

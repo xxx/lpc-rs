@@ -46,7 +46,7 @@ fn format_val(val: LpcValue, interpreter: &AsmInterpreter, indent: usize) -> Str
 /// The dump() Efun
 pub fn dump(_frame: &StackFrame, interpreter: &AsmInterpreter) {
     // function arguments start in register 1, and we know this function has only 1 arg.
-    let val = interpreter.resolve_register(1);
+    let val = interpreter.register_to_lpc_value(1);
 
     let formatted = format_val(val, interpreter, 0);
     println!("{}", formatted);

@@ -96,6 +96,7 @@ pub fn check_binary_operation_types(
                 (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
                 (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
                 (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+                (LpcType::Mapping(false), LpcType::Mapping(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(
                     node,
                     BinaryOperation::Add,
@@ -143,9 +144,9 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Index => {
-            if left_type.is_array()
+            if matches!(left_type, LpcType::Mapping(_)) || (left_type.is_array()
                 && (right_type == LpcType::Int(false)
-                    || matches!(*node.r, ExpressionNode::Range(_)))
+                    || matches!(*node.r, ExpressionNode::Range(_))))
             {
                 Ok(())
             } else {
@@ -337,6 +338,22 @@ mod check_binary_operation_tests {
             scope_id: 0,
             span: None,
         };
+        let mapping1 = Symbol {
+            name: "mapping1".to_string(),
+            type_: LpcType::Mapping(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
+        let mapping2 = Symbol {
+            name: "mapping2".to_string(),
+            type_: LpcType::Mapping(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
 
         let mut scope_tree = ScopeTree::default();
         scope_tree.push_new();
@@ -349,6 +366,8 @@ mod check_binary_operation_tests {
         scope.insert(array2);
         scope.insert(float1);
         scope.insert(float2);
+        scope.insert(mapping1);
+        scope.insert(mapping2);
 
         scope_tree
     }
@@ -554,6 +573,24 @@ mod check_binary_operation_tests {
         )
     }
 
+    fn mapping_mapping_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(HashMap::new()),
+            ExpressionNode::from(HashMap::new()),
+            &scope_tree,
+        )
+    }
+
+    fn mapping_mapping_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("mapping1")),
+            ExpressionNode::from(VarNode::new("mapping2")),
+            &scope_tree
+        )
+    }
+
     #[test]
     fn test_add() {
         let scope_tree = setup();
@@ -568,6 +605,7 @@ mod check_binary_operation_tests {
         assert!(array_array_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_int_literals(BinaryOperation::Add, &scope_tree).is_err());
         assert!(array_range_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(mapping_mapping_literals(BinaryOperation::Add, &scope_tree).is_ok());
 
         assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Add, &scope_tree).is_ok());
@@ -578,7 +616,8 @@ mod check_binary_operation_tests {
         assert!(int_float_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_int_vars(BinaryOperation::Add, &scope_tree).is_err());
-        assert!(array_range_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(array_range_vars(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(mapping_mapping_vars(BinaryOperation::Add, &scope_tree).is_ok());
 
         // valid complex tree
         assert!(get_result(
@@ -643,6 +682,7 @@ mod check_binary_operation_tests {
         assert!(array_array_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_range_literals(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(mapping_mapping_literals(BinaryOperation::Sub, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
@@ -654,6 +694,7 @@ mod check_binary_operation_tests {
         assert!(array_array_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_range_vars(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(mapping_mapping_vars(BinaryOperation::Sub, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -718,6 +759,7 @@ mod check_binary_operation_tests {
         assert!(array_array_literals(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(array_int_literals(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(array_range_literals(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(mapping_mapping_literals(BinaryOperation::Mul, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Mul, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Mul, &scope_tree).is_err());
@@ -729,6 +771,7 @@ mod check_binary_operation_tests {
         assert!(array_array_vars(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(array_int_vars(BinaryOperation::Mul, &scope_tree).is_err());
         assert!(array_range_vars(BinaryOperation::Mul, &scope_tree).is_err());
+        assert!(mapping_mapping_vars(BinaryOperation::Mul, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -793,6 +836,7 @@ mod check_binary_operation_tests {
         assert!(array_array_literals(BinaryOperation::Div, &scope_tree).is_err());
         assert!(array_int_literals(BinaryOperation::Div, &scope_tree).is_err());
         assert!(array_range_literals(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(mapping_mapping_literals(BinaryOperation::Div, &scope_tree).is_err());
 
         assert!(int_int_vars(BinaryOperation::Div, &scope_tree).is_ok());
         assert!(string_string_vars(BinaryOperation::Div, &scope_tree).is_err());
@@ -804,6 +848,7 @@ mod check_binary_operation_tests {
         assert!(array_array_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(array_int_vars(BinaryOperation::Div, &scope_tree).is_err());
         assert!(array_range_vars(BinaryOperation::Div, &scope_tree).is_err());
+        assert!(mapping_mapping_vars(BinaryOperation::Div, &scope_tree).is_err());
 
         // valid complex tree
         assert!(get_result(
@@ -865,6 +910,7 @@ mod check_binary_operation_tests {
         assert!(array_array_literals(BinaryOperation::Index, &scope_tree).is_err());
         assert!(array_int_literals(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(array_range_literals(BinaryOperation::Index, &scope_tree).is_ok());
+        assert!(mapping_mapping_literals(BinaryOperation::Index, &scope_tree).is_ok());
 
         assert!(int_int_vars(BinaryOperation::Index, &scope_tree).is_err());
         assert!(string_string_vars(BinaryOperation::Index, &scope_tree).is_err());
@@ -873,6 +919,7 @@ mod check_binary_operation_tests {
         assert!(array_array_vars(BinaryOperation::Index, &scope_tree).is_err());
         assert!(array_int_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(array_range_vars(BinaryOperation::Index, &scope_tree).is_ok());
+        assert!(mapping_mapping_vars(BinaryOperation::Index, &scope_tree).is_ok());
 
         // valid complex tree
         assert!(get_result(
