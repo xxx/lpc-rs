@@ -3,20 +3,26 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{ast::{
-    array_node::ArrayNode,
-    assignment_node::AssignmentNode,
-    ast_node::{AstNode, AstNodeTrait, SpannedNode},
-    binary_op_node::BinaryOpNode,
-    call_node::CallNode,
-    comma_expression_node::CommaExpressionNode,
-    float_node::FloatNode,
-    int_node::IntNode,
-    mapping_node::MappingNode,
-    range_node::RangeNode,
-    string_node::StringNode,
-    var_node::VarNode,
-}, codegen::tree_walker::TreeWalker, errors::LpcError, parser::span::Span, LpcInt};
+use crate::{
+    ast::{
+        array_node::ArrayNode,
+        assignment_node::AssignmentNode,
+        ast_node::{AstNode, AstNodeTrait, SpannedNode},
+        binary_op_node::BinaryOpNode,
+        call_node::CallNode,
+        comma_expression_node::CommaExpressionNode,
+        float_node::FloatNode,
+        int_node::IntNode,
+        mapping_node::MappingNode,
+        range_node::RangeNode,
+        string_node::StringNode,
+        var_node::VarNode,
+    },
+    codegen::tree_walker::TreeWalker,
+    errors::LpcError,
+    parser::span::Span,
+    LpcInt,
+};
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

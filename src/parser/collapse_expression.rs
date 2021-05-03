@@ -1,9 +1,13 @@
-use crate::{ast::{
-    binary_op_node::{BinaryOpNode, BinaryOperation},
-    expression_node::ExpressionNode,
-    int_node::IntNode,
-    string_node::StringNode,
-}, parser::span::Span, LpcInt};
+use crate::{
+    ast::{
+        binary_op_node::{BinaryOpNode, BinaryOperation},
+        expression_node::ExpressionNode,
+        int_node::IntNode,
+        string_node::StringNode,
+    },
+    parser::span::Span,
+    LpcInt,
+};
 use std::iter::repeat;
 
 /// Combine literals in cases where we have enough information to do so.

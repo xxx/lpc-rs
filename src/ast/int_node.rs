@@ -3,7 +3,12 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{ast::ast_node::{AstNodeTrait, SpannedNode}, codegen::tree_walker::TreeWalker, parser::span::Span, LpcInt};
+use crate::{
+    ast::ast_node::{AstNodeTrait, SpannedNode},
+    codegen::tree_walker::TreeWalker,
+    parser::span::Span,
+    LpcInt,
+};
 
 use crate::errors::LpcError;
 

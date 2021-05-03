@@ -1,4 +1,7 @@
-use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar, LpcFloat, LpcInt};
+use crate::{
+    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar, LpcFloat,
+    LpcInt,
+};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{
     collections::HashMap,

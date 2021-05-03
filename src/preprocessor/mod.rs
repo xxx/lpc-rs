@@ -13,17 +13,25 @@ use std::{
 
 use define::{Define, ObjectMacro};
 
-use crate::{ast::binary_op_node::BinaryOperation, context::Context, convert_escapes, errors::{
-    format_expected,
-    lazy_files::{FileCache, FILE_CACHE},
-    LpcError,
-}, parser::{
-    lexer::{
-        logos_token::{IntToken, StringToken},
-        LexWrapper, Spanned, Token, TokenVecWrapper,
+use crate::{
+    ast::binary_op_node::BinaryOperation,
+    context::Context,
+    convert_escapes,
+    errors::{
+        format_expected,
+        lazy_files::{FileCache, FILE_CACHE},
+        LpcError,
     },
-    span::Span,
-}, preprocessor::preprocessor_node::PreprocessorNode, preprocessor_parser, LpcInt};
+    parser::{
+        lexer::{
+            logos_token::{IntToken, StringToken},
+            LexWrapper, Spanned, Token, TokenVecWrapper,
+        },
+        span::Span,
+    },
+    preprocessor::preprocessor_node::PreprocessorNode,
+    preprocessor_parser, LpcInt,
+};
 use std::iter::Peekable;
 
 pub mod define;

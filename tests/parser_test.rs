@@ -1,15 +1,21 @@
-use lpc_rs::{ast::{
-    ast_node::AstNode,
-    binary_op_node::{BinaryOpNode, BinaryOperation},
-    decl_node::DeclNode,
-    expression_node::ExpressionNode,
-    float_node::FloatNode,
-    int_node::IntNode,
-    program_node::ProgramNode,
-    string_node::StringNode,
-    var_init_node::VarInitNode,
-    var_node::VarNode,
-}, lpc_parser, parser::{lexer::LexWrapper, span::Span}, semantic::lpc_type::LpcType, LpcFloat, LpcInt};
+use lpc_rs::{
+    ast::{
+        ast_node::AstNode,
+        binary_op_node::{BinaryOpNode, BinaryOperation},
+        decl_node::DeclNode,
+        expression_node::ExpressionNode,
+        float_node::FloatNode,
+        int_node::IntNode,
+        program_node::ProgramNode,
+        string_node::StringNode,
+        var_init_node::VarInitNode,
+        var_node::VarNode,
+    },
+    lpc_parser,
+    parser::{lexer::LexWrapper, span::Span},
+    semantic::lpc_type::LpcType,
+    LpcFloat, LpcInt,
+};
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {

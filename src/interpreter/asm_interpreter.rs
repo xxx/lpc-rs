@@ -1,7 +1,14 @@
-use crate::{asm::instruction::Instruction, errors::LpcError, interpreter::{
-    efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
-    stack_frame::StackFrame,
-}, parser::span::Span, semantic::function_symbol::FunctionSymbol, LpcInt};
+use crate::{
+    asm::instruction::Instruction,
+    errors::LpcError,
+    interpreter::{
+        efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
+        stack_frame::StackFrame,
+    },
+    parser::span::Span,
+    semantic::function_symbol::FunctionSymbol,
+    LpcInt,
+};
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;

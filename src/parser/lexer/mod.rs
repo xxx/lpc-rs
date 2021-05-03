@@ -16,7 +16,7 @@ use crate::{
         },
         span::Span,
     },
-    LpcInt
+    LpcInt,
 };
 
 pub mod lex_state;
