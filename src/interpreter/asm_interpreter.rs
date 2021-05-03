@@ -1,13 +1,7 @@
-use crate::{
-    asm::instruction::Instruction,
-    errors::LpcError,
-    interpreter::{
-        efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
-        stack_frame::StackFrame,
-    },
-    parser::span::Span,
-    semantic::function_symbol::FunctionSymbol,
-};
+use crate::{asm::instruction::Instruction, errors::LpcError, interpreter::{
+    efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
+    stack_frame::StackFrame,
+}, parser::span::Span, semantic::function_symbol::FunctionSymbol, LpcInt};
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -213,7 +207,7 @@ impl AsmInterpreter {
                     let registers = current_registers_mut(&mut self.stack);
 
                     if let (LpcValue::Array(vec), LpcValue::Int(i)) = (arr, index) {
-                        let idx = if i >= 0 { i } else { vec.len() as i64 + i };
+                        let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
 
                         if idx >= 0 {
                             if let Some(v) = vec.get(idx as usize) {
@@ -248,12 +242,12 @@ impl AsmInterpreter {
                         let index2 = self.resolve_register(r3.index());
 
                         if let (LpcValue::Int(start), LpcValue::Int(end)) = (index1, index2) {
-                            let to_idx = |i: i64| {
+                            let to_idx = |i: LpcInt| {
                                 // We handle the potential overflow just below.
                                 if i >= 0 {
                                     i as usize
                                 } else {
-                                    (vec.len() as i64 + i) as usize
+                                    (vec.len() as LpcInt + i) as usize
                                 }
                             };
                             let real_start = to_idx(start);
@@ -289,7 +283,7 @@ impl AsmInterpreter {
                             resolve_array_reference_mut(r2.index(), &self.stack, &mut self.memory);
                         let len = vec.len();
                         // handle negative indices
-                        let idx = if i >= 0 { i } else { len as i64 + i };
+                        let idx = if i >= 0 { i } else { len as LpcInt + i };
 
                         if (0..len).contains(&(idx as usize)) {
                             vec[idx as usize] = current_registers(&self.stack)[r1.index()];
@@ -530,7 +524,7 @@ impl AsmInterpreter {
         self.program.debug_spans.get(self.pc).unwrap()
     }
 
-    fn make_index_error(&self, index: i64, length: usize) -> LpcError {
+    fn make_index_error(&self, index: LpcInt, length: usize) -> LpcError {
         LpcError::new(format!(
             "Runtime Error: Attempting to access index {} in an array of length {}",
             index, length

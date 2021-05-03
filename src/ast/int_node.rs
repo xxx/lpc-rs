@@ -3,25 +3,21 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    ast::ast_node::{AstNodeTrait, SpannedNode},
-    codegen::tree_walker::TreeWalker,
-    parser::span::Span,
-};
+use crate::{ast::ast_node::{AstNodeTrait, SpannedNode}, codegen::tree_walker::TreeWalker, parser::span::Span, LpcInt};
 
 use crate::errors::LpcError;
 
 /// A node representing an integer literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub struct IntNode {
-    pub value: i64,
+    pub value: LpcInt,
 
     /// The span of the string in the original file
     pub span: Option<Span>,
 }
 
 impl IntNode {
-    pub fn new(value: i64) -> Self {
+    pub fn new(value: LpcInt) -> Self {
         Self { value, span: None }
     }
 }

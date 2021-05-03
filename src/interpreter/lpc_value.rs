@@ -1,6 +1,4 @@
-use crate::{
-    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar, LpcFloat,
-};
+use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar, LpcFloat, LpcInt};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{
     collections::HashMap,
@@ -15,7 +13,7 @@ use std::{
 #[derive(Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum LpcValue {
     Float(LpcFloat),
-    Int(i64),
+    Int(LpcInt),
     String(String),
     Array(Vec<LpcVar>),
     Mapping(HashMap<LpcVar, LpcVar>),
@@ -158,7 +156,7 @@ impl Sub for &LpcValue {
 }
 
 /// Repeat `s`, `i` times, and return a new String of it.
-fn repeat_string(s: &str, i: &i64) -> String {
+fn repeat_string(s: &str, i: &LpcInt) -> String {
     if *i >= 0 {
         repeat(s).take(*i as usize).collect::<String>()
     } else {

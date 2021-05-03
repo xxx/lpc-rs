@@ -3,25 +3,20 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    ast::{
-        array_node::ArrayNode,
-        assignment_node::AssignmentNode,
-        ast_node::{AstNode, AstNodeTrait, SpannedNode},
-        binary_op_node::BinaryOpNode,
-        call_node::CallNode,
-        comma_expression_node::CommaExpressionNode,
-        float_node::FloatNode,
-        int_node::IntNode,
-        mapping_node::MappingNode,
-        range_node::RangeNode,
-        string_node::StringNode,
-        var_node::VarNode,
-    },
-    codegen::tree_walker::TreeWalker,
-    errors::LpcError,
-    parser::span::Span,
-};
+use crate::{ast::{
+    array_node::ArrayNode,
+    assignment_node::AssignmentNode,
+    ast_node::{AstNode, AstNodeTrait, SpannedNode},
+    binary_op_node::BinaryOpNode,
+    call_node::CallNode,
+    comma_expression_node::CommaExpressionNode,
+    float_node::FloatNode,
+    int_node::IntNode,
+    mapping_node::MappingNode,
+    range_node::RangeNode,
+    string_node::StringNode,
+    var_node::VarNode,
+}, codegen::tree_walker::TreeWalker, errors::LpcError, parser::span::Span, LpcInt};
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -170,8 +165,8 @@ impl From<AstNode> for ExpressionNode {
     }
 }
 
-impl From<i64> for ExpressionNode {
-    fn from(value: i64) -> Self {
+impl From<LpcInt> for ExpressionNode {
+    fn from(value: LpcInt) -> Self {
         Self::Int(IntNode::new(value))
     }
 }
@@ -207,8 +202,8 @@ impl From<Vec<&str>> for ExpressionNode {
     }
 }
 
-impl From<Vec<i64>> for ExpressionNode {
-    fn from(vec: Vec<i64>) -> Self {
+impl From<Vec<LpcInt>> for ExpressionNode {
+    fn from(vec: Vec<LpcInt>) -> Self {
         let value = vec
             .iter()
             .map(|i| ExpressionNode::from(*i))

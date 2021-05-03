@@ -16,6 +16,7 @@ use crate::{
         },
         span::Span,
     },
+    LpcInt
 };
 
 pub mod lex_state;
@@ -248,7 +249,7 @@ pub enum Token {
     #[regex(r"[1-9][0-9_]*|0", |lex| {
         track_slice(lex);
 
-        match i64::from_str(&lex.slice().replace("_", "")) {
+        match LpcInt::from_str(&lex.slice().replace("_", "")) {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
             Err(e) => Err(e)
         }
@@ -256,7 +257,7 @@ pub enum Token {
     #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
         track_slice(lex);
 
-        let r = i64::from_str_radix(
+        let r = LpcInt::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0x")
                 .trim_start_matches("0X"),
@@ -270,7 +271,7 @@ pub enum Token {
     #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
         track_slice(lex);
 
-        let r = i64::from_str_radix(
+        let r = LpcInt::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0o")
                 .trim_start_matches("0O"),
@@ -284,7 +285,7 @@ pub enum Token {
     #[regex(r"0[bB][01][01_]*", |lex| {
         track_slice(lex);
 
-        let r = i64::from_str_radix(
+        let r = LpcInt::from_str_radix(
             &lex.slice().replace("_", "")
                 .trim_start_matches("0b")
                 .trim_start_matches("0B"),

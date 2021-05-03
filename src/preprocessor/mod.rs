@@ -13,25 +13,17 @@ use std::{
 
 use define::{Define, ObjectMacro};
 
-use crate::{
-    ast::binary_op_node::BinaryOperation,
-    context::Context,
-    convert_escapes,
-    errors::{
-        format_expected,
-        lazy_files::{FileCache, FILE_CACHE},
-        LpcError,
+use crate::{ast::binary_op_node::BinaryOperation, context::Context, convert_escapes, errors::{
+    format_expected,
+    lazy_files::{FileCache, FILE_CACHE},
+    LpcError,
+}, parser::{
+    lexer::{
+        logos_token::{IntToken, StringToken},
+        LexWrapper, Spanned, Token, TokenVecWrapper,
     },
-    parser::{
-        lexer::{
-            logos_token::{IntToken, StringToken},
-            LexWrapper, Spanned, Token, TokenVecWrapper,
-        },
-        span::Span,
-    },
-    preprocessor::preprocessor_node::PreprocessorNode,
-    preprocessor_parser,
-};
+    span::Span,
+}, preprocessor::preprocessor_node::PreprocessorNode, preprocessor_parser, LpcInt};
 use std::iter::Peekable;
 
 pub mod define;
@@ -741,7 +733,7 @@ impl Preprocessor {
     }
 
     /// Resolve a PreprocessorNode to an Int if possible.
-    fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<i64> {
+    fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<LpcInt> {
         match expr {
             PreprocessorNode::Var(x) => {
                 if let Some(val) = self.defines.get(x) {
@@ -764,8 +756,8 @@ impl Preprocessor {
                 match op {
                     BinaryOperation::Add => Ok(li + ri),
                     BinaryOperation::Sub => Ok(li - ri),
-                    BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as i64),
-                    BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as i64),
+                    BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as LpcInt),
+                    BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcInt),
 
                     operation => Err(LpcError::new(format!(
                         "Unknown binary operation `{}` in expression `{}`",

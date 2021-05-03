@@ -20,6 +20,7 @@ extern crate serde_derive;
 
 use decorum::Total;
 
+pub type LpcInt = i64;
 pub type LpcFloat = Total<f64>;
 
 /// Convert various literal escapes to actual escape characters

@@ -1,12 +1,9 @@
-use crate::{
-    ast::{
-        binary_op_node::{BinaryOpNode, BinaryOperation},
-        expression_node::ExpressionNode,
-        int_node::IntNode,
-        string_node::StringNode,
-    },
-    parser::span::Span,
-};
+use crate::{ast::{
+    binary_op_node::{BinaryOpNode, BinaryOperation},
+    expression_node::ExpressionNode,
+    int_node::IntNode,
+    string_node::StringNode,
+}, parser::span::Span, LpcInt};
 use std::iter::repeat;
 
 /// Combine literals in cases where we have enough information to do so.
@@ -191,7 +188,7 @@ fn collapse_div(
 }
 
 /// handle string * int and int * string
-fn collapse_repeat_string(string: String, amount: i64, span: Span) -> ExpressionNode {
+fn collapse_repeat_string(string: String, amount: LpcInt, span: Span) -> ExpressionNode {
     if amount >= 0 {
         let value = repeat(string).take(amount as usize).collect::<String>();
         ExpressionNode::String(StringNode {

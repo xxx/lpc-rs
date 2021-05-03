@@ -1,4 +1,4 @@
-use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, LpcFloat};
+use crate::{ast::binary_op_node::BinaryOperation, errors::LpcError, LpcFloat, LpcInt};
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -11,7 +11,7 @@ use std::{
 #[derive(Hash, Eq, Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LpcVar {
     Float(LpcFloat),
-    Int(i64),
+    Int(LpcInt),
     String(usize),
     Array(usize),
     Mapping(usize),

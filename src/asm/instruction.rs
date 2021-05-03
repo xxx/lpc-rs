@@ -1,4 +1,4 @@
-use crate::{asm::register::Register, LpcFloat};
+use crate::{asm::register::Register, LpcFloat, LpcInt};
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -44,7 +44,7 @@ pub enum Instruction {
     IAdd(Register, Register, Register),
 
     /// Integer constant
-    IConst(Register, i64),
+    IConst(Register, LpcInt),
 
     /// Integer constant 0
     IConst0(Register),

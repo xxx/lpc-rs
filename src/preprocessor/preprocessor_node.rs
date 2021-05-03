@@ -1,13 +1,13 @@
 use crate::ast::binary_op_node::BinaryOperation;
 use std::fmt::{Display, Formatter};
+use crate::LpcInt;
 
 /// A node type for evaluating preprocessor `#if` expressions
 #[derive(Debug, PartialEq)]
 pub enum PreprocessorNode {
     Var(String),
     // Char(char),
-    // Macro(String),
-    Int(i64),
+    Int(LpcInt),
     /// `bool` denotes whether this is negated or not
     Defined(String, bool),
     BinaryOp(
