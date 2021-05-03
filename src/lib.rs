@@ -20,7 +20,10 @@ extern crate serde_derive;
 
 use decorum::Total;
 
+/// Abstracted type to use as in-game `int`s
 pub type LpcInt = i64;
+
+/// Abstracted type for in-game `floats`. The wrapper is to handle hashing, ordering, etc.
 pub type LpcFloat = Total<f64>;
 
 /// Convert various literal escapes to actual escape characters
