@@ -24,6 +24,7 @@ use crate::{
     LpcInt,
 };
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -159,19 +160,6 @@ impl From<RangeNode> for ExpressionNode {
     }
 }
 
-// TODO: this should be TryInto
-impl From<AstNode> for ExpressionNode {
-    fn from(node: AstNode) -> Self {
-        match node {
-            AstNode::Expression(x) => x,
-            x => panic!(
-                "unimplemented From<AstNode> for ExpressionNode arm: {:?}",
-                x
-            ),
-        }
-    }
-}
-
 impl From<LpcInt> for ExpressionNode {
     fn from(value: LpcInt) -> Self {
         Self::Int(IntNode::new(value))
@@ -300,31 +288,6 @@ mod tests {
         let clone = node.clone();
 
         assert_eq!(ExpressionNode::from(node), ExpressionNode::Range(clone));
-    }
-
-    mod from_ast_node {
-        use crate::ast::{
-            ast_node::AstNode, expression_node::ExpressionNode, int_node::IntNode,
-            program_node::ProgramNode,
-        };
-
-        #[test]
-        fn test_from_ast_node_is_ok_for_expressions() {
-            let expression_node = ExpressionNode::Int(IntNode::new(666));
-            let clone = expression_node.clone();
-            let ast_node = AstNode::Expression(expression_node);
-
-            assert_eq!(ExpressionNode::from(ast_node), clone);
-        }
-
-        #[test]
-        #[should_panic]
-        fn test_from_ast_node_is_panics_for_non_expressions() {
-            let node = ProgramNode::default();
-            let ast_node = AstNode::Program(node);
-
-            ExpressionNode::from(ast_node);
-        }
     }
 
     #[test]
