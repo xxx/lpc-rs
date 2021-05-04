@@ -168,6 +168,10 @@ pub fn check_binary_operation_types(
 /// Returns the first type if no promotion is possible.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
     if op == BinaryOperation::Index {
+        if matches!(type1, LpcType::Mapping(_)) {
+            return LpcType::Mixed(false);
+        }
+
         return type1.as_array(type2.is_array());
     }
 
@@ -1122,6 +1126,41 @@ mod node_type_tests {
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types),
                 LpcType::Int(false)
+            );
+        }
+
+        #[test]
+        fn test_index_mapping_is_mixed() {
+            let mut scope_tree = ScopeTree::default();
+            let id = scope_tree.push_new();
+            let scope = scope_tree.get_mut(id).unwrap();
+            scope.insert(Symbol {
+                name: "foo".to_string(),
+                type_: LpcType::Mapping(false),
+                static_: false,
+                location: None,
+                scope_id: 0,
+                span: None,
+            });
+            let function_return_types = HashMap::new();
+
+            let l = ExpressionNode::Var(VarNode {
+                name: "foo".to_string(),
+                span: None,
+                global: true,
+            });
+            let r = ExpressionNode::from(1);
+
+            let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(l),
+                r: Box::new(r),
+                op: BinaryOperation::Index,
+                span: None,
+            });
+
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types),
+                LpcType::Mixed(false)
             );
         }
     }

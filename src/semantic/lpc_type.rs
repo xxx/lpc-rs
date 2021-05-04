@@ -24,19 +24,6 @@ impl LpcType {
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
     pub fn matches_type(&self, other: LpcType) -> bool {
-        fn array_value(t: &LpcType) -> bool {
-            match t {
-                LpcType::Void => false,
-                LpcType::Int(arr) => *arr,
-                LpcType::String(arr) => *arr,
-                LpcType::Float(arr) => *arr,
-                LpcType::Object(arr) => *arr,
-                LpcType::Mapping(arr) => *arr,
-                LpcType::Mixed(arr) => *arr,
-                _ => unimplemented!(),
-            }
-        }
-
         if let LpcType::Union(self_union) = self {
             self_union.matches_type(other)
         } else if let LpcType::Union(other_union) = other {
@@ -45,15 +32,15 @@ impl LpcType {
             // "mixed *" only matches arrays (but the elements can be any type)
             // "mixed" is a literal wildcard.
             if *array {
-                array_value(&other)
+                other.is_array()
             } else {
                 !matches!(other, LpcType::Void)
             }
         } else if let LpcType::Mixed(array) = other {
             if array {
-                array_value(self)
+                self.is_array()
             } else {
-                !matches!(other, LpcType::Void)
+                !matches!(self, LpcType::Void)
             }
         } else {
             *self == other
@@ -64,12 +51,12 @@ impl LpcType {
     pub fn is_array(&self) -> bool {
         match self {
             LpcType::Void => false,
-            LpcType::Int(arr) => *arr,
-            LpcType::String(arr) => *arr,
-            LpcType::Float(arr) => *arr,
-            LpcType::Object(arr) => *arr,
-            LpcType::Mapping(arr) => *arr,
-            LpcType::Mixed(arr) => *arr,
+            LpcType::Int(arr)
+            | LpcType::String(arr)
+            | LpcType::Float(arr)
+            | LpcType::Object(arr)
+            | LpcType::Mapping(arr)
+            | LpcType::Mixed(arr) => *arr,
             LpcType::Union(union) => union.is_array(),
         }
     }

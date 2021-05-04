@@ -842,7 +842,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{Load, ARange, FConst, IConst0, IMul, MAdd};
+        use crate::asm::instruction::Instruction::{ARange, FConst, IConst0, IMul, Load, MAdd};
 
         use super::*;
 
