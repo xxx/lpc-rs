@@ -698,8 +698,8 @@ impl TreeWalker for AsmTreeWalker {
 mod tests {
     use crate::{
         asm::instruction::Instruction::{
-            AConst, Store, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret,
-            SConst,
+            AConst, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret, SConst,
+            Store,
         },
         ast::{
             assignment_node::AssignmentOperation, ast_node::AstNode,

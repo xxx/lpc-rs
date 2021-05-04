@@ -170,7 +170,7 @@ impl Display for Instruction {
             }
             Instruction::Ret => {
                 write!(f, "ret")
-            },
+            }
             Instruction::Store(r1, r2, r3) => {
                 write!(f, "store {}, {}, {}", r1, r2, r3)
             }

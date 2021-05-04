@@ -298,30 +298,28 @@ impl AsmInterpreter {
                                     ).with_span(*self.current_debug_span()));
                             }
                         }
-                        LpcVar::Mapping(i) => {
-                            match self.memory.get_mut(i) {
-                                Some(LpcValue::Mapping(ref mut map_ref)) => {
-                                    map_ref.insert(index, current_registers(&self.stack)[r1.index()]);
-                                }
-                                Some(x) => {
-                                    return Err(LpcError::new(
+                        LpcVar::Mapping(i) => match self.memory.get_mut(i) {
+                            Some(LpcValue::Mapping(ref mut map_ref)) => {
+                                map_ref.insert(index, current_registers(&self.stack)[r1.index()]);
+                            }
+                            Some(x) => {
+                                return Err(LpcError::new(
                                         format!(
                                             "Runtime Error: Memory corrupted. Expected a mapping at index `{}`, but found `{}` instead",
                                             i,
                                             x
                                         )
                                     ).with_span(*self.current_debug_span()));
-                                }
-                                None => {
-                                    return Err(LpcError::new(
+                            }
+                            None => {
+                                return Err(LpcError::new(
                                         format!(
                                             "Runtime Error: Memory corrupted. Expected a mapping at index `{}`, but found nothing.",
                                             i
                                         )
                                     ).with_span(*self.current_debug_span()));
-                                }
                             }
-                        }
+                        },
                         x => {
                             return Err(LpcError::new(format!(
                                 "Runtime Error: Invalid attempt to take index of `{}`",
