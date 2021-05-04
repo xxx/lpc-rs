@@ -645,7 +645,7 @@ impl TreeWalker for AsmTreeWalker {
                 let _ = r.visit(self);
                 let index_result = self.current_result;
 
-                let assign = Instruction::AStore(rhs_result, var_result, index_result);
+                let assign = Instruction::Store(rhs_result, var_result, index_result);
 
                 self.instructions.push(assign);
                 self.debug_spans.push(node.span);
@@ -698,7 +698,7 @@ impl TreeWalker for AsmTreeWalker {
 mod tests {
     use crate::{
         asm::instruction::Instruction::{
-            AConst, AStore, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret,
+            AConst, Store, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret,
             SConst,
         },
         ast::{
@@ -1376,7 +1376,7 @@ mod tests {
             [
                 IConst(Register(1), -12),
                 IConst1(Register(2)),
-                AStore(Register(1), Register(666), Register(2))
+                Store(Register(1), Register(666), Register(2))
             ]
         );
     }

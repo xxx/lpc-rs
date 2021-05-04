@@ -244,7 +244,7 @@ impl AsmInterpreter {
                         panic!("ARange's array isn't actually an array?");
                     }
                 }
-                Instruction::AStore(r1, r2, r3) => {
+                Instruction::Store(r1, r2, r3) => {
                     // r2[r3] = r1;
 
                     let container = self.register_to_lpc_var(r2.index());

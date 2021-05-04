@@ -15,10 +15,6 @@ pub enum Instruction {
     /// x.4 = x.1[x.2 .. x.3]
     ARange(Register, Register, Register, Register),
 
-    /// Store a single item into an array
-    /// x.1[x.2] = x.0
-    AStore(Register, Register, Register),
-
     /// Call a function
     Call {
         name: String,
@@ -86,6 +82,10 @@ pub enum Instruction {
 
     /// Return from current function
     Ret,
+
+    /// Store a single item into an array or mapping
+    /// x.1[x.2] = x.0
+    Store(Register, Register, Register),
 }
 
 impl Display for Instruction {
@@ -101,9 +101,6 @@ impl Display for Instruction {
             }
             Instruction::ARange(r1, r2, r3, r4) => {
                 write!(f, "arange {}, {}, {}, {}", r1, r2, r3, r4)
-            }
-            Instruction::AStore(r1, r2, r3) => {
-                write!(f, "astore {}, {}, {}", r1, r2, r3)
             }
             Instruction::GLoad(r1, r2) => {
                 write!(f, "gload {}, {}", r1, r2)
@@ -173,6 +170,9 @@ impl Display for Instruction {
             }
             Instruction::Ret => {
                 write!(f, "ret")
+            },
+            Instruction::Store(r1, r2, r3) => {
+                write!(f, "store {}, {}, {}", r1, r2, r3)
             }
         }
     }
