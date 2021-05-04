@@ -17,6 +17,7 @@ use crate::{
         float_node::FloatNode,
         function_def_node::FunctionDefNode,
         int_node::IntNode,
+        mapping_node::MappingNode,
         program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
@@ -32,7 +33,6 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
     LpcFloat,
 };
-use crate::ast::mapping_node::MappingNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;

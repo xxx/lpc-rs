@@ -221,9 +221,7 @@ impl From<Vec<LpcInt>> for ExpressionNode {
 
 impl From<HashMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
     fn from(map: HashMap<ExpressionNode, ExpressionNode>) -> Self {
-        let value = map
-            .into_iter()
-            .collect::<Vec<_>>();
+        let value = map.into_iter().collect::<Vec<_>>();
 
         Self::Mapping(MappingNode { value, span: None })
     }

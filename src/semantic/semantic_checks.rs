@@ -144,9 +144,10 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Index => {
-            if matches!(left_type, LpcType::Mapping(_)) || (left_type.is_array()
-                && (right_type == LpcType::Int(false)
-                    || matches!(*node.r, ExpressionNode::Range(_))))
+            if matches!(left_type, LpcType::Mapping(_))
+                || (left_type.is_array()
+                    && (right_type == LpcType::Int(false)
+                        || matches!(*node.r, ExpressionNode::Range(_))))
             {
                 Ok(())
             } else {
@@ -573,7 +574,10 @@ mod check_binary_operation_tests {
         )
     }
 
-    fn mapping_mapping_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+    fn mapping_mapping_literals(
+        op: BinaryOperation,
+        scope_tree: &ScopeTree,
+    ) -> Result<(), LpcError> {
         get_result(
             op,
             ExpressionNode::from(HashMap::new()),
@@ -587,7 +591,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("mapping1")),
             ExpressionNode::from(VarNode::new("mapping2")),
-            &scope_tree
+            &scope_tree,
         )
     }
 

@@ -1,9 +1,9 @@
 use crate::{asm::register::Register, LpcFloat, LpcInt};
 use std::{
+    collections::HashMap,
     fmt,
     fmt::{Display, Formatter},
 };
-use std::collections::HashMap;
 
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -140,10 +140,11 @@ impl Display for Instruction {
                 write!(f, "sconst {}, {}", r, i)
             }
             Instruction::MapConst(r, i) => {
-                let str = i.iter().map(|(key, value)| {
-                    format!("{}: {}", key, value)
-                }).collect::<Vec<_>>()
-                .join(", ");
+                let str = i
+                    .iter()
+                    .map(|(key, value)| format!("{}: {}", key, value))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 write!(f, "mapconst {}, {}", r, str)
             }
             Instruction::IDiv(r1, r2, r3) => {

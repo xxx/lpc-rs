@@ -9,8 +9,7 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
     LpcInt,
 };
-use std::collections::HashMap;
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -55,7 +54,6 @@ macro_rules! mapping {
         LpcVar::Mapping($x)
     };
 }
-
 
 /// An interpreter that executes instructions
 ///
@@ -253,13 +251,21 @@ impl AsmInterpreter {
                             let index = self.register_to_lpc_var(r2.index());
                             let registers = current_registers_mut(&mut self.stack);
 
-                            if let Some(v) = map.get(&index) {
-                                registers[r3.index()] = *v;
+                            let var = if let Some(v) = map.get(&index) {
+                                *v
                             } else {
-                                registers[r3.index()] = LpcVar::Int(0);
-                            }
+                                 LpcVar::Int(0)
+                            };
+
+                            registers[r3.index()] = var;
                         }
-                        _ => panic!("This shouldn't have passed type checks.")
+                        x => {
+                            return Err(LpcError::new(format!(
+                                "Runtime Error: Invalid attempt to take index of `{}`",
+                                x
+                            ))
+                            .with_span(*self.current_debug_span()))
+                        }
                     }
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
