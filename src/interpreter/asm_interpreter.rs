@@ -223,51 +223,6 @@ impl AsmInterpreter {
                     self.memory.push(LpcValue::from(vars));
                     registers[r.index()] = array!(index);
                 }
-                Instruction::ALoad(r1, r2, r3) => {
-                    let container = self.register_to_lpc_value(r1.index());
-
-                    match container {
-                        LpcValue::Array(vec) => {
-                            let index = self.register_to_lpc_value(r2.index());
-                            let registers = current_registers_mut(&mut self.stack);
-
-                            if let LpcValue::Int(i) = index {
-                                let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
-
-                                if idx >= 0 {
-                                    if let Some(v) = vec.get(idx as usize) {
-                                        registers[r3.index()] = *v;
-                                    } else {
-                                        return Err(self.make_array_index_error(idx, vec.len()));
-                                    }
-                                } else {
-                                    return Err(self.make_array_index_error(idx, vec.len()));
-                                }
-                            } else {
-                                return Err(self.make_array_index_error(index, vec.len()));
-                            }
-                        }
-                        LpcValue::Mapping(map) => {
-                            let index = self.register_to_lpc_var(r2.index());
-                            let registers = current_registers_mut(&mut self.stack);
-
-                            let var = if let Some(v) = map.get(&index) {
-                                *v
-                            } else {
-                                 LpcVar::Int(0)
-                            };
-
-                            registers[r3.index()] = var;
-                        }
-                        x => {
-                            return Err(LpcError::new(format!(
-                                "Runtime Error: Invalid attempt to take index of `{}`",
-                                x
-                            ))
-                            .with_span(*self.current_debug_span()))
-                        }
-                    }
-                }
                 Instruction::ARange(r1, r2, r3, r4) => {
                     // r4 = r1[r2..r3]
                     let return_array =
@@ -446,6 +401,51 @@ impl AsmInterpreter {
                         Ok(result) => registers[r3.index()] = result,
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
+                        }
+                    }
+                }
+                Instruction::Load(r1, r2, r3) => {
+                    let container = self.register_to_lpc_value(r1.index());
+
+                    match container {
+                        LpcValue::Array(vec) => {
+                            let index = self.register_to_lpc_value(r2.index());
+                            let registers = current_registers_mut(&mut self.stack);
+
+                            if let LpcValue::Int(i) = index {
+                                let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+
+                                if idx >= 0 {
+                                    if let Some(v) = vec.get(idx as usize) {
+                                        registers[r3.index()] = *v;
+                                    } else {
+                                        return Err(self.make_array_index_error(idx, vec.len()));
+                                    }
+                                } else {
+                                    return Err(self.make_array_index_error(idx, vec.len()));
+                                }
+                            } else {
+                                return Err(self.make_array_index_error(index, vec.len()));
+                            }
+                        }
+                        LpcValue::Mapping(map) => {
+                            let index = self.register_to_lpc_var(r2.index());
+                            let registers = current_registers_mut(&mut self.stack);
+
+                            let var = if let Some(v) = map.get(&index) {
+                                *v
+                            } else {
+                                LpcVar::Int(0)
+                            };
+
+                            registers[r3.index()] = var;
+                        }
+                        x => {
+                            return Err(LpcError::new(format!(
+                                "Runtime Error: Invalid attempt to take index of `{}`",
+                                x
+                            ))
+                                .with_span(*self.current_debug_span()))
                         }
                     }
                 }

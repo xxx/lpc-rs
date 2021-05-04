@@ -247,7 +247,7 @@ impl AsmTreeWalker {
                 self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
             }
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
-            BinaryOperation::Index => Instruction::ALoad(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result.unwrap()),
             BinaryOperation::AndAnd => todo!(),
             BinaryOperation::OrOr => todo!(),
         }
@@ -842,7 +842,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{ALoad, ARange, FConst, IConst0, IMul, MAdd};
+        use crate::asm::instruction::Instruction::{Load, ARange, FConst, IConst0, IMul, MAdd};
 
         use super::*;
 
@@ -985,7 +985,7 @@ mod tests {
                 IConst(Register(1), 123),
                 AConst(Register(2), vec![Register(1)]),
                 IConst0(Register(3)),
-                ALoad(Register(2), Register(3), Register(4)),
+                Load(Register(2), Register(3), Register(4)),
             ];
 
             assert_eq!(walker.instructions, expected);

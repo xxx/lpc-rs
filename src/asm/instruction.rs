@@ -11,10 +11,6 @@ pub enum Instruction {
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),
 
-    /// Load a single item from an array into a register
-    /// x.2 = x.0[x.1]
-    ALoad(Register, Register, Register),
-
     /// Create an array from some range of another array
     /// x.4 = x.1[x.2 .. x.3]
     ARange(Register, Register, Register, Register),
@@ -52,6 +48,10 @@ pub enum Instruction {
 
     /// Integer constant 1
     IConst1(Register),
+
+    /// Load a single item from an array or mapping into a register
+    /// x.2 = x.0[x.1]
+    Load(Register, Register, Register),
 
     /// Create a mapping from the keys and values in the hashmap
     MapConst(Register, HashMap<Register, Register>),
@@ -99,9 +99,6 @@ impl Display for Instruction {
                     .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
             }
-            Instruction::ALoad(r1, r2, r3) => {
-                write!(f, "aload {}, {}, {}", r1, r2, r3)
-            }
             Instruction::ARange(r1, r2, r3, r4) => {
                 write!(f, "arange {}, {}, {}, {}", r1, r2, r3, r4)
             }
@@ -135,6 +132,9 @@ impl Display for Instruction {
             }
             Instruction::IConst1(r) => {
                 write!(f, "iconst1 {}", r)
+            }
+            Instruction::Load(r1, r2, r3) => {
+                write!(f, "load {}, {}, {}", r1, r2, r3)
             }
             Instruction::SConst(r, i) => {
                 write!(f, "sconst {}, {}", r, i)
