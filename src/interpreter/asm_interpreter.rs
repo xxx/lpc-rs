@@ -2,7 +2,7 @@ use crate::{
     asm::instruction::Instruction,
     errors::LpcError,
     interpreter::{
-        efun::EFUNS, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
+        efun::{EFUNS, EFUN_PROTOTYPES}, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
         stack_frame::StackFrame,
     },
     parser::span::Span,
@@ -336,18 +336,21 @@ impl AsmInterpreter {
                 } => {
                     let mut new_frame = if let Some(func) = self.program.functions.get(name) {
                         StackFrame::new(func.clone(), self.pc + 1)
-                    } else if EFUNS.contains_key(name.as_str()) {
-                        // TODO: memoize this symbol
+                    } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
-                            num_args: *num_args, // TODO: look this up server-side
+                            num_args: prototype.num_args,
                             num_locals: 0,
                             address: 0,
                         };
 
                         StackFrame::new(sym, self.pc + 1)
                     } else {
-                        panic!("Unable to find function: {}", name);
+                        return Err(LpcError::new(format!(
+                            "Runtime Error: Call to unknown function `{}`",
+                            name
+                        ))
+                            .with_span(*self.current_debug_span()));
                     };
 
                     // copy argument registers from old frame to new

@@ -7,7 +7,7 @@ use crate::{
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
-        ast_node::{AstNode, AstNodeTrait, SpannedNode},
+        ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
@@ -24,7 +24,6 @@ use crate::{
     LpcInt,
 };
 use std::collections::HashMap;
-use std::convert::TryFrom;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
