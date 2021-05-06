@@ -28,8 +28,6 @@ impl MappingNode {
     /// as the span from the start of the first item, to the end of
     /// the last.
     pub fn new(value: Vec<(ExpressionNode, ExpressionNode)>, span: Option<Span>) -> Self {
-        // go in reverse, so later-defined duplicate keys are the ones that stay
-        // let value = vec.into_iter().rev().unique_by(|(key, _)| key).collect();
         Self { value, span }
     }
 }
