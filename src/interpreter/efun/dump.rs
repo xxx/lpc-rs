@@ -9,7 +9,7 @@ fn format_array(arr: &[LpcRef], interpreter: &AsmInterpreter, indent: usize) -> 
     let inner = arr
         .iter()
         .map(|var| {
-            let val = interpreter.resolve_var(var);
+            let val = interpreter.resolve_ref(var);
             format_val(val, interpreter, indent + 2)
         })
         .collect::<Vec<_>>()
@@ -31,9 +31,9 @@ fn format_mapping(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_val = interpreter.resolve_var(key);
+            let k_val = interpreter.resolve_ref(key);
             let k_format = format_val(k_val, interpreter, 0);
-            let v_val = interpreter.resolve_var(val);
+            let v_val = interpreter.resolve_ref(val);
             let v_format = format_val(v_val, interpreter, 2);
 
             format!(

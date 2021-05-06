@@ -4,6 +4,9 @@ use std::{
     fmt::{Display, Formatter},
     ops::{Add, Div, Mul, Sub},
 };
+use fasthash::metro;
+
+type StringHash = u128;
 
 /// Represent a variable stored in a `Register`. `Copy` types store the actual value.
 /// Non-`Copy` types store an index into memory (i.e. an address).
@@ -18,6 +21,9 @@ pub enum LpcRef {
 
     /// Stores an index into the program's `ConstantPool`, rather than memory.
     StringConstant(usize),
+
+    /// A reference that contains a string's hash value, used only for mapping keys.
+    StringHash(StringHash),
 }
 
 impl LpcRef {
@@ -30,7 +36,12 @@ impl LpcRef {
             LpcRef::Array(_) => "array",
             LpcRef::Mapping(_) => "mapping",
             LpcRef::StringConstant(_) => "string",
+            LpcRef::StringHash(_) => "string",
         }
+    }
+
+    pub fn hash_string(s: &str) -> StringHash {
+        metro::hash128(s)
     }
 
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
@@ -52,6 +63,7 @@ impl Display for LpcRef {
             LpcRef::Array(x) => write!(f, "array with index {}", x),
             LpcRef::Mapping(x) => write!(f, "mapping with index {}", x),
             LpcRef::StringConstant(x) => write!(f, "string (constant) with index {}", x),
+            LpcRef::StringHash(hash) => write!(f, "string with hash {}", hash),
         }
     }
 }
