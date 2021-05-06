@@ -513,7 +513,7 @@ impl Preprocessor {
             let name = String::from(&captures[1]);
             let args: Vec<String> = COMMA_SEPARATOR
                 .split(&captures[2])
-                .map(|s| String::from(s))
+                .map(String::from)
                 .collect();
             let body = &captures[3];
 

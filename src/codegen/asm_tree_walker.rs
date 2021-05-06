@@ -31,7 +31,6 @@ use crate::{
     interpreter::{constant_pool::ConstantPool, lpc_value::LpcValue, program::Program},
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
-    LpcFloat,
 };
 
 /// Really just a `pc` index in the vm.
@@ -430,7 +429,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<(), LpcError> {
         let register = self.register_counter.next();
         self.current_result = register.unwrap();
-        let instruction = Instruction::FConst(self.current_result, LpcFloat::from(node.value));
+        let instruction = Instruction::FConst(self.current_result, node.value);
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
 
@@ -713,6 +712,7 @@ mod tests {
             span::Span,
         },
         semantic::lpc_type::LpcType,
+        LpcFloat,
     };
 
     use super::*;

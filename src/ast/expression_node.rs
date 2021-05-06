@@ -190,7 +190,7 @@ impl From<Vec<&str>> for ExpressionNode {
     fn from(vec: Vec<&str>) -> Self {
         let value = vec
             .into_iter()
-            .map(|i| ExpressionNode::from(i))
+            .map(ExpressionNode::from)
             .collect::<Vec<_>>();
         Self::Array(ArrayNode { value, span: None })
     }
@@ -200,7 +200,7 @@ impl From<Vec<LpcInt>> for ExpressionNode {
     fn from(vec: Vec<LpcInt>) -> Self {
         let value = vec
             .into_iter()
-            .map(|i| ExpressionNode::from(i))
+            .map(ExpressionNode::from)
             .collect::<Vec<_>>();
         Self::Array(ArrayNode { value, span: None })
     }

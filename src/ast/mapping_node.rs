@@ -12,10 +12,9 @@ use crate::{
     errors::LpcError,
     parser::span::Span,
 };
-use std::hash::{Hash, Hasher};
 
 /// A node representing an array literal
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct MappingNode {
     pub value: Vec<(ExpressionNode, ExpressionNode)>,
 
@@ -57,16 +56,5 @@ impl Display for MappingNode {
             .collect::<Vec<_>>()
             .join(",\n");
         write!(f, "MappingNode[{}]", s)
-    }
-}
-
-impl Hash for MappingNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        "MappingNode".hash(state);
-
-        self.value.iter().for_each(|(key, value)| {
-            key.hash(state);
-            value.hash(state)
-        })
     }
 }
