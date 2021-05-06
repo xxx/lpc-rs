@@ -23,41 +23,6 @@ const MEMORY_SIZE: usize = 100000;
 /// The initial size of the globals vector
 const GLOBALS_SIZE: usize = 100;
 
-/// Convenience helper for registers
-macro_rules! int {
-    ($x:expr) => {
-        LpcVar::Int($x)
-    };
-}
-
-/// Convenience helper for registers
-macro_rules! float {
-    ($x:expr) => {
-        LpcVar::Float($x)
-    };
-}
-
-/// Convenience helper for registers
-macro_rules! array {
-    ($x:expr) => {
-        LpcVar::Array($x)
-    };
-}
-
-/// Convenience helper for registers
-macro_rules! string_constant {
-    ($x:expr) => {
-        LpcVar::StringConstant($x)
-    };
-}
-
-/// Convenience helper for registers
-macro_rules! mapping {
-    ($x:expr) => {
-        LpcVar::Mapping($x)
-    };
-}
-
 /// An interpreter that executes instructions
 ///
 /// # Examples
@@ -195,7 +160,7 @@ impl AsmInterpreter {
                     let vars = vec.iter().map(|i| registers[i.index()]).collect::<Vec<_>>();
                     let index = self.memory.len();
                     self.memory.push(LpcValue::from(vars));
-                    registers[r.index()] = array!(index);
+                    registers[r.index()] = LpcVar::Array(index);
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
                     // r4 = r1[r2..r3]
@@ -204,7 +169,7 @@ impl AsmInterpreter {
                             let index = memory.len();
                             memory.push(LpcValue::from(arr));
                             let registers = current_registers_mut(stack);
-                            registers[r4.index()] = array!(index);
+                            registers[r4.index()] = LpcVar::Array(index);
                         };
 
                     let value = self.register_to_lpc_value(r1.index());
@@ -296,7 +261,7 @@ impl AsmInterpreter {
                 }
                 Instruction::FConst(r, f) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = float!(*f);
+                    registers[r.index()] = LpcVar::Float(*f);
                 }
                 Instruction::GLoad(r1, r2) => {
                     let global = self.globals[r1.index()];
@@ -318,19 +283,19 @@ impl AsmInterpreter {
                 }
                 Instruction::IConst(r, i) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = int!(*i);
+                    registers[r.index()] = LpcVar::Int(*i);
                 }
                 Instruction::IConst0(r) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = int!(0);
+                    registers[r.index()] = LpcVar::Int(0);
                 }
                 Instruction::IConst1(r) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = int!(1);
+                    registers[r.index()] = LpcVar::Int(1);
                 }
                 Instruction::SConst(r, s) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = string_constant!(*s);
+                    registers[r.index()] = LpcVar::StringConstant(*s);
                 }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
@@ -552,7 +517,7 @@ impl AsmInterpreter {
                     }
                     let index = self.memory.len();
                     self.memory.push(LpcValue::from(register_map));
-                    registers[r.index()] = mapping!(index);
+                    registers[r.index()] = LpcVar::Mapping(index);
                 }
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.
