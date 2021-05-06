@@ -2,7 +2,10 @@ use crate::{
     asm::instruction::Instruction,
     errors::LpcError,
     interpreter::{
-        efun::{EFUNS, EFUN_PROTOTYPES}, lpc_value::LpcValue, lpc_var::LpcVar, program::Program,
+        efun::{EFUNS, EFUN_PROTOTYPES},
+        lpc_value::LpcValue,
+        lpc_var::LpcVar,
+        program::Program,
         stack_frame::StackFrame,
     },
     parser::span::Span,
@@ -265,7 +268,7 @@ impl AsmInterpreter {
                             "Runtime Error: Call to unknown function `{}`",
                             name
                         ))
-                            .with_span(*self.current_debug_span()));
+                        .with_span(*self.current_debug_span()));
                     };
 
                     // copy argument registers from old frame to new
@@ -413,9 +416,7 @@ impl AsmInterpreter {
                                             LpcVar::Int(0)
                                         }
                                     }
-                                    None => {
-                                        LpcVar::Int(0)
-                                    }
+                                    None => LpcVar::Int(0),
                                 }
                             } else {
                                 LpcVar::Int(0)
@@ -514,7 +515,7 @@ impl AsmInterpreter {
                                 "Runtime Error: Invalid attempt to take index of `{}`",
                                 x
                             ))
-                                .with_span(*self.current_debug_span()))
+                            .with_span(*self.current_debug_span()))
                         }
                     }
                 }
