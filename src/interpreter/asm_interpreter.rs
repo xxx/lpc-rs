@@ -230,11 +230,10 @@ impl AsmInterpreter {
 
                         StackFrame::new(sym, self.pc + 1)
                     } else {
-                        return Err(LpcError::new(format!(
-                            "Runtime Error: Call to unknown function `{}`",
+                        return Err(self.runtime_error(format!(
+                            "Call to unknown function `{}`",
                             name
-                        ))
-                        .with_span(*self.current_debug_span()));
+                        )));
                     };
 
                     // copy argument registers from old frame to new
@@ -352,39 +351,8 @@ impl AsmInterpreter {
                         LpcValue::Mapping(map) => {
                             let index = self.register_to_lpc_ref(r2.index());
 
-                            let var = if let Some(v) = map.get(&index) {
+                            let var = if let Some(v) = map.get(&self.mapping_key(index)) {
                                 *v
-                            } else if matches!(index, LpcRef::String(..)) {
-                                // TODO: store a mini hashmap of actual strings to the lpc var, to avoid the loop here.
-                                // This handles an uncommon edge case where a calculated string
-                                // otherwise would not match, e.g.
-                                //
-                                // mapping m = ([ "foobar" : "baz" ]);
-                                // string s = "foo";
-                                // dump(s + "bar"); // We want this to be "baz", not 0.
-                                //
-                                // Ints and floats can match directly with their LpcRef values, and
-                                // everything else explicitly matches references only.
-
-                                let matching_key = {
-                                    let index_value = self.resolve_ref(&index);
-                                    map.keys().find(|key| {
-                                        let val = self.resolve_ref(*key);
-
-                                        val == index_value
-                                    })
-                                };
-
-                                match matching_key {
-                                    Some(k) => {
-                                        if let Some(v) = map.get(k) {
-                                            *v
-                                        } else {
-                                            LpcRef::Int(0)
-                                        }
-                                    }
-                                    None => LpcRef::Int(0),
-                                }
                             } else {
                                 LpcRef::Int(0)
                             };
@@ -393,11 +361,10 @@ impl AsmInterpreter {
                             registers[r3.index()] = var;
                         }
                         x => {
-                            return Err(LpcError::new(format!(
-                                "Runtime Error: Invalid attempt to take index of `{}`",
+                            return Err(self.runtime_error(format!(
+                                "Invalid attempt to take index of `{}`",
                                 x
-                            ))
-                            .with_span(*self.current_debug_span()))
+                            )));
                         }
                     }
                 }
@@ -430,59 +397,62 @@ impl AsmInterpreter {
                                     Some(x) => {
                                         return Err(LpcError::new(
                                             format!(
-                                                "Runtime Error: Memory corrupted. Expected an array at index `{}`, but found `{}` instead",
+                                                "Memory corrupted. Expected an array at index `{}`, but found `{}` instead",
                                                 i,
                                                 x
                                             )
                                         ).with_span(*self.current_debug_span()));
                                     }
                                     None => {
-                                        return Err(LpcError::new(
+                                        return Err(self.runtime_error(
                                             format!(
-                                                "Runtime Error: Memory corrupted. Expected an array at index `{}`, but found nothing.",
+                                                "Memory corrupted. Expected an array at index `{}`, but found nothing.",
                                                 i
                                             )
-                                        ).with_span(*self.current_debug_span()));
+                                        ));
                                     }
                                 }
                             } else {
                                 return Err(
-                                    LpcError::new(
+                                    self.runtime_error(
                                         format!(
-                                            "Runtime Error: Invalid attempt to take index `{}` of an array.",
+                                            "Invalid attempt to take index `{}` of an array.",
                                             index
                                         )
-                                    ).with_span(*self.current_debug_span()));
+                                    ));
                             }
                         }
-                        LpcRef::Mapping(i) => match self.memory.get_mut(i) {
-                            Some(LpcValue::Mapping(ref mut map_ref)) => {
-                                map_ref.insert(index, current_registers(&self.stack)[r1.index()]);
-                            }
-                            Some(x) => {
-                                return Err(LpcError::new(
-                                    format!(
-                                        "Runtime Error: Memory corrupted. Expected a mapping at index `{}`, but found `{}` instead",
+                        LpcRef::Mapping(i) => {
+                            let key = self.mapping_key(index);
+
+                            match self.memory.get_mut(i) {
+                                Some(LpcValue::Mapping(ref mut map_ref)) => {
+                                    map_ref.insert(key, current_registers(&self.stack)[r1.index()]);
+                                }
+                                Some(x) => {
+                                    let msg = format!(
+                                        "Memory corrupted. Expected a mapping at index `{}`, but found `{}` instead",
                                         i,
                                         x
-                                    )
-                                ).with_span(*self.current_debug_span()));
-                            }
-                            None => {
-                                return Err(LpcError::new(
-                                    format!(
-                                        "Runtime Error: Memory corrupted. Expected a mapping at index `{}`, but found nothing.",
-                                        i
-                                    )
-                                ).with_span(*self.current_debug_span()));
+                                    );
+
+                                    return Err(self.runtime_error(msg));
+                                }
+                                None => {
+                                    return Err(self.runtime_error(
+                                        format!(
+                                            "Memory corrupted. Expected a mapping at index `{}`, but found nothing.",
+                                            i
+                                        )
+                                    ));
+                                }
                             }
                         },
                         x => {
-                            return Err(LpcError::new(format!(
-                                "Runtime Error: Invalid attempt to take index of `{}`",
+                            return Err(self.runtime_error(format!(
+                                "Invalid attempt to take index of `{}`",
                                 x
-                            ))
-                            .with_span(*self.current_debug_span()))
+                            )))
                         }
                     }
                 }
@@ -512,14 +482,20 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::MapConst(r, map) => {
-                    let registers = current_registers_mut(&mut self.stack);
                     let mut register_map = HashMap::new();
                     for (key, value) in map {
-                        // LpcRef::hash_string(s)
-                        register_map.insert(registers[key.index()], registers[value.index()]);
+                        let mapping_key = {
+                            let registers = current_registers_mut(&mut self.stack);
+                            let r = registers[key.index()];
+                            self.mapping_key(r)
+                        };
+                        let registers = current_registers_mut(&mut self.stack);
+
+                        register_map.insert(mapping_key, registers[value.index()]);
                     }
                     let index = self.memory.len();
                     self.memory.push(LpcValue::from(register_map));
+                    let registers = current_registers_mut(&mut self.stack);
                     registers[r.index()] = LpcRef::Mapping(index);
                 }
                 // Instruction::MDiv(r1, r2, r3) => {
@@ -625,12 +601,32 @@ impl AsmInterpreter {
         self.program.debug_spans.get(self.pc).unwrap()
     }
 
+    fn mapping_key(&self, r: LpcRef) -> LpcRef {
+        match r {
+            LpcRef::String(_) |
+            LpcRef::StringConstant(_) => {
+                let v = self.resolve_ref(&r);
+
+                if let LpcValue::String(str) = v {
+                    LpcRef::StringHash(LpcRef::hash_string(&str))
+                } else {
+                    r
+                }
+            },
+            _ => r
+        }
+    }
+
+    fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        LpcError::new(format!("Runtime Error: {}", msg.as_ref()))
+            .with_span(*self.current_debug_span())
+    }
+
     fn make_array_index_error<T: Display>(&self, index: T, length: usize) -> LpcError {
-        LpcError::new(format!(
-            "Runtime Error: Attempting to access index {} in an array of length {}",
+        self.runtime_error(format!(
+            "Attempting to access index {} in an array of length {}",
             index, length
         ))
-        .with_span(*self.current_debug_span())
     }
 }
 

@@ -40,6 +40,7 @@ impl LpcRef {
         }
     }
 
+    /// A helper to use our specified hasher to create [`StringHash`]es.
     pub fn hash_string(s: &str) -> StringHash {
         metro::hash128(s)
     }
