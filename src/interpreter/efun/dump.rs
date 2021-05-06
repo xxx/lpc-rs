@@ -1,9 +1,9 @@
 use crate::interpreter::{
-    asm_interpreter::AsmInterpreter, lpc_value::LpcValue, lpc_var::LpcVar, stack_frame::StackFrame,
+    asm_interpreter::AsmInterpreter, lpc_value::LpcValue, lpc_var::LpcRef, stack_frame::StackFrame,
 };
 use std::collections::HashMap;
 
-fn format_array(arr: &[LpcVar], interpreter: &AsmInterpreter, indent: usize) -> String {
+fn format_array(arr: &[LpcRef], interpreter: &AsmInterpreter, indent: usize) -> String {
     let mut result = format!("{:width$}({{\n", "", width = indent);
 
     let inner = arr
@@ -22,7 +22,7 @@ fn format_array(arr: &[LpcVar], interpreter: &AsmInterpreter, indent: usize) -> 
 }
 
 fn format_mapping(
-    map: &HashMap<LpcVar, LpcVar>,
+    map: &HashMap<LpcRef, LpcRef>,
     interpreter: &AsmInterpreter,
     indent: usize,
 ) -> String {

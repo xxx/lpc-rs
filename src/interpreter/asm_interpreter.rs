@@ -4,7 +4,7 @@ use crate::{
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
         lpc_value::LpcValue,
-        lpc_var::LpcVar,
+        lpc_var::LpcRef,
         program::Program,
         stack_frame::StackFrame,
     },
@@ -51,7 +51,7 @@ pub struct AsmInterpreter {
     memory: Vec<LpcValue>,
 
     /// Registers that hold global variables
-    globals: Vec<LpcVar>,
+    globals: Vec<LpcRef>,
 
     /// program counter
     pc: usize,
@@ -62,13 +62,13 @@ pub struct AsmInterpreter {
 
 /// Get a reference to the passed stack frame's registers
 #[inline]
-fn current_registers(stack: &[StackFrame]) -> &Vec<LpcVar> {
+fn current_registers(stack: &[StackFrame]) -> &Vec<LpcRef> {
     &stack.last().unwrap().registers
 }
 
 /// Get a mutable reference to the passed stack frame's registers
 #[inline]
-fn current_registers_mut(stack: &mut Vec<StackFrame>) -> &mut Vec<LpcVar> {
+fn current_registers_mut(stack: &mut Vec<StackFrame>) -> &mut Vec<LpcRef> {
     stack.last_mut().unwrap().registers.as_mut()
 }
 
@@ -86,7 +86,7 @@ impl AsmInterpreter {
     ///
     /// * `program` - The Program to load
     pub fn load(&mut self, program: Program) {
-        self.globals = vec![LpcVar::Int(0); program.num_globals];
+        self.globals = vec![LpcRef::Int(0); program.num_globals];
         self.program = program;
     }
 
@@ -114,25 +114,25 @@ impl AsmInterpreter {
         self.stack.pop()
     }
 
-    /// Resolve an LpcVar into an LpcValue. This clones the value, so writes will not do anything.
+    /// Resolve an LpcRef into an LpcValue. This clones the value, so writes will not do anything.
     ///
     /// # Arguments
-    /// `var` - A reference to an [`LpcVar`] to resolve.
-    pub fn resolve_var(&self, var: &LpcVar) -> LpcValue {
+    /// `var` - A reference to an [`LpcRef`] to resolve.
+    pub fn resolve_var(&self, var: &LpcRef) -> LpcValue {
         match var {
-            LpcVar::Int(v) => LpcValue::Int(*v),
-            LpcVar::Float(v) => LpcValue::Float(*v),
-            LpcVar::String(i) |
-            LpcVar::Array(i) | // not recursive
-            LpcVar::Mapping(i) => self.memory.get(*i).unwrap().clone(), // not recursive
-            LpcVar::StringConstant(i) => self.program.constants.get(*i).unwrap().clone(),
+            LpcRef::Int(v) => LpcValue::Int(*v),
+            LpcRef::Float(v) => LpcValue::Float(*v),
+            LpcRef::String(i) |
+            LpcRef::Array(i) | // not recursive
+            LpcRef::Mapping(i) => self.memory.get(*i).unwrap().clone(), // not recursive
+            LpcRef::StringConstant(i) => self.program.constants.get(*i).unwrap().clone(),
         }
     }
 
-    /// Resolve the passed index within the current stack frame's down to an LpcVar
+    /// Resolve the passed index within the current stack frame's down to an LpcRef
     /// # Arguments
     /// `index` - the register index to resolve
-    pub fn register_to_lpc_var(&self, index: usize) -> LpcVar {
+    pub fn register_to_lpc_var(&self, index: usize) -> LpcRef {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
 
@@ -160,7 +160,7 @@ impl AsmInterpreter {
                     let vars = vec.iter().map(|i| registers[i.index()]).collect::<Vec<_>>();
                     let index = self.memory.len();
                     self.memory.push(LpcValue::from(vars));
-                    registers[r.index()] = LpcVar::Array(index);
+                    registers[r.index()] = LpcRef::Array(index);
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
                     // r4 = r1[r2..r3]
@@ -169,7 +169,7 @@ impl AsmInterpreter {
                             let index = memory.len();
                             memory.push(LpcValue::from(arr));
                             let registers = current_registers_mut(stack);
-                            registers[r4.index()] = LpcVar::Array(index);
+                            registers[r4.index()] = LpcRef::Array(index);
                         };
 
                     let value = self.register_to_lpc_value(r1.index());
@@ -199,7 +199,7 @@ impl AsmInterpreter {
 
                             if real_start <= real_end {
                                 let slice = &vec[real_start..=real_end];
-                                let mut new_vec = vec![LpcVar::Int(0); slice.len()];
+                                let mut new_vec = vec![LpcRef::Int(0); slice.len()];
                                 new_vec.copy_from_slice(slice);
                                 return_array(new_vec, &mut self.memory, &mut self.stack);
                             } else {
@@ -261,7 +261,7 @@ impl AsmInterpreter {
                 }
                 Instruction::FConst(r, f) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = LpcVar::Float(*f);
+                    registers[r.index()] = LpcRef::Float(*f);
                 }
                 Instruction::GLoad(r1, r2) => {
                     let global = self.globals[r1.index()];
@@ -283,19 +283,19 @@ impl AsmInterpreter {
                 }
                 Instruction::IConst(r, i) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = LpcVar::Int(*i);
+                    registers[r.index()] = LpcRef::Int(*i);
                 }
                 Instruction::IConst0(r) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = LpcVar::Int(0);
+                    registers[r.index()] = LpcRef::Int(0);
                 }
                 Instruction::IConst1(r) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = LpcVar::Int(1);
+                    registers[r.index()] = LpcRef::Int(1);
                 }
                 Instruction::SConst(r, s) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = LpcVar::StringConstant(*s);
+                    registers[r.index()] = LpcRef::StringConstant(*s);
                 }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
@@ -353,7 +353,7 @@ impl AsmInterpreter {
 
                             let var = if let Some(v) = map.get(&index) {
                                 *v
-                            } else if matches!(index, LpcVar::String(_)) {
+                            } else if matches!(index, LpcRef::String(_)) {
                                 // TODO: store a mini hashmap of actual strings to the lpc var, to avoid the loop here.
                                 // This handles an uncommon edge case where a calculated string
                                 // otherwise would not match, e.g.
@@ -362,7 +362,7 @@ impl AsmInterpreter {
                                 // string s = "foo";
                                 // dump(s + "bar"); // We want this to be "baz", not 0.
                                 //
-                                // Ints and floats can match directly with their LpcVar values, and
+                                // Ints and floats can match directly with their LpcRef values, and
                                 // everything else explicitly matches references only.
 
                                 let matching_key = {
@@ -379,13 +379,13 @@ impl AsmInterpreter {
                                         if let Some(v) = map.get(k) {
                                             *v
                                         } else {
-                                            LpcVar::Int(0)
+                                            LpcRef::Int(0)
                                         }
                                     }
-                                    None => LpcVar::Int(0),
+                                    None => LpcRef::Int(0),
                                 }
                             } else {
-                                LpcVar::Int(0)
+                                LpcRef::Int(0)
                             };
 
                             let registers = current_registers_mut(&mut self.stack);
@@ -407,8 +407,8 @@ impl AsmInterpreter {
                     let index = self.register_to_lpc_var(r3.index());
 
                     match container {
-                        LpcVar::Array(i) => {
-                            if let LpcVar::Int(array_idx) = index {
+                        LpcRef::Array(i) => {
+                            if let LpcRef::Int(array_idx) = index {
                                 match self.memory.get_mut(i) {
                                     Some(LpcValue::Array(ref mut vec_ref)) => {
                                         let len = vec_ref.len();
@@ -454,7 +454,7 @@ impl AsmInterpreter {
                                     ).with_span(*self.current_debug_span()));
                             }
                         }
-                        LpcVar::Mapping(i) => match self.memory.get_mut(i) {
+                        LpcRef::Mapping(i) => match self.memory.get_mut(i) {
                             Some(LpcValue::Mapping(ref mut map_ref)) => {
                                 map_ref.insert(index, current_registers(&self.stack)[r1.index()]);
                             }
@@ -494,11 +494,11 @@ impl AsmInterpreter {
                         Ok(result) => {
                             let index = self.memory.len();
                             let var = match result {
-                                LpcValue::String(_) => LpcVar::String(index),
-                                LpcValue::Array(_) => LpcVar::Array(index),
+                                LpcValue::String(_) => LpcRef::String(index),
+                                LpcValue::Array(_) => LpcRef::Array(index),
                                 LpcValue::Int(_) => unimplemented!(),
                                 LpcValue::Float(_) => unimplemented!(),
-                                LpcValue::Mapping(_) => LpcVar::Mapping(index),
+                                LpcValue::Mapping(_) => LpcRef::Mapping(index),
                             };
 
                             self.memory.push(result);
@@ -518,7 +518,7 @@ impl AsmInterpreter {
                     }
                     let index = self.memory.len();
                     self.memory.push(LpcValue::from(register_map));
-                    registers[r.index()] = LpcVar::Mapping(index);
+                    registers[r.index()] = LpcRef::Mapping(index);
                 }
                 Instruction::MDiv(r1, r2, r3) => {
                     // look up vals, divide, store result.
@@ -529,7 +529,7 @@ impl AsmInterpreter {
                             let index = self.memory.len();
                             self.memory.push(result);
 
-                            let var = LpcVar::String(index);
+                            let var = LpcRef::String(index);
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
@@ -547,7 +547,7 @@ impl AsmInterpreter {
                             let index = self.memory.len();
                             self.memory.push(result);
 
-                            let var = LpcVar::String(index);
+                            let var = LpcRef::String(index);
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }
@@ -565,7 +565,7 @@ impl AsmInterpreter {
                             let index = self.memory.len();
                             self.memory.push(result);
 
-                            let var = LpcVar::String(index);
+                            let var = LpcRef::String(index);
                             let registers = current_registers_mut(&mut self.stack);
                             registers[r3.index()] = var
                         }

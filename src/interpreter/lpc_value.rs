@@ -1,5 +1,5 @@
 use crate::{
-    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcVar, LpcFloat,
+    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcRef, LpcFloat,
     LpcInt,
 };
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
@@ -18,8 +18,8 @@ pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
     String(String),
-    Array(Vec<LpcVar>),
-    Mapping(HashMap<LpcVar, LpcVar>),
+    Array(Vec<LpcRef>),
+    Mapping(HashMap<LpcRef, LpcRef>),
 }
 
 impl LpcValue {
@@ -69,14 +69,14 @@ impl From<&String> for LpcValue {
     }
 }
 
-impl From<Vec<LpcVar>> for LpcValue {
-    fn from(v: Vec<LpcVar>) -> Self {
+impl From<Vec<LpcRef>> for LpcValue {
+    fn from(v: Vec<LpcRef>) -> Self {
         Self::Array(v)
     }
 }
 
-impl From<HashMap<LpcVar, LpcVar>> for LpcValue {
-    fn from(m: HashMap<LpcVar, LpcVar>) -> Self {
+impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
+    fn from(m: HashMap<LpcRef, LpcRef>) -> Self {
         Self::Mapping(m)
     }
 }
@@ -320,12 +320,12 @@ mod tests {
 
         #[test]
         fn test_add_array_array() {
-            let array = LpcValue::from(vec![LpcVar::Int(123)]);
-            let array2 = LpcValue::from(vec![LpcVar::Int(4433)]);
+            let array = LpcValue::from(vec![LpcRef::Int(123)]);
+            let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
             let result = &array + &array2;
 
             if let Ok(LpcValue::Array(a)) = result {
-                assert_eq!(a, vec![LpcVar::Int(123), LpcVar::Int(4433)])
+                assert_eq!(a, vec![LpcRef::Int(123), LpcRef::Int(4433)])
             } else {
                 panic!("no match")
             }
@@ -333,10 +333,10 @@ mod tests {
 
         #[test]
         fn test_add_mapping_mapping() {
-            let key1 = LpcVar::String(0);
-            let value1 = LpcVar::String(1);
-            let key2 = LpcVar::String(2);
-            let value2 = LpcVar::Int(666);
+            let key1 = LpcRef::String(0);
+            let value1 = LpcRef::String(1);
+            let key2 = LpcRef::String(2);
+            let value2 = LpcRef::Int(666);
 
             let mut hash1 = HashMap::new();
             hash1.insert(key1, value1);
@@ -350,8 +350,8 @@ mod tests {
             let result = &map + &map2;
 
             let mut expected = HashMap::new();
-            expected.insert(LpcVar::String(2), LpcVar::Int(666));
-            expected.insert(LpcVar::String(0), LpcVar::String(1));
+            expected.insert(LpcRef::String(2), LpcRef::Int(666));
+            expected.insert(LpcRef::String(0), LpcRef::String(1));
 
             if let Ok(LpcValue::Mapping(m)) = result {
                 assert_eq!(m, expected)
