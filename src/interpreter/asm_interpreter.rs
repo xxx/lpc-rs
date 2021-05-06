@@ -354,6 +354,7 @@ impl AsmInterpreter {
                             let var = if let Some(v) = map.get(&index) {
                                 *v
                             } else if matches!(index, LpcVar::String(_)) {
+                                // TODO: store a mini hashmap of actual strings to the lpc var, to avoid the loop here.
                                 // This handles an uncommon edge case where a calculated string
                                 // otherwise would not match, e.g.
                                 //

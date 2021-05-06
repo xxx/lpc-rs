@@ -67,7 +67,8 @@ pub struct TokenVecWrapper<'a> {
 }
 
 impl<'a> TokenVecWrapper<'a> {
-    #[allow(clippy::ptr_arg)] pub fn new(vec: &'a Vec<Spanned<Token>>) -> Self {
+    #[allow(clippy::ptr_arg)]
+    pub fn new(vec: &'a Vec<Spanned<Token>>) -> Self {
         Self { vec, count: 0 }
     }
 }
