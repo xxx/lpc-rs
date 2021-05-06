@@ -601,6 +601,8 @@ impl AsmInterpreter {
         self.program.debug_spans.get(self.pc).unwrap()
     }
 
+    /// Convert strings to their hashed value, so we can easily match
+    /// both literal and variable strings
     fn mapping_key(&self, r: LpcRef) -> LpcRef {
         match r {
             LpcRef::String(_) |
