@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::ast::expression_node::{ExpressionNode, first_span};
@@ -288,7 +289,7 @@ pub PrimaryExpression: ExpressionNode = {
     },
     <l:"("> "[" <list:MappingExpressionList?> "]" <r:")"> => {
          let vec = if let Some(v) = list {
-             v
+             v.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
          } else {
              Vec::new()
          };
