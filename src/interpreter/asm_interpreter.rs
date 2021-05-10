@@ -430,16 +430,14 @@ impl AsmInterpreter {
 
                     match val1 + val2 {
                         Ok(result) => {
-                            // let index = self.memory.len();
-
                             let make_ref = |r| PoolRef::new(&self.memory, RefCell::new(r));
 
                             let var = match result {
                                 LpcValue::String(_) => LpcRef::String(make_ref(result)),
                                 LpcValue::Array(_) => LpcRef::Array(make_ref(result)),
+                                LpcValue::Mapping(_) => LpcRef::Mapping(make_ref(result)),
                                 LpcValue::Int(_) => unimplemented!(),
                                 LpcValue::Float(_) => unimplemented!(),
-                                LpcValue::Mapping(_) => LpcRef::Mapping(make_ref(result)),
                             };
 
                             let registers = current_registers_mut(&mut self.stack);
