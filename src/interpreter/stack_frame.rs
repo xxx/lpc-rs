@@ -1,4 +1,4 @@
-use crate::{interpreter::lpc_var::LpcRef, semantic::function_symbol::FunctionSymbol};
+use crate::{interpreter::lpc_ref::LpcRef, semantic::function_symbol::FunctionSymbol};
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]

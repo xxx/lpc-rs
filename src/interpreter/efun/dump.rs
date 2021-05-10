@@ -1,5 +1,5 @@
 use crate::interpreter::{
-    asm_interpreter::AsmInterpreter, lpc_value::LpcValue, lpc_var::LpcRef, stack_frame::StackFrame,
+    asm_interpreter::AsmInterpreter, lpc_value::LpcValue, lpc_ref::LpcRef, stack_frame::StackFrame,
 };
 use std::collections::HashMap;
 

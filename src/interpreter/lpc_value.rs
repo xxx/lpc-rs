@@ -1,5 +1,5 @@
 use crate::{
-    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_var::LpcRef, LpcFloat,
+    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_ref::LpcRef, LpcFloat,
     LpcInt,
 };
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;

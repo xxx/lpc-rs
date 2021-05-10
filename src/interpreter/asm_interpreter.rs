@@ -4,7 +4,7 @@ use crate::{
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
         lpc_value::LpcValue,
-        lpc_var::LpcRef,
+        lpc_ref::LpcRef,
         program::Program,
         stack_frame::StackFrame,
     },
