@@ -13,7 +13,7 @@ use std::{
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
-#[derive(Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(Eq, Debug, Clone)]
 pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
@@ -57,9 +57,21 @@ impl Display for LpcValue {
     }
 }
 
+impl From<LpcInt> for LpcValue {
+    fn from(i: LpcInt) -> Self {
+        Self::Int(i)
+    }
+}
+
 impl From<f64> for LpcValue {
     fn from(f: f64) -> Self {
         Self::Float(LpcFloat::from(f))
+    }
+}
+
+impl From<&str> for LpcValue {
+    fn from(s: &str) -> Self {
+        Self::String(String::from(s))
     }
 }
 
@@ -121,7 +133,7 @@ impl Add for &LpcValue {
             LpcValue::Array(vec) => match rhs {
                 LpcValue::Array(vec2) => {
                     let mut new_vec = vec.to_vec();
-                    new_vec.extend(&*vec2);
+                    new_vec.extend(vec2.clone().into_iter());
                     Ok(LpcValue::Array(new_vec))
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
@@ -245,6 +257,24 @@ mod tests {
 
     mod test_add {
         use super::*;
+        use refpool::{Pool, PoolRef};
+        use std::cell::RefCell;
+
+        fn to_ref(pool: &Pool<RefCell<LpcValue>>, v: LpcValue) -> LpcRef {
+            match v {
+                LpcValue::Float(f) => LpcRef::Float(f),
+                LpcValue::Int(i) => LpcRef::Int(i),
+                LpcValue::String(s) => {
+                    LpcRef::String(PoolRef::new(pool, RefCell::new(LpcValue::String(s))))
+                }
+                LpcValue::Array(a) => {
+                    LpcRef::Array(PoolRef::new(pool, RefCell::new(LpcValue::Array(a))))
+                }
+                LpcValue::Mapping(m) => {
+                    LpcRef::Mapping(PoolRef::new(pool, RefCell::new(LpcValue::Mapping(m))))
+                }
+            }
+        }
 
         #[test]
         fn test_add_int_int() {
@@ -333,16 +363,17 @@ mod tests {
 
         #[test]
         fn test_add_mapping_mapping() {
-            let key1 = LpcRef::String(0);
-            let value1 = LpcRef::String(1);
-            let key2 = LpcRef::String(2);
-            let value2 = LpcRef::Int(666);
+            let pool = Pool::new(20);
+            let key1 = to_ref(&pool, LpcValue::from("key1"));
+            let value1 = to_ref(&pool, LpcValue::from("value1"));
+            let key2 = to_ref(&pool, LpcValue::from("key2"));
+            let value2 = to_ref(&pool, LpcValue::from(666));
 
             let mut hash1 = HashMap::new();
-            hash1.insert(key1, value1);
+            hash1.insert(key1.clone(), value1.clone());
 
             let mut hash2 = HashMap::new();
-            hash2.insert(key2, value2);
+            hash2.insert(key2.clone(), value2.clone());
 
             let map = LpcValue::from(hash1);
             let map2 = LpcValue::from(hash2);
@@ -350,8 +381,37 @@ mod tests {
             let result = &map + &map2;
 
             let mut expected = HashMap::new();
-            expected.insert(LpcRef::String(2), LpcRef::Int(666));
-            expected.insert(LpcRef::String(0), LpcRef::String(1));
+            expected.insert(key1, value1);
+            expected.insert(key2, value2);
+
+            if let Ok(LpcValue::Mapping(m)) = result {
+                assert_eq!(m, expected)
+            } else {
+                panic!("no match. received: {:?}", result)
+            }
+        }
+
+        #[test]
+        fn test_add_mapping_mapping_duplicate_keys() {
+            let pool = Pool::new(20);
+            let key1 = to_ref(&pool, LpcValue::from("key"));
+            let value1 = to_ref(&pool, LpcValue::from("value1"));
+            let key2 = to_ref(&pool, LpcValue::from("key"));
+            let value2 = to_ref(&pool, LpcValue::from(666));
+
+            let mut hash1 = HashMap::new();
+            hash1.insert(key1, value1);
+
+            let mut hash2 = HashMap::new();
+            hash2.insert(key2.clone(), value2.clone());
+
+            let map = LpcValue::from(hash1);
+            let map2 = LpcValue::from(hash2);
+
+            let result = &map + &map2;
+
+            let mut expected = HashMap::new();
+            expected.insert(key2, value2);
 
             if let Ok(LpcValue::Mapping(m)) = result {
                 assert_eq!(m, expected)

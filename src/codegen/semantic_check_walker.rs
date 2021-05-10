@@ -9,6 +9,7 @@ use crate::{
         expression_node::ExpressionNode,
         function_def_node::FunctionDefNode,
         int_node::IntNode,
+        program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
         var_init_node::VarInitNode,
@@ -22,7 +23,6 @@ use crate::{
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
-use crate::ast::program_node::ProgramNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -87,10 +87,8 @@ impl TreeWalker for SemanticCheckWalker {
         // Further checks require access to the function prototype for error messaging.
         let proto_opt = if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
             Some(prototype)
-        } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
-            Some(prototype)
         } else {
-            None
+            EFUN_PROTOTYPES.get(node.name.as_str())
         };
 
         if let Some(prototype) = proto_opt {
@@ -912,9 +910,10 @@ mod tests {
     }
     mod test_visit_function_def {
         use super::*;
-        use crate::ast::binary_op_node::BinaryOperation;
-        use crate::codegen::scope_walker::ScopeWalker;
-        use crate::ast::ast_node::AstNode;
+        use crate::{
+            ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
+            codegen::scope_walker::ScopeWalker,
+        };
 
         #[test]
         fn test_visit_function_def_handles_scopes() {
@@ -924,7 +923,7 @@ mod tests {
                 value: Some(ExpressionNode::from(1)),
                 array: false,
                 global: true,
-                span: None
+                span: None,
             };
 
             let param1 = VarInitNode {
@@ -933,7 +932,7 @@ mod tests {
                 value: Some(ExpressionNode::from("foo")),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             };
 
             let param2 = VarInitNode {
@@ -942,29 +941,23 @@ mod tests {
                 value: Some(ExpressionNode::from(vec![1, 2, 3, 4])),
                 array: true,
                 global: false,
-                span: None
+                span: None,
             };
 
             let mut function_def1 = FunctionDefNode {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![param1],
-                body: vec![
-                    AstNode::from(
-                        ExpressionNode::BinaryOp(
-                            BinaryOpNode {
-                                op: BinaryOperation::Add,
-                                l: Box::new(ExpressionNode::from("foo")),
-                                r: Box::new(ExpressionNode::Var(VarNode {
-                                    name: "a".to_string(),
-                                    span: None,
-                                    global: false
-                                })),
-                                span: None
-                            }
-                        )
-                    )
-                ],
+                body: vec![AstNode::from(ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: BinaryOperation::Add,
+                    l: Box::new(ExpressionNode::from("foo")),
+                    r: Box::new(ExpressionNode::Var(VarNode {
+                        name: "a".to_string(),
+                        span: None,
+                        global: false,
+                    })),
+                    span: None,
+                }))],
                 span: None,
             };
 

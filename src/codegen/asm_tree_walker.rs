@@ -28,7 +28,7 @@ use crate::{
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
     errors::LpcError,
-    interpreter::{constant_pool::ConstantPool, lpc_value::LpcValue, program::Program},
+    interpreter::{constant_pool::ConstantPool, program::Program},
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
@@ -440,7 +440,7 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
-        let index = self.constants.insert(LpcValue::from(&node.value));
+        let index = self.constants.insert(node.value.clone());
 
         self.instructions.push(Instruction::SConst(register, index));
         self.debug_spans.push(node.span);
