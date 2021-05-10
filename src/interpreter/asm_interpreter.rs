@@ -49,7 +49,6 @@ pub struct AsmInterpreter {
     stack: Vec<StackFrame>,
 
     /// Our memory
-    // memory: Vec<LpcValue>,
     memory: Pool<RefCell<LpcValue>>,
 
     /// Registers that hold global variables
@@ -167,7 +166,6 @@ impl AsmInterpreter {
                         .collect::<Vec<_>>();
                     let new_ref = PoolRef::new(&self.memory, RefCell::new(LpcValue::from(vars)));
 
-                    // self.memory.push(LpcValue::from(vars));
                     registers[r.index()] = LpcRef::Array(new_ref);
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
