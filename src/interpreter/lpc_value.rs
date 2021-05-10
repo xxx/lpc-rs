@@ -354,10 +354,17 @@ mod tests {
             let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
             let result = &array + &array2;
 
-            if let Ok(LpcValue::Array(a)) = result {
-                assert_eq!(a, vec![LpcRef::Int(123), LpcRef::Int(4433)])
-            } else {
-                panic!("no match")
+            match &result {
+                Ok(v) => {
+                    assert_ne!(v, &array); // ensure the addition makes a fully new copy
+
+                    if let LpcValue::Array(a) = v {
+                        assert_eq!(a, &vec![LpcRef::Int(123), LpcRef::Int(4433)]);
+                    } else {
+                        panic!("no match")
+                    }
+                }
+                _ => panic!("no match")
             }
         }
 

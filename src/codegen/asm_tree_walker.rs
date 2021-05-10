@@ -550,7 +550,19 @@ impl TreeWalker for AsmTreeWalker {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            current_register = self.register_counter.current();
+            if matches!(expression, ExpressionNode::Var(_)) {
+                // copy to a new register so the new var isn't a literal alias of the old.
+                let previous_register = self.register_counter.current();
+
+                current_register = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::RegCopy(previous_register, current_register);
+
+                self.instructions.push(instruction);
+                self.debug_spans.push(expression.span());
+            } else {
+                current_register = self.register_counter.current();
+            }
         } else {
             // Default value to 0 when uninitialized.
             current_register = self.register_counter.next().unwrap();
@@ -608,8 +620,10 @@ impl TreeWalker for AsmTreeWalker {
 
         match lhs.clone() {
             ExpressionNode::Var(VarNode { name, global, .. }) => {
-                node.lhs.visit(self)?;
+                lhs.visit(self)?;
                 let lhs_result = self.current_result;
+
+                println!("instr: {:?}", lhs_result);
 
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
