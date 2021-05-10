@@ -22,6 +22,7 @@ use crate::{
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
+use crate::ast::program_node::ProgramNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -62,6 +63,12 @@ impl ContextHolder for SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
+    fn visit_program(&mut self, _node: &mut ProgramNode) -> Result<(), LpcError> {
+        self.context.scopes.goto_root();
+
+        Ok(())
+    }
+
     fn visit_call(&mut self, node: &mut CallNode) -> Result<(), LpcError> {
         for argument in &mut node.arguments {
             argument.visit(self)?;
@@ -147,6 +154,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
+        self.context.scopes.goto_function(&node.name);
         self.current_function = Some(node.clone());
 
         for parameter in &mut node.parameters {
@@ -157,6 +165,7 @@ impl TreeWalker for SemanticCheckWalker {
             expression.visit(self)?;
         }
 
+        self.context.scopes.goto_root();
         Ok(())
     }
 
@@ -899,6 +908,156 @@ mod tests {
             let _ = node.visit(&mut walker);
 
             assert!(!walker.context.errors.is_empty());
+        }
+    }
+    mod test_visit_function_def {
+        use super::*;
+        use crate::ast::binary_op_node::BinaryOperation;
+        use crate::codegen::scope_walker::ScopeWalker;
+        use crate::ast::ast_node::AstNode;
+
+        #[test]
+        fn test_visit_function_def_handles_scopes() {
+            let _global = VarInitNode {
+                type_: LpcType::Int(false),
+                name: "a".to_string(),
+                value: Some(ExpressionNode::from(1)),
+                array: false,
+                global: true,
+                span: None
+            };
+
+            let param1 = VarInitNode {
+                type_: LpcType::String(false),
+                name: "a".to_string(),
+                value: Some(ExpressionNode::from("foo")),
+                array: false,
+                global: false,
+                span: None
+            };
+
+            let param2 = VarInitNode {
+                type_: LpcType::Int(true),
+                name: "a".to_string(),
+                value: Some(ExpressionNode::from(vec![1, 2, 3, 4])),
+                array: true,
+                global: false,
+                span: None
+            };
+
+            let mut function_def1 = FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "foo".to_string(),
+                parameters: vec![param1],
+                body: vec![
+                    AstNode::from(
+                        ExpressionNode::BinaryOp(
+                            BinaryOpNode {
+                                op: BinaryOperation::Add,
+                                l: Box::new(ExpressionNode::from("foo")),
+                                r: Box::new(ExpressionNode::Var(VarNode {
+                                    name: "a".to_string(),
+                                    span: None,
+                                    global: false
+                                })),
+                                span: None
+                            }
+                        )
+                    )
+                ],
+                span: None,
+            };
+
+            let mut function_def2 = FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "snuh".to_string(),
+                parameters: vec![param2],
+                body: vec![],
+                span: None,
+            };
+
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut scope_walker = ScopeWalker::new(context);
+            let _ = scope_walker.visit_function_def(&mut function_def1);
+            let _ = scope_walker.visit_function_def(&mut function_def2);
+
+            let context = scope_walker.into_context();
+            let mut walker = SemanticCheckWalker::new(context);
+
+            let _ = walker.visit_function_def(&mut function_def1);
+            let _ = walker.visit_function_def(&mut function_def2);
+
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn test_visit_return_allows_0() {
+            let mut node = ReturnNode {
+                value: Some(ExpressionNode::from(0)),
+                span: None,
+            };
+
+            let void_function_def = FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "foo".to_string(),
+                parameters: vec![],
+                body: vec![],
+                span: None,
+            };
+
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
+            walker.current_function = Some(void_function_def);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn test_visit_return_allows_mixed() {
+            let mut node = ReturnNode {
+                value: Some(ExpressionNode::from(123)),
+                span: None,
+            };
+
+            let function_def = FunctionDefNode {
+                return_type: LpcType::Mixed(false),
+                name: "foo".to_string(),
+                parameters: vec![],
+                body: vec![],
+                span: None,
+            };
+
+            let function_prototypes = HashMap::new();
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
+            walker.current_function = Some(function_def);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
         }
     }
 
