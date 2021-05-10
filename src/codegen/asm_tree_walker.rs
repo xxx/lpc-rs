@@ -623,8 +623,6 @@ impl TreeWalker for AsmTreeWalker {
                 lhs.visit(self)?;
                 let lhs_result = self.current_result;
 
-                println!("instr: {:?}", lhs_result);
-
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
                 self.instructions.push(assign);
@@ -1020,8 +1018,6 @@ mod tests {
             };
 
             let _ = walker.visit_binary_op(&mut node);
-
-            println!("isa' {:?}", walker.instructions);
 
             let expected = vec![
                 IConst(Register(1), 123),
