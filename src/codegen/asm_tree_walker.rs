@@ -309,7 +309,6 @@ impl AsmTreeWalker {
     /// `array` - The register holding the reference to the array we're taking a slice from.
     /// `node` - A reference to the `RangeNode` that holds the range of the slice we're taking.
     fn emit_range(&mut self, array: Register, node: &mut RangeNode) {
-        println!("node? {:?}", node);
         let first_index = if let Some(expr) = &mut *node.l {
             let _ = expr.visit(self);
             self.current_result

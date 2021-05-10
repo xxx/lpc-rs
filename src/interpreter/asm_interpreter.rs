@@ -152,7 +152,6 @@ impl AsmInterpreter {
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<(), LpcError> {
         while let Some(instruction) = self.program.instructions.get(self.pc) {
-            println!("current pool size: {:?}", self.memory);
             if self.is_halted {
                 break;
             }
