@@ -435,7 +435,8 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
-        self.instructions.push(Instruction::SConst(register, node.value.clone()));
+        self.instructions
+            .push(Instruction::SConst(register, node.value.clone()));
         self.debug_spans.push(node.span);
 
         Ok(())

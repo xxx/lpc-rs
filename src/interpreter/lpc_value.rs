@@ -364,7 +364,7 @@ mod tests {
                         panic!("no match")
                     }
                 }
-                _ => panic!("no match")
+                _ => panic!("no match"),
             }
         }
 

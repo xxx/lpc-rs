@@ -3,8 +3,8 @@ use crate::{
     errors::LpcError,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
-        lpc_value::LpcValue,
         lpc_ref::LpcRef,
+        lpc_value::LpcValue,
         program::Program,
         stack_frame::StackFrame,
     },

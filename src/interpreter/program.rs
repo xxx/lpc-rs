@@ -1,6 +1,5 @@
 use crate::{
-    asm::instruction::Instruction, parser::span::Span,
-    semantic::function_symbol::FunctionSymbol,
+    asm::instruction::Instruction, parser::span::Span, semantic::function_symbol::FunctionSymbol,
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
