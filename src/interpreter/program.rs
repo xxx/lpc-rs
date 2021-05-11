@@ -1,5 +1,5 @@
 use crate::{
-    asm::instruction::Instruction, interpreter::constant_pool::ConstantPool, parser::span::Span,
+    asm::instruction::Instruction, parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
 };
 use rmp_serde::Serializer;
@@ -22,9 +22,6 @@ pub struct Program {
 
     /// function mapping of name to Symbol
     pub functions: HashMap<String, FunctionSymbol>,
-
-    /// All non-int constants are stored in the pool.
-    pub constants: ConstantPool,
 
     /// How many globals does this program need storage for?
     pub num_globals: usize,

@@ -2,7 +2,6 @@ use crate::{
     ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_value::LpcValue,
     LpcFloat, LpcInt,
 };
-use fasthash::metro;
 use refpool::PoolRef;
 use std::{
     cell::RefCell,
@@ -12,8 +11,6 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
-
-type StringHash = u128;
 
 /// Represent a variable stored in a `Register`. Value types store the actual value.
 /// Reference types store a reference to the actual value.
@@ -30,12 +27,6 @@ pub enum LpcRef {
 
     /// Reference type, and stores a reference-counting pointer to the actual value
     Mapping(PoolRef<RefCell<LpcValue>>),
-
-    /// Stores an index into a [`Program`]'s [`ConstantPool`], rather than a memory reference.
-    StringConstant(usize),
-
-    /// A reference that contains a string's hash value, used only for keys in mappings.
-    StringHash(StringHash),
 }
 
 impl LpcRef {
@@ -47,14 +38,7 @@ impl LpcRef {
             LpcRef::String(_) => "string",
             LpcRef::Array(_) => "array",
             LpcRef::Mapping(_) => "mapping",
-            LpcRef::StringConstant(_) => "string",
-            LpcRef::StringHash(_) => "string",
         }
-    }
-
-    /// A helper to use our specified hasher to create [`StringHash`]es.
-    pub fn hash_string(s: &str) -> StringHash {
-        metro::hash128(s)
     }
 
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
@@ -90,8 +74,6 @@ impl Hash for LpcRef {
                 ptr::hash(&**m, state)
                 // extract_value!(*m.borrow(), LpcValue::Mapping).hash(state)
             }
-            LpcRef::StringConstant(s) => s.hash(state),
-            LpcRef::StringHash(sh) => sh.hash(state),
         }
     }
 }
@@ -108,10 +90,6 @@ impl PartialEq for LpcRef {
             (LpcRef::Array(x), LpcRef::Array(y)) | (LpcRef::Mapping(x), LpcRef::Mapping(y)) => {
                 ptr::eq(x.as_ref(), y.as_ref())
             }
-            (LpcRef::StringConstant(_x), LpcRef::StringConstant(_y)) => todo!(),
-            (LpcRef::String(_x), LpcRef::StringConstant(_y)) => todo!(),
-            (LpcRef::StringConstant(_x), LpcRef::String(_y)) => todo!(),
-            (LpcRef::StringHash(x), LpcRef::StringHash(y)) => x == y,
             _ => false,
         }
     }
@@ -125,8 +103,6 @@ impl Display for LpcRef {
             LpcRef::String(x) => write!(f, "string with index {}", x.borrow()),
             LpcRef::Array(x) => write!(f, "array with index {}", x.borrow()),
             LpcRef::Mapping(x) => write!(f, "mapping with index {}", x.borrow()),
-            LpcRef::StringConstant(x) => write!(f, "string (constant) with index {}", x),
-            LpcRef::StringHash(hash) => write!(f, "string with hash {}", hash),
         }
     }
 }

@@ -28,7 +28,7 @@ use crate::{
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
     errors::LpcError,
-    interpreter::{constant_pool::ConstantPool, program::Program},
+    interpreter::program::Program,
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
@@ -66,9 +66,6 @@ pub struct AsmTreeWalker {
 
     /// The counter for tracking globals
     global_counter: RegisterCounter,
-
-    /// All constants (really only string literals) in the program
-    constants: ConstantPool,
 
     /// The compilation context
     context: Context,
@@ -167,7 +164,6 @@ impl AsmTreeWalker {
             filename: self.context.filename.clone(),
             labels: self.labels.clone(),
             functions: self.function_map(),
-            constants: self.constants.clone(),
             num_globals: self.global_counter.get_count(),
         }
     }
@@ -439,9 +435,7 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
-        let index = self.constants.insert(node.value.clone());
-
-        self.instructions.push(Instruction::SConst(register, index));
+        self.instructions.push(Instruction::SConst(register, node.value.clone()));
         self.debug_spans.push(node.span);
 
         Ok(())
@@ -817,7 +811,7 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), 666),
-                SConst(Register(2), 0),
+                SConst(Register(2), String::from("muffuns")),
                 RegCopy(Register(1), Register(3)),
                 RegCopy(Register(2), Register(4)),
                 Call {
@@ -944,9 +938,9 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                SConst(Register(1), 0),
-                SConst(Register(2), 1),
-                SConst(Register(3), 2),
+                SConst(Register(1), String::from("foo")),
+                SConst(Register(2), String::from("bar")),
+                SConst(Register(3), String::from("baz")),
                 MAdd(Register(2), Register(3), Register(4)),
                 MAdd(Register(1), Register(4), Register(5)),
             ];
@@ -1043,9 +1037,9 @@ mod tests {
         let _ = walker.visit_string(&mut node3);
 
         let expected = vec![
-            SConst(Register(1), 0),
-            SConst(Register(2), 1),
-            SConst(Register(3), 0), // reuses constant
+            SConst(Register(1), String::from("marf")),
+            SConst(Register(2), String::from("tacos")),
+            SConst(Register(3), String::from("marf")),
         ];
 
         assert_eq!(walker.instructions, expected);
@@ -1404,7 +1398,7 @@ mod tests {
 
         let expected = vec![
             IConst(Register(1), 123),
-            SConst(Register(2), 0),
+            SConst(Register(2), String::from("foo")),
             IConst(Register(3), 666),
             AConst(Register(4), vec![Register(3)]),
             AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
@@ -1427,7 +1421,7 @@ mod tests {
 
         let expected = vec![
             IConst(Register(1), 123),
-            SConst(Register(2), 0),
+            SConst(Register(2), String::from("foo")),
             IConst(Register(3), 666),
             AConst(Register(4), vec![Register(3)]),
         ];

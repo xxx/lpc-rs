@@ -126,8 +126,6 @@ impl AsmInterpreter {
             LpcRef::String(i) |
             LpcRef::Array(i) | // not recursive
             LpcRef::Mapping(i) => i.borrow().clone(), // not recursive
-            LpcRef::StringConstant(i) => LpcValue::from(self.program.constants.get(*i).unwrap()),
-            LpcRef::StringHash(_) => unimplemented!()
         }
     }
 
@@ -297,7 +295,9 @@ impl AsmInterpreter {
                 }
                 Instruction::SConst(r, s) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    registers[r.index()] = LpcRef::StringConstant(*s);
+                    let new_ref = PoolRef::new(&self.memory, RefCell::new(LpcValue::from(s)));
+
+                    registers[r.index()] = LpcRef::String(new_ref);
                 }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
@@ -353,7 +353,7 @@ impl AsmInterpreter {
                         LpcValue::Mapping(map) => {
                             let index = self.register_to_lpc_ref(r2.index());
 
-                            let var = if let Some(v) = map.get(&self.mapping_key(index)) {
+                            let var = if let Some(v) = map.get(&index) {
                                 v.clone()
                             } else {
                                 LpcRef::Int(0)
@@ -404,7 +404,6 @@ impl AsmInterpreter {
                             }
                         }
                         LpcRef::Mapping(ref mut map_ref) => {
-                            let key = self.mapping_key(index);
                             let mut r = map_ref.borrow_mut();
                             let map = match *r {
                                 LpcValue::Mapping(ref mut m) => m,
@@ -413,7 +412,7 @@ impl AsmInterpreter {
                                 )
                             };
 
-                            map.insert(key, current_registers(&self.stack)[r1.index()].clone());
+                            map.insert(index, current_registers(&self.stack)[r1.index()].clone());
                         }
                         x => {
                             return Err(self.runtime_error(format!(
@@ -451,14 +450,10 @@ impl AsmInterpreter {
                 Instruction::MapConst(r, map) => {
                     let mut register_map = HashMap::new();
                     for (key, value) in map {
-                        let mapping_key = {
-                            let registers = current_registers_mut(&mut self.stack);
-                            let r = registers[key.index()].clone();
-                            self.mapping_key(r)
-                        };
                         let registers = current_registers_mut(&mut self.stack);
+                        let r = registers[key.index()].clone();
 
-                        register_map.insert(mapping_key, registers[value.index()].clone());
+                        register_map.insert(r, registers[value.index()].clone());
                     }
                     let new_ref =
                         PoolRef::new(&self.memory, RefCell::new(LpcValue::from(register_map)));
@@ -566,23 +561,6 @@ impl AsmInterpreter {
     #[inline]
     fn current_debug_span(&self) -> &Option<Span> {
         self.program.debug_spans.get(self.pc).unwrap()
-    }
-
-    /// Convert strings to their hashed value, so we can easily match
-    /// both literal and variable strings
-    fn mapping_key(&self, r: LpcRef) -> LpcRef {
-        match r {
-            LpcRef::String(_) | LpcRef::StringConstant(_) => {
-                let v = self.resolve_ref(&r);
-
-                if let LpcValue::String(str) = v {
-                    LpcRef::StringHash(LpcRef::hash_string(&str))
-                } else {
-                    r
-                }
-            }
-            _ => r,
-        }
     }
 
     fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {

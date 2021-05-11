@@ -54,7 +54,7 @@ pub enum Instruction {
 
     /// String constant.
     /// Store an index into the program's ConstantPool in the passed register
-    SConst(Register, usize),
+    SConst(Register, String),
 
     /// Integer division - x.2 = x.0 / x.1
     IDiv(Register, Register, Register),
