@@ -100,9 +100,9 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{}", x),
             LpcRef::Int(x) => write!(f, "{}", x),
-            LpcRef::String(x) => write!(f, "string with index {}", x.borrow()),
-            LpcRef::Array(x) => write!(f, "array with index {}", x.borrow()),
-            LpcRef::Mapping(x) => write!(f, "mapping with index {}", x.borrow()),
+            LpcRef::String(x) |
+            LpcRef::Array(x) |
+            LpcRef::Mapping(x) => write!(f, "{}", x.borrow()),
         }
     }
 }
