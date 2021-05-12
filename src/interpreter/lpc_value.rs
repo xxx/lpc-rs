@@ -1,13 +1,6 @@
-use crate::{
-    interpreter::lpc_ref::LpcRef, LpcFloat,
-    LpcInt,
-};
+use crate::{interpreter::lpc_ref::LpcRef, LpcFloat, LpcInt};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use std::{
-    collections::HashMap,
-    fmt,
-    fmt::Display,
-};
+use std::{collections::HashMap, fmt, fmt::Display};
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.

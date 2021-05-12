@@ -7,9 +7,9 @@ fn format_ref(lpc_ref: &LpcRef, interpreter: &AsmInterpreter, indent: usize) -> 
     match lpc_ref {
         LpcRef::Float(x) => format_val(&LpcValue::Float(*x), interpreter, indent),
         LpcRef::Int(x) => format_val(&LpcValue::Int(*x), interpreter, indent),
-        LpcRef::String(x) |
-        LpcRef::Array(x) |
-        LpcRef::Mapping(x) => format_val(&*x.borrow(), interpreter, indent),
+        LpcRef::String(x) | LpcRef::Array(x) | LpcRef::Mapping(x) => {
+            format_val(&*x.borrow(), interpreter, indent)
+        }
     }
 }
 
@@ -18,9 +18,7 @@ fn format_array(arr: &[LpcRef], interpreter: &AsmInterpreter, indent: usize) -> 
 
     let inner = arr
         .iter()
-        .map(|var| {
-            format_ref(var, interpreter, indent + 2)
-        })
+        .map(|var| format_ref(var, interpreter, indent + 2))
         .collect::<Vec<_>>()
         .join(",\n");
 
@@ -40,8 +38,8 @@ fn format_mapping(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_format = format_ref(key, interpreter,0);
-            let v_format = format_ref(val, interpreter,2);
+            let k_format = format_ref(key, interpreter, 0);
+            let v_format = format_ref(val, interpreter, 2);
 
             format!(
                 "{:width$}{k}: {v}",

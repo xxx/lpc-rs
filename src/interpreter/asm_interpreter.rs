@@ -1,6 +1,7 @@
 use crate::{
-    asm::instruction::Instruction,
+    asm::{instruction::Instruction, register::Register},
     errors::LpcError,
+    extract_value,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
         lpc_ref::LpcRef,
@@ -10,13 +11,10 @@ use crate::{
     },
     parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
-    LpcInt,
-    extract_value,
-    value_to_ref
+    value_to_ref, LpcInt,
 };
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
-use crate::asm::register::Register;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -264,7 +262,7 @@ impl AsmInterpreter {
                             let out = value_to_ref!(result, self.memory);
 
                             registers[r3.index()] = out
-                        },
+                        }
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
@@ -469,10 +467,15 @@ impl AsmInterpreter {
         Ok(())
     }
 
-    fn binary_operation<F>(&mut self, r1: Register, r2: Register, r3: Register, closure: F) -> Result<(), LpcError>
+    fn binary_operation<F>(
+        &mut self,
+        r1: Register,
+        r2: Register,
+        r3: Register,
+        closure: F,
+    ) -> Result<(), LpcError>
     where
         F: Fn(&LpcRef, &LpcRef) -> Result<LpcValue, LpcError>,
-
     {
         let val1 = &self.register_to_lpc_ref(r1.index());
         let val2 = &self.register_to_lpc_ref(r2.index());

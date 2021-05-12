@@ -8,10 +8,10 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
+    iter::repeat,
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
-use std::iter::repeat;
 
 #[macro_export]
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
@@ -20,11 +20,17 @@ macro_rules! value_to_ref {
         match $r {
             LpcValue::Float(x) => LpcRef::Float(x),
             LpcValue::Int(x) => LpcRef::Int(x),
-            LpcValue::String(x) => LpcRef::String(PoolRef::new(&$m, RefCell::new(LpcValue::String(x)))),
-            LpcValue::Array(x) => LpcRef::Array(PoolRef::new(&$m, RefCell::new(LpcValue::Array(x)))),
-            LpcValue::Mapping(x) => LpcRef::Mapping(PoolRef::new(&$m, RefCell::new(LpcValue::Mapping(x)))),
+            LpcValue::String(x) => {
+                LpcRef::String(PoolRef::new(&$m, RefCell::new(LpcValue::String(x))))
+            }
+            LpcValue::Array(x) => {
+                LpcRef::Array(PoolRef::new(&$m, RefCell::new(LpcValue::Array(x))))
+            }
+            LpcValue::Mapping(x) => {
+                LpcRef::Mapping(PoolRef::new(&$m, RefCell::new(LpcValue::Mapping(x))))
+            }
         }
-    }
+    };
 }
 
 /// Represent a variable stored in a `Register`. Value types store the actual value.
@@ -122,9 +128,9 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{}", x),
             LpcRef::Int(x) => write!(f, "{}", x),
-            LpcRef::String(x) |
-            LpcRef::Array(x) |
-            LpcRef::Mapping(x) => write!(f, "{}", x.borrow()),
+            LpcRef::String(x) | LpcRef::Array(x) | LpcRef::Mapping(x) => {
+                write!(f, "{}", x.borrow())
+            }
         }
     }
 }
@@ -142,12 +148,19 @@ impl Add for &LpcRef {
             LpcRef::Int(i) => match rhs {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i + i2)),
-                LpcRef::String(s) => Ok(LpcValue::String(i.to_string() + extract_value!(*s.borrow(), LpcValue::String))),
+                LpcRef::String(s) => Ok(LpcValue::String(
+                    i.to_string() + extract_value!(*s.borrow(), LpcValue::String),
+                )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
-                LpcRef::String(s2) => Ok(LpcValue::String(extract_value!(*s.borrow(), LpcValue::String).clone() + extract_value!(*s2.borrow(), LpcValue::String))),
-                LpcRef::Int(i) => Ok(LpcValue::String(extract_value!(*s.borrow(), LpcValue::String).clone() + &i.to_string())),
+                LpcRef::String(s2) => Ok(LpcValue::String(
+                    extract_value!(*s.borrow(), LpcValue::String).clone()
+                        + extract_value!(*s2.borrow(), LpcValue::String),
+                )),
+                LpcRef::Int(i) => Ok(LpcValue::String(
+                    extract_value!(*s.borrow(), LpcValue::String).clone() + &i.to_string(),
+                )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Array(vec) => match rhs {
@@ -172,7 +185,6 @@ impl Add for &LpcRef {
     }
 }
 
-
 impl Sub for &LpcRef {
     type Output = Result<LpcValue, LpcError>;
 
@@ -181,7 +193,9 @@ impl Sub for &LpcRef {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x - *y)),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as f64)),
-            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(LpcValue::Float(LpcFloat::from(*x as f64) - *y)),
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                Ok(LpcValue::Float(LpcFloat::from(*x as f64) - *y))
+            }
             _ => Err(self.to_error(BinaryOperation::Sub, &rhs)),
         }
     }
@@ -204,17 +218,19 @@ impl Mul for &LpcRef {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x * *y)),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as f64)),
-            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(LpcValue::Float(LpcFloat::from(*x as f64) * *y)),
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                Ok(LpcValue::Float(LpcFloat::from(*x as f64) * *y))
+            }
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
                 let string = extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(repeat_string(string, y)))
-            },
+            }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
                 let string = extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(repeat_string(string, x)))
-            },
+            }
             _ => Err(self.to_error(BinaryOperation::Mul, &rhs)),
         }
     }
@@ -262,8 +278,7 @@ impl Div for &LpcRef {
 mod tests {
     use super::*;
     use refpool::{Pool, PoolRef};
-    use std::cell::RefCell;
-    use std::collections::HashMap;
+    use std::{cell::RefCell, collections::HashMap};
 
     mod test_add {
         use super::*;
@@ -352,7 +367,10 @@ mod tests {
 
             match &result {
                 Ok(v) => {
-                    assert_ne!(extract_value!(v, LpcValue::Array), extract_value!(array, LpcValue::Array)); // ensure the addition makes a fully new copy
+                    assert_ne!(
+                        extract_value!(v, LpcValue::Array),
+                        extract_value!(array, LpcValue::Array)
+                    ); // ensure the addition makes a fully new copy
 
                     if let LpcValue::Array(a) = v {
                         assert_eq!(a, &vec![LpcRef::Int(123), LpcRef::Int(4433)]);
