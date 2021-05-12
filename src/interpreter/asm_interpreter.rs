@@ -11,9 +11,12 @@ use crate::{
     parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
     LpcInt,
+    extract_value,
+    value_to_ref
 };
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
+use crate::asm::register::Register;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1000;
@@ -174,16 +177,20 @@ impl AsmInterpreter {
                             registers[r4.index()] = LpcRef::Array(new_ref);
                         };
 
-                    let value = self.register_to_lpc_value(r1.index());
-                    if let LpcValue::Array(vec) = value {
+                    let value = self.register_to_lpc_ref(r1.index());
+
+                    if let LpcRef::Array(v_ref) = value {
+                        let value = v_ref.borrow();
+                        let vec = extract_value!(*value, LpcValue::Array);
+
                         if vec.is_empty() {
                             return_array(vec![], &mut self.memory, &mut self.stack);
                         }
 
-                        let index1 = self.register_to_lpc_value(r2.index());
-                        let index2 = self.register_to_lpc_value(r3.index());
+                        let index1 = self.register_to_lpc_ref(r2.index());
+                        let index2 = self.register_to_lpc_ref(r3.index());
 
-                        if let (LpcValue::Int(start), LpcValue::Int(end)) = (index1, index2) {
+                        if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
                             let to_idx = |i: LpcInt| {
                                 // We handle the potential overflow just below.
                                 if i >= 0 {
@@ -274,8 +281,12 @@ impl AsmInterpreter {
                 }
                 Instruction::IAdd(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    match registers[r1.index()].clone() + registers[r2.index()].clone() {
-                        Ok(result) => registers[r3.index()] = result,
+                    match &registers[r1.index()] + &registers[r2.index()] {
+                        Ok(result) => {
+                            let out = value_to_ref!(result, self.memory);
+
+                            registers[r3.index()] = out
+                        },
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
@@ -301,8 +312,8 @@ impl AsmInterpreter {
                 }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    match registers[r1.index()].clone() / registers[r2.index()].clone() {
-                        Ok(result) => registers[r3.index()] = result,
+                    match &registers[r1.index()] / &registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
@@ -310,8 +321,8 @@ impl AsmInterpreter {
                 }
                 Instruction::IMul(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    match registers[r1.index()].clone() * registers[r2.index()].clone() {
-                        Ok(result) => registers[r3.index()] = result,
+                    match &registers[r1.index()] * &registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
@@ -319,22 +330,25 @@ impl AsmInterpreter {
                 }
                 Instruction::ISub(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack);
-                    match registers[r1.index()].clone() - registers[r2.index()].clone() {
-                        Ok(result) => registers[r3.index()] = result,
+                    match &registers[r1.index()] - &registers[r2.index()] {
+                        Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
                     }
                 }
                 Instruction::Load(r1, r2, r3) => {
-                    let container = self.register_to_lpc_value(r1.index());
+                    let container_ref = self.register_to_lpc_ref(r1.index());
 
-                    match container {
-                        LpcValue::Array(vec) => {
-                            let index = self.register_to_lpc_value(r2.index());
+                    match container_ref {
+                        LpcRef::Array(vec_ref) => {
+                            let value = vec_ref.borrow();
+                            let vec = extract_value!(*value, LpcValue::Array);
+
+                            let index = self.register_to_lpc_ref(r2.index());
                             let registers = current_registers_mut(&mut self.stack);
 
-                            if let LpcValue::Int(i) = index {
+                            if let LpcRef::Int(i) = index {
                                 let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
 
                                 if idx >= 0 {
@@ -350,8 +364,10 @@ impl AsmInterpreter {
                                 return Err(self.make_array_index_error(index, vec.len()));
                             }
                         }
-                        LpcValue::Mapping(map) => {
+                        LpcRef::Mapping(map_ref) => {
                             let index = self.register_to_lpc_ref(r2.index());
+                            let value = map_ref.borrow();
+                            let map = extract_value!(*value, LpcValue::Mapping);
 
                             let var = if let Some(v) = map.get(&index) {
                                 v.clone()
@@ -423,29 +439,8 @@ impl AsmInterpreter {
                     }
                 }
                 Instruction::MAdd(r1, r2, r3) => {
-                    // look up vals, add, store result.
-                    let val1 = &self.register_to_lpc_value(r1.index());
-                    let val2 = &self.register_to_lpc_value(r2.index());
-
-                    match val1 + val2 {
-                        Ok(result) => {
-                            let make_ref = |r| PoolRef::new(&self.memory, RefCell::new(r));
-
-                            let var = match result {
-                                LpcValue::String(_) => LpcRef::String(make_ref(result)),
-                                LpcValue::Array(_) => LpcRef::Array(make_ref(result)),
-                                LpcValue::Mapping(_) => LpcRef::Mapping(make_ref(result)),
-                                LpcValue::Int(_) => unimplemented!(),
-                                LpcValue::Float(_) => unimplemented!(),
-                            };
-
-                            let registers = current_registers_mut(&mut self.stack);
-                            registers[r3.index()] = var
-                        }
-                        Err(e) => {
-                            return Err(e.with_span(*self.current_debug_span()));
-                        }
-                    }
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_operation(n1, n2, n3, |x, y| x + y)?;
                 }
                 Instruction::MapConst(r, map) => {
                     let mut register_map = HashMap::new();
@@ -462,64 +457,14 @@ impl AsmInterpreter {
                     registers[r.index()] = LpcRef::Mapping(new_ref);
                 }
                 // Instruction::MDiv(r1, r2, r3) => {
-                //     // look up vals, divide, store result.
-                //     let val1 = &self.register_to_lpc_value(r1.index());
-                //     let val2 = &self.register_to_lpc_value(r2.index());
-                //     match val1 / val2 {
-                //         Ok(result) => {
-                //             let index = self.memory.len();
-                //             self.memory.push(result);
-                //
-                //             let var = LpcRef::String(index);
-                //             let registers = current_registers_mut(&mut self.stack);
-                //             registers[r3.index()] = var
-                //         }
-                //         Err(e) => {
-                //             return Err(e.with_span(*self.current_debug_span()));
-                //         }
-                //     }
+                //     self.binary_operation(*r1, *r2, *r3, |x, y| x / y)?;
                 // }
                 Instruction::MMul(r1, r2, r3) => {
-                    // look up vals, multiply, store result.
-                    let val1 = &self.register_to_lpc_value(r1.index());
-                    let val2 = &self.register_to_lpc_value(r2.index());
-                    match val1 * val2 {
-                        Ok(result) => {
-                            let make_ref = |r| PoolRef::new(&self.memory, RefCell::new(r));
-
-                            let var = match result {
-                                LpcValue::String(_) => LpcRef::String(make_ref(result)),
-                                LpcValue::Array(_) => LpcRef::Array(make_ref(result)),
-                                LpcValue::Mapping(_) => LpcRef::Mapping(make_ref(result)),
-                                LpcValue::Int(_) => unimplemented!(),
-                                LpcValue::Float(_) => unimplemented!(),
-                            };
-
-                            let registers = current_registers_mut(&mut self.stack);
-                            registers[r3.index()] = var
-                        }
-                        Err(e) => {
-                            return Err(e.with_span(*self.current_debug_span()));
-                        }
-                    }
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_operation(n1, n2, n3, |x, y| x * y)?;
                 }
                 // Instruction::MSub(r1, r2, r3) => {
-                //     // look up vals, subtract, store result.
-                //     let val1 = &self.register_to_lpc_value(r1.index());
-                //     let val2 = &self.register_to_lpc_value(r2.index());
-                //     match val1 - val2 {
-                //         Ok(result) => {
-                //             let index = self.memory.len();
-                //             self.memory.push(result);
-                //
-                //             let var = LpcRef::String(index);
-                //             let registers = current_registers_mut(&mut self.stack);
-                //             registers[r3.index()] = var
-                //         }
-                //         Err(e) => {
-                //             return Err(e.with_span(*self.current_debug_span()));
-                //         }
-                //     }
+                //     self.binary_operation(*r1, *r2, *r3, |x, y| x - y)?;
                 // }
                 Instruction::RegCopy(r1, r2) => {
                     let registers = current_registers_mut(&mut self.stack);
@@ -541,6 +486,28 @@ impl AsmInterpreter {
             }
 
             self.pc += 1;
+        }
+
+        Ok(())
+    }
+
+    fn binary_operation<F>(&mut self, r1: Register, r2: Register, r3: Register, closure: F) -> Result<(), LpcError>
+    where
+        F: Fn(&LpcRef, &LpcRef) -> Result<LpcValue, LpcError>,
+
+    {
+        let val1 = &self.register_to_lpc_ref(r1.index());
+        let val2 = &self.register_to_lpc_ref(r2.index());
+        match closure(val1, val2) {
+            Ok(result) => {
+                let var = value_to_ref!(result, self.memory);
+
+                let registers = current_registers_mut(&mut self.stack);
+                registers[r3.index()] = var
+            }
+            Err(e) => {
+                return Err(e.with_span(*self.current_debug_span()));
+            }
         }
 
         Ok(())
