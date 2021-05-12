@@ -226,21 +226,13 @@ VarInit: VarInitNode = {
     <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> => {
         let name_span = name.0;
         let file_id = name_span.file_id;
-        let l = if let Some(span) = &array {
-            span.l
-        } else {
-            name_span.l
-        };
+        let l = array.unwrap_or(name_span).l;
+
         let r = if let Some(node) = &value {
-            if let Some(span) = &node.span() {
-                span.r
-            } else {
-                name_span.r
-            }
+            node.span().unwrap_or(name_span).r
         } else {
             name_span.r
         };
-
 
         VarInitNode {
             type_: LpcType::Int(false), // placeholder. Corrected in Decl.
@@ -279,11 +271,7 @@ pub PrimaryExpression: ExpressionNode = {
     <Var>,
     "(" <Expression> ")",
     "(" "{" <l:ExpressionList?> "}" ")" => {
-        let vec = if let Some(list) = l {
-            list
-        } else {
-            vec![]
-        };
+        let vec = l.unwrap_or(vec![]);
 
         ExpressionNode::Array(ArrayNode::new(vec))
     },
@@ -483,16 +471,8 @@ pub Expression: ExpressionNode = {
             c.file_id
         };
 
-        let l = if let Some(span) = e.span() {
-            span.l
-        } else {
-            c.l
-        };
-        let r = if let Some(span) = ass.span() {
-            span.r
-        } else {
-            c.r
-        };
+        let l = e.span().unwrap_or(c).l;
+        let r = ass.span().unwrap_or(c).r;
 
         let mut list = if let ExpressionNode::CommaExpression(ce) = e {
             ce.value
@@ -512,11 +492,7 @@ pub Expression: ExpressionNode = {
 pub Return: ReturnNode = {
     <ret:"return"> <e:Expression?> => {
         let r = if let Some(expr) = &e {
-            if let Some(span) = expr.span() {
-                span.r
-            } else {
-                ret.r
-            }
+            expr.span().unwrap_or(ret).r
         } else {
             ret.r
         };
