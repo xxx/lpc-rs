@@ -3,14 +3,23 @@ use crate::interpreter::{
 };
 use std::collections::HashMap;
 
+fn format_ref(lpc_ref: &LpcRef, interpreter: &AsmInterpreter, indent: usize) -> String {
+    match lpc_ref {
+        LpcRef::Float(x) => format_val(&LpcValue::Float(*x), interpreter, indent),
+        LpcRef::Int(x) => format_val(&LpcValue::Int(*x), interpreter, indent),
+        LpcRef::String(x) |
+        LpcRef::Array(x) |
+        LpcRef::Mapping(x) => format_val(&*x.borrow(), interpreter, indent),
+    }
+}
+
 fn format_array(arr: &[LpcRef], interpreter: &AsmInterpreter, indent: usize) -> String {
     let mut result = format!("{:width$}({{\n", "", width = indent);
 
     let inner = arr
         .iter()
         .map(|var| {
-            let val = interpreter.resolve_ref(var);
-            format_val(val, interpreter, indent + 2)
+            format_ref(var, interpreter, indent + 2)
         })
         .collect::<Vec<_>>()
         .join(",\n");
@@ -31,10 +40,8 @@ fn format_mapping(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_val = interpreter.resolve_ref(key);
-            let k_format = format_val(k_val, interpreter, 0);
-            let v_val = interpreter.resolve_ref(val);
-            let v_format = format_val(v_val, interpreter, 2);
+            let k_format = format_ref(key, interpreter,0);
+            let v_format = format_ref(val, interpreter,2);
 
             format!(
                 "{:width$}{k}: {v}",
@@ -53,7 +60,7 @@ fn format_mapping(
     result
 }
 
-fn format_val(val: LpcValue, interpreter: &AsmInterpreter, indent: usize) -> String {
+fn format_val(val: &LpcValue, interpreter: &AsmInterpreter, indent: usize) -> String {
     match val {
         LpcValue::Array(a) => format_array(&a, interpreter, indent),
         LpcValue::Mapping(m) => format_mapping(&m, interpreter, indent),
@@ -64,8 +71,7 @@ fn format_val(val: LpcValue, interpreter: &AsmInterpreter, indent: usize) -> Str
 /// The dump() Efun
 pub fn dump(_frame: &StackFrame, interpreter: &AsmInterpreter) {
     // function arguments start in register 1, and we know this function has only 1 arg.
-    let val = interpreter.register_to_lpc_value(1);
+    let lpc_ref = interpreter.register_to_lpc_ref(1);
 
-    let formatted = format_val(val, interpreter, 0);
-    println!("{}", formatted);
+    println!("{}", format_ref(&lpc_ref, interpreter, 0));
 }

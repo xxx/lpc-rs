@@ -118,20 +118,6 @@ impl AsmInterpreter {
         self.stack.pop()
     }
 
-    /// Resolve an LpcRef into an LpcValue. This clones the value, so writes will not do anything.
-    ///
-    /// # Arguments
-    /// `r` - A reference to an [`LpcRef`] to resolve.
-    pub fn resolve_ref(&self, r: &LpcRef) -> LpcValue {
-        match r {
-            LpcRef::Int(v) => LpcValue::Int(*v),
-            LpcRef::Float(v) => LpcValue::Float(*v),
-            LpcRef::String(i) |
-            LpcRef::Array(i) | // not recursive
-            LpcRef::Mapping(i) => i.borrow().clone(), // not recursive
-        }
-    }
-
     /// Resolve the passed index within the current stack frame's registers, down to an LpcRef
     /// # Arguments
     /// `index` - the register index to resolve
@@ -140,14 +126,6 @@ impl AsmInterpreter {
         let registers = &self.stack[len - 1].registers;
 
         registers.get(index).unwrap().clone()
-    }
-
-    /// Resolve the passed index within the current stack frame's registers,
-    /// all the way to its final LpcValue
-    /// # Arguments
-    /// `index` - the register index to resolve
-    pub fn register_to_lpc_value(&self, index: usize) -> LpcValue {
-        self.resolve_ref(&self.register_to_lpc_ref(index))
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
