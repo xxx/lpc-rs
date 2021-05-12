@@ -173,7 +173,7 @@ impl Sub for &LpcValue {
 /// Repeat `s`, `i` times, and return a new String of it.
 fn repeat_string(s: &str, i: &LpcInt) -> String {
     if *i >= 0 {
-        repeat(s).take(*i as usize).collect::<String>()
+        repeat(s).take(*i as usize).collect()
     } else {
         String::from("")
     }
