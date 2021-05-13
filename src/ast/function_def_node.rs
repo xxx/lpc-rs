@@ -53,8 +53,8 @@ impl Clone for FunctionDefNode {
         Self {
             return_type: self.return_type,
             name: self.name.clone(),
-            parameters: self.parameters.to_vec(),
-            body: self.body.to_vec(),
+            parameters: self.parameters.clone(),
+            body: self.body.clone(),
             span: self.span,
         }
     }

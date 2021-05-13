@@ -30,7 +30,7 @@ pub struct LpcError {
 }
 
 impl LpcError {
-    /// Create a new LpcError, with a message
+    /// Create a new `LpcError`, with a message
     pub fn new<T>(message: T) -> Self
     where
         T: Into<String>,
@@ -90,7 +90,7 @@ impl LpcError {
         }
 
         if !self.notes.is_empty() {
-            diagnostic = diagnostic.with_notes(self.notes.to_vec())
+            diagnostic = diagnostic.with_notes(self.notes.clone())
         }
 
         vec![diagnostic]
@@ -138,7 +138,7 @@ pub fn emit_diagnostics(errors: &[LpcError]) {
     let files = FILE_CACHE.read();
 
     let diagnostics: Vec<Diagnostic<usize>> =
-        errors.iter().flat_map(|e| e.to_diagnostics()).collect();
+        errors.iter().flat_map(LpcError::to_diagnostics).collect();
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = codespan_reporting::term::Config::default();
 

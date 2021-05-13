@@ -105,7 +105,7 @@ where
         cached_file(path.as_ref().as_os_str())
     }
 
-    /// Get the FileId for the passed path
+    /// Get the `FileId` for the passed path
     ///
     /// # Arguments
     /// `path` - The path of the file stored in the cache
@@ -113,7 +113,7 @@ where
         self.paths.iter().position(|i| i == path)
     }
 
-    /// Get a `Span` for a specific file_id and line
+    /// Get a `Span` for a specific `file_id` and line
     ///
     /// # Arguments
     /// `file_id` - the file ID you're looking for
@@ -149,7 +149,7 @@ where
 /// Concrete types are used here because of memoization
 ///
 /// # Arguments
-/// `path` - An OsStr reference representing a full path.
+/// `path` - An [`OsStr`] reference representing a full path.
 #[cached(
     result = true,
     type = "SizedCache<OsString, SimpleFile<String, String>>",
@@ -179,7 +179,7 @@ where
     fn name(&self, id: Self::FileId) -> Result<Self::Name, Error> {
         match self.paths.get(id) {
             Some(s) => Ok(s.clone()),
-            _ => Err(Error::FileMissing),
+            None => Err(Error::FileMissing),
         }
     }
 

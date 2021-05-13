@@ -25,7 +25,7 @@ impl FloatNode {
     pub fn new(v: f64) -> Self {
         // avoid any potential issues
         let value: f64 = if v.is_nan() || v.is_infinite() {
-            0 as f64
+            f64::from(0)
         } else {
             v
         };

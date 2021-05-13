@@ -79,7 +79,7 @@ impl AsmTreeWalker {
     pub fn new(context: Context) -> Self {
         Self {
             context,
-            ..Default::default()
+            ..Self::default()
         }
     }
 
@@ -159,8 +159,8 @@ impl AsmTreeWalker {
         assert_eq!(self.instructions.len(), self.debug_spans.len());
 
         Program {
-            instructions: self.instructions.to_vec(),
-            debug_spans: self.debug_spans.to_vec(),
+            instructions: self.instructions.clone(),
+            debug_spans: self.debug_spans.clone(),
             filename: self.context.filename.clone(),
             labels: self.labels.clone(),
             functions: self.function_map(),
@@ -195,11 +195,15 @@ impl AsmTreeWalker {
     /// helper to choose operation instructions
     fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
         match node {
-            ExpressionNode::Int(_) => OperationType::Register,
+            ExpressionNode::Int(_) |
             ExpressionNode::Float(_) => OperationType::Register,
-            ExpressionNode::String(_) => OperationType::Memory,
-            ExpressionNode::Array(_) => OperationType::Memory,
-            ExpressionNode::Mapping(_) => OperationType::Memory,
+            ExpressionNode::String(_) |
+            ExpressionNode::Array(_) |
+            ExpressionNode::Mapping(_) |
+            // TODO: Calls can be optimized if we can get the return types available here
+            ExpressionNode::Call(_) |
+            ExpressionNode::CommaExpression(_) |
+            ExpressionNode::Range(_) => OperationType::Memory,
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs),
             ExpressionNode::BinaryOp(node) => {
                 let left_type = self.to_operation_type(&node.l);
@@ -209,10 +213,6 @@ impl AsmTreeWalker {
                     _ => OperationType::Memory,
                 }
             }
-            // TODO: Calls can be optimized if we can get the return types available here
-            ExpressionNode::Call(_) => OperationType::Memory,
-            ExpressionNode::CommaExpression(_) => OperationType::Memory,
-            ExpressionNode::Range(_) => OperationType::Memory,
             ExpressionNode::Var(v) => {
                 let ty = self.lookup_var_symbol(&v).unwrap().type_;
 
@@ -360,7 +360,7 @@ impl TreeWalker for AsmTreeWalker {
         let params = self.context.function_params.get(&node.name);
 
         if let Some(function_args) = params {
-            let mut function_args = function_args.to_vec();
+            let mut function_args = function_args.clone();
 
             for (idx, function_arg) in function_args.iter_mut().enumerate() {
                 // use passed parameters, or default parameters if applicable.

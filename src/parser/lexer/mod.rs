@@ -629,7 +629,7 @@ impl Display for Token {
             Token::Assign(_) => "=",
             Token::PlusEq(_) => "+=",
             Token::MinusEq(_) => "-=",
-            Token::MulEq(_) => "||",
+            Token::MulEq(_) => "*=",
             Token::DivEq(_) => "/=",
             Token::ModEq(_) => "%=",
             Token::CaretEq(_) => "^=",
@@ -677,22 +677,24 @@ impl Display for Token {
             Token::Ellipsis(_) => "...",
             Token::Range(_) => "..",
             Token::NewLine(_) => "\n",
-            Token::StringLiteral(s) => &s.1,
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
-            Token::Id(id) => &id.1,
-            Token::LocalInclude(s) => &s.1,
-            Token::SysInclude(s) => &s.1,
-            Token::PreprocessorIf(s) => &s.1,
-            Token::IfDef(s) => &s.1,
-            Token::IfNDef(s) => &s.1,
-            Token::PreprocessorElse(s) => &s.1,
-            Token::Endif(s) => &s.1,
-            Token::Define(s) => &s.1,
+
+            Token::StringLiteral(s) |
+            Token::Id(s) |
+            Token::LocalInclude(s) |
+            Token::SysInclude(s) |
+            Token::PreprocessorIf(s) |
+            Token::IfDef(s) |
+            Token::IfNDef(s) |
+            Token::PreprocessorElse(s) |
+            Token::Endif(s) |
+            Token::Define(s) |
             Token::Undef(s) => &s.1,
+
             Token::Defined(_) => "defined",
             Token::DefinedParen(_) => "defined(",
-            Token::Not(_) => "defined(",
+            Token::Not(_) => "not",
             Token::Error => "Error token",
         };
 
@@ -710,14 +712,6 @@ mod tests {
             .filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _))))
             .collect::<Vec<_>>()
     }
-
-    // fn into_errors(
-    //     v: Vec<Result<Spanned<Token>, LexError>>,
-    // ) -> Vec<Result<Spanned<Token>, LexError>> {
-    //     v.into_iter()
-    //         .filter(|i| matches!(*i, Err(LexError(_))))
-    //         .collect()
-    // }
 
     #[test]
     fn test_strip_comments() {
