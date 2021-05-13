@@ -785,31 +785,37 @@ impl Preprocessor {
     fn handle_ifdef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
-        IFDEF.captures(&token.1).map_or_else(|| Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0))), |captures| {
-            self.ifdefs.push(IfDef {
-                code: String::from(&captures[1]),
-                skipping_lines: !self.defines.contains_key(&captures[1]),
-                compiled_out: self.skipping_lines(),
-                span: token.0,
-            });
+        IFDEF.captures(&token.1).map_or_else(
+            || Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0))),
+            |captures| {
+                self.ifdefs.push(IfDef {
+                    code: String::from(&captures[1]),
+                    skipping_lines: !self.defines.contains_key(&captures[1]),
+                    compiled_out: self.skipping_lines(),
+                    span: token.0,
+                });
 
-            Ok(())
-        })
+                Ok(())
+            },
+        )
     }
 
     fn handle_ifndef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
-        IFNDEF.captures(&token.1).map_or_else(|| Err(LpcError::new("Invalid `#ifndef`.").with_span(Some(token.0))), |captures| {
-            self.ifdefs.push(IfDef {
-                code: String::from(&captures[1]),
-                skipping_lines: self.defines.contains_key(&captures[1]),
-                compiled_out: self.skipping_lines(),
-                span: token.0,
-            });
+        IFNDEF.captures(&token.1).map_or_else(
+            || Err(LpcError::new("Invalid `#ifndef`.").with_span(Some(token.0))),
+            |captures| {
+                self.ifdefs.push(IfDef {
+                    code: String::from(&captures[1]),
+                    skipping_lines: self.defines.contains_key(&captures[1]),
+                    compiled_out: self.skipping_lines(),
+                    span: token.0,
+                });
 
-            Ok(())
-        })
+                Ok(())
+            },
+        )
     }
 
     fn handle_else(&mut self, token: &StringToken) -> Result<()> {

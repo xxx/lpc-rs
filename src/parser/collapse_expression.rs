@@ -192,7 +192,7 @@ fn collapse_div(
             r: Box::new(r),
             op,
             span: Some(span),
-        })
+        }),
     }
 }
 

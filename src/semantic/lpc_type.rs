@@ -71,7 +71,7 @@ impl LpcType {
             LpcType::Mixed(_) => LpcType::Mixed(arr),
             LpcType::Void => self,
             LpcType::Object(_) => self,
-            LpcType::Union(_) => self
+            LpcType::Union(_) => self,
         }
     }
 }

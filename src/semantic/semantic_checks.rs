@@ -89,14 +89,14 @@ pub fn check_binary_operation_types(
             }
 
             match tuple {
-                (LpcType::Int(false), LpcType::Int(false)) |
-                (LpcType::String(false), LpcType::Int(false)) |
-                (LpcType::Int(false), LpcType::String(false)) |
-                (LpcType::String(false), LpcType::String(false)) |
-                (LpcType::Float(false), LpcType::Float(false)) |
-                (LpcType::Float(false), LpcType::Int(false)) |
-                (LpcType::Int(false), LpcType::Float(false)) |
-                (LpcType::Mapping(false), LpcType::Mapping(false)) => Ok(()),
+                (LpcType::Int(false), LpcType::Int(false))
+                | (LpcType::String(false), LpcType::Int(false))
+                | (LpcType::Int(false), LpcType::String(false))
+                | (LpcType::String(false), LpcType::String(false))
+                | (LpcType::Float(false), LpcType::Float(false))
+                | (LpcType::Float(false), LpcType::Int(false))
+                | (LpcType::Int(false), LpcType::Float(false))
+                | (LpcType::Mapping(false), LpcType::Mapping(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(
                     node,
                     BinaryOperation::Add,
@@ -106,10 +106,10 @@ pub fn check_binary_operation_types(
             }
         }
         BinaryOperation::Sub => match tuple {
-            (LpcType::Int(false), LpcType::Int(false)) |
-            (LpcType::Float(false), LpcType::Float(false)) |
-            (LpcType::Int(false), LpcType::Float(false)) |
-            (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false))
+            | (LpcType::Float(false), LpcType::Float(false))
+            | (LpcType::Int(false), LpcType::Float(false))
+            | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
                 BinaryOperation::Sub,
@@ -118,12 +118,12 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Mul => match tuple {
-            (LpcType::Int(false), LpcType::Int(false)) |
-            (LpcType::String(false), LpcType::Int(false)) |
-            (LpcType::Int(false), LpcType::String(false)) |
-            (LpcType::Float(false), LpcType::Float(false)) |
-            (LpcType::Int(false), LpcType::Float(false)) |
-            (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false))
+            | (LpcType::String(false), LpcType::Int(false))
+            | (LpcType::Int(false), LpcType::String(false))
+            | (LpcType::Float(false), LpcType::Float(false))
+            | (LpcType::Int(false), LpcType::Float(false))
+            | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
                 BinaryOperation::Mul,
@@ -132,10 +132,10 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Div => match tuple {
-            (LpcType::Int(false), LpcType::Int(false)) |
-            (LpcType::Float(false), LpcType::Float(false)) |
-            (LpcType::Int(false), LpcType::Float(false)) |
-            (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false))
+            | (LpcType::Float(false), LpcType::Float(false))
+            | (LpcType::Int(false), LpcType::Float(false))
+            | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
                 BinaryOperation::Div,
@@ -188,8 +188,8 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
     }
 
     match (type1, type2) {
-        (LpcType::Int(false), LpcType::String(false)) |
-        (LpcType::String(false), LpcType::Int(false)) => LpcType::String(false),
+        (LpcType::Int(false), LpcType::String(false))
+        | (LpcType::String(false), LpcType::Int(false)) => LpcType::String(false),
         (x, _) => x,
     }
 }
@@ -218,9 +218,9 @@ pub fn node_type(
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
         }
-        ExpressionNode::Call(CallNode { name, .. }) => {
-            function_return_types.get(name.as_str()).map_or(LpcType::Int(false), |return_type| *return_type)
-        }
+        ExpressionNode::Call(CallNode { name, .. }) => function_return_types
+            .get(name.as_str())
+            .map_or(LpcType::Int(false), |return_type| *return_type),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();

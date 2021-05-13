@@ -404,91 +404,91 @@ fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
 impl Token {
     pub fn span(&self) -> Span {
         match self {
-            Token::Plus(x) |
-            Token::Minus(x) |
-            Token::Mul(x) |
-            Token::Div(x) |
-            Token::Mod(x) |
-            Token::Bang(x) |
-            Token::Caret(x) |
-            Token::Tilde(x) |
-            Token::And(x) |
-            Token::AndAnd(x) |
-            Token::Or(x) |
-            Token::OrOr(x) |
-            Token::LeftShift(x) |
-            Token::RightShift(x) |
-            Token::EqEq(x) |
-            Token::NotEq(x) |
-            Token::LessThan(x) |
-            Token::LessThanEq(x) |
-            Token::GreaterThan(x) |
-            Token::GreaterThanEq(x) |
-            Token::Assign(x) |
-            Token::PlusEq(x) |
-            Token::MinusEq(x) |
-            Token::MulEq(x) |
-            Token::DivEq(x) |
-            Token::ModEq(x) |
-            Token::CaretEq(x) |
-            Token::TildeEq(x) |
-            Token::AndEq(x) |
-            Token::AndAndEq(x) |
-            Token::OrEq(x) |
-            Token::OrOrEq(x) |
-            Token::LeftShiftEq(x) |
-            Token::RightShiftEq(x) |
-            Token::If(x) |
-            Token::Else(x) |
-            Token::While(x) |
-            Token::For(x) |
-            Token::Inherit(x) |
-            Token::Break(x) |
-            Token::Continue(x) |
-            Token::Case(x) |
-            Token::Do(x) |
-            Token::Int(x) |
-            Token::Float(x) |
-            Token::String(x) |
-            Token::Object(x) |
-            Token::Mapping(x) |
-            Token::Mixed(x) |
-            Token::Void(x) |
-            Token::Return(x) |
-            Token::Static(x) |
-            Token::Nomask(x) |
-            Token::Efun(x) |
-            Token::LParen(x) |
-            Token::RParen(x) |
-            Token::LBracket(x) |
-            Token::RBracket(x) |
-            Token::LBrace(x) |
-            Token::RBrace(x) |
-            Token::Comma(x) |
-            Token::CallOther(x) |
-            Token::Question(x) |
-            Token::Colon(x) |
-            Token::ColonColon(x) |
-            Token::Semi(x) |
-            Token::Ellipsis(x) |
-            Token::Range(x) |
-            Token::NewLine(x) |
-            Token::StringLiteral(StringToken(x, _)) |
-            Token::IntLiteral(IntToken(x, _)) |
-            Token::FloatLiteral(FloatToken(x, _)) |
-            Token::Id(StringToken(x, _)) |
-            Token::LocalInclude(StringToken(x, _)) |
-            Token::SysInclude(StringToken(x, _)) |
-            Token::PreprocessorIf(StringToken(x, _)) |
-            Token::IfDef(StringToken(x, _)) |
-            Token::IfNDef(StringToken(x, _)) |
-            Token::PreprocessorElse(StringToken(x, _)) |
-            Token::Endif(StringToken(x, _)) |
-            Token::Define(StringToken(x, _)) |
-            Token::Undef(StringToken(x, _)) |
-            Token::Defined(x) |
-            Token::DefinedParen(x) |
-            Token::Not(x) => *x,
+            Token::Plus(x)
+            | Token::Minus(x)
+            | Token::Mul(x)
+            | Token::Div(x)
+            | Token::Mod(x)
+            | Token::Bang(x)
+            | Token::Caret(x)
+            | Token::Tilde(x)
+            | Token::And(x)
+            | Token::AndAnd(x)
+            | Token::Or(x)
+            | Token::OrOr(x)
+            | Token::LeftShift(x)
+            | Token::RightShift(x)
+            | Token::EqEq(x)
+            | Token::NotEq(x)
+            | Token::LessThan(x)
+            | Token::LessThanEq(x)
+            | Token::GreaterThan(x)
+            | Token::GreaterThanEq(x)
+            | Token::Assign(x)
+            | Token::PlusEq(x)
+            | Token::MinusEq(x)
+            | Token::MulEq(x)
+            | Token::DivEq(x)
+            | Token::ModEq(x)
+            | Token::CaretEq(x)
+            | Token::TildeEq(x)
+            | Token::AndEq(x)
+            | Token::AndAndEq(x)
+            | Token::OrEq(x)
+            | Token::OrOrEq(x)
+            | Token::LeftShiftEq(x)
+            | Token::RightShiftEq(x)
+            | Token::If(x)
+            | Token::Else(x)
+            | Token::While(x)
+            | Token::For(x)
+            | Token::Inherit(x)
+            | Token::Break(x)
+            | Token::Continue(x)
+            | Token::Case(x)
+            | Token::Do(x)
+            | Token::Int(x)
+            | Token::Float(x)
+            | Token::String(x)
+            | Token::Object(x)
+            | Token::Mapping(x)
+            | Token::Mixed(x)
+            | Token::Void(x)
+            | Token::Return(x)
+            | Token::Static(x)
+            | Token::Nomask(x)
+            | Token::Efun(x)
+            | Token::LParen(x)
+            | Token::RParen(x)
+            | Token::LBracket(x)
+            | Token::RBracket(x)
+            | Token::LBrace(x)
+            | Token::RBrace(x)
+            | Token::Comma(x)
+            | Token::CallOther(x)
+            | Token::Question(x)
+            | Token::Colon(x)
+            | Token::ColonColon(x)
+            | Token::Semi(x)
+            | Token::Ellipsis(x)
+            | Token::Range(x)
+            | Token::NewLine(x)
+            | Token::StringLiteral(StringToken(x, _))
+            | Token::IntLiteral(IntToken(x, _))
+            | Token::FloatLiteral(FloatToken(x, _))
+            | Token::Id(StringToken(x, _))
+            | Token::LocalInclude(StringToken(x, _))
+            | Token::SysInclude(StringToken(x, _))
+            | Token::PreprocessorIf(StringToken(x, _))
+            | Token::IfDef(StringToken(x, _))
+            | Token::IfNDef(StringToken(x, _))
+            | Token::PreprocessorElse(StringToken(x, _))
+            | Token::Endif(StringToken(x, _))
+            | Token::Define(StringToken(x, _))
+            | Token::Undef(StringToken(x, _))
+            | Token::Defined(x)
+            | Token::DefinedParen(x)
+            | Token::Not(x) => *x,
             Token::Error => Span::new(0, 0..0),
         }
     }
@@ -497,91 +497,91 @@ impl Token {
     /// values for macro expansion.
     fn span_ref(&mut self) -> Option<&mut Span> {
         let span = match self {
-            Token::Plus(x) |
-            Token::Minus(x) |
-            Token::Mul(x) |
-            Token::Div(x) |
-            Token::Mod(x) |
-            Token::Bang(x) |
-            Token::Caret(x) |
-            Token::Tilde(x) |
-            Token::And(x) |
-            Token::AndAnd(x) |
-            Token::Or(x) |
-            Token::OrOr(x) |
-            Token::LeftShift(x) |
-            Token::RightShift(x) |
-            Token::EqEq(x) |
-            Token::NotEq(x) |
-            Token::LessThan(x) |
-            Token::LessThanEq(x) |
-            Token::GreaterThan(x) |
-            Token::GreaterThanEq(x) |
-            Token::Assign(x) |
-            Token::PlusEq(x) |
-            Token::MinusEq(x) |
-            Token::MulEq(x) |
-            Token::DivEq(x) |
-            Token::ModEq(x) |
-            Token::CaretEq(x) |
-            Token::TildeEq(x) |
-            Token::AndEq(x) |
-            Token::AndAndEq(x) |
-            Token::OrEq(x) |
-            Token::OrOrEq(x) |
-            Token::LeftShiftEq(x) |
-            Token::RightShiftEq(x) |
-            Token::If(x) |
-            Token::Else(x) |
-            Token::While(x) |
-            Token::For(x) |
-            Token::Inherit(x) |
-            Token::Break(x) |
-            Token::Continue(x) |
-            Token::Case(x) |
-            Token::Do(x) |
-            Token::Int(x) |
-            Token::Float(x) |
-            Token::String(x) |
-            Token::Object(x) |
-            Token::Mapping(x) |
-            Token::Mixed(x) |
-            Token::Void(x) |
-            Token::Return(x) |
-            Token::Static(x) |
-            Token::Nomask(x) |
-            Token::Efun(x) |
-            Token::LParen(x) |
-            Token::RParen(x) |
-            Token::LBracket(x) |
-            Token::RBracket(x) |
-            Token::LBrace(x) |
-            Token::RBrace(x) |
-            Token::Comma(x) |
-            Token::CallOther(x) |
-            Token::Question(x) |
-            Token::Colon(x) |
-            Token::ColonColon(x) |
-            Token::Semi(x) |
-            Token::Ellipsis(x) |
-            Token::Range(x) |
-            Token::NewLine(x) |
-            Token::StringLiteral(StringToken(x, _)) |
-            Token::IntLiteral(IntToken(x, _)) |
-            Token::FloatLiteral(FloatToken(x, _)) |
-            Token::Id(StringToken(x, _)) |
-            Token::LocalInclude(StringToken(x, _)) |
-            Token::SysInclude(StringToken(x, _)) |
-            Token::PreprocessorIf(StringToken(x, _)) |
-            Token::IfDef(StringToken(x, _)) |
-            Token::IfNDef(StringToken(x, _)) |
-            Token::PreprocessorElse(StringToken(x, _)) |
-            Token::Endif(StringToken(x, _)) |
-            Token::Define(StringToken(x, _)) |
-            Token::Undef(StringToken(x, _)) |
-            Token::Defined(x) |
-            Token::DefinedParen(x) |
-            Token::Not(x) => x,
+            Token::Plus(x)
+            | Token::Minus(x)
+            | Token::Mul(x)
+            | Token::Div(x)
+            | Token::Mod(x)
+            | Token::Bang(x)
+            | Token::Caret(x)
+            | Token::Tilde(x)
+            | Token::And(x)
+            | Token::AndAnd(x)
+            | Token::Or(x)
+            | Token::OrOr(x)
+            | Token::LeftShift(x)
+            | Token::RightShift(x)
+            | Token::EqEq(x)
+            | Token::NotEq(x)
+            | Token::LessThan(x)
+            | Token::LessThanEq(x)
+            | Token::GreaterThan(x)
+            | Token::GreaterThanEq(x)
+            | Token::Assign(x)
+            | Token::PlusEq(x)
+            | Token::MinusEq(x)
+            | Token::MulEq(x)
+            | Token::DivEq(x)
+            | Token::ModEq(x)
+            | Token::CaretEq(x)
+            | Token::TildeEq(x)
+            | Token::AndEq(x)
+            | Token::AndAndEq(x)
+            | Token::OrEq(x)
+            | Token::OrOrEq(x)
+            | Token::LeftShiftEq(x)
+            | Token::RightShiftEq(x)
+            | Token::If(x)
+            | Token::Else(x)
+            | Token::While(x)
+            | Token::For(x)
+            | Token::Inherit(x)
+            | Token::Break(x)
+            | Token::Continue(x)
+            | Token::Case(x)
+            | Token::Do(x)
+            | Token::Int(x)
+            | Token::Float(x)
+            | Token::String(x)
+            | Token::Object(x)
+            | Token::Mapping(x)
+            | Token::Mixed(x)
+            | Token::Void(x)
+            | Token::Return(x)
+            | Token::Static(x)
+            | Token::Nomask(x)
+            | Token::Efun(x)
+            | Token::LParen(x)
+            | Token::RParen(x)
+            | Token::LBracket(x)
+            | Token::RBracket(x)
+            | Token::LBrace(x)
+            | Token::RBrace(x)
+            | Token::Comma(x)
+            | Token::CallOther(x)
+            | Token::Question(x)
+            | Token::Colon(x)
+            | Token::ColonColon(x)
+            | Token::Semi(x)
+            | Token::Ellipsis(x)
+            | Token::Range(x)
+            | Token::NewLine(x)
+            | Token::StringLiteral(StringToken(x, _))
+            | Token::IntLiteral(IntToken(x, _))
+            | Token::FloatLiteral(FloatToken(x, _))
+            | Token::Id(StringToken(x, _))
+            | Token::LocalInclude(StringToken(x, _))
+            | Token::SysInclude(StringToken(x, _))
+            | Token::PreprocessorIf(StringToken(x, _))
+            | Token::IfDef(StringToken(x, _))
+            | Token::IfNDef(StringToken(x, _))
+            | Token::PreprocessorElse(StringToken(x, _))
+            | Token::Endif(StringToken(x, _))
+            | Token::Define(StringToken(x, _))
+            | Token::Undef(StringToken(x, _))
+            | Token::Defined(x)
+            | Token::DefinedParen(x)
+            | Token::Not(x) => x,
             Token::Error => return None,
         };
 
@@ -680,17 +680,17 @@ impl Display for Token {
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
 
-            Token::StringLiteral(s) |
-            Token::Id(s) |
-            Token::LocalInclude(s) |
-            Token::SysInclude(s) |
-            Token::PreprocessorIf(s) |
-            Token::IfDef(s) |
-            Token::IfNDef(s) |
-            Token::PreprocessorElse(s) |
-            Token::Endif(s) |
-            Token::Define(s) |
-            Token::Undef(s) => &s.1,
+            Token::StringLiteral(s)
+            | Token::Id(s)
+            | Token::LocalInclude(s)
+            | Token::SysInclude(s)
+            | Token::PreprocessorIf(s)
+            | Token::IfDef(s)
+            | Token::IfNDef(s)
+            | Token::PreprocessorElse(s)
+            | Token::Endif(s)
+            | Token::Define(s)
+            | Token::Undef(s) => &s.1,
 
             Token::Defined(_) => "defined",
             Token::DefinedParen(_) => "defined(",
