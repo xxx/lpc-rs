@@ -17,10 +17,10 @@ use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
 
 /// The initial size (in frames) of the call stack
-const STACK_SIZE: usize = 1000;
+const STACK_SIZE: usize = 1_000;
 
 /// The initial size (in cells) of system memory
-const MEMORY_SIZE: usize = 100000;
+const MEMORY_SIZE: usize = 100_000;
 
 /// The initial size of the globals vector
 const GLOBALS_SIZE: usize = 100;

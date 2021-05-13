@@ -23,15 +23,15 @@ impl LpcType {
     /// This is the main type-checking routine.
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
-    pub fn matches_type(&self, other: LpcType) -> bool {
+    pub fn matches_type(self, other: LpcType) -> bool {
         if let LpcType::Union(self_union) = self {
             self_union.matches_type(other)
         } else if let LpcType::Union(other_union) = other {
-            other_union.matches_type(*self)
+            other_union.matches_type(self)
         } else if let LpcType::Mixed(array) = self {
             // "mixed *" only matches arrays (but the elements can be any type)
             // "mixed" is a literal wildcard.
-            if *array {
+            if array {
                 other.is_array()
             } else {
                 !matches!(other, LpcType::Void)
@@ -43,12 +43,12 @@ impl LpcType {
                 !matches!(self, LpcType::Void)
             }
         } else {
-            *self == other
+            self == other
         }
     }
 
     /// Return if we're an array or not
-    pub fn is_array(&self) -> bool {
+    pub fn is_array(self) -> bool {
         match self {
             LpcType::Void => false,
             LpcType::Int(arr)
@@ -56,20 +56,22 @@ impl LpcType {
             | LpcType::Float(arr)
             | LpcType::Object(arr)
             | LpcType::Mapping(arr)
-            | LpcType::Mixed(arr) => *arr,
+            | LpcType::Mixed(arr) => arr,
             LpcType::Union(union) => union.is_array(),
         }
     }
 
     /// Return a copy of me, with the array flag set to `arr`.
-    pub fn as_array(&self, arr: bool) -> LpcType {
+    pub fn as_array(self, arr: bool) -> LpcType {
         match self {
             LpcType::Int(_) => LpcType::Int(arr),
             LpcType::String(_) => LpcType::String(arr),
             LpcType::Float(_) => LpcType::Float(arr),
             LpcType::Mapping(_) => LpcType::Mapping(arr),
             LpcType::Mixed(_) => LpcType::Mixed(arr),
-            x => *x,
+            LpcType::Void => self,
+            LpcType::Object(_) => self,
+            LpcType::Union(_) => self
         }
     }
 }

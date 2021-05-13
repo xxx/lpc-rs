@@ -6,9 +6,9 @@ use std::fmt::{Display, Formatter};
 pub struct Register(pub usize);
 
 impl Register {
-    #[inline(always)]
+    #[inline]
     /// An alias to get the number.
-    pub fn index(&self) -> usize {
+    pub fn index(self) -> usize {
         self.0
     }
 }

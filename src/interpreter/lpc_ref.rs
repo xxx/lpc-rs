@@ -202,9 +202,9 @@ impl Sub for &LpcRef {
 }
 
 /// Repeat `s`, `i` times, and return a new String of it.
-fn repeat_string(s: &str, i: &LpcInt) -> String {
-    if *i >= 0 {
-        repeat(s).take(*i as usize).collect()
+fn repeat_string(s: &str, i: LpcInt) -> String {
+    if i >= 0 {
+        repeat(s).take(i as usize).collect()
     } else {
         String::from("")
     }
@@ -224,12 +224,12 @@ impl Mul for &LpcRef {
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
                 let string = extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string(string, y)))
+                Ok(LpcValue::String(repeat_string(string, *y)))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
                 let string = extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string(string, x)))
+                Ok(LpcValue::String(repeat_string(string, *x)))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, &rhs)),
         }

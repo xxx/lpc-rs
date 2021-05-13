@@ -89,13 +89,13 @@ pub fn check_binary_operation_types(
             }
 
             match tuple {
-                (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
-                (LpcType::String(false), LpcType::Int(false)) => Ok(()),
-                (LpcType::Int(false), LpcType::String(false)) => Ok(()),
-                (LpcType::String(false), LpcType::String(false)) => Ok(()),
-                (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
-                (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
-                (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+                (LpcType::Int(false), LpcType::Int(false)) |
+                (LpcType::String(false), LpcType::Int(false)) |
+                (LpcType::Int(false), LpcType::String(false)) |
+                (LpcType::String(false), LpcType::String(false)) |
+                (LpcType::Float(false), LpcType::Float(false)) |
+                (LpcType::Float(false), LpcType::Int(false)) |
+                (LpcType::Int(false), LpcType::Float(false)) |
                 (LpcType::Mapping(false), LpcType::Mapping(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(
                     node,
@@ -106,9 +106,9 @@ pub fn check_binary_operation_types(
             }
         }
         BinaryOperation::Sub => match tuple {
-            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
-            (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
-            (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false)) |
+            (LpcType::Float(false), LpcType::Float(false)) |
+            (LpcType::Int(false), LpcType::Float(false)) |
             (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
@@ -118,11 +118,11 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Mul => match tuple {
-            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
-            (LpcType::String(false), LpcType::Int(false)) => Ok(()),
-            (LpcType::Int(false), LpcType::String(false)) => Ok(()),
-            (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
-            (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false)) |
+            (LpcType::String(false), LpcType::Int(false)) |
+            (LpcType::Int(false), LpcType::String(false)) |
+            (LpcType::Float(false), LpcType::Float(false)) |
+            (LpcType::Int(false), LpcType::Float(false)) |
             (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
@@ -132,9 +132,9 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Div => match tuple {
-            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
-            (LpcType::Float(false), LpcType::Float(false)) => Ok(()),
-            (LpcType::Int(false), LpcType::Float(false)) => Ok(()),
+            (LpcType::Int(false), LpcType::Int(false)) |
+            (LpcType::Float(false), LpcType::Float(false)) |
+            (LpcType::Int(false), LpcType::Float(false)) |
             (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
@@ -188,7 +188,7 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
     }
 
     match (type1, type2) {
-        (LpcType::Int(false), LpcType::String(false)) => LpcType::String(false),
+        (LpcType::Int(false), LpcType::String(false)) |
         (LpcType::String(false), LpcType::Int(false)) => LpcType::String(false),
         (x, _) => x,
     }
@@ -205,6 +205,10 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 ///
 /// # Returns
 /// The `LpcType` of the passed node.
+///
+/// # Panics
+/// * Panics if a [`CommaExpressionNode`] without any expressions is passed
+/// * Panics if A [`VarNode`] containing an undefined variable is passed
 pub fn node_type(
     node: &ExpressionNode,
     scope_tree: &ScopeTree,
@@ -215,11 +219,7 @@ pub fn node_type(
             node_type(lhs, scope_tree, function_return_types)
         }
         ExpressionNode::Call(CallNode { name, .. }) => {
-            if let Some(return_type) = function_return_types.get(name.as_str()) {
-                *return_type
-            } else {
-                LpcType::Int(false)
-            }
+            function_return_types.get(name.as_str()).map_or(LpcType::Int(false), |return_type| *return_type)
         }
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
@@ -235,7 +235,7 @@ pub fn node_type(
         ExpressionNode::String(_) => LpcType::String(false),
         ExpressionNode::Var(VarNode { name, .. }) => match scope_tree.lookup(name) {
             Some(sym) => sym.type_,
-            _ => panic!("undefined symbol {}", name),
+            None => panic!("undefined symbol {}", name),
         },
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => combine_types(
             node_type(l, scope_tree, function_return_types),
@@ -253,15 +253,7 @@ pub fn node_type(
                 .map(|i| node_type(i, scope_tree, function_return_types))
                 .collect::<Vec<_>>();
 
-            if value_types.iter().any(|ty| match *ty {
-                LpcType::Int(arr) => arr,
-                LpcType::String(arr) => arr,
-                LpcType::Float(arr) => arr,
-                LpcType::Object(arr) => arr,
-                LpcType::Mapping(arr) => arr,
-                LpcType::Mixed(arr) => arr,
-                _ => unimplemented!(), // ExpressionNodes have a concrete type.
-            }) {
+            if value_types.iter().any(|ty| ty.is_array()) {
                 LpcType::Mixed(true)
             } else if value_types.windows(2).all(|w| w[0] == w[1]) {
                 value_types[0].as_array(true)

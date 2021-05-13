@@ -107,6 +107,9 @@ impl ScopeTree {
     /// Set the current scope to the current's parent.
     /// Note that this method does *not* actually remove the scope from the tree.
     /// It remains accessible.
+    ///
+    /// # Panics
+    /// Will panic if there is no current node set
     pub fn pop(&mut self) {
         self.current_id = self.get_current_node().unwrap().parent();
     }

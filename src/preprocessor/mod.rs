@@ -341,7 +341,7 @@ impl Preprocessor {
             Some(Define::Object(object)) => {
                 let mut tokens = Vec::with_capacity(object.tokens.len());
 
-                for (tl, tok, tr) in object.tokens.to_vec() {
+                for (tl, tok, tr) in object.tokens.clone() {
                     match &tok {
                         Token::Id(s) => {
                             let mut iter = TokenVecWrapper::new(&object.tokens).peekable();
@@ -388,7 +388,7 @@ impl Preprocessor {
                 while let Some(Ok(replacement)) = iter.next() {
                     if let (tl, Token::Id(s), tr) = replacement {
                         if let Some(arg_tokens) = arg_map.get(&s.1) {
-                            replacements.append(&mut arg_tokens.to_vec());
+                            replacements.append(&mut arg_tokens.clone());
                         } else {
                             match self.expand_token(&s, &mut iter)? {
                                 Some(mut vec) => replacements.append(&mut vec),
@@ -740,7 +740,7 @@ impl Preprocessor {
         }
     }
 
-    /// Resolve a PreprocessorNode to an Int if possible.
+    /// Resolve a [`PreprocessorNode`] to an Int if possible.
     fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<LpcInt> {
         match expr {
             PreprocessorNode::Var(x) => {
@@ -785,7 +785,7 @@ impl Preprocessor {
     fn handle_ifdef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
-        if let Some(captures) = IFDEF.captures(&token.1) {
+        IFDEF.captures(&token.1).map_or_else(|| Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0))), |captures| {
             self.ifdefs.push(IfDef {
                 code: String::from(&captures[1]),
                 skipping_lines: !self.defines.contains_key(&captures[1]),
@@ -794,15 +794,13 @@ impl Preprocessor {
             });
 
             Ok(())
-        } else {
-            Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
-        }
+        })
     }
 
     fn handle_ifndef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
-        if let Some(captures) = IFNDEF.captures(&token.1) {
+        IFNDEF.captures(&token.1).map_or_else(|| Err(LpcError::new("Invalid `#ifndef`.").with_span(Some(token.0))), |captures| {
             self.ifdefs.push(IfDef {
                 code: String::from(&captures[1]),
                 skipping_lines: self.defines.contains_key(&captures[1]),
@@ -811,9 +809,7 @@ impl Preprocessor {
             });
 
             Ok(())
-        } else {
-            Err(LpcError::new("Invalid `#ifndef`.").with_span(Some(token.0)))
-        }
+        })
     }
 
     fn handle_else(&mut self, token: &StringToken) -> Result<()> {

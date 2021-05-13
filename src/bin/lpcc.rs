@@ -6,11 +6,8 @@ const DEFAULT_FILE: &str = "local/mathfile.c";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let filename = if let Some(name) = args.get(1) {
-        name
-    } else {
-        DEFAULT_FILE
-    };
+
+    let filename = args.get(1).map_or(DEFAULT_FILE, |name| name);
 
     match compile_file(filename) {
         Ok(program) => {

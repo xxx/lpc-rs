@@ -24,6 +24,9 @@ pub struct LpcTypeUnion {
 
 impl LpcTypeUnion {
     /// Insert a new type into the union
+    ///
+    /// # Panics
+    /// This will panic if the passed argument is an [`LpcType::Union`]
     pub fn insert(&mut self, type_: LpcType) {
         match type_ {
             LpcType::Void => self.set_void(true),
@@ -76,7 +79,7 @@ impl LpcTypeUnion {
     }
 
     /// Do we match against another type?
-    pub fn matches_type(&self, other: LpcType) -> bool {
+    pub fn matches_type(self, other: LpcType) -> bool {
         match other {
             LpcType::Void => self.void(),
             LpcType::Int(array) => {
@@ -131,7 +134,7 @@ impl LpcTypeUnion {
     }
 
     /// Is at least one of our types an array?
-    pub fn is_array(&self) -> bool {
+    pub fn is_array(self) -> bool {
         self.int_array()
             || self.string_array()
             || self.float_array()

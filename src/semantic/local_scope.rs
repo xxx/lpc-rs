@@ -13,7 +13,7 @@ pub struct LocalScope {
 }
 
 impl LocalScope {
-    /// Create a new LocalScope with the passed `id`
+    /// Create a new [`LocalScope`] with the passed `id`
     pub fn new(id: usize) -> Self {
         Self {
             id,
@@ -25,7 +25,7 @@ impl LocalScope {
     ///
     /// # Arguments
     ///
-    /// `symbol` - The `Symbol` to insert
+    /// `symbol` - The [`Symbol`] to insert
     pub fn insert(&mut self, mut symbol: Symbol) {
         symbol.scope_id = self.id;
         self.symbols.insert(symbol.name.clone(), symbol);
