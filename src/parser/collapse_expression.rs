@@ -169,25 +169,30 @@ fn collapse_div(
     r: ExpressionNode,
     span: Span,
 ) -> ExpressionNode {
-    match &l {
-        ExpressionNode::Int(node) => match r {
-            ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
-                value: node.value / node2.value,
-                span: Some(span),
-            }),
-            _ => ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(l),
-                r: Box::new(r),
-                op,
-                span: Some(span),
-            }),
-        },
+    match (&l, &r) {
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
+            if node2.value != 0 {
+                ExpressionNode::Int(IntNode {
+                    value: node.value / node2.value,
+                    span: Some(span),
+                })
+            } else {
+                // Push it off until runtime so errors are nicer
+                // This branch is only hit if you're dividing by a 0 int literal.
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(l),
+                    r: Box::new(r),
+                    op,
+                    span: Some(span),
+                })
+            }
+        }
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
             op,
             span: Some(span),
-        }),
+        })
     }
 }
 
