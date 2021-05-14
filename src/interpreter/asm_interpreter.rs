@@ -191,10 +191,14 @@ impl AsmInterpreter {
                                 return_array(vec![], &mut self.memory, &mut self.stack);
                             }
                         } else {
-                            panic!("Invalid code was generated for an ARange instruction.")
+                            return Err(LpcError::new(
+                                "Invalid code was generated for an ARange instruction."
+                            ).with_span(*self.current_debug_span()));
                         }
                     } else {
-                        panic!("ARange's array isn't actually an array?");
+                        return Err(LpcError::new(
+                            "ARange's array isn't actually an array?"
+                        ).with_span(*self.current_debug_span()));
                     }
                 }
                 Instruction::Call {
