@@ -38,6 +38,14 @@ impl Symbol {
     pub fn is_global(&self) -> bool {
         self.scope_id == 0
     }
+
+    /// Set the location of an existing `Symbol`
+    pub fn with_location(self, location: Option<Register>) -> Self {
+        Self {
+            location,
+            ..self
+        }
+    }
 }
 
 impl From<&mut VarInitNode> for Symbol {

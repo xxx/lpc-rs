@@ -533,20 +533,25 @@ impl TreeWalker for AsmTreeWalker {
         let current_register;
         let symbol = self.lookup_symbol(&node.name);
 
-        let sym = symbol.unwrap_or_else(|| {
-            panic!(
-                "Missing symbol, that passed semantic checks: {}",
-                &node.name
-            )
-        });
+        let sym = match symbol {
+            Some(s) => s,
+            None => {
+                return Err(LpcError::new(
+                    format!("Missing symbol, that passed semantic checks: {}", node.name)
+                ).with_span(node.span))
+            }
+        };
+
+        let sym_type = sym.type_;
 
         let global = sym.is_global();
 
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            if matches!(expression, ExpressionNode::Var(_)) {
-                // copy to a new register so the new var isn't a literal alias of the old.
+            if matches!(expression, ExpressionNode::Var(_)) && !matches!(sym_type, LpcType::Mapping(false)) {
+                // copy on write, so the new var isn't a literal alias of the old,
+                // except for mappings.
                 let previous_register = self.register_counter.current();
 
                 current_register = self.register_counter.next().unwrap();
@@ -657,8 +662,10 @@ impl TreeWalker for AsmTreeWalker {
 
                 self.current_result = rhs_result;
             }
-            _x => {
-                panic!("trying to assign to an invalid lvalue")
+            x => {
+                return Err(LpcError::new(
+                    format!("Attempt to assign to an invalid lvalue: `{}`", x)
+                ).with_span(node.span))
             }
         }
 
@@ -1173,216 +1180,224 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
-        let mut context = Context::default();
-        context.scopes.push_new();
+    mod test_visit_var {
+        use super::*;
 
-        let mut walker = AsmTreeWalker::new(context);
+        #[test]
+        fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
 
-        insert_symbol(
-            &mut walker,
-            Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(666)),
-                scope_id: 0,
-                span: None,
-            },
-        );
-        // push a local scope with a matching variable in a different location
-        walker.context.scopes.push_new();
-        insert_symbol(
-            &mut walker,
-            Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(222)),
-                scope_id: 1,
-                span: None,
-            },
-        );
+            let mut walker = AsmTreeWalker::new(context);
 
-        let mut node = VarNode {
-            name: "marf".to_string(),
-            span: None,
-            global: true,
-        };
+            insert_symbol(
+                &mut walker,
+                Symbol {
+                    name: "marf".to_string(),
+                    type_: LpcType::Int(false),
+                    static_: false,
+                    location: Some(Register(666)),
+                    scope_id: 0,
+                    span: None,
+                },
+            );
+            // push a local scope with a matching variable in a different location
+            walker.context.scopes.push_new();
+            insert_symbol(
+                &mut walker,
+                Symbol {
+                    name: "marf".to_string(),
+                    type_: LpcType::Int(false),
+                    static_: false,
+                    location: Some(Register(222)),
+                    scope_id: 1,
+                    span: None,
+                },
+            );
 
-        let _ = walker.visit_var(&mut node);
-        assert_eq!(walker.current_result, Register(1)); // global loaded into r1
-
-        let expected = vec![GLoad(Register(666), Register(1))];
-        assert_eq!(walker.instructions, expected);
-    }
-
-    #[test]
-    fn test_visit_var_sets_the_result_for_locals() {
-        let mut context = Context::default();
-        context.scopes.push_new();
-        let mut walker = AsmTreeWalker::new(context);
-
-        insert_symbol(
-            &mut walker,
-            // push a global marf to ensure we don't find it.
-            Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(444)),
-                scope_id: 0,
-                span: None,
-            },
-        );
-        walker.context.scopes.push_new(); // push a local scope
-        insert_symbol(
-            &mut walker,
-            Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(666)),
-                scope_id: 1,
-                span: None,
-            },
-        );
-
-        let mut node = VarNode::new("marf");
-
-        let _ = walker.visit_var(&mut node);
-        assert_eq!(walker.current_result, Register(666));
-
-        let expected = vec![];
-        assert_eq!(walker.instructions, expected);
-    }
-
-    #[test]
-    fn test_visit_assignment_populates_the_instructions_for_globals() {
-        let mut context = Context::default();
-        context.scopes.push_new();
-        let mut walker = AsmTreeWalker::new(context);
-
-        let sym = Symbol {
-            name: "marf".to_string(),
-            type_: LpcType::Int(false),
-            static_: false,
-            location: Some(Register(666)),
-            scope_id: 0,
-            span: None,
-        };
-        insert_symbol(&mut walker, sym);
-
-        // push a different, local `marf`, to ensure that we don't find it for this assignment.
-        walker.context.scopes.push_new();
-        let sym = Symbol {
-            name: "marf".to_string(),
-            type_: LpcType::Int(false),
-            static_: false,
-            location: Some(Register(123)),
-            scope_id: 1,
-            span: None,
-        };
-        insert_symbol(&mut walker, sym);
-
-        let mut node = AssignmentNode {
-            lhs: Box::new(ExpressionNode::Var(VarNode {
+            let mut node = VarNode {
                 name: "marf".to_string(),
                 span: None,
                 global: true,
-            })),
-            rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
-            op: AssignmentOperation::Simple,
-            span: None,
-        };
+            };
 
-        let _ = walker.visit_assignment(&mut node);
-        assert_eq!(
-            walker.instructions,
-            [
-                IConst(Register(1), -12),
-                GLoad(Register(666), Register(2)),
-                RegCopy(Register(1), Register(2)),
-                GStore(Register(2), Register(666))
-            ]
-        );
+            let _ = walker.visit_var(&mut node);
+            assert_eq!(walker.current_result, Register(1)); // global loaded into r1
+
+            let expected = vec![GLoad(Register(666), Register(1))];
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn test_visit_var_sets_the_result_for_locals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            let mut walker = AsmTreeWalker::new(context);
+
+            insert_symbol(
+                &mut walker,
+                // push a global marf to ensure we don't find it.
+                Symbol {
+                    name: "marf".to_string(),
+                    type_: LpcType::Int(false),
+                    static_: false,
+                    location: Some(Register(444)),
+                    scope_id: 0,
+                    span: None,
+                },
+            );
+            walker.context.scopes.push_new(); // push a local scope
+            insert_symbol(
+                &mut walker,
+                Symbol {
+                    name: "marf".to_string(),
+                    type_: LpcType::Int(false),
+                    static_: false,
+                    location: Some(Register(666)),
+                    scope_id: 1,
+                    span: None,
+                },
+            );
+
+            let mut node = VarNode::new("marf");
+
+            let _ = walker.visit_var(&mut node);
+            assert_eq!(walker.current_result, Register(666));
+
+            let expected = vec![];
+            assert_eq!(walker.instructions, expected);
+        }
     }
 
-    #[test]
-    fn test_visit_assignment_populates_the_instructions_for_locals() {
-        let mut context = Context::default();
-        context.scopes.push_new();
-        context.scopes.push_new();
-        let mut walker = AsmTreeWalker::new(context);
+    mod test_visit_assignment {
+        use super::*;
 
-        let sym = Symbol {
-            name: "marf".to_string(),
-            type_: LpcType::Int(false),
-            static_: false,
-            location: Some(Register(666)),
-            scope_id: 1,
-            span: None,
-        };
+        #[test]
+        fn test_populates_the_instructions_for_globals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            let mut walker = AsmTreeWalker::new(context);
 
-        insert_symbol(&mut walker, sym);
-
-        let mut node = AssignmentNode {
-            lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
-            rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
-            op: AssignmentOperation::Simple,
-            span: None,
-        };
-
-        let _ = walker.visit_assignment(&mut node);
-        assert_eq!(
-            walker.instructions,
-            [
-                IConst(Register(1), -12),
-                RegCopy(Register(1), Register(666))
-            ]
-        );
-    }
-
-    #[test]
-    fn test_visit_assignment_populates_the_instructions_for_array_items() {
-        let mut context = Context::default();
-        context.scopes.push_new();
-        context.scopes.push_new();
-        let mut walker = AsmTreeWalker::new(context);
-
-        let sym = Symbol {
-            name: "marf".to_string(),
-            type_: LpcType::Int(true),
-            static_: false,
-            location: Some(Register(666)),
-            scope_id: 1,
-            span: None,
-        };
-
-        insert_symbol(&mut walker, sym);
-
-        let mut node = AssignmentNode {
-            lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
-                r: Box::new(ExpressionNode::from(1)),
-                op: BinaryOperation::Index,
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 0,
                 span: None,
-            })),
-            rhs: Box::new(ExpressionNode::from(-12)),
-            op: AssignmentOperation::Simple,
-            span: None,
-        };
+            };
+            insert_symbol(&mut walker, sym);
 
-        let _ = walker.visit_assignment(&mut node);
-        assert_eq!(
-            walker.instructions,
-            [
-                IConst(Register(1), -12),
-                IConst1(Register(2)),
-                Store(Register(1), Register(666), Register(2))
-            ]
-        );
+            // push a different, local `marf`, to ensure that we don't find it for this assignment.
+            walker.context.scopes.push_new();
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(123)),
+                scope_id: 1,
+                span: None,
+            };
+            insert_symbol(&mut walker, sym);
+
+            let mut node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode {
+                    name: "marf".to_string(),
+                    span: None,
+                    global: true,
+                })),
+                rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
+                op: AssignmentOperation::Simple,
+                span: None,
+            };
+
+            let _ = walker.visit_assignment(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), -12),
+                    GLoad(Register(666), Register(2)),
+                    RegCopy(Register(1), Register(2)),
+                    GStore(Register(2), Register(666))
+                ]
+            );
+        }
+
+        #[test]
+        fn test_populates_the_instructions_for_locals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            context.scopes.push_new();
+            let mut walker = AsmTreeWalker::new(context);
+
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 1,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, sym);
+
+            let mut node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
+                rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
+                op: AssignmentOperation::Simple,
+                span: None,
+            };
+
+            let _ = walker.visit_assignment(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), -12),
+                    RegCopy(Register(1), Register(666))
+                ]
+            );
+        }
+
+        #[test]
+        fn test_populates_the_instructions_for_array_items() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            context.scopes.push_new();
+            let mut walker = AsmTreeWalker::new(context);
+
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(true),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 1,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, sym);
+
+            let mut node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
+                    r: Box::new(ExpressionNode::from(1)),
+                    op: BinaryOperation::Index,
+                    span: None,
+                })),
+                rhs: Box::new(ExpressionNode::from(-12)),
+                op: AssignmentOperation::Simple,
+                span: None,
+            };
+
+            let _ = walker.visit_assignment(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), -12),
+                    IConst1(Register(2)),
+                    Store(Register(1), Register(666), Register(2))
+                ]
+            );
+        }
     }
 
     #[test]
@@ -1429,6 +1444,68 @@ mod tests {
 
         assert_eq!(walker.instructions, expected);
         assert_eq!(walker.current_result, Register(4));
+    }
+
+    mod test_visit_var_init {
+        use super::*;
+
+        #[test]
+        fn test_does_not_copy_mappings() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            context.scopes.push_new();
+            let mut walker = AsmTreeWalker::new(context);
+
+            let sym = Symbol::new("marf", LpcType::Mapping(false)).with_location(Some(Register(1)));
+            insert_symbol(&mut walker, sym);
+
+            let mut node = VarInitNode {
+                type_: LpcType::Mapping(false),
+                name: "muffins".to_string(),
+                value: Some(ExpressionNode::Var(VarNode::new("marf"))),
+                array: false,
+                global: false,
+                span: None
+            };
+
+            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+
+            let _ = walker.visit_var_init(&mut node);
+            assert_eq!(
+                walker.instructions,
+                []
+            );
+        }
+
+        #[test]
+        fn test_copies_arrays() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            context.scopes.push_new(); // push a local scope
+            let mut walker = AsmTreeWalker::new(context);
+
+            let sym = Symbol::new("marf", LpcType::Int(true)).with_location(Some(Register(1)));
+            insert_symbol(&mut walker, sym);
+
+            let mut node = VarInitNode {
+                type_: LpcType::Int(true),
+                name: "muffins".to_string(),
+                value: Some(ExpressionNode::Var(VarNode::new("marf"))),
+                array: false,
+                global: false,
+                span: None
+            };
+
+            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+
+            let _ = walker.visit_var_init(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    RegCopy(Register(0), Register(1))
+                ]
+            );
+        }
     }
 
     fn insert_symbol(walker: &mut AsmTreeWalker, symbol: Symbol) {
