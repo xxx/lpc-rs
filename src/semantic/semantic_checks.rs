@@ -12,6 +12,7 @@ use crate::{
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
+use crate::ast::ast_node::SpannedNode;
 
 /// Utility functions for doing various semantic checks.
 
@@ -61,8 +62,8 @@ pub fn check_binary_operation_types(
         .with_span(node.span)
     }
 
-    let left_type = node_type(&node.l, scope_tree, function_return_types);
-    let right_type = node_type(&node.r, scope_tree, function_return_types);
+    let left_type = node_type(&node.l, scope_tree, function_return_types)?;
+    let right_type = node_type(&node.r, scope_tree, function_return_types)?;
     let tuple = (left_type, right_type);
 
     if node.op != BinaryOperation::Index {
@@ -213,55 +214,62 @@ pub fn node_type(
     node: &ExpressionNode,
     scope_tree: &ScopeTree,
     function_return_types: &HashMap<&str, LpcType>,
-) -> LpcType {
+) -> Result<LpcType, LpcError> {
     match node {
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
         }
         ExpressionNode::Call(CallNode { name, .. }) => function_return_types
             .get(name.as_str())
-            .map_or(LpcType::Int(false), |return_type| *return_type),
+            .map_or(Ok(LpcType::Int(false)), |return_type| Ok(*return_type)),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
                 node_type(&value[len - 1], scope_tree, function_return_types)
             } else {
-                panic!("We've somehow created an empty CommaExpression node")
+                return Err(LpcError::new(
+                    "We've somehow created an empty CommaExpression node"
+                ).with_span(node.span()));
             }
         }
-        ExpressionNode::Float(_) => LpcType::Float(false),
-        ExpressionNode::Int(_) => LpcType::Int(false),
-        ExpressionNode::Range(_) => LpcType::Int(true),
-        ExpressionNode::String(_) => LpcType::String(false),
-        ExpressionNode::Var(VarNode { name, .. }) => match scope_tree.lookup(name) {
-            Some(sym) => sym.type_,
-            None => panic!("undefined symbol {}", name),
+        ExpressionNode::Float(_) => Ok(LpcType::Float(false)),
+        ExpressionNode::Int(_) => Ok(LpcType::Int(false)),
+        ExpressionNode::Range(_) => Ok(LpcType::Int(true)),
+        ExpressionNode::String(_) => Ok(LpcType::String(false)),
+        ExpressionNode::Var(VarNode { name, span, .. }) => match scope_tree.lookup(name) {
+            Some(sym) => Ok(sym.type_),
+            None => return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span))
         },
-        ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => combine_types(
-            node_type(l, scope_tree, function_return_types),
-            node_type(r, scope_tree, function_return_types),
+        ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(
+            node_type(l, scope_tree, function_return_types)?,
+            node_type(r, scope_tree, function_return_types)?,
             *op,
-        ),
+        )),
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
-                return LpcType::Mixed(true);
+                return Ok(LpcType::Mixed(true));
             }
 
-            let value_types = node
+            let res: Result<Vec<_>, _> = node
                 .value
                 .iter()
                 .map(|i| node_type(i, scope_tree, function_return_types))
-                .collect::<Vec<_>>();
+                .collect();
+
+            let value_types = match res {
+                Ok(x) => x,
+                Err(e) => return Err(e)
+            };
 
             if value_types.iter().any(|ty| ty.is_array()) {
-                LpcType::Mixed(true)
+                Ok(LpcType::Mixed(true))
             } else if value_types.windows(2).all(|w| w[0] == w[1]) {
-                value_types[0].as_array(true)
+                Ok(value_types[0].as_array(true))
             } else {
-                LpcType::Mixed(true)
+                Ok(LpcType::Mixed(true))
             }
         }
-        ExpressionNode::Mapping(_) => LpcType::Mapping(false),
+        ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
     }
 }
 
@@ -989,7 +997,7 @@ mod node_type_tests {
             let function_return_types = HashMap::new();
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::Mixed(true)
             );
         }
@@ -1007,7 +1015,7 @@ mod node_type_tests {
             ]);
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::Int(true)
             );
         }
@@ -1024,7 +1032,7 @@ mod node_type_tests {
             ]);
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::Mixed(true)
             );
         }
@@ -1042,7 +1050,7 @@ mod node_type_tests {
             });
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::String(false)
             );
         }
@@ -1060,7 +1068,7 @@ mod node_type_tests {
             });
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::String(false)
             );
         }
@@ -1076,7 +1084,7 @@ mod node_type_tests {
             });
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::String(false)
             );
         }
@@ -1116,7 +1124,7 @@ mod node_type_tests {
             });
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::Int(false)
             );
         }
@@ -1151,7 +1159,7 @@ mod node_type_tests {
             });
 
             assert_eq!(
-                node_type(&node, &scope_tree, &function_return_types),
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::Mixed(false)
             );
         }

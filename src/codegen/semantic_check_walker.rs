@@ -115,7 +115,7 @@ impl TreeWalker for SemanticCheckWalker {
                         // sigh.
                     } else {
                         let arg_type =
-                            node_type(arg, &self.context.scopes, &self.function_return_values());
+                            node_type(arg, &self.context.scopes, &self.function_return_values())?;
                         if !ty.matches_type(arg_type) {
                             let e = LpcError::new(format!(
                                 "Unexpected argument type to `{}`: {}. Expected {}.",
@@ -181,7 +181,7 @@ impl TreeWalker for SemanticCheckWalker {
                         expression,
                         &self.context.scopes,
                         &self.function_return_values(),
-                    );
+                    )?;
 
                     if function_def.return_type == LpcType::Void
                         || !function_def.return_type.matches_type(return_type)
@@ -218,7 +218,7 @@ impl TreeWalker for SemanticCheckWalker {
                 expression,
                 &self.context.scopes,
                 &self.function_return_values(),
-            );
+            )?;
 
             let ret = if node.type_.matches_type(expr_type) {
                 Ok(())
@@ -251,12 +251,12 @@ impl TreeWalker for SemanticCheckWalker {
             &node.lhs,
             &self.context.scopes,
             &self.function_return_values(),
-        );
+        )?;
         let right_type = node_type(
             &node.rhs,
             &self.context.scopes,
             &self.function_return_values(),
-        );
+        )?;
 
         if left_type.matches_type(right_type) {
             Ok(())
@@ -289,13 +289,13 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         let left_type = if let Some(left) = &*node.l {
-            node_type(left, &self.context.scopes, &self.function_return_values())
+            node_type(left, &self.context.scopes, &self.function_return_values())?
         } else {
             LpcType::Int(false)
         };
 
         let right_type = if let Some(right) = &*node.r {
-            node_type(right, &self.context.scopes, &self.function_return_values())
+            node_type(right, &self.context.scopes, &self.function_return_values())?
         } else {
             LpcType::Int(false)
         };
