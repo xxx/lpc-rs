@@ -254,18 +254,18 @@ impl AsmTreeWalker {
         node: &BinaryOpNode,
         reg_left: Register,
         reg_right: Register,
-        reg_result: Option<Register>,
+        reg_result: Register,
     ) -> Instruction {
         match node.op {
             BinaryOperation::Add => {
                 self.choose_add_instruction(&node, reg_left, reg_right, reg_result)
             }
-            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result),
             BinaryOperation::Mul => {
                 self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
             }
-            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result.unwrap()),
-            BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result.unwrap()),
+            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
+            BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => todo!(),
             BinaryOperation::OrOr => todo!(),
         }
@@ -277,16 +277,16 @@ impl AsmTreeWalker {
         node: &BinaryOpNode,
         reg_left: Register,
         reg_right: Register,
-        reg_result: Option<Register>,
+        reg_result: Register,
     ) -> Instruction {
         let left_type = self.to_operation_type(&node.l);
         let right_type = self.to_operation_type(&node.r);
 
         match (left_type, right_type) {
             (OperationType::Register, OperationType::Register) => {
-                Instruction::IAdd(reg_left, reg_right, reg_result.unwrap())
+                Instruction::IAdd(reg_left, reg_right, reg_result)
             }
-            _ => Instruction::MAdd(reg_left, reg_right, reg_result.unwrap()),
+            _ => Instruction::MAdd(reg_left, reg_right, reg_result),
         }
     }
 
@@ -296,16 +296,16 @@ impl AsmTreeWalker {
         node: &BinaryOpNode,
         reg_left: Register,
         reg_right: Register,
-        reg_result: Option<Register>,
+        reg_result: Register,
     ) -> Instruction {
         let left_type = self.to_operation_type(&node.l);
         let right_type = self.to_operation_type(&node.r);
 
         match (left_type, right_type) {
             (OperationType::Register, OperationType::Register) => {
-                Instruction::IMul(reg_left, reg_right, reg_result.unwrap())
+                Instruction::IMul(reg_left, reg_right, reg_result)
             }
-            _ => Instruction::MMul(reg_left, reg_right, reg_result.unwrap()),
+            _ => Instruction::MMul(reg_left, reg_right, reg_result),
         }
     }
 
@@ -329,7 +329,7 @@ impl AsmTreeWalker {
     /// `node` - A reference to the `RangeNode` that holds the range of the slice we're taking.
     fn emit_range(&mut self, array: Register, node: &mut RangeNode) {
         let first_index = if let Some(expr) = &mut *node.l {
-            let _ = expr.visit(self);
+            expr.visit(self)?;
             self.current_result
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int 0.
@@ -337,7 +337,7 @@ impl AsmTreeWalker {
         };
 
         let second_index = if let Some(expr) = &mut *node.r {
-            let _ = expr.visit(self);
+            expr.visit(self)?;
             self.current_result
         } else {
             // A missing range end means just go to the end of the array.
@@ -370,7 +370,7 @@ impl TreeWalker for AsmTreeWalker {
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<(), LpcError> {
         self.context.scopes.goto_root();
         for expr in &mut program.body {
-            let _ = expr.visit(self);
+            expr.visit(self)?;
         }
         self.context.scopes.pop();
 
@@ -403,15 +403,15 @@ impl TreeWalker for AsmTreeWalker {
             }
         }
 
-        let start_register = self.register_counter.next();
+        let start_register = self.register_counter.next().unwrap();
         let mut register = start_register;
 
         // copy each result to the start of the arg register
         for result in &arg_results {
             self.instructions
-                .push(Instruction::RegCopy(*result, register.unwrap()));
+                .push(Instruction::RegCopy(*result, register));
             self.debug_spans.push(node.span);
-            register = self.register_counter.next();
+            register = self.register_counter.next().unwrap();
         }
 
         // Undo the final call to .next() to avoid skipping a register
@@ -420,7 +420,7 @@ impl TreeWalker for AsmTreeWalker {
         let instruction = Instruction::Call {
             name: node.name.clone(),
             num_args: arg_results.len(),
-            initial_arg: start_register.unwrap(),
+            initial_arg: start_register,
         };
 
         self.instructions.push(instruction);
@@ -431,12 +431,12 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_int(&mut self, node: &mut IntNode) -> Result<(), LpcError> {
-        let register = self.register_counter.next();
-        self.current_result = register.unwrap();
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
         let instruction = match node.value {
-            0 => Instruction::IConst0(register.unwrap()),
-            1 => Instruction::IConst1(register.unwrap()),
-            v => Instruction::IConst(register.unwrap(), v),
+            0 => Instruction::IConst0(register),
+            1 => Instruction::IConst1(register),
+            v => Instruction::IConst(register, v),
         };
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
@@ -445,8 +445,8 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<(), LpcError> {
-        let register = self.register_counter.next();
-        self.current_result = register.unwrap();
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
         let instruction = Instruction::FConst(self.current_result, node.value);
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
@@ -481,8 +481,8 @@ impl TreeWalker for AsmTreeWalker {
         node.r.visit(self)?;
         let reg_right = self.current_result;
 
-        let reg_result = self.register_counter.next();
-        self.current_result = reg_result.unwrap();
+        let reg_result = self.register_counter.next().unwrap();
+        self.current_result = reg_result;
 
         let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
         self.instructions.push(instruction);
@@ -507,7 +507,7 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         // force a final return if one isn't already there.
-        if self.instructions.len() == len || *self.instructions.last().unwrap() != Instruction::Ret
+        if self.instructions.len() == len || (self.instructions.len() > 0 && *self.instructions.last().unwrap() != Instruction::Ret)
         {
             // TODO: This should emit a warning unless the return type is void
             self.instructions.push(Instruction::Ret);
@@ -546,7 +546,7 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_decl(&mut self, node: &mut DeclNode) -> Result<(), LpcError> {
         for init in &mut node.initializations {
-            let _ = self.visit_var_init(init);
+            self.visit_var_init(init)?;
         }
 
         Ok(())
@@ -618,9 +618,23 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<(), LpcError> {
-        let sym = self.lookup_var_symbol(node).unwrap();
+        let sym = match self.lookup_var_symbol(node) {
+            Some(s) => s,
+            None => {
+                return Err(
+                    LpcError::new(format!("Unable to find symbol `{}`", node.name)).with_span(node.span)
+                );
+            }
+        };
 
-        let sym_loc = sym.location.unwrap();
+        let sym_loc = match sym.location {
+            Some(l) => l,
+            None => {
+                return Err(
+                    LpcError::new(format!("Symbol `{}` has no location set.", sym.name)).with_span(node.span)
+                );
+            }
+        };
 
         if sym.is_global() {
             let result_register = self.register_counter.next().unwrap();
@@ -673,9 +687,9 @@ impl TreeWalker for AsmTreeWalker {
                 ref mut r,
                 ..
             }) => {
-                let _ = l.visit(self);
+                l.visit(self)?;
                 let var_result = self.current_result;
-                let _ = r.visit(self);
+                r.visit(self)?;
                 let index_result = self.current_result;
 
                 let assign = Instruction::Store(rhs_result, var_result, index_result);
