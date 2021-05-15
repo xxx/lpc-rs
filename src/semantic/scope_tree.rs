@@ -108,11 +108,11 @@ impl ScopeTree {
     /// Set the current scope to the current's parent.
     /// Note that this method does *not* actually remove the scope from the tree.
     /// It remains accessible.
-    ///
-    /// # Panics
-    /// Will panic if there is no current node set
     pub fn pop(&mut self) {
-        self.current_id = self.get_current_node().unwrap().parent();
+        self.current_id = match self.get_current_node() {
+            Some(n) => n.parent(),
+            None => None
+        };
     }
 
     /// Set the current node to the root of the tree.
@@ -121,9 +121,6 @@ impl ScopeTree {
     }
 
     /// Set the current node to the scope for function named `name`.
-    ///
-    /// # Panics
-    /// Will panic if an unknown function name is passed.
     pub fn goto_function(&mut self, name: &str) -> Result<(), LpcError> {
         if let Some(id) = self.function_scopes.get(name) {
             self.current_id = Some(*id);
