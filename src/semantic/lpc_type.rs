@@ -134,8 +134,7 @@ impl From<String> for LpcType {
             "string" => LpcType::String(false),
             "object" => LpcType::Object(false),
             "mapping" => LpcType::Mapping(false),
-            "mixed" => LpcType::Mixed(false),
-            _ => panic!("Unknown LpcType. Cannot convert."),
+            _ => LpcType::Mixed(false)
         }
     }
 }
