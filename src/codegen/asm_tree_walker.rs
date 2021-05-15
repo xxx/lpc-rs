@@ -154,18 +154,38 @@ impl AsmTreeWalker {
     }
 
     /// Convert this walker's data into a [`Program`]
-    pub fn to_program(&self) -> Program {
+    pub fn to_program(&self) -> Result<Program, LpcError> {
         // These are expected and assumed to be in 1:1 correspondence at runtime
-        assert_eq!(self.instructions.len(), self.debug_spans.len());
+        self.ensure_sync()?;
 
-        Program {
+        Ok(Program {
             instructions: self.instructions.clone(),
             debug_spans: self.debug_spans.clone(),
             filename: self.context.filename.clone(),
             labels: self.labels.clone(),
             functions: self.function_map(),
             num_globals: self.global_counter.get_count(),
+        })
+    }
+
+    fn ensure_sync(&self) -> Result<(), LpcError> {
+        let a = self.instructions.len();
+        let b = self.debug_spans.len();
+        if a != b {
+            return Err(
+                LpcError::new(
+                    format!(
+                        "Instructions (length {}) and debug_spans (length {}) are out \
+                        of sync. This would be catastrophic at runtime, and indicates \
+                        a major bug in the code generator.",
+                        a,
+                        b
+                    )
+                )
+            );
         }
+
+        Ok(())
     }
 
     /// Get a reference to a symbol in the current scope

@@ -176,7 +176,10 @@ where
         println!("{}", s);
     }
 
-    let program = asm_walker.to_program();
+    let program = match asm_walker.to_program() {
+        Ok(p) => p,
+        Err(e) => return Err(CompilerError::LpcError(e))
+    };
 
     // let msgpack = program.to_msgpack();
     // println!("{:?}", msgpack.len());

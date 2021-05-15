@@ -141,6 +141,9 @@ impl AsmInterpreter {
     /// Resolve the passed index within the current stack frame's registers, down to an LpcRef
     /// # Arguments
     /// `index` - the register index to resolve
+    ///
+    /// # Panics
+    /// Panics if the stack is empty, or if there is nothing in the registers at the requested index
     pub fn register_to_lpc_ref(&self, index: usize) -> LpcRef {
         let len = self.stack.len();
         let registers = &self.stack[len - 1].registers;
@@ -162,24 +165,24 @@ impl AsmInterpreter {
                         .iter()
                         .map(|i| registers[i.index()].clone())
                         .collect::<Vec<_>>();
-                    let new_ref = PoolRef::new(&self.memory, RefCell::new(LpcValue::from(vars)));
+                    let new_ref = value_to_ref!(LpcValue::from(vars), &self.memory);
 
-                    registers[r.index()] = LpcRef::Array(new_ref);
+                    registers[r.index()] = new_ref;
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
                     // r4 = r1[r2..r3]
                     let return_array =
                         |arr, memory: &mut Pool<RefCell<LpcValue>>, stack: &mut Vec<StackFrame>| -> Result<()> {
-                            let new_ref = PoolRef::new(memory, RefCell::new(LpcValue::from(arr)));
+                            let new_ref = value_to_ref!(LpcValue::from(arr), memory);
                             let registers = current_registers_mut(stack)?;
-                            registers[r4.index()] = LpcRef::Array(new_ref);
+                            registers[r4.index()] = new_ref;
 
                             Ok(())
                         };
 
-                    let value = self.register_to_lpc_ref(r1.index());
+                    let lpc_ref = self.register_to_lpc_ref(r1.index());
 
-                    if let LpcRef::Array(v_ref) = value {
+                    if let LpcRef::Array(v_ref) = lpc_ref {
                         let value = v_ref.borrow();
                         let vec = try_extract_value!(*value, LpcValue::Array);
 
@@ -310,9 +313,9 @@ impl AsmInterpreter {
                 }
                 Instruction::SConst(r, s) => {
                     let registers = current_registers_mut(&mut self.stack)?;
-                    let new_ref = PoolRef::new(&self.memory, RefCell::new(LpcValue::from(s)));
+                    let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
 
-                    registers[r.index()] = LpcRef::String(new_ref);
+                    registers[r.index()] = new_ref;
                 }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack)?;
@@ -454,11 +457,11 @@ impl AsmInterpreter {
 
                         register_map.insert(r, registers[value.index()].clone());
                     }
-                    let new_ref =
-                        PoolRef::new(&self.memory, RefCell::new(LpcValue::from(register_map)));
 
+                    let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
                     let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r.index()] = LpcRef::Mapping(new_ref);
+
+                    registers[r.index()] = new_ref;
                 }
                 // Instruction::MDiv(r1, r2, r3) => {
                 //     self.binary_operation(*r1, *r2, *r3, |x, y| x / y)?;
