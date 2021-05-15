@@ -1,7 +1,6 @@
 use crate::{
     asm::{instruction::Instruction, register::Register},
     errors::LpcError,
-    try_extract_value,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
         lpc_ref::LpcRef,
@@ -11,7 +10,7 @@ use crate::{
     },
     parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
-    value_to_ref, LpcInt,
+    try_extract_value, value_to_ref, LpcInt,
 };
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, result};
@@ -69,11 +68,9 @@ pub struct AsmInterpreter {
 fn current_registers(stack: &[StackFrame]) -> Result<&Vec<LpcRef>> {
     match &stack.last() {
         Some(frame) => Ok(&frame.registers),
-        None => {
-            Err(
-                LpcError::new("Trying to get the current registers with an empty stack.")
-            )
-        }
+        None => Err(LpcError::new(
+            "Trying to get the current registers with an empty stack.",
+        )),
     }
 }
 
@@ -81,9 +78,9 @@ fn current_registers(stack: &[StackFrame]) -> Result<&Vec<LpcRef>> {
 #[inline]
 fn current_registers_mut(stack: &mut Vec<StackFrame>) -> Result<&mut Vec<LpcRef>> {
     if stack.is_empty() {
-        return Err(
-            LpcError::new("Trying to get the current registers (mutable) with an empty stack.")
-        );
+        return Err(LpcError::new(
+            "Trying to get the current registers (mutable) with an empty stack.",
+        ));
     }
 
     Ok(&mut stack.last_mut().unwrap().registers)
@@ -112,9 +109,7 @@ impl AsmInterpreter {
         let sym = match self.program.functions.get("create") {
             Some(s) => s,
             None => {
-                return Err(
-                    LpcError::new("Missing `create` function.")
-                );
+                return Err(LpcError::new("Missing `create` function."));
             }
         };
         let address = sym.address;
@@ -171,14 +166,16 @@ impl AsmInterpreter {
                 }
                 Instruction::ARange(r1, r2, r3, r4) => {
                     // r4 = r1[r2..r3]
-                    let return_array =
-                        |arr, memory: &mut Pool<RefCell<LpcValue>>, stack: &mut Vec<StackFrame>| -> Result<()> {
-                            let new_ref = value_to_ref!(LpcValue::from(arr), memory);
-                            let registers = current_registers_mut(stack)?;
-                            registers[r4.index()] = new_ref;
+                    let return_array = |arr,
+                                        memory: &mut Pool<RefCell<LpcValue>>,
+                                        stack: &mut Vec<StackFrame>|
+                     -> Result<()> {
+                        let new_ref = value_to_ref!(LpcValue::from(arr), memory);
+                        let registers = current_registers_mut(stack)?;
+                        registers[r4.index()] = new_ref;
 
-                            Ok(())
-                        };
+                        Ok(())
+                    };
 
                     let lpc_ref = self.register_to_lpc_ref(r1.index());
 
@@ -219,13 +216,13 @@ impl AsmInterpreter {
                             }
                         } else {
                             return Err(LpcError::new(
-                                "Invalid code was generated for an ARange instruction."
-                            ).with_span(*self.current_debug_span()));
+                                "Invalid code was generated for an ARange instruction.",
+                            )
+                            .with_span(*self.current_debug_span()));
                         }
                     } else {
-                        return Err(LpcError::new(
-                            "ARange's array isn't actually an array?"
-                        ).with_span(*self.current_debug_span()));
+                        return Err(LpcError::new("ARange's array isn't actually an array?")
+                            .with_span(*self.current_debug_span()));
                     }
                 }
                 Instruction::Call {

@@ -38,11 +38,11 @@ where
     let file_content = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => {
-            return Err(CompilerError::LpcError(
-                LpcError::new(format!("cannot read file `{}`: {}",
-                                      AsRef::<Path>::as_ref(&path).display(),
-                e))
-            ))
+            return Err(CompilerError::LpcError(LpcError::new(format!(
+                "cannot read file `{}`: {}",
+                AsRef::<Path>::as_ref(&path).display(),
+                e
+            ))))
         }
     };
 
@@ -178,7 +178,7 @@ where
 
     let program = match asm_walker.to_program() {
         Ok(p) => p,
-        Err(e) => return Err(CompilerError::LpcError(e))
+        Err(e) => return Err(CompilerError::LpcError(e)),
     };
 
     // let msgpack = program.to_msgpack();

@@ -84,7 +84,7 @@ impl LpcTypeUnion {
                 self.set_mapping_array(other.mapping_array());
                 self.set_mixed(other.mixed());
                 self.set_mixed_array(other.mixed_array());
-            },
+            }
         }
     }
 

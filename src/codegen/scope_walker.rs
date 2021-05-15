@@ -98,11 +98,9 @@ impl TreeWalker for ScopeWalker {
         let scope = self.context.scopes.get_current();
 
         if scope.is_none() {
-            return Err(
-                LpcError::new(
-                    "There's no current scope for some reason? This is a pretty bad compiler bug."
-                )
-            )
+            return Err(LpcError::new(
+                "There's no current scope for some reason? This is a pretty bad compiler bug.",
+            ));
         }
 
         if let Err(e) = check_var_redefinition(&node, scope.unwrap()) {

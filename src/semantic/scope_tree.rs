@@ -1,10 +1,10 @@
 use crate::{
     context::Context,
+    errors::LpcError,
     semantic::{local_scope::LocalScope, symbol::Symbol},
 };
 use indextree::{Arena, Node, NodeId};
 use std::collections::HashMap;
-use crate::errors::LpcError;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -111,7 +111,7 @@ impl ScopeTree {
     pub fn pop(&mut self) {
         self.current_id = match self.get_current_node() {
             Some(n) => n.parent(),
-            None => None
+            None => None,
         };
     }
 

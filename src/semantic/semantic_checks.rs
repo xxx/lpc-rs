@@ -1,6 +1,7 @@
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
+        ast_node::SpannedNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
@@ -12,7 +13,6 @@ use crate::{
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
-use crate::ast::ast_node::SpannedNode;
 
 /// Utility functions for doing various semantic checks.
 
@@ -223,9 +223,10 @@ pub fn node_type(
                 let len = value.len();
                 node_type(&value[len - 1], scope_tree, function_return_types)
             } else {
-                return Err(LpcError::new(
-                    "We've somehow created an empty CommaExpression node"
-                ).with_span(node.span()));
+                return Err(
+                    LpcError::new("We've somehow created an empty CommaExpression node")
+                        .with_span(node.span()),
+                );
             }
         }
         ExpressionNode::Float(_) => Ok(LpcType::Float(false)),
@@ -234,7 +235,9 @@ pub fn node_type(
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
         ExpressionNode::Var(VarNode { name, span, .. }) => match scope_tree.lookup(name) {
             Some(sym) => Ok(sym.type_),
-            None => return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span))
+            None => {
+                return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span))
+            }
         },
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(
             node_type(l, scope_tree, function_return_types)?,
@@ -254,7 +257,7 @@ pub fn node_type(
 
             let value_types = match res {
                 Ok(x) => x,
-                Err(e) => return Err(e)
+                Err(e) => return Err(e),
             };
 
             if value_types.iter().any(|ty| ty.is_array()) {

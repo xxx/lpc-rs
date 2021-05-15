@@ -41,10 +41,7 @@ impl Symbol {
 
     /// Set the location of an existing `Symbol`
     pub fn with_location(self, location: Option<Register>) -> Self {
-        Self {
-            location,
-            ..self
-        }
+        Self { location, ..self }
     }
 }
 

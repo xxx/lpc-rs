@@ -1,7 +1,6 @@
 use crate::{
     ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_value::LpcValue,
-    LpcFloat, LpcInt,
-    try_extract_value
+    try_extract_value, LpcFloat, LpcInt,
 };
 use refpool::PoolRef;
 use std::{

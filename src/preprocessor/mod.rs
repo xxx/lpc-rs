@@ -258,13 +258,12 @@ impl Preprocessor {
 
         // Register the file-to-be-scanned with the global file cache
         let filename = match path.as_ref().file_name() {
-            Some(fname) => {
-                fname
-            }
+            Some(fname) => fname,
             None => {
-                return Err(
-                    LpcError::new(format!("Unable to determine a file name for `{}`", path.as_ref().display()))
-                );
+                return Err(LpcError::new(format!(
+                    "Unable to determine a file name for `{}`",
+                    path.as_ref().display()
+                )));
             }
         };
         let file_id = FileCache::insert(self.canonicalize_path(filename, &cwd).display());

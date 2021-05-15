@@ -134,7 +134,7 @@ impl From<String> for LpcType {
             "string" => LpcType::String(false),
             "object" => LpcType::Object(false),
             "mapping" => LpcType::Mapping(false),
-            _ => LpcType::Mixed(false)
+            _ => LpcType::Mixed(false),
         }
     }
 }

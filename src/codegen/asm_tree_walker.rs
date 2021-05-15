@@ -175,17 +175,12 @@ impl AsmTreeWalker {
         let a = self.instructions.len();
         let b = self.debug_spans.len();
         if a != b {
-            return Err(
-                LpcError::new(
-                    format!(
-                        "Instructions (length {}) and debug_spans (length {}) are out \
+            return Err(LpcError::new(format!(
+                "Instructions (length {}) and debug_spans (length {}) are out \
                         of sync. This would be catastrophic at runtime, and indicates \
                         a major bug in the code generator.",
-                        a,
-                        b
-                    )
-                )
-            );
+                a, b
+            )));
         }
 
         Ok(())
@@ -512,7 +507,9 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         // force a final return if one isn't already there.
-        if self.instructions.len() == len || (self.instructions.len() > 0 && *self.instructions.last().unwrap() != Instruction::Ret)
+        if self.instructions.len() == len
+            || (self.instructions.len() > 0
+                && *self.instructions.last().unwrap() != Instruction::Ret)
         {
             // TODO: This should emit a warning unless the return type is void
             self.instructions.push(Instruction::Ret);
@@ -564,9 +561,11 @@ impl TreeWalker for AsmTreeWalker {
         let sym = match symbol {
             Some(s) => s,
             None => {
-                return Err(LpcError::new(
-                    format!("Missing symbol, that passed semantic checks: {}", node.name)
-                ).with_span(node.span))
+                return Err(LpcError::new(format!(
+                    "Missing symbol, that passed semantic checks: {}",
+                    node.name
+                ))
+                .with_span(node.span))
             }
         };
 
@@ -577,7 +576,9 @@ impl TreeWalker for AsmTreeWalker {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            if matches!(expression, ExpressionNode::Var(_)) && !matches!(sym_type, LpcType::Mapping(false)) {
+            if matches!(expression, ExpressionNode::Var(_))
+                && !matches!(sym_type, LpcType::Mapping(false))
+            {
                 // copy on write, so the new var isn't a literal alias of the old,
                 // except for mappings.
                 let previous_register = self.register_counter.current();
@@ -627,7 +628,8 @@ impl TreeWalker for AsmTreeWalker {
             Some(s) => s,
             None => {
                 return Err(
-                    LpcError::new(format!("Unable to find symbol `{}`", node.name)).with_span(node.span)
+                    LpcError::new(format!("Unable to find symbol `{}`", node.name))
+                        .with_span(node.span),
                 );
             }
         };
@@ -636,7 +638,8 @@ impl TreeWalker for AsmTreeWalker {
             Some(l) => l,
             None => {
                 return Err(
-                    LpcError::new(format!("Symbol `{}` has no location set.", sym.name)).with_span(node.span)
+                    LpcError::new(format!("Symbol `{}` has no location set.", sym.name))
+                        .with_span(node.span),
                 );
             }
         };
@@ -705,9 +708,11 @@ impl TreeWalker for AsmTreeWalker {
                 self.current_result = rhs_result;
             }
             x => {
-                return Err(LpcError::new(
-                    format!("Attempt to assign to an invalid lvalue: `{}`", x)
-                ).with_span(node.span))
+                return Err(LpcError::new(format!(
+                    "Attempt to assign to an invalid lvalue: `{}`",
+                    x
+                ))
+                .with_span(node.span))
             }
         }
 
@@ -1507,16 +1512,13 @@ mod tests {
                 value: Some(ExpressionNode::Var(VarNode::new("marf"))),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
 
             let _ = walker.visit_var_init(&mut node);
-            assert_eq!(
-                walker.instructions,
-                []
-            );
+            assert_eq!(walker.instructions, []);
         }
 
         #[test]
@@ -1535,18 +1537,13 @@ mod tests {
                 value: Some(ExpressionNode::Var(VarNode::new("marf"))),
                 array: false,
                 global: false,
-                span: None
+                span: None,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
 
             let _ = walker.visit_var_init(&mut node);
-            assert_eq!(
-                walker.instructions,
-                [
-                    RegCopy(Register(0), Register(1))
-                ]
-            );
+            assert_eq!(walker.instructions, [RegCopy(Register(0), Register(1))]);
         }
     }
 
