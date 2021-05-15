@@ -152,7 +152,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
-        self.context.scopes.goto_function(&node.name);
+        self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
 
         for parameter in &mut node.parameters {

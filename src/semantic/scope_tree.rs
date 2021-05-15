@@ -4,6 +4,7 @@ use crate::{
 };
 use indextree::{Arena, Node, NodeId};
 use std::collections::HashMap;
+use crate::errors::LpcError;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -123,11 +124,17 @@ impl ScopeTree {
     ///
     /// # Panics
     /// Will panic if an unknown function name is passed.
-    pub fn goto_function(&mut self, name: &str) {
+    pub fn goto_function(&mut self, name: &str) -> Result<(), LpcError> {
         if let Some(id) = self.function_scopes.get(name) {
             self.current_id = Some(*id);
+            Ok(())
         } else {
-            panic!("Unknown function passed to goto_function: {}", name);
+            Err(LpcError::new(
+                format!(
+                    "Unknown function passed to goto_function `{}`. This likely indicates a driver bug.",
+                    name
+                )
+            ))
         }
     }
 
