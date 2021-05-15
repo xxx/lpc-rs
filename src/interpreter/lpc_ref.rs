@@ -1,6 +1,7 @@
 use crate::{
     ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_value::LpcValue,
     LpcFloat, LpcInt,
+    try_extract_value
 };
 use refpool::PoolRef;
 use std::{
@@ -15,6 +16,10 @@ use std::{
 
 #[macro_export]
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
+///
+/// # Arguments
+/// `r` - The expression to be wrapped.
+/// `m` - The memory pool to declare the [`PoolRef`]s from.
 macro_rules! value_to_ref {
     ($r:expr, $m:expr) => {
         match $r {
@@ -29,6 +34,18 @@ macro_rules! value_to_ref {
             LpcValue::Mapping(x) => {
                 LpcRef::Mapping(PoolRef::new(&$m, RefCell::new(LpcValue::Mapping(x))))
             }
+        }
+    };
+}
+
+/// A more dangerous version of [`try_extract_value`], that panics instead.
+/// Only intended for use in this file (and tests may use it at-will)
+#[macro_export]
+macro_rules! extract_value {
+    ( $x:expr, $y:path ) => {
+        match &$x {
+            $y(s) => s,
+            x => panic!("Invalid LpcValue - received `{}`. This indicates a serious bug in the interpreter.", x)
         }
     };
 }
@@ -70,47 +87,6 @@ impl LpcRef {
             right.type_name()
         ))
     }
-}
-
-/// Extract the final value (or reference to such, in the case of non-`Copy` value types)
-/// from an `LpcRef`. It's simply wrapping sugar to get the final value out of an [`LpcValue`].
-///
-/// # Arguments
-/// `expr`: An LpcValue
-/// `path`: The expected LpcValue subtype of value.
-///
-/// # Panics
-/// Will panic if the subtype of `expr` does not match `path`.
-///
-/// # Examples
-/// ```
-/// use lpc_rs::interpreter::lpc_value::LpcValue;
-/// use lpc_rs::interpreter::lpc_ref::LpcRef;
-/// use lpc_rs::extract_value;
-/// use refpool::{Pool, PoolRef};
-/// use std::cell::RefCell;
-///
-/// // for `Copy` types
-/// let value = LpcValue::from(12345);
-/// assert_eq!(extract_value!(value, LpcValue::Int), &12345);
-///
-/// // for non-`Copy` types
-/// let pool = Pool::new(1);
-/// let value = LpcValue::from("tacos");
-/// let pool_ref = PoolRef::new(&pool, RefCell::new(value)); // typically wrapped by LpcRef::String
-/// assert_eq!(extract_value!(*pool_ref.borrow(), LpcValue::String), "tacos");
-///
-/// let value = LpcValue::Int(666);
-/// // assert_eq!(extract_value!(value, LpcValue::String), &666); // panics!
-/// ```
-#[macro_export]
-macro_rules! extract_value {
-    ( $x:expr, $y:path ) => {
-        match &$x {
-            $y(s) => s,
-            x => panic!("Invalid LpcValue - received `{}`. This indicates a serious bug in the interpreter.", x)
-        }
-    };
 }
 
 impl From<f64> for LpcRef {
@@ -180,24 +156,24 @@ impl Add for &LpcRef {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i + i2)),
                 LpcRef::String(s) => Ok(LpcValue::String(
-                    i.to_string() + extract_value!(*s.borrow(), LpcValue::String),
+                    i.to_string() + try_extract_value!(*s.borrow(), LpcValue::String),
                 )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
                 LpcRef::String(s2) => Ok(LpcValue::String(
-                    extract_value!(*s.borrow(), LpcValue::String).clone()
-                        + extract_value!(*s2.borrow(), LpcValue::String),
+                    try_extract_value!(*s.borrow(), LpcValue::String).clone()
+                        + try_extract_value!(*s2.borrow(), LpcValue::String),
                 )),
                 LpcRef::Int(i) => Ok(LpcValue::String(
-                    extract_value!(*s.borrow(), LpcValue::String).clone() + &i.to_string(),
+                    try_extract_value!(*s.borrow(), LpcValue::String).clone() + &i.to_string(),
                 )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Array(vec) => match rhs {
                 LpcRef::Array(vec2) => {
-                    let mut new_vec = extract_value!(*vec.borrow(), LpcValue::Array).clone();
-                    let added_vec = extract_value!(*vec2.borrow(), LpcValue::Array).clone();
+                    let mut new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
+                    let added_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
                     new_vec.extend(added_vec.into_iter());
                     Ok(LpcValue::Array(new_vec))
                 }
@@ -205,8 +181,8 @@ impl Add for &LpcRef {
             },
             LpcRef::Mapping(map) => match rhs {
                 LpcRef::Mapping(map2) => {
-                    let mut new_map = extract_value!(*map.borrow(), LpcValue::Mapping).clone();
-                    let added_map = extract_value!(*map2.borrow(), LpcValue::Mapping).clone();
+                    let mut new_map = try_extract_value!(*map.borrow(), LpcValue::Mapping).clone();
+                    let added_map = try_extract_value!(*map2.borrow(), LpcValue::Mapping).clone();
                     new_map.extend(added_map.into_iter());
                     Ok(LpcValue::Mapping(new_map))
                 }
@@ -254,12 +230,12 @@ impl Mul for &LpcRef {
             }
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
-                let string = extract_value!(*b, LpcValue::String);
+                let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(repeat_string(string, *y)))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
-                let string = extract_value!(*b, LpcValue::String);
+                let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(repeat_string(string, *x)))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, &rhs)),

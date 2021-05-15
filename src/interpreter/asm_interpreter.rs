@@ -1,7 +1,7 @@
 use crate::{
     asm::{instruction::Instruction, register::Register},
     errors::LpcError,
-    extract_value,
+    try_extract_value,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
         lpc_ref::LpcRef,
@@ -157,7 +157,7 @@ impl AsmInterpreter {
 
                     if let LpcRef::Array(v_ref) = value {
                         let value = v_ref.borrow();
-                        let vec = extract_value!(*value, LpcValue::Array);
+                        let vec = try_extract_value!(*value, LpcValue::Array);
 
                         if vec.is_empty() {
                             return_array(vec![], &mut self.memory, &mut self.stack);
@@ -323,7 +323,7 @@ impl AsmInterpreter {
                     match container_ref {
                         LpcRef::Array(vec_ref) => {
                             let value = vec_ref.borrow();
-                            let vec = extract_value!(*value, LpcValue::Array);
+                            let vec = try_extract_value!(*value, LpcValue::Array);
 
                             let index = self.register_to_lpc_ref(r2.index());
                             let registers = current_registers_mut(&mut self.stack);
@@ -347,7 +347,7 @@ impl AsmInterpreter {
                         LpcRef::Mapping(map_ref) => {
                             let index = self.register_to_lpc_ref(r2.index());
                             let value = map_ref.borrow();
-                            let map = extract_value!(*value, LpcValue::Mapping);
+                            let map = try_extract_value!(*value, LpcValue::Mapping);
 
                             let var = if let Some(v) = map.get(&index) {
                                 v.clone()
