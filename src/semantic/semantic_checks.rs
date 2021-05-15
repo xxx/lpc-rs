@@ -206,10 +206,6 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 ///
 /// # Returns
 /// The `LpcType` of the passed node.
-///
-/// # Panics
-/// * Panics if a [`CommaExpressionNode`] without any expressions is passed
-/// * Panics if A [`VarNode`] containing an undefined variable is passed
 pub fn node_type(
     node: &ExpressionNode,
     scope_tree: &ScopeTree,
