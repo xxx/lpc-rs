@@ -24,28 +24,6 @@ pub enum LpcValue {
 ///
 /// # Errors
 /// Will immediately return an `Err` with an [`LpcError`] if `path` does not match `expr`'s type.
-///
-/// # Examples
-/// ```
-/// use lpc_rs::interpreter::lpc_value::LpcValue;
-/// use lpc_rs::interpreter::lpc_ref::LpcRef;
-/// use lpc_rs::try_extract_value;
-/// use refpool::{Pool, PoolRef};
-/// use std::cell::RefCell;
-///
-/// // for `Copy` types
-/// let value = LpcValue::from(12345);
-/// assert_eq!(try_extract_value!(value, LpcValue::Int), &12345);
-///
-/// // for non-`Copy` types
-/// let pool = Pool::new(1);
-/// let value = LpcValue::from("tacos");
-/// let pool_ref = PoolRef::new(&pool, RefCell::new(value)); // typically wrapped by LpcRef::String
-/// assert_eq!(try_extract_value!(*pool_ref.borrow(), LpcValue::String), "tacos");
-///
-/// let value = LpcValue::Int(666);
-/// // assert_eq!(extract_value!(value, LpcValue::String), &666); // Immediately returns an `Err`
-/// ```
 #[macro_export]
 macro_rules! try_extract_value {
     ( $x:expr, $y:path ) => {
