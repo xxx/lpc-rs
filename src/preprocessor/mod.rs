@@ -257,7 +257,16 @@ impl Preprocessor {
         let mut output = Vec::new();
 
         // Register the file-to-be-scanned with the global file cache
-        let filename = path.as_ref().file_name().unwrap();
+        let filename = match path.as_ref().file_name() {
+            Some(fname) => {
+                fname
+            }
+            None => {
+                return Err(
+                    LpcError::new(format!("Unable to determine a file name for `{}`", path.as_ref().display()))
+                );
+            }
+        };
         let file_id = FileCache::insert(self.canonicalize_path(filename, &cwd).display());
 
         let mut token_stream = LexWrapper::new(file_content.as_ref());
@@ -267,6 +276,7 @@ impl Preprocessor {
 
         // let mut peekable = spanned_results.clone();
         let mut iter = token_stream.into_iter().peekable();
+
         while let Some(spanned_result) = iter.next() {
             match spanned_result {
                 Ok(spanned) => {

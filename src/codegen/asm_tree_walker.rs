@@ -214,12 +214,15 @@ impl AsmTreeWalker {
                 }
             }
             ExpressionNode::Var(v) => {
-                let ty = self.lookup_var_symbol(&v).unwrap().type_;
-
-                match ty {
-                    LpcType::Int(false) => OperationType::Register,
-                    LpcType::Float(false) => OperationType::Register,
-                    _ => OperationType::Memory,
+                match self.lookup_var_symbol(&v) {
+                    Some(Symbol { type_: ty, .. }) => {
+                        match ty {
+                            LpcType::Int(false) => OperationType::Register,
+                            LpcType::Float(false) => OperationType::Register,
+                            _ => OperationType::Memory,
+                        }
+                    }
+                    None => OperationType::Memory // arbitrary - doing this instead of panicking
                 }
             }
         }

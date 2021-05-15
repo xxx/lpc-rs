@@ -95,7 +95,17 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError> {
-        if let Err(e) = check_var_redefinition(&node, &self.context.scopes.get_current().unwrap()) {
+        let scope = self.context.scopes.get_current();
+
+        if scope.is_none() {
+            return Err(
+                LpcError::new(
+                    "There's no current scope for some reason? This is a pretty bad compiler bug."
+                )
+            )
+        }
+
+        if let Err(e) = check_var_redefinition(&node, scope.unwrap()) {
             self.context.errors.push(e);
         }
 
