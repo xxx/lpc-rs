@@ -223,10 +223,10 @@ pub fn node_type(
                 let len = value.len();
                 node_type(&value[len - 1], scope_tree, function_return_types)
             } else {
-                return Err(
+                Err(
                     LpcError::new("We've somehow created an empty CommaExpression node")
                         .with_span(node.span()),
-                );
+                )
             }
         }
         ExpressionNode::Float(_) => Ok(LpcType::Float(false)),

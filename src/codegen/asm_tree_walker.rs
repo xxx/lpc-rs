@@ -508,7 +508,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // force a final return if one isn't already there.
         if self.instructions.len() == len
-            || (self.instructions.len() > 0
+            || (!self.instructions.is_empty()
                 && *self.instructions.last().unwrap() != Instruction::Ret)
         {
             // TODO: This should emit a warning unless the return type is void
