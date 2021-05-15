@@ -247,6 +247,21 @@ pub enum Token {
     #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
+    // Allow multiple characters so any Unicode scalar can be matched.
+    #[regex(r#"'(\\.|[^'])+'"#, |lex| {
+    track_slice(lex);
+
+    let span = Span::new(lex.extras.current_file_id, lex.span());
+
+    match lex.slice().chars().nth(1) {
+        Some(c) => Ok(IntToken(span, c as LpcInt)),
+        None => {
+            Err(LpcError::new(
+                format!("Unable to find the character in token `{}`? This is a WTF.", lex.slice())
+            ).with_span(Some(span)))
+        }
+    }
+    })]
     #[regex(r"[1-9][0-9_]*|0", |lex| {
         track_slice(lex);
 
