@@ -35,12 +35,16 @@ pub fn compile_file<T>(path: T) -> Result<Program, CompilerError>
 where
     T: AsRef<Path> + AsRef<str>,
 {
-    let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!(
-            "cannot read file: {}",
-            AsRef::<Path>::as_ref(&path).display()
-        )
-    });
+    let file_content = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            return Err(CompilerError::LpcError(
+                LpcError::new(format!("cannot read file `{}`: {}",
+                                      AsRef::<Path>::as_ref(&path).display(),
+                e))
+            ))
+        }
+    };
 
     compile_string(path, file_content)
 }
