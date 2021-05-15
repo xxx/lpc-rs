@@ -24,9 +24,6 @@ pub struct LpcTypeUnion {
 
 impl LpcTypeUnion {
     /// Insert a new type into the union
-    ///
-    /// # Panics
-    /// This will panic if the passed argument is an [`LpcType::Union`]
     pub fn insert(&mut self, type_: LpcType) {
         match type_ {
             LpcType::Void => self.set_void(true),
