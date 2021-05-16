@@ -256,11 +256,11 @@ impl AsmTreeWalker {
     ) -> Instruction {
         match node.op {
             BinaryOperation::Add => {
-                self.choose_add_instruction(&node, reg_left, reg_right, reg_result)
+                self.choose(&node, || Instruction::IAdd(reg_left, reg_right, reg_result),|| Instruction::MAdd(reg_left, reg_right, reg_result))
             }
             BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result),
             BinaryOperation::Mul => {
-                self.choose_mul_instruction(&node, reg_left, reg_right, reg_result)
+                self.choose(&node, || Instruction::IMul(reg_left, reg_right, reg_result),|| Instruction::MMul(reg_left, reg_right, reg_result))
             }
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
@@ -269,41 +269,23 @@ impl AsmTreeWalker {
         }
     }
 
-    /// Allows for recursive determination of typed add instructions
-    fn choose_add_instruction(
+    /// Allows for recursive determination of typed binary operator instructions
+    fn choose<F, G>(
         &self,
         node: &BinaryOpNode,
-        reg_left: Register,
-        reg_right: Register,
-        reg_result: Register,
-    ) -> Instruction {
+        a: F,
+        b: G
+    ) -> Instruction
+    where
+        F: Fn() -> Instruction,
+        G: Fn() -> Instruction
+    {
         let left_type = self.to_operation_type(&node.l);
         let right_type = self.to_operation_type(&node.r);
 
         match (left_type, right_type) {
-            (OperationType::Register, OperationType::Register) => {
-                Instruction::IAdd(reg_left, reg_right, reg_result)
-            }
-            _ => Instruction::MAdd(reg_left, reg_right, reg_result),
-        }
-    }
-
-    /// Allows for recursive determination of typed mul instructions
-    fn choose_mul_instruction(
-        &self,
-        node: &BinaryOpNode,
-        reg_left: Register,
-        reg_right: Register,
-        reg_result: Register,
-    ) -> Instruction {
-        let left_type = self.to_operation_type(&node.l);
-        let right_type = self.to_operation_type(&node.r);
-
-        match (left_type, right_type) {
-            (OperationType::Register, OperationType::Register) => {
-                Instruction::IMul(reg_left, reg_right, reg_result)
-            }
-            _ => Instruction::MMul(reg_left, reg_right, reg_result),
+            (OperationType::Register, OperationType::Register) => a(),
+            _ => b(),
         }
     }
 
