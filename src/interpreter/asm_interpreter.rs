@@ -467,9 +467,10 @@ impl AsmInterpreter {
                     let (n1, n2, n3) = (*r1, *r2, *r3);
                     self.binary_operation(n1, n2, n3, |x, y| x * y)?;
                 }
-                // Instruction::MSub(r1, r2, r3) => {
-                //     self.binary_operation(*r1, *r2, *r3, |x, y| x - y)?;
-                // }
+                Instruction::MSub(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_operation(n1, n2, n3, |x, y| x - y)?;
+                }
                 Instruction::RegCopy(r1, r2) => {
                     let registers = current_registers_mut(&mut self.stack)?;
                     registers[r2.index()] = registers[r1.index()].clone()

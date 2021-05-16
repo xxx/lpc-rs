@@ -68,14 +68,11 @@ pub enum Instruction {
     /// Addition where at least one side is a reference type, so check at runtime.
     MAdd(Register, Register, Register),
 
-    /// Division where at least one side is a reference type, so check at runtime.
-    // MDiv(Register, Register, Register),
-
     /// Multiplication where at least one side is a reference type, so check at runtime.
     MMul(Register, Register, Register),
 
     /// Subtraction where at least one side is a reference type, so check at runtime.
-    // MSub(Register, Register, Register),
+    MSub(Register, Register, Register),
 
     /// Copy x.0 to x.1
     RegCopy(Register, Register),
@@ -156,15 +153,12 @@ impl Display for Instruction {
             Instruction::MAdd(r1, r2, r3) => {
                 write!(f, "madd {}, {}, {}", r1, r2, r3)
             }
-            // Instruction::MDiv(r1, r2, r3) => {
-            //     write!(f, "mdiv {}, {}, {}", r1, r2, r3)
-            // }
             Instruction::MMul(r1, r2, r3) => {
                 write!(f, "mmul {}, {}, {}", r1, r2, r3)
             }
-            // Instruction::MSub(r1, r2, r3) => {
-            //     write!(f, "msub {}, {}, {}", r1, r2, r3)
-            // }
+            Instruction::MSub(r1, r2, r3) => {
+                write!(f, "msub {}, {}, {}", r1, r2, r3)
+            }
             Instruction::RegCopy(r1, r2) => {
                 write!(f, "regcopy {}, {}", r1, r2)
             }

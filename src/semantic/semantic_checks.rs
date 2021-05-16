@@ -75,9 +75,7 @@ pub fn check_binary_operation_types(
             }
         };
 
-        if let LpcType::Mixed(_) = tuple.0 {
-            return handle(tuple, node);
-        } else if let LpcType::Mixed(_) = tuple.1 {
+        if matches!(tuple.0, LpcType::Mixed(_)) || matches!(tuple.1, LpcType::Mixed(_)) {
             return handle(tuple, node);
         }
     }
@@ -106,17 +104,23 @@ pub fn check_binary_operation_types(
                 )),
             }
         }
-        BinaryOperation::Sub => match tuple {
-            (LpcType::Int(false), LpcType::Int(false))
-            | (LpcType::Float(false), LpcType::Float(false))
-            | (LpcType::Int(false), LpcType::Float(false))
-            | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
-            (left_type, right_type) => Err(create_error(
-                node,
-                BinaryOperation::Sub,
-                left_type,
-                right_type,
-            )),
+        BinaryOperation::Sub => {
+            if tuple.0.is_array() && tuple.1.is_array() {
+                return Ok(());
+            }
+
+            match tuple {
+                (LpcType::Int(false), LpcType::Int(false))
+                | (LpcType::Float(false), LpcType::Float(false))
+                | (LpcType::Int(false), LpcType::Float(false))
+                | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
+                (left_type, right_type) => Err(create_error(
+                    node,
+                    BinaryOperation::Sub,
+                    left_type,
+                    right_type,
+                )),
+            }
         },
         BinaryOperation::Mul => match tuple {
             (LpcType::Int(false), LpcType::Int(false))
@@ -231,7 +235,7 @@ pub fn node_type(
         }
         ExpressionNode::Float(_) => Ok(LpcType::Float(false)),
         ExpressionNode::Int(_) => Ok(LpcType::Int(false)),
-        ExpressionNode::Range(_) => Ok(LpcType::Int(true)),
+        ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
         ExpressionNode::Var(VarNode { name, span, .. }) => match scope_tree.lookup(name) {
             Some(sym) => Ok(sym.type_),
@@ -611,7 +615,7 @@ mod check_binary_operation_tests {
         assert!(int_float_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_literals(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_int_literals(BinaryOperation::Add, &scope_tree).is_err());
-        assert!(array_range_literals(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(array_range_literals(BinaryOperation::Add, &scope_tree).is_err());
         assert!(mapping_mapping_literals(BinaryOperation::Add, &scope_tree).is_ok());
 
         assert!(int_int_vars(BinaryOperation::Add, &scope_tree).is_ok());
@@ -623,7 +627,7 @@ mod check_binary_operation_tests {
         assert!(int_float_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_array_vars(BinaryOperation::Add, &scope_tree).is_ok());
         assert!(array_int_vars(BinaryOperation::Add, &scope_tree).is_err());
-        assert!(array_range_vars(BinaryOperation::Add, &scope_tree).is_ok());
+        assert!(array_range_vars(BinaryOperation::Add, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Add, &scope_tree).is_ok());
 
         // valid complex tree
@@ -686,7 +690,7 @@ mod check_binary_operation_tests {
         assert!(int_string_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(float_int_literals(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(int_float_literals(BinaryOperation::Sub, &scope_tree).is_ok());
-        assert!(array_array_literals(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(array_int_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_range_literals(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(mapping_mapping_literals(BinaryOperation::Sub, &scope_tree).is_err());
@@ -698,7 +702,7 @@ mod check_binary_operation_tests {
         assert!(int_string_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(float_int_vars(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(int_float_vars(BinaryOperation::Sub, &scope_tree).is_ok());
-        assert!(array_array_vars(BinaryOperation::Sub, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Sub, &scope_tree).is_ok());
         assert!(array_int_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(array_range_vars(BinaryOperation::Sub, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Sub, &scope_tree).is_err());
