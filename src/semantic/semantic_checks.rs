@@ -121,7 +121,7 @@ pub fn check_binary_operation_types(
                     right_type,
                 )),
             }
-        },
+        }
         BinaryOperation::Mul => match tuple {
             (LpcType::Int(false), LpcType::Int(false))
             | (LpcType::String(false), LpcType::Int(false))

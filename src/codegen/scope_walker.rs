@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        ast_node::AstNodeTrait, function_def_node::FunctionDefNode, program_node::ProgramNode,
-        var_init_node::VarInitNode, var_node::VarNode,
+        ast_node::AstNodeTrait, block_node::BlockNode, function_def_node::FunctionDefNode,
+        program_node::ProgramNode, var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     context::Context,
@@ -11,7 +11,6 @@ use crate::{
         symbol::Symbol,
     },
 };
-use crate::ast::block_node::BlockNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.

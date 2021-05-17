@@ -11,6 +11,7 @@ use crate::{
         assignment_node::AssignmentNode,
         ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::{BinaryOpNode, BinaryOperation},
+        block_node::BlockNode,
         call_node::CallNode,
         decl_node::DeclNode,
         expression_node::ExpressionNode,
@@ -33,7 +34,6 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
-use crate::ast::block_node::BlockNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -256,13 +256,21 @@ impl AsmTreeWalker {
         reg_result: Register,
     ) -> Instruction {
         match node.op {
-            BinaryOperation::Add => {
-                self.choose(&node, || Instruction::IAdd(reg_left, reg_right, reg_result),|| Instruction::MAdd(reg_left, reg_right, reg_result))
-            }
-            BinaryOperation::Sub => Instruction::ISub(reg_left, reg_right, reg_result),
-            BinaryOperation::Mul => {
-                self.choose(&node, || Instruction::IMul(reg_left, reg_right, reg_result),|| Instruction::MMul(reg_left, reg_right, reg_result))
-            }
+            BinaryOperation::Add => self.choose(
+                &node,
+                || Instruction::IAdd(reg_left, reg_right, reg_result),
+                || Instruction::MAdd(reg_left, reg_right, reg_result),
+            ),
+            BinaryOperation::Sub => self.choose(
+                &node,
+                || Instruction::ISub(reg_left, reg_right, reg_result),
+                || Instruction::MSub(reg_left, reg_right, reg_result),
+            ),
+            BinaryOperation::Mul => self.choose(
+                &node,
+                || Instruction::IMul(reg_left, reg_right, reg_result),
+                || Instruction::MMul(reg_left, reg_right, reg_result),
+            ),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => todo!(),
@@ -271,15 +279,10 @@ impl AsmTreeWalker {
     }
 
     /// Allows for recursive determination of typed binary operator instructions
-    fn choose<F, G>(
-        &self,
-        node: &BinaryOpNode,
-        a: F,
-        b: G
-    ) -> Instruction
+    fn choose<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
     where
         F: Fn() -> Instruction,
-        G: Fn() -> Instruction
+        G: Fn() -> Instruction,
     {
         let left_type = self.to_operation_type(&node.l);
         let right_type = self.to_operation_type(&node.r);
@@ -1110,8 +1113,12 @@ mod tests {
 
         let expected = vec![
             IConst(Register(1), 127983),
-            RegCopy(Register(1),Register(2)),
-            Call { name: String::from("dump"), num_args: 1, initial_arg: Register(2) }
+            RegCopy(Register(1), Register(2)),
+            Call {
+                name: String::from("dump"),
+                num_args: 1,
+                initial_arg: Register(2),
+            },
         ];
 
         assert_eq!(walker.instructions, expected);

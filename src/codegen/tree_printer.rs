@@ -3,16 +3,15 @@ use tree_walker::TreeWalker;
 use crate::{
     ast::{
         array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
-        call_node::CallNode, comma_expression_node::CommaExpressionNode, decl_node::DeclNode,
-        float_node::FloatNode, function_def_node::FunctionDefNode, int_node::IntNode,
-        mapping_node::MappingNode, program_node::ProgramNode, range_node::RangeNode,
-        return_node::ReturnNode, string_node::StringNode, var_init_node::VarInitNode,
-        var_node::VarNode,
+        block_node::BlockNode, call_node::CallNode, comma_expression_node::CommaExpressionNode,
+        decl_node::DeclNode, float_node::FloatNode, function_def_node::FunctionDefNode,
+        int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
+        range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
+        var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker,
     errors::LpcError,
 };
-use crate::ast::block_node::BlockNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -64,8 +63,8 @@ impl TreeWalker for TreePrinter {
 
     /// Visit a code block
     fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         self.println_indented("Block {");
 

@@ -5,6 +5,7 @@ use crate::{
         assignment_node::AssignmentNode,
         ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
+        block_node::BlockNode,
         call_node::CallNode,
         expression_node::ExpressionNode,
         function_def_node::FunctionDefNode,
@@ -23,7 +24,6 @@ use crate::{
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
-use crate::ast::block_node::BlockNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {

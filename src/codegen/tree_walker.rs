@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         array_node::ArrayNode, assignment_node::AssignmentNode, ast_node::AstNodeTrait,
-        binary_op_node::BinaryOpNode, call_node::CallNode,
+        binary_op_node::BinaryOpNode, block_node::BlockNode, call_node::CallNode,
         comma_expression_node::CommaExpressionNode, decl_node::DeclNode, float_node::FloatNode,
         function_def_node::FunctionDefNode, int_node::IntNode, mapping_node::MappingNode,
         program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
@@ -10,7 +10,6 @@ use crate::{
     context::Context,
     errors::LpcError,
 };
-use crate::ast::block_node::BlockNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -36,8 +35,8 @@ pub trait TreeWalker {
 
     /// Visit a code block
     fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         for expr in &mut node.body {
             expr.visit(self)?;

@@ -4,9 +4,7 @@ use std::{
 };
 
 use crate::{
-    ast::{
-        ast_node::{AstNode, AstNodeTrait},
-    },
+    ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
 };
 
@@ -17,12 +15,15 @@ use indextree::NodeId;
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlockNode {
     pub body: Vec<AstNode>,
-    pub scope_id: Option<NodeId>
+    pub scope_id: Option<NodeId>,
 }
 
 impl BlockNode {
     pub fn new(body: Vec<AstNode>) -> Self {
-        Self { body, scope_id: None }
+        Self {
+            body,
+            scope_id: None,
+        }
     }
 }
 

@@ -201,14 +201,17 @@ impl Sub for &LpcRef {
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as f64)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
                 Ok(LpcValue::Float(LpcFloat::from(*x as f64) - *y))
-            },
-            (LpcRef::Array(vec), LpcRef::Array(vec2) )=> {
+            }
+            (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
                 let new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
                 let removed_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
 
-                let result = new_vec.into_iter().filter(|x| !removed_vec.contains(x)).collect();
+                let result = new_vec
+                    .into_iter()
+                    .filter(|x| !removed_vec.contains(x))
+                    .collect();
                 Ok(LpcValue::Array(result))
-            },
+            }
             _ => Err(self.to_error(BinaryOperation::Sub, &rhs)),
         }
     }
@@ -498,7 +501,10 @@ mod tests {
         fn test_sub_array_array() {
             let pool = Pool::new(10);
             let to_ref = |x| LpcRef::Int(x);
-            let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4].into_iter().map(to_ref).collect::<Vec<_>>();
+            let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
+                .into_iter()
+                .map(to_ref)
+                .collect::<Vec<_>>();
             let v2 = vec![2, 4].into_iter().map(to_ref).collect::<Vec<_>>();
             let a1 = value_to_ref!(LpcValue::from(v1), pool);
             let a2 = value_to_ref!(LpcValue::from(v2.clone()), pool);
