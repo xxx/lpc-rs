@@ -12,6 +12,7 @@ use crate::{
     codegen::tree_walker,
     errors::LpcError,
 };
+use crate::ast::block_node::BlockNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -57,6 +58,26 @@ impl TreeWalker for TreePrinter {
             expr.visit(self)?;
         }
         self.indent -= 2;
+
+        Ok(())
+    }
+
+    /// Visit a code block
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError>
+        where
+            Self: Sized,
+    {
+        self.println_indented("Block {");
+
+        self.indent += 2;
+
+        for expr in &mut node.body {
+            expr.visit(self)?;
+        }
+
+        self.indent -= 2;
+
+        self.println_indented("}");
 
         Ok(())
     }

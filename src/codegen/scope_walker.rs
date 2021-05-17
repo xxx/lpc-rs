@@ -11,6 +11,7 @@ use crate::{
         symbol::Symbol,
     },
 };
+use crate::ast::block_node::BlockNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -47,6 +48,18 @@ impl TreeWalker for ScopeWalker {
 
         for expr in &mut node.body {
             expr.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError> {
+        let scope_id = self.context.scopes.push_new();
+
+        node.scope_id = Some(scope_id);
+
+        for stmt in &mut node.body {
+            stmt.visit(self)?;
         }
 
         Ok(())

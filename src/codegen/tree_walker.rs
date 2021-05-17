@@ -10,6 +10,7 @@ use crate::{
     context::Context,
     errors::LpcError,
 };
+use crate::ast::block_node::BlockNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -25,6 +26,18 @@ pub trait TreeWalker {
     fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), LpcError>
     where
         Self: Sized,
+    {
+        for expr in &mut node.body {
+            expr.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    /// Visit a code block
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError>
+        where
+            Self: Sized,
     {
         for expr in &mut node.body {
             expr.visit(self)?;

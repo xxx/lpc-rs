@@ -115,6 +115,11 @@ impl ScopeTree {
         };
     }
 
+    /// Set the current node to the passed `Option<NodeId>`
+    pub fn goto(&mut self, id: Option<NodeId>) {
+        self.current_id = id;
+    }
+
     /// Set the current node to the root of the tree.
     pub fn goto_root(&mut self) {
         self.current_id = self.root_id;

@@ -33,6 +33,7 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
+use crate::ast::block_node::BlockNode;
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -470,6 +471,17 @@ impl TreeWalker for AsmTreeWalker {
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
 
+        Ok(())
+    }
+
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        for stmt in &mut node.body {
+            stmt.visit(self)?;
+        }
+
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -1077,6 +1089,29 @@ mod tests {
             SConst(Register(1), String::from("marf")),
             SConst(Register(2), String::from("tacos")),
             SConst(Register(3), String::from("marf")),
+        ];
+
+        assert_eq!(walker.instructions, expected);
+    }
+
+    #[test]
+    fn test_visit_block_populates_instructions() {
+        let block = "{ int a = '🏯'; dump(a); }";
+        let mut tree = lpc_parser::BlockParser::new()
+            .parse(LexWrapper::new(block))
+            .unwrap();
+
+        let mut scope_walker = ScopeWalker::default();
+        let _ = scope_walker.visit_block(&mut tree);
+
+        let context = scope_walker.into_context();
+        let mut walker = AsmTreeWalker::new(context);
+        let _ = walker.visit_block(&mut tree);
+
+        let expected = vec![
+            IConst(Register(1), 127983),
+            RegCopy(Register(1),Register(2)),
+            Call { name: String::from("dump"), num_args: 1, initial_arg: Register(2) }
         ];
 
         assert_eq!(walker.instructions, expected);

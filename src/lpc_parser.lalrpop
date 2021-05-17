@@ -1,22 +1,23 @@
 use itertools::Itertools;
-use crate::ast::program_node::ProgramNode;
-use crate::ast::binary_op_node::BinaryOperation;
-use crate::ast::expression_node::{ExpressionNode, first_span};
-use crate::ast::function_def_node::FunctionDefNode;
-use crate::ast::int_node::IntNode;
-use crate::ast::float_node::FloatNode;
-use crate::ast::call_node::CallNode;
-use crate::ast::return_node::ReturnNode;
-use crate::ast::decl_node::DeclNode;
-use crate::ast::var_init_node::VarInitNode;
-use crate::ast::range_node::RangeNode;
-use crate::ast::var_node::VarNode;
-use crate::ast::string_node::StringNode;
+use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
+use crate::ast::binary_op_node::BinaryOperation;
+use crate::ast::block_node::BlockNode;
+use crate::ast::call_node::CallNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
+use crate::ast::decl_node::DeclNode;
+use crate::ast::expression_node::{ExpressionNode, first_span};
+use crate::ast::float_node::FloatNode;
+use crate::ast::function_def_node::FunctionDefNode;
+use crate::ast::int_node::IntNode;
 use crate::ast::mapping_node::MappingNode;
-use crate::ast::ast_node::{AstNode, SpannedNode};
+use crate::ast::program_node::ProgramNode;
+use crate::ast::range_node::RangeNode;
+use crate::ast::return_node::ReturnNode;
+use crate::ast::string_node::StringNode;
+use crate::ast::var_node::VarNode;
+use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::lpc_type::LpcType;
 use crate::parser::collapse_expression::collapse_expression;
 use crate::parser::span::Span;
@@ -137,7 +138,7 @@ pub Def: AstNode = {
 };
 
 FunctionDef: FunctionDefNode = {
-    <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:SemiSeq<Statement>> "}" => {
+    <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:Statements> "}" => {
         let array = star.is_some();
 
         let l = if let Some((_, span)) = &r_type {
@@ -217,9 +218,14 @@ Type: (String, Span) = {
 };
 
 pub Statement: AstNode = {
-    <Expression> => AstNode::from(<>),
-    <Return> => AstNode::from(<>),
-    <Decl> => AstNode::from(<>)
+    <Expression> ";" => AstNode::from(<>),
+    <Return> ";" => AstNode::from(<>),
+    <Decl> ";" => AstNode::from(<>),
+    <Block> => AstNode::from(<>)
+};
+
+pub Statements: Vec<AstNode> = {
+    <Statement*>
 };
 
 VarInit: VarInitNode = {
@@ -263,6 +269,12 @@ pub Decl: DeclNode = {
         }
     }
 }
+
+pub Block: BlockNode = {
+    "{" <Statements> "}" => {
+        BlockNode::new(<>)
+    }
+};
 
 pub PrimaryExpression: ExpressionNode = {
     <Int>,

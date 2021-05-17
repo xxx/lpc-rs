@@ -14,12 +14,12 @@ use crate::{
 
 use crate::errors::LpcError;
 
-/// A node representing an array literal
+/// A node representing a comma-separated list of expressions
 #[derive(Hash, Debug, Clone, Eq, PartialEq)]
 pub struct CommaExpressionNode {
     pub value: Vec<ExpressionNode>,
 
-    /// The full span of all expressions in the array - from the left side of the first item
+    /// The full span of all expressions in the list - from the left side of the first item
     /// to the right side of the last
     pub span: Option<Span>,
 }

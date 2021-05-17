@@ -23,6 +23,7 @@ use crate::{
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
+use crate::ast::block_node::BlockNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -151,6 +152,17 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError> {
+        self.context.scopes.goto(node.scope_id);
+
+        for stmt in &mut node.body {
+            stmt.visit(self)?;
+        }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
@@ -163,7 +175,7 @@ impl TreeWalker for SemanticCheckWalker {
             expression.visit(self)?;
         }
 
-        self.context.scopes.goto_root();
+        self.context.scopes.pop();
         Ok(())
     }
 

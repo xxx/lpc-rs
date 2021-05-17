@@ -20,10 +20,12 @@ use crate::{
     errors::LpcError,
     parser::span::Span,
 };
+use crate::ast::block_node::BlockNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
 pub enum AstNode {
+    Block(BlockNode),
     Call(CallNode),
     Decl(DeclNode),
     Expression(ExpressionNode),
@@ -58,6 +60,7 @@ macro_rules! node_defs {
 }
 
 node_defs!(
+    Block,
     Call,
     Decl,
     Expression,
@@ -118,6 +121,12 @@ impl From<DeclNode> for AstNode {
 impl From<VarInitNode> for AstNode {
     fn from(node: VarInitNode) -> Self {
         AstNode::VarInit(node)
+    }
+}
+
+impl From<BlockNode> for AstNode {
+    fn from(node: BlockNode) -> Self {
+        AstNode::Block(node)
     }
 }
 
