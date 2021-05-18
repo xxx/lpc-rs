@@ -24,6 +24,7 @@ use crate::{
     LpcInt,
 };
 use std::collections::HashMap;
+use crate::ast::unary_op_node::UnaryOpNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -37,6 +38,7 @@ pub enum ExpressionNode {
     Int(IntNode),
     Range(RangeNode),
     String(StringNode),
+    UnaryOp(UnaryOpNode),
     Var(VarNode),
     Array(ArrayNode),
     Mapping(MappingNode),
@@ -68,6 +70,7 @@ impl SpannedNode for ExpressionNode {
             ExpressionNode::Int(node) => node.span,
             ExpressionNode::Range(node) => node.span,
             ExpressionNode::String(node) => node.span,
+            ExpressionNode::UnaryOp(node) => node.span,
             ExpressionNode::Var(node) => node.span,
             ExpressionNode::Array(node) => node.span,
             ExpressionNode::Mapping(node) => node.span,
@@ -118,6 +121,7 @@ delegated_traits!(
     ExpressionNode::Int,
     ExpressionNode::Range,
     ExpressionNode::String,
+    ExpressionNode::UnaryOp,
     ExpressionNode::Var,
     ExpressionNode::Array,
     ExpressionNode::Mapping
@@ -126,6 +130,12 @@ delegated_traits!(
 impl From<BinaryOpNode> for ExpressionNode {
     fn from(node: BinaryOpNode) -> Self {
         Self::BinaryOp(node)
+    }
+}
+
+impl From<UnaryOpNode> for ExpressionNode {
+    fn from(node: UnaryOpNode) -> Self {
+        Self::UnaryOp(node)
     }
 }
 

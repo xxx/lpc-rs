@@ -216,17 +216,18 @@ fn test_string_literal_repeat() {
     assert_eq!(node, expected);
 
     // test negative multiplier
-    // TODO: Once unary negatives are in, reenable this.
-    // let expr = r##""foo" * -3"##;
-    // let node = lpc_parser::ExpressionParser::new().parse(expr).unwrap();
-    //
-    // let expected = ExpressionNode::String(StringNode {
-    //     value: String::from(""),
-    //     span: Some(Span {
-    //         l: 0,
-    //         r: expr.len(),
-    //     }),
-    // });
-    //
-    // assert_eq!(node, expected);
+    let expr = r##""foo" * -3"##;
+    let lexer = LexWrapper::new(expr);
+    let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
+
+    let expected = ExpressionNode::String(StringNode {
+        value: String::from(""),
+        span: Some(Span {
+            file_id: 0,
+            l: 0,
+            r: expr.len(),
+        }),
+    });
+
+    assert_eq!(node, expected);
 }

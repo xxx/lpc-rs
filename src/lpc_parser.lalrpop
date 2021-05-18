@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use core::ops::Range;
 use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
@@ -16,10 +17,12 @@ use crate::ast::program_node::ProgramNode;
 use crate::ast::range_node::RangeNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::string_node::StringNode;
+use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 use crate::ast::var_node::VarNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::semantic::lpc_type::LpcType;
-use crate::parser::collapse_expression::collapse_expression;
+use crate::parser::collapse_binary_op::collapse_binary_op;
+use crate::parser::collapse_unary_op::collapse_unary_op;
 use crate::parser::span::Span;
 use crate::parser::lexer::Token;
 use crate::errors::LpcError;
@@ -313,7 +316,7 @@ pub PostfixExpression: ExpressionNode = {
             0
         };
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
     <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> => {
         let file_id = first_span(&[&l, &e1, &e2]).file_id;
@@ -329,7 +332,7 @@ pub PostfixExpression: ExpressionNode = {
             span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
     <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> => {
         let file_id = first_span(&[&l, &e]).file_id;
@@ -345,7 +348,7 @@ pub PostfixExpression: ExpressionNode = {
             span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
     <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> => {
         let file_id = first_span(&[&l, &e]).file_id;
@@ -361,13 +364,32 @@ pub PostfixExpression: ExpressionNode = {
             span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_expression(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
     Call => ExpressionNode::Call(<>)
 };
 
 pub UnaryExpression: ExpressionNode = {
     <PostfixExpression>,
+    <op:UnaryOp> <expr:CastExpression> => {
+        let span = if let Some(s) = expr.span() {
+            Some(Span {
+                l: op.1.start,
+                ..s
+            })
+        } else {
+            None
+        };
+
+        let n = UnaryOpNode {
+            expr: Box::new(expr),
+            op: op.0,
+            is_post: false,
+            span
+        };
+
+        collapse_unary_op(n)
+    }
 };
 
 pub CastExpression: ExpressionNode = {
@@ -389,7 +411,7 @@ pub MultiplicitiveExpression: ExpressionNode = {
              0
          };
 
-         collapse_expression(op, l, r, Span { file_id, l: left, r: right })
+         collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
     },
 };
 
@@ -408,7 +430,7 @@ pub AdditiveExpression: ExpressionNode = {
              0
          };
 
-        collapse_expression(op, l, r, Span { file_id, l: left, r: right })
+        collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
     }
 };
 
@@ -580,6 +602,14 @@ MultiplicitiveBinaryOp: BinaryOperation = {
     "*" => BinaryOperation::Mul,
     "/" => BinaryOperation::Div
 };
+
+UnaryOp: (UnaryOperation, Range<usize>) = {
+    <l:@L> "-" <r:@R> => (UnaryOperation::Negate, l..r),
+//    "++" => UnaryOperation::Inc,
+//    "--" => UnaryOperation::Dec,
+//    "!" => UnaryOperation::Bang,
+//    "~" => UnaryOperation::Tilde,
+}
 
 Var: ExpressionNode = <name:"ID"> => {
     ExpressionNode::Var(

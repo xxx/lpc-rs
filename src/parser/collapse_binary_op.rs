@@ -17,7 +17,7 @@ use std::iter::repeat;
 /// * `l` - The left operand
 /// * `r` - The right operand
 /// * `span` - The span encompassing the entire expression
-pub fn collapse_expression(
+pub fn collapse_binary_op(
     op: BinaryOperation,
     l: ExpressionNode,
     r: ExpressionNode,
@@ -223,7 +223,7 @@ mod tests {
         let op = BinaryOperation::Add;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -240,7 +240,7 @@ mod tests {
         let op = BinaryOperation::Sub;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -257,7 +257,7 @@ mod tests {
         let op = BinaryOperation::Mul;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -274,7 +274,7 @@ mod tests {
         let op = BinaryOperation::Div;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::Int(IntNode {
@@ -291,7 +291,7 @@ mod tests {
         let op = BinaryOperation::Add;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {
@@ -308,7 +308,7 @@ mod tests {
         let op = BinaryOperation::Add;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {
@@ -325,7 +325,7 @@ mod tests {
         let op = BinaryOperation::Mul;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {
@@ -342,7 +342,7 @@ mod tests {
         let op = BinaryOperation::Mul;
         let span = Span::new(0, 0..1);
 
-        let result = collapse_expression(op, node1, node2, span);
+        let result = collapse_binary_op(op, node1, node2, span);
         assert_eq!(
             result,
             ExpressionNode::String(StringNode {

@@ -10,6 +10,7 @@ use crate::{
     context::Context,
     errors::LpcError,
 };
+use crate::ast::unary_op_node::UnaryOpNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -79,6 +80,16 @@ pub trait TreeWalker {
     {
         node.l.visit(self)?;
         node.r.visit(self)?;
+
+        Ok(())
+    }
+
+    /// Visit a binary operation node
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<(), LpcError>
+    where
+        Self: Sized,
+    {
+        node.expr.visit(self)?;
 
         Ok(())
     }

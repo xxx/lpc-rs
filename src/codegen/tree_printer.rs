@@ -12,6 +12,7 @@ use crate::{
     codegen::tree_walker,
     errors::LpcError,
 };
+use crate::ast::unary_op_node::UnaryOpNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -124,6 +125,18 @@ impl TreeWalker for TreePrinter {
         self.println_indented("r: ");
         self.indent += 2;
         node.r.visit(self)?;
+        self.indent -= 4;
+
+        Ok(())
+    }
+
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<(), LpcError> {
+        self.println_indented("Unary Op");
+        self.indent += 2;
+        self.println_indented(&format!("operation: {:?}", node.op));
+        self.println_indented("expr: ");
+        self.indent += 2;
+        node.expr.visit(self)?;
         self.indent -= 4;
 
         Ok(())

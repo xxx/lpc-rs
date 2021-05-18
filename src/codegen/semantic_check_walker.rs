@@ -24,6 +24,8 @@ use crate::{
         semantic_checks::{check_binary_operation_types, node_type},
     },
 };
+use crate::ast::unary_op_node::UnaryOpNode;
+use crate::semantic::semantic_checks::check_unary_operation_types;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -140,6 +142,22 @@ impl TreeWalker for SemanticCheckWalker {
         node.r.visit(self)?;
 
         match check_binary_operation_types(
+            node,
+            &self.context.scopes,
+            &self.function_return_values(),
+        ) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                self.context.errors.push(err.clone());
+                Err(err)
+            }
+        }
+    }
+
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<(), LpcError> {
+        node.expr.visit(self)?;
+
+        match check_unary_operation_types(
             node,
             &self.context.scopes,
             &self.function_return_values(),
@@ -358,6 +376,15 @@ mod tests {
 
     use super::*;
 
+    fn empty_context() -> Context {
+        let mut scopes = ScopeTree::default();
+        scopes.push_new();
+        Context {
+            scopes,
+            ..Context::default()
+        }
+    }
+
     mod test_visit_call {
         use super::*;
 
@@ -405,15 +432,7 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
@@ -428,15 +447,7 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
             assert_eq!(walker.context.errors.len(), 1);
@@ -450,15 +461,7 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
             assert_eq!(walker.context.errors.len(), 1);
@@ -584,14 +587,12 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -600,7 +601,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_disallows_differing_types() {
+        fn test_visit_binary_op_disallows_differing_types() {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(123)),
@@ -608,14 +609,62 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
+            assert!(node.visit(&mut walker).is_err());
+        }
+    }
+
+    mod test_visit_unary_op {
+        use crate::ast::unary_op_node::UnaryOperation;
+
+        use super::*;
+
+        #[test]
+        fn test_visit_unary_op_works_allows_valid() {
+            let mut node = ExpressionNode::from(UnaryOpNode {
+                expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                op: UnaryOperation::Negate,
+                is_post: false,
+                span: None,
+            });
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let sym = Symbol::new("foo", LpcType::Int(false));
+            scopes.get_current_mut().unwrap().insert(sym);
+            let context = Context {
+                scopes,
+                ..Context::default()
+            };
+
+            let mut walker = SemanticCheckWalker::new(context);
+            assert!(node.visit(&mut walker).is_ok())
+        }
+
+        #[test]
+        fn test_visit_unary_operation_disallows_invalid() {
+            let mut node = ExpressionNode::from(UnaryOpNode {
+                expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                op: UnaryOperation::Negate,
+                is_post: false,
+                span: None,
+            });
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let sym = Symbol::new("foo", LpcType::String(false));
+            scopes.get_current_mut().unwrap().insert(sym);
+            let context = Context {
+                scopes,
                 ..Context::default()
             };
 
@@ -721,14 +770,12 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -767,14 +814,12 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -817,14 +862,12 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -853,15 +896,7 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
@@ -879,15 +914,7 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
@@ -905,12 +932,10 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -981,15 +1006,7 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut scope_walker = ScopeWalker::new(context);
             let _ = scope_walker.visit_function_def(&mut function_def1);
             let _ = scope_walker.visit_function_def(&mut function_def2);
@@ -1018,15 +1035,7 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(void_function_def);
             let _ = node.visit(&mut walker);
@@ -1049,15 +1058,7 @@ mod tests {
                 span: None,
             };
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(function_def);
             let _ = node.visit(&mut walker);
@@ -1204,14 +1205,12 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -1229,14 +1228,12 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.get_current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
-                function_prototypes,
                 ..Context::default()
             };
 
@@ -1254,15 +1251,7 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
@@ -1277,15 +1266,7 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
@@ -1300,15 +1281,7 @@ mod tests {
                 span: None,
             });
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = Context {
-                scopes,
-                function_prototypes,
-                ..Context::default()
-            };
-
+            let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 

@@ -13,6 +13,7 @@ use crate::{
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
+use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 
 /// Utility functions for doing various semantic checks.
 
@@ -169,6 +170,44 @@ pub fn check_binary_operation_types(
     }
 }
 
+/// Check if a unary operation has mismatched types
+///
+/// # Arguments
+///
+/// * `node` - The node we're checking to see if it's being used incorrectly
+/// * `scope_tree` - A reference to the scope tree that holds the program symbols
+/// * `function_return_types` - A reference to a mapping of function names to their return types
+pub fn check_unary_operation_types(
+    node: &UnaryOpNode,
+    scope_tree: &ScopeTree,
+    function_return_types: &HashMap<&str, LpcType>,
+) -> Result<(), LpcError> {
+    let expr_type = node_type(&node.expr, scope_tree, function_return_types)?;
+
+    let create_error= |expected| {
+        LpcError::new(format!(
+            "Invalid Type: `{}` `{}` ({}). Expected {}",
+            node.op, node.expr, expr_type, expected
+        ))
+            .with_span(node.span)
+    };
+
+    match node.op {
+        UnaryOperation::Negate => {
+            match expr_type {
+                LpcType::Int(false) |
+                LpcType::Float(false) => Ok(()),
+
+                _ => Err(create_error("`int`, or `float`"))
+            }
+        }
+        UnaryOperation::Inc => todo!(),
+        UnaryOperation::Dec => todo!(),
+        UnaryOperation::Bang => todo!(),
+        UnaryOperation::Tilde => todo!(),
+    }
+}
+
 /// Check two types, and return the promotion if one occurs (or the same type if both are the same)
 /// Returns the first type if no promotion is possible.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
@@ -248,6 +287,9 @@ pub fn node_type(
             node_type(r, scope_tree, function_return_types)?,
             *op,
         )),
+        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => Ok(
+            node_type(expr, scope_tree, function_return_types)?,
+        ),
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
                 return Ok(LpcType::Mixed(true));
@@ -979,6 +1021,181 @@ mod check_binary_operation_tests {
             &scope_tree,
         )
         .is_err());
+    }
+}
+
+#[cfg(test)]
+mod check_unary_operation_tests {
+    use super::*;
+    use crate::semantic::symbol::Symbol;
+
+    fn setup() -> ScopeTree {
+        let int1 = Symbol {
+            name: "int1".to_string(),
+            type_: LpcType::Int(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
+        let string1 = Symbol {
+            name: "string1".to_string(),
+            type_: LpcType::String(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
+        let array1 = Symbol {
+            name: "array1".to_string(),
+            type_: LpcType::Int(true),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
+        let float1 = Symbol {
+            name: "float1".to_string(),
+            type_: LpcType::Float(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
+        let mapping1 = Symbol {
+            name: "mapping1".to_string(),
+            type_: LpcType::Mapping(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
+
+        let mut scope_tree = ScopeTree::default();
+        scope_tree.push_new();
+        let scope = scope_tree.get_current_mut().unwrap();
+        scope.insert(int1);
+        scope.insert(string1);
+        scope.insert(array1);
+        scope.insert(float1);
+        scope.insert(mapping1);
+
+        scope_tree
+    }
+
+    fn get_result(
+        op: UnaryOperation,
+        expr_node: ExpressionNode,
+        scope_tree: &ScopeTree,
+    ) -> Result<(), LpcError> {
+        let node = UnaryOpNode {
+            expr: Box::new(expr_node),
+            op,
+            is_post: false,
+            span: None,
+        };
+        let function_return_types = HashMap::new();
+
+        check_unary_operation_types(&node, &scope_tree, &function_return_types)
+    }
+
+    fn int_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(123),
+            &scope_tree,
+        )
+    }
+
+    fn string_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from("foo"),
+            &scope_tree,
+        )
+    }
+
+    fn int_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("int1")),
+            &scope_tree,
+        )
+    }
+
+    fn string_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("string2")),
+            &scope_tree,
+        )
+    }
+
+    fn array_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(vec!["asdf", "bar", "hi"]),
+            &scope_tree,
+        )
+    }
+
+    fn array_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("array1")),
+            &scope_tree,
+        )
+    }
+
+    fn float_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(123.45),
+            &scope_tree,
+        )
+    }
+
+    fn float_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("float1")),
+            &scope_tree,
+        )
+    }
+
+    fn mapping_literal(
+        op: UnaryOperation,
+        scope_tree: &ScopeTree,
+    ) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(HashMap::new()),
+            &scope_tree,
+        )
+    }
+
+    fn mapping_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("mapping1")),
+            &scope_tree,
+        )
+    }
+
+    #[test]
+    fn test_add() {
+        let scope_tree = setup();
+
+        assert!(int_literal(UnaryOperation::Negate, &scope_tree).is_ok());
+        assert!(int_var(UnaryOperation::Negate, &scope_tree).is_ok());
+        assert!(float_literal(UnaryOperation::Negate, &scope_tree).is_ok());
+        assert!(float_var(UnaryOperation::Negate, &scope_tree).is_ok());
+        assert!(string_literal(UnaryOperation::Negate, &scope_tree).is_err());
+        assert!(string_var(UnaryOperation::Negate, &scope_tree).is_err());
+        assert!(array_literal(UnaryOperation::Negate, &scope_tree).is_err());
+        assert!(array_var(UnaryOperation::Negate, &scope_tree).is_err());
+        assert!(mapping_literal(UnaryOperation::Negate, &scope_tree).is_err());
+        assert!(mapping_var(UnaryOperation::Negate, &scope_tree).is_err());
     }
 }
 

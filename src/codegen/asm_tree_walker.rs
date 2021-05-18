@@ -34,6 +34,7 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
+use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 
 /// Really just a `pc` index in the vm.
 type Address = usize;
@@ -216,6 +217,7 @@ impl AsmTreeWalker {
         match node {
             ExpressionNode::Int(_) |
             ExpressionNode::Float(_) => OperationType::Register,
+
             ExpressionNode::String(_) |
             ExpressionNode::Array(_) |
             ExpressionNode::Mapping(_) |
@@ -230,6 +232,15 @@ impl AsmTreeWalker {
                 match (left_type, right_type) {
                     (OperationType::Register, OperationType::Register) => OperationType::Register,
                     _ => OperationType::Memory,
+                }
+            }
+            ExpressionNode::UnaryOp(node) => {
+                let expr_type = self.to_operation_type(&node.expr);
+
+                if matches!(expr_type, OperationType::Register) {
+                    OperationType::Register
+                } else {
+                    OperationType::Memory
                 }
             }
             ExpressionNode::Var(v) => {
@@ -473,6 +484,35 @@ impl TreeWalker for AsmTreeWalker {
         let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
+
+        Ok(())
+    }
+
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        node.expr.visit(self)?;
+        let reg_expr = self.current_result;
+
+        self.current_result = match node.op {
+            UnaryOperation::Negate => {
+                // multiply by -1
+                let reg = self.register_counter.next().unwrap();
+                let instruction = Instruction::IConst(reg, -1);
+                self.instructions.push(instruction);
+                self.debug_spans.push(node.span);
+
+                let reg_result = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::MMul(reg_expr, reg, reg_result);
+                self.instructions.push(instruction);
+                self.debug_spans.push(node.span);
+
+                reg_result
+            }
+            UnaryOperation::Inc => todo!(),
+            UnaryOperation::Dec => todo!(),
+            UnaryOperation::Bang => todo!(),
+            UnaryOperation::Tilde => todo!(),
+        };
 
         Ok(())
     }
