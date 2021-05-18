@@ -19,10 +19,10 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
         UnaryOperation::Negate => {
             match *expr {
                 ExpressionNode::Int(x) => {
-                    ExpressionNode::Int(IntNode { value: x.value * -1, span })
+                    ExpressionNode::Int(IntNode { value: -x.value, span })
                 }
                 ExpressionNode::Float(x) => {
-                    ExpressionNode::Float(FloatNode { value: x.value * -1.0, span })
+                    ExpressionNode::Float(FloatNode { value: -x.value, span })
                 }
                 x => x
             }
