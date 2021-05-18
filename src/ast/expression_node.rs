@@ -16,6 +16,7 @@ use crate::{
         mapping_node::MappingNode,
         range_node::RangeNode,
         string_node::StringNode,
+        unary_op_node::UnaryOpNode,
         var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
@@ -24,7 +25,6 @@ use crate::{
     LpcInt,
 };
 use std::collections::HashMap;
-use crate::ast::unary_op_node::UnaryOpNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

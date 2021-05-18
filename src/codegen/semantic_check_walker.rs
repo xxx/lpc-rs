@@ -13,6 +13,7 @@ use crate::{
         program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
+        unary_op_node::UnaryOpNode,
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
@@ -21,11 +22,9 @@ use crate::{
     interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
     semantic::{
         lpc_type::LpcType,
-        semantic_checks::{check_binary_operation_types, node_type},
+        semantic_checks::{check_binary_operation_types, check_unary_operation_types, node_type},
     },
 };
-use crate::ast::unary_op_node::UnaryOpNode;
-use crate::semantic::semantic_checks::check_unary_operation_types;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {

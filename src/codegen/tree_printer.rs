@@ -7,12 +7,11 @@ use crate::{
         decl_node::DeclNode, float_node::FloatNode, function_def_node::FunctionDefNode,
         int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
         range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
-        var_init_node::VarInitNode, var_node::VarNode,
+        unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker,
     errors::LpcError,
 };
-use crate::ast::unary_op_node::UnaryOpNode;
 
 /// A tree walker for pretty-printing an AST
 ///

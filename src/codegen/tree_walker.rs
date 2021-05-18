@@ -5,12 +5,12 @@ use crate::{
         comma_expression_node::CommaExpressionNode, decl_node::DeclNode, float_node::FloatNode,
         function_def_node::FunctionDefNode, int_node::IntNode, mapping_node::MappingNode,
         program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
-        string_node::StringNode, var_init_node::VarInitNode, var_node::VarNode,
+        string_node::StringNode, unary_op_node::UnaryOpNode, var_init_node::VarInitNode,
+        var_node::VarNode,
     },
     context::Context,
     errors::LpcError,
 };
-use crate::ast::unary_op_node::UnaryOpNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.

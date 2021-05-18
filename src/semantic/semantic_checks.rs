@@ -6,6 +6,7 @@ use crate::{
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
+        unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
@@ -13,7 +14,6 @@ use crate::{
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
 };
 use std::collections::HashMap;
-use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 
 /// Utility functions for doing various semantic checks.
 
@@ -184,23 +184,20 @@ pub fn check_unary_operation_types(
 ) -> Result<(), LpcError> {
     let expr_type = node_type(&node.expr, scope_tree, function_return_types)?;
 
-    let create_error= |expected| {
+    let create_error = |expected| {
         LpcError::new(format!(
             "Invalid Type: `{}` `{}` ({}). Expected {}",
             node.op, node.expr, expr_type, expected
         ))
-            .with_span(node.span)
+        .with_span(node.span)
     };
 
     match node.op {
-        UnaryOperation::Negate => {
-            match expr_type {
-                LpcType::Int(false) |
-                LpcType::Float(false) => Ok(()),
+        UnaryOperation::Negate => match expr_type {
+            LpcType::Int(false) | LpcType::Float(false) => Ok(()),
 
-                _ => Err(create_error("`int`, or `float`"))
-            }
-        }
+            _ => Err(create_error("`int`, or `float`")),
+        },
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => todo!(),
@@ -287,9 +284,9 @@ pub fn node_type(
             node_type(r, scope_tree, function_return_types)?,
             *op,
         )),
-        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => Ok(
-            node_type(expr, scope_tree, function_return_types)?,
-        ),
+        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => {
+            Ok(node_type(expr, scope_tree, function_return_types)?)
+        }
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
                 return Ok(LpcType::Mixed(true));
@@ -1100,27 +1097,15 @@ mod check_unary_operation_tests {
     }
 
     fn int_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
-        get_result(
-            op,
-            ExpressionNode::from(123),
-            &scope_tree,
-        )
+        get_result(op, ExpressionNode::from(123), &scope_tree)
     }
 
     fn string_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
-        get_result(
-            op,
-            ExpressionNode::from("foo"),
-            &scope_tree,
-        )
+        get_result(op, ExpressionNode::from("foo"), &scope_tree)
     }
 
     fn int_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
-        get_result(
-            op,
-            ExpressionNode::from(VarNode::new("int1")),
-            &scope_tree,
-        )
+        get_result(op, ExpressionNode::from(VarNode::new("int1")), &scope_tree)
     }
 
     fn string_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
@@ -1148,11 +1133,7 @@ mod check_unary_operation_tests {
     }
 
     fn float_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
-        get_result(
-            op,
-            ExpressionNode::from(123.45),
-            &scope_tree,
-        )
+        get_result(op, ExpressionNode::from(123.45), &scope_tree)
     }
 
     fn float_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
@@ -1163,15 +1144,8 @@ mod check_unary_operation_tests {
         )
     }
 
-    fn mapping_literal(
-        op: UnaryOperation,
-        scope_tree: &ScopeTree,
-    ) -> Result<(), LpcError> {
-        get_result(
-            op,
-            ExpressionNode::from(HashMap::new()),
-            &scope_tree,
-        )
+    fn mapping_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {
+        get_result(op, ExpressionNode::from(HashMap::new()), &scope_tree)
     }
 
     fn mapping_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<(), LpcError> {

@@ -23,6 +23,7 @@ use crate::{
         range_node::RangeNode,
         return_node::ReturnNode,
         string_node::StringNode,
+        unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
@@ -34,7 +35,6 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
-use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 
 /// Really just a `pc` index in the vm.
 type Address = usize;

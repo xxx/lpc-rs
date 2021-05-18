@@ -1,11 +1,9 @@
-use crate::{
-    ast::{
-        expression_node::ExpressionNode,
-        int_node::IntNode,
-    },
+use crate::ast::{
+    expression_node::ExpressionNode,
+    float_node::FloatNode,
+    int_node::IntNode,
+    unary_op_node::{UnaryOpNode, UnaryOperation},
 };
-use crate::ast::unary_op_node::{UnaryOperation, UnaryOpNode};
-use crate::ast::float_node::FloatNode;
 
 /// # Arguments
 /// * `op` - The operation being performed
@@ -13,20 +11,20 @@ use crate::ast::float_node::FloatNode;
 /// * `r` - The right operand
 /// * `span` - The span encompassing the entire expression
 pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
-    let UnaryOpNode { op, expr, span,.. } = node;
+    let UnaryOpNode { op, expr, span, .. } = node;
 
     match op {
-        UnaryOperation::Negate => {
-            match *expr {
-                ExpressionNode::Int(x) => {
-                    ExpressionNode::Int(IntNode { value: -x.value, span })
-                }
-                ExpressionNode::Float(x) => {
-                    ExpressionNode::Float(FloatNode { value: -x.value, span })
-                }
-                x => x
-            }
-        }
+        UnaryOperation::Negate => match *expr {
+            ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
+                value: -x.value,
+                span,
+            }),
+            ExpressionNode::Float(x) => ExpressionNode::Float(FloatNode {
+                value: -x.value,
+                span,
+            }),
+            x => x,
+        },
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => todo!(),
@@ -37,8 +35,8 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use decorum::Total;
     use crate::parser::span::Span;
+    use decorum::Total;
 
     #[test]
     fn test_collapses_negate_int() {
@@ -47,17 +45,11 @@ mod tests {
             expr: Box::new(ExpressionNode::from(123)),
             is_post: false,
             op: UnaryOperation::Negate,
-            span
+            span,
         };
 
         let result = collapse_unary_op(node);
-        assert_eq!(
-            result,
-            ExpressionNode::Int(IntNode {
-                value: -123,
-                span
-            })
-        );
+        assert_eq!(result, ExpressionNode::Int(IntNode { value: -123, span }));
     }
 
     #[test]
@@ -67,7 +59,7 @@ mod tests {
             expr: Box::new(ExpressionNode::from(3.14)),
             is_post: false,
             op: UnaryOperation::Negate,
-            span
+            span,
         };
 
         let result = collapse_unary_op(node);
