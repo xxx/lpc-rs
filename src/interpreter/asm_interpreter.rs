@@ -509,14 +509,15 @@ impl AsmInterpreter {
         r1: Register,
         r2: Register,
         r3: Register,
-        closure: F,
+        operation: F,
     ) -> Result<()>
     where
         F: Fn(&LpcRef, &LpcRef) -> Result<LpcValue>,
     {
-        let val1 = &self.register_to_lpc_ref(r1.index());
-        let val2 = &self.register_to_lpc_ref(r2.index());
-        match closure(val1, val2) {
+        let ref1 = &self.register_to_lpc_ref(r1.index());
+        let ref2 = &self.register_to_lpc_ref(r2.index());
+
+        match operation(ref1, ref2) {
             Ok(result) => {
                 let var = value_to_ref!(result, self.memory);
 
