@@ -39,6 +39,7 @@ impl Symbol {
         self.scope_id == 0
     }
 
+    // TODO: this is only used in a couple of tests. Move it there.
     /// Set the location of an existing `Symbol`
     pub fn with_location(self, location: Option<Register>) -> Self {
         Self { location, ..self }

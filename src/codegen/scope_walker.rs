@@ -133,7 +133,7 @@ impl TreeWalker for ScopeWalker {
 
         if let Some(symbol) = sym {
             if symbol.is_global() {
-                node.set_global(true);
+                node.set_global(true); // TODO: find a better place to do this
             }
         } else {
             let e =
