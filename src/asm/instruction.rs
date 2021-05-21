@@ -22,6 +22,9 @@ pub enum Instruction {
         initial_arg: Register,
     },
 
+    /// == comparison
+    EqEq(Register, Register, Register),
+
     /// Float Constant
     FConst(Register, LpcFloat),
 
@@ -98,6 +101,9 @@ impl Display for Instruction {
             }
             Instruction::ARange(r1, r2, r3, r4) => {
                 write!(f, "arange {}, {}, {}, {}", r1, r2, r3, r4)
+            }
+            Instruction::EqEq(r1, r2, r3) => {
+                write!(f, "eqeq {}, {}, {}", r1, r2, r3)
             }
             Instruction::GLoad(r1, r2) => {
                 write!(f, "gload {}, {}", r1, r2)

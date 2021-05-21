@@ -28,14 +28,15 @@ pub fn collapse_binary_op(
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Div => collapse_div(op, l, r, span),
-        BinaryOperation::Index => ExpressionNode::BinaryOp(BinaryOpNode {
+        BinaryOperation::AndAnd => todo!(),
+        BinaryOperation::OrOr => todo!(),
+        BinaryOperation::Index |
+        BinaryOperation::EqEq => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
             op,
             span: Some(span),
         }),
-        BinaryOperation::AndAnd => todo!(),
-        BinaryOperation::OrOr => todo!(),
     }
 }
 

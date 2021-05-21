@@ -225,6 +225,17 @@ impl AsmInterpreter {
                             .with_span(*self.current_debug_span()));
                     }
                 }
+                Instruction::EqEq(r1, r2, r3) => {
+                    let registers = current_registers_mut(&mut self.stack)?;
+                    let out = if registers[r1.index()] == registers[r2.index()] {
+                        1
+                    } else {
+                        0
+                    };
+
+                    let registers = current_registers_mut(&mut self.stack)?;
+                    registers[r3.index()] = LpcRef::Int(out);
+                }
                 Instruction::Call {
                     name,
                     num_args,
@@ -460,9 +471,6 @@ impl AsmInterpreter {
 
                     registers[r.index()] = new_ref;
                 }
-                // Instruction::MDiv(r1, r2, r3) => {
-                //     self.binary_operation(*r1, *r2, *r3, |x, y| x / y)?;
-                // }
                 Instruction::MMul(r1, r2, r3) => {
                     let (n1, n2, n3) = (*r1, *r2, *r3);
                     self.binary_operation(n1, n2, n3, |x, y| x * y)?;

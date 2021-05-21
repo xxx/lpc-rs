@@ -286,6 +286,9 @@ impl AsmTreeWalker {
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => todo!(),
             BinaryOperation::OrOr => todo!(),
+            BinaryOperation::EqEq => {
+                Instruction::EqEq(reg_left, reg_right, reg_result)
+            }
         }
     }
 
@@ -599,36 +602,19 @@ impl TreeWalker for AsmTreeWalker {
             Some(s) => s,
             None => {
                 return Err(LpcError::new(format!(
-                    "Missing symbol, that passed semantic checks: {}",
+                    "Missing symbol, that somehow passed semantic checks?: {}",
                     node.name
                 ))
                 .with_span(node.span))
             }
         };
 
-        let sym_type = sym.type_;
-
         let global = sym.is_global();
 
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            if matches!(expression, ExpressionNode::Var(_))
-                && !matches!(sym_type, LpcType::Mapping(false))
-            {
-                // copy on write, so the new var isn't a literal alias of the old,
-                // except for mappings.
-                let previous_register = self.register_counter.current();
-
-                current_register = self.register_counter.next().unwrap();
-
-                let instruction = Instruction::RegCopy(previous_register, current_register);
-
-                self.instructions.push(instruction);
-                self.debug_spans.push(expression.span());
-            } else {
-                current_register = self.register_counter.current();
-            }
+            current_register = self.current_result;
         } else {
             // Default value to 0 when uninitialized.
             current_register = self.register_counter.next().unwrap();
@@ -636,8 +622,8 @@ impl TreeWalker for AsmTreeWalker {
 
         if global {
             // Store the reference in the globals register.
-            // Using next() "wastes" global r0, but makes it possible for us to skip a
-            // bunch of conditionals.
+            // Using next() means global r0 is never used,
+            // but makes it possible to skip a bunch of conditionals.
             let dest_register = self.global_counter.next().unwrap();
             let instruction = Instruction::GStore(current_register, dest_register);
 
@@ -1560,12 +1546,16 @@ mod tests {
     mod test_visit_var_init {
         use super::*;
 
-        #[test]
-        fn test_does_not_copy_mappings() {
+        fn setup() -> AsmTreeWalker {
             let mut context = Context::default();
             context.scopes.push_new();
             context.scopes.push_new();
-            let mut walker = AsmTreeWalker::new(context);
+            AsmTreeWalker::new(context)
+        }
+
+        #[test]
+        fn test_does_not_copy_mappings() {
+            let mut walker = setup();
 
             let sym = Symbol::new("marf", LpcType::Mapping(false)).with_location(Some(Register(1)));
             insert_symbol(&mut walker, sym);
@@ -1586,11 +1576,8 @@ mod tests {
         }
 
         #[test]
-        fn test_copies_arrays() {
-            let mut context = Context::default();
-            context.scopes.push_new();
-            context.scopes.push_new(); // push a local scope
-            let mut walker = AsmTreeWalker::new(context);
+        fn test_does_not_copy_arrays() {
+            let mut walker = setup();
 
             let sym = Symbol::new("marf", LpcType::Int(true)).with_location(Some(Register(1)));
             insert_symbol(&mut walker, sym);
@@ -1607,7 +1594,7 @@ mod tests {
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
 
             let _ = walker.visit_var_init(&mut node);
-            assert_eq!(walker.instructions, [RegCopy(Register(0), Register(1))]);
+            assert_eq!(walker.instructions, []);
         }
     }
 
@@ -1619,6 +1606,8 @@ mod tests {
                 .get_mut(node_id)
                 .unwrap()
                 .insert(symbol)
+        } else {
+            panic!("No current scope to insert the symbol into.")
         }
     }
 }

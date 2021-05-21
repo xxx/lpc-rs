@@ -26,6 +26,8 @@ pub enum BinaryOperation {
 
     AndAnd,
     OrOr,
+
+    EqEq,
 }
 
 impl Display for BinaryOperation {
@@ -38,6 +40,7 @@ impl Display for BinaryOperation {
             BinaryOperation::Index => "[]",
             BinaryOperation::AndAnd => "&&",
             BinaryOperation::OrOr => "||",
+            BinaryOperation::EqEq => "==",
         };
 
         write!(f, "{}", s)

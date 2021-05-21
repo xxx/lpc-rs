@@ -167,6 +167,9 @@ pub fn check_binary_operation_types(
         }
         BinaryOperation::AndAnd => todo!(),
         BinaryOperation::OrOr => todo!(),
+        BinaryOperation::EqEq => {
+            Ok(())
+        }
     }
 }
 

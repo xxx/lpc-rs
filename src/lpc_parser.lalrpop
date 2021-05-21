@@ -443,7 +443,22 @@ pub RelationalExpression: ExpressionNode = {
 };
 
 pub EqualityExpression: ExpressionNode = {
-    <RelationalExpression>
+    <RelationalExpression>,
+    <l:EqualityExpression> <op:EqualityOp> <r:RelationalExpression> => {
+         let file_id = first_span(&[&l, &r]).file_id;
+         let left = if let Some(span) = l.span() {
+             span.l
+         } else {
+             0
+         };
+         let right = if let Some(span) = r.span() {
+             span.r
+         } else {
+             0
+         };
+
+         collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
+    }
 };
 
 pub AndExpression: ExpressionNode = {
@@ -601,6 +616,10 @@ AdditiveBinaryOp: BinaryOperation = {
 MultiplicitiveBinaryOp: BinaryOperation = {
     "*" => BinaryOperation::Mul,
     "/" => BinaryOperation::Div
+};
+
+EqualityOp: BinaryOperation = {
+    "==" => BinaryOperation::EqEq,
 };
 
 UnaryOp: (UnaryOperation, Range<usize>) = {
