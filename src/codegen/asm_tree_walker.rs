@@ -286,9 +286,7 @@ impl AsmTreeWalker {
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => todo!(),
             BinaryOperation::OrOr => todo!(),
-            BinaryOperation::EqEq => {
-                Instruction::EqEq(reg_left, reg_right, reg_result)
-            }
+            BinaryOperation::EqEq => Instruction::EqEq(reg_left, reg_right, reg_result),
         }
     }
 
@@ -618,7 +616,8 @@ impl TreeWalker for AsmTreeWalker {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
                 let next_register = self.register_counter.next().unwrap();
-                self.instructions.push(Instruction::RegCopy(self.current_result, next_register));
+                self.instructions
+                    .push(Instruction::RegCopy(self.current_result, next_register));
                 self.debug_spans.push(node.span());
                 next_register
             } else {
@@ -1602,15 +1601,22 @@ mod tests {
         fn test_does_not_copy_mapping_literals() {
             let mut walker = setup();
             let pairs = vec![(ExpressionNode::from("foo"), ExpressionNode::from("bar"))];
-            setup_literal(LpcType::Mapping(false), ExpressionNode::Mapping(MappingNode::new(pairs, None)), &mut walker);
+            setup_literal(
+                LpcType::Mapping(false),
+                ExpressionNode::Mapping(MappingNode::new(pairs, None)),
+                &mut walker,
+            );
 
             let mut map = HashMap::new();
             map.insert(Register(1), Register(2));
-            assert_eq!(walker.instructions, [
-                SConst(Register(1),String::from("foo")),
-                SConst(Register(2), String::from("bar")),
-                MapConst(Register(3), map)
-            ]);
+            assert_eq!(
+                walker.instructions,
+                [
+                    SConst(Register(1), String::from("foo")),
+                    SConst(Register(2), String::from("bar")),
+                    MapConst(Register(3), map)
+                ]
+            );
         }
 
         #[test]
@@ -1624,7 +1630,11 @@ mod tests {
         #[test]
         fn test_does_not_copy_int_literals() {
             let mut walker = setup();
-            setup_literal(LpcType::Int(false), ExpressionNode::Int(IntNode::new(123)), &mut walker);
+            setup_literal(
+                LpcType::Int(false),
+                ExpressionNode::Int(IntNode::new(123)),
+                &mut walker,
+            );
 
             assert_eq!(walker.instructions, [IConst(Register(1), 123)]);
         }
@@ -1640,9 +1650,16 @@ mod tests {
         #[test]
         fn test_does_not_copy_float_literals() {
             let mut walker = setup();
-            setup_literal(LpcType::Float(false), ExpressionNode::Float(FloatNode::new(123.0)), &mut walker);
+            setup_literal(
+                LpcType::Float(false),
+                ExpressionNode::Float(FloatNode::new(123.0)),
+                &mut walker,
+            );
 
-            assert_eq!(walker.instructions, [FConst(Register(1), Total::from(123.0))]);
+            assert_eq!(
+                walker.instructions,
+                [FConst(Register(1), Total::from(123.0))]
+            );
         }
 
         #[test]
@@ -1656,9 +1673,16 @@ mod tests {
         #[test]
         fn test_does_not_copy_string_literals() {
             let mut walker = setup();
-            setup_literal(LpcType::Int(true), ExpressionNode::String(StringNode::new("foo")), &mut walker);
+            setup_literal(
+                LpcType::Int(true),
+                ExpressionNode::String(StringNode::new("foo")),
+                &mut walker,
+            );
 
-            assert_eq!(walker.instructions, [SConst(Register(1), String::from("foo"))]);
+            assert_eq!(
+                walker.instructions,
+                [SConst(Register(1), String::from("foo"))]
+            );
         }
 
         #[test]
@@ -1672,9 +1696,19 @@ mod tests {
         #[test]
         fn test_does_not_copy_array_literals() {
             let mut walker = setup();
-            setup_literal(LpcType::Int(true), ExpressionNode::Array(ArrayNode::new(vec![ExpressionNode::from(1234)])), &mut walker);
+            setup_literal(
+                LpcType::Int(true),
+                ExpressionNode::Array(ArrayNode::new(vec![ExpressionNode::from(1234)])),
+                &mut walker,
+            );
 
-            assert_eq!(walker.instructions, [IConst(Register(1), 1234), AConst(Register(2), vec![Register(1)])]);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), 1234),
+                    AConst(Register(2), vec![Register(1)])
+                ]
+            );
         }
 
         #[test]

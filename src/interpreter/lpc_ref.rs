@@ -121,12 +121,8 @@ impl PartialEq for LpcRef {
                 extract_value!(*x.borrow(), LpcValue::String)
                     == extract_value!(*y.borrow(), LpcValue::String)
             }
-            (LpcRef::Array(x), LpcRef::Array(y)) => {
-                PoolRef::ptr_eq(x, y)
-            }
-            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => {
-                PoolRef::ptr_eq(x, y)
-            }
+            (LpcRef::Array(x), LpcRef::Array(y)) => PoolRef::ptr_eq(x, y),
+            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => PoolRef::ptr_eq(x, y),
             _ => false,
         }
     }
