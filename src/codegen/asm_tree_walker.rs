@@ -611,14 +611,23 @@ impl TreeWalker for AsmTreeWalker {
 
         let global = sym.is_global();
 
-        if let Some(expression) = &mut node.value {
+        current_register = if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            current_register = self.current_result;
+            if matches!(expression, ExpressionNode::Var(_)) {
+                // Copy to a new register so the new var isn't literally
+                // sharing a register with the old one.
+                let next_register = self.register_counter.next().unwrap();
+                self.instructions.push(Instruction::RegCopy(self.current_result, next_register));
+                self.debug_spans.push(node.span());
+                next_register
+            } else {
+                self.current_result
+            }
         } else {
             // Default value to 0 when uninitialized.
-            current_register = self.register_counter.next().unwrap();
-        }
+            self.register_counter.next().unwrap()
+        };
 
         if global {
             // Store the reference in the globals register.
@@ -1545,6 +1554,8 @@ mod tests {
 
     mod test_visit_var_init {
         use super::*;
+        use crate::asm::instruction::Instruction::{FConst, MapConst};
+        use decorum::Total;
 
         fn setup() -> AsmTreeWalker {
             let mut context = Context::default();
@@ -1553,15 +1564,13 @@ mod tests {
             AsmTreeWalker::new(context)
         }
 
-        #[test]
-        fn test_does_not_copy_mappings() {
-            let mut walker = setup();
-
-            let sym = Symbol::new("marf", LpcType::Mapping(false)).with_location(Some(Register(1)));
-            insert_symbol(&mut walker, sym);
+        fn setup_var(type_: LpcType, walker: &mut AsmTreeWalker) {
+            let sym = Symbol::new("marf", type_).with_location(Some(Register(1)));
+            walker.register_counter.next(); // force-increment to mimic the scope walker
+            insert_symbol(walker, sym);
 
             let mut node = VarInitNode {
-                type_: LpcType::Mapping(false),
+                type_,
                 name: "muffins".to_string(),
                 value: Some(ExpressionNode::Var(VarNode::new("marf"))),
                 array: false,
@@ -1569,32 +1578,111 @@ mod tests {
                 span: None,
             };
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            insert_symbol(walker, Symbol::from(&mut node.clone()));
 
             let _ = walker.visit_var_init(&mut node);
-            assert_eq!(walker.instructions, []);
+        }
+
+        fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut AsmTreeWalker) {
+            let mut node = VarInitNode {
+                type_,
+                name: "muffins".to_string(),
+                value: Some(value),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            insert_symbol(walker, Symbol::from(&mut node));
+
+            let _ = walker.visit_var_init(&mut node);
         }
 
         #[test]
-        fn test_does_not_copy_arrays() {
+        fn test_does_not_copy_mapping_literals() {
             let mut walker = setup();
+            let pairs = vec![(ExpressionNode::from("foo"), ExpressionNode::from("bar"))];
+            setup_literal(LpcType::Mapping(false), ExpressionNode::Mapping(MappingNode::new(pairs, None)), &mut walker);
 
-            let sym = Symbol::new("marf", LpcType::Int(true)).with_location(Some(Register(1)));
-            insert_symbol(&mut walker, sym);
+            let mut map = HashMap::new();
+            map.insert(Register(1), Register(2));
+            assert_eq!(walker.instructions, [
+                SConst(Register(1),String::from("foo")),
+                SConst(Register(2), String::from("bar")),
+                MapConst(Register(3), map)
+            ]);
+        }
 
-            let mut node = VarInitNode {
-                type_: LpcType::Int(true),
-                name: "muffins".to_string(),
-                value: Some(ExpressionNode::Var(VarNode::new("marf"))),
-                array: false,
-                global: false,
-                span: None,
-            };
+        #[test]
+        fn test_copies_mapping_vars() {
+            let mut walker = setup();
+            setup_var(LpcType::Mapping(false), &mut walker);
 
-            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+        }
 
-            let _ = walker.visit_var_init(&mut node);
-            assert_eq!(walker.instructions, []);
+        #[test]
+        fn test_does_not_copy_int_literals() {
+            let mut walker = setup();
+            setup_literal(LpcType::Int(false), ExpressionNode::Int(IntNode::new(123)), &mut walker);
+
+            assert_eq!(walker.instructions, [IConst(Register(1), 123)]);
+        }
+
+        #[test]
+        fn test_copies_int_vars() {
+            let mut walker = setup();
+            setup_var(LpcType::Int(false), &mut walker);
+
+            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+        }
+
+        #[test]
+        fn test_does_not_copy_float_literals() {
+            let mut walker = setup();
+            setup_literal(LpcType::Float(false), ExpressionNode::Float(FloatNode::new(123.0)), &mut walker);
+
+            assert_eq!(walker.instructions, [FConst(Register(1), Total::from(123.0))]);
+        }
+
+        #[test]
+        fn test_copies_float_vars() {
+            let mut walker = setup();
+            setup_var(LpcType::Float(false), &mut walker);
+
+            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+        }
+
+        #[test]
+        fn test_does_not_copy_string_literals() {
+            let mut walker = setup();
+            setup_literal(LpcType::Int(true), ExpressionNode::String(StringNode::new("foo")), &mut walker);
+
+            assert_eq!(walker.instructions, [SConst(Register(1), String::from("foo"))]);
+        }
+
+        #[test]
+        fn test_copies_string_vars() {
+            let mut walker = setup();
+            setup_var(LpcType::String(false), &mut walker);
+
+            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+        }
+
+        #[test]
+        fn test_does_not_copy_array_literals() {
+            let mut walker = setup();
+            setup_literal(LpcType::Int(true), ExpressionNode::Array(ArrayNode::new(vec![ExpressionNode::from(1234)])), &mut walker);
+
+            assert_eq!(walker.instructions, [IConst(Register(1), 1234), AConst(Register(2), vec![Register(1)])]);
+        }
+
+        #[test]
+        fn test_copies_array_vars() {
+            let mut walker = setup();
+            setup_var(LpcType::Int(true), &mut walker);
+
+            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
         }
     }
 
