@@ -48,17 +48,6 @@ pub enum Instruction {
     /// Integer constant 1
     IConst1(Register),
 
-    /// Load a single item from an array or mapping into a register
-    /// x.2 = x.0[x.1]
-    Load(Register, Register, Register),
-
-    /// Create a mapping from the keys and values in the hashmap
-    MapConst(Register, HashMap<Register, Register>),
-
-    /// String constant.
-    /// Store an index into the program's ConstantPool in the passed register
-    SConst(Register, String),
-
     /// Integer division - x.2 = x.0 / x.1
     IDiv(Register, Register, Register),
 
@@ -67,6 +56,13 @@ pub enum Instruction {
 
     /// Integer division - x.2 = x.0 - x.1
     ISub(Register, Register, Register),
+
+    /// Load a single item from an array or mapping into a register
+    /// x.2 = x.0[x.1]
+    Load(Register, Register, Register),
+
+    /// Create a mapping from the keys and values in the hashmap
+    MapConst(Register, HashMap<Register, Register>),
 
     /// Addition where at least one side is a reference type, so check at runtime.
     MAdd(Register, Register, Register),
@@ -86,6 +82,10 @@ pub enum Instruction {
     /// Store a single item into an array or mapping
     /// x.1[x.2] = x.0
     Store(Register, Register, Register),
+
+    /// String constant.
+    /// Store an index into the program's ConstantPool in the passed register
+    SConst(Register, String),
 }
 
 impl Display for Instruction {
