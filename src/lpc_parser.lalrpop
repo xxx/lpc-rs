@@ -11,6 +11,7 @@ use crate::ast::decl_node::DeclNode;
 use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::float_node::FloatNode;
 use crate::ast::function_def_node::FunctionDefNode;
+use crate::ast::if_node::IfNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::mapping_node::MappingNode;
 use crate::ast::program_node::ProgramNode;
@@ -221,14 +222,41 @@ Type: (String, Span) = {
 };
 
 pub Statement: AstNode = {
-    <Expression> ";" => AstNode::from(<>),
-    <Return> ";" => AstNode::from(<>),
-    <Decl> ";" => AstNode::from(<>),
-    <Block> => AstNode::from(<>)
+    <OpenStatement>,
+    <ClosedStatement>,
 };
 
 pub Statements: Vec<AstNode> = {
     <Statement*>
+};
+
+pub SimpleStatement: AstNode = {
+    <Expression> ";" => AstNode::from(<>),
+    <Return> ";" => AstNode::from(<>),
+    <Decl> ";" => AstNode::from(<>),
+    <Block> => AstNode::from(<>),
+};
+
+OpenStatement: AstNode = {
+    <if_t:"if"> "(" <cond:Expression> ")" <body:Statement> => {
+        // https://github.com/lalrpop/lalrpop/issues/67#issuecomment-188951041
+        let node = IfNode::new(cond, body, None, Some(if_t));
+        AstNode::from(node)
+    },
+    <if_t:"if"> "(" <cond:Expression> ")" <body:ClosedStatement> "else" <else_clause:OpenStatement> => {
+        let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
+        AstNode::from(node)
+    },
+    // "while" "(" <Expression> ")" <OpenStatement>
+};
+
+ClosedStatement: AstNode = {
+    <SimpleStatement>,
+    <if_t:"if"> "(" <cond:Expression> ")" < body:ClosedStatement> "else" <else_clause:ClosedStatement> => {
+        let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
+        AstNode::from(node)
+    },
+    // "while" "(" <Expression> ")" <ClosedStatement>
 };
 
 VarInit: VarInitNode = {

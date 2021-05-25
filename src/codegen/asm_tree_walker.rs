@@ -35,9 +35,8 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
-
-/// Really just a `pc` index in the vm.
-type Address = usize;
+use crate::ast::if_node::IfNode;
+use crate::asm::instruction::Address;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -59,6 +58,9 @@ pub struct AsmTreeWalker {
 
     /// The map of labels, to their respective addresses
     pub labels: HashMap<String, Address>,
+
+    /// counter for labels, as they need to be unique.
+    label_count: usize,
 
     /// The map of function Symbols, to their respective addresses
     pub functions: HashMap<FunctionSymbol, Address>,
@@ -355,6 +357,16 @@ impl AsmTreeWalker {
         self.debug_spans.push(node.span);
 
         Ok(())
+    }
+
+    /// Emit a numbered label with prefix `T`, tracking the current count.
+    fn new_label<T>(&mut self, prefix: T) -> String
+    where
+        T: AsRef<str>
+    {
+        let r = format!("{}_{}", prefix.as_ref(), self.label_count);
+        self.label_count += 1;
+        r
     }
 }
 
@@ -782,6 +794,60 @@ impl TreeWalker for AsmTreeWalker {
 
         Ok(())
     }
+
+    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+        let else_label = self.new_label("if-else");
+        let end_label = self.new_label("if-end");
+
+        // Visit the condition
+        node.condition.visit(self)?;
+
+        // stash some data, so we can update the instruction with the correct address
+        let cond_result = self.current_result;
+        let jz_index = self.instructions.len();
+
+        // Insert a placeholder address, which we correct below after the body's code is generated
+        let instruction = Instruction::Jz(cond_result, 0);
+        self.instructions.push(instruction);
+        self.debug_spans.push(node.span);
+
+        // Generate the main body of the statement
+        node.body.visit(self)?;
+
+        let mut jmp_index: Option<usize> = None;
+
+        if node.else_clause.is_some() {
+            // 0 is a placeholder, which is corrected further below
+            let instruction = Instruction::Jmp(0);
+            jmp_index = Some(self.instructions.len());
+            self.instructions.push(instruction);
+            self.debug_spans.push(node.span);
+        }
+
+        // Correct the address in the `Jz` instruction generated above
+        // now that the body code has been generated.
+        let addr = self.instructions.len();
+        self.labels.insert(else_label, addr);
+        let else_instruction_replacement = Instruction::Jz(cond_result, addr);
+        let _ = std::mem::replace(&mut self.instructions[jz_index], else_instruction_replacement);
+
+        // Generate the else clause code if necessary
+        if let Some(n) = &mut *node.else_clause {
+            n.visit(self)?;
+
+            let addr = self.instructions.len();
+            self.labels.insert(end_label, addr);
+
+            // Correct the address in the `Jmp` instruction above
+            let jmp_instruction_replacement = Instruction::Jmp(addr);
+            let idx = jmp_index.expect("There's an else clause, but no jmp_index was set?");
+            let _ = std::mem::replace(&mut self.instructions[idx], jmp_instruction_replacement);
+        }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -807,6 +873,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::asm::instruction::Address;
 
     #[test]
     fn test_walk_tree_populates_the_instructions() {
@@ -1717,6 +1784,55 @@ mod tests {
             setup_var(LpcType::Int(true), &mut walker);
 
             assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+        }
+    }
+
+    mod test_visit_if {
+        use super::*;
+        use crate::asm::instruction::Instruction::{EqEq, Jz, Jmp};
+
+        #[test]
+        fn test_populates_the_instructions() {
+            let mut walker = AsmTreeWalker::default();
+
+            let mut node = IfNode {
+                condition: ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(666)),
+                    r: Box::new(ExpressionNode::from(777)),
+                    op: BinaryOperation::EqEq,
+                    span: None
+                }),
+                body: Box::new(AstNode::Call(CallNode {
+                    arguments: vec![ExpressionNode::from("true")],
+                    name: "dump".to_string(),
+                    span: None
+                })),
+                else_clause: Box::new(Some(AstNode::Call(CallNode {
+                    arguments: vec![ExpressionNode::from("false")],
+                    name: "dump".to_string(),
+                    span: None
+                }))),
+                scope_id: None,
+                span: None
+            };
+
+            let _ = walker.visit_if(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                IConst(Register(2), 777),
+                EqEq(Register(1), Register(2), Register(3)),
+                Jz(Register(3), 8),
+                SConst(Register(4), String::from("true")),
+                RegCopy(Register(4), Register(5)),
+                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(5) },
+                Jmp(11),
+                SConst(Register(6), String::from("false")),
+                RegCopy(Register(6), Register(7)),
+                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(7) }
+            ];
+
+            assert_eq!(walker.instructions, expected);
         }
     }
 

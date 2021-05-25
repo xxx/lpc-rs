@@ -14,6 +14,7 @@ use crate::{
 };
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, result};
+use decorum::Total;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -319,12 +320,6 @@ impl AsmInterpreter {
                     let registers = current_registers_mut(&mut self.stack)?;
                     registers[r.index()] = LpcRef::Int(1);
                 }
-                Instruction::SConst(r, s) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
-
-                    registers[r.index()] = new_ref;
-                }
                 Instruction::IDiv(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack)?;
                     match &registers[r1.index()] / &registers[r2.index()] {
@@ -350,6 +345,20 @@ impl AsmInterpreter {
                         Err(e) => {
                             return Err(e.with_span(*self.current_debug_span()));
                         }
+                    }
+                }
+                Instruction::Jmp(address) => {
+                    self.pc = *address;
+                    continue;
+                }
+                Instruction::Jz(r1, address) => {
+                    let v = &current_registers_mut(&mut self.stack)?[r1.index()];
+
+                    println!("JZ! {:?}", v);
+                    if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
+                        println!("matched?, {:?}", address);
+                        self.pc = *address;
+                        continue;
                     }
                 }
                 Instruction::Load(r1, r2, r3) => {
@@ -400,6 +409,49 @@ impl AsmInterpreter {
                             )));
                         }
                     }
+                }
+                Instruction::MapConst(r, map) => {
+                    let mut register_map = HashMap::new();
+                    for (key, value) in map {
+                        let registers = current_registers_mut(&mut self.stack)?;
+                        let r = registers[key.index()].clone();
+
+                        register_map.insert(r, registers[value.index()].clone());
+                    }
+
+                    let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
+                    let registers = current_registers_mut(&mut self.stack)?;
+
+                    registers[r.index()] = new_ref;
+                }
+                Instruction::MAdd(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_operation(n1, n2, n3, |x, y| x + y)?;
+                }
+                Instruction::MMul(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_operation(n1, n2, n3, |x, y| x * y)?;
+                }
+                Instruction::MSub(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_operation(n1, n2, n3, |x, y| x - y)?;
+                }
+                Instruction::RegCopy(r1, r2) => {
+                    let registers = current_registers_mut(&mut self.stack)?;
+                    registers[r2.index()] = registers[r1.index()].clone()
+                }
+                Instruction::Ret => {
+                    if let Some(frame) = self.pop_frame() {
+                        self.copy_call_result(&frame)?;
+                        self.pc = frame.return_address;
+                    }
+
+                    // halt at the end of all input
+                    if self.stack.is_empty() {
+                        self.halt();
+                    }
+
+                    continue;
                 }
                 Instruction::Store(r1, r2, r3) => {
                     // r2[r3] = r1;
@@ -453,48 +505,11 @@ impl AsmInterpreter {
                         }
                     }
                 }
-                Instruction::MAdd(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_operation(n1, n2, n3, |x, y| x + y)?;
-                }
-                Instruction::MapConst(r, map) => {
-                    let mut register_map = HashMap::new();
-                    for (key, value) in map {
-                        let registers = current_registers_mut(&mut self.stack)?;
-                        let r = registers[key.index()].clone();
-
-                        register_map.insert(r, registers[value.index()].clone());
-                    }
-
-                    let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
+                Instruction::SConst(r, s) => {
                     let registers = current_registers_mut(&mut self.stack)?;
+                    let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
 
                     registers[r.index()] = new_ref;
-                }
-                Instruction::MMul(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_operation(n1, n2, n3, |x, y| x * y)?;
-                }
-                Instruction::MSub(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_operation(n1, n2, n3, |x, y| x - y)?;
-                }
-                Instruction::RegCopy(r1, r2) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r2.index()] = registers[r1.index()].clone()
-                }
-                Instruction::Ret => {
-                    if let Some(frame) = self.pop_frame() {
-                        self.copy_call_result(&frame)?;
-                        self.pc = frame.return_address;
-                    }
-
-                    // halt at the end of all input
-                    if self.stack.is_empty() {
-                        self.halt();
-                    }
-
-                    continue;
                 }
             }
 

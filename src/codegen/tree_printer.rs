@@ -12,6 +12,7 @@ use crate::{
     codegen::tree_walker,
     errors::LpcError,
 };
+use crate::ast::if_node::IfNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -273,6 +274,29 @@ impl TreeWalker for TreePrinter {
             let _ = expr.visit(self);
         }
         self.indent -= 2;
+
+        Ok(())
+    }
+
+    /// Visit an `if` statement
+    fn visit_if(&mut self, node: &mut IfNode)  -> Result<(), LpcError> {
+        self.println_indented("If");
+        self.indent += 2;
+        let _ = node.condition.visit(self);
+        self.indent -= 2;
+        self.println_indented("then");
+        self.indent += 2;
+        let _ = node.body.visit(self);
+        self.indent -= 2;
+
+        if let Some(n) = &mut *node.else_clause {
+            self.println_indented("else");
+            self.indent += 2;
+
+            let _ = n.visit(self);
+            self.indent -= 2;
+
+        }
 
         Ok(())
     }

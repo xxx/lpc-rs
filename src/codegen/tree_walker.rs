@@ -11,6 +11,7 @@ use crate::{
     context::Context,
     errors::LpcError,
 };
+use crate::ast::if_node::IfNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -213,6 +214,20 @@ pub trait TreeWalker {
     {
         for expr in &mut node.value {
             let _ = expr.visit(self);
+        }
+
+        Ok(())
+    }
+
+    /// Visit an `if` statement
+    fn visit_if(&mut self, node: &mut IfNode)  -> Result<(), LpcError>
+    where
+        Self: Sized,
+    {
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
+        if let Some(n) = &mut *node.else_clause {
+            let _ = n.visit(self);
         }
 
         Ok(())

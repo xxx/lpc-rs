@@ -5,6 +5,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+/// Really just a `pc` index in the vm.
+pub type Address = usize;
+
 /// Representation of an assembly language instruction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
@@ -57,6 +60,12 @@ pub enum Instruction {
     /// Integer division - x.2 = x.0 - x.1
     ISub(Register, Register, Register),
 
+    /// Unconditional jump
+    Jmp(Address),
+
+    /// Jump if the value in the register is zero (Int or Float)
+    Jz(Register, Address),
+
     /// Load a single item from an array or mapping into a register
     /// x.2 = x.0[x.1]
     Load(Register, Register, Register),
@@ -102,15 +111,6 @@ impl Display for Instruction {
             Instruction::ARange(r1, r2, r3, r4) => {
                 write!(f, "arange {}, {}, {}, {}", r1, r2, r3, r4)
             }
-            Instruction::EqEq(r1, r2, r3) => {
-                write!(f, "eqeq {}, {}, {}", r1, r2, r3)
-            }
-            Instruction::GLoad(r1, r2) => {
-                write!(f, "gload {}, {}", r1, r2)
-            }
-            Instruction::GStore(r1, r2) => {
-                write!(f, "gstore {}, {}", r1, r2)
-            }
             Instruction::Call {
                 name,
                 num_args,
@@ -118,8 +118,17 @@ impl Display for Instruction {
             } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)
             }
+            Instruction::EqEq(r1, r2, r3) => {
+                write!(f, "eqeq {}, {}, {}", r1, r2, r3)
+            }
             Instruction::FConst(r, fl) => {
                 write!(f, "fconst {}, {}", r, fl)
+            }
+            Instruction::GLoad(r1, r2) => {
+                write!(f, "gload {}, {}", r1, r2)
+            }
+            Instruction::GStore(r1, r2) => {
+                write!(f, "gstore {}, {}", r1, r2)
             }
             Instruction::IAdd(r1, r2, r3) => {
                 write!(f, "iadd {}, {}, {}", r1, r2, r3)
@@ -133,20 +142,6 @@ impl Display for Instruction {
             Instruction::IConst1(r) => {
                 write!(f, "iconst1 {}", r)
             }
-            Instruction::Load(r1, r2, r3) => {
-                write!(f, "load {}, {}, {}", r1, r2, r3)
-            }
-            Instruction::SConst(r, i) => {
-                write!(f, "sconst {}, {}", r, i)
-            }
-            Instruction::MapConst(r, i) => {
-                let str = i
-                    .iter()
-                    .map(|(key, value)| format!("{}: {}", key, value))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "mapconst {}, {}", r, str)
-            }
             Instruction::IDiv(r1, r2, r3) => {
                 write!(f, "idiv {}, {}, {}", r1, r2, r3)
             }
@@ -155,6 +150,23 @@ impl Display for Instruction {
             }
             Instruction::ISub(r1, r2, r3) => {
                 write!(f, "isub {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Jmp(address) => {
+                write!(f, "jmp {}", address)
+            }
+            Instruction::Jz(r1, address) => {
+                write!(f, "jz {}, {}", r1, address)
+            }
+            Instruction::Load(r1, r2, r3) => {
+                write!(f, "load {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::MapConst(r, i) => {
+                let str = i
+                    .iter()
+                    .map(|(key, value)| format!("{}: {}", key, value))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "mapconst {}, {}", r, str)
             }
             Instruction::MAdd(r1, r2, r3) => {
                 write!(f, "madd {}, {}, {}", r1, r2, r3)
@@ -173,6 +185,9 @@ impl Display for Instruction {
             }
             Instruction::Store(r1, r2, r3) => {
                 write!(f, "store {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::SConst(r, s) => {
+                write!(f, "sconst {}, {}", r, s)
             }
         }
     }

@@ -11,6 +11,7 @@ use crate::{
         symbol::Symbol,
     },
 };
+use crate::ast::if_node::IfNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -141,6 +142,19 @@ impl TreeWalker for ScopeWalker {
 
             // We check for undefined vars here in case a symbol is subsequently defined.
             self.context.errors.push(e);
+        }
+
+        Ok(())
+    }
+
+    fn visit_if(&mut self, node: &mut IfNode)  -> Result<(), LpcError> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
+        if let Some(n) = &mut *node.else_clause {
+            let _ = n.visit(self);
         }
 
         Ok(())
