@@ -5,7 +5,11 @@ use multimap::MultiMap;
 use tree_walker::TreeWalker;
 
 use crate::{
-    asm::{instruction::Instruction, register::Register, register_counter::RegisterCounter},
+    asm::{
+        instruction::{Address, Instruction},
+        register::Register,
+        register_counter::RegisterCounter,
+    },
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
@@ -17,6 +21,7 @@ use crate::{
         expression_node::ExpressionNode,
         float_node::FloatNode,
         function_def_node::FunctionDefNode,
+        if_node::IfNode,
         int_node::IntNode,
         mapping_node::MappingNode,
         program_node::ProgramNode,
@@ -26,6 +31,7 @@ use crate::{
         unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
+        while_node::WhileNode,
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
@@ -35,9 +41,6 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
-use crate::ast::if_node::IfNode;
-use crate::asm::instruction::Address;
-use crate::ast::while_node::WhileNode;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -363,7 +366,7 @@ impl AsmTreeWalker {
     /// Emit a numbered label with prefix `T`, tracking the current count.
     fn new_label<T>(&mut self, prefix: T) -> String
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         let r = format!("{}_{}", prefix.as_ref(), self.label_count);
         self.label_count += 1;
@@ -1827,7 +1830,7 @@ mod tests {
 
     mod test_visit_if {
         use super::*;
-        use crate::asm::instruction::Instruction::{EqEq, Jz, Jmp};
+        use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
 
         #[test]
         fn test_populates_the_instructions() {
@@ -1838,20 +1841,20 @@ mod tests {
                     l: Box::new(ExpressionNode::from(666)),
                     r: Box::new(ExpressionNode::from(777)),
                     op: BinaryOperation::EqEq,
-                    span: None
+                    span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
                     arguments: vec![ExpressionNode::from("true")],
                     name: "dump".to_string(),
-                    span: None
+                    span: None,
                 })),
                 else_clause: Box::new(Some(AstNode::Call(CallNode {
                     arguments: vec![ExpressionNode::from("false")],
                     name: "dump".to_string(),
-                    span: None
+                    span: None,
                 }))),
                 scope_id: None,
-                span: None
+                span: None,
             };
 
             let _ = walker.visit_if(&mut node);
@@ -1863,11 +1866,19 @@ mod tests {
                 Jz(Register(3), 8),
                 SConst(Register(4), String::from("true")),
                 RegCopy(Register(4), Register(5)),
-                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(5) },
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(5),
+                },
                 Jmp(11),
                 SConst(Register(6), String::from("false")),
                 RegCopy(Register(6), Register(7)),
-                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(7) }
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(7),
+                },
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1876,7 +1887,7 @@ mod tests {
 
     mod test_visit_while {
         use super::*;
-        use crate::asm::instruction::Instruction::{EqEq, Jz, Jmp};
+        use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
 
         #[test]
         fn test_populates_the_instructions() {
@@ -1887,15 +1898,15 @@ mod tests {
                     l: Box::new(ExpressionNode::from(666)),
                     r: Box::new(ExpressionNode::from(777)),
                     op: BinaryOperation::EqEq,
-                    span: None
+                    span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
-                    span: None
+                    span: None,
                 })),
                 scope_id: None,
-                span: None
+                span: None,
             };
 
             let _ = walker.visit_while(&mut node);
@@ -1907,8 +1918,12 @@ mod tests {
                 Jz(Register(3), 8),
                 SConst(Register(4), String::from("body")),
                 RegCopy(Register(4), Register(5)),
-                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(5) },
-                Jmp(0)
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(5),
+                },
+                Jmp(0),
             ];
 
             assert_eq!(walker.instructions, expected);

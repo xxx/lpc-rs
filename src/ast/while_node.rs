@@ -8,10 +8,8 @@ use crate::{
     codegen::tree_walker::TreeWalker,
 };
 
-use crate::errors::LpcError;
-use crate::ast::expression_node::ExpressionNode;
+use crate::{ast::expression_node::ExpressionNode, errors::LpcError, parser::span::Span};
 use indextree::NodeId;
-use crate::parser::span::Span;
 
 /// A node representing a `while` loop
 #[derive(Debug, Clone, PartialEq)]
@@ -19,7 +17,7 @@ pub struct WhileNode {
     pub condition: ExpressionNode,
     pub body: Box<AstNode>,
     pub scope_id: Option<NodeId>,
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl WhileNode {
@@ -41,6 +39,10 @@ impl AstNodeTrait for WhileNode {
 
 impl Display for WhileNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "WhileNode[cond: {}, body: {}]", self.condition, self.body)
+        write!(
+            f,
+            "WhileNode[cond: {}, body: {}]",
+            self.condition, self.body
+        )
     }
 }

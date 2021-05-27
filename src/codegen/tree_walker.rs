@@ -3,16 +3,14 @@ use crate::{
         array_node::ArrayNode, assignment_node::AssignmentNode, ast_node::AstNodeTrait,
         binary_op_node::BinaryOpNode, block_node::BlockNode, call_node::CallNode,
         comma_expression_node::CommaExpressionNode, decl_node::DeclNode, float_node::FloatNode,
-        function_def_node::FunctionDefNode, int_node::IntNode, mapping_node::MappingNode,
-        program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
-        string_node::StringNode, unary_op_node::UnaryOpNode, var_init_node::VarInitNode,
-        var_node::VarNode,
+        function_def_node::FunctionDefNode, if_node::IfNode, int_node::IntNode,
+        mapping_node::MappingNode, program_node::ProgramNode, range_node::RangeNode,
+        return_node::ReturnNode, string_node::StringNode, unary_op_node::UnaryOpNode,
+        var_init_node::VarInitNode, var_node::VarNode, while_node::WhileNode,
     },
     context::Context,
+    Result,
 };
-use crate::ast::if_node::IfNode;
-use crate::ast::while_node::WhileNode;
-use crate::Result;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.

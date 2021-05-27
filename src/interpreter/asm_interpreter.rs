@@ -12,9 +12,9 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
     try_extract_value, value_to_ref, LpcInt,
 };
+use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, result};
-use decorum::Total;
 
 type Result<T> = result::Result<T, LpcError>;
 

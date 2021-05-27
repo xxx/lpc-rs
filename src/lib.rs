@@ -18,8 +18,8 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use decorum::Total;
 use crate::errors::LpcError;
+use decorum::Total;
 use std::result;
 
 /// Abstracted type to use as in-game `int`s

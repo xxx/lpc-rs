@@ -5,15 +5,14 @@ use crate::{
         array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
         block_node::BlockNode, call_node::CallNode, comma_expression_node::CommaExpressionNode,
         decl_node::DeclNode, float_node::FloatNode, function_def_node::FunctionDefNode,
-        int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
+        if_node::IfNode, int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
         range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
         unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
+        while_node::WhileNode,
     },
     codegen::tree_walker,
+    Result,
 };
-use crate::ast::if_node::IfNode;
-use crate::ast::while_node::WhileNode;
-use crate::Result;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -296,7 +295,6 @@ impl TreeWalker for TreePrinter {
 
             let _ = n.visit(self);
             self.indent -= 2;
-
         }
 
         Ok(())

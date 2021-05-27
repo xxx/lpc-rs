@@ -13,15 +13,14 @@ use program_node::ProgramNode;
 use crate::{
     ast::{
         binary_op_node::BinaryOpNode, block_node::BlockNode, call_node::CallNode,
-        decl_node::DeclNode, expression_node, function_def_node::FunctionDefNode, int_node,
-        program_node, return_node::ReturnNode, var_init_node::VarInitNode,
+        decl_node::DeclNode, expression_node, function_def_node::FunctionDefNode, if_node::IfNode,
+        int_node, program_node, return_node::ReturnNode, var_init_node::VarInitNode,
+        while_node::WhileNode,
     },
     codegen::tree_walker::TreeWalker,
     errors::LpcError,
     parser::span::Span,
 };
-use crate::ast::if_node::IfNode;
-use crate::ast::while_node::WhileNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]

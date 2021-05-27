@@ -8,10 +8,8 @@ use crate::{
     codegen::tree_walker::TreeWalker,
 };
 
-use crate::errors::LpcError;
-use crate::ast::expression_node::ExpressionNode;
+use crate::{ast::expression_node::ExpressionNode, errors::LpcError, parser::span::Span};
 use indextree::NodeId;
-use crate::parser::span::Span;
 
 /// A node representing an `if` statement
 #[derive(Debug, Clone, PartialEq)]
@@ -20,17 +18,22 @@ pub struct IfNode {
     pub body: Box<AstNode>,
     pub else_clause: Box<Option<AstNode>>,
     pub scope_id: Option<NodeId>,
-    pub span: Option<Span>
+    pub span: Option<Span>,
 }
 
 impl IfNode {
-    pub fn new(condition: ExpressionNode, body: AstNode, else_clause: Option<AstNode>, span: Option<Span>) -> Self {
+    pub fn new(
+        condition: ExpressionNode,
+        body: AstNode,
+        else_clause: Option<AstNode>,
+        span: Option<Span>,
+    ) -> Self {
         Self {
             condition,
             body: Box::new(body),
             else_clause: Box::new(else_clause),
             scope_id: None,
-            span
+            span,
         }
     }
 }
@@ -49,6 +52,10 @@ impl Display for IfNode {
             String::from("(empty)")
         };
 
-        write!(f, "IfNode[if: {}, then: {}, else: {}]", self.condition, self.body, e)
+        write!(
+            f,
+            "IfNode[if: {}, then: {}, else: {}]",
+            self.condition, self.body, e
+        )
     }
 }
