@@ -11,6 +11,7 @@ pub mod float_node;
 pub mod function_def_node;
 pub mod if_node;
 pub mod int_node;
+pub mod while_node;
 pub mod mapping_node;
 pub mod program_node;
 pub mod range_node;

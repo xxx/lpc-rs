@@ -21,6 +21,7 @@ use crate::ast::string_node::StringNode;
 use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 use crate::ast::var_node::VarNode;
 use crate::ast::var_init_node::VarInitNode;
+use crate::ast::while_node::WhileNode;
 use crate::semantic::lpc_type::LpcType;
 use crate::parser::collapse_binary_op::collapse_binary_op;
 use crate::parser::collapse_unary_op::collapse_unary_op;
@@ -115,17 +116,6 @@ extern {
         "ID" => Token::Id(<StringToken>),
     }
 }
-
-SemiSeq<T>: Vec<T> = {
-    <v:(<T> ";")*> <e:T?> => match e {
-        None => v,
-        Some(e) => {
-            let mut v = v;
-            v.push(e);
-            v
-        }
-    }
-};
 
 pub Program: ProgramNode = <body:Def*> => ProgramNode {
     body: body.iter().map(|i| AstNode::from(i.clone())).collect::<Vec<_>>()
@@ -230,6 +220,10 @@ pub Statements: Vec<AstNode> = {
     <Statement*>
 };
 
+pub ExpressionStatement: Option<ExpressionNode> = {
+    <Expression?> ";"
+}
+
 pub SimpleStatement: AstNode = {
     <Expression> ";" => AstNode::from(<>),
     <Return> ";" => AstNode::from(<>),
@@ -247,7 +241,10 @@ OpenStatement: AstNode = {
         let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
         AstNode::from(node)
     },
-    // "while" "(" <Expression> ")" <OpenStatement>
+    <while_t:"while"> "(" <cond:Expression> ")" <body:OpenStatement> => {
+        let node = WhileNode::new(cond, body, Some(while_t));
+        AstNode::from(node)
+    }
 };
 
 ClosedStatement: AstNode = {
@@ -256,7 +253,10 @@ ClosedStatement: AstNode = {
         let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
         AstNode::from(node)
     },
-    // "while" "(" <Expression> ")" <ClosedStatement>
+     <while_t:"while"> "(" <cond:Expression> ")" <body:ClosedStatement> => {
+        let node = WhileNode::new(cond, body, Some(while_t));
+        AstNode::from(node)
+     }
 };
 
 VarInit: VarInitNode = {

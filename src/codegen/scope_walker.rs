@@ -12,6 +12,8 @@ use crate::{
     },
 };
 use crate::ast::if_node::IfNode;
+use crate::ast::while_node::WhileNode;
+use crate::Result;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -42,7 +44,7 @@ impl ContextHolder for ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<(), LpcError> {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         // Push the global scope
         self.context.scopes.push_new();
 
@@ -53,7 +55,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError> {
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
 
         node.scope_id = Some(scope_id);
@@ -65,7 +67,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
@@ -107,7 +109,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let scope = self.context.scopes.get_current();
 
         if scope.is_none() {
@@ -129,7 +131,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<(), LpcError> {
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         let sym = self.context.scopes.lookup(&node.name);
 
         if let Some(symbol) = sym {
@@ -147,7 +149,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_if(&mut self, node: &mut IfNode)  -> Result<(), LpcError> {
+    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
@@ -156,6 +158,16 @@ impl TreeWalker for ScopeWalker {
         if let Some(n) = &mut *node.else_clause {
             let _ = n.visit(self);
         }
+
+        Ok(())
+    }
+
+    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
 
         Ok(())
     }

@@ -37,6 +37,7 @@ use crate::{
 use std::result;
 use crate::ast::if_node::IfNode;
 use crate::asm::instruction::Address;
+use crate::ast::while_node::WhileNode;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -807,6 +808,7 @@ impl TreeWalker for AsmTreeWalker {
         let cond_result = self.current_result;
         let jz_index = self.instructions.len();
 
+        // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the "then" body.
         // Insert a placeholder address, which we correct below after the body's code is generated
         let instruction = Instruction::Jz(cond_result, 0);
         self.instructions.push(instruction);
@@ -830,7 +832,7 @@ impl TreeWalker for AsmTreeWalker {
         let addr = self.instructions.len();
         self.labels.insert(else_label, addr);
         let else_instruction_replacement = Instruction::Jz(cond_result, addr);
-        let _ = std::mem::replace(&mut self.instructions[jz_index], else_instruction_replacement);
+        self.instructions[jz_index] = else_instruction_replacement;
 
         // Generate the else clause code if necessary
         if let Some(n) = &mut *node.else_clause {
@@ -842,8 +844,44 @@ impl TreeWalker for AsmTreeWalker {
             // Correct the address in the `Jmp` instruction above
             let jmp_instruction_replacement = Instruction::Jmp(addr);
             let idx = jmp_index.expect("There's an else clause, but no jmp_index was set?");
-            let _ = std::mem::replace(&mut self.instructions[idx], jmp_instruction_replacement);
+            self.instructions[idx] = jmp_instruction_replacement;
         }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        let start_label = self.new_label("while-start");
+        let start_addr = self.instructions.len();
+        self.labels.insert(start_label, start_addr);
+
+        node.condition.visit(self)?;
+
+        let cond_result = self.current_result;
+        let jz_index = self.instructions.len();
+
+        // Insert a placeholder address, which we correct below after the body's code is generated
+        let instruction = Instruction::Jz(cond_result, 0);
+        self.instructions.push(instruction);
+        self.debug_spans.push(node.span);
+
+        node.body.visit(self)?;
+
+        // go back to the start of the loop
+        let instruction = Instruction::Jmp(start_addr);
+        self.instructions.push(instruction);
+        self.debug_spans.push(node.span);
+
+        // Correct the address in the `Jz` instruction generated above
+        // now that the body code has been generated.
+        let end_label = self.new_label("while-end");
+        let addr = self.instructions.len();
+        self.labels.insert(end_label, addr);
+        let else_instruction_replacement = Instruction::Jz(cond_result, addr);
+        self.instructions[jz_index] = else_instruction_replacement;
 
         self.context.scopes.pop();
         Ok(())
@@ -1830,6 +1868,47 @@ mod tests {
                 SConst(Register(6), String::from("false")),
                 RegCopy(Register(6), Register(7)),
                 Call { name: String::from("dump"), num_args: 1, initial_arg: Register(7) }
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    mod test_visit_while {
+        use super::*;
+        use crate::asm::instruction::Instruction::{EqEq, Jz, Jmp};
+
+        #[test]
+        fn test_populates_the_instructions() {
+            let mut walker = AsmTreeWalker::default();
+
+            let mut node = WhileNode {
+                condition: ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(666)),
+                    r: Box::new(ExpressionNode::from(777)),
+                    op: BinaryOperation::EqEq,
+                    span: None
+                }),
+                body: Box::new(AstNode::Call(CallNode {
+                    arguments: vec![ExpressionNode::from("body")],
+                    name: "dump".to_string(),
+                    span: None
+                })),
+                scope_id: None,
+                span: None
+            };
+
+            let _ = walker.visit_while(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                IConst(Register(2), 777),
+                EqEq(Register(1), Register(2), Register(3)),
+                Jz(Register(3), 8),
+                SConst(Register(4), String::from("body")),
+                RegCopy(Register(4), Register(5)),
+                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(5) },
+                Jmp(0)
             ];
 
             assert_eq!(walker.instructions, expected);

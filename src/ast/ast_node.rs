@@ -21,6 +21,7 @@ use crate::{
     parser::span::Span,
 };
 use crate::ast::if_node::IfNode;
+use crate::ast::while_node::WhileNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
@@ -34,6 +35,7 @@ pub enum AstNode {
     Program(ProgramNode),
     Return(ReturnNode),
     VarInit(VarInitNode),
+    While(WhileNode),
 }
 
 #[auto_impl(&mut)]
@@ -69,7 +71,8 @@ node_defs!(
     If,
     Program,
     Return,
-    VarInit
+    VarInit,
+    While
 );
 
 impl Display for AstNode {
@@ -135,5 +138,11 @@ impl From<BlockNode> for AstNode {
 impl From<IfNode> for AstNode {
     fn from(node: IfNode) -> Self {
         AstNode::If(node)
+    }
+}
+
+impl From<WhileNode> for AstNode {
+    fn from(node: WhileNode) -> Self {
+        AstNode::While(node)
     }
 }

@@ -19,12 +19,17 @@ extern crate serde;
 extern crate serde_derive;
 
 use decorum::Total;
+use crate::errors::LpcError;
+use std::result;
 
 /// Abstracted type to use as in-game `int`s
 pub type LpcInt = i64;
 
 /// Abstracted type for in-game `floats`. The wrapper is to handle hashing, ordering, etc.
 pub type LpcFloat = Total<f64>;
+
+/// Common `Result` type
+pub type Result<T> = result::Result<T, LpcError>;
 
 /// Convert various literal escapes to actual escape characters
 ///
