@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use phf::phf_set;
+
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
@@ -14,9 +17,37 @@ use crate::{
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
     Result,
 };
-use std::collections::HashMap;
 
 /// Utility functions for doing various semantic checks.
+
+static KEYWORDS: phf::Set<&'static str> = phf_set! {
+    "break",
+    "case",
+    "continue",
+    "default", // TODO: add token
+    "do",
+    "efun",
+    "else",
+    "float",
+    "for",
+    "foreach", // TODO: add token
+    "function", // TODO: add token
+    "if",
+    "inherit",
+    "int",
+    "mapping",
+    "mixed",
+    "nomask",
+    "object",
+    "private", // TODO: add token
+    "public", // TODO: add token
+    "return",
+    "static",
+    "string",
+    "switch", // TODO: add token
+    "void",
+    "while",
+};
 
 /// Check if a var has already been defined in the local scope.
 ///
@@ -312,6 +343,18 @@ pub fn node_type(
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
     }
+}
+
+/// Is the passed name a keyword?
+pub fn is_keyword<T>(name: T) -> Result<()>
+where
+    T: AsRef<str>
+{
+    if KEYWORDS.contains(name.as_ref()) {
+        return Err(LpcError::new(format!("`{}` is a keyword of the language, and cannot be used here.", name.as_ref())));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -26,6 +26,7 @@ use crate::{
     },
     Result,
 };
+use crate::semantic::semantic_checks::is_keyword;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -182,6 +183,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+        is_keyword(&node.name)?;
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
 
@@ -242,6 +244,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
+            is_keyword(&node.name)?;
             expression.visit(self)?;
 
             let expr_type = node_type(
@@ -886,7 +889,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_var_init_validates_both_sides() {
+        fn validates_both_sides() {
             let mut node = VarInitNode {
                 name: "foo".to_string(),
                 type_: LpcType::Int(false),
@@ -904,7 +907,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_var_init_always_allows_0() {
+        fn always_allows_0() {
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: "foo".to_string(),
@@ -922,7 +925,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_var_init_disallows_differing_types() {
+        fn disallows_differing_types() {
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: "foo".to_string(),
@@ -944,6 +947,28 @@ mod tests {
 
             assert!(!walker.context.errors.is_empty());
         }
+
+        #[test]
+        fn disallows_keyword_name() {
+            let mut node = VarInitNode {
+                type_: LpcType::String(false),
+                name: "switch".to_string(),
+                value: Some(ExpressionNode::from(123)),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            if let Err(e) = result {
+                assert!(e.to_string().contains("is a keyword of the language"));
+            } else {
+                panic!("didn't error?")
+            }
+        }
     }
     mod test_visit_function_def {
         use super::*;
@@ -953,7 +978,7 @@ mod tests {
         };
 
         #[test]
-        fn test_visit_function_def_handles_scopes() {
+        fn handles_scopes() {
             let _global = VarInitNode {
                 type_: LpcType::Int(false),
                 name: "a".to_string(),
@@ -1021,49 +1046,23 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_return_allows_0() {
-            let mut node = ReturnNode {
-                value: Some(ExpressionNode::from(0)),
-                span: None,
-            };
-
-            let void_function_def = FunctionDefNode {
+        fn disallows_keyword_name() {
+            let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "foo".to_string(),
+                name: "while".to_string(),
                 parameters: vec![],
                 body: vec![],
                 span: None,
             };
-
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            walker.current_function = Some(void_function_def);
-            let _ = node.visit(&mut walker);
+            let result = walker.visit_function_def(&mut node);
 
-            assert!(walker.context.errors.is_empty());
-        }
-
-        #[test]
-        fn test_visit_return_allows_mixed() {
-            let mut node = ReturnNode {
-                value: Some(ExpressionNode::from(123)),
-                span: None,
-            };
-
-            let function_def = FunctionDefNode {
-                return_type: LpcType::Mixed(false),
-                name: "foo".to_string(),
-                parameters: vec![],
-                body: vec![],
-                span: None,
-            };
-
-            let context = empty_context();
-            let mut walker = SemanticCheckWalker::new(context);
-            walker.current_function = Some(function_def);
-            let _ = node.visit(&mut walker);
-
-            assert!(walker.context.errors.is_empty());
+            if let Err(e) = result {
+                assert!(e.to_string().contains("is a keyword of the language"));
+            } else {
+                panic!("didn't error?")
+            }
         }
     }
 
