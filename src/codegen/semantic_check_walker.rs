@@ -392,7 +392,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_call_allows_known_functions() {
+        fn allows_known_functions() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "known".to_string(),
@@ -428,7 +428,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_allows_known_efuns() {
+        fn allows_known_efuns() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "dump".to_string(),
@@ -443,7 +443,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_disallows_unknown_functions() {
+        fn disallows_unknown_functions() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "unknown".to_string(),
@@ -457,7 +457,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_disallows_incorrect_function_arity() {
+        fn disallows_incorrect_function_arity() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "print".to_string(),
@@ -471,7 +471,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_understands_argument_defaults() {
+        fn understands_argument_defaults() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![],
                 name: "my_func".to_string(),
@@ -506,7 +506,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_disallows_invalid_arg_types() {
+        fn disallows_invalid_arg_types() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(123)],
                 name: "my_func".to_string(),
@@ -541,7 +541,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_allows_0() {
+        fn allows_0() {
             let mut node = ExpressionNode::from(CallNode {
                 arguments: vec![ExpressionNode::from(0)],
                 name: "my_func".to_string(),
@@ -582,7 +582,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_binary_op_validates_both_sides() -> Result<()> {
+        fn validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
@@ -604,7 +604,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_binary_op_disallows_differing_types() {
+        fn disallows_differing_types() {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(123)),
@@ -654,7 +654,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_unary_operation_disallows_invalid() {
+        fn disallows_invalid() {
             let mut node = ExpressionNode::from(UnaryOpNode {
                 expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 op: UnaryOperation::Negate,
@@ -682,7 +682,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_assignment_validates_both_sides() -> Result<()> {
+        fn validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
@@ -706,7 +706,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_always_allows_0() -> Result<()> {
+        fn always_allows_0() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
@@ -730,7 +730,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_disallows_differing_types() {
+        fn disallows_differing_types() {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
@@ -754,7 +754,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_allows_mixed() {
+        fn allows_mixed() {
             let mut init_node = VarInitNode {
                 type_: LpcType::Mixed(false),
                 name: "foo".to_string(),
@@ -793,7 +793,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_allows_array_items() {
+        fn allows_array_items() {
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(false),
                 name: "foo".to_string(),
@@ -837,7 +837,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_allows_array_ranges() {
+        fn allows_array_ranges() {
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(true),
                 name: "foo".to_string(),
@@ -1131,7 +1131,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_return_allows_0() {
+        fn allows_0() {
             let mut node = ReturnNode {
                 value: Some(ExpressionNode::from(0)),
                 span: None,
@@ -1162,7 +1162,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_return_allows_mixed() {
+        fn allows_mixed() {
             let mut node = ReturnNode {
                 value: Some(ExpressionNode::from(123)),
                 span: None,
@@ -1197,7 +1197,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_range_allows_ints() {
+        fn allows_ints() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::Var(VarNode::new("foo")))),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -1220,7 +1220,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_range_disallows_non_ints() {
+        fn disallows_non_ints() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::Var(VarNode::new("foo")))),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -1243,7 +1243,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_range_allows_start_blank() {
+        fn allows_start_blank() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(None),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -1258,7 +1258,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_range_allows_end_blank() {
+        fn allows_end_blank() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::from(456))),
                 r: Box::new(None),
@@ -1273,7 +1273,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_range_allows_both_blank() {
+        fn allows_both_blank() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(None),
                 r: Box::new(None),
