@@ -11,9 +11,8 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
     semantic::lpc_type::LpcType,
+    Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialEq)]
@@ -74,7 +73,7 @@ impl SpannedNode for VarInitNode {
 
 impl AstNodeTrait for VarInitNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_var_init(self)
     }
 }

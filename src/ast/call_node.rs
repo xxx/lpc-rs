@@ -9,8 +9,8 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::LpcError,
     parser::span::Span,
+    Result,
 };
 
 /// Representation of a function call.
@@ -33,7 +33,7 @@ impl SpannedNode for CallNode {
 }
 
 impl AstNodeTrait for CallNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_call(self)
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     context::Context,
-    errors::LpcError,
+    Result,
 };
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
@@ -25,7 +25,7 @@ impl ContextHolder for DefaultParamsWalker {
 }
 
 impl TreeWalker for DefaultParamsWalker {
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let vec = node
             .parameters
             .iter()

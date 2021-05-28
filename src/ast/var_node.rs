@@ -7,9 +7,8 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
+    Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing the use of a variable.
 #[derive(Hash, Debug, Clone, Eq, PartialEq)]
@@ -46,7 +45,7 @@ impl SpannedNode for VarNode {
 }
 
 impl AstNodeTrait for VarNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_var(self)
     }
 }

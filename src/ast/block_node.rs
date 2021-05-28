@@ -6,9 +6,9 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
+    Result,
 };
 
-use crate::errors::LpcError;
 use indextree::NodeId;
 
 /// A node representing a code block
@@ -28,7 +28,7 @@ impl BlockNode {
 }
 
 impl AstNodeTrait for BlockNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_block(self)
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_value::LpcValue,
-    try_extract_value, LpcFloat, LpcInt,
+    try_extract_value, LpcFloat, LpcInt, Result,
 };
 use refpool::PoolRef;
 use std::{
@@ -141,7 +141,7 @@ impl Display for LpcRef {
 }
 
 impl Add for &LpcRef {
-    type Output = Result<LpcValue, LpcError>;
+    type Output = Result<LpcValue>;
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
@@ -191,7 +191,7 @@ impl Add for &LpcRef {
 }
 
 impl Sub for &LpcRef {
-    type Output = Result<LpcValue, LpcError>;
+    type Output = Result<LpcValue>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
@@ -226,7 +226,7 @@ fn repeat_string(s: &str, i: LpcInt) -> String {
 }
 
 impl Mul for &LpcRef {
-    type Output = Result<LpcValue, LpcError>;
+    type Output = Result<LpcValue>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
@@ -252,7 +252,7 @@ impl Mul for &LpcRef {
 }
 
 impl Div for &LpcRef {
-    type Output = Result<LpcValue, LpcError>;
+    type Output = Result<LpcValue>;
 
     fn div(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {

@@ -39,11 +39,10 @@ use crate::{
     interpreter::program::Program,
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
+    Result,
 };
-use std::result;
-use crate::ast::do_while_node::DoWhileNode;
 
-type Result<T> = result::Result<T, LpcError>;
+use crate::ast::do_while_node::DoWhileNode;
 
 /// Partition on whether the value is stored in registers or memory, to help select instructions.
 /// tl;dr - Value types use `Register`, while reference types use `Memory`.
@@ -1952,8 +1951,10 @@ mod tests {
 
     mod test_visit_do_while {
         use super::*;
-        use crate::asm::instruction::Instruction::{EqEq, Jnz};
-        use crate::ast::do_while_node::DoWhileNode;
+        use crate::{
+            asm::instruction::Instruction::{EqEq, Jnz},
+            ast::do_while_node::DoWhileNode,
+        };
 
         #[test]
         fn test_populates_the_instructions() {
@@ -1985,7 +1986,6 @@ mod tests {
                     num_args: 1,
                     initial_arg: Register(2),
                 },
-
                 IConst(Register(3), 666),
                 IConst(Register(4), 777),
                 EqEq(Register(3), Register(4), Register(5)),

@@ -9,8 +9,8 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::LpcError,
     parser::span::Span,
+    Result,
 };
 
 /// All possible assignment operations
@@ -47,7 +47,7 @@ impl SpannedNode for AssignmentNode {
 
 impl AstNodeTrait for AssignmentNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_assignment(self)
     }
 }

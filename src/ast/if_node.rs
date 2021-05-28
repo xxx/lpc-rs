@@ -6,9 +6,10 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
+    Result,
 };
 
-use crate::{ast::expression_node::ExpressionNode, errors::LpcError, parser::span::Span};
+use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
 use indextree::NodeId;
 
 /// A node representing an `if` statement
@@ -39,7 +40,7 @@ impl IfNode {
 }
 
 impl AstNodeTrait for IfNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_if(self)
     }
 }

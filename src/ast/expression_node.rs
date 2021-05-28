@@ -20,9 +20,8 @@ use crate::{
         var_node::VarNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::LpcError,
     parser::span::Span,
-    LpcInt,
+    LpcInt, Result,
 };
 use std::collections::HashMap;
 
@@ -81,7 +80,7 @@ impl SpannedNode for ExpressionNode {
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl AstNodeTrait for ExpressionNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
                 match self {
                 $(
                     $x(y) => y.visit(tree_walker),

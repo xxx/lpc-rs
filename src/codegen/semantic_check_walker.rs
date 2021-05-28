@@ -24,6 +24,7 @@ use crate::{
         lpc_type::LpcType,
         semantic_checks::{check_binary_operation_types, check_unary_operation_types, node_type},
     },
+    Result,
 };
 
 /// A tree walker to handle various semantic & type checks
@@ -65,13 +66,13 @@ impl ContextHolder for SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
-    fn visit_program(&mut self, _node: &mut ProgramNode) -> Result<(), LpcError> {
+    fn visit_program(&mut self, _node: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
 
         Ok(())
     }
 
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<(), LpcError> {
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         for argument in &mut node.arguments {
             argument.visit(self)?;
         }
@@ -136,7 +137,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<(), LpcError> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
@@ -153,7 +154,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<(), LpcError> {
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
         node.expr.visit(self)?;
 
         match check_unary_operation_types(
@@ -169,7 +170,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<(), LpcError> {
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         for stmt in &mut node.body {
@@ -180,7 +181,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<(), LpcError> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
 
@@ -196,7 +197,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<(), LpcError> {
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
         }
@@ -239,7 +240,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<(), LpcError> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
@@ -272,7 +273,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<(), LpcError> {
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
@@ -305,7 +306,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<(), LpcError>
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()>
     where
         Self: Sized,
     {
@@ -578,7 +579,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_binary_op_validates_both_sides() -> Result<(), LpcError> {
+        fn test_visit_binary_op_validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
@@ -678,7 +679,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_assignment_validates_both_sides() -> Result<(), LpcError> {
+        fn test_visit_assignment_validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
@@ -702,7 +703,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_assignment_always_allows_0() -> Result<(), LpcError> {
+        fn test_visit_assignment_always_allows_0() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),

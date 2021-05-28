@@ -2,6 +2,7 @@ use crate::{
     context::Context,
     errors::LpcError,
     semantic::{local_scope::LocalScope, symbol::Symbol},
+    Result,
 };
 use indextree::{Arena, Node, NodeId};
 use std::collections::HashMap;
@@ -126,7 +127,7 @@ impl ScopeTree {
     }
 
     /// Set the current node to the scope for function named `name`.
-    pub fn goto_function(&mut self, name: &str) -> Result<(), LpcError> {
+    pub fn goto_function(&mut self, name: &str) -> Result<()> {
         if let Some(id) = self.function_scopes.get(name) {
             self.current_id = Some(*id);
             Ok(())

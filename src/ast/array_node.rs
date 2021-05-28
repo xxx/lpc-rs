@@ -9,8 +9,8 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::LpcError,
     parser::span::Span,
+    Result,
 };
 
 /// A node representing an array literal
@@ -53,7 +53,7 @@ impl SpannedNode for ArrayNode {
 
 impl AstNodeTrait for ArrayNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_array(self)
     }
 }

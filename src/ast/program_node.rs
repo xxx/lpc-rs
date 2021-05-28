@@ -6,9 +6,8 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
+    Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -19,7 +18,7 @@ pub struct ProgramNode {
 
 impl AstNodeTrait for ProgramNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_program(self)
     }
 }

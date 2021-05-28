@@ -7,9 +7,8 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
+    Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing a string literal
 #[derive(Hash, Debug, Clone, Eq, PartialEq)]
@@ -37,7 +36,7 @@ impl SpannedNode for StringNode {
 
 impl AstNodeTrait for StringNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_string(self)
     }
 }

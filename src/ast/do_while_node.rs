@@ -6,7 +6,7 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
-    Result
+    Result,
 };
 
 use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
@@ -22,7 +22,7 @@ pub struct DoWhileNode {
 }
 
 impl DoWhileNode {
-    pub fn new( body: AstNode, condition: ExpressionNode, span: Option<Span>) -> Self {
+    pub fn new(body: AstNode, condition: ExpressionNode, span: Option<Span>) -> Self {
         Self {
             condition,
             body: Box::new(body),

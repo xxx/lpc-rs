@@ -13,15 +13,14 @@ use program_node::ProgramNode;
 use crate::{
     ast::{
         binary_op_node::BinaryOpNode, block_node::BlockNode, call_node::CallNode,
-        decl_node::DeclNode, expression_node, function_def_node::FunctionDefNode, if_node::IfNode,
-        int_node, program_node, return_node::ReturnNode, var_init_node::VarInitNode,
-        while_node::WhileNode,
+        decl_node::DeclNode, do_while_node::DoWhileNode, expression_node,
+        function_def_node::FunctionDefNode, if_node::IfNode, int_node, program_node,
+        return_node::ReturnNode, var_init_node::VarInitNode, while_node::WhileNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::LpcError,
     parser::span::Span,
+    Result,
 };
-use crate::ast::do_while_node::DoWhileNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
@@ -41,7 +40,7 @@ pub enum AstNode {
 
 #[auto_impl(&mut)]
 pub trait AstNodeTrait: PartialEq + Display {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError>;
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()>;
 }
 
 pub trait SpannedNode {
@@ -52,7 +51,7 @@ pub trait SpannedNode {
 macro_rules! node_defs {
     ( $( $x:ident ),+ ) => {
         impl AstNodeTrait for AstNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
                 match self {
                  $(
                     AstNode::$x(y) => y.visit(tree_walker),

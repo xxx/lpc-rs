@@ -10,13 +10,11 @@ use crate::{
     },
     parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
-    try_extract_value, value_to_ref, LpcInt,
+    try_extract_value, value_to_ref, LpcInt, Result,
 };
 use decorum::Total;
 use refpool::{Pool, PoolRef};
-use std::{cell::RefCell, collections::HashMap, fmt::Display, result};
-
-type Result<T> = result::Result<T, LpcError>;
+use std::{cell::RefCell, collections::HashMap, fmt::Display};
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 1_000;

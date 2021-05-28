@@ -7,9 +7,8 @@ use crate::{
     ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
     codegen::tree_walker::TreeWalker,
     semantic::lpc_type::LpcType,
+    Result,
 };
-
-use crate::errors::LpcError;
 
 /// A container for a set of variable declarations.
 #[derive(Debug, Clone, PartialEq)]
@@ -31,7 +30,7 @@ impl DeclNode {
 
 impl AstNodeTrait for DeclNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_decl(self)
     }
 }

@@ -8,7 +8,6 @@ use std::{
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
-    result,
 };
 
 use define::{Define, ObjectMacro};
@@ -30,14 +29,12 @@ use crate::{
         span::Span,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
-    preprocessor_parser, LpcInt,
+    preprocessor_parser, LpcInt, Result,
 };
 use std::iter::Peekable;
 
 pub mod define;
 pub mod preprocessor_node;
-
-type Result<T> = result::Result<T, LpcError>;
 
 lazy_static! {
     static ref SYS_INCLUDE: Regex = Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();

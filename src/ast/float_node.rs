@@ -7,10 +7,8 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    LpcFloat,
+    LpcFloat, Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
@@ -44,7 +42,7 @@ impl SpannedNode for FloatNode {
 }
 
 impl AstNodeTrait for FloatNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_float(self)
     }
 }

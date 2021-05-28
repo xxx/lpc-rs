@@ -16,7 +16,7 @@ use crate::{
         },
         span::Span,
     },
-    LpcInt,
+    LpcInt, Result,
 };
 
 pub mod lex_state;
@@ -43,7 +43,7 @@ impl<'input> LexWrapper<'input> {
 }
 
 impl Iterator for LexWrapper<'_> {
-    type Item = Result<Spanned<Token>, LpcError>;
+    type Item = Result<Spanned<Token>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.lexer.next()?;
@@ -74,7 +74,7 @@ impl<'a> TokenVecWrapper<'a> {
 }
 
 impl<'a> Iterator for TokenVecWrapper<'a> {
-    type Item = Result<Spanned<Token>, LpcError>;
+    type Item = Result<Spanned<Token>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.vec.get(self.count);
@@ -721,7 +721,7 @@ impl Display for Token {
 mod tests {
     use super::*;
 
-    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>, LpcError>> {
+    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>>> {
         let lexer = LexWrapper::new(prog);
         lexer
             .filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _))))

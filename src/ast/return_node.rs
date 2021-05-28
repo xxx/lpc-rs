@@ -10,9 +10,8 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
+    Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, PartialEq)]
@@ -38,7 +37,7 @@ impl SpannedNode for ReturnNode {
 
 impl AstNodeTrait for ReturnNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_return(self)
     }
 }

@@ -7,10 +7,8 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    LpcInt,
+    LpcInt, Result,
 };
-
-use crate::errors::LpcError;
 
 /// A node representing an integer literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
@@ -35,7 +33,7 @@ impl SpannedNode for IntNode {
 
 impl AstNodeTrait for IntNode {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<(), LpcError> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_int(self)
     }
 }
