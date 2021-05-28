@@ -22,11 +22,12 @@ use crate::{
     interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
     semantic::{
         lpc_type::LpcType,
-        semantic_checks::{check_binary_operation_types, check_unary_operation_types, node_type},
+        semantic_checks::{
+            check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
+        },
     },
     Result,
 };
-use crate::semantic::semantic_checks::is_keyword;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -67,8 +68,12 @@ impl ContextHolder for SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
-    fn visit_program(&mut self, _node: &mut ProgramNode) -> Result<()> {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
+
+        for expr in &mut node.body {
+            expr.visit(self)?;
+        }
 
         Ok(())
     }
@@ -222,7 +227,8 @@ impl TreeWalker for SemanticCheckWalker {
                             "Invalid return type {}. Expected {}.",
                             return_type, function_def.return_type
                         ))
-                        .with_span(node.span);
+                        .with_span(node.span)
+                        .with_label("Defined here", function_def.span);
 
                         self.context.errors.push(error);
                     }
@@ -233,7 +239,8 @@ impl TreeWalker for SemanticCheckWalker {
                     LpcType::Void,
                     function_def.return_type
                 ))
-                .with_span(node.span);
+                .with_span(node.span)
+                .with_label("Defined here", function_def.span);
 
                 self.context.errors.push(error);
             }
@@ -243,8 +250,8 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+        is_keyword(&node.name)?;
         if let Some(expression) = &mut node.value {
-            is_keyword(&node.name)?;
             expression.visit(self)?;
 
             let expr_type = node_type(
@@ -368,8 +375,8 @@ impl TreeWalker for SemanticCheckWalker {
 mod tests {
     use crate::{
         ast::{
-            assignment_node::AssignmentOperation, expression_node::ExpressionNode,
-            var_node::VarNode,
+            assignment_node::AssignmentOperation, ast_node::AstNode,
+            expression_node::ExpressionNode, var_node::VarNode,
         },
         semantic::{
             function_prototype::FunctionPrototype, lpc_type::LpcType, scope_tree::ScopeTree,
@@ -385,6 +392,31 @@ mod tests {
         Context {
             scopes,
             ..Context::default()
+        }
+    }
+
+    mod test_visit_program {
+        use super::*;
+
+        #[test]
+        fn checks_its_body() {
+            let mut node = ProgramNode {
+                body: vec![AstNode::from(VarInitNode {
+                    type_: LpcType::String(false),
+                    name: "mapping".to_string(),
+                    value: None,
+                    array: false,
+                    global: false,
+                    span: None,
+                })],
+            };
+
+            let mut walker = SemanticCheckWalker::new(empty_context());
+            if let Err(e) = walker.visit_program(&mut node) {
+                assert!(e.to_string().contains("is a keyword of the language"));
+            } else {
+                panic!("did not error?");
+            }
         }
     }
 

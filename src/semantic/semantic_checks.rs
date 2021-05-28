@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use phf::phf_set;
+use std::collections::HashMap;
 
 use crate::{
     ast::{
@@ -348,10 +348,13 @@ pub fn node_type(
 /// Is the passed name a keyword?
 pub fn is_keyword<T>(name: T) -> Result<()>
 where
-    T: AsRef<str>
+    T: AsRef<str>,
 {
     if KEYWORDS.contains(name.as_ref()) {
-        return Err(LpcError::new(format!("`{}` is a keyword of the language, and cannot be used here.", name.as_ref())));
+        return Err(LpcError::new(format!(
+            "`{}` is a keyword of the language, and cannot be used here.",
+            name.as_ref()
+        )));
     }
 
     Ok(())
@@ -1218,13 +1221,21 @@ mod combine_types_tests {
 
     #[test]
     fn index_into_mapping_is_mixed() {
-        let combo = combine_types(LpcType::Mapping(false), LpcType::String(false), BinaryOperation::Index);
+        let combo = combine_types(
+            LpcType::Mapping(false),
+            LpcType::String(false),
+            BinaryOperation::Index,
+        );
         assert_eq!(combo, LpcType::Mixed(false));
     }
 
     #[test]
     fn index_into_array_is_first_type_with_second_type_array_status() {
-        let combo = combine_types(LpcType::String(true), LpcType::Int(false), BinaryOperation::Index);
+        let combo = combine_types(
+            LpcType::String(true),
+            LpcType::Int(false),
+            BinaryOperation::Index,
+        );
         assert_eq!(combo, LpcType::String(false));
     }
 
@@ -1237,25 +1248,45 @@ mod combine_types_tests {
 
     #[test]
     fn differing_array_status_returns_first_type() {
-        let combo = combine_types(LpcType::String(true), LpcType::Int(false), BinaryOperation::Add);
+        let combo = combine_types(
+            LpcType::String(true),
+            LpcType::Int(false),
+            BinaryOperation::Add,
+        );
         assert_eq!(combo, LpcType::String(true));
 
-        let combo = combine_types(LpcType::String(false), LpcType::Int(true), BinaryOperation::Add);
+        let combo = combine_types(
+            LpcType::String(false),
+            LpcType::Int(true),
+            BinaryOperation::Add,
+        );
         assert_eq!(combo, LpcType::String(false));
     }
 
     #[test]
     fn both_array_is_mixed_array() {
-        let combo = combine_types(LpcType::String(true), LpcType::Int(true), BinaryOperation::Add);
+        let combo = combine_types(
+            LpcType::String(true),
+            LpcType::Int(true),
+            BinaryOperation::Add,
+        );
         assert_eq!(combo, LpcType::Mixed(true));
     }
 
     #[test]
     fn both_int_op_string_is_string() {
-        let combo = combine_types(LpcType::String(false), LpcType::Int(false), BinaryOperation::Add);
+        let combo = combine_types(
+            LpcType::String(false),
+            LpcType::Int(false),
+            BinaryOperation::Add,
+        );
         assert_eq!(combo, LpcType::String(false));
 
-        let combo = combine_types(LpcType::Int(false), LpcType::String(false), BinaryOperation::Add);
+        let combo = combine_types(
+            LpcType::Int(false),
+            LpcType::String(false),
+            BinaryOperation::Add,
+        );
         assert_eq!(combo, LpcType::String(false));
     }
 }
