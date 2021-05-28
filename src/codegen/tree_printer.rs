@@ -13,6 +13,7 @@ use crate::{
     codegen::tree_walker,
     Result,
 };
+use crate::ast::do_while_node::DoWhileNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -62,7 +63,6 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    /// Visit a code block
     fn visit_block(&mut self, node: &mut BlockNode) -> Result<()>
     where
         Self: Sized,
@@ -278,7 +278,6 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    /// Visit an `if` statement
     fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
         self.println_indented("If");
         self.indent += 2;
@@ -300,7 +299,6 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    /// Visit a `while` loop
     fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
         self.println_indented("While");
         self.indent += 2;
@@ -309,6 +307,19 @@ impl TreeWalker for TreePrinter {
         self.println_indented("body:");
         self.indent += 2;
         let _ = node.body.visit(self);
+        self.indent -= 2;
+
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+        self.println_indented("Do");
+        self.indent += 2;
+        let _ = node.body.visit(self);
+        self.indent -= 2;
+        self.println_indented("while:");
+        self.indent += 2;
+        let _ = node.condition.visit(self);
         self.indent -= 2;
 
         Ok(())

@@ -351,12 +351,18 @@ impl AsmInterpreter {
                     self.pc = *address;
                     continue;
                 }
+                Instruction::Jnz(r1, address) => {
+                    let v = &current_registers_mut(&mut self.stack)?[r1.index()];
+
+                    if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
+                        self.pc = *address;
+                        continue;
+                    }
+                }
                 Instruction::Jz(r1, address) => {
                     let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
-                    println!("JZ! {:?}", v);
                     if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                        println!("matched?, {:?}", address);
                         self.pc = *address;
                         continue;
                     }

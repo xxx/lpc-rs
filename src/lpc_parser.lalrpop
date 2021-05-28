@@ -8,6 +8,7 @@ use crate::ast::block_node::BlockNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
 use crate::ast::decl_node::DeclNode;
+use crate::ast::do_while_node::DoWhileNode;
 use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::float_node::FloatNode;
 use crate::ast::function_def_node::FunctionDefNode;
@@ -229,6 +230,7 @@ pub SimpleStatement: AstNode = {
     <Return> ";" => AstNode::from(<>),
     <Decl> ";" => AstNode::from(<>),
     <Block> => AstNode::from(<>),
+    <DoWhile> => AstNode::from(<>)
 };
 
 OpenStatement: AstNode = {
@@ -257,6 +259,12 @@ ClosedStatement: AstNode = {
         let node = WhileNode::new(cond, body, Some(while_t));
         AstNode::from(node)
      }
+};
+
+DoWhile: DoWhileNode = {
+    <do_t:"do"> <body:Statement> "while" "(" <cond:Expression> ")" ";" => {
+        DoWhileNode::new(body, cond, Some(do_t))
+    }
 };
 
 VarInit: VarInitNode = {

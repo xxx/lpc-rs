@@ -11,6 +11,7 @@ use crate::{
     context::Context,
     Result,
 };
+use crate::ast::do_while_node::DoWhileNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -239,6 +240,17 @@ pub trait TreeWalker {
     {
         let _ = node.condition.visit(self);
         let _ = node.body.visit(self);
+
+        Ok(())
+    }
+
+    /// Visit a `do {} while` loop
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        let _ = node.body.visit(self);
+        let _ = node.condition.visit(self);
 
         Ok(())
     }

@@ -6,6 +6,7 @@ pub mod block_node;
 pub mod call_node;
 pub mod comma_expression_node;
 pub mod decl_node;
+pub mod do_while_node;
 pub mod expression_node;
 pub mod float_node;
 pub mod function_def_node;

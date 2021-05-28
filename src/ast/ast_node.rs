@@ -21,6 +21,7 @@ use crate::{
     errors::LpcError,
     parser::span::Span,
 };
+use crate::ast::do_while_node::DoWhileNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
@@ -28,6 +29,7 @@ pub enum AstNode {
     Block(BlockNode),
     Call(CallNode),
     Decl(DeclNode),
+    DoWhile(DoWhileNode),
     Expression(ExpressionNode),
     FunctionDef(FunctionDefNode),
     If(IfNode),
@@ -65,6 +67,7 @@ node_defs!(
     Block,
     Call,
     Decl,
+    DoWhile,
     Expression,
     FunctionDef,
     If,
@@ -143,5 +146,11 @@ impl From<IfNode> for AstNode {
 impl From<WhileNode> for AstNode {
     fn from(node: WhileNode) -> Self {
         AstNode::While(node)
+    }
+}
+
+impl From<DoWhileNode> for AstNode {
+    fn from(node: DoWhileNode) -> Self {
+        AstNode::DoWhile(node)
     }
 }

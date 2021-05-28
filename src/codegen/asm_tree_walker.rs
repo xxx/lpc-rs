@@ -41,6 +41,7 @@ use crate::{
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
 };
 use std::result;
+use crate::ast::do_while_node::DoWhileNode;
 
 type Result<T> = result::Result<T, LpcError>;
 
@@ -391,6 +392,17 @@ impl TreeWalker for AsmTreeWalker {
         Ok(())
     }
 
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        for stmt in &mut node.body {
+            stmt.visit(self)?;
+        }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         let mut arg_results = vec![];
 
@@ -531,17 +543,6 @@ impl TreeWalker for AsmTreeWalker {
             UnaryOperation::Tilde => todo!(),
         };
 
-        Ok(())
-    }
-
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        for stmt in &mut node.body {
-            stmt.visit(self)?;
-        }
-
-        self.context.scopes.pop();
         Ok(())
     }
 
@@ -885,6 +886,25 @@ impl TreeWalker for AsmTreeWalker {
         self.labels.insert(end_label, addr);
         let else_instruction_replacement = Instruction::Jz(cond_result, addr);
         self.instructions[jz_index] = else_instruction_replacement;
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        let start_label = self.new_label("do-while-start");
+        let start_addr = self.instructions.len();
+        self.labels.insert(start_label, start_addr);
+
+        node.body.visit(self)?;
+        node.condition.visit(self)?;
+
+        // Go back to the start of the loop if the result isn't zero
+        let instruction = Instruction::Jnz(self.current_result, start_addr);
+        self.instructions.push(instruction);
+        self.debug_spans.push(node.span);
 
         self.context.scopes.pop();
         Ok(())
@@ -1924,6 +1944,52 @@ mod tests {
                     initial_arg: Register(5),
                 },
                 Jmp(0),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    mod test_visit_do_while {
+        use super::*;
+        use crate::asm::instruction::Instruction::{EqEq, Jnz};
+        use crate::ast::do_while_node::DoWhileNode;
+
+        #[test]
+        fn test_populates_the_instructions() {
+            let mut walker = AsmTreeWalker::default();
+
+            let mut node = DoWhileNode {
+                condition: ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(666)),
+                    r: Box::new(ExpressionNode::from(777)),
+                    op: BinaryOperation::EqEq,
+                    span: None,
+                }),
+                body: Box::new(AstNode::Call(CallNode {
+                    arguments: vec![ExpressionNode::from("body")],
+                    name: "dump".to_string(),
+                    span: None,
+                })),
+                scope_id: None,
+                span: None,
+            };
+
+            let _ = walker.visit_do_while(&mut node);
+
+            let expected = vec![
+                SConst(Register(1), String::from("body")),
+                RegCopy(Register(1), Register(2)),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(2),
+                },
+
+                IConst(Register(3), 666),
+                IConst(Register(4), 777),
+                EqEq(Register(3), Register(4), Register(5)),
+                Jnz(Register(5), 0),
             ];
 
             assert_eq!(walker.instructions, expected);

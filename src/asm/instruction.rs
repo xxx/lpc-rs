@@ -63,6 +63,9 @@ pub enum Instruction {
     /// Unconditional jump
     Jmp(Address),
 
+    /// Jump if the value in the register is not zero (Int or Float)
+    Jnz(Register, Address),
+
     /// Jump if the value in the register is zero (Int or Float)
     Jz(Register, Address),
 
@@ -153,6 +156,9 @@ impl Display for Instruction {
             }
             Instruction::Jmp(address) => {
                 write!(f, "jmp {}", address)
+            }
+            Instruction::Jnz(r1, address) => {
+                write!(f, "jnz {}, {}", r1, address)
             }
             Instruction::Jz(r1, address) => {
                 write!(f, "jz {}, {}", r1, address)

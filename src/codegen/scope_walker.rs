@@ -13,6 +13,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::do_while_node::DoWhileNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -167,6 +168,16 @@ impl TreeWalker for ScopeWalker {
 
         let _ = node.condition.visit(self);
         let _ = node.body.visit(self);
+
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        let _ = node.body.visit(self);
+        let _ = node.condition.visit(self);
 
         Ok(())
     }
