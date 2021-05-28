@@ -1170,6 +1170,54 @@ mod check_unary_operation_tests {
 }
 
 #[cfg(test)]
+mod combine_types_tests {
+    use super::*;
+
+    #[test]
+    fn index_into_mapping_is_mixed() {
+        let combo = combine_types(LpcType::Mapping(false), LpcType::String(false), BinaryOperation::Index);
+        assert_eq!(combo, LpcType::Mixed(false));
+    }
+
+    #[test]
+    fn index_into_array_is_first_type_with_second_type_array_status() {
+        let combo = combine_types(LpcType::String(true), LpcType::Int(false), BinaryOperation::Index);
+        assert_eq!(combo, LpcType::String(false));
+    }
+
+    #[test]
+    fn equivalent_returns_that_type() {
+        let type_ = LpcType::String(true);
+        let combo = combine_types(type_, type_, BinaryOperation::Add);
+        assert_eq!(combo, type_);
+    }
+
+    #[test]
+    fn differing_array_status_returns_first_type() {
+        let combo = combine_types(LpcType::String(true), LpcType::Int(false), BinaryOperation::Add);
+        assert_eq!(combo, LpcType::String(true));
+
+        let combo = combine_types(LpcType::String(false), LpcType::Int(true), BinaryOperation::Add);
+        assert_eq!(combo, LpcType::String(false));
+    }
+
+    #[test]
+    fn both_array_is_mixed_array() {
+        let combo = combine_types(LpcType::String(true), LpcType::Int(true), BinaryOperation::Add);
+        assert_eq!(combo, LpcType::Mixed(true));
+    }
+
+    #[test]
+    fn both_int_op_string_is_string() {
+        let combo = combine_types(LpcType::String(false), LpcType::Int(false), BinaryOperation::Add);
+        assert_eq!(combo, LpcType::String(false));
+
+        let combo = combine_types(LpcType::Int(false), LpcType::String(false), BinaryOperation::Add);
+        assert_eq!(combo, LpcType::String(false));
+    }
+}
+
+#[cfg(test)]
 mod node_type_tests {
     use super::*;
 
