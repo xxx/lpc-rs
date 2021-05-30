@@ -44,6 +44,13 @@ use crate::{
 
 use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode};
 
+macro_rules! push_instruction {
+    ($slf:expr, $inst:expr, $span:expr) => {
+        $slf.instructions.push($inst);
+        $slf.debug_spans.push($span);
+    }
+}
+
 /// Partition on whether the value is stored in registers or memory, to help select instructions.
 /// tl;dr - Value types use `Register`, while reference types use `Memory`.
 enum OperationType {
@@ -472,8 +479,7 @@ impl TreeWalker for AsmTreeWalker {
             1 => Instruction::IConst1(register),
             v => Instruction::IConst(register, v),
         };
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
@@ -482,8 +488,7 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
         let instruction = Instruction::FConst(self.current_result, node.value);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
@@ -492,9 +497,7 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
-        self.instructions
-            .push(Instruction::SConst(register, node.value.clone()));
-        self.debug_spans.push(node.span);
+        push_instruction!(self, Instruction::SConst(register, node.value.clone()), node.span);
 
         Ok(())
     }
@@ -519,8 +522,7 @@ impl TreeWalker for AsmTreeWalker {
         self.current_result = reg_result;
 
         let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
@@ -534,14 +536,12 @@ impl TreeWalker for AsmTreeWalker {
                 // multiply by -1
                 let reg = self.register_counter.next().unwrap();
                 let instruction = Instruction::IConst(reg, -1);
-                self.instructions.push(instruction);
-                self.debug_spans.push(node.span);
+                push_instruction!(self, instruction, node.span);
 
                 let reg_result = self.register_counter.next().unwrap();
 
                 let instruction = Instruction::MMul(reg_expr, reg, reg_result);
-                self.instructions.push(instruction);
-                self.debug_spans.push(node.span);
+                push_instruction!(self, instruction, node.span);
 
                 reg_result
             }
@@ -575,8 +575,7 @@ impl TreeWalker for AsmTreeWalker {
                 && *self.instructions.last().unwrap() != Instruction::Ret)
         {
             // TODO: This should emit a warning unless the return type is void
-            self.instructions.push(Instruction::Ret);
-            self.debug_spans.push(node.span);
+            push_instruction!(self, Instruction::Ret, node.span);
         }
 
         self.context.scopes.pop();
@@ -599,12 +598,10 @@ impl TreeWalker for AsmTreeWalker {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
             let copy = Instruction::RegCopy(self.current_result, Register(0));
-            self.instructions.push(copy);
-            self.debug_spans.push(expression.span());
+            push_instruction!(self, copy, expression.span());
         }
 
-        self.instructions.push(Instruction::Ret);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, Instruction::Ret, node.span);
 
         Ok(())
     }
@@ -641,9 +638,7 @@ impl TreeWalker for AsmTreeWalker {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
                 let next_register = self.register_counter.next().unwrap();
-                self.instructions
-                    .push(Instruction::RegCopy(self.current_result, next_register));
-                self.debug_spans.push(node.span());
+                push_instruction!(self, Instruction::RegCopy(self.current_result, next_register), node.span());
                 next_register
             } else {
                 self.current_result
@@ -659,9 +654,7 @@ impl TreeWalker for AsmTreeWalker {
             // but makes it possible to skip a bunch of conditionals.
             let dest_register = self.global_counter.next().unwrap();
             let instruction = Instruction::GStore(current_register, dest_register);
-
-            self.instructions.push(instruction);
-            self.debug_spans.push(node.span);
+            push_instruction!(self, instruction, node.span);
         }
 
         let current_global_register = self.global_counter.current();
@@ -703,8 +696,7 @@ impl TreeWalker for AsmTreeWalker {
         if sym.is_global() {
             let result_register = self.register_counter.next().unwrap();
             let instruction = Instruction::GLoad(sym_loc, result_register);
-            self.instructions.push(instruction);
-            self.debug_spans.push(node.span);
+            push_instruction!(self, instruction, node.span);
 
             self.current_result = result_register;
         } else {
@@ -726,8 +718,7 @@ impl TreeWalker for AsmTreeWalker {
 
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
-                self.instructions.push(assign);
-                self.debug_spans.push(node.span);
+                push_instruction!(self, assign, node.span);
 
                 // Copy over globals if necessary
                 if global {
@@ -738,8 +729,7 @@ impl TreeWalker for AsmTreeWalker {
                     }) = self.lookup_global(&name)
                     {
                         let store = Instruction::GStore(lhs_result, *register);
-                        self.instructions.push(store);
-                        self.debug_spans.push(node.span);
+                        push_instruction!(self, store, node.span);
                     }
                 }
 
@@ -756,10 +746,9 @@ impl TreeWalker for AsmTreeWalker {
                 r.visit(self)?;
                 let index_result = self.current_result;
 
-                let assign = Instruction::Store(rhs_result, var_result, index_result);
+                let store = Instruction::Store(rhs_result, var_result, index_result);
 
-                self.instructions.push(assign);
-                self.debug_spans.push(node.span);
+                push_instruction!(self, store, node.span);
 
                 self.current_result = rhs_result;
             }
@@ -784,8 +773,7 @@ impl TreeWalker for AsmTreeWalker {
 
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
-        self.instructions.push(Instruction::AConst(register, items));
-        self.debug_spans.push(node.span);
+        push_instruction!(self, Instruction::AConst(register, items), node.span);
 
         Ok(())
     }
@@ -802,8 +790,7 @@ impl TreeWalker for AsmTreeWalker {
 
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
-        self.instructions.push(Instruction::MapConst(register, map));
-        self.debug_spans.push(node.span);
+        push_instruction!(self, Instruction::MapConst(register, map), node.span);
 
         Ok(())
     }
@@ -823,8 +810,7 @@ impl TreeWalker for AsmTreeWalker {
         // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the "then" body.
         // Insert a placeholder address, which we correct below after the body's code is generated
         let instruction = Instruction::Jz(cond_result, 0);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         // Generate the main body of the statement
         node.body.visit(self)?;
@@ -835,8 +821,7 @@ impl TreeWalker for AsmTreeWalker {
             // 0 is a placeholder, which is corrected further below
             let instruction = Instruction::Jmp(0);
             jmp_index = Some(self.instructions.len());
-            self.instructions.push(instruction);
-            self.debug_spans.push(node.span);
+            push_instruction!(self, instruction, node.span);
         }
 
         // Correct the address in the `Jz` instruction generated above
@@ -877,15 +862,13 @@ impl TreeWalker for AsmTreeWalker {
 
         // Insert a placeholder address, which we correct below after the body's code is generated
         let instruction = Instruction::Jz(cond_result, 0);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         node.body.visit(self)?;
 
         // go back to the start of the loop
         let instruction = Instruction::Jmp(start_addr);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         // Correct the address in the `Jz` instruction generated above
         // now that the body code has been generated.
@@ -911,8 +894,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // Go back to the start of the loop if the result isn't zero
         let instruction = Instruction::Jnz(self.current_result, start_addr);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         self.context.scopes.pop();
         Ok(())
@@ -937,8 +919,7 @@ impl TreeWalker for AsmTreeWalker {
 
             // Insert a placeholder address of 0, which is corrected later
             let instruction = Instruction::Jz(cond_result, 0);
-            self.instructions.push(instruction);
-            self.debug_spans.push(c.span());
+            push_instruction!(self, instruction, c.span());
 
             Some((cond_result, jz_index))
         } else {
@@ -953,8 +934,7 @@ impl TreeWalker for AsmTreeWalker {
 
         // go back to the start of the loop
         let instruction = Instruction::Jmp(start_addr);
-        self.instructions.push(instruction);
-        self.debug_spans.push(node.span);
+        push_instruction!(self, instruction, node.span);
 
         if let Some((cond_result, jz_index)) = jz_tuple {
             // Correct the address in the `Jz` instruction generated above
