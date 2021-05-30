@@ -597,7 +597,6 @@ AssignmentExpression: ExpressionNode = {
         ExpressionNode::Assignment(AssignmentNode {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-            op: AssignmentOperation::Simple,
             span: Some(Span { file_id, l, r }),
         })
     }

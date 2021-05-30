@@ -1594,7 +1594,6 @@ mod tests {
                     global: true,
                 })),
                 rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
-                op: AssignmentOperation::Simple,
                 span: None,
             };
 
@@ -1631,7 +1630,6 @@ mod tests {
             let mut node = AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
                 rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
-                op: AssignmentOperation::Simple,
                 span: None,
             };
 
@@ -1671,7 +1669,6 @@ mod tests {
                     span: None,
                 })),
                 rhs: Box::new(ExpressionNode::from(-12)),
-                op: AssignmentOperation::Simple,
                 span: None,
             };
 
@@ -2080,7 +2077,6 @@ mod tests {
                         op: BinaryOperation::Sub,
                         span: None,
                     })),
-                    op: AssignmentOperation::Simple,
                     span: None,
                 })),
                 body: Box::new(AstNode::Block(BlockNode {

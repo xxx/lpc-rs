@@ -739,7 +739,6 @@ mod tests {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
-                op: AssignmentOperation::Simple,
                 span: None,
             });
 
@@ -763,7 +762,6 @@ mod tests {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
-                op: AssignmentOperation::Simple,
                 span: None,
             });
 
@@ -787,7 +785,6 @@ mod tests {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
-                op: AssignmentOperation::Simple,
                 span: None,
             });
 
@@ -822,7 +819,6 @@ mod tests {
             let mut assignment_node = AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(var_node)),
                 rhs: Box::new(ExpressionNode::from("foobar")),
-                op: AssignmentOperation::Simple,
                 span: None,
             };
 
@@ -866,7 +862,6 @@ mod tests {
                     op: BinaryOperation::Index,
                     span: None,
                 })),
-                op: AssignmentOperation::Simple,
                 span: None,
             };
 
@@ -914,7 +909,6 @@ mod tests {
                     op: BinaryOperation::Index,
                     span: None,
                 })),
-                op: AssignmentOperation::Simple,
                 span: None,
             };
 

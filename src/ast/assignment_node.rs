@@ -59,12 +59,6 @@ pub struct AssignmentNode {
     /// right-hand side
     pub rhs: Box<ExpressionNode>,
 
-    #[deprecated(
-        note = "All assignments are `Simple` assignments, after being decomposed in the parser"
-    )]
-    /// the operation
-    pub op: AssignmentOperation,
-
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>,
 }

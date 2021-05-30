@@ -250,7 +250,6 @@ mod tests {
         let node = AssignmentNode {
             lhs: Box::new(VarNode::new("adsf").into()),
             rhs: Box::new(IntNode::new(324).into()),
-            op: AssignmentOperation::Simple,
             span: None,
         };
 
