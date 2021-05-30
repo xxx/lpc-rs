@@ -8,6 +8,7 @@ use crate::{
         block_node::BlockNode,
         call_node::CallNode,
         expression_node::ExpressionNode,
+        for_node::ForNode,
         function_def_node::FunctionDefNode,
         int_node::IntNode,
         program_node::ProgramNode,
@@ -28,7 +29,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::for_node::ForNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {

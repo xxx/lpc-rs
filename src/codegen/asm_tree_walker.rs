@@ -48,7 +48,7 @@ macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
         $slf.instructions.push($inst);
         $slf.debug_spans.push($span);
-    }
+    };
 }
 
 /// Partition on whether the value is stored in registers or memory, to help select instructions.
@@ -503,7 +503,11 @@ impl TreeWalker for AsmTreeWalker {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
 
-        push_instruction!(self, Instruction::SConst(register, node.value.clone()), node.span);
+        push_instruction!(
+            self,
+            Instruction::SConst(register, node.value.clone()),
+            node.span
+        );
 
         Ok(())
     }
@@ -644,7 +648,11 @@ impl TreeWalker for AsmTreeWalker {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
                 let next_register = self.register_counter.next().unwrap();
-                push_instruction!(self, Instruction::RegCopy(self.current_result, next_register), node.span());
+                push_instruction!(
+                    self,
+                    Instruction::RegCopy(self.current_result, next_register),
+                    node.span()
+                );
                 next_register
             } else {
                 self.current_result

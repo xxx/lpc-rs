@@ -63,8 +63,7 @@ pub fn check_var_redefinition(node: &'_ VarInitNode, scope: &'_ LocalScope) -> R
     if let Some(sym) = scope.lookup(&node.name) {
         Err(LpcError::new(format!("Redefinition of `{}`", sym.name))
             .with_span(node.span)
-            .with_label("Originally declared here", sym.span)
-        )
+            .with_label("Originally declared here", sym.span))
     } else {
         Ok(())
     }
@@ -200,20 +199,12 @@ pub fn check_binary_operation_types(
         BinaryOperation::AndAnd => todo!(),
         BinaryOperation::OrOr => todo!(),
         BinaryOperation::EqEq => Ok(()),
-        BinaryOperation::Lt
-        | BinaryOperation::Lte
-        | BinaryOperation::Gt
-        | BinaryOperation::Gte => {
+        BinaryOperation::Lt | BinaryOperation::Lte | BinaryOperation::Gt | BinaryOperation::Gte => {
             match tuple {
                 (LpcType::Int(false), LpcType::Int(false))
                 | (LpcType::Float(false), LpcType::Float(false))
                 | (LpcType::String(false), LpcType::String(false)) => Ok(()),
-                (left_type, right_type) => Err(create_error(
-                    node,
-                    node.op,
-                    left_type,
-                    right_type,
-                )),
+                (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
             }
         }
     }
@@ -1107,7 +1098,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::Lt, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Lt, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_lte() {
         let scope_tree = setup();

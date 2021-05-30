@@ -277,9 +277,10 @@ impl AsmInterpreter {
                             self.copy_call_result(&frame)?;
                         }
                     } else {
-                        return Err(
-                            self.runtime_error(format!("Call to unknown function (that had a valid prototype?) `{}`", name))
-                        );
+                        return Err(self.runtime_error(format!(
+                            "Call to unknown function (that had a valid prototype?) `{}`",
+                            name
+                        )));
                     }
                 }
                 Instruction::FConst(r, f) => {
@@ -583,11 +584,7 @@ impl AsmInterpreter {
         let ref1 = &self.register_to_lpc_ref(r1.index());
         let ref2 = &self.register_to_lpc_ref(r2.index());
 
-        let out = if operation(ref1, ref2) {
-            1
-        } else {
-            0
-        };
+        let out = if operation(ref1, ref2) { 1 } else { 0 };
 
         let registers = current_registers_mut(&mut self.stack)?;
         registers[r3.index()] = LpcRef::Int(out);

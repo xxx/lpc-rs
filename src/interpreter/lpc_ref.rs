@@ -5,6 +5,7 @@ use crate::{
 use refpool::PoolRef;
 use std::{
     cell::RefCell,
+    cmp::Ordering,
     fmt,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
@@ -12,7 +13,6 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
-use std::cmp::Ordering;
 
 #[macro_export]
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
