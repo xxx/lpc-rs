@@ -38,7 +38,7 @@ impl Display for UnaryOperation {
 }
 
 /// Representation of a binary operation
-#[derive(Hash, Debug, Eq, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone)]
 pub struct UnaryOpNode {
     pub expr: Box<ExpressionNode>,
 
@@ -68,16 +68,5 @@ impl AstNodeTrait for UnaryOpNode {
 impl Display for UnaryOpNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "UnaryOpNode[{:?}]", self)
-    }
-}
-
-impl Clone for UnaryOpNode {
-    fn clone(&self) -> Self {
-        Self {
-            expr: Box::new((*self.expr).clone()),
-            op: self.op,
-            is_post: self.is_post,
-            span: self.span,
-        }
     }
 }

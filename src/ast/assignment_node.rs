@@ -24,7 +24,7 @@ pub enum AssignmentOperation {
 }
 
 /// A node representing an assignment.
-#[derive(Hash, Debug, Eq, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone)]
 pub struct AssignmentNode {
     /// left-hand side
     pub lhs: Box<ExpressionNode>,
@@ -55,16 +55,5 @@ impl AstNodeTrait for AssignmentNode {
 impl Display for AssignmentNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "AssignmentNode[{:?}]", self)
-    }
-}
-
-impl Clone for AssignmentNode {
-    fn clone(&self) -> Self {
-        Self {
-            lhs: self.lhs.clone(),
-            rhs: self.rhs.clone(),
-            op: self.op,
-            span: self.span,
-        }
     }
 }

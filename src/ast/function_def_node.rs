@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// A node representation a function definition
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionDefNode {
     pub return_type: LpcType,
     pub name: String,
@@ -44,17 +44,5 @@ impl Display for FunctionDefNode {
             "FunctionDefNode[{}, {} {:?} {:?}]",
             self.return_type, self.name, self.parameters, self.body
         )
-    }
-}
-
-impl Clone for FunctionDefNode {
-    fn clone(&self) -> Self {
-        Self {
-            return_type: self.return_type,
-            name: self.name.clone(),
-            parameters: self.parameters.clone(),
-            body: self.body.clone(),
-            span: self.span,
-        }
     }
 }

@@ -52,7 +52,7 @@ impl Display for BinaryOperation {
 }
 
 /// Representation of a binary operation
-#[derive(Hash, Debug, Eq, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone)]
 pub struct BinaryOpNode {
     /// Left-hand side
     pub l: Box<ExpressionNode>,
@@ -83,16 +83,5 @@ impl AstNodeTrait for BinaryOpNode {
 impl Display for BinaryOpNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "BinaryOpNode[{:?}]", self)
-    }
-}
-
-impl Clone for BinaryOpNode {
-    fn clone(&self) -> Self {
-        Self {
-            l: Box::new((*self.l).clone()),
-            r: Box::new((*self.r).clone()),
-            op: self.op,
-            span: self.span,
-        }
     }
 }

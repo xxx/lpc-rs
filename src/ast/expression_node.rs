@@ -27,7 +27,7 @@ use std::collections::HashMap;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
-#[derive(Hash, Debug, Eq, PartialEq)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
@@ -84,16 +84,6 @@ macro_rules! delegated_traits {
                 match self {
                 $(
                     $x(y) => y.visit(tree_walker),
-                )*
-                }
-            }
-        }
-
-        impl Clone for ExpressionNode {
-            fn clone(&self) -> Self {
-                match self {
-                $(
-                    $x(y) => $x((*y).clone()),
                 )*
                 }
             }
