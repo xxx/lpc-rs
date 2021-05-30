@@ -23,10 +23,10 @@ pub enum AssignmentOperation {
     Index,
 
     /// Plus-equals assignment - `a += 1`;
-    PlusEq,
+    AddEq,
 
     /// Plus-equals assignment - `a -= 1`;
-    MinusEq,
+    SubEq,
 
     /// Plus-equals assignment - `a *= 2`;
     MulEq,
@@ -40,8 +40,8 @@ impl Display for AssignmentOperation {
         let s = match self {
             AssignmentOperation::Simple => "=",
             AssignmentOperation::Index => "[]",
-            AssignmentOperation::PlusEq => "+=",
-            AssignmentOperation::MinusEq => "-=",
+            AssignmentOperation::AddEq => "+=",
+            AssignmentOperation::SubEq => "-=",
             AssignmentOperation::MulEq => "*=",
             AssignmentOperation::DivEq => "/=",
         };

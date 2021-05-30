@@ -145,9 +145,9 @@ pub enum Token {
     #[token("=", track_slice)]
     Assign(Span),
     #[token("+=", track_slice)]
-    PlusEq(Span),
+    AddEq(Span),
     #[token("-=", track_slice)]
-    MinusEq(Span),
+    SubEq(Span),
     #[token("*=", track_slice)]
     MulEq(Span),
     #[token("/=", track_slice)]
@@ -440,8 +440,8 @@ impl Token {
             | Token::GreaterThan(x)
             | Token::GreaterThanEq(x)
             | Token::Assign(x)
-            | Token::PlusEq(x)
-            | Token::MinusEq(x)
+            | Token::AddEq(x)
+            | Token::SubEq(x)
             | Token::MulEq(x)
             | Token::DivEq(x)
             | Token::ModEq(x)
@@ -533,8 +533,8 @@ impl Token {
             | Token::GreaterThan(x)
             | Token::GreaterThanEq(x)
             | Token::Assign(x)
-            | Token::PlusEq(x)
-            | Token::MinusEq(x)
+            | Token::AddEq(x)
+            | Token::SubEq(x)
             | Token::MulEq(x)
             | Token::DivEq(x)
             | Token::ModEq(x)
@@ -642,8 +642,8 @@ impl Display for Token {
             Token::GreaterThanEq(_) => ">=",
 
             Token::Assign(_) => "=",
-            Token::PlusEq(_) => "+=",
-            Token::MinusEq(_) => "-=",
+            Token::AddEq(_) => "+=",
+            Token::SubEq(_) => "-=",
             Token::MulEq(_) => "*=",
             Token::DivEq(_) => "/=",
             Token::ModEq(_) => "%=",

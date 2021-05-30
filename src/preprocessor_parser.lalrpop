@@ -35,8 +35,8 @@ extern {
         ">=" => Token::GreaterThanEq(<Span>),
 
         "=" => Token::Assign(<Span>),
-        "+=" => Token::PlusEq(<Span>),
-        "-=" => Token::MinusEq(<Span>),
+        "+=" => Token::AddEq(<Span>),
+        "-=" => Token::SubEq(<Span>),
         "*=" => Token::MulEq(<Span>),
         "/=" => Token::DivEq(<Span>),
         "%=" => Token::ModEq(<Span>),

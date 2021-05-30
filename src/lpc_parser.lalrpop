@@ -62,8 +62,8 @@ extern {
         ">=" => Token::GreaterThanEq(<Span>),
 
         "=" => Token::Assign(<Span>),
-        "+=" => Token::PlusEq(<Span>),
-        "-=" => Token::MinusEq(<Span>),
+        "+=" => Token::AddEq(<Span>),
+        "-=" => Token::SubEq(<Span>),
         "*=" => Token::MulEq(<Span>),
         "/=" => Token::DivEq(<Span>),
         "%=" => Token::ModEq(<Span>),
@@ -570,13 +570,13 @@ AssignmentExpression: ExpressionNode = {
             AssignmentOperation::Simple => {
                 rhs
             }
-            AssignmentOperation::PlusEq
-            | AssignmentOperation::MinusEq
+            AssignmentOperation::AddEq
+            | AssignmentOperation::SubEq
             | AssignmentOperation::MulEq
             | AssignmentOperation::DivEq => {
                 let binary_op = match op {
-                    AssignmentOperation::PlusEq => BinaryOperation::Add,
-                    AssignmentOperation::MinusEq => BinaryOperation::Sub,
+                    AssignmentOperation::AddEq => BinaryOperation::Add,
+                    AssignmentOperation::SubEq => BinaryOperation::Sub,
                     AssignmentOperation::MulEq => BinaryOperation::Mul,
                     AssignmentOperation::DivEq => BinaryOperation::Div,
                     _ => panic!("This only way for this to be reached is if a new op was added in the parent `match`, \
@@ -700,8 +700,8 @@ pub Call: CallNode = {
 
 AssignmentOp: AssignmentOperation = {
     "=" => AssignmentOperation::Simple,
-    "+=" => AssignmentOperation::PlusEq,
-    "-=" => AssignmentOperation::MinusEq,
+    "+=" => AssignmentOperation::AddEq,
+    "-=" => AssignmentOperation::SubEq,
     "*=" => AssignmentOperation::MulEq,
     "/=" => AssignmentOperation::DivEq,
 };
