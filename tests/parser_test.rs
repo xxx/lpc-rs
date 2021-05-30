@@ -16,6 +16,7 @@ use lpc_rs::{
     semantic::lpc_type::LpcType,
     LpcFloat, LpcInt,
 };
+use lpc_rs::ast::assignment_node::AssignmentNode;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -228,6 +229,39 @@ fn test_string_literal_repeat() {
             r: expr.len(),
         }),
     });
+
+    assert_eq!(node, expected);
+}
+
+#[test]
+fn test_compound_assignment_decompose() {
+    let expr = "a += 2";
+    let lexer = LexWrapper::new(expr);
+    let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
+
+    let expected = ExpressionNode::Assignment(
+        AssignmentNode {
+            lhs: Box::new(ExpressionNode::Var(VarNode {
+                name: "a".to_string(),
+                span: Some(Span { l: 0, r: 1, file_id: 0 }),
+                global: false
+            })),
+            rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                l: Box::new(ExpressionNode::Var(VarNode {
+                    name: "a".to_string(),
+                    span: Some(Span { l: 0, r: 1, file_id: 0 }),
+                    global: false
+                })),
+                r: Box::new(ExpressionNode::Int(IntNode {
+                    value: 2,
+                    span: Some(Span { l: 5, r: 6, file_id: 0 })
+                })),
+                op: BinaryOperation::Add,
+                span: Some(Span { l: 5, r: 6, file_id: 0 })
+            })),
+            span: Some(Span { l: 0, r: 6, file_id: 0 })
+        }
+    );
 
     assert_eq!(node, expected);
 }
