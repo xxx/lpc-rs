@@ -17,35 +17,34 @@ use crate::{
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BinaryOperation {
     Add,
-    Sub,
-    Mul,
-    Div,
-
-    /// Index into an array or mapping
-    Index,
-
     AndAnd,
-    OrOr,
-
+    Div,
     EqEq,
-    //
-    // Lt,
-    // Lte,
-    // Gt,
-    // Gte
+    Gt,
+    Gte,
+    Index,
+    Lt,
+    Lte,
+    Mul,
+    OrOr,
+    Sub,
 }
 
 impl Display for BinaryOperation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = match self {
             BinaryOperation::Add => "+",
-            BinaryOperation::Sub => "-",
-            BinaryOperation::Mul => "*",
-            BinaryOperation::Div => "/",
-            BinaryOperation::Index => "[]",
             BinaryOperation::AndAnd => "&&",
-            BinaryOperation::OrOr => "||",
+            BinaryOperation::Div => "/",
             BinaryOperation::EqEq => "==",
+            BinaryOperation::Gt => ">",
+            BinaryOperation::Gte => ">=",
+            BinaryOperation::Index => "[]",
+            BinaryOperation::Lt => "<",
+            BinaryOperation::Lte => "<=",
+            BinaryOperation::Mul => "*",
+            BinaryOperation::OrOr => "||",
+            BinaryOperation::Sub => "-",
         };
 
         write!(f, "{}", s)

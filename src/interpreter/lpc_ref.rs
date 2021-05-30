@@ -12,6 +12,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
+use std::cmp::Ordering;
 
 #[macro_export]
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
@@ -124,6 +125,23 @@ impl PartialEq for LpcRef {
             (LpcRef::Array(x), LpcRef::Array(y)) => PoolRef::ptr_eq(x, y),
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => PoolRef::ptr_eq(x, y),
             _ => false,
+        }
+    }
+}
+
+impl PartialOrd for LpcRef {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
+            (LpcRef::String(x), LpcRef::String(y)) => {
+                let xb = x.borrow();
+                let yb = y.borrow();
+                let a = extract_value!(*xb, LpcValue::String);
+                let b = extract_value!(*yb, LpcValue::String);
+                Some(a.cmp(b))
+            }
+            _ => None,
         }
     }
 }

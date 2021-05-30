@@ -489,7 +489,22 @@ pub ShiftExpression: ExpressionNode = {
 };
 
 pub RelationalExpression: ExpressionNode = {
-    <ShiftExpression>
+    <ShiftExpression>,
+    <l:RelationalExpression> <op:RelationalOp> <r:ShiftExpression> => {
+         let file_id = first_span(&[&l, &r]).file_id;
+         let left = if let Some(span) = l.span() {
+             span.l
+         } else {
+             0
+         };
+         let right = if let Some(span) = r.span() {
+             span.r
+         } else {
+             0
+         };
+
+         collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
+    }
 };
 
 pub EqualityExpression: ExpressionNode = {
@@ -670,6 +685,13 @@ MultiplicitiveBinaryOp: BinaryOperation = {
 
 EqualityOp: BinaryOperation = {
     "==" => BinaryOperation::EqEq,
+};
+
+RelationalOp: BinaryOperation = {
+    "<" => BinaryOperation::Lt,
+    "<=" => BinaryOperation::Lte,
+    ">" => BinaryOperation::Gt,
+    ">=" => BinaryOperation::Gte,
 };
 
 UnaryOp: (UnaryOperation, Range<usize>) = {

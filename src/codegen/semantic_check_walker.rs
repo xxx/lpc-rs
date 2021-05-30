@@ -28,6 +28,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::for_node::ForNode;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -368,6 +369,26 @@ impl TreeWalker for SemanticCheckWalker {
 
             Err(e)
         }
+    }
+
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        if let Some(n) = &mut *node.initializer {
+            let _ = n.visit(self);
+        }
+        if let Some(n) = &mut node.condition {
+            let _ = n.visit(self);
+        }
+
+        let _ = node.body.visit(self);
+
+        if let Some(n) = &mut node.incrementer {
+            let _ = n.visit(self);
+        }
+
+        self.context.scopes.pop();
+        Ok(())
     }
 }
 

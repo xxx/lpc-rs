@@ -280,17 +280,17 @@ impl AsmTreeWalker {
         reg_result: Register,
     ) -> Instruction {
         match node.op {
-            BinaryOperation::Add => self.choose(
+            BinaryOperation::Add => self.choose_num_or_mixed(
                 &node,
                 || Instruction::IAdd(reg_left, reg_right, reg_result),
                 || Instruction::MAdd(reg_left, reg_right, reg_result),
             ),
-            BinaryOperation::Sub => self.choose(
+            BinaryOperation::Sub => self.choose_num_or_mixed(
                 &node,
                 || Instruction::ISub(reg_left, reg_right, reg_result),
                 || Instruction::MSub(reg_left, reg_right, reg_result),
             ),
-            BinaryOperation::Mul => self.choose(
+            BinaryOperation::Mul => self.choose_num_or_mixed(
                 &node,
                 || Instruction::IMul(reg_left, reg_right, reg_result),
                 || Instruction::MMul(reg_left, reg_right, reg_result),
@@ -300,11 +300,17 @@ impl AsmTreeWalker {
             BinaryOperation::AndAnd => todo!(),
             BinaryOperation::OrOr => todo!(),
             BinaryOperation::EqEq => Instruction::EqEq(reg_left, reg_right, reg_result),
+            BinaryOperation::Lt => Instruction::Lt(reg_left, reg_right, reg_result),
+            BinaryOperation::Lte => Instruction::Lte(reg_left, reg_right, reg_result),
+            BinaryOperation::Gt => Instruction::Gt(reg_left, reg_right, reg_result),
+            BinaryOperation::Gte => Instruction::Gte(reg_left, reg_right, reg_result),
         }
     }
 
-    /// Allows for recursive determination of typed binary operator instructions
-    fn choose<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
+    /// Allows for recursive determination of typed binary operator instructions, allowing
+    /// choice between a numeric (i.e. held in registers) and mixed (i.e. tracked via references)
+    /// Switching on the instructions lets us avoid some value lookups at runtime.
+    fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
     where
         F: Fn() -> Instruction,
         G: Fn() -> Instruction,

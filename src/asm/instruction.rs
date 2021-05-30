@@ -39,6 +39,14 @@ pub enum Instruction {
     /// Copies a variable from *local* register x.0, into the *global* register x.1.
     GStore(Register, Register),
 
+    /// Greater than
+    /// x.2 = x.0 > x.1
+    Gt(Register, Register, Register),
+
+    /// Greater than or equal to
+    /// x.2 = x.0 >= x.1
+    Gte(Register, Register, Register),
+
     /// Integer addition - x.2 = x.0 + x.1
     IAdd(Register, Register, Register),
 
@@ -72,6 +80,14 @@ pub enum Instruction {
     /// Load a single item from an array or mapping into a register
     /// x.2 = x.0[x.1]
     Load(Register, Register, Register),
+
+    /// Less than
+    /// x.2 = x.0 < x.1
+    Lt(Register, Register, Register),
+
+    /// Less than or equal to
+    /// x.2 = x.0 <= x.1
+    Lte(Register, Register, Register),
 
     /// Create a mapping from the keys and values in the hashmap
     MapConst(Register, HashMap<Register, Register>),
@@ -133,6 +149,12 @@ impl Display for Instruction {
             Instruction::GStore(r1, r2) => {
                 write!(f, "gstore {}, {}", r1, r2)
             }
+            Instruction::Gt(r1, r2, r3) => {
+                write!(f, "gt {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Gte(r1, r2, r3) => {
+                write!(f, "gte {}, {}, {}", r1, r2, r3)
+            }
             Instruction::IAdd(r1, r2, r3) => {
                 write!(f, "iadd {}, {}, {}", r1, r2, r3)
             }
@@ -165,6 +187,12 @@ impl Display for Instruction {
             }
             Instruction::Load(r1, r2, r3) => {
                 write!(f, "load {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Lt(r1, r2, r3) => {
+                write!(f, "lt {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Lte(r1, r2, r3) => {
+                write!(f, "lte {}, {}, {}", r1, r2, r3)
             }
             Instruction::MapConst(r, i) => {
                 let str = i

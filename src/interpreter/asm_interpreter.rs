@@ -277,7 +277,9 @@ impl AsmInterpreter {
                             self.copy_call_result(&frame)?;
                         }
                     } else {
-                        unimplemented!()
+                        return Err(
+                            self.runtime_error(format!("Call to unknown function (that had a valid prototype?) `{}`", name))
+                        );
                     }
                 }
                 Instruction::FConst(r, f) => {
@@ -292,6 +294,14 @@ impl AsmInterpreter {
                 Instruction::GStore(r1, r2) => {
                     let registers = current_registers_mut(&mut self.stack)?;
                     self.globals[r2.index()] = registers[r1.index()].clone()
+                }
+                Instruction::Gt(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_boolean_operation(n1, n2, n3, |x, y| x > y)?;
+                }
+                Instruction::Gte(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_boolean_operation(n1, n2, n3, |x, y| x >= y)?;
                 }
                 Instruction::IAdd(r1, r2, r3) => {
                     let registers = current_registers_mut(&mut self.stack)?;
@@ -413,6 +423,14 @@ impl AsmInterpreter {
                             )));
                         }
                     }
+                }
+                Instruction::Lt(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_boolean_operation(n1, n2, n3, |x, y| x < y)?;
+                }
+                Instruction::Lte(r1, r2, r3) => {
+                    let (n1, n2, n3) = (*r1, *r2, *r3);
+                    self.binary_boolean_operation(n1, n2, n3, |x, y| x <= y)?;
                 }
                 Instruction::MapConst(r, map) => {
                     let mut register_map = HashMap::new();
@@ -547,6 +565,32 @@ impl AsmInterpreter {
                 return Err(e.with_span(*self.current_debug_span()));
             }
         }
+
+        Ok(())
+    }
+
+    /// Binary operations that return a boolean value
+    fn binary_boolean_operation<F>(
+        &mut self,
+        r1: Register,
+        r2: Register,
+        r3: Register,
+        operation: F,
+    ) -> Result<()>
+    where
+        F: Fn(&LpcRef, &LpcRef) -> bool,
+    {
+        let ref1 = &self.register_to_lpc_ref(r1.index());
+        let ref2 = &self.register_to_lpc_ref(r2.index());
+
+        let out = if operation(ref1, ref2) {
+            1
+        } else {
+            0
+        };
+
+        let registers = current_registers_mut(&mut self.stack)?;
+        registers[r3.index()] = LpcRef::Int(out);
 
         Ok(())
     }

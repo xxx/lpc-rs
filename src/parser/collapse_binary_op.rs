@@ -25,12 +25,17 @@ pub fn collapse_binary_op(
 ) -> ExpressionNode {
     match op {
         BinaryOperation::Add => collapse_add(op, l, r, span),
-        BinaryOperation::Sub => collapse_sub(op, l, r, span),
-        BinaryOperation::Mul => collapse_mul(op, l, r, span),
-        BinaryOperation::Div => collapse_div(op, l, r, span),
         BinaryOperation::AndAnd => todo!(),
+        BinaryOperation::Div => collapse_div(op, l, r, span),
+        BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::OrOr => todo!(),
-        BinaryOperation::Index | BinaryOperation::EqEq => ExpressionNode::BinaryOp(BinaryOpNode {
+        BinaryOperation::Sub => collapse_sub(op, l, r, span),
+        BinaryOperation::Index
+        | BinaryOperation::EqEq
+        | BinaryOperation::Lt
+        | BinaryOperation::Lte
+        | BinaryOperation::Gt
+        | BinaryOperation::Gte => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
             op,
