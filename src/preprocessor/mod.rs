@@ -659,11 +659,9 @@ impl Preprocessor {
 
         if let Some(captures) = IF.captures(&token.1) {
             // parse the captures into an expression, then evaluate it.
-            // println!("captured {:?}", &captures[1]);
             match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[1]))
             {
                 Ok(expr) => {
-                    // println!("exper! {:?} || {:?}", expr, &captures[1]);
                     let printing_lines = self.eval_expr_for_skipping(&expr, Some(token.0))?;
 
                     self.ifdefs.push(IfDef {
