@@ -428,24 +428,33 @@ impl TreeWalker for AsmTreeWalker {
             }
         }
 
-        let start_register = self.register_counter.next().unwrap();
-        let mut register = start_register;
+        let instruction = if arg_results.len() == 1 {
+            // no need to serialize args for the `Call` instruction if there's only one.
+            Instruction::Call {
+                name: node.name.clone(),
+                num_args: arg_results.len(),
+                initial_arg: arg_results[0],
+            }
+        } else {
+            let start_register = self.register_counter.next().unwrap();
+            let mut register = start_register;
 
-        // copy each result to the start of the arg register
-        for result in &arg_results {
-            self.instructions
-                .push(Instruction::RegCopy(*result, register));
-            self.debug_spans.push(node.span);
-            register = self.register_counter.next().unwrap();
-        }
+            // copy each result to the start of the arg register
+            for result in &arg_results {
+                self.instructions
+                    .push(Instruction::RegCopy(*result, register));
+                self.debug_spans.push(node.span);
+                register = self.register_counter.next().unwrap();
+            }
 
-        // Undo the final call to .next() to avoid skipping a register
-        self.register_counter.go_back();
+            // Undo the final call to .next() to avoid skipping a register
+            self.register_counter.go_back();
 
-        let instruction = Instruction::Call {
-            name: node.name.clone(),
-            num_args: arg_results.len(),
-            initial_arg: start_register,
+            Instruction::Call {
+                name: node.name.clone(),
+                num_args: arg_results.len(),
+                initial_arg: start_register,
+            }
         };
 
         self.instructions.push(instruction);
@@ -1012,11 +1021,10 @@ mod tests {
         let expected = vec![
             IConst(Register(1), -1),
             IConst(Register(2), 9),
-            RegCopy(Register(2), Register(3)),
             Call {
                 name: String::from("print"),
                 num_args: 1,
-                initial_arg: Register(3),
+                initial_arg: Register(2),
             },
             Ret, // Automatically added
         ];
@@ -1041,11 +1049,10 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), -1),
-                RegCopy(Register(1), Register(2)),
                 Call {
                     name: String::from("print"),
                     num_args: 1,
-                    initial_arg: Register(2),
+                    initial_arg: Register(1),
                 },
             ];
 
@@ -1326,11 +1333,10 @@ mod tests {
 
         let expected = vec![
             IConst(Register(1), 127983),
-            RegCopy(Register(1), Register(2)),
             Call {
                 name: String::from("dump"),
                 num_args: 1,
-                initial_arg: Register(2),
+                initial_arg: Register(1),
             },
         ];
 
@@ -1934,21 +1940,19 @@ mod tests {
                 IConst(Register(1), 666),
                 IConst(Register(2), 777),
                 EqEq(Register(1), Register(2), Register(3)),
-                Jz(Register(3), 8),
+                Jz(Register(3), 7),
                 SConst(Register(4), String::from("true")),
-                RegCopy(Register(4), Register(5)),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(4),
+                },
+                Jmp(9),
+                SConst(Register(5), String::from("false")),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
                     initial_arg: Register(5),
-                },
-                Jmp(11),
-                SConst(Register(6), String::from("false")),
-                RegCopy(Register(6), Register(7)),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(7),
                 },
             ];
 
@@ -1986,13 +1990,12 @@ mod tests {
                 IConst(Register(1), 666),
                 IConst(Register(2), 777),
                 EqEq(Register(1), Register(2), Register(3)),
-                Jz(Register(3), 8),
+                Jz(Register(3), 7),
                 SConst(Register(4), String::from("body")),
-                RegCopy(Register(4), Register(5)),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
-                    initial_arg: Register(5),
+                    initial_arg: Register(4),
                 },
                 Jmp(0),
             ];
@@ -2032,16 +2035,15 @@ mod tests {
 
             let expected = vec![
                 SConst(Register(1), String::from("body")),
-                RegCopy(Register(1), Register(2)),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
-                    initial_arg: Register(2),
+                    initial_arg: Register(1),
                 },
-                IConst(Register(3), 666),
-                IConst(Register(4), 777),
-                EqEq(Register(3), Register(4), Register(5)),
-                Jnz(Register(5), 0),
+                IConst(Register(2), 666),
+                IConst(Register(3), 777),
+                EqEq(Register(2), Register(3), Register(4)),
+                Jnz(Register(4), 0),
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -2106,16 +2108,15 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), 10),
-                Jz(Register(1), 8),
-                RegCopy(Register(1), Register(2)),
+                Jz(Register(1), 7),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
-                    initial_arg: Register(2),
+                    initial_arg: Register(1),
                 },
-                IConst1(Register(3)),
-                ISub(Register(1), Register(3), Register(4)),
-                RegCopy(Register(4), Register(1)),
+                IConst1(Register(2)),
+                ISub(Register(1), Register(2), Register(3)),
+                RegCopy(Register(3), Register(1)),
                 Jmp(1),
             ];
 
