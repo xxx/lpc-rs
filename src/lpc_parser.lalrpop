@@ -3,7 +3,7 @@ use core::ops::Range;
 use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
-use crate::ast::binary_op_node::BinaryOperation;
+use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::ast::block_node::BlockNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
@@ -565,10 +565,27 @@ AssignmentExpression: ExpressionNode = {
              0
          };
 
+        // Decompose `op=` operators (e.g. `+=`, `-=`, etc.)
+        let rhs = match op {
+            AssignmentOperation::Simple => {
+                rhs
+            }
+            AssignmentOperation::PlusEq => {
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: BinaryOperation::Add,
+                    span: rhs.span(),
+                    l: Box::new(lhs.clone()),
+                    r: Box::new(rhs),
+                })
+
+            }
+            _ => panic!("unknown operation in assignment: `{}`", op)
+        };
+
         ExpressionNode::Assignment(AssignmentNode {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-            op,
+            op: AssignmentOperation::Simple,
             span: Some(Span { file_id, l, r }),
         })
     }
@@ -670,7 +687,8 @@ pub Call: CallNode = {
 };
 
 AssignmentOp: AssignmentOperation = {
-    "=" => AssignmentOperation::Simple
+    "=" => AssignmentOperation::Simple,
+    "+=" => AssignmentOperation::PlusEq,
 };
 
 AdditiveBinaryOp: BinaryOperation = {

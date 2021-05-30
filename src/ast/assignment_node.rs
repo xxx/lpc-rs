@@ -21,6 +21,21 @@ pub enum AssignmentOperation {
 
     /// Index assigment - `a[2] = "hello";`
     Index,
+
+    /// Plus-equals assignment - `a += 1`;
+    PlusEq
+}
+
+impl Display for AssignmentOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            AssignmentOperation::Simple => "=",
+            AssignmentOperation::Index => "[]",
+            AssignmentOperation::PlusEq => "+="
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 /// A node representing an assignment.
