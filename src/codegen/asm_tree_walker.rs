@@ -976,8 +976,8 @@ mod tests {
             Store,
         },
         ast::{
-            assignment_node::AssignmentOperation, ast_node::AstNode,
-            comma_expression_node::CommaExpressionNode, expression_node::ExpressionNode,
+            ast_node::AstNode, comma_expression_node::CommaExpressionNode,
+            expression_node::ExpressionNode,
         },
         codegen::scope_walker::ScopeWalker,
         compiler::preprocess_string,

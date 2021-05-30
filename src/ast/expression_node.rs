@@ -215,10 +215,7 @@ impl From<HashMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ast::{assignment_node::AssignmentOperation, binary_op_node::BinaryOperation},
-        LpcFloat,
-    };
+    use crate::{ast::binary_op_node::BinaryOperation, LpcFloat};
 
     use super::*;
 

@@ -395,10 +395,7 @@ impl TreeWalker for SemanticCheckWalker {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::{
-            assignment_node::AssignmentOperation, ast_node::AstNode,
-            expression_node::ExpressionNode, var_node::VarNode,
-        },
+        ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
         semantic::{
             function_prototype::FunctionPrototype, lpc_type::LpcType, scope_tree::ScopeTree,
             symbol::Symbol,
