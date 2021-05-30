@@ -725,9 +725,12 @@ impl TreeWalker for AsmTreeWalker {
         let rhs_result = self.current_result;
         let lhs = &mut *node.lhs;
 
-        match lhs.clone() {
+        if matches!(lhs, ExpressionNode::Var(_)) {
+            lhs.visit(self)?;
+        }
+
+        match lhs {
             ExpressionNode::Var(VarNode { name, global, .. }) => {
-                lhs.visit(self)?;
                 let lhs_result = self.current_result;
 
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
@@ -735,7 +738,7 @@ impl TreeWalker for AsmTreeWalker {
                 push_instruction!(self, assign, node.span);
 
                 // Copy over globals if necessary
-                if global {
+                if *global {
                     if let Some(Symbol {
                         scope_id: 0,
                         location: Some(register),
