@@ -28,6 +28,11 @@ pub enum BinaryOperation {
     OrOr,
 
     EqEq,
+    //
+    // Lt,
+    // Lte,
+    // Gt,
+    // Gte
 }
 
 impl Display for BinaryOperation {

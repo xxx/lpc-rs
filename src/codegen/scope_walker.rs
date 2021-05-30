@@ -13,6 +13,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::for_node::ForNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -177,6 +178,26 @@ impl TreeWalker for ScopeWalker {
 
         let _ = node.body.visit(self);
         let _ = node.condition.visit(self);
+
+        Ok(())
+    }
+
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        if let Some(n) = &mut *node.initializer {
+            let _ = n.visit(self);
+        }
+        if let Some(n) = &mut node.condition {
+            let _ = n.visit(self);
+        }
+
+        let _ = node.body.visit(self);
+
+        if let Some(n) = &mut node.incrementer {
+            let _ = n.visit(self);
+        }
 
         Ok(())
     }

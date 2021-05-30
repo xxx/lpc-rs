@@ -21,6 +21,7 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use crate::ast::for_node::ForNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, Clone)]
@@ -30,6 +31,7 @@ pub enum AstNode {
     Decl(DeclNode),
     DoWhile(DoWhileNode),
     Expression(ExpressionNode),
+    For(ForNode),
     FunctionDef(FunctionDefNode),
     If(IfNode),
     Program(ProgramNode),
@@ -68,6 +70,7 @@ node_defs!(
     Decl,
     DoWhile,
     Expression,
+    For,
     FunctionDef,
     If,
     Program,
@@ -85,6 +88,12 @@ impl Display for AstNode {
 impl From<ExpressionNode> for AstNode {
     fn from(node: ExpressionNode) -> Self {
         AstNode::Expression(node)
+    }
+}
+
+impl From<ForNode> for AstNode {
+    fn from(node: ForNode) -> Self {
+        AstNode::For(node)
     }
 }
 

@@ -9,6 +9,7 @@ pub mod decl_node;
 pub mod do_while_node;
 pub mod expression_node;
 pub mod float_node;
+pub mod for_node;
 pub mod function_def_node;
 pub mod if_node;
 pub mod int_node;

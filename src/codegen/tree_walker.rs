@@ -12,6 +12,7 @@ use crate::{
     context::Context,
     Result,
 };
+use crate::ast::for_node::ForNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -251,6 +252,27 @@ pub trait TreeWalker {
     {
         let _ = node.body.visit(self);
         let _ = node.condition.visit(self);
+
+        Ok(())
+    }
+
+    /// Visit a `for` loop
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        if let Some(n) = &mut *node.initializer {
+            let _ = n.visit(self);
+        }
+        if let Some(n) = &mut node.condition {
+            let _ = n.visit(self);
+        }
+
+        let _ = node.body.visit(self);
+
+        if let Some(n) = &mut node.incrementer {
+            let _ = n.visit(self);
+        }
 
         Ok(())
     }

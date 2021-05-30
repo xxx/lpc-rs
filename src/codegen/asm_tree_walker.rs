@@ -43,6 +43,7 @@ use crate::{
 };
 
 use crate::ast::do_while_node::DoWhileNode;
+use crate::ast::for_node::ForNode;
 
 /// Partition on whether the value is stored in registers or memory, to help select instructions.
 /// tl;dr - Value types use `Register`, while reference types use `Memory`.
@@ -904,6 +905,58 @@ impl TreeWalker for AsmTreeWalker {
         let instruction = Instruction::Jnz(self.current_result, start_addr);
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        if let Some(i) = &mut *node.initializer {
+            i.visit(self)?;
+        }
+
+        let start_label = self.new_label("for-start");
+        let start_addr = self.instructions.len();
+        self.labels.insert(start_label, start_addr);
+
+        let jz_tuple = if let Some(c) = &mut node.condition {
+            c.visit(self)?;
+
+            let cond_result = self.current_result;
+            let jz_index = self.instructions.len();
+
+            // Insert a placeholder address of 0, which is corrected later
+            let instruction = Instruction::Jz(cond_result, 0);
+            self.instructions.push(instruction);
+            self.debug_spans.push(c.span());
+
+            Some((cond_result, jz_index))
+        } else {
+            None
+        };
+
+        node.body.visit(self)?;
+
+        if let Some(i) = &mut node.incrementer {
+            i.visit(self)?;
+        }
+
+        // go back to the start of the loop
+        let instruction = Instruction::Jmp(start_addr);
+        self.instructions.push(instruction);
+        self.debug_spans.push(node.span);
+
+        if let Some((cond_result, jz_index)) = jz_tuple {
+            // Correct the address in the `Jz` instruction generated above
+            // now that the body code has been generated.
+            let end_label = self.new_label("for-end");
+            let addr = self.instructions.len();
+            self.labels.insert(end_label, addr);
+            let else_instruction_replacement = Instruction::Jz(cond_result, addr);
+            self.instructions[jz_index] = else_instruction_replacement;
+        }
 
         self.context.scopes.pop();
         Ok(())
@@ -1990,6 +2043,83 @@ mod tests {
                 IConst(Register(4), 777),
                 EqEq(Register(3), Register(4), Register(5)),
                 Jnz(Register(5), 0),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    mod test_visit_for {
+        use super::*;
+        use crate::{
+            ast::for_node::ForNode,
+        };
+        use crate::asm::instruction::Instruction::{Jz, Jmp, ISub};
+
+        #[test]
+        fn populates_the_instructions() {
+            let var = VarNode {
+                name: "i".to_string(),
+                span: None,
+                global: false
+            };
+
+            let mut node = ForNode {
+                initializer: Box::new(Some(AstNode::VarInit(VarInitNode {
+                    type_: LpcType::Int(false),
+                    name: "i".to_string(),
+                    value: Some(ExpressionNode::from(10)),
+                    array: false,
+                    global: false,
+                    span: None
+                }))),
+                condition: Some(ExpressionNode::Var(var.clone())),
+                incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
+                    lhs: Box::new(ExpressionNode::Var(var.clone())),
+                    rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                        l: Box::new(ExpressionNode::Var(var.clone())),
+                        r: Box::new(ExpressionNode::from(1)),
+                        op: BinaryOperation::Sub,
+                        span: None
+                    })),
+                    op: AssignmentOperation::Simple,
+                    span: None
+                })),
+                body: Box::new(AstNode::Block(BlockNode {
+                    body: vec![
+                        AstNode::Call(CallNode {
+                            arguments: vec![ExpressionNode::Var(var.clone())],
+                            name: "dump".to_string(),
+                            span: None,
+                        })
+                    ],
+                    scope_id: None
+                })),
+                scope_id: None,
+                span: None,
+            };
+
+            let mut scope_walker = ScopeWalker::default();
+            let _ = scope_walker.visit_for(&mut node);
+
+            let context = scope_walker.into_context();
+            let mut walker = AsmTreeWalker::new(context);
+
+            let _ = walker.visit_for(&mut node).unwrap();
+
+            let expected = vec![
+                IConst(Register(1), 10),
+                Jz(Register(1), 8),
+                RegCopy(Register(1), Register(2)),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(2),
+                },
+                IConst1(Register(3)),
+                ISub(Register(1), Register(3), Register(4)),
+                RegCopy(Register(4), Register(1)),
+                Jmp(1),
             ];
 
             assert_eq!(walker.instructions, expected);

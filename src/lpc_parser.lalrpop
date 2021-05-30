@@ -11,6 +11,7 @@ use crate::ast::decl_node::DeclNode;
 use crate::ast::do_while_node::DoWhileNode;
 use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::float_node::FloatNode;
+use crate::ast::for_node::ForNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::if_node::IfNode;
 use crate::ast::int_node::IntNode;
@@ -246,6 +247,10 @@ OpenStatement: AstNode = {
     <while_t:"while"> "(" <cond:Expression> ")" <body:OpenStatement> => {
         let node = WhileNode::new(cond, body, Some(while_t));
         AstNode::from(node)
+    },
+    <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:OpenStatement> => {
+        let node = ForNode::new(init, cond, inc, body, Some(for_t));
+        AstNode::from(node)
     }
 };
 
@@ -258,7 +263,16 @@ ClosedStatement: AstNode = {
      <while_t:"while"> "(" <cond:Expression> ")" <body:ClosedStatement> => {
         let node = WhileNode::new(cond, body, Some(while_t));
         AstNode::from(node)
-     }
+     },
+    <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:ClosedStatement> => {
+        let node = ForNode::new(init, cond, inc, body, Some(for_t));
+        AstNode::from(node)
+    }
+};
+
+ForInit: AstNode = {
+    <Decl> => AstNode::from(<>),
+    <Expression> => AstNode::from(<>)
 };
 
 DoWhile: DoWhileNode = {
