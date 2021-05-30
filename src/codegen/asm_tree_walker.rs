@@ -42,8 +42,7 @@ use crate::{
     Result,
 };
 
-use crate::ast::do_while_node::DoWhileNode;
-use crate::ast::for_node::ForNode;
+use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode};
 
 /// Partition on whether the value is stored in registers or memory, to help select instructions.
 /// tl;dr - Value types use `Register`, while reference types use `Memory`.
@@ -2052,16 +2051,16 @@ mod tests {
     mod test_visit_for {
         use super::*;
         use crate::{
+            asm::instruction::Instruction::{ISub, Jmp, Jz},
             ast::for_node::ForNode,
         };
-        use crate::asm::instruction::Instruction::{Jz, Jmp, ISub};
 
         #[test]
         fn populates_the_instructions() {
             let var = VarNode {
                 name: "i".to_string(),
                 span: None,
-                global: false
+                global: false,
             };
 
             let mut node = ForNode {
@@ -2071,7 +2070,7 @@ mod tests {
                     value: Some(ExpressionNode::from(10)),
                     array: false,
                     global: false,
-                    span: None
+                    span: None,
                 }))),
                 condition: Some(ExpressionNode::Var(var.clone())),
                 incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
@@ -2080,20 +2079,18 @@ mod tests {
                         l: Box::new(ExpressionNode::Var(var.clone())),
                         r: Box::new(ExpressionNode::from(1)),
                         op: BinaryOperation::Sub,
-                        span: None
+                        span: None,
                     })),
                     op: AssignmentOperation::Simple,
-                    span: None
+                    span: None,
                 })),
                 body: Box::new(AstNode::Block(BlockNode {
-                    body: vec![
-                        AstNode::Call(CallNode {
-                            arguments: vec![ExpressionNode::Var(var.clone())],
-                            name: "dump".to_string(),
-                            span: None,
-                        })
-                    ],
-                    scope_id: None
+                    body: vec![AstNode::Call(CallNode {
+                        arguments: vec![ExpressionNode::Var(var.clone())],
+                        name: "dump".to_string(),
+                        span: None,
+                    })],
+                    scope_id: None,
                 })),
                 scope_id: None,
                 span: None,

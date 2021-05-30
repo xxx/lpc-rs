@@ -29,7 +29,7 @@ impl ForNode {
         condition: Option<ExpressionNode>,
         incrementer: Option<ExpressionNode>,
         body: AstNode,
-        span: Option<Span>
+        span: Option<Span>,
     ) -> Self {
         Self {
             initializer: Box::new(initializer),
@@ -61,7 +61,11 @@ impl Display for ForNode {
         write!(
             f,
             "ForNode[init: {}, cond: {}, inc: {}, body: {}]",
-            if let Some(c) = &*self.initializer { c.to_string() } else { String::from("(None)") },
+            if let Some(c) = &*self.initializer {
+                c.to_string()
+            } else {
+                String::from("(None)")
+            },
             opt_display(&self.condition),
             opt_display(&self.incrementer),
             self.body
