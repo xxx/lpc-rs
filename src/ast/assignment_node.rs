@@ -23,7 +23,16 @@ pub enum AssignmentOperation {
     Index,
 
     /// Plus-equals assignment - `a += 1`;
-    PlusEq
+    PlusEq,
+
+    /// Plus-equals assignment - `a -= 1`;
+    MinusEq,
+
+    /// Plus-equals assignment - `a *= 2`;
+    MulEq,
+
+    /// Plus-equals assignment - `a /= `0`;
+    DivEq,
 }
 
 impl Display for AssignmentOperation {
@@ -31,7 +40,10 @@ impl Display for AssignmentOperation {
         let s = match self {
             AssignmentOperation::Simple => "=",
             AssignmentOperation::Index => "[]",
-            AssignmentOperation::PlusEq => "+="
+            AssignmentOperation::PlusEq => "+=",
+            AssignmentOperation::MinusEq => "-=",
+            AssignmentOperation::MulEq => "*=",
+            AssignmentOperation::DivEq => "/=",
         };
 
         write!(f, "{}", s)
@@ -47,6 +59,9 @@ pub struct AssignmentNode {
     /// right-hand side
     pub rhs: Box<ExpressionNode>,
 
+    #[deprecated(
+        note = "All assignments are `Simple` assignments, after being decomposed in the parser"
+    )]
     /// the operation
     pub op: AssignmentOperation,
 

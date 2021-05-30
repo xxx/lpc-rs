@@ -565,14 +565,26 @@ AssignmentExpression: ExpressionNode = {
              0
          };
 
-        // Decompose `op=` operators (e.g. `+=`, `-=`, etc.)
+        // Decompose `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
         let rhs = match op {
             AssignmentOperation::Simple => {
                 rhs
             }
-            AssignmentOperation::PlusEq => {
+            AssignmentOperation::PlusEq
+            | AssignmentOperation::MinusEq
+            | AssignmentOperation::MulEq
+            | AssignmentOperation::DivEq => {
+                let binary_op = match op {
+                    AssignmentOperation::PlusEq => BinaryOperation::Add,
+                    AssignmentOperation::MinusEq => BinaryOperation::Sub,
+                    AssignmentOperation::MulEq => BinaryOperation::Mul,
+                    AssignmentOperation::DivEq => BinaryOperation::Div,
+                    _ => panic!("This only way for this to be reached is if a new op was added in the parent `match`, \
+                                without updating this one.")
+                };
+
                 ExpressionNode::BinaryOp(BinaryOpNode {
-                    op: BinaryOperation::Add,
+                    op: binary_op,
                     span: rhs.span(),
                     l: Box::new(lhs.clone()),
                     r: Box::new(rhs),
@@ -689,6 +701,9 @@ pub Call: CallNode = {
 AssignmentOp: AssignmentOperation = {
     "=" => AssignmentOperation::Simple,
     "+=" => AssignmentOperation::PlusEq,
+    "-=" => AssignmentOperation::MinusEq,
+    "*=" => AssignmentOperation::MulEq,
+    "/=" => AssignmentOperation::DivEq,
 };
 
 AdditiveBinaryOp: BinaryOperation = {
