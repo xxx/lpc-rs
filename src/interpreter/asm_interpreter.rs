@@ -241,6 +241,7 @@ impl AsmInterpreter {
                     initial_arg,
                 } => {
                     let mut new_frame = if let Some(func) = self.program.functions.get(name) {
+                        // TODO: get rid of this clone
                         StackFrame::new(func.clone(), self.pc + 1)
                     } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                         let sym = FunctionSymbol {
