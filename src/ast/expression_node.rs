@@ -16,6 +16,7 @@ use crate::{
         mapping_node::MappingNode,
         range_node::RangeNode,
         string_node::StringNode,
+        ternary_node::TernaryNode,
         unary_op_node::UnaryOpNode,
         var_node::VarNode,
     },
@@ -37,6 +38,7 @@ pub enum ExpressionNode {
     Int(IntNode),
     Range(RangeNode),
     String(StringNode),
+    Ternary(TernaryNode),
     UnaryOp(UnaryOpNode),
     Var(VarNode),
     Array(ArrayNode),
@@ -69,6 +71,7 @@ impl SpannedNode for ExpressionNode {
             ExpressionNode::Int(node) => node.span,
             ExpressionNode::Range(node) => node.span,
             ExpressionNode::String(node) => node.span,
+            ExpressionNode::Ternary(node) => node.span,
             ExpressionNode::UnaryOp(node) => node.span,
             ExpressionNode::Var(node) => node.span,
             ExpressionNode::Array(node) => node.span,
@@ -110,6 +113,7 @@ delegated_traits!(
     ExpressionNode::Int,
     ExpressionNode::Range,
     ExpressionNode::String,
+    ExpressionNode::Ternary,
     ExpressionNode::UnaryOp,
     ExpressionNode::Var,
     ExpressionNode::Array,
@@ -155,6 +159,12 @@ impl From<CallNode> for ExpressionNode {
 impl From<RangeNode> for ExpressionNode {
     fn from(node: RangeNode) -> Self {
         Self::Range(node)
+    }
+}
+
+impl From<TernaryNode> for ExpressionNode {
+    fn from(node: TernaryNode) -> Self {
+        Self::Ternary(node)
     }
 }
 

@@ -20,6 +20,7 @@ use crate::ast::program_node::ProgramNode;
 use crate::ast::range_node::RangeNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::string_node::StringNode;
+use crate::ast::ternary_node::TernaryNode;
 use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 use crate::ast::var_node::VarNode;
 use crate::ast::var_init_node::VarInitNode;
@@ -547,7 +548,22 @@ pub LogicalOrExpression: ExpressionNode = {
 };
 
 pub ConditionalExpression: ExpressionNode = {
-    <LogicalOrExpression>
+    <LogicalOrExpression>,
+    <cond:LogicalOrExpression> "?" <body:Expression> ":" <else_clause:ConditionalExpression> => {
+        let file_id = first_span(&[&cond, &body, &else_clause]).file_id;
+        let l = if let Some(span) = cond.span() {
+            span.l
+        } else {
+            0
+        };
+        let r = if let Some(span) = else_clause.span() {
+            span.r
+        } else {
+            0
+        };
+
+        ExpressionNode::from(TernaryNode::new(cond, body, else_clause, Some(Span { file_id, l, r })))
+    }
 };
 
 AssignmentExpression: ExpressionNode = {

@@ -42,7 +42,7 @@ use crate::{
     Result,
 };
 
-use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode};
+use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode, ternary_node::TernaryNode};
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -243,6 +243,14 @@ impl AsmTreeWalker {
                 let left_type = self.to_operation_type(&node.l);
                 let right_type = self.to_operation_type(&node.r);
                 match (left_type, right_type) {
+                    (OperationType::Register, OperationType::Register) => OperationType::Register,
+                    _ => OperationType::Memory,
+                }
+            }
+            ExpressionNode::Ternary(node) => {
+                let body_type = self.to_operation_type(&node.body);
+                let else_type = self.to_operation_type(&node.else_clause);
+                match (body_type, else_type) {
                     (OperationType::Register, OperationType::Register) => OperationType::Register,
                     _ => OperationType::Memory,
                 }
@@ -964,6 +972,51 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
+        let result_reg = self.register_counter.next().unwrap();
+
+        node.condition.visit(self)?;
+
+        let cond_result = self.current_result;
+
+        let jz_index = self.instructions.len();
+        let instruction = Instruction::Jz(cond_result, 0);
+        push_instruction!(self, instruction, node.span);
+
+        node.body.visit(self)?;
+        push_instruction!(
+            self,
+            Instruction::RegCopy(self.current_result, result_reg),
+            node.span
+        );
+
+        let jmp_index = self.instructions.len();
+        let instruction = Instruction::Jmp(0);
+        push_instruction!(self, instruction, node.span);
+
+        let else_addr = self.instructions.len();
+        let else_label = self.new_label("ternary-else");
+        self.labels.insert(else_label, else_addr);
+
+        node.else_clause.visit(self)?;
+        push_instruction!(
+            self,
+            Instruction::RegCopy(self.current_result, result_reg),
+            node.span
+        );
+
+        let end_addr = self.instructions.len();
+        let end_label = self.new_label("ternary-end");
+        self.labels.insert(end_label, end_addr);
+
+        // correct the jump addresses
+        self.instructions[jz_index] = Instruction::Jz(cond_result, else_addr);
+        self.instructions[jmp_index] = Instruction::Jmp(end_addr);
+
+        self.current_result = result_reg;
         Ok(())
     }
 }
@@ -2111,6 +2164,47 @@ mod tests {
                 ISub(Register(1), Register(2), Register(3)),
                 RegCopy(Register(3), Register(1)),
                 Jmp(1),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    mod test_visit_ternary {
+        use super::*;
+        use crate::{
+            asm::instruction::Instruction::{Jmp, Jz, Lte},
+            ast::ternary_node::TernaryNode,
+        };
+
+        #[test]
+        fn populates_the_instructions() {
+            let mut node = TernaryNode {
+                condition: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(2)),
+                    r: Box::new(ExpressionNode::from(3)),
+                    op: BinaryOperation::Lte,
+                    span: None,
+                })),
+                body: Box::new(ExpressionNode::from(666)),
+                else_clause: Box::new(ExpressionNode::from(777)),
+                span: None,
+            };
+
+            let mut walker = AsmTreeWalker::new(Context::default());
+
+            let _ = walker.visit_ternary(&mut node).unwrap();
+
+            let expected = vec![
+                IConst(Register(2), 2),
+                IConst(Register(3), 3),
+                Lte(Register(2), Register(3), Register(4)),
+                Jz(Register(4), 7), // jump to else
+                IConst(Register(5), 666),
+                RegCopy(Register(5), Register(1)),
+                Jmp(9), // jump to end
+                IConst(Register(6), 777),
+                RegCopy(Register(6), Register(1)),
             ];
 
             assert_eq!(walker.instructions, expected);

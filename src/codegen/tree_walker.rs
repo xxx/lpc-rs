@@ -6,8 +6,9 @@ use crate::{
         do_while_node::DoWhileNode, float_node::FloatNode, for_node::ForNode,
         function_def_node::FunctionDefNode, if_node::IfNode, int_node::IntNode,
         mapping_node::MappingNode, program_node::ProgramNode, range_node::RangeNode,
-        return_node::ReturnNode, string_node::StringNode, unary_op_node::UnaryOpNode,
-        var_init_node::VarInitNode, var_node::VarNode, while_node::WhileNode,
+        return_node::ReturnNode, string_node::StringNode, ternary_node::TernaryNode,
+        unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
+        while_node::WhileNode,
     },
     context::Context,
     Result,
@@ -272,6 +273,18 @@ pub trait TreeWalker {
         if let Some(n) = &mut node.incrementer {
             let _ = n.visit(self);
         }
+
+        Ok(())
+    }
+
+    /// Visit a ternary expression
+    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
+        let _ = node.else_clause.visit(self);
 
         Ok(())
     }

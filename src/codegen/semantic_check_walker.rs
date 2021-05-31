@@ -14,6 +14,7 @@ use crate::{
         program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
+        ternary_node::TernaryNode,
         unary_op_node::UnaryOpNode,
         var_init_node::VarInitNode,
     },
@@ -388,6 +389,37 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
+        let _ = node.else_clause.visit(self);
+
+        let body_type = node_type(
+            &*node.body,
+            &self.context.scopes,
+            &self.function_return_values(),
+        )?;
+        let else_type = node_type(
+            &*node.else_clause,
+            &self.context.scopes,
+            &self.function_return_values(),
+        )?;
+
+        if body_type != else_type {
+            let e = LpcError::new(format!(
+                "differing types in ternary operation: `{}` and `{}`",
+                body_type, else_type
+            ))
+            .with_span(node.span);
+            self.context.errors.push(e);
+        }
+
         Ok(())
     }
 }
@@ -1329,6 +1361,25 @@ mod tests {
             let _ = node.visit(&mut walker);
 
             assert!(walker.context.errors.is_empty());
+        }
+    }
+
+    mod test_visit_ternary {
+        use super::*;
+
+        #[test]
+        fn disallows_differing_types() {
+            let mut node = ExpressionNode::from(TernaryNode {
+                condition: Box::new(ExpressionNode::from(1)),
+                body: Box::new(ExpressionNode::from(1)),
+                else_clause: Box::new(ExpressionNode::from("foo")),
+                span: None,
+            });
+
+            let mut walker = SemanticCheckWalker::new(Context::default());
+            let _ = node.visit(&mut walker);
+
+            assert!(!walker.context.errors.is_empty());
         }
     }
 }

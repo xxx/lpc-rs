@@ -9,6 +9,7 @@ use crate::{
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
+        ternary_node::TernaryNode,
         unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
@@ -350,6 +351,9 @@ pub fn node_type(
             } else {
                 Ok(LpcType::Mixed(true))
             }
+        }
+        ExpressionNode::Ternary(TernaryNode { body, .. }) => {
+            Ok(node_type(body, scope_tree, function_return_types)?)
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
     }
