@@ -29,3 +29,22 @@ impl StackFrame {
         }
     }
 }
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_sets_up_registers() {
+        let fs = FunctionSymbol {
+            name: "my_function".to_string(),
+            num_args: 4,
+            num_locals: 7,
+            address: 123
+        };
+
+        let frame = StackFrame::new(fs, 5);
+
+        assert_eq!(frame.registers.len(), 12);
+        assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
+    }
+}
