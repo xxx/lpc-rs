@@ -12,6 +12,9 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use crate::ast::assignment_node::AssignmentOperation;
+use std::convert::TryFrom;
+use crate::errors::LpcError;
 
 /// All possible binary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
@@ -48,6 +51,23 @@ impl Display for BinaryOperation {
         };
 
         write!(f, "{}", s)
+    }
+}
+
+impl TryFrom<AssignmentOperation> for BinaryOperation {
+    type Error = LpcError;
+
+    fn try_from(value: AssignmentOperation) -> Result<Self> {
+        match value {
+            AssignmentOperation::Simple => {
+                Err(LpcError::new(format!("Failure to convert `{}` into a BinaryOperation", value)))
+            }
+            AssignmentOperation::Index => Ok(Self::Index),
+            AssignmentOperation::AddEq => Ok(Self::Add),
+            AssignmentOperation::SubEq => Ok(Self::Sub),
+            AssignmentOperation::MulEq => Ok(Self::Mul),
+            AssignmentOperation::DivEq => Ok(Self::Div)
+        }
     }
 }
 

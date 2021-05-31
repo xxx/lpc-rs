@@ -1,5 +1,6 @@
 use itertools::Itertools;
-use core::ops::Range;
+use std::ops::Range;
+use std::convert::TryFrom;
 use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
@@ -590,13 +591,10 @@ AssignmentExpression: ExpressionNode = {
             | AssignmentOperation::SubEq
             | AssignmentOperation::MulEq
             | AssignmentOperation::DivEq => {
-                let binary_op = match op {
-                    AssignmentOperation::AddEq => BinaryOperation::Add,
-                    AssignmentOperation::SubEq => BinaryOperation::Sub,
-                    AssignmentOperation::MulEq => BinaryOperation::Mul,
-                    AssignmentOperation::DivEq => BinaryOperation::Div,
-                    _ => panic!("This only way for this to be reached is if a new op was added in the parent `match`, \
-                                without updating this one.")
+                let binary_op = match BinaryOperation::try_from(op) {
+                    Ok(x) => x,
+                    Err(_) => panic!("This only way for this to be reached is if a new op was added in the parent `match`, \
+                                without updating the TryFrom implementation, which shouldn't compile.")
                 };
 
                 ExpressionNode::BinaryOp(BinaryOpNode {
