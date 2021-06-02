@@ -15,9 +15,13 @@ use crate::{
 use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
+use std::rc::Rc;
+
+/// The initial size (in objects) of the object space
+const OBJECT_SPACE_SIZE: usize = 100_000;
 
 /// The initial size (in frames) of the call stack
-const STACK_SIZE: usize = 1_000;
+const STACK_SIZE: usize = 2_000;
 
 /// The initial size (in cells) of system memory
 const MEMORY_SIZE: usize = 100_000;
@@ -44,7 +48,10 @@ const GLOBALS_SIZE: usize = 100;
 #[derive(Debug)]
 pub struct AsmInterpreter {
     /// The program to run
-    program: Program,
+    program: Rc<Program>,
+
+    /// Our object space
+    programs: HashMap<String, Rc<Program>>,
 
     /// The call stack
     stack: Vec<StackFrame>,
@@ -100,7 +107,9 @@ impl AsmInterpreter {
     /// * `program` - The Program to load
     pub fn load(&mut self, program: Program) {
         self.globals = vec![LpcRef::Int(0); program.num_globals];
-        self.program = program;
+        let r = Rc::new(program);
+        self.programs.insert(r.filename.clone(), r.clone());
+        self.program = r;
     }
 
     /// Dummy starter for the interpreter, to get the "create" stack frame setup
@@ -627,8 +636,12 @@ impl AsmInterpreter {
 
 impl Default for AsmInterpreter {
     fn default() -> Self {
+        let programs = HashMap::with_capacity(OBJECT_SPACE_SIZE);
+        let program = Rc::new(Program::default());
+
         Self {
-            program: Program::default(),
+            program,
+            programs,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
             globals: Vec::with_capacity(GLOBALS_SIZE),
