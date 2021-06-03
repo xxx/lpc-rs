@@ -103,11 +103,9 @@ impl Hash for LpcRef {
             LpcRef::String(s) => extract_value!(*s.borrow(), LpcValue::String).hash(state),
             LpcRef::Array(a) => {
                 ptr::hash(&**a, state)
-                // extract_value!(*a.borrow(), LpcValue::Array).hash(state)
             }
             LpcRef::Mapping(m) => {
                 ptr::hash(&**m, state)
-                // extract_value!(*m.borrow(), LpcValue::Mapping).hash(state)
             }
         }
     }
