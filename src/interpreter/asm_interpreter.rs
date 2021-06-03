@@ -16,6 +16,7 @@ use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
 use std::rc::Rc;
+use crate::interpreter::interpreter_program::InterpreterProgram;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -27,7 +28,7 @@ const STACK_SIZE: usize = 2_000;
 const MEMORY_SIZE: usize = 100_000;
 
 /// The initial size of the globals vector
-const GLOBALS_SIZE: usize = 100;
+// const GLOBALS_SIZE: usize = 100;
 
 /// An interpreter that executes instructions
 ///
@@ -48,19 +49,16 @@ const GLOBALS_SIZE: usize = 100;
 #[derive(Debug)]
 pub struct AsmInterpreter {
     /// The program to run
-    program: Rc<Program>,
+    program: Rc<InterpreterProgram>,
 
     /// Our object space
-    programs: HashMap<String, Rc<Program>>,
+    programs: HashMap<String, Rc<InterpreterProgram>>,
 
     /// The call stack
     stack: Vec<StackFrame>,
 
     /// Our memory
     memory: Pool<RefCell<LpcValue>>,
-
-    /// Registers that hold global variables
-    globals: Vec<LpcRef>,
 
     /// program counter
     pc: usize,
@@ -106,8 +104,7 @@ impl AsmInterpreter {
     ///
     /// * `program` - The Program to load
     pub fn load(&mut self, program: Program) {
-        self.globals = vec![LpcRef::Int(0); program.num_globals];
-        let r = Rc::new(program);
+        let r = Rc::new(InterpreterProgram::new(program));
         self.programs.insert(r.filename.clone(), r.clone());
         self.program = r;
     }
@@ -160,6 +157,8 @@ impl AsmInterpreter {
             if self.is_halted {
                 break;
             }
+
+            println!("here? {:?}", instruction);
 
             match instruction {
                 Instruction::AConst(r, vec) => {
@@ -298,13 +297,17 @@ impl AsmInterpreter {
                     registers[r.index()] = LpcRef::Float(*f);
                 }
                 Instruction::GLoad(r1, r2) => {
-                    let global = self.globals[r1.index()].clone();
+                    // load from global r1, into local r2
+                    let global = self.program.globals[r1.index()].borrow().clone();
                     let registers = current_registers_mut(&mut self.stack)?;
                     registers[r2.index()] = global
                 }
                 Instruction::GStore(r1, r2) => {
+                    // store local r1 into global r2
                     let registers = current_registers_mut(&mut self.stack)?;
-                    self.globals[r2.index()] = registers[r1.index()].clone()
+                    println!("before {:?} | {:?}", self.program.globals, registers[r1.index()]);
+                    self.program.globals[r2.index()].replace(registers[r1.index()].clone());
+                    println!("after {:?}", self.program.globals);
                 }
                 Instruction::Gt(r1, r2, r3) => {
                     let (n1, n2, n3) = (*r1, *r2, *r3);
@@ -637,14 +640,13 @@ impl AsmInterpreter {
 impl Default for AsmInterpreter {
     fn default() -> Self {
         let programs = HashMap::with_capacity(OBJECT_SPACE_SIZE);
-        let program = Rc::new(Program::default());
+        let program = Rc::new(InterpreterProgram::new(Program::default()));
 
         Self {
             program,
             programs,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
-            globals: Vec::with_capacity(GLOBALS_SIZE),
             is_halted: true,
             pc: 0,
         }
