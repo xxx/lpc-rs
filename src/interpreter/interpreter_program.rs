@@ -1,7 +1,5 @@
-use crate::interpreter::program::Program;
-use crate::interpreter::lpc_ref::LpcRef;
-use std::ops::Deref;
-use std::cell::RefCell;
+use crate::interpreter::{lpc_ref::LpcRef, program::Program};
+use std::{cell::RefCell, ops::Deref};
 
 /// A wrapper type to allow the VM to keep the immutable program and its
 /// mutable runtime pieces together.
@@ -18,7 +16,7 @@ impl InterpreterProgram {
 
         Self {
             program,
-            globals: vec![RefCell::new(LpcRef::Int(0)); num_globals]
+            globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
         }
     }
 }

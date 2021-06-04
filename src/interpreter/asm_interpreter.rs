@@ -3,6 +3,7 @@ use crate::{
     errors::LpcError,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
+        interpreter_program::InterpreterProgram,
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
         program::Program,
@@ -14,9 +15,7 @@ use crate::{
 };
 use decorum::Total;
 use refpool::{Pool, PoolRef};
-use std::{cell::RefCell, collections::HashMap, fmt::Display};
-use std::rc::Rc;
-use crate::interpreter::interpreter_program::InterpreterProgram;
+use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -115,7 +114,7 @@ impl AsmInterpreter {
             name: "global-init".to_string(), // note unparsable name, so it can't be overridden
             num_args: 0,
             num_locals: self.program.num_globals,
-            address: 0
+            address: 0,
         };
         let create = StackFrame::new(sym, 0);
         self.push_frame(create);

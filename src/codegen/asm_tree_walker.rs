@@ -13,7 +13,7 @@ use crate::{
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
-        ast_node::{AstNodeTrait, SpannedNode, AstNode},
+        ast_node::{AstNode, AstNodeTrait, SpannedNode},
         binary_op_node::{BinaryOpNode, BinaryOperation},
         block_node::BlockNode,
         call_node::CallNode,
@@ -409,27 +409,32 @@ impl TreeWalker for AsmTreeWalker {
         self.context.scopes.goto_root();
 
         // Partition global variable initializations vs everything else
-        let (global_init, functions): (Vec<&mut AstNode>, Vec<&mut AstNode>) = program.body.iter_mut().partition(|x| {
-            matches!(**x, AstNode::Decl(_))
-        });
+        let (global_init, functions): (Vec<&mut AstNode>, Vec<&mut AstNode>) = program
+            .body
+            .iter_mut()
+            .partition(|x| matches!(**x, AstNode::Decl(_)));
 
         // Hoist all global variables, and initialize them at the very start of the program
         for node in global_init {
             node.visit(self).unwrap();
         }
 
-        if self.context.function_prototypes.contains_key(CREATE_FUNCTION) {
+        if self
+            .context
+            .function_prototypes
+            .contains_key(CREATE_FUNCTION)
+        {
             let mut call = CallNode {
                 arguments: vec![],
                 name: "create".to_string(),
-                span: None
+                span: None,
             };
             call.visit(self)?;
         }
 
         let mut ret = ReturnNode {
             value: None,
-            span: None
+            span: None,
         };
         ret.visit(self)?;
 
@@ -1108,9 +1113,12 @@ mod tests {
             let instructions = generate_instructions(prog);
 
             let expected = vec![
-                Call { name: String::from("create"), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: String::from("create"),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
-
                 IConst(Register(1), -1),
                 IConst(Register(2), 9),
                 Call {
@@ -1145,8 +1153,12 @@ mod tests {
                 GLoad(Register(2), Register(1)),
                 GLoad(Register(1), Register(2)),
                 MAdd(Register(1), Register(2), Register(3)),
-                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(3) },
-                Ret
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(3),
+                },
+                Ret,
             ];
 
             assert_eq!(instructions, expected);
@@ -1169,17 +1181,27 @@ mod tests {
             let expected = [
                 IConst(Register(1), 666),
                 GStore(Register(1), Register(1)),
-                Call { name: String::from("create"), num_args: 0, initial_arg: Register(2) },
+                Call {
+                    name: String::from("create"),
+                    num_args: 0,
+                    initial_arg: Register(2),
+                },
                 Ret, // end of initialization
-
                 IConst(Register(1), 3),
                 RegCopy(Register(1), Register(0)),
                 Ret, // end of marf()
-
-                Call { name: String::from("marf"), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: String::from("marf"),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 SConst(Register(1), String::from(" times a winner!")),
                 MAdd(Register(0), Register(1), Register(2)),
-                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(2) },
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(2),
+                },
                 Ret, // end of create()
             ];
 

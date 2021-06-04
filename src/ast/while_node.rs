@@ -40,10 +40,6 @@ impl AstNodeTrait for WhileNode {
 
 impl Display for WhileNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "while({}) {{ {} }}]",
-            self.condition, self.body
-        )
+        write!(f, "while({}) {{ {} }}]", self.condition, self.body)
     }
 }

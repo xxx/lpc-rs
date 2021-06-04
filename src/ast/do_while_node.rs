@@ -40,10 +40,6 @@ impl AstNodeTrait for DoWhileNode {
 
 impl Display for DoWhileNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "do {{ {} }} while ({})]",
-            self.body, self.condition
-        )
+        write!(f, "do {{ {} }} while ({})]", self.body, self.condition)
     }
 }

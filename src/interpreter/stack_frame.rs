@@ -40,7 +40,7 @@ mod tests {
             name: "my_function".to_string(),
             num_args: 4,
             num_locals: 7,
-            address: 123
+            address: 123,
         };
 
         let frame = StackFrame::new(fs, 5);

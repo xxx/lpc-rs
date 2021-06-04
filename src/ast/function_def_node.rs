@@ -42,10 +42,6 @@ impl Display for FunctionDefNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let p = self.parameters.iter().map(|a| a.to_string()).join(", ");
         let b = self.body.iter().map(|a| a.to_string()).join(", ");
-        write!(
-            f,
-            "{} {}({}) {{ {} }}",
-            self.return_type, self.name, p, b
-        )
+        write!(f, "{} {}({}) {{ {} }}", self.return_type, self.name, p, b)
     }
 }
