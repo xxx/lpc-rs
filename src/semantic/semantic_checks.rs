@@ -24,6 +24,7 @@ use crate::{
 static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "break",
     "case",
+    "catch", // TODO: add token
     "continue",
     "default", // TODO: add token
     "do",
