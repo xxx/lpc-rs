@@ -1,6 +1,6 @@
 use crate::interpreter::program::Program;
 use crate::interpreter::lpc_ref::LpcRef;
-use std::ops::{DerefMut, Deref};
+use std::ops::Deref;
 use std::cell::RefCell;
 
 /// A wrapper type to allow the VM to keep the immutable program and its
