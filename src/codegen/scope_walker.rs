@@ -52,6 +52,7 @@ impl TreeWalker for ScopeWalker {
             expr.visit(self)?;
         }
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -64,6 +65,7 @@ impl TreeWalker for ScopeWalker {
             stmt.visit(self)?;
         }
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -106,6 +108,7 @@ impl TreeWalker for ScopeWalker {
             },
         );
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -159,6 +162,7 @@ impl TreeWalker for ScopeWalker {
             let _ = n.visit(self);
         }
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -169,6 +173,7 @@ impl TreeWalker for ScopeWalker {
         let _ = node.condition.visit(self);
         let _ = node.body.visit(self);
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -179,6 +184,7 @@ impl TreeWalker for ScopeWalker {
         let _ = node.body.visit(self);
         let _ = node.condition.visit(self);
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -199,6 +205,7 @@ impl TreeWalker for ScopeWalker {
             let _ = n.visit(self);
         }
 
+        self.context.scopes.pop();
         Ok(())
     }
 }

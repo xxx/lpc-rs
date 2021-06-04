@@ -111,17 +111,16 @@ impl AsmInterpreter {
 
     /// Dummy starter for the interpreter, to get the "create" stack frame setup
     pub fn exec(&mut self) -> Result<()> {
-        let sym = match self.program.functions.get("create") {
-            Some(s) => s,
-            None => {
-                return Err(LpcError::new("Missing `create` function."));
-            }
+        let sym = FunctionSymbol {
+            name: "global-init".to_string(), // note unparsable name, so it can't be overridden
+            num_args: 0,
+            num_locals: self.program.num_globals,
+            address: 0
         };
-        let address = sym.address;
-        let create = StackFrame::new(sym.clone(), 0);
+        let create = StackFrame::new(sym, 0);
         self.push_frame(create);
 
-        self.pc = address;
+        self.pc = 0;
 
         self.is_halted = false;
 
@@ -157,8 +156,6 @@ impl AsmInterpreter {
             if self.is_halted {
                 break;
             }
-
-            println!("here? {:?}", instruction);
 
             match instruction {
                 Instruction::AConst(r, vec) => {
@@ -305,9 +302,7 @@ impl AsmInterpreter {
                 Instruction::GStore(r1, r2) => {
                     // store local r1 into global r2
                     let registers = current_registers_mut(&mut self.stack)?;
-                    println!("before {:?} | {:?}", self.program.globals, registers[r1.index()]);
                     self.program.globals[r2.index()].replace(registers[r1.index()].clone());
-                    println!("after {:?}", self.program.globals);
                 }
                 Instruction::Gt(r1, r2, r3) => {
                     let (n1, n2, n3) = (*r1, *r2, *r3);
