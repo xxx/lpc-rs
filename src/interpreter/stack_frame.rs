@@ -30,6 +30,7 @@ impl StackFrame {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
