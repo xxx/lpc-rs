@@ -3,7 +3,7 @@ use std::ops::Range;
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct Span {
     /// Left index of the span
     pub l: usize,
