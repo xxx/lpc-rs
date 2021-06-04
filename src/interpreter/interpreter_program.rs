@@ -30,9 +30,3 @@ impl Deref for InterpreterProgram {
         &self.program
     }
 }
-
-impl DerefMut for InterpreterProgram {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.program
-    }
-}
