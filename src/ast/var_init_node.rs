@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// A node representing a variable definition, with optional initialization
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct VarInitNode {
     /// The LPC type.
     pub type_: LpcType,
@@ -80,11 +80,13 @@ impl AstNodeTrait for VarInitNode {
 
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "VarInitNode[{} {} {:?}]",
-            self.type_, self.name, self.value
-        )
+        let v = if let Some(x) = &self.value {
+            format!(" = {}", x.to_string())
+        } else {
+            String::from("")
+        };
+
+        write!(f, "{} {} = {}", self.type_, self.name, v)
     }
 }
 

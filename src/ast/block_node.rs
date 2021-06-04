@@ -12,7 +12,7 @@ use crate::{
 use indextree::NodeId;
 
 /// A node representing a code block
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct BlockNode {
     pub body: Vec<AstNode>,
     pub scope_id: Option<NodeId>,
@@ -41,6 +41,6 @@ impl Display for BlockNode {
             .map(|item| format!("{}", item))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "BlockNode[{}]", s)
+        write!(f, "{{ {} }}", s)
     }
 }

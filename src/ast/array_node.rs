@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// A node representing an array literal
-#[derive(Hash, Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct ArrayNode {
     pub value: Vec<ExpressionNode>,
 
@@ -66,6 +66,6 @@ impl Display for ArrayNode {
             .map(|item| format!("{}", item))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "ArrayNode[{}]", s)
+        write!(f, "({{ {} }})", s)
     }
 }

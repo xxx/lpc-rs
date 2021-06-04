@@ -9,9 +9,10 @@ use crate::{
     semantic::lpc_type::LpcType,
     Result,
 };
+use itertools::Itertools;
 
 /// A container for a set of variable declarations.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct DeclNode {
     /// The declared type
     pub type_: LpcType,
@@ -37,6 +38,12 @@ impl AstNodeTrait for DeclNode {
 
 impl Display for DeclNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DeclNode[{} {:?}]", self.type_, self.initializations)
+        let s = self
+            .initializations
+            .iter()
+            .map(|item| format!("{}", item))
+            .join(", ");
+
+        write!(f, "{} {}", self.type_, s)
     }
 }

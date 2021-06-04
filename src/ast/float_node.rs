@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// A node representing a float literal
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub struct FloatNode {
     pub value: LpcFloat,
 
@@ -49,6 +49,6 @@ impl AstNodeTrait for FloatNode {
 
 impl Display for FloatNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "FloatNode[{}]", self.value)
+        write!(f, "{}", self.value)
     }
 }

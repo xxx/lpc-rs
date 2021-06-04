@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// A node representing a ternary expression
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialOrd, PartialEq)]
 pub struct TernaryNode {
     pub condition: Box<ExpressionNode>,
     pub body: Box<ExpressionNode>,
@@ -54,7 +54,7 @@ impl Display for TernaryNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "TernaryNode[{} ? {} : {}]",
+            "{} ? {} : {}",
             self.condition, self.body, self.else_clause
         )
     }

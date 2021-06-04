@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// A node representing the use of a variable.
-#[derive(Hash, Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct VarNode {
     /// The name of the variable.
     pub name: String,
@@ -52,11 +52,6 @@ impl AstNodeTrait for VarNode {
 
 impl Display for VarNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "VarNode[{}] {}",
-            self.name,
-            if self.global { "(global)" } else { "" }
-        )
+        write!(f, "{}", self.name)
     }
 }

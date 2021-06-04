@@ -12,9 +12,10 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use itertools::Itertools;
 
 /// A node representing a comma-separated list of expressions
-#[derive(Hash, Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct CommaExpressionNode {
     pub value: Vec<ExpressionNode>,
 
@@ -63,8 +64,7 @@ impl Display for CommaExpressionNode {
             .value
             .iter()
             .map(|item| format!("{}", item))
-            .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "CommaExpressionNode[{}]", s)
+        write!(f, "{}", s)
     }
 }

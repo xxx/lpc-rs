@@ -12,9 +12,10 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use itertools::Itertools;
 
 /// Representation of a function call.
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
 pub struct CallNode {
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,
@@ -40,6 +41,7 @@ impl AstNodeTrait for CallNode {
 
 impl Display for CallNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "CallNode[{:?}]", self)
+        let args = self.arguments.iter().map(|a| a.to_string()).join(" ,");
+        write!(f, "{}({})", self.name, args)
     }
 }

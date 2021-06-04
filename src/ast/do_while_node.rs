@@ -13,7 +13,7 @@ use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
 use indextree::NodeId;
 
 /// A node representing a `do {} while` loop
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct DoWhileNode {
     pub condition: ExpressionNode,
     pub body: Box<AstNode>,
@@ -42,7 +42,7 @@ impl Display for DoWhileNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DoWhileNode[body: {}, cond: {}]",
+            "do {{ {} }} while ({})]",
             self.body, self.condition
         )
     }

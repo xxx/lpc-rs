@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// A node representing a string literal
-#[derive(Hash, Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct StringNode {
     pub value: String,
 
@@ -43,6 +43,6 @@ impl AstNodeTrait for StringNode {
 
 impl Display for StringNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "StringNode[{}]", self.value)
+        write!(f, "\"{}\"", self.value)
     }
 }

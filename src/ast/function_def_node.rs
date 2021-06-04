@@ -13,9 +13,10 @@ use crate::{
     semantic::lpc_type::LpcType,
     Result,
 };
+use itertools::Itertools;
 
 /// A node representation a function definition
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct FunctionDefNode {
     pub return_type: LpcType,
     pub name: String,
@@ -39,10 +40,12 @@ impl AstNodeTrait for FunctionDefNode {
 
 impl Display for FunctionDefNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let p = self.parameters.iter().map(|a| a.to_string()).join(", ");
+        let b = self.body.iter().map(|a| a.to_string()).join(", ");
         write!(
             f,
-            "FunctionDefNode[{}, {} {:?} {:?}]",
-            self.return_type, self.name, self.parameters, self.body
+            "{} {}({}) {{ {} }}",
+            self.return_type, self.name, p, b
         )
     }
 }

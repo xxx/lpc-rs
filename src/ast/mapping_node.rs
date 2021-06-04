@@ -12,9 +12,10 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use itertools::Itertools;
 
 /// A node representing an array literal
-#[derive(Hash, Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialEq, PartialOrd)]
 pub struct MappingNode {
     pub value: Vec<(ExpressionNode, ExpressionNode)>,
 
@@ -51,8 +52,7 @@ impl Display for MappingNode {
             .value
             .iter()
             .map(|(key, value)| format!("{}: {}", key, value))
-            .collect::<Vec<_>>()
-            .join(",\n");
-        write!(f, "MappingNode[{}]", s)
+            .join(", ");
+        write!(f, "([ {} ])", s)
     }
 }

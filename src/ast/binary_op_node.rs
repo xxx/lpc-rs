@@ -17,7 +17,7 @@ use std::convert::TryFrom;
 use crate::errors::LpcError;
 
 /// All possible binary operations
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum BinaryOperation {
     Add,
     AndAnd,
@@ -72,7 +72,7 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
 }
 
 /// Representation of a binary operation
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub struct BinaryOpNode {
     /// Left-hand side
     pub l: Box<ExpressionNode>,
@@ -102,6 +102,6 @@ impl AstNodeTrait for BinaryOpNode {
 
 impl Display for BinaryOpNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "BinaryOpNode[{:?}]", self)
+        write!(f, "{} {} {}", self.l, self.op, self.r)
     }
 }

@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Representation of a Range, with optional ends.
-#[derive(Hash, Debug, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct RangeNode {
     /// Left-hand side
     pub l: Box<Option<ExpressionNode>>,
@@ -51,6 +51,17 @@ impl AstNodeTrait for RangeNode {
 
 impl Display for RangeNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "RangeNode[{:?}]", self)
+        let stringify = |a: &Option<ExpressionNode>| -> String {
+            if let Some(b) = a {
+                b.to_string()
+            } else {
+                String::from("")
+            }
+        };
+
+        let ls = stringify(&self.l);
+        let rs = stringify(&self.r);
+
+        write!(f, "{}..{}", ls, rs)
     }
 }

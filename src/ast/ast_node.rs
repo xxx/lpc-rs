@@ -23,7 +23,7 @@ use crate::{
 };
 
 /// Representation of a top-level node in the AST.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum AstNode {
     Block(BlockNode),
     Call(CallNode),

@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// All possible unary operations
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum UnaryOperation {
     Negate,
     Inc,
@@ -38,7 +38,7 @@ impl Display for UnaryOperation {
 }
 
 /// Representation of a binary operation
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub struct UnaryOpNode {
     pub expr: Box<ExpressionNode>,
 
@@ -67,6 +67,10 @@ impl AstNodeTrait for UnaryOpNode {
 
 impl Display for UnaryOpNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "UnaryOpNode[{:?}]", self)
+        if self.is_post {
+            write!(f, "{}{}", self.expr, self.op)
+        } else {
+            write!(f, "{}{}", self.op, self.expr)
+        }
     }
 }

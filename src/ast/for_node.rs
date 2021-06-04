@@ -13,7 +13,7 @@ use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
 use indextree::NodeId;
 
 /// A node representing a `while` loop
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct ForNode {
     pub initializer: Box<Option<AstNode>>,
     pub condition: Option<ExpressionNode>,
@@ -60,11 +60,11 @@ impl Display for ForNode {
 
         write!(
             f,
-            "ForNode[init: {}, cond: {}, inc: {}, body: {}]",
+            "for ({}; {}; {}) {{ {} }}",
             if let Some(c) = &*self.initializer {
                 c.to_string()
             } else {
-                String::from("(None)")
+                String::from("")
             },
             opt_display(&self.condition),
             opt_display(&self.incrementer),

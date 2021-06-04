@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),

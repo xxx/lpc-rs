@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// A node representing a function return call.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct ReturnNode {
     /// The value to return from the function.
     pub value: Option<ExpressionNode>,
@@ -44,6 +44,12 @@ impl AstNodeTrait for ReturnNode {
 
 impl Display for ReturnNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "ReturnNode[{:?}]", self.value)
+        let s = if let Some(x) = &self.value {
+            x.to_string()
+        } else {
+            String::from("")
+        };
+
+        write!(f, "return {}", s)
     }
 }

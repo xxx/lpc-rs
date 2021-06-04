@@ -13,7 +13,7 @@ use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
 use indextree::NodeId;
 
 /// A node representing an `if` statement
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct IfNode {
     pub condition: ExpressionNode,
     pub body: Box<AstNode>,
@@ -48,14 +48,14 @@ impl AstNodeTrait for IfNode {
 impl Display for IfNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let e = if let Some(clause) = &*self.else_clause {
-            format!("{}", clause)
+            format!(" else {{ {} }}", clause)
         } else {
-            String::from("(empty)")
+            String::from("")
         };
 
         write!(
             f,
-            "IfNode[if: {}, then: {}, else: {}]",
+            "if({}) {{ {} }}{}]",
             self.condition, self.body, e
         )
     }

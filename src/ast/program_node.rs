@@ -8,9 +8,10 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
+use itertools::Itertools;
 
 /// A node representing a full object. This is the top-level translation unit.
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Default)]
 pub struct ProgramNode {
     /// The list of function defs for this program
     pub body: Vec<AstNode>,
@@ -25,6 +26,12 @@ impl AstNodeTrait for ProgramNode {
 
 impl Display for ProgramNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "ProgramNode[{:?}]", self)
+        let s = self
+            .body
+            .iter()
+            .map(|a| a.to_string())
+            .join(", ");
+
+        write!(f, "{}", s)
     }
 }

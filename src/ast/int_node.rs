@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// A node representing an integer literal
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub struct IntNode {
     pub value: LpcInt,
 
@@ -40,6 +40,6 @@ impl AstNodeTrait for IntNode {
 
 impl Display for IntNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "IntNode[{}]", self.value)
+        write!(f, "{}", self.value)
     }
 }

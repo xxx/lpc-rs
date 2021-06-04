@@ -51,7 +51,7 @@ impl Display for AssignmentOperation {
 }
 
 /// A node representing an assignment.
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialOrd, PartialEq, Clone)]
 pub struct AssignmentNode {
     /// left-hand side
     pub lhs: Box<ExpressionNode>,
@@ -78,6 +78,6 @@ impl AstNodeTrait for AssignmentNode {
 
 impl Display for AssignmentNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "AssignmentNode[{:?}]", self)
+        write!(f, "{} = {}", self.lhs, self.rhs)
     }
 }
