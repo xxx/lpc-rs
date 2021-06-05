@@ -111,7 +111,7 @@ impl AsmInterpreter {
     /// Dummy starter for the interpreter, to get the "create" stack frame setup
     pub fn exec(&mut self) -> Result<()> {
         let sym = FunctionSymbol {
-            name: "global-init".to_string(), // note unparsable name, so it can't be overridden
+            name: "global-init".to_string(),
             num_args: 0,
             num_locals: self.program.num_globals,
             address: 0,
