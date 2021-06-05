@@ -121,19 +121,12 @@ where
     /// `id` - The ID of the file to get (IDs are returned by `add()`).
     pub fn get(&self, id: FileId) -> Result<SimpleFile<String, String>, Error> {
         match self.paths.get(id) {
-            Some(lf) => {
-                match lf {
-                    LazyFile::Lazy(path) => {
-                        self.get_by_path(path)
-                    }
-                    LazyFile::Eager(path, source) => {
-                        Ok(SimpleFile::new(
-                            path.to_string(),
-                            source.to_string(),
-                        ))
-                    }
+            Some(lf) => match lf {
+                LazyFile::Lazy(path) => self.get_by_path(path),
+                LazyFile::Eager(path, source) => {
+                    Ok(SimpleFile::new(path.to_string(), source.to_string()))
                 }
-            }
+            },
             None => Err(Error::FileMissing),
         }
     }
@@ -154,11 +147,9 @@ where
     /// # Arguments
     /// `path` - The path of the file stored in the cache
     pub fn get_id(&self, path: &Name) -> Option<FileId> {
-        self.paths.iter().position(|i| {
-            match i {
-                LazyFile::Lazy(p) => path == p,
-                LazyFile::Eager(p, _) => path == p
-            }
+        self.paths.iter().position(|i| match i {
+            LazyFile::Lazy(p) => path == p,
+            LazyFile::Eager(p, _) => path == p,
         })
     }
 
@@ -220,7 +211,7 @@ fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, Error> {
 impl<'input, Name, Source> Files<'input> for LazyFiles<Name, Source>
 where
     Name: 'input + std::fmt::Display + Clone + AsRef<Path> + std::cmp::PartialEq,
-    Source: std::fmt::Display + AsRef<str>
+    Source: std::fmt::Display + AsRef<str>,
 {
     type FileId = FileId;
     type Name = Name;
@@ -231,11 +222,11 @@ where
             Some(s) => {
                 let p = match s {
                     LazyFile::Lazy(p) => p,
-                    LazyFile::Eager(p, _) => p
+                    LazyFile::Eager(p, _) => p,
                 };
 
                 Ok(p.clone())
-            },
+            }
             None => Err(Error::FileMissing),
         }
     }
