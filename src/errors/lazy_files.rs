@@ -11,6 +11,15 @@ use std::{
     path::Path,
 };
 
+#[derive(Debug)]
+enum LazyFile<Name, Source> {
+    // A file path, that's lazily-loaded if and when necessary.
+    Lazy(Name),
+
+    // A filepath and its source code. This is mostly used in testing.
+    Eager(Name, Source),
+}
+
 lazy_static! {
     /// A global file cache for use in error reporting.
     pub static ref FILE_CACHE: RwLock<LazyFiles<String, String>> = RwLock::new(LazyFiles::new());
@@ -49,19 +58,24 @@ pub type FileId = usize;
 ///
 /// println!("contents: {}", files.get(id).unwrap().source());
 /// println!("contents: {}", files.get_by_path(&path).unwrap().source());
+///
+/// // Also handles eagerly-adding code to the cache
+/// let id2 = files.add_eager("my-in-memory-file.c", String::from("int j = 123;"));
+/// assert_eq!(files.get(id2).unwrap().source(), "int j = 123;");
 /// ```
 #[derive(Debug)]
 pub struct LazyFiles<Name, Source>
 where
     Name: AsRef<Path> + Clone + std::fmt::Display,
 {
-    paths: Vec<Name>,
+    paths: Vec<LazyFile<Name, Source>>,
     source: PhantomData<Source>,
 }
 
 impl<'a, Name, Source> LazyFiles<Name, Source>
 where
     Name: AsRef<Path> + Clone + std::fmt::Display + std::cmp::PartialEq,
+    Source: std::fmt::Display + AsRef<str>,
 {
     /// Create a new [`LazyFiles`] instance
     pub fn new() -> Self {
@@ -80,7 +94,24 @@ where
         }
 
         let id = self.paths.len();
-        self.paths.push(path);
+        self.paths.push(LazyFile::Lazy(path));
+        id
+    }
+
+    /// Add a new file plus its source code to the cache
+    ///
+    /// # Arguments
+    /// `path` - The full path, including filename, to the file being added.
+    ///     No canonicalization is done, so it's highly recommended to use
+    ///     absolute paths.
+    /// `code` - The source code for the file in question
+    pub fn add_eager(&mut self, path: Name, code: Source) -> FileId {
+        if let Some(id) = self.get_id(&path) {
+            return id;
+        }
+
+        let id = self.paths.len();
+        self.paths.push(LazyFile::Eager(path, code));
         id
     }
 
@@ -89,9 +120,22 @@ where
     /// # Arguments
     /// `id` - The ID of the file to get (IDs are returned by `add()`).
     pub fn get(&self, id: FileId) -> Result<SimpleFile<String, String>, Error> {
-        let path = self.name(id)?;
-
-        self.get_by_path(path)
+        match self.paths.get(id) {
+            Some(lf) => {
+                match lf {
+                    LazyFile::Lazy(path) => {
+                        self.get_by_path(path)
+                    }
+                    LazyFile::Eager(path, source) => {
+                        Ok(SimpleFile::new(
+                            path.to_string(),
+                            source.to_string(),
+                        ))
+                    }
+                }
+            }
+            None => Err(Error::FileMissing),
+        }
     }
 
     /// Get a file by its path
@@ -110,7 +154,12 @@ where
     /// # Arguments
     /// `path` - The path of the file stored in the cache
     pub fn get_id(&self, path: &Name) -> Option<FileId> {
-        self.paths.iter().position(|i| i == path)
+        self.paths.iter().position(|i| {
+            match i {
+                LazyFile::Lazy(p) => path == p,
+                LazyFile::Eager(p, _) => path == p
+            }
+        })
     }
 
     /// Get a `Span` for a specific `file_id` and line
@@ -171,6 +220,7 @@ fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, Error> {
 impl<'input, Name, Source> Files<'input> for LazyFiles<Name, Source>
 where
     Name: 'input + std::fmt::Display + Clone + AsRef<Path> + std::cmp::PartialEq,
+    Source: std::fmt::Display + AsRef<str>
 {
     type FileId = FileId;
     type Name = Name;
@@ -178,7 +228,14 @@ where
 
     fn name(&self, id: Self::FileId) -> Result<Self::Name, Error> {
         match self.paths.get(id) {
-            Some(s) => Ok(s.clone()),
+            Some(s) => {
+                let p = match s {
+                    LazyFile::Lazy(p) => p,
+                    LazyFile::Eager(p, _) => p
+                };
+
+                Ok(p.clone())
+            },
             None => Err(Error::FileMissing),
         }
     }
@@ -201,11 +258,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_does_not_duplicate() {
+    fn does_not_duplicate() {
         let mut files: LazyFiles<&str, String> = LazyFiles::new();
         let file = "/foo/bar.c";
 
         let id = files.add(file);
         assert_eq!(id, files.add(file));
+    }
+
+    #[test]
+    fn handles_inline_source() {
+        let mut files: LazyFiles<&str, &str> = LazyFiles::new();
+        let file = "/foo/bar.c";
+        let prog = "int j = 123;";
+
+        let id = files.add_eager(file, prog);
+        assert_eq!(files.get(id).unwrap().source(), prog);
     }
 }
