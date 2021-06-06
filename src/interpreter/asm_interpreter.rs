@@ -9,7 +9,6 @@ use crate::{
         program::Program,
         stack_frame::StackFrame,
     },
-    parser::span::Span,
     semantic::function_symbol::FunctionSymbol,
     try_extract_value, value_to_ref, LpcInt, Result,
 };
@@ -25,9 +24,6 @@ const STACK_SIZE: usize = 2_000;
 
 /// The initial size (in cells) of system memory
 const MEMORY_SIZE: usize = 100_000;
-
-/// The initial size of the globals vector
-// const GLOBALS_SIZE: usize = 100;
 
 /// An interpreter that executes instructions
 ///
@@ -58,9 +54,6 @@ pub struct AsmInterpreter {
 
     /// Our memory
     memory: Pool<RefCell<LpcValue>>,
-
-    /// program counter
-    pc: usize,
 
     /// Is the machine halted?
     is_halted: bool,
@@ -119,7 +112,7 @@ impl AsmInterpreter {
         let create = StackFrame::new(sym, 0);
         self.push_frame(create);
 
-        self.pc = 0;
+        self.program.set_pc(0);
 
         self.is_halted = false;
 
@@ -151,7 +144,7 @@ impl AsmInterpreter {
 
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<()> {
-        while let Some(instruction) = self.program.instructions.get(self.pc) {
+        while let Some(instruction) = self.program.instruction() {
             if self.is_halted {
                 break;
             }
@@ -221,11 +214,11 @@ impl AsmInterpreter {
                             return Err(LpcError::new(
                                 "Invalid code was generated for an ARange instruction.",
                             )
-                            .with_span(*self.current_debug_span()));
+                            .with_span(self.program.current_debug_span()));
                         }
                     } else {
                         return Err(LpcError::new("ARange's array isn't actually an array?")
-                            .with_span(*self.current_debug_span()));
+                            .with_span(self.program.current_debug_span()));
                     }
                 }
                 Instruction::EqEq(r1, r2, r3) => {
@@ -246,7 +239,7 @@ impl AsmInterpreter {
                 } => {
                     let mut new_frame = if let Some(func) = self.program.functions.get(name) {
                         // TODO: get rid of this clone
-                        StackFrame::new(func.clone(), self.pc + 1)
+                        StackFrame::new(func.clone(), self.program.pc() + 1)
                     } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
@@ -255,7 +248,7 @@ impl AsmInterpreter {
                             address: 0,
                         };
 
-                        StackFrame::new(sym, self.pc + 1)
+                        StackFrame::new(sym, self.program.pc() + 1)
                     } else {
                         return Err(
                             self.runtime_error(format!("Call to unknown function `{}`", name))
@@ -273,7 +266,7 @@ impl AsmInterpreter {
                     self.stack.push(new_frame);
 
                     if let Some(FunctionSymbol { address, .. }) = self.program.functions.get(name) {
-                        self.pc = *address;
+                        self.program.set_pc(*address);
                         continue;
                     } else if let Some(efun) = EFUNS.get(name.as_str()) {
                         // the efun is responsible for populating the return value
@@ -320,7 +313,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = out
                         }
                         Err(e) => {
-                            return Err(e.with_span(*self.current_debug_span()));
+                            return Err(e.with_span(self.program.current_debug_span()));
                         }
                     }
                 }
@@ -341,7 +334,7 @@ impl AsmInterpreter {
                     match &registers[r1.index()] / &registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
-                            return Err(e.with_span(*self.current_debug_span()));
+                            return Err(e.with_span(self.program.current_debug_span()));
                         }
                     }
                 }
@@ -350,7 +343,7 @@ impl AsmInterpreter {
                     match &registers[r1.index()] * &registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
-                            return Err(e.with_span(*self.current_debug_span()));
+                            return Err(e.with_span(self.program.current_debug_span()));
                         }
                     }
                 }
@@ -359,19 +352,19 @@ impl AsmInterpreter {
                     match &registers[r1.index()] - &registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
-                            return Err(e.with_span(*self.current_debug_span()));
+                            return Err(e.with_span(self.program.current_debug_span()));
                         }
                     }
                 }
                 Instruction::Jmp(address) => {
-                    self.pc = *address;
+                    self.program.set_pc(*address);
                     continue;
                 }
                 Instruction::Jnz(r1, address) => {
                     let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
                     if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
-                        self.pc = *address;
+                        self.program.set_pc(*address);
                         continue;
                     }
                 }
@@ -379,7 +372,7 @@ impl AsmInterpreter {
                     let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
                     if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                        self.pc = *address;
+                        self.program.set_pc(*address);
                         continue;
                     }
                 }
@@ -473,7 +466,7 @@ impl AsmInterpreter {
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame)?;
-                        self.pc = frame.return_address;
+                        self.program.set_pc(frame.return_address);
                     }
 
                     // halt at the end of all input
@@ -543,7 +536,7 @@ impl AsmInterpreter {
                 }
             }
 
-            self.pc += 1;
+            self.program.inc_pc();
         }
 
         Ok(())
@@ -570,7 +563,7 @@ impl AsmInterpreter {
                 registers[r3.index()] = var
             }
             Err(e) => {
-                return Err(e.with_span(*self.current_debug_span()));
+                return Err(e.with_span(self.program.current_debug_span()));
             }
         }
 
@@ -613,14 +606,9 @@ impl AsmInterpreter {
         Ok(())
     }
 
-    #[inline]
-    fn current_debug_span(&self) -> &Option<Span> {
-        self.program.debug_spans.get(self.pc).unwrap()
-    }
-
     fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         LpcError::new(format!("Runtime Error: {}", msg.as_ref()))
-            .with_span(*self.current_debug_span())
+            .with_span(self.program.current_debug_span())
     }
 
     fn make_array_index_error<T: Display>(&self, index: T, length: usize) -> LpcError {
@@ -642,7 +630,6 @@ impl Default for AsmInterpreter {
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
             is_halted: true,
-            pc: 0,
         }
     }
 }
