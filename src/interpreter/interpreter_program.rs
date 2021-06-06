@@ -1,8 +1,12 @@
-use crate::interpreter::{lpc_ref::LpcRef, program::Program};
-use std::{cell::RefCell, ops::Deref};
-use crate::parser::span::Span;
-use std::cell::Cell;
-use crate::asm::instruction::Instruction;
+use crate::{
+    asm::instruction::Instruction,
+    interpreter::{lpc_ref::LpcRef, program::Program},
+    parser::span::Span,
+};
+use std::{
+    cell::{Cell, RefCell},
+    ops::Deref,
+};
 
 /// A wrapper type to allow the VM to keep the immutable program and its
 /// mutable runtime pieces together.
@@ -10,8 +14,7 @@ use crate::asm::instruction::Instruction;
 pub struct InterpreterProgram {
     pub program: Program,
     pub globals: Vec<RefCell<LpcRef>>,
-    pc: Cell<usize>
-    // pub clones: Vec<>
+    pc: Cell<usize>, // pub clones: Vec<>
 }
 
 impl InterpreterProgram {
@@ -21,17 +24,15 @@ impl InterpreterProgram {
         Self {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
-            pc: Cell::new(0)
+            pc: Cell::new(0),
         }
     }
 
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
         match self.program.debug_spans.get(self.pc.get()) {
-            Some(o) => {
-                *o
-            }
-            None => None
+            Some(o) => *o,
+            None => None,
         }
     }
 
