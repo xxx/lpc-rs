@@ -14,9 +14,7 @@ fn main() {
             let mut interpreter = AsmInterpreter::default();
 
             // println!("{:?}", program);
-            interpreter.load(program);
-
-            if let Err(e) = interpreter.exec() {
+            if let Err(e) = interpreter.init_program(program) {
                 errors::emit_diagnostics(&[e]);
             }
         }

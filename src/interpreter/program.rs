@@ -20,6 +20,8 @@ pub struct Program {
     pub labels: HashMap<String, usize>,
 
     /// function mapping of name to Symbol
+    // TODO: wrap this FunctionSymbol in an RC
+    //   to avoid cloning the whole thing when a new stack frame is built
     pub functions: HashMap<String, FunctionSymbol>,
 
     /// How many globals does this program need storage for?
@@ -32,6 +34,14 @@ impl Program {
         let mut buf = vec![];
         self.serialize(&mut Serializer::new(&mut buf)).unwrap();
         buf
+    }
+
+    /// Look up a function by its name
+    pub fn lookup_function<T>(&self, name: T) -> Option<&FunctionSymbol>
+    where
+        T: AsRef<str>
+    {
+        self.functions.get(name.as_ref())
     }
 }
 

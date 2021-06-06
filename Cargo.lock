@@ -531,6 +531,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy_format"
+version = "1.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db80df3725d8abca205542a31eded20ca470f356850219d692be0fe62a4ce746"
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,6 +605,7 @@ dependencies = [
  "itertools",
  "lalrpop",
  "lalrpop-util",
+ "lazy_format",
  "lazy_static",
  "logos",
  "modular-bitfield",

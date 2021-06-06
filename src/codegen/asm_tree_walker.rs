@@ -425,6 +425,7 @@ impl TreeWalker for AsmTreeWalker {
             .contains_key(CREATE_FUNCTION)
         {
             let mut call = CallNode {
+                receiver: Box::new(None),
                 arguments: vec![],
                 name: "create".to_string(),
                 span: None,
@@ -2095,11 +2096,13 @@ mod tests {
                     span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
                     arguments: vec![ExpressionNode::from("true")],
                     name: "dump".to_string(),
                     span: None,
                 })),
                 else_clause: Box::new(Some(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
                     arguments: vec![ExpressionNode::from("false")],
                     name: "dump".to_string(),
                     span: None,
@@ -2150,6 +2153,7 @@ mod tests {
                     span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
                     span: None,
@@ -2197,6 +2201,7 @@ mod tests {
                     span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
                     span: None,
@@ -2261,6 +2266,7 @@ mod tests {
                 })),
                 body: Box::new(AstNode::Block(BlockNode {
                     body: vec![AstNode::Call(CallNode {
+                        receiver: Box::new(None),
                         arguments: vec![ExpressionNode::Var(var.clone())],
                         name: "dump".to_string(),
                         span: None,

@@ -704,6 +704,7 @@ pub Call: CallNode = {
         let r = right.r;
 
         CallNode {
+            receiver: Box::new(None),
             arguments,
             name: name.1,
             span: Some(Span { file_id, l, r })

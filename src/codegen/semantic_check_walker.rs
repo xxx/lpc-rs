@@ -476,6 +476,7 @@ mod tests {
         #[test]
         fn allows_known_functions() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
@@ -512,6 +513,7 @@ mod tests {
         #[test]
         fn allows_known_efuns() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "dump".to_string(),
                 span: None,
@@ -527,6 +529,7 @@ mod tests {
         #[test]
         fn disallows_unknown_functions() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![],
                 name: "unknown".to_string(),
                 span: None,
@@ -541,6 +544,7 @@ mod tests {
         #[test]
         fn disallows_incorrect_function_arity() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![],
                 name: "print".to_string(),
                 span: None,
@@ -555,6 +559,7 @@ mod tests {
         #[test]
         fn understands_argument_defaults() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![],
                 name: "my_func".to_string(),
                 span: None,
@@ -590,6 +595,7 @@ mod tests {
         #[test]
         fn disallows_invalid_arg_types() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![ExpressionNode::from(123)],
                 name: "my_func".to_string(),
                 span: None,
@@ -625,6 +631,7 @@ mod tests {
         #[test]
         fn allows_0() {
             let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
                 arguments: vec![ExpressionNode::from(0)],
                 name: "my_func".to_string(),
                 span: None,

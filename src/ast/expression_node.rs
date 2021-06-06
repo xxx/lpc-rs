@@ -271,6 +271,7 @@ mod tests {
     #[test]
     fn test_from_call_node() {
         let node = CallNode {
+            receiver: Box::new(None),
             arguments: vec![],
             name: "foo".to_string(),
             span: None,

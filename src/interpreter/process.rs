@@ -10,7 +10,7 @@ use std::{
 
 /// A wrapper type to allow the VM to keep the immutable program and its
 /// mutable runtime pieces together.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Process {
     pub program: Program,
     pub globals: Vec<RefCell<LpcRef>>,

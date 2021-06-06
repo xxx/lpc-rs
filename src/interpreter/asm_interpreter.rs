@@ -56,7 +56,7 @@ pub struct AsmInterpreter {
     memory: Pool<RefCell<LpcValue>>,
 
     /// Is the machine halted?
-    is_halted: bool,
+    halted: bool,
 }
 
 /// Get a reference to the passed stack frame's registers
@@ -101,32 +101,79 @@ impl AsmInterpreter {
         self.process = r;
     }
 
-    /// Dummy starter for the interpreter, to get the "create" stack frame setup
-    pub fn exec(&mut self) -> Result<()> {
+    /// Initialize the current [`Program`]. This sets up all of the global variables.
+    pub fn init(&mut self) -> Result<()> {
         let sym = FunctionSymbol {
-            name: "global-init".to_string(),
+            name: "_global-var-init".to_string(),
             num_args: 0,
             num_locals: self.process.num_globals,
             address: 0,
         };
-        let create = StackFrame::new(sym, 0);
+        let create = StackFrame::new(self.process.clone(), sym, 0);
         self.push_frame(create);
-
         self.process.set_pc(0);
-
-        self.is_halted = false;
+        self.halted = false;
 
         self.eval()
+    }
+
+    /// Convenience method to load and initialize a [`Program`]
+    pub fn init_program(&mut self, program: Program) -> Result<()> {
+        self.load(program);
+        self.init()
+    }
+
+    pub fn call_other<T, U>(&mut self, path: T, name: U, args: &[LpcRef]) -> Result<()>
+    where
+        T: AsRef<str>,
+        U: AsRef<str>
+    {
+        let proc = self.lookup_process(path.as_ref())?;
+        let func = match proc.lookup_function(name.as_ref()) {
+            Some(f) => f,
+            // TODO: this should just return 0 to the user, once this is all wired up
+            None => return Err(LpcError::new(format!("Unable to find function `{}`", name.as_ref()))
+                .with_span(self.process.current_debug_span()))
+        };
+        let addr = func.address;
+        proc.set_pc(addr);
+        let return_addr = self.process.pc() + 1;
+        let frame = StackFrame::new(proc.clone(), func.clone(), return_addr);
+        self.push_frame(frame);
+        self.halted = false;
+        self.eval()
+    }
+
+    fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
+    where
+        T: AsRef<str>
+    {
+        match self.processes.get(path.as_ref()) {
+            Some(proc) => {
+                Ok(proc)
+            }
+            None => {
+                Err(LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
+                        .with_span(self.process.current_debug_span()))
+            }
+        }
     }
 
     /// Push a new stack frame onto the call stack
     fn push_frame(&mut self, frame: StackFrame) {
         self.stack.push(frame);
+        self.process = self.stack.last().unwrap().process.clone();
     }
 
     /// Pop the current stack frame off the stack
     fn pop_frame(&mut self) -> Option<StackFrame> {
-        self.stack.pop()
+        let previous_frame = self.stack.pop();
+
+        if !self.stack.is_empty() {
+            self.process = self.stack.last().unwrap().process.clone();
+        }
+
+        previous_frame
     }
 
     /// Resolve the passed index within the current stack frame's registers, down to an LpcRef
@@ -145,7 +192,7 @@ impl AsmInterpreter {
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<()> {
         while let Some(instruction) = self.process.instruction() {
-            if self.is_halted {
+            if self.halted {
                 break;
             }
 
@@ -238,8 +285,7 @@ impl AsmInterpreter {
                     initial_arg,
                 } => {
                     let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-                        // TODO: get rid of this clone
-                        StackFrame::new(func.clone(), self.process.pc() + 1)
+                        StackFrame::new(self.process.clone(), func.clone(), self.process.pc() + 1)
                     } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
@@ -248,7 +294,7 @@ impl AsmInterpreter {
                             address: 0,
                         };
 
-                        StackFrame::new(sym, self.process.pc() + 1)
+                        StackFrame::new(self.process.clone(), sym, self.process.pc() + 1)
                     } else {
                         return Err(
                             self.runtime_error(format!("Call to unknown function `{}`", name))
@@ -594,7 +640,7 @@ impl AsmInterpreter {
 
     /// Flag the machine to halt after it finishes executing its next instruction.
     fn halt(&mut self) {
-        self.is_halted = true;
+        self.halted = true;
     }
 
     /// Convenience helper to copy a return value from a given stack frame, back to the current one.
@@ -629,7 +675,7 @@ impl Default for AsmInterpreter {
             processes: programs,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
-            is_halted: true,
+            halted: true,
         }
     }
 }
