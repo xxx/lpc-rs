@@ -47,6 +47,7 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "static",
     "string",
     "switch", // TODO: add token
+    "throw", // TODO: add token
     "void",
     "while",
 };
