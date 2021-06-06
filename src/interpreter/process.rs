@@ -11,13 +11,13 @@ use std::{
 /// A wrapper type to allow the VM to keep the immutable program and its
 /// mutable runtime pieces together.
 #[derive(Debug)]
-pub struct InterpreterProgram {
+pub struct Process {
     pub program: Program,
     pub globals: Vec<RefCell<LpcRef>>,
     pc: Cell<usize>, // pub clones: Vec<>
 }
 
-impl InterpreterProgram {
+impl Process {
     pub fn new(program: Program) -> Self {
         let num_globals = program.num_globals;
 
@@ -58,7 +58,7 @@ impl InterpreterProgram {
 }
 
 // This is an officially sanctioned abuse of Deref.
-impl Deref for InterpreterProgram {
+impl Deref for Process {
     type Target = Program;
 
     fn deref(&self) -> &Self::Target {

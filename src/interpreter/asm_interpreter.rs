@@ -3,7 +3,7 @@ use crate::{
     errors::LpcError,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
-        interpreter_program::InterpreterProgram,
+        process::Process,
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
         program::Program,
@@ -43,11 +43,11 @@ const MEMORY_SIZE: usize = 100_000;
 /// ```
 #[derive(Debug)]
 pub struct AsmInterpreter {
-    /// The program to run
-    program: Rc<InterpreterProgram>,
+    /// The process to run
+    process: Rc<Process>,
 
     /// Our object space
-    programs: HashMap<String, Rc<InterpreterProgram>>,
+    processes: HashMap<String, Rc<Process>>,
 
     /// The call stack
     stack: Vec<StackFrame>,
@@ -96,9 +96,9 @@ impl AsmInterpreter {
     ///
     /// * `program` - The Program to load
     pub fn load(&mut self, program: Program) {
-        let r = Rc::new(InterpreterProgram::new(program));
-        self.programs.insert(r.filename.clone(), r.clone());
-        self.program = r;
+        let r = Rc::new(Process::new(program));
+        self.processes.insert(r.filename.clone(), r.clone());
+        self.process = r;
     }
 
     /// Dummy starter for the interpreter, to get the "create" stack frame setup
@@ -106,13 +106,13 @@ impl AsmInterpreter {
         let sym = FunctionSymbol {
             name: "global-init".to_string(),
             num_args: 0,
-            num_locals: self.program.num_globals,
+            num_locals: self.process.num_globals,
             address: 0,
         };
         let create = StackFrame::new(sym, 0);
         self.push_frame(create);
 
-        self.program.set_pc(0);
+        self.process.set_pc(0);
 
         self.is_halted = false;
 
@@ -144,7 +144,7 @@ impl AsmInterpreter {
 
     /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<()> {
-        while let Some(instruction) = self.program.instruction() {
+        while let Some(instruction) = self.process.instruction() {
             if self.is_halted {
                 break;
             }
@@ -214,11 +214,11 @@ impl AsmInterpreter {
                             return Err(LpcError::new(
                                 "Invalid code was generated for an ARange instruction.",
                             )
-                            .with_span(self.program.current_debug_span()));
+                            .with_span(self.process.current_debug_span()));
                         }
                     } else {
                         return Err(LpcError::new("ARange's array isn't actually an array?")
-                            .with_span(self.program.current_debug_span()));
+                            .with_span(self.process.current_debug_span()));
                     }
                 }
                 Instruction::EqEq(r1, r2, r3) => {
@@ -237,9 +237,9 @@ impl AsmInterpreter {
                     num_args,
                     initial_arg,
                 } => {
-                    let mut new_frame = if let Some(func) = self.program.functions.get(name) {
+                    let mut new_frame = if let Some(func) = self.process.functions.get(name) {
                         // TODO: get rid of this clone
-                        StackFrame::new(func.clone(), self.program.pc() + 1)
+                        StackFrame::new(func.clone(), self.process.pc() + 1)
                     } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
@@ -248,7 +248,7 @@ impl AsmInterpreter {
                             address: 0,
                         };
 
-                        StackFrame::new(sym, self.program.pc() + 1)
+                        StackFrame::new(sym, self.process.pc() + 1)
                     } else {
                         return Err(
                             self.runtime_error(format!("Call to unknown function `{}`", name))
@@ -265,8 +265,8 @@ impl AsmInterpreter {
 
                     self.stack.push(new_frame);
 
-                    if let Some(FunctionSymbol { address, .. }) = self.program.functions.get(name) {
-                        self.program.set_pc(*address);
+                    if let Some(FunctionSymbol { address, .. }) = self.process.functions.get(name) {
+                        self.process.set_pc(*address);
                         continue;
                     } else if let Some(efun) = EFUNS.get(name.as_str()) {
                         // the efun is responsible for populating the return value
@@ -287,14 +287,14 @@ impl AsmInterpreter {
                 }
                 Instruction::GLoad(r1, r2) => {
                     // load from global r1, into local r2
-                    let global = self.program.globals[r1.index()].borrow().clone();
+                    let global = self.process.globals[r1.index()].borrow().clone();
                     let registers = current_registers_mut(&mut self.stack)?;
                     registers[r2.index()] = global
                 }
                 Instruction::GStore(r1, r2) => {
                     // store local r1 into global r2
                     let registers = current_registers_mut(&mut self.stack)?;
-                    self.program.globals[r2.index()].replace(registers[r1.index()].clone());
+                    self.process.globals[r2.index()].replace(registers[r1.index()].clone());
                 }
                 Instruction::Gt(r1, r2, r3) => {
                     let (n1, n2, n3) = (*r1, *r2, *r3);
@@ -313,7 +313,7 @@ impl AsmInterpreter {
                             registers[r3.index()] = out
                         }
                         Err(e) => {
-                            return Err(e.with_span(self.program.current_debug_span()));
+                            return Err(e.with_span(self.process.current_debug_span()));
                         }
                     }
                 }
@@ -334,7 +334,7 @@ impl AsmInterpreter {
                     match &registers[r1.index()] / &registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
-                            return Err(e.with_span(self.program.current_debug_span()));
+                            return Err(e.with_span(self.process.current_debug_span()));
                         }
                     }
                 }
@@ -343,7 +343,7 @@ impl AsmInterpreter {
                     match &registers[r1.index()] * &registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
-                            return Err(e.with_span(self.program.current_debug_span()));
+                            return Err(e.with_span(self.process.current_debug_span()));
                         }
                     }
                 }
@@ -352,19 +352,19 @@ impl AsmInterpreter {
                     match &registers[r1.index()] - &registers[r2.index()] {
                         Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                         Err(e) => {
-                            return Err(e.with_span(self.program.current_debug_span()));
+                            return Err(e.with_span(self.process.current_debug_span()));
                         }
                     }
                 }
                 Instruction::Jmp(address) => {
-                    self.program.set_pc(*address);
+                    self.process.set_pc(*address);
                     continue;
                 }
                 Instruction::Jnz(r1, address) => {
                     let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
                     if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
-                        self.program.set_pc(*address);
+                        self.process.set_pc(*address);
                         continue;
                     }
                 }
@@ -372,7 +372,7 @@ impl AsmInterpreter {
                     let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
                     if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                        self.program.set_pc(*address);
+                        self.process.set_pc(*address);
                         continue;
                     }
                 }
@@ -394,13 +394,13 @@ impl AsmInterpreter {
                                     if let Some(v) = vec.get(idx as usize) {
                                         registers[r3.index()] = v.clone();
                                     } else {
-                                        return Err(self.make_array_index_error(idx, vec.len()));
+                                        return Err(self.array_index_error(idx, vec.len()));
                                     }
                                 } else {
-                                    return Err(self.make_array_index_error(idx, vec.len()));
+                                    return Err(self.array_index_error(idx, vec.len()));
                                 }
                             } else {
-                                return Err(self.make_array_index_error(index, vec.len()));
+                                return Err(self.array_index_error(index, vec.len()));
                             }
                         }
                         LpcRef::Mapping(map_ref) => {
@@ -466,7 +466,7 @@ impl AsmInterpreter {
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame)?;
-                        self.program.set_pc(frame.return_address);
+                        self.process.set_pc(frame.return_address);
                     }
 
                     // halt at the end of all input
@@ -506,7 +506,7 @@ impl AsmInterpreter {
                                 vec[idx as usize] =
                                     current_registers(&self.stack)?[r1.index()].clone();
                             } else {
-                                return Err(self.make_array_index_error(idx, len));
+                                return Err(self.array_index_error(idx, len));
                             }
                         }
                         LpcRef::Mapping(ref mut map_ref) => {
@@ -536,7 +536,7 @@ impl AsmInterpreter {
                 }
             }
 
-            self.program.inc_pc();
+            self.process.inc_pc();
         }
 
         Ok(())
@@ -563,7 +563,7 @@ impl AsmInterpreter {
                 registers[r3.index()] = var
             }
             Err(e) => {
-                return Err(e.with_span(self.program.current_debug_span()));
+                return Err(e.with_span(self.process.current_debug_span()));
             }
         }
 
@@ -608,10 +608,10 @@ impl AsmInterpreter {
 
     fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         LpcError::new(format!("Runtime Error: {}", msg.as_ref()))
-            .with_span(self.program.current_debug_span())
+            .with_span(self.process.current_debug_span())
     }
 
-    fn make_array_index_error<T: Display>(&self, index: T, length: usize) -> LpcError {
+    fn array_index_error<T: Display>(&self, index: T, length: usize) -> LpcError {
         self.runtime_error(format!(
             "Attempting to access index {} in an array of length {}",
             index, length
@@ -622,11 +622,11 @@ impl AsmInterpreter {
 impl Default for AsmInterpreter {
     fn default() -> Self {
         let programs = HashMap::with_capacity(OBJECT_SPACE_SIZE);
-        let program = Rc::new(InterpreterProgram::new(Program::default()));
+        let program = Rc::new(Process::new(Program::default()));
 
         Self {
-            program,
-            programs,
+            process: program,
+            processes: programs,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
             is_halted: true,
