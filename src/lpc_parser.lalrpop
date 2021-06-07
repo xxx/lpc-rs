@@ -338,7 +338,7 @@ pub PrimaryExpression: ExpressionNode = {
     <Var>,
     "(" <Expression> ")",
     "(" "{" <l:ExpressionList?> "}" ")" => {
-        let vec = l.unwrap_or(vec![]);
+        let vec = l.unwrap_or(Vec::new());
 
         ExpressionNode::Array(ArrayNode::new(vec))
     },
@@ -418,7 +418,17 @@ pub PostfixExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    Call => ExpressionNode::Call(<>)
+    <e:(<PostfixExpression> "->")?> <mut c:Call> => {
+        if let Some(rcvr) = e {
+            let span = Span::combine(rcvr.span(), c.span);
+            c.receiver = Box::new(Some(rcvr));
+            c.span = span;
+
+            ExpressionNode::from(c)
+        } else {
+            ExpressionNode::from(c)
+        }
+    },
 };
 
 pub UnaryExpression: ExpressionNode = {

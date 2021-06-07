@@ -81,6 +81,11 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+        // call_other is not type checked
+        if node.receiver.is_some() {
+            return Ok(());
+        }
+
         for argument in &mut node.arguments {
             argument.visit(self)?;
         }
@@ -546,7 +551,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: Box::new(None),
                 arguments: vec![],
-                name: "print".to_string(),
+                name: "dump".to_string(),
                 span: None,
             });
 
@@ -663,6 +668,21 @@ mod tests {
             let _ = node.visit(&mut walker);
             assert!(walker.context.errors.is_empty());
         }
+
+        #[test]
+        fn allows_bad_data_with_call_other() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(Some(ExpressionNode::from(23))),
+                arguments: vec![],
+                name: "dump".to_string(),
+                span: None,
+            });
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+            assert!(walker.context.errors.is_empty());
+        }
     }
 
     mod test_visit_binary_op {
@@ -721,7 +741,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_visit_unary_op_works_allows_valid() {
+        fn works_allows_valid() {
             let mut node = ExpressionNode::from(UnaryOpNode {
                 expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 op: UnaryOperation::Negate,

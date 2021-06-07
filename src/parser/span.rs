@@ -36,6 +36,25 @@ impl Span {
             r: range.end,
         }
     }
+
+    pub fn combine(left: Option<Span>, right: Option<Span>) -> Option<Self> {
+        if left.is_none() {
+            return right;
+        }
+        if right.is_none() {
+            return left;
+        }
+        let l = left.unwrap();
+        let r = right.unwrap();
+
+        let span = Self {
+            file_id: l.file_id,
+            l: l.l,
+            r: r.r
+        };
+
+        Some(span)
+    }
 }
 
 impl From<&Span> for Range<usize> {

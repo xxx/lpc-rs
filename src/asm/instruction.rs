@@ -9,6 +9,7 @@ use std::{
 pub type Address = usize;
 
 /// Representation of an assembly language instruction.
+/// In general, they are structured as `name(arg1, ...argn, destination)`, a la the AT&T syntax
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
@@ -20,6 +21,14 @@ pub enum Instruction {
 
     /// Call a function
     Call {
+        name: String,
+        num_args: usize,
+        initial_arg: Register,
+    },
+
+    /// Call a function in another object
+    CallOther {
+        receiver: Register,
         name: String,
         num_args: usize,
         initial_arg: Register,
@@ -136,6 +145,14 @@ impl Display for Instruction {
                 initial_arg,
             } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)
+            }
+            Instruction::CallOther {
+                receiver,
+                name,
+                num_args,
+                initial_arg,
+            } => {
+                write!(f, "callother {}, {}, {}, {}", receiver, name, num_args, initial_arg)
             }
             Instruction::EqEq(r1, r2, r3) => {
                 write!(f, "eqeq {}, {}, {}", r1, r2, r3)

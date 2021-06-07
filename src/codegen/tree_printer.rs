@@ -82,9 +82,15 @@ impl TreeWalker for TreePrinter {
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        self.println_indented("Call");
-        self.indent += 2;
-        self.println_indented(&format!("id: {}", node.name));
+        if let Some(rcvr) = &*node.receiver {
+            self.println_indented("Call Other");
+            self.indent += 2;
+            self.println_indented(&format!("receiver: {}", rcvr));
+        } else {
+            self.println_indented("Call");
+            self.indent += 2;
+        }
+        self.println_indented(&format!("name: {}", node.name));
         self.println_indented("args:");
         self.indent += 2;
         for arg in &mut node.arguments {

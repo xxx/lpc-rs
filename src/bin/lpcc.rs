@@ -13,6 +13,9 @@ fn main() {
         Ok(program) => {
             let mut interpreter = AsmInterpreter::default();
 
+            let c2 = compile_file("local/mathfile2.c").unwrap();
+            let _ = interpreter.init_program(c2);
+
             // println!("{:?}", program);
             if let Err(e) = interpreter.init_program(program) {
                 errors::emit_diagnostics(&[e]);

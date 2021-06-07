@@ -39,7 +39,7 @@ const MEMORY_SIZE: usize = 100_000;
 ///
 /// // Load the program and run it
 /// let mut interpreter = AsmInterpreter::new(program);
-/// interpreter.exec();
+/// interpreter.init();
 /// ```
 #[derive(Debug)]
 pub struct AsmInterpreter {
@@ -121,27 +121,6 @@ impl AsmInterpreter {
     pub fn init_program(&mut self, program: Program) -> Result<()> {
         self.load(program);
         self.init()
-    }
-
-    pub fn call_other<T, U>(&mut self, path: T, name: U, args: &[LpcRef]) -> Result<()>
-    where
-        T: AsRef<str>,
-        U: AsRef<str>
-    {
-        let proc = self.lookup_process(path.as_ref())?;
-        let func = match proc.lookup_function(name.as_ref()) {
-            Some(f) => f,
-            // TODO: this should just return 0 to the user, once this is all wired up
-            None => return Err(LpcError::new(format!("Unable to find function `{}`", name.as_ref()))
-                .with_span(self.process.current_debug_span()))
-        };
-        let addr = func.address;
-        proc.set_pc(addr);
-        let return_addr = self.process.pc() + 1;
-        let frame = StackFrame::new(proc.clone(), func.clone(), return_addr);
-        self.push_frame(frame);
-        self.halted = false;
-        self.eval()
     }
 
     fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
@@ -326,6 +305,70 @@ impl AsmInterpreter {
                             name
                         )));
                     }
+                }
+                Instruction::CallOther {
+                    receiver,
+                    name,
+                    num_args,
+                    initial_arg,
+                } => {
+                    // get receiver process and make it the current one
+                    let receiver_ref = self.register_to_lpc_ref(receiver.index());
+                    let nc = name.clone();
+                    let num_args = *num_args;
+                    let initial_index = initial_arg.index();
+                    let return_address = self.process.pc() + 1;
+
+                    match receiver_ref {
+                        LpcRef::String(s) => {
+                            let r = s.borrow();
+                            let str = try_extract_value!(*r, LpcValue::String);
+
+                            let pr = self.lookup_process(str)?;
+                            // Only switch the process if there's actually a function to
+                            // call by this name on the other side.
+                            if pr.functions.contains_key(&nc) {
+                                self.process = pr.clone();
+                            }
+                        },
+                        _ => return Err(LpcError::new(format!("What are you trying to call `{}` on?", name))
+                            .with_span(self.process.current_debug_span()))
+                    }
+
+                    let sym = if let Some(fs) = self.process.functions.get(&nc) {
+                        fs
+                    } else {
+                        if let Some(frame) = self.stack.last_mut() {
+                            frame.registers[0] = LpcRef::Int(0);
+                            self.process.inc_pc();
+                            continue;
+                        } else {
+                            return Err(
+                                self.runtime_error(format!("Call to unknown function `{}`", nc))
+                            );
+                        }
+                    };
+
+                    // Because call_other args aren't arity-checked, there might be more
+                    // passed than expected, so we might need to reserve more space
+                    let mut new_frame = StackFrame::with_minimum_arg_capacity(
+                        self.process.clone(),
+                        sym.clone(),
+                        return_address,
+                        num_args + 1 // +1 for r0
+                    );
+
+                    // copy argument registers from old frame to new
+                    if num_args > 0_usize {
+                        let current_frame = self.stack.last().unwrap();
+                        new_frame.registers[1..=num_args]
+                            .clone_from_slice(&current_frame.registers[initial_index..(initial_index + num_args)]);
+                    }
+
+                    self.stack.push(new_frame);
+
+                    self.process.set_pc(sym.address);
+                    continue;
                 }
                 Instruction::FConst(r, f) => {
                     let registers = current_registers_mut(&mut self.stack)?;

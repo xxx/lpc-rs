@@ -487,10 +487,22 @@ impl TreeWalker for AsmTreeWalker {
 
         let instruction = if arg_results.len() == 1 {
             // no need to serialize args for the `Call` instruction if there's only one.
-            Instruction::Call {
-                name: node.name.clone(),
-                num_args: arg_results.len(),
-                initial_arg: arg_results[0],
+            if let Some(rcvr) = &mut *node.receiver {
+                rcvr.visit(self)?;
+                let receiver_result = self.current_result;
+
+                Instruction::CallOther {
+                    receiver: receiver_result,
+                    name: node.name.clone(),
+                    num_args: arg_results.len(),
+                    initial_arg: arg_results[0],
+                }
+            } else {
+                Instruction::Call {
+                    name: node.name.clone(),
+                    num_args: arg_results.len(),
+                    initial_arg: arg_results[0],
+                }
             }
         } else {
             let start_register = self.register_counter.next().unwrap();
@@ -504,13 +516,25 @@ impl TreeWalker for AsmTreeWalker {
                 register = self.register_counter.next().unwrap();
             }
 
-            // Undo the final call to .next() to avoid skipping a register
+            // Undo the final call to .next() to avoid wasting a register
             self.register_counter.go_back();
 
-            Instruction::Call {
-                name: node.name.clone(),
-                num_args: arg_results.len(),
-                initial_arg: start_register,
+            if let Some(rcvr) = &mut *node.receiver {
+                rcvr.visit(self)?;
+                let receiver_result = self.current_result;
+
+                Instruction::CallOther {
+                    receiver: receiver_result,
+                    name: node.name.clone(),
+                    num_args: arg_results.len(),
+                    initial_arg: start_register,
+                }
+            } else {
+                Instruction::Call {
+                    name: node.name.clone(),
+                    num_args: arg_results.len(),
+                    initial_arg: start_register,
+                }
             }
         };
 
@@ -1211,12 +1235,12 @@ mod tests {
     }
 
     mod test_visit_call {
-        use crate::asm::instruction::Instruction::Call;
+        use crate::asm::instruction::Instruction::{Call, CallOther};
 
         use super::*;
 
         #[test]
-        fn test_visit_call_populates_the_instructions() {
+        fn populates_the_instructions() {
             let mut walker = AsmTreeWalker::default();
             let call = "print(4 - 5)";
             let mut tree = lpc_parser::CallParser::new()
@@ -1238,7 +1262,31 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_call_populates_the_instructions_with_defaults() {
+        fn populates_the_instructions_for_call_other() {
+            let mut walker = AsmTreeWalker::default();
+            let call = "\"foo\"->print(4 - 5)";
+            let mut tree = lpc_parser::ExpressionParser::new()
+                .parse(LexWrapper::new(call))
+                .unwrap();
+
+            let _ = tree.visit(&mut walker);
+
+            let expected = vec![
+                IConst(Register(1), -1),
+                SConst(Register(2), String::from("foo")),
+                CallOther {
+                    receiver: Register(2),
+                    name: String::from("print"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_with_defaults() {
             let mut function_params = HashMap::new();
 
             function_params.insert(
