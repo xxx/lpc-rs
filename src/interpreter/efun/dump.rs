@@ -1,7 +1,7 @@
-use crate::interpreter::{
-    asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue,
+use crate::{
+    interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
+    Result,
 };
-use crate::Result;
 use std::collections::HashMap;
 
 fn format_ref(lpc_ref: &LpcRef, interpreter: &AsmInterpreter, indent: usize) -> String {

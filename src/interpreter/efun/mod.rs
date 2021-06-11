@@ -2,16 +2,16 @@ mod clone_object;
 mod dump;
 
 use lazy_static::lazy_static;
-use std::collections::HashMap;
 use phf::phf_map;
+use std::collections::HashMap;
 
 use crate::{
     interpreter::asm_interpreter::AsmInterpreter,
     semantic::{function_prototype::FunctionPrototype, lpc_type::LpcType},
-    Result
+    Result,
 };
-use dump::dump;
 use clone_object::clone_object;
+use dump::dump;
 
 /// Signature for Efuns
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;

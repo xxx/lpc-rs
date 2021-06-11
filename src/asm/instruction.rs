@@ -152,7 +152,11 @@ impl Display for Instruction {
                 num_args,
                 initial_arg,
             } => {
-                write!(f, "callother {}, {}, {}, {}", receiver, name, num_args, initial_arg)
+                write!(
+                    f,
+                    "callother {}, {}, {}, {}",
+                    receiver, name, num_args, initial_arg
+                )
             }
             Instruction::EqEq(r1, r2, r3) => {
                 write!(f, "eqeq {}, {}, {}", r1, r2, r3)

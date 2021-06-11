@@ -1,13 +1,11 @@
-use crate::interpreter::asm_interpreter::AsmInterpreter;
-use crate::try_extract_value;
-use crate::Result;
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::errors::LpcError;
-use crate::compiler::compile_file;
-use crate::compiler::compiler_error::CompilerError;
-use crate::interpreter::lpc_value::LpcValue;
-use std::cell::RefCell;
+use crate::{
+    compiler::{compile_file, compiler_error::CompilerError},
+    errors::LpcError,
+    interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
+    try_extract_value, Result,
+};
 use refpool::PoolRef;
+use std::cell::RefCell;
 
 pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
     let frame = interpreter.stack.last().unwrap();
@@ -27,7 +25,7 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
                     let err = match e {
                         CompilerError::LpcError(x) => x,
                         // TODO: make this handle all of these errors
-                        CompilerError::Collection(mut x) => x.swap_remove(0)
+                        CompilerError::Collection(mut x) => x.swap_remove(0),
                     };
                     return Err(err);
                 }
@@ -53,9 +51,11 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
         // clone the entire master program (not the Rc), then initialize the clone,
         // create an LpcRef for the object, and put that into r0
     } else {
-        return Err(
-            LpcError::new(format!("Invalid argument passed to `clone_object`: {}", lpc_ref)
-        ).with_span(frame.process.current_debug_span()));
+        return Err(LpcError::new(format!(
+            "Invalid argument passed to `clone_object`: {}",
+            lpc_ref
+        ))
+        .with_span(frame.process.current_debug_span()));
     }
 
     Ok(())

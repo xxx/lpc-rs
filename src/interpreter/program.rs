@@ -39,7 +39,7 @@ impl Program {
     /// Look up a function by its name
     pub fn lookup_function<T>(&self, name: T) -> Option<&FunctionSymbol>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         self.functions.get(name.as_ref())
     }

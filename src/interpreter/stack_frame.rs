@@ -1,5 +1,7 @@
-use crate::{interpreter::lpc_ref::LpcRef, semantic::function_symbol::FunctionSymbol};
-use crate::interpreter::process::Process;
+use crate::{
+    interpreter::{lpc_ref::LpcRef, process::Process},
+    semantic::function_symbol::FunctionSymbol,
+};
 use std::rc::Rc;
 
 /// A representation of a function call's context.
@@ -44,7 +46,12 @@ impl StackFrame {
     /// * `return_address` - Where to return to after we return from this frame's function.
     /// * `arg_capacity` - Reserve space for at least this many registers
     ///     (this is used for ellipsis args and `call_other`)
-    pub fn with_minimum_arg_capacity(process: Rc<Process>, symbol: FunctionSymbol, return_address: usize, arg_capacity: usize) -> Self {
+    pub fn with_minimum_arg_capacity(
+        process: Rc<Process>,
+        symbol: FunctionSymbol,
+        return_address: usize,
+        arg_capacity: usize,
+    ) -> Self {
         // add +1 for r0 (where return value is stored)
         let reg_len = symbol.num_args + symbol.num_locals + 1;
         let reservation = std::cmp::max(reg_len, arg_capacity + symbol.num_locals + 1);

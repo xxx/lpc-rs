@@ -15,9 +15,9 @@ use crate::{
         var_node::VarNode,
     },
     errors::LpcError,
+    interpreter::efun::EFUN_PROTOTYPES,
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
     Result,
-    interpreter::efun::EFUN_PROTOTYPES,
 };
 
 /// Utility functions for doing various semantic checks.
@@ -300,20 +300,14 @@ pub fn node_type(
             node_type(lhs, scope_tree, function_return_types)
         }
         ExpressionNode::Call(CallNode { name, .. }) => {
-            function_return_types
-                .get(name.as_str())
-                .map_or_else(
-                    || {
-                        match EFUN_PROTOTYPES.get(name.as_str()) {
-                            Some(x) => {
-                                Ok(x.return_type)
-                            }
-                            None => Ok(LpcType::Int(false))
-                        }
-                    },
-                    |return_type| Ok(*return_type)
-                )
-        },
+            function_return_types.get(name.as_str()).map_or_else(
+                || match EFUN_PROTOTYPES.get(name.as_str()) {
+                    Some(x) => Ok(x.return_type),
+                    None => Ok(LpcType::Int(false)),
+                },
+                |return_type| Ok(*return_type),
+            )
+        }
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();

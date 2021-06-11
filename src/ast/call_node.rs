@@ -1,8 +1,8 @@
+use lazy_format::lazy_format;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lazy_format::lazy_format;
 
 use crate::{
     ast::{

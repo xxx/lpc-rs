@@ -110,7 +110,7 @@ impl Hash for LpcRef {
             LpcRef::String(x) => extract_value!(*x.borrow(), LpcValue::String).hash(state),
             LpcRef::Array(x) => ptr::hash(&**x, state),
             LpcRef::Mapping(x) => ptr::hash(&**x, state),
-            LpcRef::Object(x) => ptr::hash(&**x, state)
+            LpcRef::Object(x) => ptr::hash(&**x, state),
         }
     }
 }
@@ -206,7 +206,7 @@ impl Add for &LpcRef {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Object(_) =>  Err(self.to_error(BinaryOperation::Add, rhs)),
+            LpcRef::Object(_) => Err(self.to_error(BinaryOperation::Add, rhs)),
         }
     }
 }

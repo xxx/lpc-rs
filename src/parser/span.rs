@@ -50,7 +50,7 @@ impl Span {
         let span = Self {
             file_id: l.file_id,
             l: l.l,
-            r: r.r
+            r: r.r,
         };
 
         Some(span)

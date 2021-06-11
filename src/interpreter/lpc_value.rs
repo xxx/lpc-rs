@@ -1,8 +1,9 @@
-use crate::{interpreter::lpc_ref::LpcRef, LpcFloat, LpcInt};
+use crate::{
+    interpreter::{lpc_ref::LpcRef, process::Process},
+    LpcFloat, LpcInt,
+};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use std::{collections::HashMap, fmt, fmt::Display};
-use crate::interpreter::process::Process;
-use std::rc::Rc;
+use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -110,10 +111,8 @@ impl PartialEq for LpcValue {
             (LpcValue::Mapping(x), LpcValue::Mapping(y)) => {
                 x.keys().collect::<Vec<_>>() == y.keys().collect::<Vec<_>>()
                     && x.values().collect::<Vec<_>>() == y.values().collect::<Vec<_>>()
-            },
-            (LpcValue::Object(x), LpcValue::Object(y)) => {
-                Rc::ptr_eq(x, y)
             }
+            (LpcValue::Object(x), LpcValue::Object(y)) => Rc::ptr_eq(x, y),
             _ => false,
         }
     }
