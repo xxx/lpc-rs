@@ -56,9 +56,6 @@ pub struct AsmInterpreter {
 
     /// Our memory
     pub memory: Pool<RefCell<LpcValue>>,
-
-    /// Is the machine halted?
-    halted: bool,
 }
 
 /// Get a reference to the passed stack frame's registers
@@ -115,7 +112,6 @@ impl AsmInterpreter {
         let create = StackFrame::new(self.process.clone(), sym, 0);
         self.push_frame(create);
         self.process.set_pc(0);
-        self.halted = false;
 
         self.eval()
     }
@@ -173,472 +169,475 @@ impl AsmInterpreter {
         registers.get(index).unwrap().clone()
     }
 
-    /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<()> {
-        while let Some(instruction) = self.process.instruction() {
-            if self.halted {
-                break;
+        let mut halted = false;
+
+        while !halted {
+            halted = self.eval_one_instruction()?;
+        }
+
+        Ok(())
+    }
+
+    /// Evaluate loaded instructions, starting from the current value of the PC
+    /// The boolean represents whether we are at the end of input (i.e. we should halt the machine)
+    fn eval_one_instruction(&mut self) -> Result<bool> {
+        let instruction = match self.process.instruction() {
+            Some(i) => i,
+            None => return Ok(true)
+        };
+
+        println!("isntr {}", instruction);
+        self.process.inc_pc();
+
+        match instruction {
+            Instruction::AConst(r, vec) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                let vars = vec
+                    .iter()
+                    .map(|i| registers[i.index()].clone())
+                    .collect::<Vec<_>>();
+                let new_ref = value_to_ref!(LpcValue::from(vars), &self.memory);
+
+                registers[r.index()] = new_ref;
             }
+            Instruction::ARange(r1, r2, r3, r4) => {
+                // r4 = r1[r2..r3]
+                let return_array = |arr,
+                                    memory: &mut Pool<RefCell<LpcValue>>,
+                                    stack: &mut Vec<StackFrame>|
+                                    -> Result<()> {
+                    let new_ref = value_to_ref!(LpcValue::from(arr), memory);
+                    let registers = current_registers_mut(stack)?;
+                    registers[r4.index()] = new_ref;
 
-            println!("instruction pc {:?} {} {}", instruction, self.process.pc(), self.process.program.filename);
+                    Ok(())
+                };
 
-            self.process.inc_pc();
+                let lpc_ref = self.register_to_lpc_ref(r1.index());
 
-            match instruction {
-                Instruction::AConst(r, vec) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    let vars = vec
-                        .iter()
-                        .map(|i| registers[i.index()].clone())
-                        .collect::<Vec<_>>();
-                    let new_ref = value_to_ref!(LpcValue::from(vars), &self.memory);
+                if let LpcRef::Array(v_ref) = lpc_ref {
+                    let value = v_ref.borrow();
+                    let vec = try_extract_value!(*value, LpcValue::Array);
 
-                    registers[r.index()] = new_ref;
-                }
-                Instruction::ARange(r1, r2, r3, r4) => {
-                    // r4 = r1[r2..r3]
-                    let return_array = |arr,
-                                        memory: &mut Pool<RefCell<LpcValue>>,
-                                        stack: &mut Vec<StackFrame>|
-                     -> Result<()> {
-                        let new_ref = value_to_ref!(LpcValue::from(arr), memory);
-                        let registers = current_registers_mut(stack)?;
-                        registers[r4.index()] = new_ref;
+                    if vec.is_empty() {
+                        return_array(vec![], &mut self.memory, &mut self.stack)?;
+                    }
 
-                        Ok(())
-                    };
+                    let index1 = self.register_to_lpc_ref(r2.index());
+                    let index2 = self.register_to_lpc_ref(r3.index());
 
-                    let lpc_ref = self.register_to_lpc_ref(r1.index());
+                    if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+                        let to_idx = |i: LpcInt| {
+                            // We handle the potential overflow just below.
+                            if i >= 0 {
+                                i as usize
+                            } else {
+                                (vec.len() as LpcInt + i) as usize
+                            }
+                        };
+                        let real_start = to_idx(start);
+                        let mut real_end = to_idx(end);
 
-                    if let LpcRef::Array(v_ref) = lpc_ref {
-                        let value = v_ref.borrow();
-                        let vec = try_extract_value!(*value, LpcValue::Array);
+                        if real_end >= vec.len() {
+                            real_end = vec.len() - 1;
+                        }
 
-                        if vec.is_empty() {
+                        if real_start <= real_end {
+                            let slice = &vec[real_start..=real_end];
+                            let mut new_vec = vec![LpcRef::Int(0); slice.len()];
+                            new_vec.clone_from_slice(slice);
+                            return_array(new_vec, &mut self.memory, &mut self.stack)?;
+                        } else {
                             return_array(vec![], &mut self.memory, &mut self.stack)?;
                         }
-
-                        let index1 = self.register_to_lpc_ref(r2.index());
-                        let index2 = self.register_to_lpc_ref(r3.index());
-
-                        if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
-                            let to_idx = |i: LpcInt| {
-                                // We handle the potential overflow just below.
-                                if i >= 0 {
-                                    i as usize
-                                } else {
-                                    (vec.len() as LpcInt + i) as usize
-                                }
-                            };
-                            let real_start = to_idx(start);
-                            let mut real_end = to_idx(end);
-
-                            if real_end >= vec.len() {
-                                real_end = vec.len() - 1;
-                            }
-
-                            if real_start <= real_end {
-                                let slice = &vec[real_start..=real_end];
-                                let mut new_vec = vec![LpcRef::Int(0); slice.len()];
-                                new_vec.clone_from_slice(slice);
-                                return_array(new_vec, &mut self.memory, &mut self.stack)?;
-                            } else {
-                                return_array(vec![], &mut self.memory, &mut self.stack)?;
-                            }
-                        } else {
-                            return Err(LpcError::new(
-                                "Invalid code was generated for an ARange instruction.",
-                            )
-                            .with_span(self.process.current_debug_span()));
-                        }
                     } else {
-                        return Err(LpcError::new("ARange's array isn't actually an array?")
+                        return Err(LpcError::new(
+                            "Invalid code was generated for an ARange instruction.",
+                        )
                             .with_span(self.process.current_debug_span()));
                     }
+                } else {
+                    return Err(LpcError::new("ARange's array isn't actually an array?")
+                        .with_span(self.process.current_debug_span()));
                 }
-                Instruction::EqEq(r1, r2, r3) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    let out = if registers[r1.index()] == registers[r2.index()] {
-                        1
-                    } else {
-                        0
+            }
+            Instruction::EqEq(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                let out = if registers[r1.index()] == registers[r2.index()] {
+                    1
+                } else {
+                    0
+                };
+
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r3.index()] = LpcRef::Int(out);
+            }
+            Instruction::Call {
+                name,
+                num_args,
+                initial_arg,
+            } => {
+                let mut new_frame = if let Some(func) = self.process.functions.get(name) {
+                    StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
+                } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                    let sym = FunctionSymbol {
+                        name: name.clone(),
+                        num_args: prototype.num_args,
+                        num_locals: 0,
+                        address: 0,
                     };
 
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r3.index()] = LpcRef::Int(out);
-                }
-                Instruction::Call {
-                    name,
-                    num_args,
-                    initial_arg,
-                } => {
-                    let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-                        StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
-                    } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                        let sym = FunctionSymbol {
-                            name: name.clone(),
-                            num_args: prototype.num_args,
-                            num_locals: 0,
-                            address: 0,
-                        };
-
-                        StackFrame::new(self.process.clone(), sym, self.process.pc())
-                    } else {
-                        return Err(
-                            self.runtime_error(format!("Call to unknown function `{}`", name))
-                        );
-                    };
-
-                    // copy argument registers from old frame to new
-                    if *num_args > 0_usize {
-                        let index = initial_arg.index();
-                        let current_frame = self.stack.last().unwrap();
-                        new_frame.registers[1..=*num_args]
-                            .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
-                    }
-
-                    self.stack.push(new_frame);
-
-                    if let Some(FunctionSymbol { address, .. }) = self.process.functions.get(name) {
-                        self.process.set_pc(*address);
-                        continue;
-                    } else if let Some(efun) = EFUNS.get(name.as_str()) {
-                        // the efun is responsible for populating the return value
-                        efun(self)?;
-                        if let Some(frame) = self.pop_frame() {
-                            self.copy_call_result(&frame)?;
-                        }
-                    } else {
-                        return Err(self.runtime_error(format!(
-                            "Call to unknown function (that had a valid prototype?) `{}`",
-                            name
-                        )));
-                    }
-                }
-                Instruction::CallOther {
-                    receiver,
-                    name,
-                    num_args,
-                    initial_arg,
-                } => {
-                    // get receiver process and make it the current one
-                    let receiver_ref = self.register_to_lpc_ref(receiver.index());
-                    let nc = name.clone();
-                    let num_args = *num_args;
-                    let initial_index = initial_arg.index();
-                    let return_address = self.process.pc();
-
-                    match receiver_ref {
-                        LpcRef::String(s) => {
-                            let r = s.borrow();
-                            let str = try_extract_value!(*r, LpcValue::String);
-
-                            let pr = self.lookup_process(str)?;
-                            // Only switch the process if there's actually a function to
-                            // call by this name on the other side.
-                            if pr.functions.contains_key(&nc) {
-                                self.process = pr.clone();
-                            }
-                        },
-                        _ => return Err(LpcError::new(format!("What are you trying to call `{}` on?", name))
-                            .with_span(self.process.current_debug_span()))
-                    }
-
-                    let sym = if let Some(fs) = self.process.functions.get(&nc) {
-                        fs
-                    } else {
-                        if let Some(frame) = self.stack.last_mut() {
-                            frame.registers[0] = LpcRef::Int(0);
-                            self.process.inc_pc();
-                            continue;
-                        } else {
-                            return Err(
-                                self.runtime_error(format!("Call to unknown function `{}`", nc))
-                            );
-                        }
-                    };
-
-                    // Because call_other args aren't arity-checked, there might be more
-                    // passed than expected, so we might need to reserve more space
-                    let mut new_frame = StackFrame::with_minimum_arg_capacity(
-                        self.process.clone(),
-                        sym.clone(),
-                        return_address,
-                        num_args + 1 // +1 for r0
+                    StackFrame::new(self.process.clone(), sym, self.process.pc())
+                } else {
+                    return Err(
+                        self.runtime_error(format!("Call to unknown function `{}`", name))
                     );
+                };
 
-                    // copy argument registers from old frame to new
-                    if num_args > 0_usize {
-                        let current_frame = self.stack.last().unwrap();
-                        new_frame.registers[1..=num_args]
-                            .clone_from_slice(&current_frame.registers[initial_index..(initial_index + num_args)]);
-                    }
+                // copy argument registers from old frame to new
+                if *num_args > 0_usize {
+                    let index = initial_arg.index();
+                    let current_frame = self.stack.last().unwrap();
+                    new_frame.registers[1..=*num_args]
+                        .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
+                }
 
-                    self.stack.push(new_frame);
+                self.stack.push(new_frame);
 
-                    self.process.set_pc(sym.address);
-                    continue;
-                }
-                Instruction::FConst(r, f) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r.index()] = LpcRef::Float(*f);
-                }
-                Instruction::GLoad(r1, r2) => {
-                    // load from global r1, into local r2
-                    let global = self.process.globals[r1.index()].borrow().clone();
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r2.index()] = global
-                }
-                Instruction::GStore(r1, r2) => {
-                    // store local r1 into global r2
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    self.process.globals[r2.index()].replace(registers[r1.index()].clone());
-                }
-                Instruction::Gt(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_boolean_operation(n1, n2, n3, |x, y| x > y)?;
-                }
-                Instruction::Gte(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_boolean_operation(n1, n2, n3, |x, y| x >= y)?;
-                }
-                Instruction::IAdd(r1, r2, r3) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    match &registers[r1.index()] + &registers[r2.index()] {
-                        Ok(result) => {
-                            let out = value_to_ref!(result, self.memory);
-
-                            registers[r3.index()] = out
-                        }
-                        Err(e) => {
-                            return Err(e.with_span(self.process.current_debug_span()));
-                        }
-                    }
-                }
-                Instruction::IConst(r, i) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r.index()] = LpcRef::Int(*i);
-                }
-                Instruction::IConst0(r) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r.index()] = LpcRef::Int(0);
-                }
-                Instruction::IConst1(r) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r.index()] = LpcRef::Int(1);
-                }
-                Instruction::IDiv(r1, r2, r3) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    match &registers[r1.index()] / &registers[r2.index()] {
-                        Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-                        Err(e) => {
-                            return Err(e.with_span(self.process.current_debug_span()));
-                        }
-                    }
-                }
-                Instruction::IMul(r1, r2, r3) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    match &registers[r1.index()] * &registers[r2.index()] {
-                        Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-                        Err(e) => {
-                            return Err(e.with_span(self.process.current_debug_span()));
-                        }
-                    }
-                }
-                Instruction::ISub(r1, r2, r3) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    match &registers[r1.index()] - &registers[r2.index()] {
-                        Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-                        Err(e) => {
-                            return Err(e.with_span(self.process.current_debug_span()));
-                        }
-                    }
-                }
-                Instruction::Jmp(address) => {
+                if let Some(FunctionSymbol { address, .. }) = self.process.functions.get(name) {
                     self.process.set_pc(*address);
-                    continue;
+                } else if let Some(efun) = EFUNS.get(name.as_str()) {
+                    // the efun is responsible for populating the return value
+                    efun(self)?;
+                    if let Some(frame) = self.pop_frame() {
+                        self.copy_call_result(&frame)?;
+                    }
+                } else {
+                    return Err(self.runtime_error(format!(
+                        "Call to unknown function (that had a valid prototype?) `{}`",
+                        name
+                    )));
                 }
-                Instruction::Jnz(r1, address) => {
-                    let v = &current_registers_mut(&mut self.stack)?[r1.index()];
+            }
+            Instruction::CallOther {
+                receiver,
+                name,
+                num_args,
+                initial_arg,
+            } => {
+                // get receiver process and make it the current one
+                let receiver_ref = self.register_to_lpc_ref(receiver.index());
+                let nc = name.clone();
+                let num_args = *num_args;
+                let initial_index = initial_arg.index();
+                let return_address = self.process.pc();
 
-                    if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
-                        self.process.set_pc(*address);
-                        continue;
+                match receiver_ref {
+                    LpcRef::String(s) => {
+                        let r = s.borrow();
+                        let str = try_extract_value!(*r, LpcValue::String);
+
+                        let pr = self.lookup_process(str)?;
+                        // Only switch the process if there's actually a function to
+                        // call by this name on the other side.
+                        if pr.functions.contains_key(&nc) {
+                            self.process = pr.clone();
+                        }
+                    },
+                    _ => return Err(LpcError::new(format!("What are you trying to call `{}` on?", name))
+                        .with_span(self.process.current_debug_span()))
+                }
+
+                let sym = if let Some(fs) = self.process.functions.get(&nc) {
+                    fs
+                } else {
+                    return if let Some(frame) = self.stack.last_mut() {
+                        frame.registers[0] = LpcRef::Int(0);
+                        self.process.inc_pc();
+
+                        Ok(false)
+                    } else {
+                        Err(
+                            self.runtime_error(format!("Call to unknown function `{}`", nc))
+                        )
+                    }
+                };
+
+                // Because call_other args aren't arity-checked, there might be more
+                // passed than expected, so we might need to reserve more space
+                let mut new_frame = StackFrame::with_minimum_arg_capacity(
+                    self.process.clone(),
+                    sym.clone(),
+                    return_address,
+                    num_args + 1 // +1 for r0
+                );
+
+                // copy argument registers from old frame to new
+                if num_args > 0_usize {
+                    let current_frame = self.stack.last().unwrap();
+                    new_frame.registers[1..=num_args]
+                        .clone_from_slice(&current_frame.registers[initial_index..(initial_index + num_args)]);
+                }
+
+                self.stack.push(new_frame);
+
+                self.process.set_pc(sym.address);
+            }
+            Instruction::FConst(r, f) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r.index()] = LpcRef::Float(*f);
+            }
+            Instruction::GLoad(r1, r2) => {
+                // load from global r1, into local r2
+                let global = self.process.globals[r1.index()].borrow().clone();
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r2.index()] = global
+            }
+            Instruction::GStore(r1, r2) => {
+                // store local r1 into global r2
+                let registers = current_registers_mut(&mut self.stack)?;
+                self.process.globals[r2.index()].replace(registers[r1.index()].clone());
+            }
+            Instruction::Gt(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_boolean_operation(n1, n2, n3, |x, y| x > y)?;
+            }
+            Instruction::Gte(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_boolean_operation(n1, n2, n3, |x, y| x >= y)?;
+            }
+            Instruction::IAdd(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                match &registers[r1.index()] + &registers[r2.index()] {
+                    Ok(result) => {
+                        let out = value_to_ref!(result, self.memory);
+
+                        registers[r3.index()] = out
+                    }
+                    Err(e) => {
+                        return Err(e.with_span(self.process.current_debug_span()));
                     }
                 }
-                Instruction::Jz(r1, address) => {
-                    let v = &current_registers_mut(&mut self.stack)?[r1.index()];
-
-                    if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                        self.process.set_pc(*address);
-                        continue;
+            }
+            Instruction::IConst(r, i) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r.index()] = LpcRef::Int(*i);
+            }
+            Instruction::IConst0(r) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r.index()] = LpcRef::Int(0);
+            }
+            Instruction::IConst1(r) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r.index()] = LpcRef::Int(1);
+            }
+            Instruction::IDiv(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                match &registers[r1.index()] / &registers[r2.index()] {
+                    Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+                    Err(e) => {
+                        return Err(e.with_span(self.process.current_debug_span()));
                     }
                 }
-                Instruction::Load(r1, r2, r3) => {
-                    let container_ref = self.register_to_lpc_ref(r1.index());
+            }
+            Instruction::IMul(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                match &registers[r1.index()] * &registers[r2.index()] {
+                    Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+                    Err(e) => {
+                        return Err(e.with_span(self.process.current_debug_span()));
+                    }
+                }
+            }
+            Instruction::ISub(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                match &registers[r1.index()] - &registers[r2.index()] {
+                    Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+                    Err(e) => {
+                        return Err(e.with_span(self.process.current_debug_span()));
+                    }
+                }
+            }
+            Instruction::Jmp(address) => {
+                self.process.set_pc(*address);
+            }
+            Instruction::Jnz(r1, address) => {
+                let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
-                    match container_ref {
-                        LpcRef::Array(vec_ref) => {
-                            let value = vec_ref.borrow();
-                            let vec = try_extract_value!(*value, LpcValue::Array);
+                if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
+                    self.process.set_pc(*address);
+                }
+            }
+            Instruction::Jz(r1, address) => {
+                let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
-                            let index = self.register_to_lpc_ref(r2.index());
-                            let registers = current_registers_mut(&mut self.stack)?;
+                if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
+                    self.process.set_pc(*address);
+                }
+            }
+            Instruction::Load(r1, r2, r3) => {
+                let container_ref = self.register_to_lpc_ref(r1.index());
 
-                            if let LpcRef::Int(i) = index {
-                                let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+                match container_ref {
+                    LpcRef::Array(vec_ref) => {
+                        let value = vec_ref.borrow();
+                        let vec = try_extract_value!(*value, LpcValue::Array);
 
-                                if idx >= 0 {
-                                    if let Some(v) = vec.get(idx as usize) {
-                                        registers[r3.index()] = v.clone();
-                                    } else {
-                                        return Err(self.array_index_error(idx, vec.len()));
-                                    }
+                        let index = self.register_to_lpc_ref(r2.index());
+                        let registers = current_registers_mut(&mut self.stack)?;
+
+                        if let LpcRef::Int(i) = index {
+                            let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+
+                            if idx >= 0 {
+                                if let Some(v) = vec.get(idx as usize) {
+                                    registers[r3.index()] = v.clone();
                                 } else {
                                     return Err(self.array_index_error(idx, vec.len()));
                                 }
                             } else {
-                                return Err(self.array_index_error(index, vec.len()));
+                                return Err(self.array_index_error(idx, vec.len()));
                             }
-                        }
-                        LpcRef::Mapping(map_ref) => {
-                            let index = self.register_to_lpc_ref(r2.index());
-                            let value = map_ref.borrow();
-                            let map = try_extract_value!(*value, LpcValue::Mapping);
-
-                            let var = if let Some(v) = map.get(&index) {
-                                v.clone()
-                            } else {
-                                LpcRef::Int(0)
-                            };
-
-                            let registers = current_registers_mut(&mut self.stack)?;
-                            registers[r3.index()] = var;
-                        }
-                        x => {
-                            return Err(self.runtime_error(format!(
-                                "Invalid attempt to take index of `{}`",
-                                x
-                            )));
+                        } else {
+                            return Err(self.array_index_error(index, vec.len()));
                         }
                     }
-                }
-                Instruction::Lt(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_boolean_operation(n1, n2, n3, |x, y| x < y)?;
-                }
-                Instruction::Lte(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_boolean_operation(n1, n2, n3, |x, y| x <= y)?;
-                }
-                Instruction::MapConst(r, map) => {
-                    let mut register_map = HashMap::new();
-                    for (key, value) in map {
+                    LpcRef::Mapping(map_ref) => {
+                        let index = self.register_to_lpc_ref(r2.index());
+                        let value = map_ref.borrow();
+                        let map = try_extract_value!(*value, LpcValue::Mapping);
+
+                        let var = if let Some(v) = map.get(&index) {
+                            v.clone()
+                        } else {
+                            LpcRef::Int(0)
+                        };
+
                         let registers = current_registers_mut(&mut self.stack)?;
-                        let r = registers[key.index()].clone();
-
-                        register_map.insert(r, registers[value.index()].clone());
+                        registers[r3.index()] = var;
                     }
-
-                    let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
+                    x => {
+                        return Err(self.runtime_error(format!(
+                            "Invalid attempt to take index of `{}`",
+                            x
+                        )));
+                    }
+                }
+            }
+            Instruction::Lt(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_boolean_operation(n1, n2, n3, |x, y| x < y)?;
+            }
+            Instruction::Lte(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_boolean_operation(n1, n2, n3, |x, y| x <= y)?;
+            }
+            Instruction::MapConst(r, map) => {
+                let mut register_map = HashMap::new();
+                for (key, value) in map {
                     let registers = current_registers_mut(&mut self.stack)?;
+                    let r = registers[key.index()].clone();
 
-                    registers[r.index()] = new_ref;
+                    register_map.insert(r, registers[value.index()].clone());
                 }
-                Instruction::MAdd(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_operation(n1, n2, n3, |x, y| x + y)?;
-                }
-                Instruction::MMul(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_operation(n1, n2, n3, |x, y| x * y)?;
-                }
-                Instruction::MSub(r1, r2, r3) => {
-                    let (n1, n2, n3) = (*r1, *r2, *r3);
-                    self.binary_operation(n1, n2, n3, |x, y| x - y)?;
-                }
-                Instruction::RegCopy(r1, r2) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    registers[r2.index()] = registers[r1.index()].clone()
-                }
-                Instruction::Ret => {
-                    if let Some(frame) = self.pop_frame() {
-                        self.copy_call_result(&frame)?;
 
-                        if !self.stack.is_empty() && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process) {
-                            self.process.set_pc(frame.return_address);
-                        }
-                    }
+                let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
+                let registers = current_registers_mut(&mut self.stack)?;
 
-                    // halt at the end of all input
-                    if self.stack.is_empty() {
-                        self.halt();
-                    }
+                registers[r.index()] = new_ref;
+            }
+            Instruction::MAdd(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x + y)?;
+            }
+            Instruction::MMul(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x * y)?;
+            }
+            Instruction::MSub(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x - y)?;
+            }
+            Instruction::RegCopy(r1, r2) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r2.index()] = registers[r1.index()].clone()
+            }
+            Instruction::Ret => {
+                if let Some(frame) = self.pop_frame() {
+                    self.copy_call_result(&frame)?;
 
-                    continue;
-                }
-                Instruction::Store(r1, r2, r3) => {
-                    // r2[r3] = r1;
-
-                    let mut container = self.register_to_lpc_ref(r2.index());
-                    let index = self.register_to_lpc_ref(r3.index());
-                    let array_idx = if let LpcRef::Int(i) = index { i } else { 0 };
-
-                    match container {
-                        LpcRef::Array(vec_ref) => {
-                            let mut r = vec_ref.borrow_mut();
-                            let vec = match *r {
-                                LpcValue::Array(ref mut v) => v,
-                                _ => return Err(self.runtime_error(
-                                    "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
-                                )
-                            };
-
-                            let len = vec.len();
-
-                            // handle negative indices
-                            let idx = if array_idx >= 0 {
-                                array_idx
-                            } else {
-                                len as LpcInt + array_idx
-                            };
-
-                            if idx >= 0 && (idx as usize) < len {
-                                vec[idx as usize] =
-                                    current_registers(&self.stack)?[r1.index()].clone();
-                            } else {
-                                return Err(self.array_index_error(idx, len));
-                            }
-                        }
-                        LpcRef::Mapping(ref mut map_ref) => {
-                            let mut r = map_ref.borrow_mut();
-                            let map = match *r {
-                                LpcValue::Mapping(ref mut m) => m,
-                                _ => return Err(self.runtime_error(
-                                    "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
-                                )
-                            };
-
-                            map.insert(index, current_registers(&self.stack)?[r1.index()].clone());
-                        }
-                        x => {
-                            return Err(self.runtime_error(format!(
-                                "Invalid attempt to take index of `{}`",
-                                x
-                            )))
-                        }
+                    if !self.stack.is_empty() && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process) {
+                        self.process.set_pc(frame.return_address);
                     }
                 }
-                Instruction::SConst(r, s) => {
-                    let registers = current_registers_mut(&mut self.stack)?;
-                    let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
 
-                    registers[r.index()] = new_ref;
+                // halt at the end of all input
+                if self.stack.is_empty() {
+                    return Ok(true);
                 }
+            }
+            Instruction::Store(r1, r2, r3) => {
+                // r2[r3] = r1;
+
+                let mut container = self.register_to_lpc_ref(r2.index());
+                let index = self.register_to_lpc_ref(r3.index());
+                let array_idx = if let LpcRef::Int(i) = index { i } else { 0 };
+
+                match container {
+                    LpcRef::Array(vec_ref) => {
+                        let mut r = vec_ref.borrow_mut();
+                        let vec = match *r {
+                            LpcValue::Array(ref mut v) => v,
+                            _ => return Err(self.runtime_error(
+                                "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
+                            )
+                        };
+
+                        let len = vec.len();
+
+                        // handle negative indices
+                        let idx = if array_idx >= 0 {
+                            array_idx
+                        } else {
+                            len as LpcInt + array_idx
+                        };
+
+                        if idx >= 0 && (idx as usize) < len {
+                            vec[idx as usize] =
+                                current_registers(&self.stack)?[r1.index()].clone();
+                        } else {
+                            return Err(self.array_index_error(idx, len));
+                        }
+                    }
+                    LpcRef::Mapping(ref mut map_ref) => {
+                        let mut r = map_ref.borrow_mut();
+                        let map = match *r {
+                            LpcValue::Mapping(ref mut m) => m,
+                            _ => return Err(self.runtime_error(
+                                "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
+                            )
+                        };
+
+                        map.insert(index, current_registers(&self.stack)?[r1.index()].clone());
+                    }
+                    x => {
+                        return Err(self.runtime_error(format!(
+                            "Invalid attempt to take index of `{}`",
+                            x
+                        )))
+                    }
+                }
+            }
+            Instruction::SConst(r, s) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
+
+                registers[r.index()] = new_ref;
             }
         }
 
-        Ok(())
+        Ok(false)
     }
 
     fn binary_operation<F>(
@@ -696,11 +695,6 @@ impl AsmInterpreter {
         self.stack.last_mut().unwrap().registers[0] = result;
     }
 
-    /// Flag the machine to halt after it finishes executing its next instruction.
-    fn halt(&mut self) {
-        self.halted = true;
-    }
-
     /// Convenience helper to copy a return value from a given stack frame, back to the current one.
     fn copy_call_result(&mut self, from: &StackFrame) -> Result<()> {
         if !self.stack.is_empty() {
@@ -734,7 +728,6 @@ impl Default for AsmInterpreter {
             clone_count: 0,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
-            halted: true,
         }
     }
 }
