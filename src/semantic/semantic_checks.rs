@@ -17,6 +17,7 @@ use crate::{
     errors::LpcError,
     semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
     Result,
+    interpreter::efun::EFUN_PROTOTYPES,
 };
 
 /// Utility functions for doing various semantic checks.
@@ -298,9 +299,21 @@ pub fn node_type(
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
             node_type(lhs, scope_tree, function_return_types)
         }
-        ExpressionNode::Call(CallNode { name, .. }) => function_return_types
-            .get(name.as_str())
-            .map_or(Ok(LpcType::Int(false)), |return_type| Ok(*return_type)),
+        ExpressionNode::Call(CallNode { name, .. }) => {
+            function_return_types
+                .get(name.as_str())
+                .map_or_else(
+                    || {
+                        match EFUN_PROTOTYPES.get(name.as_str()) {
+                            Some(x) => {
+                                Ok(x.return_type)
+                            }
+                            None => Ok(LpcType::Int(false))
+                        }
+                    },
+                    |return_type| Ok(*return_type)
+                )
+        },
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
@@ -1410,7 +1423,7 @@ mod combine_types_tests {
 }
 
 #[cfg(test)]
-mod node_type_tests {
+mod test_node_type {
     use super::*;
 
     mod arrays {
@@ -1418,7 +1431,7 @@ mod node_type_tests {
         use crate::ast::array_node::ArrayNode;
 
         #[test]
-        fn test_node_type_empty_array_is_mixed() {
+        fn empty_array_is_mixed() {
             let node = ExpressionNode::Array(ArrayNode {
                 value: vec![],
                 span: None,
@@ -1433,7 +1446,7 @@ mod node_type_tests {
         }
 
         #[test]
-        fn test_node_type_array_all_same_is_that() {
+        fn array_all_same_is_that() {
             let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 
@@ -1451,7 +1464,7 @@ mod node_type_tests {
         }
 
         #[test]
-        fn test_node_type_array_any_array_is_mixed() {
+        fn array_any_array_is_mixed() {
             let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 
@@ -1468,7 +1481,7 @@ mod node_type_tests {
         }
 
         #[test]
-        fn test_node_type_int_op_string_is_string() {
+        fn int_op_string_is_string() {
             let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 
@@ -1486,7 +1499,7 @@ mod node_type_tests {
         }
 
         #[test]
-        fn test_node_type_string_op_int_is_string() {
+        fn string_op_int_is_string() {
             let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 
@@ -1504,7 +1517,7 @@ mod node_type_tests {
         }
 
         #[test]
-        fn test_node_type_comma_expression_is_last_item() {
+        fn comma_expression_is_last_item() {
             let scope_tree = ScopeTree::default();
             let function_return_types = HashMap::new();
 
@@ -1516,6 +1529,24 @@ mod node_type_tests {
             assert_eq!(
                 node_type(&node, &scope_tree, &function_return_types).unwrap(),
                 LpcType::String(false)
+            );
+        }
+
+        #[test]
+        fn call_falls_back_to_efun_check() {
+            let scope_tree = ScopeTree::default();
+            let function_return_types = HashMap::new();
+
+            let node = ExpressionNode::Call(CallNode {
+                receiver: Box::new(None),
+                arguments: vec![ExpressionNode::from("foo/bar.c")],
+                name: "clone_object".to_string(),
+                span: None,
+            });
+
+            assert_eq!(
+                node_type(&node, &scope_tree, &function_return_types).unwrap(),
+                LpcType::Object(false)
             );
         }
     }

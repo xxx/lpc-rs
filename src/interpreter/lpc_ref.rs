@@ -34,6 +34,9 @@ macro_rules! value_to_ref {
             LpcValue::Mapping(x) => {
                 LpcRef::Mapping(PoolRef::new(&$m, RefCell::new(LpcValue::Mapping(x))))
             }
+            LpcValue::Object(x) => {
+                LpcRef::Object(PoolRef::new(&$m, RefCell::new(LpcValue::Object(x))))
+            }
         }
     };
 }
@@ -65,6 +68,9 @@ pub enum LpcRef {
 
     /// Reference type, and stores a reference-counting pointer to the actual value
     Mapping(PoolRef<RefCell<LpcValue>>),
+
+    /// Reference type, pointing to an LPC `object`
+    Object(PoolRef<RefCell<LpcValue>>),
 }
 
 impl LpcRef {
@@ -76,6 +82,7 @@ impl LpcRef {
             LpcRef::String(_) => "string",
             LpcRef::Array(_) => "array",
             LpcRef::Mapping(_) => "mapping",
+            LpcRef::Object(_) => "object",
         }
     }
 
@@ -98,11 +105,12 @@ impl From<f64> for LpcRef {
 impl Hash for LpcRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            LpcRef::Float(f) => f.hash(state),
-            LpcRef::Int(i) => i.hash(state),
-            LpcRef::String(s) => extract_value!(*s.borrow(), LpcValue::String).hash(state),
-            LpcRef::Array(a) => ptr::hash(&**a, state),
-            LpcRef::Mapping(m) => ptr::hash(&**m, state),
+            LpcRef::Float(x) => x.hash(state),
+            LpcRef::Int(x) => x.hash(state),
+            LpcRef::String(x) => extract_value!(*x.borrow(), LpcValue::String).hash(state),
+            LpcRef::Array(x) => ptr::hash(&**x, state),
+            LpcRef::Mapping(x) => ptr::hash(&**x, state),
+            LpcRef::Object(x) => ptr::hash(&**x, state)
         }
     }
 }
@@ -145,7 +153,7 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{}", x),
             LpcRef::Int(x) => write!(f, "{}", x),
-            LpcRef::String(x) | LpcRef::Array(x) | LpcRef::Mapping(x) => {
+            LpcRef::String(x) | LpcRef::Array(x) | LpcRef::Mapping(x) | LpcRef::Object(x) => {
                 write!(f, "{}", x.borrow())
             }
         }
@@ -198,6 +206,7 @@ impl Add for &LpcRef {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
+            LpcRef::Object(_) =>  Err(self.to_error(BinaryOperation::Add, rhs)),
         }
     }
 }

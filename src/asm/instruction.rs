@@ -10,7 +10,7 @@ pub type Address = usize;
 
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la the AT&T syntax
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),

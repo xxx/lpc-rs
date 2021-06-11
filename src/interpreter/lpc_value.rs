@@ -1,6 +1,8 @@
 use crate::{interpreter::lpc_ref::LpcRef, LpcFloat, LpcInt};
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{collections::HashMap, fmt, fmt::Display};
+use crate::interpreter::process::Process;
+use std::rc::Rc;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -11,6 +13,7 @@ pub enum LpcValue {
     String(String),
     Array(Vec<LpcRef>),
     Mapping(HashMap<LpcRef, LpcRef>),
+    Object(Rc<Process>),
 }
 
 /// Extract the final value (or reference to such, in the case of non-`Copy` value types)
@@ -43,6 +46,7 @@ impl LpcValue {
             LpcValue::String(_) => "string",
             LpcValue::Array(_) => "array",
             LpcValue::Mapping(_) => "mapping",
+            LpcValue::Object(_) => "object",
         }
     }
 }
@@ -50,11 +54,12 @@ impl LpcValue {
 impl Display for LpcValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LpcValue::Float(fl) => write!(f, "{}", fl),
-            LpcValue::Int(i) => write!(f, "{}", i),
-            LpcValue::String(s) => write!(f, "\"{}\"", s),
-            LpcValue::Array(a) => write!(f, "({{ {:?} }})", a),
-            LpcValue::Mapping(a) => write!(f, "([ {:?} ])", a),
+            LpcValue::Float(x) => write!(f, "{}", x),
+            LpcValue::Int(x) => write!(f, "{}", x),
+            LpcValue::String(x) => write!(f, "\"{}\"", x),
+            LpcValue::Array(x) => write!(f, "({{ {:?} }})", x),
+            LpcValue::Mapping(x) => write!(f, "([ {:?} ])", x),
+            LpcValue::Object(x) => write!(f, "{{ {:?} }}", x),
         }
     }
 }
@@ -98,13 +103,16 @@ impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
 impl PartialEq for LpcValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (LpcValue::Float(f), LpcValue::Float(f2)) => f == f2,
-            (LpcValue::Int(i), LpcValue::Int(i2)) => i == i2,
-            (LpcValue::String(s), LpcValue::String(s2)) => s == s2,
-            (LpcValue::Array(v), LpcValue::Array(v2)) => v == v2,
-            (LpcValue::Mapping(m), LpcValue::Mapping(m2)) => {
-                m.keys().collect::<Vec<_>>() == m2.keys().collect::<Vec<_>>()
-                    && m.values().collect::<Vec<_>>() == m2.values().collect::<Vec<_>>()
+            (LpcValue::Float(x), LpcValue::Float(y)) => x == y,
+            (LpcValue::Int(x), LpcValue::Int(y)) => x == y,
+            (LpcValue::String(x), LpcValue::String(y)) => x == y,
+            (LpcValue::Array(x), LpcValue::Array(y)) => x == y,
+            (LpcValue::Mapping(x), LpcValue::Mapping(y)) => {
+                x.keys().collect::<Vec<_>>() == y.keys().collect::<Vec<_>>()
+                    && x.values().collect::<Vec<_>>() == y.values().collect::<Vec<_>>()
+            },
+            (LpcValue::Object(x), LpcValue::Object(y)) => {
+                Rc::ptr_eq(x, y)
             }
             _ => false,
         }

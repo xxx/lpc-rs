@@ -44,16 +44,18 @@ const MEMORY_SIZE: usize = 100_000;
 #[derive(Debug)]
 pub struct AsmInterpreter {
     /// The process to run
-    process: Rc<Process>,
+    pub process: Rc<Process>,
 
     /// Our object space
-    processes: HashMap<String, Rc<Process>>,
+    pub processes: HashMap<String, Rc<Process>>,
 
     /// The call stack
-    stack: Vec<StackFrame>,
+    pub stack: Vec<StackFrame>,
+
+    pub clone_count: usize,
 
     /// Our memory
-    memory: Pool<RefCell<LpcValue>>,
+    pub memory: Pool<RefCell<LpcValue>>,
 
     /// Is the machine halted?
     halted: bool,
@@ -95,10 +97,11 @@ impl AsmInterpreter {
     /// # Arguments
     ///
     /// * `program` - The Program to load
-    pub fn load(&mut self, program: Program) {
+    pub fn load(&mut self, program: Program) -> Rc<Process> {
         let r = Rc::new(Process::new(program));
         self.processes.insert(r.filename.clone(), r.clone());
-        self.process = r;
+        self.process = r.clone();
+        r
     }
 
     /// Initialize the current [`Program`]. This sets up all of the global variables.
@@ -118,9 +121,11 @@ impl AsmInterpreter {
     }
 
     /// Convenience method to load and initialize a [`Program`]
-    pub fn init_program(&mut self, program: Program) -> Result<()> {
-        self.load(program);
-        self.init()
+    pub fn init_program(&mut self, program: Program) -> Result<Rc<Process>> {
+        let r = self.load(program);
+        self.init()?;
+
+        Ok(r)
     }
 
     fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
@@ -174,6 +179,10 @@ impl AsmInterpreter {
             if self.halted {
                 break;
             }
+
+            println!("instruction pc {:?} {} {}", instruction, self.process.pc(), self.process.program.filename);
+
+            self.process.inc_pc();
 
             match instruction {
                 Instruction::AConst(r, vec) => {
@@ -264,7 +273,7 @@ impl AsmInterpreter {
                     initial_arg,
                 } => {
                     let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-                        StackFrame::new(self.process.clone(), func.clone(), self.process.pc() + 1)
+                        StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
                     } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                         let sym = FunctionSymbol {
                             name: name.clone(),
@@ -273,7 +282,7 @@ impl AsmInterpreter {
                             address: 0,
                         };
 
-                        StackFrame::new(self.process.clone(), sym, self.process.pc() + 1)
+                        StackFrame::new(self.process.clone(), sym, self.process.pc())
                     } else {
                         return Err(
                             self.runtime_error(format!("Call to unknown function `{}`", name))
@@ -295,7 +304,7 @@ impl AsmInterpreter {
                         continue;
                     } else if let Some(efun) = EFUNS.get(name.as_str()) {
                         // the efun is responsible for populating the return value
-                        efun(&self.stack.last().unwrap(), &self);
+                        efun(self)?;
                         if let Some(frame) = self.pop_frame() {
                             self.copy_call_result(&frame)?;
                         }
@@ -317,7 +326,7 @@ impl AsmInterpreter {
                     let nc = name.clone();
                     let num_args = *num_args;
                     let initial_index = initial_arg.index();
-                    let return_address = self.process.pc() + 1;
+                    let return_address = self.process.pc();
 
                     match receiver_ref {
                         LpcRef::String(s) => {
@@ -555,7 +564,10 @@ impl AsmInterpreter {
                 Instruction::Ret => {
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame)?;
-                        self.process.set_pc(frame.return_address);
+
+                        if !self.stack.is_empty() && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process) {
+                            self.process.set_pc(frame.return_address);
+                        }
                     }
 
                     // halt at the end of all input
@@ -624,8 +636,6 @@ impl AsmInterpreter {
                     registers[r.index()] = new_ref;
                 }
             }
-
-            self.process.inc_pc();
         }
 
         Ok(())
@@ -681,6 +691,11 @@ impl AsmInterpreter {
         Ok(())
     }
 
+    /// Convenience helper for [`Efun`]s to get their result into the correct location.
+    pub fn return_efun_result(&mut self, result: LpcRef) {
+        self.stack.last_mut().unwrap().registers[0] = result;
+    }
+
     /// Flag the machine to halt after it finishes executing its next instruction.
     fn halt(&mut self) {
         self.halted = true;
@@ -716,6 +731,7 @@ impl Default for AsmInterpreter {
         Self {
             process: program,
             processes: programs,
+            clone_count: 0,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
             halted: true,

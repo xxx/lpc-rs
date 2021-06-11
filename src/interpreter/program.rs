@@ -5,7 +5,7 @@ use rmp_serde::Serializer;
 use serde::Serialize;
 use std::collections::HashMap;
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
     /// The actual program to execute
     pub instructions: Vec<Instruction>,

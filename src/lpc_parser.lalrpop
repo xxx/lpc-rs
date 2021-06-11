@@ -155,7 +155,7 @@ FunctionDef: FunctionDefNode = {
                  "int" => LpcType::Int(array),
                  "string" => LpcType::String(array),
                  "float" => LpcType::Float(array),
-                 // "object" => LpcType::Object(array),
+                 "object" => LpcType::Object(array),
                  "mapping" => LpcType::Mapping(array),
                  "mixed" => LpcType::Mixed(array),
                  _ => unimplemented!()
@@ -212,6 +212,7 @@ Type: (String, Span) = {
     "string" => (String::from("string"), <>),
     "mixed" => (String::from("mixed"), <>),
     "mapping" => (String::from("mapping"), <>),
+    "object" => (String::from("object"), <>),
     "void" => (String::from("void"), <>),
 };
 
