@@ -28,6 +28,7 @@ phf = { version = "0.8.0", features = ["macros"] }
 refpool = "0.4.3"
 regex = "1"
 rmp-serde = "0.15.4"
+rustyline = "8.2.0" # lpcdb only
 serde = { version = "1.0.123", features = ["derive"] }
 serde_derive = "1.0.123"
 

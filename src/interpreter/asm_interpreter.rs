@@ -3,9 +3,9 @@ use crate::{
     errors::LpcError,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
-        process::Process,
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
+        process::Process,
         program::Program,
         stack_frame::StackFrame,
     },
@@ -60,7 +60,7 @@ pub struct AsmInterpreter {
 
 /// Get a reference to the passed stack frame's registers
 #[inline]
-fn current_registers(stack: &[StackFrame]) -> Result<&Vec<LpcRef>> {
+pub fn current_registers(stack: &[StackFrame]) -> Result<&Vec<LpcRef>> {
     match &stack.last() {
         Some(frame) => Ok(&frame.registers),
         None => Err(LpcError::new(
@@ -101,8 +101,9 @@ impl AsmInterpreter {
         r
     }
 
-    /// Initialize the current [`Program`]. This sets up all of the global variables.
-    pub fn init(&mut self) -> Result<()> {
+    /// Set up the stack frame for initializing the global vars, and calling `create`.
+    /// No code is executed by this function - it merely sets up the stack frame.
+    pub fn init_stack(&mut self) {
         let sym = FunctionSymbol {
             name: "_global-var-init".to_string(),
             num_args: 0,
@@ -112,6 +113,12 @@ impl AsmInterpreter {
         let create = StackFrame::new(self.process.clone(), sym, 0);
         self.push_frame(create);
         self.process.set_pc(0);
+    }
+
+    /// Fully initialize the current [`Program`].
+    /// This sets up all of the global variables and calls `create`.
+    pub fn init(&mut self) -> Result<()> {
+        self.init_stack();
 
         self.eval()
     }
@@ -126,16 +133,14 @@ impl AsmInterpreter {
 
     fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         match self.processes.get(path.as_ref()) {
-            Some(proc) => {
-                Ok(proc)
-            }
-            None => {
-                Err(LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
-                        .with_span(self.process.current_debug_span()))
-            }
+            Some(proc) => Ok(proc),
+            None => Err(
+                LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
+                    .with_span(self.process.current_debug_span()),
+            ),
         }
     }
 
@@ -181,13 +186,12 @@ impl AsmInterpreter {
 
     /// Evaluate loaded instructions, starting from the current value of the PC
     /// The boolean represents whether we are at the end of input (i.e. we should halt the machine)
-    fn eval_one_instruction(&mut self) -> Result<bool> {
+    pub fn eval_one_instruction(&mut self) -> Result<bool> {
         let instruction = match self.process.instruction() {
             Some(i) => i,
-            None => return Ok(true)
+            None => return Ok(true),
         };
 
-        println!("isntr {}", instruction);
         self.process.inc_pc();
 
         match instruction {
@@ -206,7 +210,7 @@ impl AsmInterpreter {
                 let return_array = |arr,
                                     memory: &mut Pool<RefCell<LpcValue>>,
                                     stack: &mut Vec<StackFrame>|
-                                    -> Result<()> {
+                 -> Result<()> {
                     let new_ref = value_to_ref!(LpcValue::from(arr), memory);
                     let registers = current_registers_mut(stack)?;
                     registers[r4.index()] = new_ref;
@@ -255,7 +259,7 @@ impl AsmInterpreter {
                         return Err(LpcError::new(
                             "Invalid code was generated for an ARange instruction.",
                         )
-                            .with_span(self.process.current_debug_span()));
+                        .with_span(self.process.current_debug_span()));
                     }
                 } else {
                     return Err(LpcError::new("ARange's array isn't actually an array?")
@@ -290,9 +294,7 @@ impl AsmInterpreter {
 
                     StackFrame::new(self.process.clone(), sym, self.process.pc())
                 } else {
-                    return Err(
-                        self.runtime_error(format!("Call to unknown function `{}`", name))
-                    );
+                    return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
                 };
 
                 // copy argument registers from old frame to new
@@ -344,9 +346,14 @@ impl AsmInterpreter {
                         if pr.functions.contains_key(&nc) {
                             self.process = pr.clone();
                         }
-                    },
-                    _ => return Err(LpcError::new(format!("What are you trying to call `{}` on?", name))
+                    }
+                    _ => {
+                        return Err(LpcError::new(format!(
+                            "What are you trying to call `{}` on?",
+                            name
+                        ))
                         .with_span(self.process.current_debug_span()))
+                    }
                 }
 
                 let sym = if let Some(fs) = self.process.functions.get(&nc) {
@@ -358,10 +365,8 @@ impl AsmInterpreter {
 
                         Ok(false)
                     } else {
-                        Err(
-                            self.runtime_error(format!("Call to unknown function `{}`", nc))
-                        )
-                    }
+                        Err(self.runtime_error(format!("Call to unknown function `{}`", nc)))
+                    };
                 };
 
                 // Because call_other args aren't arity-checked, there might be more
@@ -370,14 +375,15 @@ impl AsmInterpreter {
                     self.process.clone(),
                     sym.clone(),
                     return_address,
-                    num_args + 1 // +1 for r0
+                    num_args + 1, // +1 for r0
                 );
 
                 // copy argument registers from old frame to new
                 if num_args > 0_usize {
                     let current_frame = self.stack.last().unwrap();
-                    new_frame.registers[1..=num_args]
-                        .clone_from_slice(&current_frame.registers[initial_index..(initial_index + num_args)]);
+                    new_frame.registers[1..=num_args].clone_from_slice(
+                        &current_frame.registers[initial_index..(initial_index + num_args)],
+                    );
                 }
 
                 self.stack.push(new_frame);
@@ -518,10 +524,9 @@ impl AsmInterpreter {
                         registers[r3.index()] = var;
                     }
                     x => {
-                        return Err(self.runtime_error(format!(
-                            "Invalid attempt to take index of `{}`",
-                            x
-                        )));
+                        return Err(
+                            self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+                        );
                     }
                 }
             }
@@ -567,7 +572,9 @@ impl AsmInterpreter {
                 if let Some(frame) = self.pop_frame() {
                     self.copy_call_result(&frame)?;
 
-                    if !self.stack.is_empty() && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process) {
+                    if !self.stack.is_empty()
+                        && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process)
+                    {
                         self.process.set_pc(frame.return_address);
                     }
                 }
@@ -604,8 +611,7 @@ impl AsmInterpreter {
                         };
 
                         if idx >= 0 && (idx as usize) < len {
-                            vec[idx as usize] =
-                                current_registers(&self.stack)?[r1.index()].clone();
+                            vec[idx as usize] = current_registers(&self.stack)?[r1.index()].clone();
                         } else {
                             return Err(self.array_index_error(idx, len));
                         }
@@ -622,10 +628,9 @@ impl AsmInterpreter {
                         map.insert(index, current_registers(&self.stack)?[r1.index()].clone());
                     }
                     x => {
-                        return Err(self.runtime_error(format!(
-                            "Invalid attempt to take index of `{}`",
-                            x
-                        )))
+                        return Err(
+                            self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+                        )
                     }
                 }
             }
