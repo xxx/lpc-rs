@@ -84,9 +84,9 @@ fn current_registers_mut(stack: &mut Vec<StackFrame>) -> Result<&mut Vec<LpcRef>
 impl AsmInterpreter {
     /// Create a new [`AsmInterpreter`]
     pub fn new(program: Program) -> Self {
-        let mut s = Self::default();
-        s.load(program);
-        s
+        let mut interpreter = Self::default();
+        interpreter.load(program);
+        interpreter
     }
 
     /// Load a program for evaluation
@@ -95,15 +95,23 @@ impl AsmInterpreter {
     ///
     /// * `program` - The Program to load
     pub fn load(&mut self, program: Program) -> Rc<Process> {
+        let r = self.insert(program);
+        self.process = r.clone();
+        r
+    }
+
+    /// Add a program to the table
+    /// If a new program with the same filename as an existing one is added,
+    /// the new will overwrite the old in the table.
+    pub fn insert(&mut self, program: Program) -> Rc<Process> {
         let r = Rc::new(Process::new(program));
         self.processes.insert(r.filename.clone(), r.clone());
-        self.process = r.clone();
         r
     }
 
     /// Set up the stack frame for initializing the global vars, and calling `create`.
     /// No code is executed by this function - it merely sets up the stack frame.
-    pub fn init_stack(&mut self) {
+    pub fn setup_program_globals_frame(&mut self) {
         let sym = FunctionSymbol {
             name: "_global-var-init".to_string(),
             num_args: 0,
@@ -118,7 +126,7 @@ impl AsmInterpreter {
     /// Fully initialize the current [`Program`].
     /// This sets up all of the global variables and calls `create`.
     pub fn init(&mut self) -> Result<()> {
-        self.init_stack();
+        self.setup_program_globals_frame();
 
         self.eval()
     }
@@ -129,6 +137,28 @@ impl AsmInterpreter {
         self.init()?;
 
         Ok(r)
+    }
+
+    /// Convenience method to load and initialize a [`Program`], maintaining
+    /// & resetting the current process and stack, while sharing the memory pool.
+    /// This exists for use within `clone_object()` and other cases where new objects
+    /// are created in Rust.
+    pub fn init_program_with_clean_stack(&mut self, program: Program) -> Result<Rc<Process>> {
+        let current_process = self.process.clone();
+        let clean_stack = Vec::with_capacity(20);
+        let current_stack = std::mem::replace(&mut self.stack, clean_stack);
+
+        let process = self.load(program);
+        let result = self.init();
+
+        let _ = std::mem::replace(&mut self.stack, current_stack);
+        let _ = std::mem::replace(&mut self.process, current_process);
+
+        if let Err(e) = result {
+            return Err(e);
+        }
+
+        Ok(process)
     }
 
     fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
@@ -146,6 +176,8 @@ impl AsmInterpreter {
 
     /// Push a new stack frame onto the call stack
     fn push_frame(&mut self, frame: StackFrame) {
+        // println!("pushing frame in push_frame: {:?}", frame);
+
         self.stack.push(frame);
         self.process = self.stack.last().unwrap().process.clone();
     }
@@ -153,6 +185,7 @@ impl AsmInterpreter {
     /// Pop the current stack frame off the stack
     fn pop_frame(&mut self) -> Option<StackFrame> {
         let previous_frame = self.stack.pop();
+        // println!("popped frame: {:?}", previous_frame);
 
         if !self.stack.is_empty() {
             self.process = self.stack.last().unwrap().process.clone();
@@ -191,6 +224,8 @@ impl AsmInterpreter {
             Some(i) => i,
             None => return Ok(true),
         };
+
+        // println!("evaling ({}) {}", self.process.filename, instruction);
 
         self.process.inc_pc();
 
@@ -305,13 +340,15 @@ impl AsmInterpreter {
                         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
                 }
 
+                // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame);
 
                 if let Some(FunctionSymbol { address, .. }) = self.process.functions.get(name) {
                     self.process.set_pc(*address);
                 } else if let Some(efun) = EFUNS.get(name.as_str()) {
-                    // the efun is responsible for populating the return value
+                    // the efun is responsible for populating the return value in its own frame
                     efun(self)?;
+
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame)?;
                     }
@@ -330,6 +367,7 @@ impl AsmInterpreter {
             } => {
                 // get receiver process and make it the current one
                 let receiver_ref = self.register_to_lpc_ref(receiver.index());
+                // TODO: Find a way to rid of this clone, or make it cheaper
                 let nc = name.clone();
                 let num_args = *num_args;
                 let initial_index = initial_arg.index();
@@ -341,9 +379,20 @@ impl AsmInterpreter {
                         let str = try_extract_value!(*r, LpcValue::String);
 
                         let pr = self.lookup_process(str)?;
+
                         // Only switch the process if there's actually a function to
                         // call by this name on the other side.
-                        if pr.functions.contains_key(&nc) {
+                        if pr.functions.contains_key(name) {
+                            self.process = pr.clone();
+                        }
+                    }
+                    LpcRef::Object(o) => {
+                        let r = o.borrow();
+                        let pr = try_extract_value!(*r, LpcValue::Object);
+
+                        // Only switch the process if there's actually a function to
+                        // call by this name on the other side.
+                        if pr.functions.contains_key(name) {
                             self.process = pr.clone();
                         }
                     }
@@ -359,6 +408,7 @@ impl AsmInterpreter {
                 let sym = if let Some(fs) = self.process.functions.get(&nc) {
                     fs
                 } else {
+                    // if no function by that name, just return 0 immediately
                     return if let Some(frame) = self.stack.last_mut() {
                         frame.registers[0] = LpcRef::Int(0);
                         self.process.inc_pc();
@@ -369,8 +419,8 @@ impl AsmInterpreter {
                     };
                 };
 
-                // Because call_other args aren't arity-checked, there might be more
-                // passed than expected, so we might need to reserve more space
+                // Because call_other args aren't arity-checked at compile time, there might
+                // be more passed than expected, so we might need to reserve more space
                 let mut new_frame = StackFrame::with_minimum_arg_capacity(
                     self.process.clone(),
                     sym.clone(),
@@ -386,6 +436,7 @@ impl AsmInterpreter {
                     );
                 }
 
+                // println!("pushing frame in CallOther: {:?}", new_frame);
                 self.stack.push(new_frame);
 
                 self.process.set_pc(sym.address);
@@ -697,6 +748,7 @@ impl AsmInterpreter {
 
     /// Convenience helper for [`Efun`]s to get their result into the correct location.
     pub fn return_efun_result(&mut self, result: LpcRef) {
+        println!("returning: {}", self.stack.last_mut().unwrap());
         self.stack.last_mut().unwrap().registers[0] = result;
     }
 

@@ -712,7 +712,7 @@ impl TreeWalker for AsmTreeWalker {
         current_register = if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            if matches!(expression, ExpressionNode::Var(_)) {
+            if matches!(expression, ExpressionNode::Var(_)) || matches!(expression, ExpressionNode::Call(_)) {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
                 let next_register = self.register_counter.next().unwrap();
@@ -2125,6 +2125,42 @@ mod tests {
             setup_var(LpcType::Int(true), &mut walker);
 
             assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+        }
+
+        #[test]
+        fn copies_calls() {
+            let mut walker = setup();
+
+            let mut node = VarInitNode {
+                type_: LpcType::Object(false),
+                name: "muffins".to_string(),
+                value: Some(ExpressionNode::Call(CallNode {
+                    receiver: Box::new(None),
+                    arguments: vec![ExpressionNode::from("/foo/bar.c")],
+                    name: "clone_object".to_string(),
+                    span: None
+                })),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+
+            let _ = walker.visit_var_init(&mut node);
+
+            assert_eq!(
+                walker.instructions,
+                [
+                    SConst(Register(1), String::from("/foo/bar.c")),
+                    Call {
+                        name: String::from("clone_object"),
+                        num_args: 1,
+                        initial_arg: Register(1)
+                    },
+                    RegCopy(Register(0), Register(2))
+                ]
+            );
         }
     }
 

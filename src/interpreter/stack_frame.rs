@@ -3,6 +3,8 @@ use crate::{
     semantic::function_symbol::FunctionSymbol,
 };
 use std::rc::Rc;
+use std::fmt::{Display, Formatter};
+use std::fmt;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -60,6 +62,19 @@ impl StackFrame {
             registers: vec![LpcRef::Int(0); reservation],
             ..Self::new(process, symbol, return_address)
         }
+    }
+}
+
+impl Display for StackFrame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Calling {} (addr {})\nReturning to {}\nProcess {}\n\n",
+            self.symbol.name,
+            self.symbol.address,
+            self.return_address,
+            self.process.filename
+        )
     }
 }
 
