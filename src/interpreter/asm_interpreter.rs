@@ -329,6 +329,8 @@ impl AsmInterpreter {
 
                     StackFrame::new(self.process.clone(), sym, self.process.pc())
                 } else {
+                    println!("proc {:#?}", self.process);
+                    println!("functions {:#?}", self.process.functions);
                     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
                 };
 
@@ -415,7 +417,7 @@ impl AsmInterpreter {
 
                         Ok(false)
                     } else {
-                        Err(self.runtime_error(format!("Call to unknown function `{}`", nc)))
+                        Err(self.runtime_error(format!("call_other to `{}`, that has no stack frame. This is a WTF.", nc)))
                     };
                 };
 

@@ -170,8 +170,12 @@ where
 
     // let scope_tree = ScopeTree::from(context);
     let mut asm_walker = AsmTreeWalker::new(context);
-    let _ = program.visit(&mut asm_walker);
-    // print!("{:?}", asm_walker.instructions);
+
+    if let Err(e) = program.visit(&mut asm_walker) {
+        errors::emit_diagnostics(&[e.clone()]);
+        return Err(CompilerError::LpcError(e));
+    }
+
     for s in asm_walker.listing() {
         println!("{}", s);
     }

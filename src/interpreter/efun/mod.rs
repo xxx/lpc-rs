@@ -31,7 +31,7 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert(DUMP, FunctionPrototype {
             name: String::from(DUMP),
-            return_type: LpcType::Int(false),
+            return_type: LpcType::Void,
             num_args: 1,
             num_default_args: 0,
             arg_types: vec![LpcType::Mixed(false)],

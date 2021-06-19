@@ -242,7 +242,7 @@ impl Display for Instruction {
                 write!(f, "store {}, {}, {}", r1, r2, r3)
             }
             Instruction::SConst(r, s) => {
-                write!(f, "sconst {}, {}", r, s)
+                write!(f, "sconst {}, \"{}\"", r, s)
             }
         }
     }

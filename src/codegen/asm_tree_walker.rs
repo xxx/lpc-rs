@@ -37,6 +37,7 @@ use crate::{
     context::Context,
     errors::LpcError,
     interpreter::program::Program,
+    interpreter::efun::EFUN_PROTOTYPES,
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
     Result,
@@ -540,7 +541,53 @@ impl TreeWalker for AsmTreeWalker {
 
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
-        self.current_result = Register(0); // returned results are in r0
+
+        if let Some(func) = self.context.function_prototypes.get(&node.name) {
+            if func.return_type == LpcType::Void {
+                self.current_result = Register(0);
+            } else {
+                let next_register = self.register_counter.next().unwrap();
+
+                push_instruction!(
+                    self,
+                    Instruction::RegCopy(Register(0), next_register),
+                    node.span()
+                );
+
+                self.current_result = next_register;
+            }
+        } else if let Some(func) = EFUN_PROTOTYPES.get(node.name.as_str()) {
+            if func.return_type == LpcType::Void {
+                self.current_result = Register(0);
+            } else {
+                let next_register = self.register_counter.next().unwrap();
+
+                push_instruction!(
+                    self,
+                    Instruction::RegCopy(Register(0), next_register),
+                    node.span()
+                );
+
+                self.current_result = next_register;
+            }
+        } else if node.receiver.is_some() {
+            let next_register = self.register_counter.next().unwrap();
+
+            push_instruction!(
+                self,
+                Instruction::RegCopy(Register(0), next_register),
+                node.span()
+            );
+
+            self.current_result = next_register;
+        } else {
+            return Err(LpcError::new(format!(
+                "Unable to find return type for `{}`. This is a weird issue that indicates \
+                something very broken in the semantic checks.",
+                node.name
+            ))
+                .with_span(node.span));
+        }
 
         Ok(())
     }
@@ -647,7 +694,7 @@ impl TreeWalker for AsmTreeWalker {
             expression.visit(self)?;
         }
 
-        // force a final return if one isn't already there.
+        // insert a final return if one isn't already there.
         if self.instructions.len() == len
             || (!self.instructions.is_empty()
                 && *self.instructions.last().unwrap() != Instruction::Ret)
@@ -712,7 +759,7 @@ impl TreeWalker for AsmTreeWalker {
         current_register = if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            if matches!(expression, ExpressionNode::Var(_)) || matches!(expression, ExpressionNode::Call(_)) {
+            if matches!(expression, ExpressionNode::Var(_)) {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
                 let next_register = self.register_counter.next().unwrap();
@@ -1131,7 +1178,7 @@ mod tests {
             let prog = "
                 void create() {
                     1 + 3 - 5;
-                    print(4 + 5);
+                    dump(4 + 5);
                 }
             ";
 
@@ -1147,7 +1194,7 @@ mod tests {
                 IConst(Register(1), -1),
                 IConst(Register(2), 9),
                 Call {
-                    name: String::from("print"),
+                    name: String::from("dump"),
                     num_args: 1,
                     initial_arg: Register(2),
                 },
@@ -1220,12 +1267,13 @@ mod tests {
                     num_args: 0,
                     initial_arg: Register(1),
                 },
-                SConst(Register(1), String::from(" times a winner!")),
-                MAdd(Register(0), Register(1), Register(2)),
+                RegCopy(Register(0), Register(1)),
+                SConst(Register(2), String::from(" times a winner!")),
+                MAdd(Register(1), Register(2), Register(3)),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
-                    initial_arg: Register(2),
+                    initial_arg: Register(3),
                 },
                 Ret, // end of create()
             ];
@@ -1238,11 +1286,12 @@ mod tests {
         use crate::asm::instruction::Instruction::{Call, CallOther};
 
         use super::*;
+        use crate::semantic::function_prototype::FunctionPrototype;
 
         #[test]
         fn populates_the_instructions() {
             let mut walker = AsmTreeWalker::default();
-            let call = "print(4 - 5)";
+            let call = "dump(4 - 5)";
             let mut tree = lpc_parser::CallParser::new()
                 .parse(LexWrapper::new(call))
                 .unwrap();
@@ -1252,7 +1301,7 @@ mod tests {
             let expected = vec![
                 IConst(Register(1), -1),
                 Call {
-                    name: String::from("print"),
+                    name: String::from("dump"),
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -1280,6 +1329,7 @@ mod tests {
                     num_args: 1,
                     initial_arg: Register(1),
                 },
+                RegCopy(Register(0), Register(3)),
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1317,6 +1367,104 @@ mod tests {
                     num_args: 2,
                     initial_arg: Register(3),
                 },
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn copies_non_void_call_results() {
+            let mut context = Context::default();
+            let prototype = FunctionPrototype {
+                name: String::from("marfin"),
+                return_type: LpcType::Int(false),
+                num_args: 1,
+                num_default_args: 0,
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![]
+            };
+
+            context.function_prototypes.insert("marfin".into(), prototype);
+            let mut walker = AsmTreeWalker::new(context);
+            let call = "marfin(666)";
+            let mut tree = lpc_parser::CallParser::new()
+                .parse(LexWrapper::new(call))
+                .unwrap();
+
+            let _ = walker.visit_call(&mut tree);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                Call { name: String::from("marfin"), num_args: 1, initial_arg: Register(1) },
+                RegCopy(Register(0), Register(2)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn does_not_copy_void_call_results() {
+            let mut context = Context::default();
+            let prototype = FunctionPrototype {
+                name: String::from("void_thing"),
+                return_type: LpcType::Void,
+                num_args: 1,
+                num_default_args: 0,
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![]
+            };
+
+            context.function_prototypes.insert("void_thing".into(), prototype);
+            let mut walker = AsmTreeWalker::new(context);
+            let call = "void_thing(666)";
+            let mut tree = lpc_parser::CallParser::new()
+                .parse(LexWrapper::new(call))
+                .unwrap();
+
+            let _ = walker.visit_call(&mut tree);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                Call { name: String::from("void_thing"), num_args: 1, initial_arg: Register(1) },
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn copies_non_void_efun_results() {
+            let mut walker = AsmTreeWalker::default();
+            let call = r#"clone_object("/foo.c")"#;
+            let mut tree = lpc_parser::CallParser::new()
+                .parse(LexWrapper::new(call))
+                .unwrap();
+
+            let _ = walker.visit_call(&mut tree);
+
+            let expected = vec![
+                SConst(Register(1), String::from("/foo.c")),
+                Call { name: String::from("clone_object"), num_args: 1, initial_arg: Register(1) },
+                RegCopy(Register(0), Register(2)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn does_not_copy_void_efun_results() {
+            let mut walker = AsmTreeWalker::default();
+            let call = r#"dump("lkajsdflkajsdf")"#;
+            let mut tree = lpc_parser::CallParser::new()
+                .parse(LexWrapper::new(call))
+                .unwrap();
+
+            let _ = walker.visit_call(&mut tree);
+
+            let expected = vec![
+                SConst(Register(1), String::from("lkajsdflkajsdf")),
+                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(1) },
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1563,7 +1711,7 @@ mod tests {
                 name: String::from("dump"),
                 num_args: 1,
                 initial_arg: Register(1),
-            },
+            }
         ];
 
         assert_eq!(walker.instructions, expected);

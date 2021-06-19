@@ -42,3 +42,9 @@ impl Display for CompilerError {
 }
 
 impl Error for CompilerError {}
+
+impl From<LpcError> for CompilerError {
+    fn from(e: LpcError) -> Self {
+        Self::LpcError(e)
+    }
+}
