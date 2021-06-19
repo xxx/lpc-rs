@@ -3,8 +3,7 @@ use crate::{
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

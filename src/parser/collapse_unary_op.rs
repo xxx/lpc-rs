@@ -12,18 +12,16 @@ use crate::ast::{
 /// * `span` - The span encompassing the entire expression
 pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
     match node.op {
-        UnaryOperation::Negate => {
-            match &*node.expr {
-                ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
-                    value: -x.value,
-                    span: node.span,
-                }),
-                ExpressionNode::Float(x) => ExpressionNode::Float(FloatNode {
-                    value: -x.value,
-                    span: node.span,
-                }),
-                _ => ExpressionNode::UnaryOp(node),
-            }
+        UnaryOperation::Negate => match &*node.expr {
+            ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
+                value: -x.value,
+                span: node.span,
+            }),
+            ExpressionNode::Float(x) => ExpressionNode::Float(FloatNode {
+                value: -x.value,
+                span: node.span,
+            }),
+            _ => ExpressionNode::UnaryOp(node),
         },
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
@@ -83,9 +81,6 @@ mod tests {
         };
 
         let result = collapse_unary_op(node.clone());
-        assert_eq!(
-            result,
-            ExpressionNode::UnaryOp(node)
-        );
+        assert_eq!(result, ExpressionNode::UnaryOp(node));
     }
 }

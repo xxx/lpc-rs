@@ -21,9 +21,7 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
             Some(proc) => proc.clone(),
             None => {
                 match compile_file(path) {
-                    Ok(prog) => {
-                        interpreter.init_program_with_clean_stack(prog)?
-                    }
+                    Ok(prog) => interpreter.init_program_with_clean_stack(prog)?,
                     Err(e) => {
                         let debug_span = frame.process.current_debug_span();
 

@@ -679,7 +679,7 @@ impl TreeWalker for AsmTreeWalker {
                 push_instruction!(self, instruction, node.span);
 
                 reg_result
-            },
+            }
             UnaryOperation::Tilde => todo!(),
         };
 
