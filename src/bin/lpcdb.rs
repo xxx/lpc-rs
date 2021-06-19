@@ -14,7 +14,7 @@ use rustyline::{error::ReadlineError, Editor};
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 
-const HELP: &'static str = r"
+const HELP: &str = r"
            lpcdb Help
 ? | .help - This help text
 q | ctrl-C | ctrl-D - Exit the program

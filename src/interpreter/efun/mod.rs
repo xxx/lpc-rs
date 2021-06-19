@@ -16,8 +16,8 @@ use dump::dump;
 /// Signature for Efuns
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
 
-pub const CLONE_OBJECT: &'static str = "clone_object";
-pub const DUMP: &'static str = "dump";
+pub const CLONE_OBJECT: &str = "clone_object";
+pub const DUMP: &str = "dump";
 
 /// Global static mapping of all efun names to the actual function
 pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {

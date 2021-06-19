@@ -134,21 +134,18 @@ impl Preprocessor {
         let sep = String::from(std::path::MAIN_SEPARATOR);
         let os_sep = OsString::from(&sep);
         let mut root_string = OsString::from(self.context.root_dir.to_str().unwrap());
-        // Do this the hard way because .join/.push overwrite if the arg starts with "/"
-        let localized_path = if path_ref.to_string_lossy().starts_with(&sep) {
-            root_string.push(&os_sep);
-            root_string.push(&path_ref);
-            root_string
-        } else {
+
+        // turn relative paths into absolute
+        if !path_ref.to_string_lossy().starts_with(&sep) {
             root_string.push(&os_sep);
             root_string.push(cwd.as_ref().as_os_str());
-            root_string.push(&os_sep);
-            root_string.push(&path_ref);
-            root_string
-        };
+        }
+
+        root_string.push(&os_sep);
+        root_string.push(&path_ref);
 
         Path::new(
-            &localized_path
+            &root_string
                 .to_string_lossy()
                 .replace("//", "/")
                 .replace("/./", "/"),
