@@ -11,23 +11,23 @@ use crate::ast::{
 /// * `r` - The right operand
 /// * `span` - The span encompassing the entire expression
 pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
-    let UnaryOpNode { op, expr, span, .. } = node;
-
-    match op {
-        UnaryOperation::Negate => match *expr {
-            ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
-                value: -x.value,
-                span,
-            }),
-            ExpressionNode::Float(x) => ExpressionNode::Float(FloatNode {
-                value: -x.value,
-                span,
-            }),
-            x => x,
+    match node.op {
+        UnaryOperation::Negate => {
+            match &*node.expr {
+                ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
+                    value: -x.value,
+                    span: node.span,
+                }),
+                ExpressionNode::Float(x) => ExpressionNode::Float(FloatNode {
+                    value: -x.value,
+                    span: node.span,
+                }),
+                _ => ExpressionNode::UnaryOp(node),
+            }
         },
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
-        UnaryOperation::Bang => todo!(),
+        UnaryOperation::Bang => ExpressionNode::UnaryOp(node),
         UnaryOperation::Tilde => todo!(),
     }
 }
@@ -39,7 +39,7 @@ mod tests {
     use decorum::Total;
 
     #[test]
-    fn test_collapses_negate_int() {
+    fn collapses_negate_int() {
         let span = Some(Span::new(0, 0..1));
         let node = UnaryOpNode {
             expr: Box::new(ExpressionNode::from(123)),
@@ -53,7 +53,7 @@ mod tests {
     }
 
     #[test]
-    fn test_collapses_negate_float() {
+    fn collapses_negate_float() {
         let span = Some(Span::new(0, 0..1));
         let node = UnaryOpNode {
             expr: Box::new(ExpressionNode::from(3.14)),
@@ -69,6 +69,23 @@ mod tests {
                 value: Total::from(-3.14),
                 span
             })
+        );
+    }
+
+    #[test]
+    fn collapses_bang() {
+        let span = Some(Span::new(0, 0..1));
+        let node = UnaryOpNode {
+            expr: Box::new(ExpressionNode::from(3.14)),
+            is_post: false,
+            op: UnaryOperation::Bang,
+            span,
+        };
+
+        let result = collapse_unary_op(node.clone());
+        assert_eq!(
+            result,
+            ExpressionNode::UnaryOp(node)
         );
     }
 }

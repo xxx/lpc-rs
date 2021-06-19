@@ -172,7 +172,7 @@ impl Add for &LpcRef {
             },
             LpcRef::Int(i) => match rhs {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) + *f)),
-                LpcRef::Int(i2) => Ok(LpcValue::Int(i + i2)),
+                LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
                 LpcRef::String(s) => Ok(LpcValue::String(
                     i.to_string() + try_extract_value!(*s.borrow(), LpcValue::String),
                 )),
@@ -216,7 +216,7 @@ impl Sub for &LpcRef {
 
     fn sub(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x - *y)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(*y))),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as f64)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
@@ -251,7 +251,7 @@ impl Mul for &LpcRef {
 
     fn mul(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x * *y)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_mul(*y))),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as f64)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
@@ -281,7 +281,7 @@ impl Div for &LpcRef {
                 if y == &0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Int(*x / *y))
+                    Ok(LpcValue::Int(x.wrapping_div(*y)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
@@ -320,7 +320,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_add_int_int() {
+        fn int_int() {
             let int1 = LpcRef::Int(123);
             let int2 = LpcRef::Int(456);
             let result = &int1 + &int2;
@@ -332,7 +332,19 @@ mod tests {
         }
 
         #[test]
-        fn test_add_string_string() {
+        fn int_int_overflow_wraps() {
+            let int1 = LpcRef::Int(LpcInt::MAX);
+            let int2 = LpcRef::Int(1);
+            let result = &int1 + &int2;
+            if let Ok(LpcValue::Int(x)) = result {
+                assert_eq!(x, LpcInt::MIN)
+            } else {
+                panic!("no match")
+            }
+        }
+
+        #[test]
+        fn string_string() {
             let pool = Pool::new(20);
             let string1 = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let string2 = value_to_ref!(LpcValue::String("bar".to_string()), pool);
@@ -345,7 +357,7 @@ mod tests {
         }
 
         #[test]
-        fn test_add_string_int() {
+        fn string_int() {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(123);
@@ -358,7 +370,7 @@ mod tests {
         }
 
         #[test]
-        fn test_add_int_string() {
+        fn int_string() {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(123);
@@ -371,7 +383,7 @@ mod tests {
         }
 
         #[test]
-        fn test_add_float_int() {
+        fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &float + &int;
@@ -383,7 +395,14 @@ mod tests {
         }
 
         #[test]
-        fn test_add_int_float() {
+        fn float_int_overflow_does_not_panic() {
+            let float = LpcRef::from(f64::MAX);
+            let int = LpcRef::Int(1);
+            assert!((&float + &int).is_ok());
+        }
+
+        #[test]
+        fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &int + &float;
@@ -395,7 +414,14 @@ mod tests {
         }
 
         #[test]
-        fn test_add_array_array() {
+        fn int_float_overflow_does_not_panic() {
+            let int = LpcRef::Int(LpcInt::MAX);
+            let float = LpcRef::from(1.0);
+            assert!((&int + &float).is_ok());
+        }
+
+        #[test]
+        fn array_array() {
             let pool = Pool::new(20);
             let array = LpcValue::from(vec![LpcRef::Int(123)]);
             let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
@@ -419,7 +445,7 @@ mod tests {
         }
 
         #[test]
-        fn test_add_mapping_mapping() {
+        fn mapping_mapping() {
             let pool = Pool::new(20);
             let key1 = value_to_ref!(LpcValue::from("key1"), pool);
             let value1 = value_to_ref!(LpcValue::from("value1"), pool);
@@ -449,7 +475,7 @@ mod tests {
         }
 
         #[test]
-        fn test_add_mapping_mapping_duplicate_keys() {
+        fn mapping_mapping_duplicate_keys() {
             let pool = Pool::new(20);
             let key1 = value_to_ref!(LpcValue::from("key"), pool);
             let value1 = value_to_ref!(LpcValue::from("value1"), pool);
@@ -478,7 +504,7 @@ mod tests {
         }
 
         #[test]
-        fn test_add_mismatched() {
+        fn add_mismatched() {
             let pool = Pool::new(5);
             let int = LpcRef::Int(123);
             let array = value_to_ref!(LpcValue::Array(vec![]), pool);
@@ -494,7 +520,15 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_sub_float_int() {
+        fn int_int_underflow_does_not_panic() {
+            let int = LpcRef::Int(LpcInt::MIN);
+            let int2 = LpcRef::Int(1);
+            let result = &int - &int2;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &float - &int;
@@ -506,7 +540,15 @@ mod tests {
         }
 
         #[test]
-        fn test_sub_int_float() {
+        fn float_int_underflow_does_not_panic() {
+            let float = LpcRef::from(f64::MIN);
+            let int = LpcRef::Int(LpcInt::MAX);
+            let result = &float - &int;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &int - &float;
@@ -518,7 +560,15 @@ mod tests {
         }
 
         #[test]
-        fn test_sub_array_array() {
+        fn int_float_underflow_does_not_panic() {
+            let int = LpcRef::Int(LpcInt::MIN);
+            let float = LpcRef::from(1.0);
+            let result = &int - &float;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn array_array() {
             let pool = Pool::new(10);
             let to_ref = |x| LpcRef::Int(x);
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
@@ -544,7 +594,15 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_mul_string_int() {
+        fn int_int_overflow_does_not_panic() {
+            let int = LpcRef::Int(LpcInt::MAX);
+            let int2 = LpcRef::Int(2);
+            let result = &int * &int2;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn string_int() {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(4);
@@ -557,7 +615,7 @@ mod tests {
         }
 
         #[test]
-        fn test_mul_int_string() {
+        fn int_string() {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(4);
@@ -570,7 +628,7 @@ mod tests {
         }
 
         #[test]
-        fn test_mul_float_int() {
+        fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &float * &int;
@@ -582,7 +640,15 @@ mod tests {
         }
 
         #[test]
-        fn test_mul_int_float() {
+        fn float_int_overflow_does_not_panic() {
+            let float = LpcRef::from(f64::MAX);
+            let int = LpcRef::Int(2);
+            let result = &float * &int;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &int * &float;
@@ -592,13 +658,29 @@ mod tests {
                 panic!("no match")
             }
         }
+
+        #[test]
+        fn int_float_overflow_does_not_panic() {
+            let int = LpcRef::Int(LpcInt::MAX);
+            let float = LpcRef::from(200.0);
+            let result = &int * &float;
+            assert!(result.is_ok());
+        }
     }
 
     mod test_div {
         use super::*;
 
         #[test]
-        fn test_div_float_int() {
+        fn int_int_overflow_does_not_panic() {
+            let int = LpcRef::Int(-1);
+            let int2 = LpcRef::Int(LpcInt::MAX);
+            let result = &int / &int2;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &float / &int;
@@ -611,7 +693,17 @@ mod tests {
         }
 
         #[test]
-        fn test_div_int_float() {
+        fn float_int_overflow_does_not_panic() {
+            // I'm not sure it's possible to cause an overflow here?
+            let float = LpcRef::from(-1.0);
+            let int = LpcRef::Int(LpcInt::MAX);
+            let result = &float / &int;
+
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
             let result = &int / &float;
@@ -624,7 +716,16 @@ mod tests {
         }
 
         #[test]
-        fn test_div_by_zero() {
+        fn int_float_overflow_does_not_panic() {
+            let int = LpcRef::Int(-1);
+            let float = LpcRef::from(f64::MAX);
+            let result = &int / &float;
+
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn div_by_zero() {
             let int = LpcRef::Int(123);
             let zero = LpcRef::Int(0);
 

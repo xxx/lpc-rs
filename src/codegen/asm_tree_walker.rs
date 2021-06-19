@@ -672,7 +672,14 @@ impl TreeWalker for AsmTreeWalker {
             }
             UnaryOperation::Inc => todo!(),
             UnaryOperation::Dec => todo!(),
-            UnaryOperation::Bang => todo!(),
+            UnaryOperation::Bang => {
+                let reg_result = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::Not(reg_expr, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                reg_result
+            },
             UnaryOperation::Tilde => todo!(),
         };
 

@@ -244,7 +244,7 @@ pub fn check_unary_operation_types(
         },
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
-        UnaryOperation::Bang => todo!(),
+        UnaryOperation::Bang => Ok(()),
         UnaryOperation::Tilde => todo!(),
     }
 }

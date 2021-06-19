@@ -756,7 +756,7 @@ UnaryOp: (UnaryOperation, Range<usize>) = {
     <l:@L> "-" <r:@R> => (UnaryOperation::Negate, l..r),
 //    "++" => UnaryOperation::Inc,
 //    "--" => UnaryOperation::Dec,
-//    "!" => UnaryOperation::Bang,
+    <l:@L> "!" <r:@R> => (UnaryOperation::Bang, l..r),
 //    "~" => UnaryOperation::Tilde,
 }
 

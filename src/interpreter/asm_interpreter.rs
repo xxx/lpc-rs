@@ -620,6 +620,14 @@ impl AsmInterpreter {
                 let (n1, n2, n3) = (*r1, *r2, *r3);
                 self.binary_operation(n1, n2, n3, |x, y| x - y)?;
             }
+            Instruction::Not(r1, r2) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r2.index()] = if matches!(registers[r1.index()], LpcRef::Int(0)) {
+                    LpcRef::Int(1)
+                } else {
+                    LpcRef::Int(0)
+                };
+            }
             Instruction::RegCopy(r1, r2) => {
                 let registers = current_registers_mut(&mut self.stack)?;
                 registers[r2.index()] = registers[r1.index()].clone()
