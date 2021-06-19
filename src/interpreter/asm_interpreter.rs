@@ -118,7 +118,7 @@ impl AsmInterpreter {
             num_locals: self.process.num_globals,
             address: 0,
         };
-        let create = StackFrame::new(self.process.clone(), sym, 0);
+        let create = StackFrame::new(self.process.clone(), Rc::new(sym), 0);
         self.push_frame(create);
         self.process.set_pc(0);
     }
@@ -327,7 +327,7 @@ impl AsmInterpreter {
                         address: 0,
                     };
 
-                    StackFrame::new(self.process.clone(), sym, self.process.pc())
+                    StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
                 } else {
                     println!("proc {:#?}", self.process);
                     println!("functions {:#?}", self.process.functions);
@@ -345,8 +345,8 @@ impl AsmInterpreter {
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame);
 
-                if let Some(FunctionSymbol { address, .. }) = self.process.functions.get(name) {
-                    self.process.set_pc(*address);
+                if let Some(x) = self.process.functions.get(name) {
+                    self.process.set_pc(x.address);
                 } else if let Some(efun) = EFUNS.get(name.as_str()) {
                     // the efun is responsible for populating the return value in its own frame
                     efun(self)?;

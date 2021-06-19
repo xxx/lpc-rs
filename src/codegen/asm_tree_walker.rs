@@ -43,6 +43,7 @@ use crate::{
 };
 
 use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode, ternary_node::TernaryNode};
+use std::rc::Rc;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -76,7 +77,7 @@ pub struct AsmTreeWalker {
     label_count: usize,
 
     /// The map of function Symbols, to their respective addresses
-    pub functions: HashMap<FunctionSymbol, Address>,
+    pub functions: HashMap<Rc<FunctionSymbol>, Address>,
 
     /// Track where the result of a child branch is
     current_result: Register,
@@ -163,7 +164,7 @@ impl AsmTreeWalker {
     }
 
     /// Return a map of function names to their corresponding full symbol
-    pub fn function_map(&self) -> HashMap<String, FunctionSymbol> {
+    pub fn function_map(&self) -> HashMap<String, Rc<FunctionSymbol>> {
         let mut map = HashMap::new();
 
         for sym in self.functions.keys() {
@@ -706,12 +707,12 @@ impl TreeWalker for AsmTreeWalker {
 
         let num_args = node.parameters.len();
         self.functions.insert(
-            FunctionSymbol {
+            Rc::new(FunctionSymbol {
                 name: node.name.clone(),
                 num_args,
                 num_locals: self.register_counter.get_count() - num_args,
                 address: return_address,
-            },
+            }),
             return_address,
         );
 

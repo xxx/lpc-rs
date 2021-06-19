@@ -14,7 +14,7 @@ pub struct StackFrame {
     /// A pointer to the process that owns the function being called
     pub process: Rc<Process>,
     /// The function symbol that this frame represents a call to
-    pub symbol: FunctionSymbol,
+    pub symbol: Rc<FunctionSymbol>,
     /// Where we return to after we return from this function.
     pub return_address: usize,
     /// Our registers. By convention, `registers[0]` is for the return value of the call.
@@ -29,7 +29,7 @@ impl StackFrame {
     /// * `process` - The process that owns the function being called
     /// * `symbol` - The symbol representing the function being called
     /// * `return_address` - Where to return to after we return from this frame's function.
-    pub fn new(process: Rc<Process>, symbol: FunctionSymbol, return_address: usize) -> Self {
+    pub fn new(process: Rc<Process>, symbol: Rc<FunctionSymbol>, return_address: usize) -> Self {
         // add +1 for r0 (where return value is stored)
         let reg_len = symbol.num_args + symbol.num_locals + 1;
 
@@ -52,7 +52,7 @@ impl StackFrame {
     ///     (this is used for ellipsis args and `call_other`)
     pub fn with_minimum_arg_capacity(
         process: Rc<Process>,
-        symbol: FunctionSymbol,
+        symbol: Rc<FunctionSymbol>,
         return_address: usize,
         arg_capacity: usize,
     ) -> Self {
@@ -92,7 +92,7 @@ mod tests {
             address: 123,
         };
 
-        let frame = StackFrame::new(Rc::new(process), fs, 5);
+        let frame = StackFrame::new(Rc::new(process), Rc::new(fs), 5);
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -112,7 +112,7 @@ mod tests {
                 address: 123,
             };
 
-            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), fs, 5, 30);
+            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 5, 30);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -129,7 +129,7 @@ mod tests {
                 address: 123,
             };
 
-            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), fs, 5, 2);
+            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 5, 2);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));

@@ -4,6 +4,7 @@ use crate::{
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -20,9 +21,7 @@ pub struct Program {
     pub labels: HashMap<String, usize>,
 
     /// function mapping of name to Symbol
-    // TODO: wrap this FunctionSymbol in an RC
-    //   to avoid cloning the whole thing when a new stack frame is built
-    pub functions: HashMap<String, FunctionSymbol>,
+    pub functions: HashMap<String, Rc<FunctionSymbol>>,
 
     /// How many globals does this program need storage for?
     pub num_globals: usize,
@@ -37,7 +36,7 @@ impl Program {
     }
 
     /// Look up a function by its name
-    pub fn lookup_function<T>(&self, name: T) -> Option<&FunctionSymbol>
+    pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<FunctionSymbol>>
     where
         T: AsRef<str>,
     {
