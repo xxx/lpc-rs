@@ -2140,7 +2140,10 @@ mod tests {
         }
 
         fn setup_var(type_: LpcType, walker: &mut AsmTreeWalker) {
-            let sym = Symbol::new("marf", type_).with_location(Some(Register(1)));
+            let sym = Symbol {
+                location: Some(Register(1)),
+                ..Symbol::new("marf", type_)
+            };
             walker.register_counter.next(); // force-increment to mimic the scope walker
             insert_symbol(walker, sym);
 
