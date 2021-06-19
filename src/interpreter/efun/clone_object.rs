@@ -21,8 +21,6 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
             None => {
                 match compile_file(path) {
                     Ok(prog) => {
-                        println!("clone init master");
-
                         interpreter.init_program_with_clean_stack(prog)?
                     }
                     Err(e) => {
@@ -52,7 +50,6 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
         let v = LpcValue::Object(new_proc);
         let result = LpcRef::Object(PoolRef::new(&interpreter.memory, RefCell::new(v)));
 
-        println!("result {}", result);
         interpreter.return_efun_result(result);
     } else {
         return Err(LpcError::new(format!(
