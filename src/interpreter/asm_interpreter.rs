@@ -753,7 +753,6 @@ impl AsmInterpreter {
 
     /// Convenience helper for [`Efun`]s to get their result into the correct location.
     pub fn return_efun_result(&mut self, result: LpcRef) {
-        println!("returning: {}", self.stack.last_mut().unwrap());
         self.stack.last_mut().unwrap().registers[0] = result;
     }
 

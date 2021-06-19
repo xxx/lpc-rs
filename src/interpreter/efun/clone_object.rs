@@ -7,6 +7,7 @@ use crate::{
 use refpool::PoolRef;
 use std::cell::RefCell;
 
+/// `clone_object`, the efun for creating new object instances.
 pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
     let frame = interpreter.stack.last().unwrap();
 
