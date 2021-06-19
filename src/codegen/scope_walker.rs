@@ -139,7 +139,9 @@ impl TreeWalker for ScopeWalker {
 
         if let Some(symbol) = sym {
             if symbol.is_global() {
-                node.set_global(true); // TODO: find a better place to do this
+                // Set the node to global, so we know whether to look at the program registers,
+                //or the global registers, during codegen.
+                node.set_global(true);
             }
         } else {
             let e =
