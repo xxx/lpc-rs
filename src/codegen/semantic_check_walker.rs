@@ -491,7 +491,7 @@ mod tests {
             function_prototypes.insert(
                 String::from("known"),
                 FunctionPrototype {
-                    name: String::from("known"),
+                    name: "known".into(),
                     return_type: LpcType::Int(false),
                     num_args: 0,
                     num_default_args: 0,
@@ -574,7 +574,7 @@ mod tests {
             function_prototypes.insert(
                 String::from("my_func"),
                 FunctionPrototype {
-                    name: String::from("my_func"),
+                    name: "my_func".into(),
                     return_type: LpcType::Int(false),
                     num_args: 1,
                     num_default_args: 1,
@@ -610,7 +610,7 @@ mod tests {
             function_prototypes.insert(
                 String::from("my_func"),
                 FunctionPrototype {
-                    name: String::from("my_func"),
+                    name: "my_func".into(),
                     return_type: LpcType::Int(false),
                     num_args: 1,
                     num_default_args: 0,
@@ -646,7 +646,7 @@ mod tests {
             function_prototypes.insert(
                 String::from("my_func"),
                 FunctionPrototype {
-                    name: String::from("my_func"),
+                    name: "my_func".into(),
                     return_type: LpcType::String(false),
                     num_args: 1,
                     num_default_args: 0,

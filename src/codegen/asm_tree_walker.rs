@@ -1375,7 +1375,7 @@ mod tests {
         fn copies_non_void_call_results() {
             let mut context = Context::default();
             let prototype = FunctionPrototype {
-                name: String::from("marfin"),
+                name: "marfin".into(),
                 return_type: LpcType::Int(false),
                 num_args: 1,
                 num_default_args: 0,
@@ -1412,7 +1412,7 @@ mod tests {
         fn does_not_copy_void_call_results() {
             let mut context = Context::default();
             let prototype = FunctionPrototype {
-                name: String::from("void_thing"),
+                name: "void_thing".into(),
                 return_type: LpcType::Void,
                 num_args: 1,
                 num_default_args: 0,

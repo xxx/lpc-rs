@@ -93,7 +93,7 @@ impl TreeWalker for ScopeWalker {
         self.context.function_prototypes.insert(
             node.name.clone(),
             FunctionPrototype {
-                name: node.name.clone(),
+                name: node.name.clone().into(),
                 return_type: node.return_type,
                 num_args,
                 num_default_args,
@@ -249,7 +249,7 @@ mod tests {
                 assert_eq!(
                     *proto,
                     FunctionPrototype {
-                        name: "marf".to_string(),
+                        name: "marf".into(),
                         return_type: LpcType::Mixed(false),
                         num_args: 2,
                         num_default_args: 0,

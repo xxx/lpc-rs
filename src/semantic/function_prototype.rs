@@ -1,10 +1,11 @@
 use crate::{parser::span::Span, semantic::lpc_type::LpcType};
+use std::borrow::Cow;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionPrototype {
     /// The name of the function
-    pub name: String,
+    pub name: Cow<'static, str>,
 
     /// The return type
     pub return_type: LpcType,

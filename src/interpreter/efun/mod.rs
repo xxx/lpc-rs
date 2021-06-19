@@ -34,7 +34,7 @@ lazy_static! {
     pub static ref EFUN_PROTOTYPES: HashMap<&'static str, FunctionPrototype> = {
         let mut m = HashMap::new();
         m.insert(CLONE_OBJECT, FunctionPrototype {
-            name: String::from(CLONE_OBJECT),
+            name: CLONE_OBJECT.into(),
             return_type: LpcType::Object(false),
             num_args: 1,
             num_default_args: 0,
@@ -44,7 +44,7 @@ lazy_static! {
         });
 
         m.insert(DUMP, FunctionPrototype {
-            name: String::from(DUMP),
+            name: DUMP.into(),
             return_type: LpcType::Void,
             num_args: 1,
             num_default_args: 0,
@@ -54,7 +54,7 @@ lazy_static! {
         });
 
         m.insert(THIS_OBJECT, FunctionPrototype {
-            name: String::from(THIS_OBJECT),
+            name: THIS_OBJECT.into(),
             return_type: LpcType::Object(false),
             num_args: 0,
             num_default_args: 0,
