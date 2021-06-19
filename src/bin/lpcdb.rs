@@ -5,11 +5,8 @@ use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs::{
     compiler::compile_file,
-    errors,
-    errors::LpcError,
     interpreter::{
         asm_interpreter::{current_registers, AsmInterpreter},
-        lpc_ref::LpcRef,
         program::Program,
     },
 };
@@ -40,7 +37,7 @@ fn main() {
     match compile_file(filename) {
         Ok(program) => {
             let mut repl = Repl::new(program);
-            repl.repl();
+            let _ = repl.repl();
         }
         Err(e) => eprintln!("unable to compile {}: {:?}", filename, e),
     }
