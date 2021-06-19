@@ -211,6 +211,22 @@ pub enum Token {
     Nomask(Span),
     #[token("efun", track_slice)]
     Efun(Span),
+    #[token("catch", track_slice)]
+    Catch(Span),
+    #[token("throw", track_slice)]
+    Throw(Span),
+    #[token("switch", track_slice)]
+    Switch(Span),
+    #[token("default", track_slice)]
+    Default(Span),
+    #[token("foreach", track_slice)]
+    Foreach(Span),
+    #[token("function", track_slice)]
+    Function(Span),
+    #[token("private", track_slice)]
+    Private(Span),
+    #[token("public", track_slice)]
+    Public(Span),
 
     #[token("(", track_slice)]
     LParen(Span),
@@ -503,7 +519,15 @@ impl Token {
             | Token::Undef(StringToken(x, _))
             | Token::Defined(x)
             | Token::DefinedParen(x)
-            | Token::Not(x) => *x,
+            | Token::Not(x)
+            | Token::Catch(x)
+            | Token::Throw(x)
+            | Token::Switch(x)
+            | Token::Default(x)
+            | Token::Foreach(x)
+            | Token::Function(x)
+            | Token::Private(x)
+            | Token::Public(x) => *x,
             Token::Error => Span::new(0, 0..0),
         }
     }
@@ -596,7 +620,15 @@ impl Token {
             | Token::Undef(StringToken(x, _))
             | Token::Defined(x)
             | Token::DefinedParen(x)
-            | Token::Not(x) => x,
+            | Token::Not(x)
+            | Token::Catch(x)
+            | Token::Throw(x)
+            | Token::Switch(x)
+            | Token::Default(x)
+            | Token::Foreach(x)
+            | Token::Function(x)
+            | Token::Private(x)
+            | Token::Public(x) => x,
             Token::Error => return None,
         };
 
@@ -676,6 +708,14 @@ impl Display for Token {
             Token::Static(_) => "static",
             Token::Nomask(_) => "nomask",
             Token::Efun(_) => "efun",
+            Token::Catch(_) => "catch",
+            Token::Throw(_) => "throw",
+            Token::Switch(_) => "switch",
+            Token::Default(_) => "default",
+            Token::Foreach(_) => "foreach",
+            Token::Function(_) => "function",
+            Token::Private(_) => "private",
+            Token::Public(_) => "public",
 
             Token::LParen(_) => "(",
             Token::RParen(_) => ")",

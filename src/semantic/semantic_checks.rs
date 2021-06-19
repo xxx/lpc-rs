@@ -25,16 +25,16 @@ use crate::{
 static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "break",
     "case",
-    "catch", // TODO: add token
+    "catch",
     "continue",
-    "default", // TODO: add token
+    "default",
     "do",
     "efun",
     "else",
     "float",
     "for",
-    "foreach", // TODO: add token
-    "function", // TODO: add token
+    "foreach",
+    "function",
     "if",
     "inherit",
     "int",
@@ -42,13 +42,13 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "mixed",
     "nomask",
     "object",
-    "private", // TODO: add token
-    "public", // TODO: add token
+    "private",
+    "public",
     "return",
     "static",
     "string",
-    "switch", // TODO: add token
-    "throw", // TODO: add token
+    "switch",
+    "throw",
     "void",
     "while",
 };
