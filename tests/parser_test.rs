@@ -17,6 +17,7 @@ use lpc_rs::{
     semantic::lpc_type::LpcType,
     LpcFloat, LpcInt,
 };
+use lpc_rs::ast::function_def_node::FunctionDefNode;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -36,7 +37,7 @@ fn assert_int(value: LpcInt, expr: &str) {
 }
 
 #[test]
-fn test_program_global_vars() {
+fn program_global_vars() {
     let prog = "int i = 123; int j = i - 8; string *k;";
     let lexer = LexWrapper::new(prog);
     let node = lpc_parser::ProgramParser::new().parse(lexer).unwrap();
@@ -126,45 +127,45 @@ fn test_program_global_vars() {
 }
 
 #[test]
-fn test_operator_precedence_add_first() {
+fn operator_precedence_add_first() {
     assert_int(7, "1 + 2 * 3");
 }
 
 #[test]
-fn test_operator_precedence_mul_first() {
+fn operator_precedence_mul_first() {
     assert_int(7, "3 * 2 + 1");
 }
 
 #[test]
-fn test_int_literal_collapse() {
+fn int_literal_collapse() {
     assert_int(6, "10 - 3 * 2 + 4 / 2");
 }
 
 #[test]
-fn test_int_literal_underscores() {
+fn int_literal_underscores() {
     assert_int(1234567890, "1_234_56___7890");
 }
 
 #[test]
-fn test_int_literal_hexadecimal() {
+fn int_literal_hexadecimal() {
     assert_int(1638, "0x66_6");
     assert_int(0, "0X0");
 }
 
 #[test]
-fn test_int_literal_octal() {
+fn int_literal_octal() {
     assert_int(272, "0420");
     assert_int(0, "00");
 }
 
 #[test]
-fn test_int_literal_binary() {
+fn int_literal_binary() {
     assert_int(109, "0b1101101");
     assert_int(0, "0B0");
 }
 
 #[test]
-fn test_float_literal_underscores() {
+fn float_literal_underscores() {
     let expr = "1_1.234_332e2_2";
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
@@ -182,7 +183,7 @@ fn test_float_literal_underscores() {
 }
 
 #[test]
-fn test_string_literal_concat() {
+fn string_literal_concat() {
     let expr = r##""foo" + "bar" + "baz" + "quux""##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
@@ -200,7 +201,7 @@ fn test_string_literal_concat() {
 }
 
 #[test]
-fn test_string_literal_repeat() {
+fn string_literal_repeat() {
     let expr = r##""foo" * 3"##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
@@ -234,7 +235,7 @@ fn test_string_literal_repeat() {
 }
 
 #[test]
-fn test_compound_assignment_decompose() {
+fn compound_assignment_decompose() {
     let expr = "a += 2";
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new().parse(lexer).unwrap();
@@ -282,4 +283,15 @@ fn test_compound_assignment_decompose() {
     });
 
     assert_eq!(node, expected);
+}
+
+#[test]
+fn typeless_functions_are_mixed() {
+    let prog = r#"marfin() {
+            return "hello, we're marfin'!";
+        }"#.replace("\n", "");
+    let lexer = LexWrapper::new(&prog);
+    let node = lpc_parser::FunctionDefParser::new().parse(lexer).unwrap();
+
+    assert!(matches!(node, FunctionDefNode { return_type: LpcType::Mixed(false), .. }));
 }

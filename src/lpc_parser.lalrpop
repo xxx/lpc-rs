@@ -135,7 +135,7 @@ pub Def: AstNode = {
     }
 };
 
-FunctionDef: FunctionDefNode = {
+pub FunctionDef: FunctionDefNode = {
     <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:Statements> "}" => {
         let array = star.is_some();
 
@@ -161,7 +161,7 @@ FunctionDef: FunctionDefNode = {
                  _ => unimplemented!()
              }
          } else {
-             LpcType::Int(array)
+             LpcType::Mixed(array)
          };
 
         let file_id = name.0.file_id;
