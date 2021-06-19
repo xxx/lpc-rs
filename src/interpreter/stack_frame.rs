@@ -2,9 +2,11 @@ use crate::{
     interpreter::{lpc_ref::LpcRef, process::Process},
     semantic::function_symbol::FunctionSymbol,
 };
-use std::rc::Rc;
-use std::fmt::{Display, Formatter};
-use std::fmt;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+    rc::Rc,
+};
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -70,10 +72,7 @@ impl Display for StackFrame {
         write!(
             f,
             "Calling {} (addr {})\nReturning to {}\nProcess {}\n\n",
-            self.symbol.name,
-            self.symbol.address,
-            self.return_address,
-            self.process.filename
+            self.symbol.name, self.symbol.address, self.return_address, self.process.filename
         )
     }
 }

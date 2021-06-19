@@ -417,7 +417,10 @@ impl AsmInterpreter {
 
                         Ok(false)
                     } else {
-                        Err(self.runtime_error(format!("call_other to `{}`, that has no stack frame. This is a WTF.", nc)))
+                        Err(self.runtime_error(format!(
+                            "call_other to `{}`, that has no stack frame. This is a WTF.",
+                            nc
+                        )))
                     };
                 };
 

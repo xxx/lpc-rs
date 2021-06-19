@@ -32,7 +32,8 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
                             CompilerError::LpcError(x) => x,
                             // TODO: make this handle all of these errors
                             CompilerError::Collection(mut x) => x.swap_remove(0),
-                        }.with_span(debug_span);
+                        }
+                        .with_span(debug_span);
 
                         return Err(err);
                     }

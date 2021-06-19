@@ -36,8 +36,7 @@ use crate::{
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
     errors::LpcError,
-    interpreter::program::Program,
-    interpreter::efun::EFUN_PROTOTYPES,
+    interpreter::{efun::EFUN_PROTOTYPES, program::Program},
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
     Result,
@@ -586,7 +585,7 @@ impl TreeWalker for AsmTreeWalker {
                 something very broken in the semantic checks.",
                 node.name
             ))
-                .with_span(node.span));
+            .with_span(node.span));
         }
 
         Ok(())
@@ -1382,10 +1381,12 @@ mod tests {
                 num_default_args: 0,
                 arg_types: vec![],
                 span: None,
-                arg_spans: vec![]
+                arg_spans: vec![],
             };
 
-            context.function_prototypes.insert("marfin".into(), prototype);
+            context
+                .function_prototypes
+                .insert("marfin".into(), prototype);
             let mut walker = AsmTreeWalker::new(context);
             let call = "marfin(666)";
             let mut tree = lpc_parser::CallParser::new()
@@ -1396,7 +1397,11 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), 666),
-                Call { name: String::from("marfin"), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: String::from("marfin"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 RegCopy(Register(0), Register(2)),
             ];
 
@@ -1413,10 +1418,12 @@ mod tests {
                 num_default_args: 0,
                 arg_types: vec![],
                 span: None,
-                arg_spans: vec![]
+                arg_spans: vec![],
             };
 
-            context.function_prototypes.insert("void_thing".into(), prototype);
+            context
+                .function_prototypes
+                .insert("void_thing".into(), prototype);
             let mut walker = AsmTreeWalker::new(context);
             let call = "void_thing(666)";
             let mut tree = lpc_parser::CallParser::new()
@@ -1427,7 +1434,11 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), 666),
-                Call { name: String::from("void_thing"), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: String::from("void_thing"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1445,7 +1456,11 @@ mod tests {
 
             let expected = vec![
                 SConst(Register(1), String::from("/foo.c")),
-                Call { name: String::from("clone_object"), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: String::from("clone_object"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 RegCopy(Register(0), Register(2)),
             ];
 
@@ -1464,7 +1479,11 @@ mod tests {
 
             let expected = vec![
                 SConst(Register(1), String::from("lkajsdflkajsdf")),
-                Call { name: String::from("dump"), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1711,7 +1730,7 @@ mod tests {
                 name: String::from("dump"),
                 num_args: 1,
                 initial_arg: Register(1),
-            }
+            },
         ];
 
         assert_eq!(walker.instructions, expected);
@@ -2286,7 +2305,7 @@ mod tests {
                     receiver: Box::new(None),
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
                     name: "clone_object".to_string(),
-                    span: None
+                    span: None,
                 })),
                 array: false,
                 global: false,
