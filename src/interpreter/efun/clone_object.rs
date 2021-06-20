@@ -6,37 +6,43 @@ use crate::{
 };
 use refpool::PoolRef;
 use std::cell::RefCell;
+use std::rc::Rc;
+use crate::interpreter::process::Process;
+
+fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Process>> {
+    let frame = interpreter.stack.last().unwrap();
+
+    match interpreter.processes.get(path) {
+        Some(proc) => Ok(proc.clone()),
+        None => {
+            match compile_file(path) {
+                Ok(prog) => interpreter.init_program_with_clean_stack(prog),
+                Err(e) => {
+                    let debug_span = frame.process.current_debug_span();
+
+                    let err = match e {
+                        CompilerError::LpcError(x) => x,
+                        // TODO: make this handle all of these errors
+                        CompilerError::Collection(mut x) => x.swap_remove(0),
+                    }
+                        .with_span(debug_span);
+
+                    return Err(err);
+                }
+            }
+        }
+    }
+}
 
 /// `clone_object`, the efun for creating new object instances.
 pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
-    let frame = interpreter.stack.last().unwrap();
-
     let arg = interpreter.register_to_lpc_ref(1);
 
     if let LpcRef::String(s) = arg {
         let r = s.borrow();
         let path = try_extract_value!(*r, LpcValue::String);
 
-        let master = match interpreter.processes.get(path) {
-            Some(proc) => proc.clone(),
-            None => {
-                match compile_file(path) {
-                    Ok(prog) => interpreter.init_program_with_clean_stack(prog)?,
-                    Err(e) => {
-                        let debug_span = frame.process.current_debug_span();
-
-                        let err = match e {
-                            CompilerError::LpcError(x) => x,
-                            // TODO: make this handle all of these errors
-                            CompilerError::Collection(mut x) => x.swap_remove(0),
-                        }
-                        .with_span(debug_span);
-
-                        return Err(err);
-                    }
-                }
-            }
-        };
+        let master = load_master(interpreter, path)?;
 
         if master.program.pragmas.no_clone() {
             return Err(LpcError::new(format!(
@@ -59,6 +65,8 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
 
         interpreter.return_efun_result(result);
     } else {
+        let frame = interpreter.stack.last().unwrap();
+
         return Err(LpcError::new(format!(
             "Invalid argument passed to `clone_object`: {}",
             arg
