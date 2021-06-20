@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::ops::Range;
 use std::convert::TryFrom;
+use lalrpop_util::ParseError;
 use crate::ast::ast_node::{AstNode, SpannedNode};
 use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
@@ -34,8 +35,9 @@ use crate::parser::lexer::Token;
 use crate::errors::LpcError;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 use crate::LpcFloat;
+use crate::context::Context;
 
-grammar;
+grammar<'context>(context: &'context Context);
 
 extern {
     type Location = usize;
@@ -136,7 +138,7 @@ pub Def: AstNode = {
 };
 
 pub FunctionDef: FunctionDefNode = {
-    <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:Statements> "}" => {
+    <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:Statements> "}" =>? {
         let array = star.is_some();
 
         let l = if let Some((_, span)) = &r_type {
@@ -148,30 +150,37 @@ pub FunctionDef: FunctionDefNode = {
         };
 
         let r = name.0.r;
-
-         let return_type = if let Some(this_type) = r_type {
-             match this_type.0.as_str() {
-                 "void" => LpcType::Void,
-                 "int" => LpcType::Int(array),
-                 "string" => LpcType::String(array),
-                 "float" => LpcType::Float(array),
-                 "object" => LpcType::Object(array),
-                 "mapping" => LpcType::Mapping(array),
-                 "mixed" => LpcType::Mixed(array),
-                 _ => unimplemented!()
-             }
-         } else {
-             LpcType::Mixed(array)
-         };
-
         let file_id = name.0.file_id;
-        FunctionDefNode {
+
+        let span = Span::new(file_id, l..r);
+
+        let return_type = if let Some(this_type) = r_type {
+            match this_type.0.as_str() {
+                "void" => LpcType::Void,
+                "int" => LpcType::Int(array),
+                "string" => LpcType::String(array),
+                "float" => LpcType::Float(array),
+                "object" => LpcType::Object(array),
+                "mapping" => LpcType::Mapping(array),
+                "mixed" => LpcType::Mixed(array),
+                _ => unimplemented!()
+            }
+        } else if context.pragmas.strict_types() {
+            let err = LpcError::new("Missing return type")
+                                      .with_span(Some(span))
+                                      .with_note("`#pragma strict_types` is enabled, which requires all functions to have an explicit return type.");
+            return Err(ParseError::User { error: err });
+        } else {
+            LpcType::Mixed(array)
+        };
+
+        Ok(FunctionDefNode {
             name: name.1,
             parameters,
             body,
             return_type,
-            span: Some(Span::new(file_id, l..r))
-        }
+            span: Some(span)
+        })
     },
 }
 

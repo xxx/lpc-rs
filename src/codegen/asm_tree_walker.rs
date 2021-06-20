@@ -1166,10 +1166,11 @@ mod tests {
 
         fn generate_instructions(prog: &str) -> Vec<Instruction> {
             let mut scope_walker = ScopeWalker::new(Context::default());
-            let (code, _) = preprocess_string("foo.c", prog).unwrap();
+            let (code, preprocessor) = preprocess_string("foo.c", prog).unwrap();
 
+            let context = preprocessor.into_context();
             let mut tree = lpc_parser::ProgramParser::new()
-                .parse(TokenVecWrapper::new(&code))
+                .parse(&context, TokenVecWrapper::new(&code))
                 .unwrap();
 
             let _ = scope_walker.visit_program(&mut tree);
@@ -1301,7 +1302,7 @@ mod tests {
             let mut walker = AsmTreeWalker::default();
             let call = "dump(4 - 5)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&Context::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -1323,7 +1324,7 @@ mod tests {
             let mut walker = AsmTreeWalker::default();
             let call = "\"foo\"->print(4 - 5)";
             let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&Context::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = tree.visit(&mut walker);
@@ -1360,7 +1361,7 @@ mod tests {
             let mut walker = AsmTreeWalker::new(context);
             let call = "foo(666)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&walker.context, LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -1399,7 +1400,7 @@ mod tests {
             let mut walker = AsmTreeWalker::new(context);
             let call = "marfin(666)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&walker.context, LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -1436,7 +1437,7 @@ mod tests {
             let mut walker = AsmTreeWalker::new(context);
             let call = "void_thing(666)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&walker.context, LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -1458,7 +1459,7 @@ mod tests {
             let mut walker = AsmTreeWalker::default();
             let call = r#"clone_object("/foo.c")"#;
             let mut tree = lpc_parser::CallParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&Context::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -1481,7 +1482,7 @@ mod tests {
             let mut walker = AsmTreeWalker::default();
             let call = r#"dump("lkajsdflkajsdf")"#;
             let mut tree = lpc_parser::CallParser::new()
-                .parse(LexWrapper::new(call))
+                .parse(&Context::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -1723,7 +1724,7 @@ mod tests {
     fn test_visit_block_populates_instructions() {
         let block = "{ int a = '🏯'; dump(a); }";
         let mut tree = lpc_parser::BlockParser::new()
-            .parse(LexWrapper::new(block))
+            .parse(&Context::default(), LexWrapper::new(block))
             .unwrap();
 
         let mut scope_walker = ScopeWalker::default();
@@ -1751,7 +1752,7 @@ mod tests {
         let _walker = AsmTreeWalker::default();
         let call = "int main(int i) { return i + 4; }";
         let tree = lpc_parser::DefParser::new()
-            .parse(LexWrapper::new(call))
+            .parse(&Context::default(), LexWrapper::new(call))
             .unwrap();
 
         let mut node = if let AstNode::FunctionDef(node) = tree {
@@ -1819,7 +1820,7 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let call = "int foo = 1, *bar = ({ 56 })";
         let mut tree = lpc_parser::DeclParser::new()
-            .parse(LexWrapper::new(call))
+            .parse(&Context::default(), LexWrapper::new(call))
             .unwrap();
 
         let mut scope_walker = ScopeWalker::default();

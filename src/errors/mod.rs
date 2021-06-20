@@ -106,11 +106,8 @@ impl Display for LpcError {
 impl Error for LpcError {}
 
 /// Map LALRpop's parse errors into our local error type
-impl<'a, E> From<LalrpopParseError<usize, Token, E>> for LpcError
-where
-    E: Display,
-{
-    fn from(err: LalrpopParseError<usize, Token, E>) -> Self {
+impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
+    fn from(err: LalrpopParseError<usize, Token, LpcError>) -> Self {
         match err {
             LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
             LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
@@ -125,7 +122,7 @@ where
             LalrpopParseError::ExtraToken {
                 token: (_start, ref token, _end),
             } => LpcError::new(format!("Extra Token: `{}`", token)).with_span(Some(token.span())),
-            LalrpopParseError::User { error } => LpcError::new(format!("User error: {}", error)),
+            LalrpopParseError::User { error } => error
         }
     }
 }

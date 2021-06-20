@@ -130,7 +130,7 @@ where
     let code = TokenVecWrapper::new(&code);
     let context = preprocessor.into_context();
 
-    let program = lpc_parser::ProgramParser::new().parse(code);
+    let program = lpc_parser::ProgramParser::new().parse(&context, code);
 
     let mut program = match program {
         Ok(prog) => prog,

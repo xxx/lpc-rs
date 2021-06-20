@@ -25,8 +25,11 @@ use std::result;
 /// Abstracted type to use as in-game `int`s
 pub type LpcInt = i64;
 
-/// Abstracted type for in-game `floats`. The wrapper is to handle hashing, ordering, etc.
-pub type LpcFloat = Total<f64>;
+/// The base float-type that in-game `float`s are backed by
+pub type BaseFloat = f64;
+
+/// Abstracted type for in-game `float`s. The wrapper is to handle hashing, ordering, etc.
+pub type LpcFloat = Total<BaseFloat>;
 
 /// Common `Result` type
 pub type Result<T> = result::Result<T, LpcError>;
