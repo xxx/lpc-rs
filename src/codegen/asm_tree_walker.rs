@@ -186,6 +186,7 @@ impl AsmTreeWalker {
             labels: self.labels.clone(),
             functions: self.function_map(),
             num_globals: self.global_counter.get_count() + 1, // +1 for r0, for return values
+            pragmas: self.context.pragmas.clone()
         })
     }
 

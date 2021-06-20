@@ -9,6 +9,11 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use crate::interpreter::pragma_flags::NO_CLONE;
+use crate::interpreter::pragma_flags::NO_INHERIT;
+use crate::interpreter::pragma_flags::NO_SHADOW;
+use crate::interpreter::pragma_flags::RESIDENT;
+use crate::interpreter::pragma_flags::STRICT_TYPES;
 
 use define::{Define, ObjectMacro};
 
@@ -57,6 +62,9 @@ lazy_static! {
         Regex::new(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
     static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
     static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
+    static ref PRAGMA: Regex = Regex::new(r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#).unwrap();
+
+    static ref COMMA_SEPARATOR: Regex = Regex::new(r"\s*,\s*").unwrap();
 }
 
 #[derive(Debug)]
@@ -240,7 +248,7 @@ impl Preprocessor {
     ///     }
     /// "#;
     ///
-    /// let processed = preprocessor.scan("file.c", "/", content);
+    /// let processed = preprocessor.scan("foo.c", "/", content);
     /// ```
     pub fn scan<T, U, V>(&mut self, path: T, cwd: U, file_content: V) -> Result<Vec<Spanned<Token>>>
     where
@@ -289,6 +297,7 @@ impl Preprocessor {
                         Token::PreprocessorIf(t) => self.handle_if(t)?,
                         Token::IfDef(t) => self.handle_ifdef(t)?,
                         Token::IfNDef(t) => self.handle_ifndef(t)?,
+                        Token::Pragma(t) => self.handle_pragma(t)?,
 
                         Token::NewLine(_) => { /* Ignore */ }
 
@@ -508,10 +517,6 @@ impl Preprocessor {
 
         if let Some(captures) = DEFINEMACRO.captures(&token.1) {
             check_duplicate(&captures[1], span)?;
-
-            lazy_static! {
-                static ref COMMA_SEPARATOR: Regex = Regex::new(r"\s*,\s*").unwrap();
-            }
 
             let name = String::from(&captures[1]);
             let args: Vec<String> = COMMA_SEPARATOR
@@ -863,6 +868,28 @@ impl Preprocessor {
 
         self.ifdefs.pop();
         self.current_else = None;
+
+        Ok(())
+    }
+
+    fn handle_pragma(&mut self, token: &StringToken) -> Result<()> {
+        self.check_for_previous_newline(token.0)?;
+
+        if let Some(captures) = PRAGMA.captures(&token.1) {
+            for arg in COMMA_SEPARATOR.split(&captures[1]) {
+                match arg {
+                    NO_CLONE => self.context.pragmas.set_no_clone(true),
+                    NO_INHERIT => self.context.pragmas.set_no_inherit(true),
+                    NO_SHADOW => self.context.pragmas.set_no_shadow(true),
+                    RESIDENT => self.context.pragmas.set_resident(true),
+                    STRICT_TYPES => self.context.pragmas.set_strict_types(true),
+                    x => {
+                        return Err(LpcError::new(format!("Unknown pragma `{}`", x))
+                            .with_span(Some(token.0)));
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
@@ -1833,6 +1860,33 @@ mod tests {
             "## };
 
             test_invalid(prog, "Incorrect number of macro arguments");
+        }
+    }
+
+    mod test_pragmas {
+        use super::*;
+
+        #[test]
+        fn test_pragmas() {
+            let prog = indoc! { r##"
+                #pragma strict_types
+                #pragma no_clone,resident ,  no_shadow
+            "## };
+
+            let mut preprocessor = fixture();
+            match preprocessor.scan("test.c", "/", prog) {
+                Ok(_) => {
+                    assert!(preprocessor.context.pragmas.strict_types());
+                    assert!(preprocessor.context.pragmas.no_clone());
+                    assert!(preprocessor.context.pragmas.resident());
+                    assert!(preprocessor.context.pragmas.no_shadow());
+
+                    assert!(!preprocessor.context.pragmas.no_inherit());
+                }
+                Err(e) => {
+                    panic!("{:?}", e)
+                }
+            }
         }
     }
 }

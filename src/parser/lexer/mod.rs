@@ -90,7 +90,7 @@ impl<'a> Iterator for TokenVecWrapper<'a> {
 
         match &token.1 {
             Token::Error => Some(Err(LpcError::new(format!(
-                "Lex Error: Invalid Token `{}`at {:?}",
+                "Lex Error: Invalid Token `{}` at {:?}",
                 token.1, span
             )))),
             t => Some(Ok((span.l, t.clone(), span.r))),
@@ -375,6 +375,9 @@ pub enum Token {
     #[token("not", track_slice)]
     Not(Span),
 
+    #[regex("#[^\n\\S]*pragma[^\n]*\n?", string_token)]
+    Pragma(StringToken),
+
     #[error]
     // Strip whitespace and comments
     #[regex(r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", |lex| {
@@ -520,6 +523,7 @@ impl Token {
             | Token::Defined(x)
             | Token::DefinedParen(x)
             | Token::Not(x)
+            | Token::Pragma(StringToken(x, _))
             | Token::Catch(x)
             | Token::Throw(x)
             | Token::Switch(x)
@@ -621,6 +625,7 @@ impl Token {
             | Token::Defined(x)
             | Token::DefinedParen(x)
             | Token::Not(x)
+            | Token::Pragma(StringToken(x, _))
             | Token::Catch(x)
             | Token::Throw(x)
             | Token::Switch(x)
@@ -745,11 +750,13 @@ impl Display for Token {
             | Token::PreprocessorElse(s)
             | Token::Endif(s)
             | Token::Define(s)
-            | Token::Undef(s) => &s.1,
+            | Token::Undef(s)
+            | Token::Pragma(s) => &s.1,
 
             Token::Defined(_) => "defined",
             Token::DefinedParen(_) => "defined(",
             Token::Not(_) => "not",
+
             Token::Error => "Error token",
         };
 

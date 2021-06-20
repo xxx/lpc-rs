@@ -4,6 +4,7 @@ use crate::{
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::{collections::HashMap, rc::Rc};
+use crate::interpreter::pragma_flags::PragmaFlags;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -24,6 +25,9 @@ pub struct Program {
 
     /// How many globals does this program need storage for?
     pub num_globals: usize,
+
+    /// Which pragmas have been set for this program?
+    pub pragmas: PragmaFlags,
 }
 
 impl Program {

@@ -12,6 +12,7 @@ use crate::{
 
 use crate::errors::LpcError;
 use std::sync::Arc;
+use crate::interpreter::pragma_flags::PragmaFlags;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -41,6 +42,9 @@ pub struct Context {
 
     /// Any errors that have been collected
     pub errors: Vec<LpcError>,
+
+    /// The pragmas that have been set
+    pub pragmas: PragmaFlags,
 }
 
 impl Context {
@@ -86,6 +90,7 @@ impl Default for Context {
             scopes: ScopeTree::default(),
             function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
+            pragmas: PragmaFlags::new()
         }
     }
 }

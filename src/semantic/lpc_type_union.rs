@@ -1,6 +1,7 @@
 use crate::semantic::lpc_type::LpcType;
-use modular_bitfield::{prelude::*, private::static_assertions::_core::fmt::Formatter};
+use modular_bitfield::prelude::*;
 use std::{convert::TryInto, fmt, fmt::Display, ops::BitOr};
+use std::fmt::Formatter;
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
