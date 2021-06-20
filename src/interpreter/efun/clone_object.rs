@@ -38,6 +38,14 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
             }
         };
 
+        if master.program.pragmas.no_clone() {
+            return Err(LpcError::new(format!(
+                "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
+                master.program.filename
+            ))
+            .with_span(interpreter.process.current_debug_span()));
+        }
+
         let mut new_clone = master.program.clone();
 
         let new_path = format!("{}#{}", path, interpreter.clone_count);
@@ -59,4 +67,37 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{interpreter::stack_frame::StackFrame, semantic::function_symbol::FunctionSymbol};
+    use std::rc::Rc;
+
+    #[test]
+    fn returns_error_if_no_clone() {
+        let mut interpreter = AsmInterpreter::default();
+        let sym = FunctionSymbol {
+            name: "clone_object".to_string(),
+            num_args: 1,
+            num_locals: 0,
+            address: 0,
+        };
+
+        let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym), 0);
+
+        let path = LpcRef::String(PoolRef::new(
+            &interpreter.memory,
+            RefCell::new(LpcValue::from("./tests/fixtures/code/no_clone.c")),
+        ));
+        frame.registers[1] = path;
+
+        interpreter.push_frame(frame);
+
+        assert_eq!(
+            &clone_object(&mut interpreter).unwrap_err().to_string(),
+            "./tests/fixtures/code/no_clone.c has `#pragma no_clone` enabled, and so cannot be cloned."
+        )
+    }
 }

@@ -175,7 +175,7 @@ impl AsmInterpreter {
     }
 
     /// Push a new stack frame onto the call stack
-    fn push_frame(&mut self, frame: StackFrame) {
+    pub fn push_frame(&mut self, frame: StackFrame) {
         // println!("pushing frame in push_frame: {:?}", frame);
 
         self.stack.push(frame);

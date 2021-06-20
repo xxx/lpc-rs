@@ -14,7 +14,7 @@ use std::{
 pub struct Process {
     pub program: Program,
     pub globals: Vec<RefCell<LpcRef>>,
-    pc: Cell<usize>, // pub clones: Vec<>
+    pc: Cell<usize>,
 }
 
 impl Process {
