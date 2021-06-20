@@ -1,13 +1,13 @@
 use crate::{
     compiler::{compile_file, compiler_error::CompilerError},
     errors::LpcError,
-    interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{
+        asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
+    },
     try_extract_value, Result,
 };
 use refpool::PoolRef;
-use std::cell::RefCell;
-use std::rc::Rc;
-use crate::interpreter::process::Process;
+use std::{cell::RefCell, rc::Rc};
 
 fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Process>> {
     let frame = interpreter.stack.last().unwrap();
@@ -25,7 +25,7 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
                         // TODO: make this handle all of these errors
                         CompilerError::Collection(mut x) => x.swap_remove(0),
                     }
-                        .with_span(debug_span);
+                    .with_span(debug_span);
 
                     return Err(err);
                 }
