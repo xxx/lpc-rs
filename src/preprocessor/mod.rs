@@ -1,3 +1,4 @@
+use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
 use codespan_reporting::files::Files;
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
@@ -9,11 +10,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use crate::interpreter::pragma_flags::NO_CLONE;
-use crate::interpreter::pragma_flags::NO_INHERIT;
-use crate::interpreter::pragma_flags::NO_SHADOW;
-use crate::interpreter::pragma_flags::RESIDENT;
-use crate::interpreter::pragma_flags::STRICT_TYPES;
 
 use define::{Define, ObjectMacro};
 
@@ -62,8 +58,10 @@ lazy_static! {
         Regex::new(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
     static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
     static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
-    static ref PRAGMA: Regex = Regex::new(r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#).unwrap();
-
+    static ref PRAGMA: Regex = Regex::new(
+        r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#
+    )
+    .unwrap();
     static ref COMMA_SEPARATOR: Regex = Regex::new(r"\s*,\s*").unwrap();
 }
 

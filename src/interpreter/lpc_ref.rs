@@ -1,6 +1,6 @@
 use crate::{
     ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_value::LpcValue,
-    try_extract_value, LpcFloat, LpcInt, Result,
+    try_extract_value, BaseFloat, LpcFloat, LpcInt, Result,
 };
 use refpool::PoolRef;
 use std::{
@@ -96,8 +96,8 @@ impl LpcRef {
     }
 }
 
-impl From<f64> for LpcRef {
-    fn from(f: f64) -> Self {
+impl From<BaseFloat> for LpcRef {
+    fn from(f: BaseFloat) -> Self {
         Self::Float(LpcFloat::from(f))
     }
 }
@@ -167,11 +167,11 @@ impl Add for &LpcRef {
         match self {
             LpcRef::Float(f) => match rhs {
                 LpcRef::Float(f2) => Ok(LpcValue::Float(*f + *f2)),
-                LpcRef::Int(i) => Ok(LpcValue::Float(*f + *i as f64)),
+                LpcRef::Int(i) => Ok(LpcValue::Float(*f + *i as BaseFloat)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Int(i) => match rhs {
-                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as f64) + *f)),
+                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
                 LpcRef::String(s) => Ok(LpcValue::String(
                     i.to_string() + try_extract_value!(*s.borrow(), LpcValue::String),
@@ -218,9 +218,9 @@ impl Sub for &LpcRef {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(*y))),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as f64)),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as BaseFloat)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(*x as f64) - *y))
+                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) - *y))
             }
             (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
                 let new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
@@ -253,9 +253,9 @@ impl Mul for &LpcRef {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_mul(*y))),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as f64)),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as BaseFloat)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(*x as f64) * *y))
+                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) * *y))
             }
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
@@ -285,7 +285,7 @@ impl Div for &LpcRef {
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < f64::EPSILON {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
                     Ok(LpcValue::Float(*x / *y))
@@ -295,14 +295,14 @@ impl Div for &LpcRef {
                 if y == &0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(*x / *y as f64))
+                    Ok(LpcValue::Float(*x / *y as BaseFloat))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < f64::EPSILON {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat::from(*x as f64) / *y))
+                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Div, &rhs)),
@@ -396,7 +396,7 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
-            let float = LpcRef::from(f64::MAX);
+            let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::Int(1);
             assert!((&float + &int).is_ok());
         }
@@ -541,7 +541,7 @@ mod tests {
 
         #[test]
         fn float_int_underflow_does_not_panic() {
-            let float = LpcRef::from(f64::MIN);
+            let float = LpcRef::from(BaseFloat::MIN);
             let int = LpcRef::Int(LpcInt::MAX);
             let result = &float - &int;
             assert!(result.is_ok());
@@ -641,7 +641,7 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
-            let float = LpcRef::from(f64::MAX);
+            let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::Int(2);
             let result = &float * &int;
             assert!(result.is_ok());
@@ -718,7 +718,7 @@ mod tests {
         #[test]
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
-            let float = LpcRef::from(f64::MAX);
+            let float = LpcRef::from(BaseFloat::MAX);
             let result = &int / &float;
 
             assert!(result.is_ok());

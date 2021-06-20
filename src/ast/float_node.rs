@@ -7,7 +7,7 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    LpcFloat, Result,
+    BaseFloat, LpcFloat, Result,
 };
 
 /// A node representing a float literal
@@ -20,10 +20,10 @@ pub struct FloatNode {
 }
 
 impl FloatNode {
-    pub fn new(v: f64) -> Self {
+    pub fn new(v: BaseFloat) -> Self {
         // avoid any potential issues
-        let value: f64 = if v.is_nan() || v.is_infinite() {
-            f64::from(0)
+        let value: BaseFloat = if v.is_nan() || v.is_infinite() {
+            BaseFloat::from(0)
         } else {
             v
         };

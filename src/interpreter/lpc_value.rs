@@ -1,6 +1,6 @@
 use crate::{
     interpreter::{lpc_ref::LpcRef, process::Process},
-    LpcFloat, LpcInt,
+    BaseFloat, LpcFloat, LpcInt,
 };
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
@@ -71,8 +71,8 @@ impl From<LpcInt> for LpcValue {
     }
 }
 
-impl From<f64> for LpcValue {
-    fn from(f: f64) -> Self {
+impl From<BaseFloat> for LpcValue {
+    fn from(f: BaseFloat) -> Self {
         Self::Float(LpcFloat::from(f))
     }
 }

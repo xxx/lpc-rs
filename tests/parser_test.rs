@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lpc_rs::{
     ast::{
         assignment_node::AssignmentNode,
@@ -6,27 +7,30 @@ use lpc_rs::{
         decl_node::DeclNode,
         expression_node::ExpressionNode,
         float_node::FloatNode,
+        function_def_node::FunctionDefNode,
         int_node::IntNode,
         program_node::ProgramNode,
         string_node::StringNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
+    compiler::preprocess_string,
+    context::Context,
     lpc_parser,
-    parser::{lexer::LexWrapper, span::Span},
+    parser::{
+        lexer::{LexWrapper, TokenVecWrapper},
+        span::Span,
+    },
     semantic::lpc_type::LpcType,
     LpcFloat, LpcInt,
 };
-use lpc_rs::ast::function_def_node::FunctionDefNode;
-use lpc_rs::context::Context;
-use indoc::indoc;
-use lpc_rs::compiler::preprocess_string;
-use lpc_rs::parser::lexer::TokenVecWrapper;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ExpressionParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ExpressionNode::Int(IntNode {
         value,
@@ -44,7 +48,9 @@ fn assert_int(value: LpcInt, expr: &str) {
 fn program_global_vars() {
     let prog = "int i = 123; int j = i - 8; string *k;";
     let lexer = LexWrapper::new(prog);
-    let node = lpc_parser::ProgramParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ProgramParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ProgramNode {
         body: vec![
@@ -172,7 +178,9 @@ fn int_literal_binary() {
 fn float_literal_underscores() {
     let expr = "1_1.234_332e2_2";
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ExpressionParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ExpressionNode::Float(FloatNode {
         value: LpcFloat::from(112343320000000000000000.0),
@@ -190,7 +198,9 @@ fn float_literal_underscores() {
 fn string_literal_concat() {
     let expr = r##""foo" + "bar" + "baz" + "quux""##;
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ExpressionParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foobarbazquux"),
@@ -208,7 +218,9 @@ fn string_literal_concat() {
 fn string_literal_repeat() {
     let expr = r##""foo" * 3"##;
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ExpressionParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foofoofoo"),
@@ -224,7 +236,9 @@ fn string_literal_repeat() {
     // test negative multiplier
     let expr = r##""foo" * -3"##;
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ExpressionParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from(""),
@@ -242,7 +256,9 @@ fn string_literal_repeat() {
 fn compound_assignment_decompose() {
     let expr = "a += 2";
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::ExpressionParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
         lhs: Box::new(ExpressionNode::Var(VarNode {
@@ -293,11 +309,20 @@ fn compound_assignment_decompose() {
 fn typeless_functions_are_mixed() {
     let prog = r#"marfin() {
             return "hello, we're marfin'!";
-        }"#.replace("\n", "");
+        }"#
+    .replace("\n", "");
     let lexer = LexWrapper::new(&prog);
-    let node = lpc_parser::FunctionDefParser::new().parse(&Context::default(), lexer).unwrap();
+    let node = lpc_parser::FunctionDefParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
 
-    assert!(matches!(node, FunctionDefNode { return_type: LpcType::Mixed(false), .. }));
+    assert!(matches!(
+        node,
+        FunctionDefNode {
+            return_type: LpcType::Mixed(false),
+            ..
+        }
+    ));
 }
 
 #[test]

@@ -122,7 +122,7 @@ impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
             LalrpopParseError::ExtraToken {
                 token: (_start, ref token, _end),
             } => LpcError::new(format!("Extra Token: `{}`", token)).with_span(Some(token.span())),
-            LalrpopParseError::User { error } => error
+            LalrpopParseError::User { error } => error,
         }
     }
 }

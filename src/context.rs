@@ -10,9 +10,8 @@ use crate::{
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 
-use crate::errors::LpcError;
+use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags};
 use std::sync::Arc;
-use crate::interpreter::pragma_flags::PragmaFlags;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -90,7 +89,7 @@ impl Default for Context {
             scopes: ScopeTree::default(),
             function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
-            pragmas: PragmaFlags::new()
+            pragmas: PragmaFlags::new(),
         }
     }
 }

@@ -1,10 +1,10 @@
 use crate::{
-    asm::instruction::Instruction, parser::span::Span, semantic::function_symbol::FunctionSymbol,
+    asm::instruction::Instruction, interpreter::pragma_flags::PragmaFlags, parser::span::Span,
+    semantic::function_symbol::FunctionSymbol,
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::{collections::HashMap, rc::Rc};
-use crate::interpreter::pragma_flags::PragmaFlags;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

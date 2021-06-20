@@ -16,7 +16,7 @@ use crate::{
         },
         span::Span,
     },
-    LpcInt, Result,
+    BaseFloat, LpcInt, Result,
 };
 
 pub mod lex_state;
@@ -431,7 +431,7 @@ fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
 /// Track and convert float literals to [`FloatToken`]s
 fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
     track_slice(lex);
-    let f = f64::from_str(&lex.slice().replace("_", "")).unwrap();
+    let f = BaseFloat::from_str(&lex.slice().replace("_", "")).unwrap();
     FloatToken(Span::new(lex.extras.current_file_id, lex.span()), f)
 }
 

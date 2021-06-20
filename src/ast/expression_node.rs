@@ -22,7 +22,7 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    LpcInt, Result,
+    BaseFloat, LpcInt, Result,
 };
 use std::collections::HashMap;
 
@@ -174,8 +174,8 @@ impl From<LpcInt> for ExpressionNode {
     }
 }
 
-impl From<f64> for ExpressionNode {
-    fn from(value: f64) -> Self {
+impl From<BaseFloat> for ExpressionNode {
+    fn from(value: BaseFloat) -> Self {
         Self::Float(FloatNode::new(value))
     }
 }
