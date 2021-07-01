@@ -121,7 +121,7 @@ impl TreeWalker for ScopeWalker {
             ));
         }
 
-        if let Err(e) = check_var_redefinition(&node, scope.unwrap()) {
+        if let Err(e) = check_var_redefinition(node, scope.unwrap()) {
             self.context.errors.push(e);
         }
 

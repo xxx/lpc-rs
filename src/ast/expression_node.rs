@@ -247,7 +247,7 @@ mod tests {
     fn test_from_int_node() {
         let node = IntNode::new(666);
 
-        let clone = node.clone();
+        let clone = node;
 
         assert_eq!(ExpressionNode::from(node), ExpressionNode::Int(clone));
     }

@@ -68,12 +68,12 @@ impl Context {
 
     #[inline]
     pub fn lib_dir(&self) -> &str {
-        &self.config.lib_dir()
+        self.config.lib_dir()
     }
 
     #[inline]
     pub fn system_include_dirs(&self) -> &Vec<String> {
-        &self.config.system_include_dirs()
+        self.config.system_include_dirs()
     }
 }
 

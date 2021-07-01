@@ -8,7 +8,7 @@ use crate::{
     parser::span::Span,
     LpcInt,
 };
-use std::iter::repeat;
+
 
 /// Combine literals in cases where we have enough information to do so.
 ///
@@ -204,7 +204,7 @@ fn collapse_div(
 /// handle string * int and int * string
 fn collapse_repeat_string(string: String, amount: LpcInt, span: Span) -> ExpressionNode {
     if amount >= 0 {
-        let value = repeat(string).take(amount as usize).collect::<String>();
+        let value = string.repeat(amount as usize);
         ExpressionNode::String(StringNode {
             value,
             span: Some(span),

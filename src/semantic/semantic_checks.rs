@@ -501,7 +501,7 @@ mod check_binary_operation_tests {
         };
         let function_return_types = HashMap::new();
 
-        check_binary_operation_types(&node, &scope_tree, &function_return_types)
+        check_binary_operation_types(&node, scope_tree, &function_return_types)
     }
 
     fn int_int_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<()> {
@@ -509,7 +509,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(123),
             ExpressionNode::from(-123),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -518,7 +518,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from("foo"),
             ExpressionNode::from(123),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -527,7 +527,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(123),
             ExpressionNode::from("foo"),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -536,7 +536,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from("asdf"),
             ExpressionNode::from("foo"),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -545,7 +545,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("int1")),
             ExpressionNode::from(VarNode::new("int2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -554,7 +554,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("string2")),
             ExpressionNode::from(VarNode::new("int2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -563,7 +563,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("int2")),
             ExpressionNode::from(VarNode::new("string2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -572,7 +572,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("string1")),
             ExpressionNode::from(VarNode::new("string2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -581,7 +581,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(vec!["asdf", "bar", "hi"]),
             ExpressionNode::from(vec![1, 2, 5]),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -590,7 +590,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("array1")),
             ExpressionNode::from(VarNode::new("array2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -599,7 +599,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(vec!["asdf", "bar", "hi"]),
             ExpressionNode::from(666),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -608,7 +608,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("array1")),
             ExpressionNode::from(VarNode::new("int1")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -617,7 +617,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(vec![666, 2]),
             ExpressionNode::Range(RangeNode::new(Some(ExpressionNode::from(0)), None, None)),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -630,7 +630,7 @@ mod check_binary_operation_tests {
                 Some(ExpressionNode::from(VarNode::new("int2"))),
                 None,
             )),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -639,7 +639,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(123.45),
             ExpressionNode::from(-123.45),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -648,7 +648,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("float1")),
             ExpressionNode::from(VarNode::new("float2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -657,7 +657,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(123.45),
             ExpressionNode::from(-123),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -666,7 +666,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("float1")),
             ExpressionNode::from(VarNode::new("int1")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -675,7 +675,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(-123),
             ExpressionNode::from(123.45),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -684,7 +684,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("int1")),
             ExpressionNode::from(VarNode::new("float1")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -693,7 +693,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(HashMap::new()),
             ExpressionNode::from(HashMap::new()),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -702,7 +702,7 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("mapping1")),
             ExpressionNode::from(VarNode::new("mapping2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -1260,26 +1260,26 @@ mod check_unary_operation_tests {
         };
         let function_return_types = HashMap::new();
 
-        check_unary_operation_types(&node, &scope_tree, &function_return_types)
+        check_unary_operation_types(&node, scope_tree, &function_return_types)
     }
 
     fn int_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(123), &scope_tree)
+        get_result(op, ExpressionNode::from(123), scope_tree)
     }
 
     fn string_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from("foo"), &scope_tree)
+        get_result(op, ExpressionNode::from("foo"), scope_tree)
     }
 
     fn int_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(VarNode::new("int1")), &scope_tree)
+        get_result(op, ExpressionNode::from(VarNode::new("int1")), scope_tree)
     }
 
     fn string_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("string2")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -1287,7 +1287,7 @@ mod check_unary_operation_tests {
         get_result(
             op,
             ExpressionNode::from(vec!["asdf", "bar", "hi"]),
-            &scope_tree,
+            scope_tree,
         )
     }
 
@@ -1295,31 +1295,31 @@ mod check_unary_operation_tests {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("array1")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
     fn float_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(123.45), &scope_tree)
+        get_result(op, ExpressionNode::from(123.45), scope_tree)
     }
 
     fn float_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("float1")),
-            &scope_tree,
+            scope_tree,
         )
     }
 
     fn mapping_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(HashMap::new()), &scope_tree)
+        get_result(op, ExpressionNode::from(HashMap::new()), scope_tree)
     }
 
     fn mapping_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("mapping1")),
-            &scope_tree,
+            scope_tree,
         )
     }
 

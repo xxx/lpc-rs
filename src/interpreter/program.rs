@@ -88,9 +88,11 @@ mod tests {
 
     #[test]
     fn test_cwd() {
-        let mut program = Program::default();
+        let mut program = Program {
+            filename: "foo/bar/baz.c".into(),
+            ..Program::default()
+        };
 
-        program.filename = "foo/bar/baz.c".into();
         assert_eq!(&*program.cwd().to_str().unwrap(), "foo/bar");
 
         program.filename = "marf.c".into();

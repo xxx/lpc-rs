@@ -203,7 +203,7 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let appends = self.expand_token(&t, &mut iter)?;
+                            let appends = self.expand_token(t, &mut iter)?;
 
                             match appends {
                                 Some(mut vec) => {
@@ -948,7 +948,7 @@ mod tests {
                 // #endif
             "# };
 
-        test_valid(input, &vec!["This should be printed"]);
+        test_valid(input, &["This should be printed"]);
     }
 
     mod test_system_includes {
@@ -1003,7 +1003,7 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &vec![]);
+            test_valid(input, &[]);
         }
 
         #[test]
@@ -1098,7 +1098,7 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &vec![]);
+            test_valid(input, &[]);
         }
 
         #[test]
@@ -1324,7 +1324,7 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &vec![]);
+            test_valid(input, &[]);
         }
 
         #[test]
@@ -1409,7 +1409,7 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &vec![]);
+            test_valid(input, &[]);
         }
 
         #[test]
@@ -1494,7 +1494,7 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &vec![]);
+            test_valid(input, &[]);
         }
 
         #[test]
@@ -1602,7 +1602,7 @@ mod tests {
                 #endif
             "## };
 
-            test_valid(prog, &vec!["#if FOO works"])
+            test_valid(prog, &["#if FOO works"])
         }
 
         #[test]
@@ -1627,11 +1627,9 @@ mod tests {
 
             test_valid(
                 prog,
-                &vec![
-                    "#if defined(FOO) works",
+                &["#if defined(FOO) works",
                     "#if defined (BAR) works",
-                    "#if defined(BAZ) works",
-                ],
+                    "#if defined(BAZ) works"],
             )
         }
 
@@ -1681,14 +1679,12 @@ mod tests {
 
             test_valid(
                 prog,
-                &vec![
-                    "first test passes",
+                &["first test passes",
                     "second test passes",
                     "third test passes",
                     "fourth test passes",
                     "fifth test passes",
-                    "sixth test passes",
-                ],
+                    "sixth test passes"],
             );
         }
 
@@ -1702,7 +1698,7 @@ mod tests {
                 #endif
             "## };
 
-            test_valid(prog, &vec![])
+            test_valid(prog, &[])
         }
     }
 
@@ -1722,7 +1718,7 @@ mod tests {
 
             test_valid(
                 prog,
-                &vec!["666", "+", "(", "5", "+", "7", "+", "1234", ")"],
+                &["666", "+", "(", "5", "+", "7", "+", "1234", ")"],
             )
         }
 
@@ -1737,7 +1733,7 @@ mod tests {
                 BAR
             "## };
 
-            test_valid(prog, &vec!["1234", "4567"])
+            test_valid(prog, &["1234", "4567"])
         }
 
         #[test]

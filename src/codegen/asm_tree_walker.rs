@@ -270,7 +270,7 @@ impl AsmTreeWalker {
                 }
             }
             ExpressionNode::Var(v) => {
-                match self.lookup_var_symbol(&v) {
+                match self.lookup_var_symbol(v) {
                     Some(Symbol { type_: ty, .. }) => {
                         match ty {
                             LpcType::Int(false) => OperationType::Register,
@@ -294,17 +294,17 @@ impl AsmTreeWalker {
     ) -> Instruction {
         match node.op {
             BinaryOperation::Add => self.choose_num_or_mixed(
-                &node,
+                node,
                 || Instruction::IAdd(reg_left, reg_right, reg_result),
                 || Instruction::MAdd(reg_left, reg_right, reg_result),
             ),
             BinaryOperation::Sub => self.choose_num_or_mixed(
-                &node,
+                node,
                 || Instruction::ISub(reg_left, reg_right, reg_result),
                 || Instruction::MSub(reg_left, reg_right, reg_result),
             ),
             BinaryOperation::Mul => self.choose_num_or_mixed(
-                &node,
+                node,
                 || Instruction::IMul(reg_left, reg_right, reg_result),
                 || Instruction::MMul(reg_left, reg_right, reg_result),
             ),
@@ -865,7 +865,7 @@ impl TreeWalker for AsmTreeWalker {
                         scope_id: 0,
                         location: Some(register),
                         ..
-                    }) = self.lookup_global(&name)
+                    }) = self.lookup_global(name)
                     {
                         let store = Instruction::GStore(lhs_result, *register);
                         push_instruction!(self, store, node.span);
@@ -1180,7 +1180,7 @@ mod tests {
             let mut walker = AsmTreeWalker::new(context);
             let _ = tree.visit(&mut walker);
 
-            walker.instructions.to_owned()
+            walker.instructions
         }
 
         #[test]
@@ -2532,7 +2532,7 @@ mod tests {
                 body: Box::new(AstNode::Block(BlockNode {
                     body: vec![AstNode::Call(CallNode {
                         receiver: Box::new(None),
-                        arguments: vec![ExpressionNode::Var(var.clone())],
+                        arguments: vec![ExpressionNode::Var(var)],
                         name: "dump".to_string(),
                         span: None,
                     })],

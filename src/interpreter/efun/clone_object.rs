@@ -29,7 +29,7 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
                     }
                     .with_span(debug_span);
 
-                    return Err(err);
+                    Err(err)
                 }
             }
         }

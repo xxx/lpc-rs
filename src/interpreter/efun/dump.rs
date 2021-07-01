@@ -61,8 +61,8 @@ fn format_mapping(
 
 fn format_val(val: &LpcValue, interpreter: &AsmInterpreter, indent: usize) -> String {
     match val {
-        LpcValue::Array(a) => format_array(&a, interpreter, indent),
-        LpcValue::Mapping(m) => format_mapping(&m, interpreter, indent),
+        LpcValue::Array(a) => format_array(a, interpreter, indent),
+        LpcValue::Mapping(m) => format_mapping(m, interpreter, indent),
         x => format!("{:width$}{}", "", x, width = indent),
     }
 }

@@ -290,7 +290,7 @@ pub enum Token {
         track_slice(lex);
 
         let r = LpcInt::from_str_radix(
-            &lex.slice().replace("_", "")
+            lex.slice().replace("_", "")
                 .trim_start_matches("0x")
                 .trim_start_matches("0X"),
             16);
@@ -304,7 +304,7 @@ pub enum Token {
         track_slice(lex);
 
         let r = LpcInt::from_str_radix(
-            &lex.slice().replace("_", "")
+            lex.slice().replace("_", "")
                 .trim_start_matches("0o")
                 .trim_start_matches("0O"),
             8);
@@ -318,7 +318,7 @@ pub enum Token {
         track_slice(lex);
 
         let r = LpcInt::from_str_radix(
-            &lex.slice().replace("_", "")
+            lex.slice().replace("_", "")
                 .trim_start_matches("0b")
                 .trim_start_matches("0B"),
             2);

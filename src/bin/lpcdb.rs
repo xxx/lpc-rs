@@ -36,7 +36,7 @@ fn main() {
 
     let config = Rc::new(Config::new(None::<&str>).unwrap());
 
-    let compiler = Compiler::new(config.clone());
+    let compiler = Compiler::new(config);
 
     let filename = args.get(1).map_or(DEFAULT_FILE, |name| name);
 

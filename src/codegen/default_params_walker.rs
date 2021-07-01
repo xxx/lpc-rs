@@ -84,7 +84,7 @@ mod tests {
 
         let expected = vec![None, Some(ExpressionNode::from("marf"))];
 
-        for (idx, param) in params.into_iter().enumerate() {
+        for (idx, param) in params.iter().enumerate() {
             assert_eq!(*param, expected[idx]);
         }
     }

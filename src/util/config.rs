@@ -55,8 +55,8 @@ impl Config {
         let lib_dir = canonicalized_path(non_canon)?;
 
         Ok(Self {
+            lib_dir,
             system_include_dirs,
-            lib_dir
         })
     }
 
@@ -126,6 +126,6 @@ where
         Ok(y) => {
             Ok(y.to_string_lossy().into_owned())
         }
-        Err(e) => return Err(LpcError::new(e.to_string()))
+        Err(e) => Err(LpcError::new(e.to_string()))
     }
 }

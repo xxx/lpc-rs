@@ -9,7 +9,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
-    iter::repeat,
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
@@ -232,7 +231,7 @@ impl Sub for &LpcRef {
                     .collect();
                 Ok(LpcValue::Array(result))
             }
-            _ => Err(self.to_error(BinaryOperation::Sub, &rhs)),
+            _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
     }
 }
@@ -240,7 +239,7 @@ impl Sub for &LpcRef {
 /// Repeat `s`, `i` times, and return a new String of it.
 fn repeat_string(s: &str, i: LpcInt) -> String {
     if i >= 0 {
-        repeat(s).take(i as usize).collect()
+        s.repeat(i as usize)
     } else {
         String::from("")
     }
@@ -267,7 +266,7 @@ impl Mul for &LpcRef {
                 let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(repeat_string(string, *x)))
             }
-            _ => Err(self.to_error(BinaryOperation::Mul, &rhs)),
+            _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
     }
 }
@@ -305,7 +304,7 @@ impl Div for &LpcRef {
                     Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
                 }
             }
-            _ => Err(self.to_error(BinaryOperation::Div, &rhs)),
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
 }
@@ -510,9 +509,7 @@ mod tests {
             let array = value_to_ref!(LpcValue::Array(vec![]), pool);
             let result = &int + &array;
 
-            if let Ok(_) = result {
-                panic!("int + array should have failed, but didn't!")
-            }
+            assert!(result.is_err());
         }
     }
 
@@ -577,7 +574,7 @@ mod tests {
                 .collect::<Vec<_>>();
             let v2 = vec![2, 4].into_iter().map(to_ref).collect::<Vec<_>>();
             let a1 = value_to_ref!(LpcValue::from(v1), pool);
-            let a2 = value_to_ref!(LpcValue::from(v2.clone()), pool);
+            let a2 = value_to_ref!(LpcValue::from(v2), pool);
 
             let result = &a1 - &a2;
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
