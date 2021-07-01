@@ -1,12 +1,15 @@
+use delegate::delegate;
+use std::{
+    cell::{Cell, RefCell},
+    ops::Deref,
+};
 use crate::{
     asm::instruction::Instruction,
     interpreter::{lpc_ref::LpcRef, program::Program},
     parser::span::Span,
 };
-use std::{
-    cell::{Cell, RefCell},
-    ops::Deref,
-};
+use std::path::Path;
+use std::borrow::Cow;
 
 /// A wrapper type to allow the VM to keep the immutable program and its
 /// mutable runtime pieces together.
@@ -25,6 +28,13 @@ impl Process {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             pc: Cell::new(0),
+        }
+    }
+
+    delegate! {
+        to self.program {
+            /// Get the program's current working directory
+            pub fn cwd(&self) -> Cow<'_, Path>;
         }
     }
 

@@ -14,7 +14,7 @@ use lpc_rs::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    compiler::preprocess_string,
+    compiler::Compiler,
     context::Context,
     lpc_parser,
     parser::{
@@ -335,7 +335,8 @@ fn test_error_when_pragma_strict_types_without_return_type() {
         }
     "# };
 
-    let (code, preprocessor) = preprocess_string("foo/bar.c", prog).unwrap();
+    let compiler = Compiler::default();
+    let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
     let code = TokenVecWrapper::new(&code);
     let context = preprocessor.into_context();
 

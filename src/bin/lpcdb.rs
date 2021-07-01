@@ -4,13 +4,15 @@ use std::env;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs::{
-    compiler::compile_file,
+    compiler::Compiler,
     interpreter::{
         asm_interpreter::{current_registers, AsmInterpreter},
         program::Program,
     },
 };
 use rustyline::{error::ReadlineError, Editor};
+use std::rc::Rc;
+use lpc_rs::util::config::Config;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 
@@ -32,9 +34,13 @@ n: Execute the next instruction
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    let config = Rc::new(Config::new(None::<&str>).unwrap());
+
+    let compiler = Compiler::new(config.clone());
+
     let filename = args.get(1).map_or(DEFAULT_FILE, |name| name);
 
-    match compile_file(filename) {
+    match compiler.compile_file(filename) {
         Ok(program) => {
             let mut repl = Repl::new(program);
             let _ = repl.repl();

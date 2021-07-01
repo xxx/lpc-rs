@@ -5,6 +5,8 @@ use crate::{
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::{collections::HashMap, rc::Rc};
+use std::path::{Path, PathBuf};
+use std::borrow::Cow;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -30,7 +32,7 @@ pub struct Program {
     pub pragmas: PragmaFlags,
 }
 
-impl Program {
+impl<'a> Program {
     /// Serialize the program to msgpack format, suitable for saving to disk.
     pub fn to_msgpack(&self) -> Vec<u8> {
         let mut buf = vec![];
@@ -45,6 +47,14 @@ impl Program {
     {
         self.functions.get(name.as_ref())
     }
+
+    /// Get the directory of this program. Used for clone_object, etc.
+    pub fn cwd(&'a self) -> Cow<'a, Path> {
+        match Path::new(&self.filename).parent() {
+            None => Cow::Owned(PathBuf::from("")),
+            Some(path) => Cow::Borrowed(path)
+        }
+    }
 }
 
 impl From<Vec<u8>> for Program {
@@ -57,7 +67,7 @@ impl From<Vec<u8>> for Program {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::compile_string;
+    use crate::compiler::Compiler;
 
     #[test]
     fn test_serialization_and_deserialization() {
@@ -68,10 +78,25 @@ mod tests {
                 dump(foo);
             }
         "#;
-        let prog = compile_string("foo.c", content.to_string()).unwrap();
+        let compiler = Compiler::default();
+        let prog = compiler.compile_string("foo.c", content.to_string()).unwrap();
 
         let msgpack = prog.to_msgpack();
 
         assert_eq!(Program::from(msgpack), prog);
+    }
+
+    #[test]
+    fn test_cwd() {
+        let mut program = Program::default();
+
+        program.filename = "foo/bar/baz.c".into();
+        assert_eq!(&*program.cwd().to_str().unwrap(), "foo/bar");
+
+        program.filename = "marf.c".into();
+        assert_eq!(&*program.cwd().to_str().unwrap(), "");
+
+        program.filename = "".into();
+        assert_eq!(&*program.cwd().to_str().unwrap(), "");
     }
 }

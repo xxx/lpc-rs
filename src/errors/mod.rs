@@ -127,6 +127,12 @@ impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
     }
 }
 
+impl From<std::io::Error> for LpcError {
+    fn from(e: std::io::Error) -> Self {
+        Self::new(e.to_string())
+    }
+}
+
 /// Emit nice error messages to the console.
 ///
 /// # Arguments
@@ -143,7 +149,7 @@ pub fn emit_diagnostics(errors: &[LpcError]) {
         if let Err(e) =
             codespan_reporting::term::emit(&mut writer.lock(), &config, &*files, diagnostic)
         {
-            eprintln!("error attempting to emit error: {:?}", e);
+            eprintln!("error attempting to emit diagnostic: {:?} ::: {:?} ::: {:?}", e, diagnostic, files);
         };
     }
 }

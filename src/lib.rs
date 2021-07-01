@@ -8,6 +8,7 @@ pub mod interpreter;
 pub mod parser;
 pub mod preprocessor;
 pub mod semantic;
+pub mod util;
 
 #[macro_use]
 extern crate lalrpop_util;

@@ -1,16 +1,12 @@
 use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
-use codespan_reporting::files::Files;
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
-use path_absolutize::Absolutize;
 use regex::Regex;
 use std::{
     collections::HashMap,
-    ffi::OsString,
     fs,
-    path::{Path, PathBuf},
+    path::Path,
 };
-
 use define::{Define, ObjectMacro};
 
 use crate::{
@@ -19,7 +15,7 @@ use crate::{
     convert_escapes,
     errors::{
         format_expected,
-        lazy_files::{FileCache, FILE_CACHE},
+        lazy_files::FileCache,
         LpcError,
     },
     parser::{
@@ -33,6 +29,7 @@ use crate::{
     preprocessor_parser, LpcInt, Result,
 };
 use std::iter::Peekable;
+use crate::util::path_maker::{canonicalize_server_path, canonicalize_in_game_path};
 
 pub mod define;
 pub mod preprocessor_node;
@@ -106,8 +103,11 @@ impl Preprocessor {
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
     /// use lpc_rs::context::Context;
+    /// use lpc_rs::util::config::Config;
+    /// use std::rc::Rc;
     ///
-    /// let context = Context::new("test.c", "/home/mud/lib", vec!["/include", "/sys"]);
+    /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
+    /// let context = Context::new("test.c", Rc::new(config));
     /// let preprocessor = Preprocessor::new(context);
     /// ```
     pub fn new(context: Context) -> Self {
@@ -125,104 +125,6 @@ impl Preprocessor {
         self.context
     }
 
-    /// Convert an in-game path, relative or absolute, to a canonical, absolute on-server path.
-    /// This function is used for resolving included files.
-    ///
-    /// # Arguments
-    /// `path` - An in-game path.
-    /// `cwd` - The current working directory, needed to resolve relative paths.
-    fn canonicalize_path<T, U>(&self, path: T, cwd: U) -> PathBuf
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-    {
-        let path_ref = path.as_ref().as_os_str();
-        let sep = String::from(std::path::MAIN_SEPARATOR);
-        let os_sep = OsString::from(&sep);
-        let mut root_string = OsString::from(self.context.root_dir.to_str().unwrap());
-
-        // turn relative paths into absolute
-        if !path_ref.to_string_lossy().starts_with(&sep) {
-            root_string.push(&os_sep);
-            root_string.push(cwd.as_ref().as_os_str());
-        }
-
-        root_string.push(&os_sep);
-        root_string.push(&path_ref);
-
-        Path::new(
-            &root_string
-                .to_string_lossy()
-                .replace("//", "/")
-                .replace("/./", "/"),
-        )
-        .absolutize()
-        .unwrap()
-        .to_path_buf()
-    }
-
-    /// Convert an in-game path, relative or absolute, to a canonical, absolute in-game path.
-    ///
-    /// # Arguments
-    /// `path` - An in-game path.
-    /// `cwd` - The current working directory, needed to resolve relative paths.
-    fn canonicalize_local_path<T, U>(&self, path: T, cwd: U) -> PathBuf
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-    {
-        let canon = self.canonicalize_path(path, cwd);
-        let buf = canon.as_os_str();
-        let root_len = self.context.root_dir.as_os_str().len();
-
-        PathBuf::from(
-            &buf.to_string_lossy()
-                .chars()
-                .skip(root_len)
-                .collect::<String>()
-                .replace("//", "/")
-                .replace("/./", "/"),
-        )
-    }
-
-    /// Scan a file on disk, using the `filename` stored in `Context`.
-    /// This is a light wrapper around `scan()` for convenience to kick off a scan.
-    ///
-    /// # Arguments
-    /// `cwd` - The current working directory on-server, used to resolve relative links
-    ///
-    /// # Examples
-    /// ```
-    /// use lpc_rs::context::Context;
-    /// use lpc_rs::preprocessor::Preprocessor;
-    ///
-    /// let context = Context::new("./foo.c", ".", vec!["/include", "/sys/include"]);
-    /// let mut preprocessor = Preprocessor::new(context);
-    ///
-    /// let processed = preprocessor.scan_context("/");
-    /// ```
-    pub fn scan_context<T>(&mut self, cwd: T) -> Result<Vec<Spanned<Token>>>
-    where
-        T: AsRef<Path>,
-    {
-        let file_id = FileCache::insert(self.context.filename.clone());
-        let files = FILE_CACHE.read();
-        let source = match files.source(file_id) {
-            Ok(x) => x,
-            Err(e) => {
-                let canonical_path = self.canonicalize_path(&self.context.filename, &cwd);
-
-                return Err(LpcError::new(format!(
-                    "Unable to read `{}`: {}",
-                    canonical_path.display(),
-                    e
-                )));
-            }
-        };
-
-        self.scan(&self.context.filename.clone(), cwd, source)
-    }
-
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
     ///
     /// # Arguments
@@ -234,8 +136,11 @@ impl Preprocessor {
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
     /// use lpc_rs::context::Context;
+    /// use lpc_rs::util::config::Config;
+    /// use std::rc::Rc;
     ///
-    /// let context = Context::new("./foo.c", ".", vec!["/include", "/sys/include"]);
+    /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
+    /// let context = Context::new("test.c", Rc::new(config));
     /// let mut preprocessor = Preprocessor::new(context);
     ///
     /// let content = r#"
@@ -266,14 +171,11 @@ impl Preprocessor {
                 )));
             }
         };
-        let file_id = FileCache::insert(self.canonicalize_path(filename, &cwd).display());
+        let file_id = FileCache::insert(canonicalize_server_path(filename, &cwd, &self.context.lib_dir()).display());
 
         let mut token_stream = LexWrapper::new(file_content.as_ref());
         token_stream.set_file_id(file_id);
-        // let tokens = token_stream.collect::<Vec<_>>().iter().peekable();
-        // let mut spanned_results = Arc::new(token_stream.peekable());
 
-        // let mut peekable = spanned_results.clone();
         let mut iter = token_stream.into_iter().peekable();
 
         while let Some(spanned_result) = iter.next() {
@@ -602,7 +504,8 @@ impl Preprocessor {
         if let Some(captures) = SYS_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
 
-            for dir in &*self.context.include_dirs.clone() {
+            // TODO: get rid of this clone
+            for dir in &*self.context.system_include_dirs().clone() {
                 if let Ok(included) = self.include_local_file(matched.as_str(), dir, token.0) {
                     for spanned in included {
                         self.append_spanned(&mut output, spanned)
@@ -909,13 +812,14 @@ impl Preprocessor {
         T: AsRef<Path>,
         U: AsRef<Path>,
     {
-        let canon_include_path = self.canonicalize_path(&path, &cwd);
+        let canon_include_path = canonicalize_server_path(&path, &cwd, &self.context.lib_dir());
 
-        if !canon_include_path.starts_with(&self.context.root_dir) {
+        if !canon_include_path.starts_with(self.context.lib_dir()) {
             return Err(LpcError::new(&format!(
-                "Attempt to include a file outside the root: `{}` (expanded to `{}`)",
+                "Attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path.as_ref().display(),
-                canon_include_path.display()
+                canon_include_path.display(),
+                self.context.lib_dir()
             ))
             .with_span(Some(span)));
         }
@@ -933,7 +837,7 @@ impl Preprocessor {
             }
         };
 
-        let local_canon_include_path = self.canonicalize_local_path(&path, &cwd);
+        let local_canon_include_path = canonicalize_in_game_path(&path, &cwd, &self.context.lib_dir());
         let filename = local_canon_include_path.file_name().unwrap();
         let cwd = local_canon_include_path.parent().unwrap();
         self.scan(filename, cwd, &file_content)
@@ -995,9 +899,15 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
+    use crate::util::config::Config;
+    use std::rc::Rc;
 
     fn fixture() -> Preprocessor {
-        let context = Context::new("test.c", "./tests/fixtures/code", vec!["/sys", "sys2"]);
+        let config = Config::default()
+            .with_lib_dir("./tests/fixtures/code")
+            .with_system_include_dirs(vec!["/sys", "sys2"]);
+
+        let context = Context::new("test.c", Rc::new(config));
         Preprocessor::new(context)
     }
 

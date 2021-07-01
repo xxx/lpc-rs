@@ -1147,7 +1147,6 @@ mod tests {
             expression_node::ExpressionNode,
         },
         codegen::scope_walker::ScopeWalker,
-        compiler::preprocess_string,
         lpc_parser,
         parser::{
             lexer::{LexWrapper, TokenVecWrapper},
@@ -1163,10 +1162,12 @@ mod tests {
     mod test_visit_program {
         use super::*;
         use crate::asm::instruction::Instruction::MAdd;
+        use crate::compiler::Compiler;
 
         fn generate_instructions(prog: &str) -> Vec<Instruction> {
+            let compiler = Compiler::default();
             let mut scope_walker = ScopeWalker::new(Context::default());
-            let (code, preprocessor) = preprocess_string("foo.c", prog).unwrap();
+            let (code, preprocessor) = compiler.preprocess_string("foo.c", prog).unwrap();
 
             let context = preprocessor.into_context();
             let mut tree = lpc_parser::ProgramParser::new()

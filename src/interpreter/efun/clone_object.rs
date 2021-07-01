@@ -1,5 +1,5 @@
 use crate::{
-    compiler::{compile_file, compiler_error::CompilerError},
+    compiler::{compiler_error::CompilerError},
     errors::LpcError,
     interpreter::{
         asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
@@ -8,14 +8,16 @@ use crate::{
 };
 use refpool::PoolRef;
 use std::{cell::RefCell, rc::Rc};
+use crate::compiler::Compiler;
 
 fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Process>> {
     let frame = interpreter.stack.last().unwrap();
+    let compiler = Compiler::new(interpreter.config.clone());
 
     match interpreter.processes.get(path) {
         Some(proc) => Ok(proc.clone()),
         None => {
-            match compile_file(path) {
+            match compiler.compile_in_game_file(path, interpreter.in_game_cwd()?, interpreter.process.current_debug_span()) {
                 Ok(prog) => interpreter.init_program_with_clean_stack(prog),
                 Err(e) => {
                     let debug_span = frame.process.current_debug_span();
@@ -82,10 +84,28 @@ mod tests {
     use super::*;
     use crate::{interpreter::stack_frame::StackFrame, semantic::function_symbol::FunctionSymbol};
     use std::rc::Rc;
+    use crate::util::config::Config;
+    use crate::interpreter::program::Program;
+    use std::fs;
+    use regex::Regex;
 
     #[test]
     fn returns_error_if_no_clone() {
-        let mut interpreter = AsmInterpreter::default();
+        let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests");
+
+        let program = Program {
+            instructions: vec![],
+            filename: fs::canonicalize("./tests/fixtures/code/empty.c").unwrap().to_string_lossy().to_string(),
+            debug_spans: vec![],
+            labels: Default::default(),
+            functions: Default::default(),
+            num_globals: 0,
+            pragmas: Default::default()
+        };
+
+        let mut interpreter = AsmInterpreter::new(config.into());
+        interpreter.load(program);
+
         let sym = FunctionSymbol {
             name: "clone_object".to_string(),
             num_args: 1,
@@ -97,15 +117,14 @@ mod tests {
 
         let path = LpcRef::String(PoolRef::new(
             &interpreter.memory,
-            RefCell::new(LpcValue::from("./tests/fixtures/code/no_clone.c")),
+            RefCell::new(LpcValue::from("./no_clone.c")),
         ));
         frame.registers[1] = path;
 
         interpreter.push_frame(frame);
 
-        assert_eq!(
-            &clone_object(&mut interpreter).unwrap_err().to_string(),
-            "./tests/fixtures/code/no_clone.c has `#pragma no_clone` enabled, and so cannot be cloned."
-        )
+        let re = Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.").unwrap();
+
+        assert!(re.is_match(&clone_object(&mut interpreter).unwrap_err().to_string()));
     }
 }

@@ -15,6 +15,8 @@ use crate::{
 use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use crate::util::config::Config;
+use std::path::PathBuf;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -31,18 +33,22 @@ const MEMORY_SIZE: usize = 100_000;
 ///
 /// ```
 /// use lpc_rs::interpreter::asm_interpreter::AsmInterpreter;
-/// use lpc_rs::compiler::compile_string;
+/// use lpc_rs::compiler::Compiler;
 ///
 /// let prog = r#"int create() { dump("hello, world"); int b = 123; return b; }"#;
+/// let compiler = Compiler::default();
 /// // See also `compile_file` for compiling files from disk.
-/// let program = compile_string("my_prog.c", prog).expect("Unable to compile.");
+/// let program = compiler.compile_string("my_prog.c", prog).expect("Unable to compile.");
 ///
 /// // Load the program and run it
-/// let mut interpreter = AsmInterpreter::new(program);
-/// interpreter.init();
+/// let mut interpreter = AsmInterpreter::default();
+/// interpreter.init_program(program);
 /// ```
 #[derive(Debug)]
 pub struct AsmInterpreter {
+    /// The configuration received from the running user
+    pub config: Rc<Config>,
+
     /// The process to run
     pub process: Rc<Process>,
 
@@ -82,11 +88,12 @@ fn current_registers_mut(stack: &mut Vec<StackFrame>) -> Result<&mut Vec<LpcRef>
 }
 
 impl AsmInterpreter {
-    /// Create a new [`AsmInterpreter`]
-    pub fn new(program: Program) -> Self {
-        let mut interpreter = Self::default();
-        interpreter.load(program);
-        interpreter
+    /// Create a new [`AsmInterpreter`] with the passed [`Config`]
+    pub fn new(config: Rc<Config>) -> Self {
+        Self {
+            config,
+            ..Self::default()
+        }
     }
 
     /// Load a program for evaluation
@@ -194,6 +201,17 @@ impl AsmInterpreter {
         previous_frame
     }
 
+    /// Get the in-game directory of the current process
+    pub fn in_game_cwd(&self) -> Result<PathBuf> {
+        match self.process.cwd().strip_prefix(self.config.lib_dir()) {
+            // TODO: rewrite this to avoid converting this to an owned value
+            // The problem is the self.process.cwd() call creates a value
+            // owned by the current function.
+            Ok(x) => Ok(x.to_path_buf()),
+            Err(e) => Err(LpcError::new(e.to_string()))
+        }
+    }
+
     /// Resolve the passed index within the current stack frame's registers, down to an LpcRef
     /// # Arguments
     /// `index` - the register index to resolve
@@ -207,6 +225,7 @@ impl AsmInterpreter {
         registers.get(index).unwrap().clone()
     }
 
+    /// Evaluate loaded instructions, starting from the current value of the PC
     fn eval(&mut self) -> Result<()> {
         let mut halted = false;
 
@@ -217,7 +236,7 @@ impl AsmInterpreter {
         Ok(())
     }
 
-    /// Evaluate loaded instructions, starting from the current value of the PC
+    /// Evaluate the instruction at the current value of the PC
     /// The boolean represents whether we are at the end of input (i.e. we should halt the machine)
     pub fn eval_one_instruction(&mut self) -> Result<bool> {
         let instruction = match self.process.instruction() {
@@ -792,6 +811,7 @@ impl Default for AsmInterpreter {
         let program = Rc::new(Process::new(Program::default()));
 
         Self {
+            config: Rc::new(Config::default()),
             process: program,
             processes: programs,
             clone_count: 0,

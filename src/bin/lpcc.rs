@@ -1,17 +1,25 @@
 use std::env;
 
-use lpc_rs::{compiler::compile_file, errors, interpreter::asm_interpreter::AsmInterpreter};
+use lpc_rs::{errors, interpreter::asm_interpreter::AsmInterpreter};
+use lpc_rs::util::config::Config;
+use lpc_rs::compiler::Compiler;
+use std::rc::Rc;
 
-const DEFAULT_FILE: &str = "local/mathfile.c";
+const DEFAULT_FILE: &str = "mathfile.c";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    let config = Rc::new(Config::new(None::<&str>).unwrap());
+    println!("config {:?}", config);
+
+    let compiler = Compiler::new(config.clone());
+
     let filename = args.get(1).map_or(DEFAULT_FILE, |name| name);
 
-    match compile_file(filename) {
+    match compiler.compile_in_game_file(filename, "/", None) {
         Ok(program) => {
-            let mut interpreter = AsmInterpreter::default();
+            let mut interpreter = AsmInterpreter::new(config);
 
             // println!("{:?}", program);
             if let Err(e) = interpreter.init_program(program) {
