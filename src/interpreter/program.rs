@@ -4,9 +4,12 @@ use crate::{
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
-use std::{collections::HashMap, rc::Rc};
-use std::path::{Path, PathBuf};
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -52,7 +55,7 @@ impl<'a> Program {
     pub fn cwd(&'a self) -> Cow<'a, Path> {
         match Path::new(&self.filename).parent() {
             None => Cow::Owned(PathBuf::from("")),
-            Some(path) => Cow::Borrowed(path)
+            Some(path) => Cow::Borrowed(path),
         }
     }
 }
@@ -79,7 +82,9 @@ mod tests {
             }
         "#;
         let compiler = Compiler::default();
-        let prog = compiler.compile_string("foo.c", content.to_string()).unwrap();
+        let prog = compiler
+            .compile_string("foo.c", content.to_string())
+            .unwrap();
 
         let msgpack = prog.to_msgpack();
 

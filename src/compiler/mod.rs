@@ -14,20 +14,20 @@ use crate::{
     errors::LpcError,
     interpreter::program::Program,
     lpc_parser,
-    parser::lexer::{Spanned, Token, TokenVecWrapper},
+    parser::{
+        lexer::{Spanned, Token, TokenVecWrapper},
+        span::Span,
+    },
     preprocessor::Preprocessor,
+    util::{config::Config, path_maker::canonicalize_server_path},
 };
-use crate::util::config::Config;
-use std::rc::Rc;
-use crate::util::path_maker::canonicalize_server_path;
-use std::fmt::Debug;
-use crate::parser::span::Span;
+use std::{fmt::Debug, rc::Rc};
 
 pub mod compiler_error;
 
 #[derive(Debug, Default)]
 pub struct Compiler {
-    config: Rc<Config>
+    config: Rc<Config>,
 }
 
 impl Compiler {
@@ -67,10 +67,15 @@ impl Compiler {
     }
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
-    pub fn compile_in_game_file<T, U>(&self, path: T, cwd: U, span: Option<Span>) -> Result<Program, CompilerError>
-        where
-            T: AsRef<Path> + AsRef<str>,
-            U: AsRef<Path>,
+    pub fn compile_in_game_file<T, U>(
+        &self,
+        path: T,
+        cwd: U,
+        span: Option<Span>,
+    ) -> Result<Program, CompilerError>
+    where
+        T: AsRef<Path> + AsRef<str>,
+        U: AsRef<Path>,
     {
         let absolute_file_path = canonicalize_server_path(&path, &cwd, self.config.lib_dir());
 

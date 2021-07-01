@@ -149,7 +149,10 @@ pub fn emit_diagnostics(errors: &[LpcError]) {
         if let Err(e) =
             codespan_reporting::term::emit(&mut writer.lock(), &config, &*files, diagnostic)
         {
-            eprintln!("error attempting to emit diagnostic: {:?} ::: {:?} ::: {:?}", e, diagnostic, files);
+            eprintln!(
+                "error attempting to emit diagnostic: {:?} ::: {:?} ::: {:?}",
+                e, diagnostic, files
+            );
         };
     }
 }

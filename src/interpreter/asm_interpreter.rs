@@ -10,13 +10,13 @@ use crate::{
         stack_frame::StackFrame,
     },
     semantic::function_symbol::FunctionSymbol,
-    try_extract_value, value_to_ref, LpcInt, Result,
+    try_extract_value,
+    util::config::Config,
+    value_to_ref, LpcInt, Result,
 };
 use decorum::Total;
 use refpool::{Pool, PoolRef};
-use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
-use crate::util::config::Config;
-use std::path::PathBuf;
+use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -208,7 +208,7 @@ impl AsmInterpreter {
             // The problem is the self.process.cwd() call creates a value
             // owned by the current function.
             Ok(x) => Ok(x.to_path_buf()),
-            Err(e) => Err(LpcError::new(e.to_string()))
+            Err(e) => Err(LpcError::new(e.to_string())),
         }
     }
 

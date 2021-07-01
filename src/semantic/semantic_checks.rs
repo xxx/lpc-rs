@@ -1292,11 +1292,7 @@ mod check_unary_operation_tests {
     }
 
     fn array_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(
-            op,
-            ExpressionNode::from(VarNode::new("array1")),
-            scope_tree,
-        )
+        get_result(op, ExpressionNode::from(VarNode::new("array1")), scope_tree)
     }
 
     fn float_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
@@ -1304,11 +1300,7 @@ mod check_unary_operation_tests {
     }
 
     fn float_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(
-            op,
-            ExpressionNode::from(VarNode::new("float1")),
-            scope_tree,
-        )
+        get_result(op, ExpressionNode::from(VarNode::new("float1")), scope_tree)
     }
 
     fn mapping_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {

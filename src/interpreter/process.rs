@@ -1,15 +1,15 @@
-use delegate::delegate;
-use std::{
-    cell::{Cell, RefCell},
-    ops::Deref,
-};
 use crate::{
     asm::instruction::Instruction,
     interpreter::{lpc_ref::LpcRef, program::Program},
     parser::span::Span,
 };
-use std::path::Path;
-use std::borrow::Cow;
+use delegate::delegate;
+use std::{
+    borrow::Cow,
+    cell::{Cell, RefCell},
+    ops::Deref,
+    path::Path,
+};
 
 /// A wrapper type to allow the VM to keep the immutable program and its
 /// mutable runtime pieces together.

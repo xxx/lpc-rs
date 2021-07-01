@@ -1,15 +1,11 @@
-use std::{
-    collections::HashMap,
-};
-
+use std::collections::HashMap;
 
 use crate::{
     ast::expression_node::ExpressionNode,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 
-use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags};
-use crate::util::config::Config;
+use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
 use std::rc::Rc;
 
 /// A big, fat state object to store data created at various stages of compilation.

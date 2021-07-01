@@ -1,5 +1,5 @@
 use crate::{
-    compiler::{compiler_error::CompilerError},
+    compiler::{compiler_error::CompilerError, Compiler},
     errors::LpcError,
     interpreter::{
         asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
@@ -8,7 +8,6 @@ use crate::{
 };
 use refpool::PoolRef;
 use std::{cell::RefCell, rc::Rc};
-use crate::compiler::Compiler;
 
 fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Process>> {
     let frame = interpreter.stack.last().unwrap();
@@ -17,7 +16,11 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
     match interpreter.processes.get(path) {
         Some(proc) => Ok(proc.clone()),
         None => {
-            match compiler.compile_in_game_file(path, interpreter.in_game_cwd()?, interpreter.process.current_debug_span()) {
+            match compiler.compile_in_game_file(
+                path,
+                interpreter.in_game_cwd()?,
+                interpreter.process.current_debug_span(),
+            ) {
                 Ok(prog) => interpreter.init_program_with_clean_stack(prog),
                 Err(e) => {
                     let debug_span = frame.process.current_debug_span();
@@ -82,12 +85,13 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{interpreter::stack_frame::StackFrame, semantic::function_symbol::FunctionSymbol};
-    use std::rc::Rc;
-    use crate::util::config::Config;
-    use crate::interpreter::program::Program;
-    use std::fs;
+    use crate::{
+        interpreter::{program::Program, stack_frame::StackFrame},
+        semantic::function_symbol::FunctionSymbol,
+        util::config::Config,
+    };
     use regex::Regex;
+    use std::{fs, rc::Rc};
 
     #[test]
     fn returns_error_if_no_clone() {
@@ -95,12 +99,15 @@ mod tests {
 
         let program = Program {
             instructions: vec![],
-            filename: fs::canonicalize("./tests/fixtures/code/empty.c").unwrap().to_string_lossy().to_string(),
+            filename: fs::canonicalize("./tests/fixtures/code/empty.c")
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
             debug_spans: vec![],
             labels: Default::default(),
             functions: Default::default(),
             num_globals: 0,
-            pragmas: Default::default()
+            pragmas: Default::default(),
         };
 
         let mut interpreter = AsmInterpreter::new(config.into());
@@ -123,7 +130,9 @@ mod tests {
 
         interpreter.push_frame(frame);
 
-        let re = Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.").unwrap();
+        let re =
+            Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.")
+                .unwrap();
 
         assert!(re.is_match(&clone_object(&mut interpreter).unwrap_err().to_string()));
     }

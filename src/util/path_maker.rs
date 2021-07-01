@@ -1,6 +1,8 @@
-use std::path::{PathBuf, Path};
 use path_absolutize::Absolutize;
-use std::ffi::{OsString, OsStr};
+use std::{
+    ffi::{OsStr, OsString},
+    path::{Path, PathBuf},
+};
 
 /// Convert an in-game path, relative or absolute, to a canonical, absolute *on-server* path.
 /// This function is used for resolving included files.
@@ -10,10 +12,10 @@ use std::ffi::{OsString, OsStr};
 /// `cwd` - The current working directory, needed to resolve relative paths.
 /// `root_dir` - The game root directory.
 pub fn canonicalize_server_path<T, U, V>(path: T, cwd: U, root_dir: V) -> PathBuf
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-        V: Into<OsString>,
+where
+    T: AsRef<Path>,
+    U: AsRef<Path>,
+    V: Into<OsString>,
 {
     let path_ref = path.as_ref().as_os_str();
     let sep = String::from(std::path::MAIN_SEPARATOR);
@@ -35,9 +37,9 @@ pub fn canonicalize_server_path<T, U, V>(path: T, cwd: U, root_dir: V) -> PathBu
             .replace("//", "/")
             .replace("/./", "/"),
     )
-        .absolutize()
-        .unwrap()
-        .to_path_buf()
+    .absolutize()
+    .unwrap()
+    .to_path_buf()
 }
 
 /// Convert an in-game path, relative or absolute, to a canonical, absolute *in-game* path.
@@ -48,10 +50,10 @@ pub fn canonicalize_server_path<T, U, V>(path: T, cwd: U, root_dir: V) -> PathBu
 /// `cwd` - The current working directory, needed to resolve relative paths.
 /// `lib_dir` - The game root directory.
 pub fn canonicalize_in_game_path<T, U, V>(path: T, cwd: U, lib_dir: V) -> PathBuf
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-        V: AsRef<OsStr>,
+where
+    T: AsRef<Path>,
+    U: AsRef<Path>,
+    V: AsRef<OsStr>,
 {
     let canon = canonicalize_server_path(path, cwd, lib_dir.as_ref());
     let buf = canon.as_os_str();
@@ -68,7 +70,6 @@ pub fn canonicalize_in_game_path<T, U, V>(path: T, cwd: U, lib_dir: V) -> PathBu
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,23 +79,61 @@ mod tests {
 
     #[test]
     fn test_canonicalize_server_path() {
-        assert_eq!(canonicalize_server_path("my_file.c", CWD, LIB_DIR).as_os_str(), "/home/mud/lib/home/wizard/mpd/my_file.c");
-        assert_eq!(canonicalize_server_path("./my_file.c", CWD, LIB_DIR).as_os_str(), "/home/mud/lib/home/wizard/mpd/my_file.c");
-        assert_eq!(canonicalize_server_path("../my_file.c", CWD, LIB_DIR).as_os_str(), "/home/mud/lib/home/wizard/my_file.c");
-        assert_eq!(canonicalize_server_path("/my_file.c", CWD, LIB_DIR).as_os_str(), "/home/mud/lib/my_file.c");
-        assert_eq!(canonicalize_server_path("../../../../../../../../../my_file.c", CWD, LIB_DIR).as_os_str(), "/my_file.c");
+        assert_eq!(
+            canonicalize_server_path("my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/mud/lib/home/wizard/mpd/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_server_path("./my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/mud/lib/home/wizard/mpd/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_server_path("../my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/mud/lib/home/wizard/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_server_path("/my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/mud/lib/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_server_path("../../../../../../../../../my_file.c", CWD, LIB_DIR)
+                .as_os_str(),
+            "/my_file.c"
+        );
 
-        assert_eq!(canonicalize_server_path("root.c", ".", LIB_DIR).as_os_str(), "/home/mud/lib/root.c");
+        assert_eq!(
+            canonicalize_server_path("root.c", ".", LIB_DIR).as_os_str(),
+            "/home/mud/lib/root.c"
+        );
         // assert_eq!(canonicalize_server_path("root.c", "/", LIB_DIR).as_os_str(), "/home/mud/lib/root.c");
-        assert_eq!(canonicalize_server_path("./root.c", "/foobar", LIB_DIR).as_os_str(), "/home/mud/lib/foobar/root.c");
+        assert_eq!(
+            canonicalize_server_path("./root.c", "/foobar", LIB_DIR).as_os_str(),
+            "/home/mud/lib/foobar/root.c"
+        );
     }
 
     #[test]
     fn test_canonicalize_in_game_path() {
-        assert_eq!(canonicalize_in_game_path("my_file.c", CWD, LIB_DIR).as_os_str(), "/home/wizard/mpd/my_file.c");
-        assert_eq!(canonicalize_in_game_path("./my_file.c", CWD, LIB_DIR).as_os_str(), "/home/wizard/mpd/my_file.c");
-        assert_eq!(canonicalize_in_game_path("../my_file.c", CWD, LIB_DIR).as_os_str(), "/home/wizard/my_file.c");
-        assert_eq!(canonicalize_in_game_path("/my_file.c", CWD, LIB_DIR).as_os_str(), "/my_file.c");
-        assert_eq!(canonicalize_in_game_path("../../../../../../../../../my_file.c", CWD, LIB_DIR).as_os_str(), "");
+        assert_eq!(
+            canonicalize_in_game_path("my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/wizard/mpd/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_in_game_path("./my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/wizard/mpd/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_in_game_path("../my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/home/wizard/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_in_game_path("/my_file.c", CWD, LIB_DIR).as_os_str(),
+            "/my_file.c"
+        );
+        assert_eq!(
+            canonicalize_in_game_path("../../../../../../../../../my_file.c", CWD, LIB_DIR)
+                .as_os_str(),
+            ""
+        );
     }
 }

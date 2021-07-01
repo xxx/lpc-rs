@@ -1,8 +1,8 @@
 use std::env;
 
-use lpc_rs::{errors, interpreter::asm_interpreter::AsmInterpreter};
-use lpc_rs::util::config::Config;
-use lpc_rs::compiler::Compiler;
+use lpc_rs::{
+    compiler::Compiler, errors, interpreter::asm_interpreter::AsmInterpreter, util::config::Config,
+};
 use std::rc::Rc;
 
 const DEFAULT_FILE: &str = "mathfile.c";

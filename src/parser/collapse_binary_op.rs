@@ -9,7 +9,6 @@ use crate::{
     LpcInt,
 };
 
-
 /// Combine literals in cases where we have enough information to do so.
 ///
 /// # Arguments

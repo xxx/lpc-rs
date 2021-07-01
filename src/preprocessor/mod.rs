@@ -1,23 +1,15 @@
 use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
+use define::{Define, ObjectMacro};
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{
-    collections::HashMap,
-    fs,
-    path::Path,
-};
-use define::{Define, ObjectMacro};
+use std::{collections::HashMap, fs, path::Path};
 
 use crate::{
     ast::binary_op_node::BinaryOperation,
     context::Context,
     convert_escapes,
-    errors::{
-        format_expected,
-        lazy_files::FileCache,
-        LpcError,
-    },
+    errors::{format_expected, lazy_files::FileCache, LpcError},
     parser::{
         lexer::{
             logos_token::{IntToken, StringToken},
@@ -26,10 +18,11 @@ use crate::{
         span::Span,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
-    preprocessor_parser, LpcInt, Result,
+    preprocessor_parser,
+    util::path_maker::{canonicalize_in_game_path, canonicalize_server_path},
+    LpcInt, Result,
 };
 use std::iter::Peekable;
-use crate::util::path_maker::{canonicalize_server_path, canonicalize_in_game_path};
 
 pub mod define;
 pub mod preprocessor_node;
@@ -171,7 +164,9 @@ impl Preprocessor {
                 )));
             }
         };
-        let file_id = FileCache::insert(canonicalize_server_path(filename, &cwd, &self.context.lib_dir()).display());
+        let file_id = FileCache::insert(
+            canonicalize_server_path(filename, &cwd, &self.context.lib_dir()).display(),
+        );
 
         let mut token_stream = LexWrapper::new(file_content.as_ref());
         token_stream.set_file_id(file_id);
@@ -837,7 +832,8 @@ impl Preprocessor {
             }
         };
 
-        let local_canon_include_path = canonicalize_in_game_path(&path, &cwd, &self.context.lib_dir());
+        let local_canon_include_path =
+            canonicalize_in_game_path(&path, &cwd, &self.context.lib_dir());
         let filename = local_canon_include_path.file_name().unwrap();
         let cwd = local_canon_include_path.parent().unwrap();
         self.scan(filename, cwd, &file_content)
@@ -1627,9 +1623,11 @@ mod tests {
 
             test_valid(
                 prog,
-                &["#if defined(FOO) works",
+                &[
+                    "#if defined(FOO) works",
                     "#if defined (BAR) works",
-                    "#if defined(BAZ) works"],
+                    "#if defined(BAZ) works",
+                ],
             )
         }
 
@@ -1679,12 +1677,14 @@ mod tests {
 
             test_valid(
                 prog,
-                &["first test passes",
+                &[
+                    "first test passes",
                     "second test passes",
                     "third test passes",
                     "fourth test passes",
                     "fifth test passes",
-                    "sixth test passes"],
+                    "sixth test passes",
+                ],
             );
         }
 
@@ -1716,10 +1716,7 @@ mod tests {
                 666 + BAR(5, 7)
             "## };
 
-            test_valid(
-                prog,
-                &["666", "+", "(", "5", "+", "7", "+", "1234", ")"],
-            )
+            test_valid(prog, &["666", "+", "(", "5", "+", "7", "+", "1234", ")"])
         }
 
         #[test]

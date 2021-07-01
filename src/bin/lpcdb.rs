@@ -9,10 +9,10 @@ use lpc_rs::{
         asm_interpreter::{current_registers, AsmInterpreter},
         program::Program,
     },
+    util::config::Config,
 };
 use rustyline::{error::ReadlineError, Editor};
 use std::rc::Rc;
-use lpc_rs::util::config::Config;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 

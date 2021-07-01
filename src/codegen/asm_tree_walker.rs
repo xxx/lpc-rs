@@ -1161,8 +1161,7 @@ mod tests {
 
     mod test_visit_program {
         use super::*;
-        use crate::asm::instruction::Instruction::MAdd;
-        use crate::compiler::Compiler;
+        use crate::{asm::instruction::Instruction::MAdd, compiler::Compiler};
 
         fn generate_instructions(prog: &str) -> Vec<Instruction> {
             let compiler = Compiler::default();
