@@ -21,7 +21,7 @@ use crate::{
     preprocessor::Preprocessor,
     util::{config::Config, path_maker::canonicalize_server_path},
 };
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, io::ErrorKind, rc::Rc};
 
 pub mod compiler_error;
 
@@ -55,11 +55,27 @@ impl Compiler {
         let file_content = match fs::read_to_string(&path) {
             Ok(s) => s,
             Err(e) => {
-                return Err(CompilerError::LpcError(LpcError::new(format!(
-                    "cannot read file `{}`: {}",
-                    AsRef::<Path>::as_ref(&path).display(),
-                    e
-                ))))
+                return match e.kind() {
+                    ErrorKind::NotFound => {
+                        let mut dot_c = AsRef::<str>::as_ref(&path).to_string();
+
+                        if dot_c.ends_with(".c") {
+                            return Err(CompilerError::LpcError(LpcError::new(format!(
+                                "Cannot read file `{}`: {}",
+                                AsRef::<Path>::as_ref(&path).display(),
+                                e
+                            ))));
+                        }
+
+                        dot_c.push_str(".c");
+                        self.compile_file(dot_c)
+                    }
+                    _ => Err(CompilerError::LpcError(LpcError::new(format!(
+                        "Cannot read file `{}`: {}",
+                        AsRef::<Path>::as_ref(&path).display(),
+                        e
+                    )))),
+                }
             }
         };
 
@@ -91,7 +107,8 @@ impl Compiler {
         self.compile_file(&*absolute_file_path.to_string_lossy())
     }
 
-    /// Take a str and preprocess it into a vector of Span tuples
+    /// Take a str and preprocess it into a vector of Span tuples, and also returns the Preprocessor
+    /// used.
     ///
     /// # Arguments
     /// `path` - The in-game path to the file being preprocessed. Used for resolving
@@ -103,7 +120,8 @@ impl Compiler {
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let code = r#"
-    ///     int j = 123;
+    ///     #define COOL_NUMBER 123
+    ///     int j = COOL_NUMBER;
     ///
     ///     int square() {
     ///         return j * j;
@@ -232,5 +250,38 @@ impl Compiler {
         // println!("{:?}", msgpack.len());
         // println!("{:?}", Program::from(msgpack));
         Ok(program)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod test_compile_file {
+        use super::*;
+
+        #[test]
+        fn tries_dot_c() {
+            let compiler = Compiler::default();
+
+            assert!(compiler.compile_file("tests/fixtures/code/example").is_ok());
+        }
+    }
+
+    mod test_compile_in_game_file {
+        use super::*;
+        use regex::Regex;
+
+        #[test]
+        fn disallows_going_outside_the_root() {
+            let config = Config::new(None::<&str>).unwrap().with_lib_dir("tests");
+            let compiler = Compiler::new(config.into());
+
+            assert!(compiler
+                .compile_in_game_file("../../secure.c", "/", None)
+                .unwrap_err()
+                .to_string()
+                .starts_with("Attempt to access a file outside of lib_dir"));
+        }
     }
 }

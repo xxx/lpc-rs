@@ -11,10 +11,11 @@ use std::{
     path::Path,
 };
 
-/// A wrapper type to allow the VM to keep the immutable program and its
+/// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct Process {
+    // TODO: share this immutable program among all processes
     pub program: Program,
     pub globals: Vec<RefCell<LpcRef>>,
     pc: Cell<usize>,
