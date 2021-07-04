@@ -5,11 +5,11 @@ use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::{
     ffi::{OsStr, OsString},
-    fs,
     marker::PhantomData,
     ops::Range,
     path::Path,
 };
+use fs_err as fs;
 
 #[derive(Debug)]
 enum LazyFile<Name, Source> {

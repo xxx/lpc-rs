@@ -10,8 +10,8 @@ use std::{
 /// # Arguments
 /// `path` - An in-game path.
 /// `cwd` - The current working directory, needed to resolve relative paths.
-/// `root_dir` - The game root directory.
-pub fn canonicalize_server_path<T, U, V>(path: T, cwd: U, root_dir: V) -> PathBuf
+/// `lib_dir` - The game's lib directory.
+pub fn canonicalize_server_path<T, U, V>(path: T, cwd: U, lib_dir: V) -> PathBuf
 where
     T: AsRef<Path>,
     U: AsRef<Path>,
@@ -20,19 +20,19 @@ where
     let path_ref = path.as_ref().as_os_str();
     let sep = String::from(std::path::MAIN_SEPARATOR);
     let os_sep = OsString::from(&sep);
-    let mut root_string = root_dir.into();
+    let mut lib_string = lib_dir.into();
 
     // turn relative paths into absolute
     if !path_ref.to_string_lossy().starts_with(&sep) {
-        root_string.push(&os_sep);
-        root_string.push(cwd.as_ref().as_os_str());
+        lib_string.push(&os_sep);
+        lib_string.push(cwd.as_ref().as_os_str());
     }
 
-    root_string.push(&os_sep);
-    root_string.push(&path_ref);
+    lib_string.push(&os_sep);
+    lib_string.push(&path_ref);
 
     Path::new(
-        &root_string
+        &lib_string
             .to_string_lossy()
             .replace("//", "/")
             .replace("/./", "/"),
@@ -48,7 +48,7 @@ where
 /// # Arguments
 /// `path` - An in-game path.
 /// `cwd` - The current working directory, needed to resolve relative paths.
-/// `lib_dir` - The game root directory.
+/// `lib_dir` - The game lib directory.
 pub fn canonicalize_in_game_path<T, U, V>(path: T, cwd: U, lib_dir: V) -> PathBuf
 where
     T: AsRef<Path>,

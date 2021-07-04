@@ -91,7 +91,8 @@ mod tests {
         util::config::Config,
     };
     use regex::Regex;
-    use std::{fs, rc::Rc};
+    use std::rc::Rc;
+    use fs_err as fs;
 
     #[test]
     fn returns_error_if_no_clone() {

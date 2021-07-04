@@ -1,5 +1,6 @@
-use std::{fs, path::Path};
+use std::path::Path;
 
+use fs_err as fs;
 use compiler_error::CompilerError;
 
 use crate::{
@@ -237,9 +238,9 @@ impl Compiler {
             return Err(CompilerError::LpcError(e));
         }
 
-        for s in asm_walker.listing() {
-            println!("{}", s);
-        }
+        // for s in asm_walker.listing() {
+        //     println!("{}", s);
+        // }
 
         let program = match asm_walker.to_program() {
             Ok(p) => p,
@@ -270,7 +271,6 @@ mod tests {
 
     mod test_compile_in_game_file {
         use super::*;
-        use regex::Regex;
 
         #[test]
         fn disallows_going_outside_the_root() {

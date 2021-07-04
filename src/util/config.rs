@@ -1,16 +1,20 @@
 use crate::{errors::LpcError, Result};
-use std::{fs, path::Path};
+use std::path::Path;
+use fs_err as fs;
 use toml::{value::Index, Value};
 
-const CONFIG_FILE: &str = "./config.toml";
+const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
+
+const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
 
 #[derive(Debug, Default)]
 pub struct Config {
     lib_dir: String,
     system_include_dirs: Vec<String>,
+    master_object: String
 }
 
 impl Config {
@@ -20,7 +24,7 @@ impl Config {
     {
         let config_str = match config_override {
             Some(path) => fs::read_to_string(path)?,
-            None => fs::read_to_string(CONFIG_FILE)?,
+            None => fs::read_to_string(DEFAULT_CONFIG_FILE)?,
         };
 
         let config = match config_str.parse::<Value>() {
@@ -54,12 +58,27 @@ impl Config {
                 String::from(".")
             }
         };
-
         let lib_dir = canonicalized_path(non_canon)?;
+
+        let dug = dig(&config, MASTER_OBJECT);
+        let master_object = match dug {
+            Some(x) => {
+                match x.as_str() {
+                    Some(s) => String::from(s),
+                    None => {
+                        return Err(LpcError::new("Invalid configuration for `master_object` found. Cannot continue."));
+                    }
+                }
+            },
+            None => {
+                return Err(LpcError::new("No configuration for `master_object` found. Cannot continue."));
+            }
+        };
 
         Ok(Self {
             lib_dir,
             system_include_dirs,
+            master_object
         })
     }
 
@@ -94,6 +113,11 @@ impl Config {
     #[inline]
     pub fn lib_dir(&self) -> &str {
         &self.lib_dir
+    }
+
+    #[inline]
+    pub fn master_object(&self) -> &str {
+        &self.master_object
     }
 
     #[inline]

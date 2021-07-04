@@ -3,7 +3,8 @@ use define::{Define, ObjectMacro};
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, path::Path};
+use fs_err as fs;
 
 use crate::{
     ast::binary_op_node::BinaryOperation,
@@ -1006,7 +1007,7 @@ mod tests {
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include <nonexistent.h>"#;
 
-            test_invalid(input, "No such file or directory");
+            test_invalid(input, "failed to open file");
         }
 
         #[test]
@@ -1101,7 +1102,7 @@ mod tests {
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
-            test_invalid(input, "No such file or directory");
+            test_invalid(input, "failed to open file");
         }
 
         #[test]
