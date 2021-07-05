@@ -13,12 +13,12 @@ use std::{
     ptr,
 };
 
-#[macro_export]
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
 /// # Arguments
 /// `r` - The expression to be wrapped.
 /// `m` - The memory pool to declare the [`PoolRef`]s from.
+#[macro_export]
 macro_rules! value_to_ref {
     ($r:expr, $m:expr) => {
         match $r {

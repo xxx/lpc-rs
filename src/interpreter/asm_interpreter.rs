@@ -819,6 +819,7 @@ impl AsmInterpreter {
     }
 
     /// Call the specified function in the specified object.
+    /// Note: `args` are *not* type-checked.
     ///
     /// # Arguments
     /// `object` - The object containing the function to call
@@ -831,7 +832,7 @@ impl AsmInterpreter {
         let f = match object.functions.get(func.as_ref()) {
             Some(sym) => sym,
             None => {
-                return Err(LpcError::new(format!(
+                return Err(self.runtime_error(format!(
                     "Applied function `{}` not found in `{}`",
                     func.as_ref(),
                     object.filename
@@ -867,7 +868,7 @@ impl AsmInterpreter {
         let return_val = match self.popped_frame {
             Some(ref mut frame) => std::mem::replace(&mut frame.registers[0], LpcRef::Int(0)),
             None => {
-                return Err(LpcError::new(format!(
+                return Err(self.runtime_error(format!(
                     "Expected a stack frame after apply of `{}`, but did not find one",
                     func.as_ref()
                 )));

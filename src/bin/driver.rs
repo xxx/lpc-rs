@@ -1,9 +1,15 @@
 // use std::env;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+use refpool::PoolRef;
 use lpc_rs::{
     compiler::Compiler, errors, interpreter::asm_interpreter::AsmInterpreter, util::config::Config,
+    value_to_ref,
+    interpreter::lpc_value::LpcValue,
+    interpreter::lpc_ref::LpcRef,
 };
-use std::rc::Rc;
+use std::collections::HashMap;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -37,7 +43,23 @@ fn main() {
                 .get("/secure/master.c")
                 .unwrap()
                 .clone();
-            let ob = interpreter.apply(master, "thing", &Vec::new());
+            let mut mapping = HashMap::new();
+            mapping.insert(
+                value_to_ref!(LpcValue::from("foo"), interpreter.memory),
+                value_to_ref!(LpcValue::from("bar"), interpreter.memory)
+            );
+            mapping.insert(
+                value_to_ref!(LpcValue::from("baz"), interpreter.memory),
+                value_to_ref!(LpcValue::from(vec![LpcRef::Int(12938), value_to_ref!(LpcValue::from("a str"), interpreter.memory)]), interpreter.memory)
+            );
+
+            let args = vec![
+                value_to_ref!(LpcValue::Int(69), interpreter.memory),
+                value_to_ref!(LpcValue::from("marfin"), interpreter.memory),
+                value_to_ref!(LpcValue::Object(master.clone()), interpreter.memory),
+                value_to_ref!(LpcValue::Mapping(mapping), interpreter.memory),
+            ];
+            let ob = interpreter.apply(master, "thing", &args);
             println!("ob??? {:?}", ob);
         }
         Err(e) => eprintln!("unable to compile {}: {:?}", filename, e),
