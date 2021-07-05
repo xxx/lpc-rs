@@ -30,6 +30,15 @@ fn main() {
             if let Err(e) = interpreter.init_program(program) {
                 errors::emit_diagnostics(&[e]);
             }
+
+            println!("procs {:?}", interpreter.processes);
+            let master = interpreter
+                .processes
+                .get("/secure/master.c")
+                .unwrap()
+                .clone();
+            let ob = interpreter.apply(master, "thing", &Vec::new());
+            println!("ob??? {:?}", ob);
         }
         Err(e) => eprintln!("unable to compile {}: {:?}", filename, e),
     }

@@ -1,6 +1,7 @@
 use crate::parser::span::Span;
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error, Files, SimpleFile};
+use fs_err as fs;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::{
@@ -9,7 +10,6 @@ use std::{
     ops::Range,
     path::Path,
 };
-use fs_err as fs;
 
 #[derive(Debug)]
 enum LazyFile<Name, Source> {

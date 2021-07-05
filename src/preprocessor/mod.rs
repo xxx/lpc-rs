@@ -1,10 +1,10 @@
 use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
 use define::{Define, ObjectMacro};
+use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, path::Path};
-use fs_err as fs;
 
 use crate::{
     ast::binary_op_node::BinaryOperation,

@@ -111,12 +111,19 @@ impl AsmInterpreter {
         r
     }
 
-    /// Add a program to the table
+    /// Create a [`Process`] from a [`Program`], and add add it to the process table.
     /// If a new program with the same filename as an existing one is added,
     /// the new will overwrite the old in the table.
+    /// Storage keys are the in-game filename
     pub fn insert(&mut self, program: Program) -> Rc<Process> {
+        let name: String = program
+            .filename
+            .strip_prefix(self.config.lib_dir())
+            .unwrap_or(program.filename.as_ref())
+            .into();
+
         let r = Rc::new(Process::new(program));
-        self.processes.insert(r.filename.clone(), r.clone());
+        self.processes.insert(name, r.clone());
         r
     }
 
@@ -812,16 +819,23 @@ impl AsmInterpreter {
     }
 
     /// Call the specified function in the specified object.
+    ///
+    /// # Arguments
+    /// `object` - The object containing the function to call
+    /// `func` - The name of the function to call
+    /// `args` - The arguments being applied to
     pub fn apply<T>(&mut self, object: Rc<Process>, func: T, args: &[LpcRef]) -> Result<LpcRef>
-        where
-            T: AsRef<str>,
+    where
+        T: AsRef<str>,
     {
         let f = match object.functions.get(func.as_ref()) {
             Some(sym) => sym,
             None => {
-                return Err(LpcError::new(
-                    format!("Applied function `{}` not found in `{}`", func.as_ref(), object.filename)
-                ));
+                return Err(LpcError::new(format!(
+                    "Applied function `{}` not found in `{}`",
+                    func.as_ref(),
+                    object.filename
+                )));
             }
         };
 
@@ -833,12 +847,8 @@ impl AsmInterpreter {
         let clean_stack = Vec::with_capacity(20);
         let current_stack = std::mem::replace(&mut self.stack, clean_stack);
 
-        let mut frame = StackFrame::with_minimum_arg_capacity(
-            self.process.clone(),
-            sym,
-            0,
-            args.len()
-        );
+        let mut frame =
+            StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, 0, args.len());
         frame.registers[1..=args.len()].clone_from_slice(&args);
 
         self.push_frame(frame);
@@ -855,11 +865,12 @@ impl AsmInterpreter {
         }
 
         let return_val = match self.popped_frame {
-            Some(ref mut frame) => {
-                std::mem::replace(&mut frame.registers[0], LpcRef::Int(0))
-            }
+            Some(ref mut frame) => std::mem::replace(&mut frame.registers[0], LpcRef::Int(0)),
             None => {
-                return Err(LpcError::new(format!("Expected a stack frame after apply of `{}`, but did not find one", func.as_ref())));
+                return Err(LpcError::new(format!(
+                    "Expected a stack frame after apply of `{}`, but did not find one",
+                    func.as_ref()
+                )));
             }
         };
 

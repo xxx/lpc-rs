@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use fs_err as fs;
 use compiler_error::CompilerError;
+use fs_err as fs;
 
 use crate::{
     ast::ast_node::AstNodeTrait,

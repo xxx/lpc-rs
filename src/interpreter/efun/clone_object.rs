@@ -90,9 +90,9 @@ mod tests {
         semantic::function_symbol::FunctionSymbol,
         util::config::Config,
     };
+    use fs_err as fs;
     use regex::Regex;
     use std::rc::Rc;
-    use fs_err as fs;
 
     #[test]
     fn returns_error_if_no_clone() {

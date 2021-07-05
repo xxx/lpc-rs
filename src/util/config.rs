@@ -1,6 +1,6 @@
 use crate::{errors::LpcError, Result};
-use std::path::Path;
 use fs_err as fs;
+use std::path::Path;
 use toml::{value::Index, Value};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
@@ -14,7 +14,7 @@ const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
 pub struct Config {
     lib_dir: String,
     system_include_dirs: Vec<String>,
-    master_object: String
+    master_object: String,
 }
 
 impl Config {
@@ -62,23 +62,25 @@ impl Config {
 
         let dug = dig(&config, MASTER_OBJECT);
         let master_object = match dug {
-            Some(x) => {
-                match x.as_str() {
-                    Some(s) => String::from(s),
-                    None => {
-                        return Err(LpcError::new("Invalid configuration for `master_object` found. Cannot continue."));
-                    }
+            Some(x) => match x.as_str() {
+                Some(s) => String::from(s),
+                None => {
+                    return Err(LpcError::new(
+                        "Invalid configuration for `master_object` found. Cannot continue.",
+                    ));
                 }
             },
             None => {
-                return Err(LpcError::new("No configuration for `master_object` found. Cannot continue."));
+                return Err(LpcError::new(
+                    "No configuration for `master_object` found. Cannot continue.",
+                ));
             }
         };
 
         Ok(Self {
             lib_dir,
             system_include_dirs,
-            master_object
+            master_object,
         })
     }
 
