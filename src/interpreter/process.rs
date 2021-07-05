@@ -10,25 +10,28 @@ use std::{
     ops::Deref,
     path::Path,
 };
+use std::rc::Rc;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct Process {
-    // TODO: share this immutable program among all processes
-    pub program: Program,
+    pub program: Rc<Program>,
     pub globals: Vec<RefCell<LpcRef>>,
     pc: Cell<usize>,
+    /// What is the clone ID of this process? If `None`, this is a master object
+    clone_id: Option<usize>,
 }
 
 impl Process {
-    pub fn new(program: Program) -> Self {
+    pub fn new(program: Program, clone_id: Option<usize>) -> Self {
         let num_globals = program.num_globals;
 
         Self {
-            program,
+            program: program.into(),
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             pc: Cell::new(0),
+            clone_id: None
         }
     }
 
@@ -65,6 +68,15 @@ impl Process {
     #[inline]
     pub fn instruction(&self) -> Option<&Instruction> {
         self.instructions.get(self.pc.get())
+    }
+
+    /// Get the filename of this process, including the clone ID suffix if present.
+    #[inline]
+    pub fn filename(&self) -> Cow<str> {
+        match self.clone_id {
+            Some(x) => Cow::Owned(format!("{}#{}", self.program.filename, x)),
+            None => Cow::Borrowed(&self.program.filename),
+        }
     }
 }
 
