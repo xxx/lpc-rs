@@ -41,7 +41,7 @@ impl StackFrame {
         }
     }
 
-    /// Create a new [`StackFrame`] instance
+    /// Create a new [`StackFrame`] instance with space for at least `arg_capacity` registers.
     ///
     /// # Arguments
     ///
@@ -58,7 +58,8 @@ impl StackFrame {
     ) -> Self {
         // add +1 for r0 (where return value is stored)
         let reg_len = symbol.num_args + symbol.num_locals + 1;
-        let reservation = std::cmp::max(reg_len, arg_capacity + symbol.num_locals + 1);
+        let arg_len = arg_capacity + symbol.num_locals + 1;
+        let reservation = std::cmp::max(reg_len, arg_len);
 
         Self {
             registers: vec![LpcRef::Int(0); reservation],

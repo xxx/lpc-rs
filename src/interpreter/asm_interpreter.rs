@@ -58,10 +58,14 @@ pub struct AsmInterpreter {
     /// The call stack
     pub stack: Vec<StackFrame>,
 
+    /// How many clones have been created so far?
     pub clone_count: usize,
 
     /// Our memory
     pub memory: Pool<RefCell<LpcValue>>,
+
+    /// The most recently-popped stack frame. Used by `apply` to get return values.
+    popped_frame: Option<StackFrame>,
 }
 
 /// Get a reference to the passed stack frame's registers
@@ -189,7 +193,7 @@ impl AsmInterpreter {
         self.process = self.stack.last().unwrap().process.clone();
     }
 
-    /// Pop the current stack frame off the stack
+    /// Pop the current stack frame off the call stack
     fn pop_frame(&mut self) -> Option<StackFrame> {
         let previous_frame = self.stack.pop();
         // println!("popped frame: {:?}", previous_frame);
@@ -372,6 +376,7 @@ impl AsmInterpreter {
 
                     if let Some(frame) = self.pop_frame() {
                         self.copy_call_result(&frame)?;
+                        self.popped_frame = Some(frame);
                     }
                 } else {
                     return Err(self.runtime_error(format!(
@@ -660,6 +665,8 @@ impl AsmInterpreter {
                     {
                         self.process.set_pc(frame.return_address);
                     }
+
+                    self.popped_frame = Some(frame);
                 }
 
                 // halt at the end of all input
@@ -803,6 +810,61 @@ impl AsmInterpreter {
             index, length
         ))
     }
+
+    /// Call the specified function in the specified object.
+    pub fn apply<T>(&mut self, object: Rc<Process>, func: T, args: &[LpcRef]) -> Result<LpcRef>
+        where
+            T: AsRef<str>,
+    {
+        let f = match object.functions.get(func.as_ref()) {
+            Some(sym) => sym,
+            None => {
+                return Err(LpcError::new(
+                    format!("Applied function `{}` not found in `{}`", func.as_ref(), object.filename)
+                ));
+            }
+        };
+
+        let addr = f.address;
+        let sym = f.clone();
+
+        // use a pristine stack for the apply
+        let current_process = std::mem::replace(&mut self.process, object);
+        let clean_stack = Vec::with_capacity(20);
+        let current_stack = std::mem::replace(&mut self.stack, clean_stack);
+
+        let mut frame = StackFrame::with_minimum_arg_capacity(
+            self.process.clone(),
+            sym,
+            0,
+            args.len()
+        );
+        frame.registers[1..=args.len()].clone_from_slice(&args);
+
+        self.push_frame(frame);
+        self.process.set_pc(addr);
+
+        let result = self.eval();
+
+        // Clean up
+        let _ = std::mem::replace(&mut self.stack, current_stack);
+        let _ = std::mem::replace(&mut self.process, current_process);
+
+        if let Err(e) = result {
+            return Err(e);
+        }
+
+        let return_val = match self.popped_frame {
+            Some(ref mut frame) => {
+                std::mem::replace(&mut frame.registers[0], LpcRef::Int(0))
+            }
+            None => {
+                return Err(LpcError::new(format!("Expected a stack frame after apply of `{}`, but did not find one", func.as_ref())));
+            }
+        };
+
+        Ok(return_val)
+    }
 }
 
 impl Default for AsmInterpreter {
@@ -817,6 +879,7 @@ impl Default for AsmInterpreter {
             clone_count: 0,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
+            popped_frame: None,
         }
     }
 }
