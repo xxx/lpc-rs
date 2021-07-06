@@ -69,8 +69,8 @@ impl LpcType {
             LpcType::Float(_) => LpcType::Float(arr),
             LpcType::Mapping(_) => LpcType::Mapping(arr),
             LpcType::Mixed(_) => LpcType::Mixed(arr),
+            LpcType::Object(_) => LpcType::Object(arr),
             LpcType::Void => self,
-            LpcType::Object(_) => self,
             LpcType::Union(_) => self,
         }
     }
