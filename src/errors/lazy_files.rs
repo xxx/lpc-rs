@@ -85,9 +85,7 @@ where
     /// Add a new file to the cache
     ///
     /// # Arguments
-    /// `path` - The full path, including filename, to the file being added.
-    ///     No canonicalization is done, so it's highly recommended to use
-    ///     absolute paths.
+    /// `path` - The absolute on-server path, including filename, to the file being added.
     pub fn add(&mut self, path: Name) -> FileId {
         if let Some(id) = self.get_id(&path) {
             return id;
@@ -101,9 +99,7 @@ where
     /// Add a new file plus its source code to the cache
     ///
     /// # Arguments
-    /// `path` - The full path, including filename, to the file being added.
-    ///     No canonicalization is done, so it's highly recommended to use
-    ///     absolute paths.
+    /// `path` - The absolute full path, including filename, to the file being added.
     /// `code` - The source code for the file in question
     pub fn add_eager(&mut self, path: Name, code: Source) -> FileId {
         if let Some(id) = self.get_id(&path) {
