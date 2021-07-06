@@ -24,7 +24,7 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn new(program: Program, clone_id: Option<usize>) -> Self {
+    pub fn new(program: Program) -> Self {
         let num_globals = program.num_globals;
 
         Self {
@@ -32,6 +32,17 @@ impl Process {
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             pc: Cell::new(0),
             clone_id: None
+        }
+    }
+
+    pub fn new_clone(program: Rc<Program>, clone_id: usize) -> Self {
+        let num_globals = program.num_globals;
+
+        Self {
+            program,
+            globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
+            pc: Cell::new(0),
+            clone_id: Some(clone_id)
         }
     }
 
@@ -77,6 +88,17 @@ impl Process {
             Some(x) => Cow::Owned(format!("{}#{}", self.program.filename, x)),
             None => Cow::Borrowed(&self.program.filename),
         }
+    }
+
+    /// Get the filename with the passed prefix stripped off, defaulting to the `program` filename
+    /// if that fails.
+    #[inline]
+    pub fn localized_filename(&self, prefix: &str) -> String {
+        self
+            .filename()
+            .strip_prefix(prefix)
+            .unwrap_or(self.program.filename.as_ref())
+            .into()
     }
 }
 

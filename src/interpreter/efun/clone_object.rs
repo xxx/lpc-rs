@@ -5,6 +5,7 @@ use crate::{
         asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
     },
     try_extract_value, Result,
+    value_to_ref,
 };
 use refpool::PoolRef;
 use std::{cell::RefCell, rc::Rc};
@@ -21,7 +22,18 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
                 interpreter.in_game_cwd()?,
                 interpreter.process.current_debug_span(),
             ) {
-                Ok(prog) => interpreter.init_program_with_clean_stack(prog),
+                Ok(prog) => {
+                    let closure = |interpreter: &mut AsmInterpreter| {
+                        let process = interpreter.load_master(prog);
+                        let init_result = interpreter.init();
+
+                        return match init_result {
+                            Ok(_) => Ok(process),
+                            Err(e) => Err(e)
+                        };
+                    };
+                    interpreter.with_clean_stack(closure)
+                },
                 Err(e) => {
                     let debug_span = frame.process.current_debug_span();
 
@@ -57,16 +69,21 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
             .with_span(interpreter.process.current_debug_span()));
         }
 
-        let mut new_clone = master.program.clone();
-
-        let new_path = format!("{}#{}", path, interpreter.clone_count);
-        new_clone.filename = new_path;
-        interpreter.clone_count += 1;
+        let new_clone = master.program.clone();
 
         // Set up the return value
-        let new_proc = interpreter.init_program_with_clean_stack(new_clone)?;
+        let closure = |interpreter: &mut AsmInterpreter| {
+            let process = interpreter.load_clone(new_clone);
+            let init_result = interpreter.init();
+
+            return match init_result {
+                Ok(_) => Ok(process),
+                Err(e) => Err(e)
+            };
+        };
+        let new_proc = interpreter.with_clean_stack(closure)?;
         let v = LpcValue::Object(new_proc);
-        let result = LpcRef::Object(PoolRef::new(&interpreter.memory, RefCell::new(v)));
+        let result = value_to_ref!(v, &interpreter.memory);
 
         interpreter.return_efun_result(result);
     } else {
@@ -112,7 +129,7 @@ mod tests {
         };
 
         let mut interpreter = AsmInterpreter::new(config.into());
-        interpreter.load(program);
+        interpreter.load_master(program);
 
         let sym = FunctionSymbol {
             name: "clone_object".to_string(),
@@ -123,10 +140,7 @@ mod tests {
 
         let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym), 0);
 
-        let path = LpcRef::String(PoolRef::new(
-            &interpreter.memory,
-            RefCell::new(LpcValue::from("./no_clone.c")),
-        ));
+        let path = value_to_ref!(LpcValue::from("./no_clone.c"), &interpreter.memory);
         frame.registers[1] = path;
 
         interpreter.push_frame(frame);

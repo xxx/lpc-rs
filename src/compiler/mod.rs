@@ -145,7 +145,7 @@ impl Compiler {
         let context = Context::new(&path, self.config.clone());
 
         let mut preprocessor = Preprocessor::new(context);
-        let code = match preprocessor.scan(&path, ".", &code) {
+        let code = match preprocessor.scan(&path, "/", &code) {
             Ok(c) => c,
             Err(e) => {
                 let err = e;

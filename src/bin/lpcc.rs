@@ -22,7 +22,7 @@ fn main() {
             let mut interpreter = AsmInterpreter::new(config);
 
             // println!("{:?}", program);
-            if let Err(e) = interpreter.init_program(program) {
+            if let Err(e) = interpreter.init_master(program) {
                 errors::emit_diagnostics(&[e]);
             }
         }

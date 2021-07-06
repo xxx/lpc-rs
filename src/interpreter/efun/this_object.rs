@@ -1,6 +1,7 @@
 use crate::{
     interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
     Result,
+    value_to_ref,
 };
 use refpool::PoolRef;
 use std::cell::RefCell;
@@ -9,7 +10,7 @@ use std::cell::RefCell;
 pub fn this_object(interpreter: &mut AsmInterpreter) -> Result<()> {
     let proc = interpreter.process.clone();
     let v = LpcValue::Object(proc);
-    let result = LpcRef::Object(PoolRef::new(&interpreter.memory, RefCell::new(v)));
+    let result = value_to_ref!(v, &interpreter.memory);
 
     interpreter.return_efun_result(result);
 

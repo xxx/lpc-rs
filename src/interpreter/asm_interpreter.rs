@@ -42,7 +42,7 @@ const MEMORY_SIZE: usize = 100_000;
 ///
 /// // Load the program and run it
 /// let mut interpreter = AsmInterpreter::default();
-/// interpreter.init_program(program);
+/// interpreter.init_master(program);
 /// ```
 #[derive(Debug)]
 pub struct AsmInterpreter {
@@ -101,12 +101,26 @@ impl AsmInterpreter {
     }
 
     /// Load a program for evaluation
+    /// `load_master` is intended for programs destined to be master objects
     ///
     /// # Arguments
     ///
     /// * `program` - The Program to load
-    pub fn load(&mut self, program: Program) -> Rc<Process> {
-        let r = self.insert(program);
+    pub fn load_master(&mut self, program: Program) -> Rc<Process> {
+        let r = self.insert_master(program);
+        self.process = r.clone();
+        r
+    }
+
+    /// Load a program for evaluation
+    /// `load_master` is intended for programs destined to be master objects
+    ///
+    /// # Arguments
+    ///
+    /// * `program` - The Program to load. Assumed to already be wrapped in an [`Rc`]
+    ///   from cloning from an existing process.
+    pub fn load_clone(&mut self, program: Rc<Program>) -> Rc<Process> {
+        let r = self.insert_clone(program);
         self.process = r.clone();
         r
     }
@@ -115,16 +129,24 @@ impl AsmInterpreter {
     /// If a new program with the same filename as an existing one is added,
     /// the new will overwrite the old in the table.
     /// Storage keys are the in-game filename
-    pub fn insert(&mut self, program: Program) -> Rc<Process> {
-        let name: String = program
-            .filename
-            .strip_prefix(self.config.lib_dir())
-            .unwrap_or(program.filename.as_ref())
-            .into();
+    pub fn insert_master(&mut self, program: Program) -> Rc<Process> {
+        let process = Rc::new(Process::new(program));
+        self.insert_process(process.clone());
+        process
+    }
 
-        let r = Rc::new(Process::new(program));
-        self.processes.insert(name, r.clone());
-        r
+    pub fn insert_clone(&mut self, program: Rc<Program>) -> Rc<Process> {
+        let cnt = self.clone_count;
+        self.clone_count += 1;
+        let process = Rc::new(Process::new_clone(program, cnt));
+        self.insert_process(process.clone());
+        process
+    }
+
+    pub fn insert_process(&mut self, process: Rc<Process>) {
+        let name = process.localized_filename(self.config.lib_dir());
+
+        self.processes.insert(name, process);
     }
 
     /// Set up the stack frame for initializing the global vars, and calling `create`.
@@ -150,33 +172,29 @@ impl AsmInterpreter {
     }
 
     /// Convenience method to load and initialize a [`Program`]
-    pub fn init_program(&mut self, program: Program) -> Result<Rc<Process>> {
-        let r = self.load(program);
+    pub fn init_master(&mut self, program: Program) -> Result<Rc<Process>> {
+        let r = self.load_master(program);
         self.init()?;
 
         Ok(r)
     }
 
-    /// Convenience method to load and initialize a [`Program`], maintaining
-    /// & resetting the current process and stack, while sharing the memory pool.
-    /// This exists for use within `clone_object()` and other cases where new objects
-    /// are created in Rust.
-    pub fn init_program_with_clean_stack(&mut self, program: Program) -> Result<Rc<Process>> {
+    /// Convenience method to run a closure, while maintaining
+    /// & resetting the current process and stack, and sharing the memory pool.
+    pub fn with_clean_stack<F, T>(&mut self, closure: F) -> Result<T>
+    where
+        F: FnOnce(&mut AsmInterpreter) -> Result<T>
+    {
         let current_process = self.process.clone();
         let clean_stack = Vec::with_capacity(20);
         let current_stack = std::mem::replace(&mut self.stack, clean_stack);
 
-        let process = self.load(program);
-        let result = self.init();
+        let result = closure(self);
 
         let _ = std::mem::replace(&mut self.stack, current_stack);
         let _ = std::mem::replace(&mut self.process, current_process);
 
-        if let Err(e) = result {
-            return Err(e);
-        }
-
-        Ok(process)
+        result
     }
 
     fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>

@@ -57,7 +57,7 @@ pub struct Repl {
 impl Repl {
     pub fn new(program: Program) -> Self {
         let mut vm = AsmInterpreter::default();
-        vm.load(program);
+        let _ = vm.load_master(program);
         vm.setup_program_globals_frame();
 
         Self { vm }

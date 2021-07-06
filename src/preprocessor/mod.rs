@@ -165,8 +165,10 @@ impl Preprocessor {
                 )));
             }
         };
+        println!("asdfasdfa {:?} {:?}", path.as_ref(), filename);
         let file_id = FileCache::insert(
-            canonicalize_server_path(filename, &cwd, &self.context.lib_dir()).display(),
+            // canonicalize_server_path(path, &cwd, &self.context.lib_dir()).display(),
+            path.as_ref().display()
         );
 
         let mut token_stream = LexWrapper::new(file_content.as_ref());
