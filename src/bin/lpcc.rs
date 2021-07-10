@@ -17,7 +17,7 @@ fn main() {
 
     let filename = args.get(1).map_or(DEFAULT_FILE, |name| name);
 
-    match compiler.compile_in_game_file(filename, "/", None) {
+    match compiler.compile_in_game_file(filename, None) {
         Ok(program) => {
             let mut interpreter = AsmInterpreter::new(config);
 

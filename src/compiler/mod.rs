@@ -20,9 +20,10 @@ use crate::{
         span::Span,
     },
     preprocessor::Preprocessor,
-    util::{config::Config, path_maker::canonicalize_server_path},
+    util::config::Config,
 };
 use std::{fmt::Debug, io::ErrorKind, rc::Rc};
+use crate::util::path_maker::LpcPath;
 
 pub mod compiler_error;
 
@@ -31,7 +32,10 @@ pub struct Compiler {
     config: Rc<Config>,
 }
 
-impl Compiler {
+impl Compiler
+// where
+//     LpcPath: From<&P>
+{
     /// Create a new `Compiler` with the passed [`Config`]
     pub fn new(config: Rc<Config>) -> Self {
         Self { config }
@@ -51,61 +55,65 @@ impl Compiler {
     /// ```
     pub fn compile_file<T>(&self, path: T) -> Result<Program, CompilerError>
     where
-        T: AsRef<Path> + AsRef<str>,
+        T: AsRef<Path> + Into<LpcPath>,
     {
-        let file_content = match fs::read_to_string(&path) {
+        let lpc_path = path.into();
+        let absolute = lpc_path.as_server(self.config.lib_dir());
+        let file_content = match fs::read_to_string(&*absolute) {
             Ok(s) => s,
             Err(e) => {
                 return match e.kind() {
                     ErrorKind::NotFound => {
-                        let mut dot_c = AsRef::<str>::as_ref(&path).to_string();
+                        // let mut dot_c = AsRef::<str>::as_ref(&path).to_string();
 
-                        if dot_c.ends_with(".c") {
+                        if absolute.ends_with(".c") {
                             return Err(CompilerError::LpcError(LpcError::new(format!(
                                 "Cannot read file `{}`: {}",
-                                AsRef::<Path>::as_ref(&path).display(),
+                                absolute.display(),
                                 e
                             ))));
                         }
 
-                        dot_c.push_str(".c");
-                        self.compile_file(dot_c)
+                        let mut owned = absolute.into_owned().into_os_string();
+                        owned.push(".c");
+                        self.compile_file(owned)
                     }
                     _ => Err(CompilerError::LpcError(LpcError::new(format!(
                         "Cannot read file `{}`: {}",
-                        AsRef::<Path>::as_ref(&path).display(),
+                        absolute.display(),
                         e
                     )))),
                 }
             }
         };
 
-        self.compile_string(path, file_content)
+        self.compile_string(absolute, file_content)
     }
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
-    pub fn compile_in_game_file<T, U>(
+    pub fn compile_in_game_file<T>(
         &self,
         path: T,
-        cwd: U,
+        // cwd: U,
         span: Option<Span>,
     ) -> Result<Program, CompilerError>
     where
-        T: AsRef<Path> + AsRef<str>,
-        U: AsRef<Path>,
+        T: AsRef<Path> + Into<LpcPath>,
+        // U: AsRef<Path>,
     {
-        let absolute_file_path = canonicalize_server_path(&path, &cwd, self.config.lib_dir());
+        let lpc_path = path.into();
+        let absolute_file_path = lpc_path.as_server(self.config.lib_dir());
 
         if !absolute_file_path.starts_with(self.config.lib_dir()) {
             return Err(CompilerError::LpcError(LpcError::new(&format!(
                 "Attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                AsRef::<Path>::as_ref(&path).display(),
+                AsRef::<Path>::as_ref(&*absolute_file_path).display(),
                 absolute_file_path.display(),
                 self.config.lib_dir()
             )).with_span(span)));
         }
 
-        self.compile_file(&*absolute_file_path.to_string_lossy())
+        self.compile_file(absolute_file_path)
     }
 
     /// Take a str and preprocess it into a vector of Span tuples, and also returns the Preprocessor
@@ -139,13 +147,13 @@ impl Compiler {
         code: U,
     ) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
     where
-        T: AsRef<Path> + AsRef<str>,
+        T: AsRef<Path> + Into<LpcPath>,
         U: AsRef<str>,
     {
         let context = Context::new(&path, self.config.clone());
 
         let mut preprocessor = Preprocessor::new(context);
-        let code = match preprocessor.scan(&path, "/", &code) {
+        let code = match preprocessor.scan(&path, &code) {
             Ok(c) => c,
             Err(e) => {
                 let err = e;
@@ -184,7 +192,7 @@ impl Compiler {
 
     pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program, CompilerError>
     where
-        T: AsRef<Path> + AsRef<str>,
+        T: AsRef<Path> + Into<LpcPath>,
         U: AsRef<str>,
     {
         let (code, preprocessor) = self.preprocess_string(&path, code)?;
@@ -278,7 +286,7 @@ mod tests {
             let compiler = Compiler::new(config.into());
 
             assert!(compiler
-                .compile_in_game_file("../../secure.c", "/", None)
+                .compile_in_game_file("../../secure.c", None)
                 .unwrap_err()
                 .to_string()
                 .starts_with("Attempt to access a file outside of lib_dir"));

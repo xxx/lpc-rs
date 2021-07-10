@@ -9,6 +9,7 @@ use crate::{
 };
 use refpool::PoolRef;
 use std::{cell::RefCell, rc::Rc};
+use crate::util::path_maker::LpcPath;
 
 fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Process>> {
     let frame = interpreter.stack.last().unwrap();
@@ -17,9 +18,9 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
     match interpreter.processes.get(path) {
         Some(proc) => Ok(proc.clone()),
         None => {
+            let full_path = LpcPath::new_in_game_with_cwd(path, interpreter.in_game_cwd()?);
             match compiler.compile_in_game_file(
-                path,
-                interpreter.in_game_cwd()?,
+                full_path,
                 interpreter.process.current_debug_span(),
             ) {
                 Ok(prog) => {

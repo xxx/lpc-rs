@@ -7,6 +7,7 @@ use crate::{
 
 use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
 use std::rc::Rc;
+use std::path::Path;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -53,10 +54,10 @@ impl Context {
     /// ```
     pub fn new<T>(filename: T, config: Rc<Config>) -> Self
     where
-        T: AsRef<str>,
+        T: AsRef<Path>,
     {
         Self {
-            filename: String::from(filename.as_ref()),
+            filename: filename.as_ref().to_string_lossy().into_owned(),
             config,
             ..Self::default()
         }

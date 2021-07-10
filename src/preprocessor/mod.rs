@@ -24,6 +24,7 @@ use crate::{
     LpcInt, Result,
 };
 use std::iter::Peekable;
+use crate::util::path_maker::LpcPath;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -137,7 +138,7 @@ impl Preprocessor {
     /// let context = Context::new("test.c", Rc::new(config));
     /// let mut preprocessor = Preprocessor::new(context);
     ///
-    /// let content = r#"
+    /// let code = r#"
     ///     #include "include/simple.h"
     ///
     ///     void main() {
@@ -145,33 +146,20 @@ impl Preprocessor {
     ///     }
     /// "#;
     ///
-    /// let processed = preprocessor.scan("foo.c", "/", content);
+    /// let processed = preprocessor.scan("foo.c", code);
     /// ```
-    pub fn scan<T, U, V>(&mut self, path: T, cwd: U, file_content: V) -> Result<Vec<Spanned<Token>>>
+    pub fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
     where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-        V: AsRef<str>,
+        P: AsRef<Path> + Into<LpcPath>,
+        C: AsRef<str>,
     {
         let mut output = Vec::new();
 
-        // Register the file-to-be-scanned with the global file cache
-        let filename = match path.as_ref().file_name() {
-            Some(fname) => fname,
-            None => {
-                return Err(LpcError::new(format!(
-                    "Unable to determine a file name for `{}`",
-                    path.as_ref().display()
-                )));
-            }
-        };
-        println!("asdfasdfa {:?} {:?}", path.as_ref(), filename);
         let file_id = FileCache::insert(
-            // canonicalize_server_path(path, &cwd, &self.context.lib_dir()).display(),
             path.as_ref().display()
         );
 
-        let mut token_stream = LexWrapper::new(file_content.as_ref());
+        let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
 
         let mut iter = token_stream.into_iter().peekable();
@@ -185,9 +173,13 @@ impl Preprocessor {
 
                     match token {
                         Token::LocalInclude(t) => {
+                            let cwd = path.as_ref().parent().unwrap_or(self.context.lib_dir().as_ref()).to_path_buf();
                             self.handle_local_include(t, &cwd, &mut output)?
                         }
-                        Token::SysInclude(t) => self.handle_sys_include(t, &cwd, &mut output)?,
+                        Token::SysInclude(t) => {
+                            let cwd = path.as_ref().parent().unwrap_or(self.context.lib_dir().as_ref()).to_path_buf();
+                            self.handle_sys_include(t, &cwd, &mut output)?
+                        },
                         Token::PreprocessorElse(t) => self.handle_else(t)?,
                         Token::Endif(t) => self.handle_endif(t)?,
                         Token::Define(t) => self.handle_define(t)?,
@@ -837,9 +829,10 @@ impl Preprocessor {
 
         let local_canon_include_path =
             canonicalize_in_game_path(&path, &cwd, &self.context.lib_dir());
-        let filename = local_canon_include_path.file_name().unwrap();
-        let cwd = local_canon_include_path.parent().unwrap();
-        self.scan(filename, cwd, &file_content)
+        let path = LpcPath::new_server(local_canon_include_path);
+        // let filename = local_canon_include_path.file_name().unwrap();
+        // let cwd = local_canon_include_path.parent().unwrap();
+        self.scan(path, &file_content)
     }
 
     /// Are we skipping lines right now due to `#if`s?
@@ -912,7 +905,7 @@ mod tests {
 
     fn test_valid(input: &str, expected: &[&str]) {
         let mut preprocessor = fixture();
-        match preprocessor.scan("test.c", "/", input) {
+        match preprocessor.scan("test.c", input) {
             Ok(result) => {
                 let mapped = result.iter().map(|i| i.1.to_string()).collect::<Vec<_>>();
 
@@ -927,7 +920,7 @@ mod tests {
     // `expected` is converted to a Regex, for easier matching on errors.
     fn test_invalid(input: &str, expected: &str) {
         let mut preprocessor = fixture();
-        match preprocessor.scan("test.c", "/", input) {
+        match preprocessor.scan("test.c", input) {
             Ok(result) => {
                 panic!("Expected to fail, but passed with {:?}", result);
             }
@@ -1151,7 +1144,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", "/", input) {
+            match preprocessor.scan("test.c", input) {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
@@ -1203,7 +1196,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", "/", input) {
+            match preprocessor.scan("test.c", input) {
                 Ok(_) => {
                     panic!("Expected an error due to duplicate definition.");
                 }
@@ -1222,7 +1215,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", "/", input) {
+            match preprocessor.scan("test.c", input) {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
@@ -1248,7 +1241,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", "/", input) {
+            match preprocessor.scan("test.c", input) {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("HELLO").unwrap(),
@@ -1778,7 +1771,7 @@ mod tests {
             "## };
 
             let mut preprocessor = fixture();
-            match preprocessor.scan("test.c", "/", prog) {
+            match preprocessor.scan("test.c", prog) {
                 Ok(_) => {
                     assert!(preprocessor.context.pragmas.strict_types());
                     assert!(preprocessor.context.pragmas.no_clone());

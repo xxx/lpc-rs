@@ -3,6 +3,156 @@ use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
 };
+use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
+
+#[derive(Debug)]
+pub enum LpcPath {
+    /// Represent an on-server path. Relative paths a relative to the running process' dir.
+    Server(PathBuf),
+
+    /// Represent an in-game path. Relative paths are relative to `lib_dir`.
+    InGame(PathBuf)
+}
+
+impl LpcPath {
+    /// Create a new on-server path. This essentially means the path will be treated
+    /// as it's passed. An attempt will be made to canonicalize the path before storage.
+    pub fn new_server<T>(path: T) -> Self
+    where
+        T: AsRef<Path>
+    {
+        let canon = match path.as_ref().absolutize() {
+            Ok(x) => x.to_path_buf(),
+            Err(_) => path.as_ref().to_path_buf()
+        };
+
+        Self::Server(canon)
+    }
+
+    /// Create a new in-game path. It assumes that any interaction with the real file system
+    /// will require canonicalization
+    pub fn new_in_game<T>(path: T) -> Self
+    where
+        T: AsRef<Path>
+    {
+        Self::InGame(path.as_ref().to_path_buf())
+    }
+
+    /// Create a new in-game path. It assumes that any interaction with the real file system
+    /// will require canonicalization.
+    /// This is just a convenience function that combines the cwd and path, mostly used for
+    /// resolving relative `#include` paths.
+    ///
+    /// # Arguments
+    /// `path` - The relative path to the file
+    /// `cwd` - The current directory used when resolving `.`s in `path`.
+    pub fn new_in_game_with_cwd<T, U>(path: T, cwd: U) -> Self
+    where
+        T: AsRef<Path>,
+        U: AsRef<Path>,
+    {
+        let buf = cwd.as_ref().join(path);
+        Self::InGame(buf)
+    }
+
+    /// Return the full, absolute on-server path for a file
+    ///
+    /// # Arguments
+    ///
+    /// `root` - The root to use for resolving `InGame` variants.
+    pub fn as_server<P>(&self, root: P) -> Cow<Path>
+    where
+        P: AsRef<Path>
+    {
+        match self {
+            LpcPath::Server(x) => Cow::Borrowed(x),
+            LpcPath::InGame(x) => {
+                let rt = canonicalize_server_path(x, "/", root.as_ref());
+
+                Cow::Owned(rt)
+            }
+        }
+    }
+
+    pub fn as_in_game<P>(&self, root: P) -> &Path
+    where
+        P: AsRef<Path>
+    {
+        match self {
+            LpcPath::Server(x) => {
+                match x.strip_prefix(root) {
+                    Ok(y) => y,
+                    Err(_) => x
+                }
+            },
+            LpcPath::InGame(x) => x
+        }
+    }
+}
+
+impl<T> From<&T> for LpcPath
+where
+    T: AsRef<Path>
+{
+    fn from(p: &T) -> Self {
+        Self::new_server(p.as_ref())
+    }
+}
+
+impl From<PathBuf> for LpcPath {
+    fn from(pb: PathBuf) -> Self {
+        Self::new_server(pb)
+    }
+}
+
+impl From<&str> for LpcPath {
+    fn from(s: &str) -> Self {
+        Self::new_server(s)
+    }
+}
+
+impl From<Cow<'_, Path>> for LpcPath {
+    fn from(c: Cow<'_, Path>) -> Self {
+        Self::new_server(c.as_os_str())
+    }
+}
+
+impl From<OsString> for LpcPath {
+    fn from(c: OsString) -> Self {
+        Self::new_server(c.as_os_str())
+    }
+}
+
+impl AsRef<str> for LpcPath {
+    fn as_ref(&self) -> &str {
+        match self {
+            // TODO: terrible defaults here
+            LpcPath::Server(x) => x.to_str().unwrap_or(""),
+            LpcPath::InGame(x) => x.to_str().unwrap_or("")
+        }
+    }
+}
+
+impl AsRef<Path> for LpcPath {
+    fn as_ref(&self) -> &Path {
+        match self {
+            LpcPath::Server(x) => x,
+            LpcPath::InGame(x) => x
+        }
+    }
+}
+
+impl Display for LpcPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let p = match self {
+            LpcPath::Server(x)
+            | LpcPath::InGame(x) => x
+        };
+
+        write!(f, "{}", p.display())
+    }
+}
 
 /// Convert an in-game path, relative or absolute, to a canonical, absolute *on-server* path.
 /// This function is used for resolving included files.

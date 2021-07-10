@@ -10,6 +10,7 @@ use lpc_rs::{
     interpreter::lpc_ref::LpcRef,
 };
 use std::collections::HashMap;
+use lpc_rs::util::path_maker::LpcPath;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -26,9 +27,10 @@ fn main() {
 
     let compiler = Compiler::new(config.clone());
 
-    let filename = config.master_object();
+    let lpc_path = LpcPath::new_in_game(config.master_object());
+    let filename = lpc_path.as_server(config.lib_dir());
 
-    match compiler.compile_in_game_file(filename, "/", None) {
+    match compiler.compile_in_game_file(&filename, None) {
         Ok(program) => {
             let mut interpreter = AsmInterpreter::new(config);
 
@@ -62,6 +64,6 @@ fn main() {
             let ob = interpreter.apply(master, "thing", &args);
             println!("ob??? {:?}", ob);
         }
-        Err(e) => eprintln!("unable to compile {}: {:?}", filename, e),
+        Err(e) => eprintln!("unable to compile {}: {:?}", filename.display(), e),
     }
 }
