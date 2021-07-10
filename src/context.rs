@@ -6,8 +6,7 @@ use crate::{
 };
 
 use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
-use std::rc::Rc;
-use std::path::Path;
+use std::{path::Path, rc::Rc};
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in

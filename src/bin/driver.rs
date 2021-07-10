@@ -1,16 +1,14 @@
 // use std::env;
 
-use std::rc::Rc;
-use std::cell::RefCell;
-use refpool::PoolRef;
 use lpc_rs::{
-    compiler::Compiler, errors, interpreter::asm_interpreter::AsmInterpreter, util::config::Config,
+    compiler::Compiler,
+    errors,
+    interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
+    util::{config::Config, path_maker::LpcPath},
     value_to_ref,
-    interpreter::lpc_value::LpcValue,
-    interpreter::lpc_ref::LpcRef,
 };
-use std::collections::HashMap;
-use lpc_rs::util::path_maker::LpcPath;
+use refpool::PoolRef;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -48,11 +46,17 @@ fn main() {
             let mut mapping = HashMap::new();
             mapping.insert(
                 value_to_ref!(LpcValue::from("foo"), interpreter.memory),
-                value_to_ref!(LpcValue::from("bar"), interpreter.memory)
+                value_to_ref!(LpcValue::from("bar"), interpreter.memory),
             );
             mapping.insert(
                 value_to_ref!(LpcValue::from("baz"), interpreter.memory),
-                value_to_ref!(LpcValue::from(vec![LpcRef::Int(12938), value_to_ref!(LpcValue::from("a str"), interpreter.memory)]), interpreter.memory)
+                value_to_ref!(
+                    LpcValue::from(vec![
+                        LpcRef::Int(12938),
+                        value_to_ref!(LpcValue::from("a str"), interpreter.memory)
+                    ]),
+                    interpreter.memory
+                ),
             );
 
             let args = vec![

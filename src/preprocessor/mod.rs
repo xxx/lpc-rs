@@ -20,11 +20,10 @@ use crate::{
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
-    util::path_maker::{canonicalize_in_game_path, canonicalize_server_path},
+    util::path_maker::{canonicalize_in_game_path, canonicalize_server_path, LpcPath},
     LpcInt, Result,
 };
 use std::iter::Peekable;
-use crate::util::path_maker::LpcPath;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -155,9 +154,7 @@ impl Preprocessor {
     {
         let mut output = Vec::new();
 
-        let file_id = FileCache::insert(
-            path.as_ref().display()
-        );
+        let file_id = FileCache::insert(path.as_ref().display());
 
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
@@ -173,13 +170,21 @@ impl Preprocessor {
 
                     match token {
                         Token::LocalInclude(t) => {
-                            let cwd = path.as_ref().parent().unwrap_or_else(|| self.context.lib_dir().as_ref()).to_path_buf();
+                            let cwd = path
+                                .as_ref()
+                                .parent()
+                                .unwrap_or_else(|| self.context.lib_dir().as_ref())
+                                .to_path_buf();
                             self.handle_local_include(t, &cwd, &mut output)?
                         }
                         Token::SysInclude(t) => {
-                            let cwd = path.as_ref().parent().unwrap_or_else(|| self.context.lib_dir().as_ref()).to_path_buf();
+                            let cwd = path
+                                .as_ref()
+                                .parent()
+                                .unwrap_or_else(|| self.context.lib_dir().as_ref())
+                                .to_path_buf();
                             self.handle_sys_include(t, &cwd, &mut output)?
-                        },
+                        }
                         Token::PreprocessorElse(t) => self.handle_else(t)?,
                         Token::Endif(t) => self.handle_endif(t)?,
                         Token::Define(t) => self.handle_define(t)?,

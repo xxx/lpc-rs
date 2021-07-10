@@ -1,10 +1,10 @@
 use path_absolutize::Absolutize;
 use std::{
+    borrow::Cow,
     ffi::{OsStr, OsString},
+    fmt::{Display, Formatter},
     path::{Path, PathBuf},
 };
-use std::borrow::Cow;
-use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum LpcPath {
@@ -12,7 +12,7 @@ pub enum LpcPath {
     Server(PathBuf),
 
     /// Represent an in-game path. Relative paths are relative to `lib_dir`.
-    InGame(PathBuf)
+    InGame(PathBuf),
 }
 
 impl LpcPath {
@@ -20,11 +20,11 @@ impl LpcPath {
     /// as it's passed. An attempt will be made to canonicalize the path before storage.
     pub fn new_server<T>(path: T) -> Self
     where
-        T: AsRef<Path>
+        T: AsRef<Path>,
     {
         let canon = match path.as_ref().absolutize() {
             Ok(x) => x.to_path_buf(),
-            Err(_) => path.as_ref().to_path_buf()
+            Err(_) => path.as_ref().to_path_buf(),
         };
 
         Self::Server(canon)
@@ -34,7 +34,7 @@ impl LpcPath {
     /// will require canonicalization
     pub fn new_in_game<T>(path: T) -> Self
     where
-        T: AsRef<Path>
+        T: AsRef<Path>,
     {
         Self::InGame(path.as_ref().to_path_buf())
     }
@@ -63,7 +63,7 @@ impl LpcPath {
     /// `root` - The root to use for resolving `InGame` variants.
     pub fn as_server<P>(&self, root: P) -> Cow<Path>
     where
-        P: AsRef<Path>
+        P: AsRef<Path>,
     {
         match self {
             LpcPath::Server(x) => Cow::Borrowed(x),
@@ -77,23 +77,21 @@ impl LpcPath {
 
     pub fn as_in_game<P>(&self, root: P) -> &Path
     where
-        P: AsRef<Path>
+        P: AsRef<Path>,
     {
         match self {
-            LpcPath::Server(x) => {
-                match x.strip_prefix(root) {
-                    Ok(y) => y,
-                    Err(_) => x
-                }
+            LpcPath::Server(x) => match x.strip_prefix(root) {
+                Ok(y) => y,
+                Err(_) => x,
             },
-            LpcPath::InGame(x) => x
+            LpcPath::InGame(x) => x,
         }
     }
 }
 
 impl<T> From<&T> for LpcPath
 where
-    T: AsRef<Path>
+    T: AsRef<Path>,
 {
     fn from(p: &T) -> Self {
         Self::new_server(p.as_ref())
@@ -129,7 +127,7 @@ impl AsRef<str> for LpcPath {
         match self {
             // TODO: terrible defaults here
             LpcPath::Server(x) => x.to_str().unwrap_or(""),
-            LpcPath::InGame(x) => x.to_str().unwrap_or("")
+            LpcPath::InGame(x) => x.to_str().unwrap_or(""),
         }
     }
 }
@@ -138,7 +136,7 @@ impl AsRef<Path> for LpcPath {
     fn as_ref(&self) -> &Path {
         match self {
             LpcPath::Server(x) => x,
-            LpcPath::InGame(x) => x
+            LpcPath::InGame(x) => x,
         }
     }
 }
@@ -146,8 +144,7 @@ impl AsRef<Path> for LpcPath {
 impl Display for LpcPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let p = match self {
-            LpcPath::Server(x)
-            | LpcPath::InGame(x) => x
+            LpcPath::Server(x) | LpcPath::InGame(x) => x,
         };
 
         write!(f, "{}", p.display())

@@ -20,10 +20,9 @@ use crate::{
         span::Span,
     },
     preprocessor::Preprocessor,
-    util::config::Config,
+    util::{config::Config, path_maker::LpcPath},
 };
 use std::{fmt::Debug, io::ErrorKind, rc::Rc};
-use crate::util::path_maker::LpcPath;
 
 pub mod compiler_error;
 
@@ -83,7 +82,7 @@ impl Compiler
                         absolute.display(),
                         e
                     )))),
-                }
+                };
             }
         };
 

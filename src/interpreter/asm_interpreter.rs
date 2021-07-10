@@ -183,7 +183,7 @@ impl AsmInterpreter {
     /// & resetting the current process and stack, and sharing the memory pool.
     pub fn with_clean_stack<F, T>(&mut self, closure: F) -> Result<T>
     where
-        F: FnOnce(&mut AsmInterpreter) -> Result<T>
+        F: FnOnce(&mut AsmInterpreter) -> Result<T>,
     {
         let current_process = self.process.clone();
         let clean_stack = Vec::with_capacity(20);

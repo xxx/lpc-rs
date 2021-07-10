@@ -1,7 +1,6 @@
 use crate::{
     interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
-    Result,
-    value_to_ref,
+    value_to_ref, Result,
 };
 use refpool::PoolRef;
 use std::cell::RefCell;

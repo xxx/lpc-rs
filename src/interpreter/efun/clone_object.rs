@@ -4,12 +4,12 @@ use crate::{
     interpreter::{
         asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
     },
-    try_extract_value, Result,
-    value_to_ref,
+    try_extract_value,
+    util::path_maker::LpcPath,
+    value_to_ref, Result,
 };
 use refpool::PoolRef;
 use std::{cell::RefCell, rc::Rc};
-use crate::util::path_maker::LpcPath;
 
 fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Process>> {
     let frame = interpreter.stack.last().unwrap();
@@ -19,10 +19,8 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
         Some(proc) => Ok(proc.clone()),
         None => {
             let full_path = LpcPath::new_in_game_with_cwd(path, interpreter.in_game_cwd()?);
-            match compiler.compile_in_game_file(
-                full_path,
-                interpreter.process.current_debug_span(),
-            ) {
+            match compiler.compile_in_game_file(full_path, interpreter.process.current_debug_span())
+            {
                 Ok(prog) => {
                     let closure = |interpreter: &mut AsmInterpreter| {
                         let process = interpreter.load_master(prog);
@@ -30,11 +28,11 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
 
                         match init_result {
                             Ok(_) => Ok(process),
-                            Err(e) => Err(e)
+                            Err(e) => Err(e),
                         }
                     };
                     interpreter.with_clean_stack(closure)
-                },
+                }
                 Err(e) => {
                     let debug_span = frame.process.current_debug_span();
 
@@ -79,7 +77,7 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
 
             match init_result {
                 Ok(_) => Ok(process),
-                Err(e) => Err(e)
+                Err(e) => Err(e),
             }
         };
         let new_proc = interpreter.with_clean_stack(closure)?;

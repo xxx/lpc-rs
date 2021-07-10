@@ -9,8 +9,8 @@ use std::{
     cell::{Cell, RefCell},
     ops::Deref,
     path::Path,
+    rc::Rc,
 };
-use std::rc::Rc;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -31,7 +31,7 @@ impl Process {
             program: program.into(),
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             pc: Cell::new(0),
-            clone_id: None
+            clone_id: None,
         }
     }
 
@@ -42,7 +42,7 @@ impl Process {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             pc: Cell::new(0),
-            clone_id: Some(clone_id)
+            clone_id: Some(clone_id),
         }
     }
 
@@ -94,8 +94,7 @@ impl Process {
     /// if that fails.
     #[inline]
     pub fn localized_filename(&self, prefix: &str) -> String {
-        self
-            .filename()
+        self.filename()
             .strip_prefix(prefix)
             .unwrap_or_else(|| self.program.filename.as_ref())
             .into()
