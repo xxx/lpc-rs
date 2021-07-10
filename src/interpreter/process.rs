@@ -97,7 +97,7 @@ impl Process {
         self
             .filename()
             .strip_prefix(prefix)
-            .unwrap_or(self.program.filename.as_ref())
+            .unwrap_or_else(|| self.program.filename.as_ref())
             .into()
     }
 }

@@ -28,10 +28,10 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
                         let process = interpreter.load_master(prog);
                         let init_result = interpreter.init();
 
-                        return match init_result {
+                        match init_result {
                             Ok(_) => Ok(process),
                             Err(e) => Err(e)
-                        };
+                        }
                     };
                     interpreter.with_clean_stack(closure)
                 },
@@ -77,10 +77,10 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
             let process = interpreter.load_clone(new_clone);
             let init_result = interpreter.init();
 
-            return match init_result {
+            match init_result {
                 Ok(_) => Ok(process),
                 Err(e) => Err(e)
-            };
+            }
         };
         let new_proc = interpreter.with_clean_stack(closure)?;
         let v = LpcValue::Object(new_proc);

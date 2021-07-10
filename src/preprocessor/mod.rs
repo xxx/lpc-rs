@@ -173,11 +173,11 @@ impl Preprocessor {
 
                     match token {
                         Token::LocalInclude(t) => {
-                            let cwd = path.as_ref().parent().unwrap_or(self.context.lib_dir().as_ref()).to_path_buf();
+                            let cwd = path.as_ref().parent().unwrap_or_else(|| self.context.lib_dir().as_ref()).to_path_buf();
                             self.handle_local_include(t, &cwd, &mut output)?
                         }
                         Token::SysInclude(t) => {
-                            let cwd = path.as_ref().parent().unwrap_or(self.context.lib_dir().as_ref()).to_path_buf();
+                            let cwd = path.as_ref().parent().unwrap_or_else(|| self.context.lib_dir().as_ref()).to_path_buf();
                             self.handle_sys_include(t, &cwd, &mut output)?
                         },
                         Token::PreprocessorElse(t) => self.handle_else(t)?,
