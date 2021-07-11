@@ -27,4 +27,8 @@ pub struct FunctionPrototype {
 
     /// Spans for my arguments
     pub arg_spans: Vec<Span>,
+
+    /// Whether the signature of this function ends with an `...`, meaning any
+    /// number of arguments can be passed when calling it.
+    pub ellipsis: bool
 }

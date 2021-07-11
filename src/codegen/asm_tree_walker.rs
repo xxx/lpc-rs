@@ -44,6 +44,7 @@ use crate::{
 
 use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode, ternary_node::TernaryNode};
 use std::rc::Rc;
+use crate::interpreter::efun::CALL_OTHER;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -467,6 +468,7 @@ impl TreeWalker for AsmTreeWalker {
         let params = self.context.function_params.get(&node.name);
 
         if let Some(function_args) = params {
+            // TODO: get rid of this clone or make it cheaper
             let mut function_args = function_args.clone();
 
             for (idx, function_arg) in function_args.iter_mut().enumerate() {
@@ -530,6 +532,25 @@ impl TreeWalker for AsmTreeWalker {
                     name: node.name.clone(),
                     num_args: arg_results.len(),
                     initial_arg: start_register,
+                }
+            } else if node.name == CALL_OTHER {
+                let receiver = arg_results[0];
+                let name = if let ExpressionNode::String(StringNode { value, ..}) = &node.arguments[1] {
+                    value.clone()
+                } else {
+                    return Err(LpcError::new(
+                        format!(
+                            "Invalid function name passed to `call_other`: {}",
+                            node.arguments[1]
+                        )
+                    ));
+                };
+
+                Instruction::CallOther {
+                    receiver,
+                    name,
+                    num_args: arg_results.len() - 2,
+                    initial_arg: if arg_results.len() > 2 { arg_results[2] } else { arg_results[0] }
                 }
             } else {
                 Instruction::Call {
@@ -1392,6 +1413,7 @@ mod tests {
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
+                ellipsis: false,
             };
 
             context
@@ -1429,6 +1451,7 @@ mod tests {
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
+                ellipsis: false,
             };
 
             context

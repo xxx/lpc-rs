@@ -105,6 +105,7 @@ impl TreeWalker for ScopeWalker {
                         .flat_map(|n| n.span)
                         .collect::<Vec<_>>()
                 },
+                ellipsis: false,
             },
         );
 
@@ -257,7 +258,8 @@ mod tests {
                         num_default_args: 0,
                         arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
                         span: None,
-                        arg_spans: vec![]
+                        arg_spans: vec![],
+                        ellipsis: false,
                     }
                 )
             } else {

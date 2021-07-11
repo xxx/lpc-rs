@@ -18,12 +18,14 @@ use this_object::this_object;
 /// Signature for Efuns
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
 
+pub const CALL_OTHER: &str = "call_other";
 pub const CLONE_OBJECT: &str = "clone_object";
 pub const DUMP: &str = "dump";
 pub const THIS_OBJECT: &str = "this_object";
 
 /// Global static mapping of all efun names to the actual function
 pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
+    // "call_other" is implemented with a custom `Instruction`
     "clone_object" => clone_object,
     "dump" => dump,
     "this_object" => this_object,
@@ -33,6 +35,25 @@ lazy_static! {
     /// Global static mapping of all efun names to their prototype
     pub static ref EFUN_PROTOTYPES: HashMap<&'static str, FunctionPrototype> = {
         let mut m = HashMap::new();
+
+        m.insert(CALL_OTHER, FunctionPrototype {
+            name: CALL_OTHER.into(),
+            return_type: LpcType::Mixed(false),
+            num_args: 2,
+            num_default_args: 0,
+            arg_types: vec![
+                LpcType::Object(false)
+                | LpcType::Object(true)
+                | LpcType::String(false)
+                | LpcType::String(true)
+                | LpcType::Mapping(false),
+                LpcType::String(false)
+            ],
+            span: None,
+            arg_spans: vec![],
+            ellipsis: true,
+        });
+
         m.insert(CLONE_OBJECT, FunctionPrototype {
             name: CLONE_OBJECT.into(),
             return_type: LpcType::Object(false),
@@ -40,7 +61,8 @@ lazy_static! {
             num_default_args: 0,
             arg_types: vec![LpcType::String(false)],
             span: None,
-            arg_spans: vec![]
+            arg_spans: vec![],
+            ellipsis: false,
         });
 
         m.insert(DUMP, FunctionPrototype {
@@ -50,7 +72,8 @@ lazy_static! {
             num_default_args: 0,
             arg_types: vec![LpcType::Mixed(false)],
             span: None,
-            arg_spans: vec![]
+            arg_spans: vec![],
+            ellipsis: false,
         });
 
         m.insert(THIS_OBJECT, FunctionPrototype {
@@ -60,7 +83,8 @@ lazy_static! {
             num_default_args: 0,
             arg_types: vec![],
             span: None,
-            arg_spans: vec![]
+            arg_spans: vec![],
+            ellipsis: false,
         });
 
         m

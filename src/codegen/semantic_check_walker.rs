@@ -21,7 +21,7 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     context::Context,
     errors::LpcError,
-    interpreter::efun::{EFUNS, EFUN_PROTOTYPES},
+    interpreter::efun::EFUN_PROTOTYPES,
     semantic::{
         lpc_type::LpcType,
         semantic_checks::{
@@ -92,7 +92,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         // Check function existence.
         if !self.context.function_prototypes.contains_key(&node.name)
-            && !EFUNS.contains_key(node.name.as_str())
+            && !EFUN_PROTOTYPES.contains_key(node.name.as_str())
         {
             let e = LpcError::new(format!("Call to unknown function `{}`", node.name))
                 .with_span(node.span);
@@ -111,9 +111,10 @@ impl TreeWalker for SemanticCheckWalker {
             let arg_len = node.arguments.len();
 
             // Check function arity.
-            if !((prototype.num_args - prototype.num_default_args)..=prototype.num_args)
-                .contains(&arg_len)
-            {
+            let minimum = prototype.num_args - prototype.num_default_args;
+            let valid = (minimum..=prototype.num_args).contains(&arg_len) ||
+                (prototype.ellipsis && arg_len >= minimum);
+            if !valid {
                 let e = LpcError::new(format!(
                     "Incorrect argument count in call to `{}`: expected: {}, received: {}",
                     node.name, prototype.num_args, arg_len
@@ -498,6 +499,7 @@ mod tests {
                     arg_types: vec![],
                     span: None,
                     arg_spans: vec![],
+                    ellipsis: false,
                 },
             );
 
@@ -562,6 +564,27 @@ mod tests {
         }
 
         #[test]
+        fn handles_ellipsis_argument_arity() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
+                arguments: vec![
+                    ExpressionNode::from("bar.c"),
+                    ExpressionNode::from("my_function"),
+                    ExpressionNode::from(123),
+                    ExpressionNode::from(111),
+                    ExpressionNode::from("sha256"),
+                ], // `call_other` is specified as having 2 arguments, but we're passing more
+                name: "call_other".to_string(),
+                span: None,
+            });
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
         fn understands_argument_defaults() {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: Box::new(None),
@@ -581,6 +604,7 @@ mod tests {
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
+                    ellipsis: false,
                 },
             );
 
@@ -617,6 +641,7 @@ mod tests {
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
+                    ellipsis: false,
                 },
             );
 
@@ -653,6 +678,7 @@ mod tests {
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
+                    ellipsis: false,
                 },
             );
 
