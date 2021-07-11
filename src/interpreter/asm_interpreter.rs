@@ -229,7 +229,7 @@ impl AsmInterpreter {
     }
 
     /// Pop the current stack frame off the call stack
-    fn pop_frame(&mut self) -> Option<StackFrame> {
+    pub fn pop_frame(&mut self) -> Option<StackFrame> {
         let previous_frame = self.stack.pop();
         // println!("popped frame: {:?}", previous_frame);
 

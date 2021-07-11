@@ -112,8 +112,7 @@ mod tests {
     use regex::Regex;
     use std::rc::Rc;
 
-    #[test]
-    fn returns_error_if_no_clone() {
+    fn fixture() -> AsmInterpreter {
         let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests");
 
         let program = Program {
@@ -131,6 +130,40 @@ mod tests {
 
         let mut interpreter = AsmInterpreter::new(config.into());
         interpreter.load_master(program);
+
+        interpreter
+    }
+
+    #[test]
+    fn does_not_create_multiple_master_objects() {
+        let mut interpreter = fixture();
+
+        let sym = FunctionSymbol {
+            name: "clone_object".to_string(),
+            num_args: 1,
+            num_locals: 0,
+            address: 0,
+        };
+
+        let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym), 0);
+
+        let path = value_to_ref!(LpcValue::from("./example"), &interpreter.memory);
+        frame.registers[1] = path;
+
+        interpreter.push_frame(frame.clone());
+        assert!(clone_object(&mut interpreter).is_ok());
+        interpreter.pop_frame();
+
+        interpreter.push_frame(frame);
+        assert!(clone_object(&mut interpreter).is_ok());
+
+        // procs are empty.c, example.c, example.c#0, example.c#1
+        assert_eq!(interpreter.processes.len(), 4);
+    }
+
+    #[test]
+    fn returns_error_if_no_clone() {
+        let mut interpreter = fixture();
 
         let sym = FunctionSymbol {
             name: "clone_object".to_string(),
