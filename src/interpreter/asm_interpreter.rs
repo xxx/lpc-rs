@@ -197,16 +197,26 @@ impl AsmInterpreter {
         result
     }
 
-    fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
+    pub fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
     where
         T: AsRef<str>,
     {
-        match self.processes.get(path.as_ref()) {
+        let s = path.as_ref();
+
+        match self.processes.get(s) {
             Some(proc) => Ok(proc),
-            None => Err(
-                LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
-                    .with_span(self.process.current_debug_span()),
-            ),
+            None => {
+                if !s.ends_with(".c") {
+                    let mut owned = s.to_string();
+                    owned.push_str(".c");
+                    return self.lookup_process(owned);
+                }
+
+                Err(
+                    LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
+                        .with_span(self.process.current_debug_span()),
+                )
+            },
         }
     }
 

@@ -15,10 +15,12 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
     let frame = interpreter.stack.last().unwrap();
     let compiler = Compiler::new(interpreter.config.clone());
 
-    match interpreter.processes.get(path) {
-        Some(proc) => Ok(proc.clone()),
-        None => {
-            let full_path = LpcPath::new_in_game_with_cwd(path, interpreter.in_game_cwd()?);
+    let full_path = LpcPath::new_in_game_with_cwd(path, interpreter.in_game_cwd()?);
+    let path_str: &str = full_path.as_ref();
+
+    match interpreter.lookup_process(path_str) {
+        Ok(proc) => Ok(proc.clone()),
+        Err(_) => {
             match compiler.compile_in_game_file(full_path, interpreter.process.current_debug_span())
             {
                 Ok(prog) => {
