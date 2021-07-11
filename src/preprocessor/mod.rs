@@ -20,10 +20,11 @@ use crate::{
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
-    util::path_maker::{canonicalize_in_game_path, canonicalize_server_path, LpcPath},
+    util::path_maker::LpcPath,
     LpcInt, Result,
 };
 use std::iter::Peekable;
+use crate::util::path_maker::ToLpcPath;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -122,9 +123,8 @@ impl Preprocessor {
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
     ///
     /// # Arguments
-    /// `path` - The path + name of the file being scanned.
-    /// `cwd` - The current working directory on-server, used to resolve relative links
-    /// `file_content` - The actual content of the file to scan.
+    /// `path` - The [`Path`]like representing the file.
+    /// `code` - The code to scan.
     ///
     /// # Examples
     /// ```
@@ -170,18 +170,18 @@ impl Preprocessor {
 
                     match token {
                         Token::LocalInclude(t) => {
-                            let cwd = path
-                                .as_ref()
+                            let lpc_path = path.as_ref().to_lpc_path();
+                            let cwd = lpc_path.as_in_game(self.context.config.lib_dir())
                                 .parent()
-                                .unwrap_or_else(|| self.context.lib_dir().as_ref())
+                                .unwrap_or(&Path::new("/"))
                                 .to_path_buf();
                             self.handle_local_include(t, &cwd, &mut output)?
                         }
                         Token::SysInclude(t) => {
-                            let cwd = path
-                                .as_ref()
+                            let lpc_path = path.as_ref().to_lpc_path();
+                            let cwd = lpc_path.as_in_game(self.context.config.lib_dir())
                                 .parent()
-                                .unwrap_or_else(|| self.context.lib_dir().as_ref())
+                                .unwrap_or(&Path::new("/"))
                                 .to_path_buf();
                             self.handle_sys_include(t, &cwd, &mut output)?
                         }
@@ -481,6 +481,10 @@ impl Preprocessor {
         Ok(())
     }
 
+    /// # Arguments
+    /// `token` - The matched lexer token
+    /// `cwd` - an in-game directory, to use as the reference for relative paths.
+    /// `output` - The vector to append included tokens to
     fn handle_sys_include<U>(
         &mut self,
         token: &StringToken,
@@ -499,19 +503,33 @@ impl Preprocessor {
         if let Some(captures) = SYS_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
 
-            // TODO: get rid of this clone
-            for dir in &*self.context.system_include_dirs().clone() {
-                if let Ok(included) = self.include_local_file(matched.as_str(), dir, token.0) {
-                    for spanned in included {
-                        self.append_spanned(&mut output, spanned)
-                    }
+            let config = self.context.config.clone();
+            for dir in config.system_include_dirs() {
+                let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), dir);
+                return match self.include_local_file(&to_include, token.0) {
+                    Ok(included) => {
+                        for spanned in included {
+                            self.append_spanned(&mut output, spanned)
+                        }
 
-                    return Ok(());
+                        Ok(())
+                    }
+                    Err(e) => {
+                        // TODO: bleeeeeeech
+                        // If the error is just "file not found", keep looking
+                        if e.as_ref().contains("Unable to read include file") {
+                            continue;
+                        }
+
+                        Err(e)
+                    }
                 }
             }
 
+            let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), &cwd);
+
             // Fall back to trying local paths
-            let included = self.include_local_file(matched.as_str(), &cwd, token.0)?;
+            let included = self.include_local_file(&to_include, token.0)?;
 
             for spanned in included {
                 self.append_spanned(&mut output, spanned)
@@ -523,6 +541,10 @@ impl Preprocessor {
         }
     }
 
+    /// # Arguments
+    /// `token` - The matched lexer token
+    /// `cwd` - an in-game directory, to use as the reference for relative paths.
+    /// `output` - The vector to append included tokens to
     fn handle_local_include<U>(
         &mut self,
         token: &StringToken,
@@ -540,7 +562,9 @@ impl Preprocessor {
 
         if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
-            let included = self.include_local_file(matched.as_str(), &cwd, token.0)?;
+            let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), cwd);
+
+            let included = self.include_local_file(&to_include, token.0)?;
 
             for spanned in included {
                 self.append_spanned(&mut output, spanned)
@@ -618,6 +642,7 @@ impl Preprocessor {
                 }
             }
             PreprocessorNode::Int(i) => Ok(i != &0),
+            PreprocessorNode::String(_) => Ok(true),
             PreprocessorNode::Defined(x, negated) => {
                 let option = self.defines.get(x);
                 Ok(if *negated {
@@ -797,22 +822,21 @@ impl Preprocessor {
     ///     the `#include` directive.
     /// `cwd` - The current working directory. Used for resolving relative pathnames.
     /// `span` - The [`Span`] of the `#include` token.
-    fn include_local_file<T, U>(
+    fn include_local_file(
         &mut self,
-        path: T,
-        cwd: U,
+        // path: T,
+        // cwd: U,
+        path: &LpcPath,
         span: Span,
-    ) -> Result<Vec<Spanned<Token>>>
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-    {
-        let canon_include_path = canonicalize_server_path(&path, &cwd, &self.context.lib_dir());
+    ) -> Result<Vec<Spanned<Token>>> {
+        let canon_include_path = path.as_server(self.context.lib_dir());
+        // let canon_include_path = canonicalize_server_path(&path, &cwd, &self.context.lib_dir());
 
+        // println!("local include {:?} {:?} {:?}", path.as_ref(), cwd.as_ref(), canon_include_path);
         if !canon_include_path.starts_with(self.context.lib_dir()) {
             return Err(LpcError::new(&format!(
                 "Attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                path.as_ref().display(),
+                path,
                 canon_include_path.display(),
                 self.context.lib_dir()
             ))
@@ -823,20 +847,15 @@ impl Preprocessor {
             Ok(content) => content,
             Err(e) => {
                 return Err(LpcError::new(&format!(
-                    "Unable to read include file `{}`: {:?} (cwd `{}`)",
-                    path.as_ref().display(),
-                    cwd.as_ref().display(),
+                    "Unable to read include file `{}`: {:?}",
+                    path,
                     e
                 ))
                 .with_span(Some(span)));
             }
         };
 
-        let local_canon_include_path =
-            canonicalize_in_game_path(&path, &cwd, &self.context.lib_dir());
-        let path = LpcPath::new_server(local_canon_include_path);
-        // let filename = local_canon_include_path.file_name().unwrap();
-        // let cwd = local_canon_include_path.parent().unwrap();
+        let path = LpcPath::new_server(canon_include_path);
         self.scan(path, &file_content)
     }
 
@@ -1007,7 +1026,7 @@ mod tests {
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include <nonexistent.h>"#;
 
-            test_invalid(input, "failed to open file");
+            test_invalid(input, "Unable to read include file `nonexistent.h`");
         }
 
         #[test]
@@ -1102,7 +1121,7 @@ mod tests {
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
-            test_invalid(input, "failed to open file");
+            test_invalid(input, "Unable to read include file `/askdf/foo.h`");
         }
 
         #[test]

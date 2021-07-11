@@ -37,7 +37,7 @@ fn main() {
                 errors::emit_diagnostics(&[e]);
             }
 
-            println!("procs {:?}", interpreter.processes);
+            // println!("procs {:?}", interpreter.processes);
             let master = interpreter
                 .processes
                 .get("/secure/master.c")

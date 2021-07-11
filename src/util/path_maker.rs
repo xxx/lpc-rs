@@ -75,6 +75,11 @@ impl LpcPath {
         }
     }
 
+    /// Return the in-game path represented by this instance
+    ///
+    /// # Arguments
+    ///
+    /// `root` - The root to strip off of `Server` variants.
     pub fn as_in_game<P>(&self, root: P) -> &Path
     where
         P: AsRef<Path>,
@@ -87,6 +92,10 @@ impl LpcPath {
             LpcPath::InGame(x) => x,
         }
     }
+}
+
+pub trait ToLpcPath {
+    fn to_lpc_path(&self) -> LpcPath;
 }
 
 impl<T> From<&T> for LpcPath
@@ -122,12 +131,30 @@ impl From<OsString> for LpcPath {
     }
 }
 
+impl ToLpcPath for PathBuf {
+    fn to_lpc_path(&self) -> LpcPath {
+        LpcPath::new_server(self.as_os_str())
+    }
+}
+
+impl ToLpcPath for &Path {
+    fn to_lpc_path(&self) -> LpcPath {
+        LpcPath::Server(self.to_path_buf())
+    }
+}
+
+impl ToLpcPath for &str {
+    fn to_lpc_path(&self) -> LpcPath {
+        LpcPath::new_server(self)
+    }
+}
+
 impl AsRef<str> for LpcPath {
     fn as_ref(&self) -> &str {
         match self {
             // TODO: terrible defaults here
-            LpcPath::Server(x) => x.to_str().unwrap_or(""),
-            LpcPath::InGame(x) => x.to_str().unwrap_or(""),
+            LpcPath::Server(x) => x.to_str().unwrap_or("."),
+            LpcPath::InGame(x) => x.to_str().unwrap_or("/"),
         }
     }
 }
@@ -143,9 +170,7 @@ impl AsRef<Path> for LpcPath {
 
 impl Display for LpcPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let p = match self {
-            LpcPath::Server(x) | LpcPath::InGame(x) => x,
-        };
+        let p: &Path = self.as_ref();
 
         write!(f, "{}", p.display())
     }

@@ -7,6 +7,7 @@ pub enum PreprocessorNode {
     Var(String),
     // Char(char),
     Int(LpcInt),
+    String(String),
     /// `bool` denotes whether this is negated or not
     Defined(String, bool),
     BinaryOp(
@@ -19,12 +20,13 @@ pub enum PreprocessorNode {
 impl Display for PreprocessorNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PreprocessorNode::Var(v) => write!(f, "{}", v),
-            PreprocessorNode::Int(i) => write!(f, "{}", i),
-            PreprocessorNode::Defined(d, negated) => {
+            PreprocessorNode::Var(x) => write!(f, "{}", x),
+            PreprocessorNode::Int(x) => write!(f, "{}", x),
+            PreprocessorNode::String(x) => write!(f, "{}", x),
+            PreprocessorNode::Defined(x, negated) => {
                 let not = if *negated { "not " } else { "" };
 
-                write!(f, "{}defined({})", not, d)
+                write!(f, "{}defined({})", not, x)
             }
             PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{} {} {}", l, op, r),
         }

@@ -99,6 +99,7 @@ extern {
 PrimaryExpression: PreprocessorNode = {
     <Int> => PreprocessorNode::Int(<>),
     <Var> => PreprocessorNode::Var(<>),
+    <String> => PreprocessorNode::String(<>),
     "(" <Expression> ")",
     <not:"not"?> "defined" "(" <var:Var> ")" => PreprocessorNode::Defined(var, not.is_some()),
     <not:"not"?> "defined(" <var:Var> ")" => PreprocessorNode::Defined(var, not.is_some()),
@@ -132,6 +133,8 @@ pub Expression: PreprocessorNode = {
 Var: String = <"ID"> => <>.1;
 
 Int: LpcInt = <"IntLiteral"> => <>.1;
+
+String: String = <"StringLiteral"> => <>.1;
 
 AdditiveBinaryOp: BinaryOperation = {
     "+" => BinaryOperation::Add,

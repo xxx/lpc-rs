@@ -105,6 +105,12 @@ impl Display for LpcError {
 
 impl Error for LpcError {}
 
+impl AsRef<str> for LpcError {
+    fn as_ref(&self) -> &str {
+        &self.message
+    }
+}
+
 /// Map LALRpop's parse errors into our local error type
 impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
     fn from(err: LalrpopParseError<usize, Token, LpcError>) -> Self {

@@ -1,0 +1,1 @@
+#define COOL "sup"

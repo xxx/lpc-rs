@@ -119,8 +119,7 @@ impl Compiler
     /// used.
     ///
     /// # Arguments
-    /// `path` - The in-game path to the file being preprocessed. Used for resolving
-    ///   relative `#include` paths. It's assumed the CWD is already prepended.
+    /// `path` - The absolute on-server path to the file represented by `code`
     /// `code` - The actual code to preprocess.
     ///
     /// # Examples
@@ -170,8 +169,7 @@ impl Compiler
     /// Compile a string containing an LPC program into a Program struct
     ///
     /// # Arguments
-    /// `path` - The in-game path of the file being compiled. Used for error messaging.
-    ///   It's assumed the CWD is already prepended.
+    /// `path` - The absolute on-server path to the file being represented by `code`
     /// `code` - The actual code to be compiled.
     /// # Examples
     /// ```
@@ -188,7 +186,6 @@ impl Compiler
     /// let compiler = Compiler::default();
     /// let prog = compiler.compile_string("~/my_file.c", code).expect("Failed to compile.");
     /// ```
-
     pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program, CompilerError>
     where
         T: AsRef<Path> + Into<LpcPath>,
