@@ -20,11 +20,10 @@ use crate::{
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
-    util::path_maker::LpcPath,
+    util::path_maker::{LpcPath, ToLpcPath},
     LpcInt, Result,
 };
 use std::iter::Peekable;
-use crate::util::path_maker::ToLpcPath;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -171,7 +170,8 @@ impl Preprocessor {
                     match token {
                         Token::LocalInclude(t) => {
                             let lpc_path = path.as_ref().to_lpc_path();
-                            let cwd = lpc_path.as_in_game(self.context.config.lib_dir())
+                            let cwd = lpc_path
+                                .as_in_game(self.context.config.lib_dir())
                                 .parent()
                                 .unwrap_or(&Path::new("/"))
                                 .to_path_buf();
@@ -179,7 +179,8 @@ impl Preprocessor {
                         }
                         Token::SysInclude(t) => {
                             let lpc_path = path.as_ref().to_lpc_path();
-                            let cwd = lpc_path.as_in_game(self.context.config.lib_dir())
+                            let cwd = lpc_path
+                                .as_in_game(self.context.config.lib_dir())
                                 .parent()
                                 .unwrap_or(&Path::new("/"))
                                 .to_path_buf();
@@ -523,7 +524,7 @@ impl Preprocessor {
 
                         Err(e)
                     }
-                }
+                };
             }
 
             let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), &cwd);
@@ -848,8 +849,7 @@ impl Preprocessor {
             Err(e) => {
                 return Err(LpcError::new(&format!(
                     "Unable to read include file `{}`: {:?}",
-                    path,
-                    e
+                    path, e
                 ))
                 .with_span(Some(span)));
             }

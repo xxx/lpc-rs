@@ -216,7 +216,7 @@ impl AsmInterpreter {
                     LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
                         .with_span(self.process.current_debug_span()),
                 )
-            },
+            }
         }
     }
 
