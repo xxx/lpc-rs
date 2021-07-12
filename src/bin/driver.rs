@@ -7,8 +7,8 @@ use lpc_rs::{
     util::{config::Config, path_maker::LpcPath},
     value_to_ref,
 };
-use refpool::PoolRef;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
+use std::rc::Rc;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();

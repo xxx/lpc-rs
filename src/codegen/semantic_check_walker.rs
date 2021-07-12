@@ -112,8 +112,8 @@ impl TreeWalker for SemanticCheckWalker {
 
             // Check function arity.
             let minimum = prototype.num_args - prototype.num_default_args;
-            let valid = (minimum..=prototype.num_args).contains(&arg_len) ||
-                (prototype.ellipsis && arg_len >= minimum);
+            let valid = (minimum..=prototype.num_args).contains(&arg_len)
+                || (prototype.ellipsis && arg_len >= minimum);
             if !valid {
                 let e = LpcError::new(format!(
                     "Incorrect argument count in call to `{}`: expected: {}, received: {}",

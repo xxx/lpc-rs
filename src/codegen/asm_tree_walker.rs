@@ -42,9 +42,11 @@ use crate::{
     Result,
 };
 
-use crate::ast::{do_while_node::DoWhileNode, for_node::ForNode, ternary_node::TernaryNode};
+use crate::{
+    ast::{do_while_node::DoWhileNode, for_node::ForNode, ternary_node::TernaryNode},
+    interpreter::efun::CALL_OTHER,
+};
 use std::rc::Rc;
-use crate::interpreter::efun::CALL_OTHER;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -494,10 +496,12 @@ impl TreeWalker for AsmTreeWalker {
             if let Some(rcvr) = &mut *node.receiver {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
+                let name_register = self.register_counter.next().unwrap();
+                push_instruction!(self, Instruction::SConst(name_register, node.name.clone()), node.span);
 
                 Instruction::CallOther {
                     receiver: receiver_result,
-                    name: node.name.clone(),
+                    name: name_register,
                     num_args: arg_results.len(),
                     initial_arg: arg_results[0],
                 }
@@ -514,9 +518,7 @@ impl TreeWalker for AsmTreeWalker {
 
             // copy each result to the start of the arg register
             for result in &arg_results {
-                self.instructions
-                    .push(Instruction::RegCopy(*result, register));
-                self.debug_spans.push(node.span);
+                push_instruction!(self, Instruction::RegCopy(*result, register), node.span);
                 register = self.register_counter.next().unwrap();
             }
 
@@ -527,30 +529,28 @@ impl TreeWalker for AsmTreeWalker {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
 
+                let name_register = self.register_counter.next().unwrap();
+                push_instruction!(self, Instruction::SConst(name_register, node.name.clone()), node.span);
+
                 Instruction::CallOther {
                     receiver: receiver_result,
-                    name: node.name.clone(),
+                    name: name_register,
                     num_args: arg_results.len(),
                     initial_arg: start_register,
                 }
             } else if node.name == CALL_OTHER {
                 let receiver = arg_results[0];
-                let name = if let ExpressionNode::String(StringNode { value, ..}) = &node.arguments[1] {
-                    value.clone()
-                } else {
-                    return Err(LpcError::new(
-                        format!(
-                            "Invalid function name passed to `call_other`: {}",
-                            node.arguments[1]
-                        )
-                    ));
-                };
+                let name = arg_results[1];
 
                 Instruction::CallOther {
                     receiver,
                     name,
                     num_args: arg_results.len() - 2,
-                    initial_arg: if arg_results.len() > 2 { arg_results[2] } else { arg_results[0] }
+                    initial_arg: if arg_results.len() > 2 {
+                        arg_results[2]
+                    } else {
+                        arg_results[0] // i.e. no args used in the function
+                    },
                 }
             } else {
                 Instruction::Call {
@@ -1353,13 +1353,14 @@ mod tests {
             let expected = vec![
                 IConst(Register(1), -1),
                 SConst(Register(2), String::from("foo")),
+                SConst(Register(3), String::from("print")),
                 CallOther {
                     receiver: Register(2),
-                    name: String::from("print"),
+                    name: Register(3),
                     num_args: 1,
                     initial_arg: Register(1),
                 },
-                RegCopy(Register(0), Register(3)),
+                RegCopy(Register(0), Register(4)),
             ];
 
             assert_eq!(walker.instructions, expected);

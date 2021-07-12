@@ -428,8 +428,19 @@ impl AsmInterpreter {
             } => {
                 // get receiver process and make it the current one
                 let receiver_ref = self.register_to_lpc_ref(receiver.index());
-                // TODO: Find a way to rid of this clone, or make it cheaper
-                let nc = name.clone();
+                let name_ref = self.register_to_lpc_ref(name.index());
+                let pool_ref = if let LpcRef::String(r) = name_ref {
+                    r
+                } else {
+                    return Err(self.runtime_error(
+                        format!(
+                            "Invalid name passed to `call_other`: {}",
+                            name_ref
+                        )
+                    ));
+                };
+                let borrowed = pool_ref.borrow();
+                let name_str = try_extract_value!(*borrowed, LpcValue::String);
                 let num_args = *num_args;
                 let initial_index = initial_arg.index();
                 let return_address = self.process.pc();
@@ -443,7 +454,7 @@ impl AsmInterpreter {
 
                         // Only switch the process if there's actually a function to
                         // call by this name on the other side.
-                        if pr.functions.contains_key(name) {
+                        if pr.functions.contains_key(name_str) {
                             self.process = pr.clone();
                         }
                     }
@@ -453,20 +464,20 @@ impl AsmInterpreter {
 
                         // Only switch the process if there's actually a function to
                         // call by this name on the other side.
-                        if pr.functions.contains_key(name) {
+                        if pr.functions.contains_key(name_str) {
                             self.process = pr.clone();
                         }
                     }
                     _ => {
                         return Err(LpcError::new(format!(
                             "What are you trying to call `{}` on?",
-                            name
+                            name_str
                         ))
                         .with_span(self.process.current_debug_span()))
                     }
                 }
 
-                let sym = if let Some(fs) = self.process.functions.get(&nc) {
+                let sym = if let Some(fs) = self.process.functions.get(name_str) {
                     fs
                 } else {
                     // if no function by that name, just return 0 immediately
@@ -478,7 +489,7 @@ impl AsmInterpreter {
                     } else {
                         Err(self.runtime_error(format!(
                             "call_other to `{}`, that has no stack frame. This is a WTF.",
-                            nc
+                            name_str
                         )))
                     };
                 };

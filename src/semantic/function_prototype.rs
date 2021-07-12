@@ -30,5 +30,5 @@ pub struct FunctionPrototype {
 
     /// Whether the signature of this function ends with an `...`, meaning any
     /// number of arguments can be passed when calling it.
-    pub ellipsis: bool
+    pub ellipsis: bool,
 }

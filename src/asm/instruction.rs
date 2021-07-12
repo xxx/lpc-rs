@@ -29,7 +29,7 @@ pub enum Instruction {
     /// Call a function in another object
     CallOther {
         receiver: Register,
-        name: String,
+        name: Register,
         num_args: usize,
         initial_arg: Register,
     },
