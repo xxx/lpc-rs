@@ -432,41 +432,44 @@ impl AsmInterpreter {
                 let pool_ref = if let LpcRef::String(r) = name_ref {
                     r
                 } else {
-                    return Err(self.runtime_error(
-                        format!(
-                            "Invalid name passed to `call_other`: {}",
-                            name_ref
-                        )
-                    ));
+                    return Err(self.runtime_error(format!(
+                        "Invalid name passed to `call_other`: {}",
+                        name_ref
+                    )));
                 };
                 let borrowed = pool_ref.borrow();
                 let name_str = try_extract_value!(*borrowed, LpcValue::String);
                 let num_args = *num_args;
                 let initial_index = initial_arg.index();
                 let return_address = self.process.pc();
+                let is_array = matches!(receiver_ref, LpcRef::Array(_));
 
-                match receiver_ref {
-                    LpcRef::String(s) => {
-                        let r = s.borrow();
-                        let str = try_extract_value!(*r, LpcValue::String);
+                let receivers: Vec<LpcValue> = match &receiver_ref {
+                    LpcRef::String(_) | LpcRef::Object(_) => {
+                        let resolved = self.resolve_call_other_receiver(&receiver_ref, name_str);
 
-                        let pr = self.lookup_process(str)?;
-
-                        // Only switch the process if there's actually a function to
-                        // call by this name on the other side.
-                        if pr.functions.contains_key(name_str) {
-                            self.process = pr.clone();
+                        if let Some(pr) = resolved {
+                            vec![pr.into()]
+                        } else {
+                            Vec::new()
                         }
                     }
-                    LpcRef::Object(o) => {
-                        let r = o.borrow();
-                        let pr = try_extract_value!(*r, LpcValue::Object);
+                    LpcRef::Array(r) => {
+                        let b = r.borrow();
+                        let array = try_extract_value!(*b, LpcValue::Array);
 
-                        // Only switch the process if there's actually a function to
-                        // call by this name on the other side.
-                        if pr.functions.contains_key(name_str) {
-                            self.process = pr.clone();
-                        }
+                        array
+                            .iter()
+                            .map(|lpc_ref| {
+                                let resolved = self.resolve_call_other_receiver(lpc_ref, name_str);
+
+                                if let Some(pr) = resolved {
+                                    pr.into()
+                                } else {
+                                    LpcValue::Int(0)
+                                }
+                            })
+                            .collect::<Vec<_>>()
                     }
                     _ => {
                         return Err(LpcError::new(format!(
@@ -475,46 +478,44 @@ impl AsmInterpreter {
                         ))
                         .with_span(self.process.current_debug_span()))
                     }
-                }
-
-                let sym = if let Some(fs) = self.process.functions.get(name_str) {
-                    fs
-                } else {
-                    // if no function by that name, just return 0 immediately
-                    return if let Some(frame) = self.stack.last_mut() {
-                        frame.registers[0] = LpcRef::Int(0);
-                        self.process.inc_pc();
-
-                        Ok(false)
-                    } else {
-                        Err(self.runtime_error(format!(
-                            "call_other to `{}`, that has no stack frame. This is a WTF.",
-                            name_str
-                        )))
-                    };
                 };
 
-                // Because call_other args aren't arity-checked at compile time, there might
-                // be more passed than expected, so we might need to reserve more space
-                let mut new_frame = StackFrame::with_minimum_arg_capacity(
-                    self.process.clone(),
-                    sym.clone(),
-                    return_address,
-                    num_args + 1, // +1 for r0
-                );
+                let mut results = Vec::with_capacity(receivers.len());
+                for item in receivers {
+                    match item {
+                        LpcValue::Object(receiver) => {
+                            let args = self.stack.last().unwrap().registers
+                                [initial_index..(initial_index + num_args)]
+                                .to_vec();
+                            let closure = |interpreter: &mut AsmInterpreter| {
+                                interpreter.call_other(receiver, name_str, return_address, args)
+                            };
 
-                // copy argument registers from old frame to new
-                if num_args > 0_usize {
-                    let current_frame = self.stack.last().unwrap();
-                    new_frame.registers[1..=num_args].clone_from_slice(
-                        &current_frame.registers[initial_index..(initial_index + num_args)],
-                    );
+                            let res = self.with_clean_stack(closure);
+                            results.push(res);
+                        }
+                        _ => {
+                            results.push(Ok(LpcRef::Int(0)));
+                        }
+                    };
                 }
 
-                // println!("pushing frame in CallOther: {:?}", new_frame);
-                self.stack.push(new_frame);
+                let mut refs = results
+                    .into_iter()
+                    .map(|result| match result {
+                        Ok(r) => r,
+                        Err(_) => LpcRef::Int(0),
+                    })
+                    .collect::<Vec<_>>();
 
-                self.process.set_pc(sym.address);
+                let result_ref = if is_array {
+                    let val = LpcValue::from(refs);
+                    value_to_ref!(val, &self.memory)
+                } else {
+                    refs.swap_remove(0)
+                };
+
+                self.return_efun_result(result_ref)
             }
             Instruction::FConst(r, f) => {
                 let registers = current_registers_mut(&mut self.stack)?;
@@ -779,6 +780,92 @@ impl AsmInterpreter {
         }
 
         Ok(false)
+    }
+
+    fn resolve_call_other_receiver(
+        &self,
+        receiver_ref: &LpcRef,
+        name: &str,
+    ) -> Option<Rc<Process>> {
+        let process = match receiver_ref {
+            LpcRef::String(s) => {
+                let r = s.borrow();
+                let str = if let LpcValue::String(ref s) = *r {
+                    s
+                } else {
+                    return None;
+                };
+
+                match self.lookup_process(str) {
+                    Ok(proc) => proc.clone(),
+                    Err(_) => return None,
+                }
+            }
+            LpcRef::Object(o) => {
+                let r = o.borrow();
+                if let LpcValue::Object(ref proc) = *r {
+                    proc.clone()
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        };
+
+        // Only switch the process if there's actually a function to
+        // call by this name on the other side.
+        if process.functions.contains_key(name) {
+            Some(process)
+        } else {
+            None
+        }
+    }
+
+    /// Call a function in the specified receiver. This assumes the stack has been cleared ahead of time.
+    fn call_other(
+        &mut self,
+        receiver: Rc<Process>,
+        name: &str,
+        return_address: usize,
+        mut args: Vec<LpcRef>,
+    ) -> Result<LpcRef> {
+        self.process = receiver;
+
+        let sym = if let Some(fs) = self.process.functions.get(name) {
+            fs
+        } else {
+            // if no function by that name, just return 0 immediately
+            return Ok(LpcRef::Int(0));
+        };
+
+        let num_args = args.len();
+
+        // Because call_other args aren't arity-checked at compile time, there might
+        // be more passed than expected, so we might need to reserve more space
+        let mut new_frame = StackFrame::with_minimum_arg_capacity(
+            self.process.clone(),
+            sym.clone(),
+            return_address,
+            num_args + 1, // +1 for r0
+        );
+
+        // put the arguments into the new correct place in the new frame.
+        if num_args > 0_usize {
+            new_frame.registers[1..=num_args].swap_with_slice(&mut args);
+        }
+
+        // println!("pushing frame in CallOther: {:?}", new_frame);
+        self.stack.push(new_frame);
+
+        self.process.set_pc(sym.address);
+
+        self.eval()?;
+
+        if let Some(frame) = &self.popped_frame {
+            return Ok(frame.registers[0].clone());
+        }
+
+        Err(self.runtime_error("`call_other` was called but never pushed a frame?"))
     }
 
     fn binary_operation<F>(

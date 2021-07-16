@@ -2,6 +2,7 @@ use crate::{
     interpreter::{lpc_ref::LpcRef, process::Process},
     BaseFloat, LpcFloat, LpcInt,
 };
+use itertools::Itertools;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
 
@@ -58,9 +59,12 @@ impl Display for LpcValue {
             LpcValue::Float(x) => write!(f, "{}", x),
             LpcValue::Int(x) => write!(f, "{}", x),
             LpcValue::String(x) => write!(f, "\"{}\"", x),
-            LpcValue::Array(x) => write!(f, "({{ {:?} }})", x),
+            LpcValue::Array(x) => {
+                let inner = x.iter().map(|x| format!("{}", x)).join(", ");
+                write!(f, "({{ {} }})", inner)
+            }
             LpcValue::Mapping(x) => write!(f, "([ {:?} ])", x),
-            LpcValue::Object(x) => write!(f, "{{ {:?} }}", x),
+            LpcValue::Object(x) => write!(f, "< {:?} >", x),
         }
     }
 }
@@ -98,6 +102,12 @@ impl From<Vec<LpcRef>> for LpcValue {
 impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
     fn from(m: HashMap<LpcRef, LpcRef>) -> Self {
         Self::Mapping(m)
+    }
+}
+
+impl From<Rc<Process>> for LpcValue {
+    fn from(o: Rc<Process>) -> Self {
+        Self::Object(o)
     }
 }
 

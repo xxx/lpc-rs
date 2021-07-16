@@ -497,7 +497,11 @@ impl TreeWalker for AsmTreeWalker {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
                 let name_register = self.register_counter.next().unwrap();
-                push_instruction!(self, Instruction::SConst(name_register, node.name.clone()), node.span);
+                push_instruction!(
+                    self,
+                    Instruction::SConst(name_register, node.name.clone()),
+                    node.span
+                );
 
                 Instruction::CallOther {
                     receiver: receiver_result,
@@ -530,7 +534,11 @@ impl TreeWalker for AsmTreeWalker {
                 let receiver_result = self.current_result;
 
                 let name_register = self.register_counter.next().unwrap();
-                push_instruction!(self, Instruction::SConst(name_register, node.name.clone()), node.span);
+                push_instruction!(
+                    self,
+                    Instruction::SConst(name_register, node.name.clone()),
+                    node.span
+                );
 
                 Instruction::CallOther {
                     receiver: receiver_result,
