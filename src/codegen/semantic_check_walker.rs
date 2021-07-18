@@ -30,6 +30,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::function_def_node::ARGV;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -259,6 +260,17 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         is_keyword(&node.name)?;
+
+        if node.name == ARGV {
+            if let Some(FunctionDefNode { ellipsis: true, span, .. }) = self.current_function {
+                let e = LpcError::new("Redeclaration of `argv` in a function with ellipsis arguments")
+                    .with_span(node.span)
+                    .with_label("Declared here", span);
+                self.context.errors.push(e.clone());
+                return Err(e);
+            }
+        }
+
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
@@ -1097,6 +1109,70 @@ mod tests {
             } else {
                 panic!("didn't error?")
             }
+        }
+
+        #[test]
+        fn disallows_argv_in_ellipsis_function() {
+            let mut node = VarInitNode {
+                type_: LpcType::Mixed(true),
+                name: "argv".to_string(),
+                value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+
+            // Fake it, as if we're currently walking a function def
+            walker.current_function = Some(FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "moop".to_string(),
+                parameters: vec![],
+                ellipsis: true,
+                body: vec![],
+                span: None
+            });
+
+            let result = node.visit(&mut walker);
+
+            if let Err(e) = result {
+                assert!(e.to_string().contains(
+                    "Redeclaration of `argv` in a function with ellipsis arguments"
+                ));
+            } else {
+                panic!("didn't error?")
+            }
+        }
+
+        #[test]
+        fn allows_argv_in_non_ellipsis_function() {
+            let mut node = VarInitNode {
+                type_: LpcType::Mixed(true),
+                name: "argv".to_string(),
+                value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
+                array: false,
+                global: false,
+                span: None,
+            };
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+
+            // Fake it, as if we're currently walking a function def
+            walker.current_function = Some(FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "moop".to_string(),
+                parameters: vec![],
+                ellipsis: false,
+                body: vec![],
+                span: None
+            });
+
+            let result = node.visit(&mut walker);
+
+            assert!(result.is_ok());
         }
     }
     mod test_visit_function_def {
