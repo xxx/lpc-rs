@@ -467,7 +467,7 @@ impl AsmInterpreter {
                         let value = LpcValue::from(pr);
                         Ok(get_result(value, interpreter).unwrap_or(LpcRef::Int(0)))
                     } else {
-                        return Err(interpreter.runtime_error("Unable to find the receiver."));
+                        Err(interpreter.runtime_error("Unable to find the receiver."))
                     }
                 };
 
