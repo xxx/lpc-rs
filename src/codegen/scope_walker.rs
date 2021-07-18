@@ -14,6 +14,7 @@ use crate::{
     },
     Result,
 };
+use crate::semantic::lpc_type::LpcType;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -77,6 +78,19 @@ impl TreeWalker for ScopeWalker {
 
         for parameter in &mut node.parameters {
             parameter.visit(self)?;
+        }
+
+        if node.ellipsis {
+            let sym = Symbol {
+                name: "argv".to_string(),
+                type_: LpcType::Mixed(true),
+                static_: false,
+                location: None,
+                scope_id: scope_id.into(),
+                span: node.span
+            };
+
+            self.insert_symbol(sym);
         }
 
         for expression in &mut node.body {
@@ -233,7 +247,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_stores_the_prototype() {
+        fn stores_the_prototype() {
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
                 return_type: LpcType::Mixed(false),
@@ -267,6 +281,34 @@ mod tests {
                 panic!("prototype not found!")
             }
         }
+
+        #[test]
+        fn sets_up_argv_for_ellipsis() {
+            let mut walker = ScopeWalker::default();
+            let mut node = FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "marf".to_string(),
+                ellipsis: true,
+                parameters: vec![],
+                body: vec![],
+                span: None,
+            };
+
+            let _ = walker.visit_function_def(&mut node);
+
+            walker.context.scopes.goto_function("marf").unwrap();
+
+            let argv = walker
+                .context
+                .scopes
+                .current()
+                .unwrap()
+                .lookup("argv")
+                .unwrap();
+
+            assert_eq!(argv.name, "argv");
+            assert_eq!(argv.type_, LpcType::Mixed(true));
+        }
     }
 
     mod test_visit_var_init {
@@ -298,7 +340,7 @@ mod tests {
         }
 
         #[test]
-        fn test_sets_error_for_var_redefinition_in_same_scope() {
+        fn sets_error_for_var_redefinition_in_same_scope() {
             let (mut walker, mut node) = setup();
 
             let _ = walker.visit_var_init(&mut node);
@@ -307,7 +349,7 @@ mod tests {
         }
 
         #[test]
-        fn test_does_not_error_for_var_shadow_in_different_scope() {
+        fn does_not_error_for_var_shadow_in_different_scope() {
             let (mut walker, mut node) = setup();
 
             walker.context.scopes.push_new();
@@ -318,7 +360,7 @@ mod tests {
         }
 
         #[test]
-        fn test_inserts_the_symbol() {
+        fn inserts_the_symbol() {
             let (mut walker, mut node) = setup();
 
             walker.context.scopes.push_new();
@@ -352,7 +394,7 @@ mod tests {
         }
 
         #[test]
-        fn test_sets_global_flag() {
+        fn sets_global_flag() {
             let (mut walker, mut node) = setup();
 
             walker.insert_symbol(Symbol {
@@ -370,7 +412,7 @@ mod tests {
         }
 
         #[test]
-        fn test_pushes_error_for_undefined_vars() {
+        fn pushes_error_for_undefined_vars() {
             let (mut walker, mut node) = setup();
 
             let _ = walker.visit_var(&mut node);
