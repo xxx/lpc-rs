@@ -1,7 +1,7 @@
 use crate::asm::register::Register;
 
 /// A [`Register`]-aware counter, used during code generation.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Copy)]
 pub struct RegisterCounter {
     count: usize,
 }
@@ -23,10 +23,8 @@ impl RegisterCounter {
         self.count -= 1;
     }
 
-    /// Return the current internal count
-    pub fn get_count(&self) -> usize {
-        self.count
-    }
+    /// Get the current counter value
+    pub fn as_usize(&self) -> usize { self.count }
 }
 
 impl Iterator for RegisterCounter {

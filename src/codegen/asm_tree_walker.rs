@@ -188,7 +188,7 @@ impl AsmTreeWalker {
             filename: self.context.filename.clone(),
             labels: self.labels.clone(),
             functions: self.function_map(),
-            num_globals: self.global_counter.get_count() + 1, // +1 for r0, for return values
+            num_globals: self.global_counter.as_usize() + 1, // +1 for r0, for return values
             pragmas: self.context.pragmas.clone(),
         })
     }
@@ -747,7 +747,7 @@ impl TreeWalker for AsmTreeWalker {
             Rc::new(FunctionSymbol {
                 name: node.name.clone(),
                 num_args,
-                num_locals: self.register_counter.get_count() - num_args,
+                num_locals: self.register_counter.as_usize() - num_args,
                 address: return_address,
             }),
             return_address,
@@ -1593,7 +1593,7 @@ mod tests {
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
             sym.location = Some(Register(1));
-            context.scopes.get_current_mut().unwrap().insert(sym);
+            context.scopes.current_mut().unwrap().insert(sym);
 
             let mut walker = AsmTreeWalker::new(context);
 
@@ -1872,7 +1872,7 @@ mod tests {
 
         assert_eq!(walker.instructions, expected);
 
-        let scope = walker.context.scopes.get_current().unwrap();
+        let scope = walker.context.scopes.current().unwrap();
         assert_eq!(
             scope.lookup("foo").unwrap(),
             Symbol {

@@ -728,7 +728,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -750,7 +750,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -778,7 +778,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -800,7 +800,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -828,7 +828,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 function_prototypes,
@@ -851,7 +851,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 function_prototypes,
@@ -874,7 +874,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 function_prototypes,
@@ -907,7 +907,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -950,7 +950,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -997,7 +997,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -1336,7 +1336,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()
@@ -1359,7 +1359,7 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
-            scopes.get_current_mut().unwrap().insert(sym);
+            scopes.current_mut().unwrap().insert(sym);
             let context = Context {
                 scopes,
                 ..Context::default()

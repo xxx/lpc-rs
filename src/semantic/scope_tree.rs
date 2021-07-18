@@ -78,7 +78,7 @@ impl ScopeTree {
     }
 
     /// Get the current scope
-    pub fn get_current(&self) -> Option<&LocalScope> {
+    pub fn current(&self) -> Option<&LocalScope> {
         match self.current_id {
             Some(x) => self.get(x),
             None => None,
@@ -86,7 +86,7 @@ impl ScopeTree {
     }
 
     /// Get a mutable reference to the current scope
-    pub fn get_current_mut(&mut self) -> Option<&mut LocalScope> {
+    pub fn current_mut(&mut self) -> Option<&mut LocalScope> {
         match self.current_id {
             Some(x) => self.get_mut(x),
             None => None,
@@ -94,7 +94,7 @@ impl ScopeTree {
     }
 
     /// Get the node for the current scope, used for traversal.
-    pub fn get_current_node(&self) -> Option<&Node<LocalScope>> {
+    pub fn current_node(&self) -> Option<&Node<LocalScope>> {
         match self.current_id {
             Some(x) => self.scopes.get(x),
             None => None,
@@ -110,7 +110,7 @@ impl ScopeTree {
     /// Note that this method does *not* actually remove the scope from the tree.
     /// It remains accessible.
     pub fn pop(&mut self) {
-        self.current_id = match self.get_current_node() {
+        self.current_id = match self.current_node() {
             Some(n) => n.parent(),
             None => None,
         };
@@ -236,7 +236,7 @@ mod tests {
         let mut collection = ScopeTree::default();
         collection.push_new();
         let sym = Symbol::new("foo", LpcType::String(false));
-        collection.get_current_mut().unwrap().insert(sym);
+        collection.current_mut().unwrap().insert(sym);
 
         if let Some(scope_ref) = collection.lookup("foo") {
             assert_eq!(scope_ref.type_, LpcType::String(false));
@@ -249,7 +249,7 @@ mod tests {
     fn test_lookup_checks_parent_recursively() {
         let mut collection = ScopeTree::default();
         collection.push_new();
-        let scope1 = collection.get_current_mut();
+        let scope1 = collection.current_mut();
 
         let sym = Symbol::new("foo", LpcType::String(false));
         scope1.unwrap().insert(sym);

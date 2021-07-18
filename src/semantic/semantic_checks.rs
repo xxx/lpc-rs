@@ -480,7 +480,7 @@ mod check_binary_operation_tests {
 
         let mut scope_tree = ScopeTree::default();
         scope_tree.push_new();
-        let scope = scope_tree.get_current_mut().unwrap();
+        let scope = scope_tree.current_mut().unwrap();
         scope.insert(int1);
         scope.insert(int2);
         scope.insert(string1);
@@ -1256,7 +1256,7 @@ mod check_unary_operation_tests {
 
         let mut scope_tree = ScopeTree::default();
         scope_tree.push_new();
-        let scope = scope_tree.get_current_mut().unwrap();
+        let scope = scope_tree.current_mut().unwrap();
         scope.insert(int1);
         scope.insert(string1);
         scope.insert(array1);
@@ -1266,7 +1266,7 @@ mod check_unary_operation_tests {
         scope_tree
     }
 
-    fn get_result(
+    fn to_result(
         op: UnaryOperation,
         expr_node: ExpressionNode,
         scope_tree: &ScopeTree,
@@ -1283,19 +1283,19 @@ mod check_unary_operation_tests {
     }
 
     fn int_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(123), scope_tree)
+        to_result(op, ExpressionNode::from(123), scope_tree)
     }
 
     fn string_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from("foo"), scope_tree)
+        to_result(op, ExpressionNode::from("foo"), scope_tree)
     }
 
     fn int_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(VarNode::new("int1")), scope_tree)
+        to_result(op, ExpressionNode::from(VarNode::new("int1")), scope_tree)
     }
 
     fn string_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(
+        to_result(
             op,
             ExpressionNode::from(VarNode::new("string2")),
             scope_tree,
@@ -1303,7 +1303,7 @@ mod check_unary_operation_tests {
     }
 
     fn array_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(
+        to_result(
             op,
             ExpressionNode::from(vec!["asdf", "bar", "hi"]),
             scope_tree,
@@ -1311,23 +1311,23 @@ mod check_unary_operation_tests {
     }
 
     fn array_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(VarNode::new("array1")), scope_tree)
+        to_result(op, ExpressionNode::from(VarNode::new("array1")), scope_tree)
     }
 
     fn float_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(123.45), scope_tree)
+        to_result(op, ExpressionNode::from(123.45), scope_tree)
     }
 
     fn float_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(VarNode::new("float1")), scope_tree)
+        to_result(op, ExpressionNode::from(VarNode::new("float1")), scope_tree)
     }
 
     fn mapping_literal(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(op, ExpressionNode::from(HashMap::new()), scope_tree)
+        to_result(op, ExpressionNode::from(HashMap::new()), scope_tree)
     }
 
     fn mapping_var(op: UnaryOperation, scope_tree: &ScopeTree) -> Result<()> {
-        get_result(
+        to_result(
             op,
             ExpressionNode::from(VarNode::new("mapping1")),
             scope_tree,

@@ -31,7 +31,7 @@ impl ScopeWalker {
 
     /// Insert a new symbol into the current scope
     fn insert_symbol(&mut self, symbol: Symbol) {
-        if let Some(scope) = self.context.scopes.get_current_mut() {
+        if let Some(scope) = self.context.scopes.current_mut() {
             scope.insert(symbol)
         }
     }
@@ -114,7 +114,7 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
-        let scope = self.context.scopes.get_current();
+        let scope = self.context.scopes.current();
 
         if scope.is_none() {
             return Err(LpcError::new(
@@ -327,7 +327,7 @@ mod tests {
             assert!(walker
                 .context
                 .scopes
-                .get_current()
+                .current()
                 .unwrap()
                 .lookup("foo")
                 .is_some());

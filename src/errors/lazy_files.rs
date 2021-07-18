@@ -87,7 +87,7 @@ where
     /// # Arguments
     /// `path` - The absolute on-server path, including filename, to the file being added.
     pub fn add(&mut self, path: Name) -> FileId {
-        if let Some(id) = self.get_id(&path) {
+        if let Some(id) = self.id_for(&path) {
             return id;
         }
 
@@ -102,7 +102,7 @@ where
     /// `path` - The absolute full path, including filename, to the file being added.
     /// `code` - The source code for the file in question
     pub fn add_eager(&mut self, path: Name, code: Source) -> FileId {
-        if let Some(id) = self.get_id(&path) {
+        if let Some(id) = self.id_for(&path) {
             return id;
         }
 
@@ -142,7 +142,7 @@ where
     ///
     /// # Arguments
     /// `path` - The path of the file stored in the cache
-    pub fn get_id(&self, path: &Name) -> Option<FileId> {
+    pub fn id_for(&self, path: &Name) -> Option<FileId> {
         self.paths.iter().position(|i| match i {
             LazyFile::Lazy(p) => path == p,
             LazyFile::Eager(p, _) => path == p,
