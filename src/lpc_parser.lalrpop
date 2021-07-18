@@ -347,14 +347,19 @@ pub PrimaryExpression: ExpressionNode = {
     <String>,
     <Var>,
     "(" <Expression> ")",
-    "(" "{" <l:ExpressionList?> "}" ")" => {
-        let vec = l.unwrap_or(Vec::new());
+    "(" "{" <l:(ExpressionList ","?)?>  "}" ")" => {
+        let vec = if let Some(v) = l {
+            v.0
+        } else {
+            Vec::new()
+        };
 
         ExpressionNode::Array(ArrayNode::new(vec))
     },
-    <l:"("> "[" <list:MappingExpressionList?> "]" <r:")"> => {
+    <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> => {
          let vec = if let Some(v) = list {
-             v.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
+             // Deduplicate kv pairs, in reverse to later-declared pairs override earlier ones.
+             v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
          } else {
              Vec::new()
          };

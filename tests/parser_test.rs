@@ -22,7 +22,7 @@ use lpc_rs::{
         span::Span,
     },
     semantic::lpc_type::LpcType,
-    LpcFloat, LpcInt,
+    LpcFloat, LpcInt, Result,
 };
 
 // just a helper for a very common pattern
@@ -335,11 +335,45 @@ fn test_error_when_pragma_strict_types_without_return_type() {
         }
     "# };
 
+    let program = parse_prog(prog);
+
+    assert_eq!(&program.unwrap_err().to_string(), "Missing return type");
+}
+
+#[test]
+fn test_allows_extra_commas_for_array() {
+    let prog = indoc! { r#"
+        mixed foo = ({ 1, 2, 3, });
+    "# };
+
+    let program = parse_prog(prog);
+
+    assert!(program.is_ok());
+}
+
+#[test]
+fn test_allows_extra_commas_for_mapping() {
+    let prog = indoc! { r#"
+        mapping thing = ([
+            "foo": "bar",
+            "baz": "quux",
+            1: 2,
+        ]);
+    "# };
+
+    let program = parse_prog(prog);
+
+    assert!(program.is_ok());
+}
+
+fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
     let code = TokenVecWrapper::new(&code);
     let context = preprocessor.into_context();
 
-    let program = lpc_parser::ProgramParser::new().parse(&context, code);
-    assert_eq!(&program.unwrap_err().to_string(), "Missing return type");
+    match lpc_parser::ProgramParser::new().parse(&context, code) {
+        Ok(pr) => Ok(pr),
+        Err(e) => Err(e.into())
+    }
 }
