@@ -17,7 +17,6 @@ use crate::{
 use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
-use itertools::Itertools;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -429,6 +428,8 @@ impl AsmInterpreter {
             } => {
                 // get receiver process and make it the current one
                 let receiver_ref = self.register_to_lpc_ref(receiver.index());
+
+                // Figure out which function we're calling
                 let name_ref = self.register_to_lpc_ref(name.index());
                 let pool_ref = if let LpcRef::String(r) = name_ref {
                     r
@@ -439,31 +440,28 @@ impl AsmInterpreter {
                     )));
                 };
                 let borrowed = pool_ref.borrow();
-                let name_str = try_extract_value!(*borrowed, LpcValue::String);
+                let function_name = try_extract_value!(*borrowed, LpcValue::String);
+
                 let num_args = *num_args;
                 let initial_index = initial_arg.index();
                 let return_address = self.process.pc();
 
-                let get_result = |value: LpcValue, interpreter: &mut AsmInterpreter| {
-                    match value {
-                        LpcValue::Object(receiver) => {
-                            let args = interpreter.stack.last().unwrap().registers
-                                [initial_index..(initial_index + num_args)]
-                                .to_vec();
-                            let closure = |inner: &mut AsmInterpreter| {
-                                inner.call_other(receiver, name_str, return_address, args)
-                            };
+                let get_result = |value: LpcValue, interpreter: &mut AsmInterpreter| match value {
+                    LpcValue::Object(receiver) => {
+                        let args = interpreter.stack.last().unwrap().registers
+                            [initial_index..(initial_index + num_args)]
+                            .to_vec();
+                        let closure = |inner: &mut AsmInterpreter| {
+                            inner.call_other(receiver, function_name, return_address, args)
+                        };
 
-                            interpreter.with_clean_stack(closure)
-                        }
-                        _ => {
-                            Ok(LpcRef::Int(0))
-                        }
+                        interpreter.with_clean_stack(closure)
                     }
+                    _ => Ok(LpcRef::Int(0)),
                 };
 
                 let resolve_result = |receiver_ref, interpreter: &mut AsmInterpreter| {
-                    let resolved = interpreter.resolve_call_other_receiver(receiver_ref, name_str);
+                    let resolved = interpreter.resolve_call_other_receiver(receiver_ref, function_name);
 
                     if let Some(pr) = resolved {
                         let value = LpcValue::from(pr);
@@ -474,19 +472,16 @@ impl AsmInterpreter {
                 };
 
                 let result_ref = match &receiver_ref {
-                    LpcRef::String(_) | LpcRef::Object(_) => {
-                        resolve_result(&receiver_ref, self)?
-                    }
+                    LpcRef::String(_) | LpcRef::Object(_) => resolve_result(&receiver_ref, self)?,
                     LpcRef::Array(r) => {
                         let b = r.borrow();
                         let array = try_extract_value!(*b, LpcValue::Array);
 
                         let array_value: LpcValue = array
                             .iter()
-                            .map(|lpc_ref| {
-                                resolve_result(lpc_ref, self).unwrap_or(LpcRef::Int(0))
-                            })
-                            .collect::<Vec<_>>().into();
+                            .map(|lpc_ref| resolve_result(lpc_ref, self).unwrap_or(LpcRef::Int(0)))
+                            .collect::<Vec<_>>()
+                            .into();
                         value_to_ref!(array_value, &self.memory)
                     }
                     LpcRef::Mapping(m) => {
@@ -496,34 +491,24 @@ impl AsmInterpreter {
                         let with_results: LpcValue = hashmap
                             .iter()
                             .map(|(key_ref, value_ref)| {
-                                (key_ref.clone(), resolve_result(value_ref, self).unwrap_or(LpcRef::Int(0)))
+                                (
+                                    key_ref.clone(),
+                                    resolve_result(value_ref, self).unwrap_or(LpcRef::Int(0)),
+                                )
                             })
-                            .collect::<HashMap<_, _>>().into();
+                            .collect::<HashMap<_, _>>()
+                            .into();
 
                         value_to_ref!(with_results, &self.memory)
                     }
                     _ => {
                         return Err(LpcError::new(format!(
                             "What are you trying to call `{}` on?",
-                            name_str
+                            function_name
                         ))
                         .with_span(self.process.current_debug_span()))
                     }
                 };
-
-                // let results = receivers.into_iter().map(|x| get_result(x, self)).collect_vec();
-                //
-                // let mut refs = results
-                //     .into_iter()
-                //     .map(|result| result.unwrap_or(LpcRef::Int(0)))
-                //     .collect::<Vec<_>>();
-                //
-                // let result_ref = if is_array {
-                //     let val = LpcValue::from(refs);
-                //     value_to_ref!(val, &self.memory)
-                // } else {
-                //     refs.swap_remove(0)
-                // };
 
                 self.return_efun_result(result_ref)
             }
