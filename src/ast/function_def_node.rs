@@ -21,6 +21,7 @@ pub struct FunctionDefNode {
     pub return_type: LpcType,
     pub name: String,
     pub parameters: Vec<VarInitNode>,
+    pub ellipsis: bool,
     pub body: Vec<AstNode>,
     pub span: Option<Span>,
 }

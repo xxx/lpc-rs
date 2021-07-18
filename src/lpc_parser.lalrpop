@@ -138,8 +138,9 @@ pub Def: AstNode = {
 };
 
 pub FunctionDef: FunctionDefNode = {
-    <r_type:Type?> <star:"*"?> <name:"ID"> <parameters:Parameters> "{" <body:Statements> "}" =>? {
+    <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> "{" <body:Statements> "}" =>? {
         let array = star.is_some();
+        let (parameters, ellipsis) = parameter_tuple;
 
         let l = if let Some((_, span)) = &r_type {
            span.l
@@ -177,6 +178,7 @@ pub FunctionDef: FunctionDefNode = {
         Ok(FunctionDefNode {
             name: name.1,
             parameters,
+            ellipsis,
             body,
             return_type,
             span: Some(span)
@@ -184,16 +186,15 @@ pub FunctionDef: FunctionDefNode = {
     },
 }
 
-Parameters: Vec<VarInitNode> = {
-    "(" <parm:Parameter?> ")" => {
-        parm.unwrap_or(vec![])
-    }
-};
-
-// TODO: ellipsis
-Parameter: Vec<VarInitNode> = {
-    <parms:ParameterList> <_ellipsis:("," "...")?> => {
-        parms
+Parameters: (Vec<VarInitNode>, bool) = {
+    "(" ")" => {
+        (Vec::new(), false)
+    },
+    "(" <params:ParameterList> <ellipsis:("," "...")?> ")" => {
+        (params, ellipsis.is_some())
+    },
+    "(" "..." ")" => {
+        (Vec::new(), true)
     }
 };
 

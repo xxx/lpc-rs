@@ -74,6 +74,7 @@ mod tests {
             return_type: LpcType::Void,
             name: "foo".to_string(),
             parameters,
+            ellipsis: false,
             body: vec![],
             span: None,
         };

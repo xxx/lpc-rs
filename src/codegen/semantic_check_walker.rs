@@ -1139,6 +1139,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![param1],
+                ellipsis: false,
                 body: vec![AstNode::from(ExpressionNode::BinaryOp(BinaryOpNode {
                     op: BinaryOperation::Add,
                     l: Box::new(ExpressionNode::from("foo")),
@@ -1156,6 +1157,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "snuh".to_string(),
                 parameters: vec![param2],
+                ellipsis: false,
                 body: vec![],
                 span: None,
             };
@@ -1180,6 +1182,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "while".to_string(),
                 parameters: vec![],
+                ellipsis: false,
                 body: vec![],
                 span: None,
             };
@@ -1214,6 +1217,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
+                ellipsis: false,
                 body: vec![],
                 span: None,
             };
@@ -1222,6 +1226,7 @@ mod tests {
                 return_type: LpcType::Int(false),
                 name: "snuh".to_string(),
                 parameters: vec![],
+                ellipsis: false,
                 body: vec![],
                 span: None,
             };
@@ -1270,6 +1275,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
+                ellipsis: false,
                 body: vec![],
                 span: None,
             };
@@ -1301,6 +1307,7 @@ mod tests {
                 return_type: LpcType::Mixed(false),
                 name: "foo".to_string(),
                 parameters: vec![],
+                ellipsis: false,
                 body: vec![],
                 span: None,
             };

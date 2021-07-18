@@ -238,6 +238,7 @@ mod tests {
             let mut node = FunctionDefNode {
                 return_type: LpcType::Mixed(false),
                 name: "marf".to_string(),
+                ellipsis: false,
                 parameters: vec![
                     VarInitNode::new("foo", LpcType::Int(false)),
                     VarInitNode::new("bar", LpcType::Mapping(true)),

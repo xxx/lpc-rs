@@ -326,7 +326,7 @@ fn typeless_functions_are_mixed() {
 }
 
 #[test]
-fn test_error_when_pragma_strict_types_without_return_type() {
+fn error_when_pragma_strict_types_without_return_type() {
     let prog = indoc! { r#"
         #pragma strict_types
 
@@ -341,7 +341,7 @@ fn test_error_when_pragma_strict_types_without_return_type() {
 }
 
 #[test]
-fn test_allows_extra_commas_for_array() {
+fn allows_extra_commas_for_array() {
     let prog = indoc! { r#"
         mixed foo = ({ 1, 2, 3, });
     "# };
@@ -352,7 +352,7 @@ fn test_allows_extra_commas_for_array() {
 }
 
 #[test]
-fn test_allows_extra_commas_for_mapping() {
+fn allows_extra_commas_for_mapping() {
     let prog = indoc! { r#"
         mapping thing = ([
             "foo": "bar",
@@ -364,6 +364,38 @@ fn test_allows_extra_commas_for_mapping() {
     let program = parse_prog(prog);
 
     assert!(program.is_ok());
+}
+
+#[test]
+fn ellipsis_sets_the_flag_when_only_arg() {
+    let prog = indoc! { r#"
+        int tacos(...) {
+            return 666;
+        }
+    "#
+    }.replace("\n", "");
+
+    let lexer = LexWrapper::new(&prog);
+    let node = lpc_parser::FunctionDefParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
+    assert!(matches!(node, FunctionDefNode { ellipsis: true, .. }));
+}
+
+#[test]
+fn ellipsis_sets_the_flag_when_not_only_arg() {
+    let prog = indoc! { r#"
+        int tacos(int i, ...) {
+            return 666;
+        }
+    "#
+    }.replace("\n", "");
+
+    let lexer = LexWrapper::new(&prog);
+    let node = lpc_parser::FunctionDefParser::new()
+        .parse(&Context::default(), lexer)
+        .unwrap();
+    assert!(matches!(node, FunctionDefNode { ellipsis: true, .. }));
 }
 
 fn parse_prog(prog: &str) -> Result<ProgramNode> {
