@@ -185,7 +185,7 @@ pub fn check_binary_operation_types(
             )),
         },
         BinaryOperation::Index => {
-            if matches!(left_type, LpcType::Mapping(_))
+            if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
                 || (left_type.is_array()
                     && (right_type == LpcType::Int(false)
                         || matches!(*node.r, ExpressionNode::Range(_))))
@@ -469,6 +469,14 @@ mod check_binary_operation_tests {
             scope_id: 0,
             span: None,
         };
+        let mixed1 = Symbol {
+            name: "mixed1".to_string(),
+            type_: LpcType::Mixed(false),
+            static_: false,
+            location: None,
+            scope_id: 0,
+            span: None,
+        };
 
         let mut scope_tree = ScopeTree::default();
         scope_tree.push_new();
@@ -483,6 +491,7 @@ mod check_binary_operation_tests {
         scope.insert(float2);
         scope.insert(mapping1);
         scope.insert(mapping2);
+        scope.insert(mixed1);
 
         scope_tree
     }
@@ -702,6 +711,15 @@ mod check_binary_operation_tests {
             op,
             ExpressionNode::from(VarNode::new("mapping1")),
             ExpressionNode::from(VarNode::new("mapping2")),
+            scope_tree,
+        )
+    }
+
+    fn mixed_any_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<()> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("mixed1")),
+            ExpressionNode::from(VarNode::new("float1")),
             scope_tree,
         )
     }
@@ -1037,6 +1055,7 @@ mod check_binary_operation_tests {
         assert!(array_int_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(array_range_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(mapping_mapping_vars(BinaryOperation::Index, &scope_tree).is_ok());
+        assert!(mixed_any_vars(BinaryOperation::Index, &scope_tree).is_ok());
 
         // valid complex tree
         assert!(get_result(

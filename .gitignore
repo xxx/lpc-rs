@@ -1,4 +1,5 @@
 /target
 /.idea
 /local
+/lib
 config.toml
