@@ -8,6 +8,8 @@ use std::{
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
 
+pub type Label = String;
+
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la the AT&T syntax
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,13 +80,13 @@ pub enum Instruction {
     ISub(Register, Register, Register),
 
     /// Unconditional jump
-    Jmp(Address),
+    Jmp(Label),
 
     /// Jump if the value in the register is not zero (Int or Float)
-    Jnz(Register, Address),
+    Jnz(Register, Label),
 
     /// Jump if the value in the register is zero (Int or Float)
-    Jz(Register, Address),
+    Jz(Register, Label),
 
     /// Load a single item from an array or mapping into a register
     /// x.2 = x.0[x.1]

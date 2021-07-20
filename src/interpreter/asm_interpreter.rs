@@ -17,6 +17,7 @@ use crate::{
 use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
+use crate::asm::instruction::Address;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -587,21 +588,24 @@ impl AsmInterpreter {
                     }
                 }
             }
-            Instruction::Jmp(address) => {
-                self.process.set_pc(*address);
+            Instruction::Jmp(label) => {
+                let address = self.lookup_address(label)?;
+                self.process.set_pc(address);
             }
-            Instruction::Jnz(r1, address) => {
+            Instruction::Jnz(r1, label) => {
                 let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
                 if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
-                    self.process.set_pc(*address);
+                    let address = self.lookup_address(label)?;
+                    self.process.set_pc(address);
                 }
             }
-            Instruction::Jz(r1, address) => {
+            Instruction::Jz(r1, label) => {
                 let v = &current_registers_mut(&mut self.stack)?[r1.index()];
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                    self.process.set_pc(*address);
+                    let address = self.lookup_address(label)?;
+                    self.process.set_pc(address);
                 }
             }
             Instruction::Load(r1, r2, r3) => {
@@ -997,6 +1001,15 @@ impl AsmInterpreter {
         };
 
         Ok(return_val)
+    }
+
+    fn lookup_address(&self, label: &str) -> Result<Address> {
+        match self.process.labels.get(label) {
+            Some(a) => Ok(*a),
+            None => {
+                Err(self.runtime_error(format!("Unable to find address for {}", label)))
+            }
+        }
     }
 }
 

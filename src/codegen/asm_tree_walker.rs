@@ -1035,33 +1035,21 @@ impl TreeWalker for AsmTreeWalker {
         // Visit the condition
         node.condition.visit(self)?;
 
-        // stash some data, so we can update the instruction with the correct address
-        let cond_result = self.current_result;
-        let jz_index = self.instructions.len();
-
         // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the "then" body.
         // Insert a placeholder address, which we correct below after the body's code is generated
-        let instruction = Instruction::Jz(cond_result, 0);
+        let instruction = Instruction::Jz(self.current_result, else_label.clone());
         push_instruction!(self, instruction, node.span);
 
         // Generate the main body of the statement
         node.body.visit(self)?;
 
-        let mut jmp_index: Option<usize> = None;
-
         if node.else_clause.is_some() {
-            // 0 is a placeholder, which is corrected further below
-            let instruction = Instruction::Jmp(0);
-            jmp_index = Some(self.instructions.len());
+            let instruction = Instruction::Jmp(end_label.clone());
             push_instruction!(self, instruction, node.span);
         }
 
-        // Correct the address in the `Jz` instruction generated above
-        // now that the body code has been generated.
         let addr = self.instructions.len();
         self.labels.insert(else_label, addr);
-        let else_instruction_replacement = Instruction::Jz(cond_result, addr);
-        self.instructions[jz_index] = else_instruction_replacement;
 
         // Generate the else clause code if necessary
         if let Some(n) = &mut *node.else_clause {
@@ -1069,11 +1057,6 @@ impl TreeWalker for AsmTreeWalker {
 
             let addr = self.instructions.len();
             self.labels.insert(end_label, addr);
-
-            // Correct the address in the `Jmp` instruction above
-            let jmp_instruction_replacement = Instruction::Jmp(addr);
-            let idx = jmp_index.expect("There's an else clause, but no jmp_index was set?");
-            self.instructions[idx] = jmp_instruction_replacement;
         }
 
         self.context.scopes.pop();
@@ -1084,31 +1067,25 @@ impl TreeWalker for AsmTreeWalker {
         self.context.scopes.goto(node.scope_id);
 
         let start_label = self.new_label("while-start");
+        let end_label = self.new_label("while-end");
         let start_addr = self.instructions.len();
-        self.labels.insert(start_label, start_addr);
+        self.labels.insert(start_label.clone(), start_addr);
 
         node.condition.visit(self)?;
 
         let cond_result = self.current_result;
-        let jz_index = self.instructions.len();
 
-        // Insert a placeholder address, which we correct below after the body's code is generated
-        let instruction = Instruction::Jz(cond_result, 0);
+        let instruction = Instruction::Jz(cond_result, end_label.clone());
         push_instruction!(self, instruction, node.span);
 
         node.body.visit(self)?;
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_addr);
+        let instruction = Instruction::Jmp(start_label);
         push_instruction!(self, instruction, node.span);
 
-        // Correct the address in the `Jz` instruction generated above
-        // now that the body code has been generated.
-        let end_label = self.new_label("while-end");
         let addr = self.instructions.len();
         self.labels.insert(end_label, addr);
-        let else_instruction_replacement = Instruction::Jz(cond_result, addr);
-        self.instructions[jz_index] = else_instruction_replacement;
 
         self.context.scopes.pop();
         Ok(())
@@ -1119,13 +1096,13 @@ impl TreeWalker for AsmTreeWalker {
 
         let start_label = self.new_label("do-while-start");
         let start_addr = self.instructions.len();
-        self.labels.insert(start_label, start_addr);
+        self.labels.insert(start_label.clone(), start_addr);
 
         node.body.visit(self)?;
         node.condition.visit(self)?;
 
         // Go back to the start of the loop if the result isn't zero
-        let instruction = Instruction::Jnz(self.current_result, start_addr);
+        let instruction = Instruction::Jnz(self.current_result, start_label);
         push_instruction!(self, instruction, node.span);
 
         self.context.scopes.pop();
@@ -1140,22 +1117,15 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         let start_label = self.new_label("for-start");
+        let end_label = self.new_label("for-end");
         let start_addr = self.instructions.len();
-        self.labels.insert(start_label, start_addr);
+        self.labels.insert(start_label.clone(), start_addr);
 
-        let jz_tuple = if let Some(c) = &mut node.condition {
-            c.visit(self)?;
+        if let Some(cond) = &mut node.condition {
+            cond.visit(self)?;
 
-            let cond_result = self.current_result;
-            let jz_index = self.instructions.len();
-
-            // Insert a placeholder address of 0, which is corrected later
-            let instruction = Instruction::Jz(cond_result, 0);
-            push_instruction!(self, instruction, c.span());
-
-            Some((cond_result, jz_index))
-        } else {
-            None
+            let instruction = Instruction::Jz(self.current_result, end_label.clone());
+            push_instruction!(self, instruction, cond.span());
         };
 
         node.body.visit(self)?;
@@ -1165,18 +1135,11 @@ impl TreeWalker for AsmTreeWalker {
         }
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_addr);
+        let instruction = Instruction::Jmp(start_label);
         push_instruction!(self, instruction, node.span);
 
-        if let Some((cond_result, jz_index)) = jz_tuple {
-            // Correct the address in the `Jz` instruction generated above
-            // now that the body code has been generated.
-            let end_label = self.new_label("for-end");
-            let addr = self.instructions.len();
-            self.labels.insert(end_label, addr);
-            let else_instruction_replacement = Instruction::Jz(cond_result, addr);
-            self.instructions[jz_index] = else_instruction_replacement;
-        }
+        let addr = self.instructions.len();
+        self.labels.insert(end_label, addr);
 
         self.context.scopes.pop();
         Ok(())
@@ -1184,13 +1147,12 @@ impl TreeWalker for AsmTreeWalker {
 
     fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
         let result_reg = self.register_counter.next().unwrap();
+        let else_label = self.new_label("ternary-else");
+        let end_label = self.new_label("ternary-end");
 
         node.condition.visit(self)?;
 
-        let cond_result = self.current_result;
-
-        let jz_index = self.instructions.len();
-        let instruction = Instruction::Jz(cond_result, 0);
+        let instruction = Instruction::Jz(self.current_result, else_label.clone());
         push_instruction!(self, instruction, node.span);
 
         node.body.visit(self)?;
@@ -1200,12 +1162,10 @@ impl TreeWalker for AsmTreeWalker {
             node.span
         );
 
-        let jmp_index = self.instructions.len();
-        let instruction = Instruction::Jmp(0);
+        let instruction = Instruction::Jmp(end_label.clone());
         push_instruction!(self, instruction, node.span);
 
         let else_addr = self.instructions.len();
-        let else_label = self.new_label("ternary-else");
         self.labels.insert(else_label, else_addr);
 
         node.else_clause.visit(self)?;
@@ -1216,12 +1176,7 @@ impl TreeWalker for AsmTreeWalker {
         );
 
         let end_addr = self.instructions.len();
-        let end_label = self.new_label("ternary-end");
         self.labels.insert(end_label, end_addr);
-
-        // correct the jump addresses
-        self.instructions[jz_index] = Instruction::Jz(cond_result, else_addr);
-        self.instructions[jmp_index] = Instruction::Jmp(end_addr);
 
         self.current_result = result_reg;
         Ok(())
@@ -2546,14 +2501,14 @@ mod tests {
                 IConst(Register(1), 666),
                 IConst(Register(2), 777),
                 EqEq(Register(1), Register(2), Register(3)),
-                Jz(Register(3), 7),
+                Jz(Register(3), "if-else_0".into()),
                 SConst(Register(4), String::from("true")),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
                     initial_arg: Register(4),
                 },
-                Jmp(9),
+                Jmp("if-end_1".into()),
                 SConst(Register(5), String::from("false")),
                 Call {
                     name: String::from("dump"),
@@ -2597,14 +2552,14 @@ mod tests {
                 IConst(Register(1), 666),
                 IConst(Register(2), 777),
                 EqEq(Register(1), Register(2), Register(3)),
-                Jz(Register(3), 7),
+                Jz(Register(3), "while-end_1".into()),
                 SConst(Register(4), String::from("body")),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
                     initial_arg: Register(4),
                 },
-                Jmp(0),
+                Jmp("while-start_0".into()),
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -2651,7 +2606,7 @@ mod tests {
                 IConst(Register(2), 666),
                 IConst(Register(3), 777),
                 EqEq(Register(2), Register(3), Register(4)),
-                Jnz(Register(4), 0),
+                Jnz(Register(4), "do-while-start_0".into()),
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -2716,7 +2671,7 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), 10),
-                Jz(Register(1), 7),
+                Jz(Register(1), "for-end_1".into()),
                 Call {
                     name: String::from("dump"),
                     num_args: 1,
@@ -2725,7 +2680,7 @@ mod tests {
                 IConst1(Register(2)),
                 ISub(Register(1), Register(2), Register(3)),
                 RegCopy(Register(3), Register(1)),
-                Jmp(1),
+                Jmp("for-start_0".into()),
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -2761,10 +2716,10 @@ mod tests {
                 IConst(Register(2), 2),
                 IConst(Register(3), 3),
                 Lte(Register(2), Register(3), Register(4)),
-                Jz(Register(4), 7), // jump to else
+                Jz(Register(4), "ternary-else_0".into()), // jump to else
                 IConst(Register(5), 666),
                 RegCopy(Register(5), Register(1)),
-                Jmp(9), // jump to end
+                Jmp("ternary-end_1".into()), // jump to end
                 IConst(Register(6), 777),
                 RegCopy(Register(6), Register(1)),
             ];
