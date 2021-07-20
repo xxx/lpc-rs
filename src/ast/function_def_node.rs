@@ -16,7 +16,7 @@ use crate::{
 use itertools::Itertools;
 
 /// A constant for the `argv` variable that's automatically created in functions with ellipsis args
-pub const ARGV: &'static str = "argv";
+pub const ARGV: &str = "argv";
 
 /// A node representation a function definition
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
