@@ -119,7 +119,7 @@ impl TreeWalker for ScopeWalker {
                         .flat_map(|n| n.span)
                         .collect::<Vec<_>>()
                 },
-                ellipsis: false,
+                ellipsis: node.ellipsis,
             },
         );
 

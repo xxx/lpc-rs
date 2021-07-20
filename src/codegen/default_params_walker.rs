@@ -31,7 +31,7 @@ impl TreeWalker for DefaultParamsWalker {
             .iter()
             .map(|p| p.value.clone())
             .collect::<Vec<_>>();
-        self.context.function_params.insert(node.name.clone(), vec);
+        self.context.default_function_params.insert(node.name.clone(), vec);
 
         Ok(())
     }
@@ -81,7 +81,7 @@ mod tests {
 
         let _ = walker.visit_function_def(&mut node);
 
-        let params = walker.context.function_params.get("foo").unwrap();
+        let params = walker.context.default_function_params.get("foo").unwrap();
 
         let expected = vec![None, Some(ExpressionNode::from("marf"))];
 

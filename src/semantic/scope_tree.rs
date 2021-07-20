@@ -141,6 +141,16 @@ impl ScopeTree {
         }
     }
 
+    /// Get a mutable [`LocalScope`] reference, by function name
+    pub fn function_scope_mut(&mut self, name: &'_ str) -> Option<&mut LocalScope> {
+        if let Some(id) = self.function_scopes.get(name) {
+            let id = *id;
+            self.get_mut(id)
+        } else {
+            None
+        }
+    }
+
     /// Look up a symbol, recursing up to parent scopes as necessary.
     ///
     /// # Arguments
@@ -218,7 +228,7 @@ mod tests {
     use crate::semantic::lpc_type::LpcType;
 
     #[test]
-    fn test_push_new() {
+    fn push_new() {
         let mut collection = ScopeTree::default();
         let scope1_id = collection.push_new();
         let scope2_id = collection.push_new();
@@ -231,44 +241,80 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_lookup_finds_the_symbol() {
-        let mut collection = ScopeTree::default();
-        collection.push_new();
-        let sym = Symbol::new("foo", LpcType::String(false));
-        collection.current_mut().unwrap().insert(sym);
+    mod test_lookup {
+        use super::*;
 
-        if let Some(scope_ref) = collection.lookup("foo") {
-            assert_eq!(scope_ref.type_, LpcType::String(false));
-        } else {
-            panic!("symbol not found.");
+        #[test]
+        fn lookup_finds_the_symbol() {
+            let mut collection = ScopeTree::default();
+            collection.push_new();
+            let sym = Symbol::new("foo", LpcType::String(false));
+            collection.current_mut().unwrap().insert(sym);
+
+            if let Some(scope_ref) = collection.lookup("foo") {
+                assert_eq!(scope_ref.type_, LpcType::String(false));
+            } else {
+                panic!("symbol not found.");
+            }
+        }
+
+        #[test]
+        fn lookup_checks_parent_recursively() {
+            let mut collection = ScopeTree::default();
+            collection.push_new();
+            let scope1 = collection.current_mut();
+
+            let sym = Symbol::new("foo", LpcType::String(false));
+            scope1.unwrap().insert(sym);
+
+            collection.push_new();
+
+            if let Some(scope_ref) = collection.lookup("foo") {
+                assert_eq!(scope_ref.type_, LpcType::String(false));
+            } else {
+                panic!("symbol not found.");
+            }
+        }
+
+        #[test]
+        fn lookup_returns_none_when_not_found() {
+            let mut tree = ScopeTree::default();
+            tree.push_new();
+
+            let result = tree.lookup("asdf");
+            assert_eq!(result, None);
         }
     }
 
-    #[test]
-    fn test_lookup_checks_parent_recursively() {
-        let mut collection = ScopeTree::default();
-        collection.push_new();
-        let scope1 = collection.current_mut();
+    mod test_function_scope_mut {
+        use super::*;
 
-        let sym = Symbol::new("foo", LpcType::String(false));
-        scope1.unwrap().insert(sym);
+        #[test]
+        fn returns_the_scope() {
+            let mut tree = ScopeTree::default();
+            tree.push_new();
+            let id = tree.push_new();
+            tree.push_new();
 
-        collection.push_new();
+            tree.insert_function("foobar", &id);
 
-        if let Some(scope_ref) = collection.lookup("foo") {
-            assert_eq!(scope_ref.type_, LpcType::String(false));
-        } else {
-            panic!("symbol not found.");
+            tree.goto(Some(id));
+
+            let mut scope = tree.current_mut().unwrap().clone();
+
+            tree.goto_root();
+
+            let looked_up_scope = tree
+                .function_scope_mut("foobar")
+                .unwrap();
+
+            assert_eq!(&mut scope, looked_up_scope);
         }
-    }
 
-    #[test]
-    fn test_lookup_returns_none_when_not_found() {
-        let mut tree = ScopeTree::default();
-        tree.push_new();
-
-        let result = tree.lookup("asdf");
-        assert_eq!(result, None);
+        #[test]
+        fn returns_none_when_not_found() {
+            let mut tree = ScopeTree::default();
+            assert!(tree.function_scope_mut("foobar").is_none());
+        }
     }
 }

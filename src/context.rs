@@ -26,7 +26,7 @@ pub struct Context {
     pub function_prototypes: HashMap<String, FunctionPrototype>,
 
     /// Storage for default function params, for the functions that have them
-    pub function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
+    pub default_function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Any errors that have been collected
     pub errors: Vec<LpcError>,
@@ -80,7 +80,7 @@ impl Default for Context {
             config: Rc::new(Config::default()),
             errors: Vec::new(),
             scopes: ScopeTree::default(),
-            function_params: HashMap::new(),
+            default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
         }

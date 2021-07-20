@@ -47,6 +47,7 @@ use crate::{
     interpreter::efun::CALL_OTHER,
 };
 use std::rc::Rc;
+use crate::ast::function_def_node::ARGV;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -344,12 +345,17 @@ impl AsmTreeWalker {
     /// for default arguments - we just want to have it on hand to refer to
     /// when we generate code for calls.
     fn visit_parameter(&mut self, node: &VarInitNode) {
-        let current_register;
+        self.assign_sym_location(&node.name)
+    }
 
-        current_register = self.register_counter.next().unwrap();
+    /// A helper to assign the next free [`Register`] to a [`Symbol`]
+    /// of the given name, within the current scope.
+    fn assign_sym_location(&mut self, name: &str) {
+        let current_register = self.register_counter.next().unwrap();
 
-        let symbol = self.lookup_symbol_mut(&node.name);
+        let symbol = self.lookup_symbol_mut(name);
         if let Some(sym) = symbol {
+            println!("assigning location to {}", name);
             sym.location = Some(current_register);
         }
     }
@@ -465,14 +471,18 @@ impl TreeWalker for AsmTreeWalker {
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        let mut arg_results = vec![];
+        let mut arg_results = Vec::new();
+        let mut ellipsis_results = Vec::new();
+        let default_params = self.context.default_function_params.get(&node.name);
+        let mut ellipsis = false;
 
-        let params = self.context.function_params.get(&node.name);
-
-        if let Some(function_args) = params {
+        // All "normal" functions should have a set of default params to match the declared params,
+        // even if the defaults are all `None`.
+        if let Some(function_args) = default_params {
             // TODO: get rid of this clone or make it cheaper
             let mut function_args = function_args.clone();
 
+            // generate code for the explicitly-specified arguments
             for (idx, function_arg) in function_args.iter_mut().enumerate() {
                 // use passed parameters, or default parameters if applicable.
                 if let Some(arg) = node.arguments.get_mut(idx) {
@@ -482,6 +492,54 @@ impl TreeWalker for AsmTreeWalker {
                     arg.visit(self)?;
                     arg_results.push(self.current_result);
                 }
+            }
+
+            // generate code for ellipsis arguments
+            if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
+                if prototype.ellipsis {
+                    ellipsis = true;
+                    let ellipsis_arg_count = node.arguments.len().saturating_sub(function_args.len());
+
+                    if ellipsis_arg_count > 0 {
+                        let ellipsis_args = &mut node.arguments[function_args.len()..];
+
+                        ellipsis_results.reserve_exact(ellipsis_arg_count);
+
+                        for arg in ellipsis_args {
+                            arg.visit(self)?;
+                            ellipsis_results.push(self.current_result);
+                        }
+                    }
+                }
+            }
+
+            if ellipsis {
+                let mut argv = match self.context.scopes.function_scope_mut(&node.name) {
+                    Some(scope) => {
+                        println!("current scope {:?}", scope);
+                        match scope.lookup_mut(ARGV) {
+                            Some(sym) => sym,
+                            None => {
+                                return Err(LpcError::new(
+                                    "Ellipsis args were passed, but cannot find `argv`'s location. This should not happen."
+                                ).with_span(node.span));
+                            }
+                        }
+                    }
+                    None => {
+                        return Err(LpcError::new(
+                            "Ellipsis args were passed, but cannot find `argv`'s location. This should not happen."
+                        ).with_span(node.span));
+                    }
+                };
+
+                let current_register = self.register_counter.next().unwrap();
+                argv.location = Some(current_register);
+
+                println!("argv? {:?}", argv);
+                self.current_result = current_register;
+                push_instruction!(self, Instruction::AConst(current_register, ellipsis_results), node.span);
+                arg_results.push(current_register);
             }
         } else {
             // TODO: This is where efuns are handled
@@ -572,6 +630,7 @@ impl TreeWalker for AsmTreeWalker {
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
 
+        // Take care of the result after the call returns.
         if let Some(func) = self.context.function_prototypes.get(&node.name) {
             if func.return_type == LpcType::Void {
                 self.current_result = Register(0);
@@ -727,6 +786,10 @@ impl TreeWalker for AsmTreeWalker {
             self.visit_parameter(parameter);
         }
 
+        if node.ellipsis {
+            self.assign_sym_location(ARGV);
+        }
+
         for expression in &mut node.body {
             expression.visit(self)?;
         }
@@ -742,7 +805,8 @@ impl TreeWalker for AsmTreeWalker {
 
         self.context.scopes.pop();
 
-        let num_args = node.parameters.len();
+        let num_args = node.parameters.len() + (node.ellipsis as usize);
+
         self.functions.insert(
             Rc::new(FunctionSymbol {
                 name: node.name.clone(),
@@ -1376,15 +1440,15 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_with_defaults() {
-            let mut function_params = HashMap::new();
+            let mut default_function_params = HashMap::new();
 
-            function_params.insert(
+            default_function_params.insert(
                 String::from("foo"),
                 vec![None, Some(ExpressionNode::from("muffuns"))],
             );
 
             let context = Context {
-                function_params,
+                default_function_params,
                 ..Context::default()
             };
 
@@ -1526,6 +1590,44 @@ mod tests {
                     num_args: 1,
                     initial_arg: Register(1),
                 },
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn handles_ellipsis_functions() {
+            let mut context = Context::default();
+            let prototype = FunctionPrototype {
+                name: "my_func".into(),
+                return_type: LpcType::Void,
+                num_args: 1,
+                num_default_args: 0,
+                arg_types: vec![LpcType::String(false)],
+                span: None,
+                arg_spans: vec![],
+                ellipsis: true,
+            };
+
+            context
+                .function_prototypes
+                .insert("my_func".into(), prototype);
+            let mut walker = AsmTreeWalker::new(context);
+            let call = "my_func(\"hello!\", 42, \"cool beans\")";
+            let mut tree = lpc_parser::CallParser::new()
+                .parse(&walker.context, LexWrapper::new(call))
+                .unwrap();
+
+            let _ = walker.visit_call(&mut tree);
+
+            let expected = vec![
+                SConst(Register(1), "hello!".into()),
+                IConst(Register(2), 42),
+                SConst(Register(3), "cool beans".into()),
+                RegCopy(Register(1), Register(4)),
+                RegCopy(Register(2), Register(5)),
+                RegCopy(Register(3), Register(6)),
+                Call { name: "my_func".into(), num_args: 3, initial_arg: Register(4) }
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1820,6 +1922,37 @@ mod tests {
         };
 
         assert_eq!(walker.functions.get(&sym).unwrap(), &address);
+    }
+
+    #[test]
+    fn test_visit_function_def_handles_ellipses() {
+        let mut scope_walker = ScopeWalker::default();
+        let _walker = AsmTreeWalker::default();
+        let call = "int main(int i, ...) { return argv; }";
+        let tree = lpc_parser::DefParser::new()
+            .parse(&Context::default(), LexWrapper::new(call))
+            .unwrap();
+
+        let mut node = if let AstNode::FunctionDef(node) = tree {
+            node
+        } else {
+            panic!("Didn't receive a function def?");
+        };
+
+        let _ = scope_walker.visit_function_def(&mut node);
+
+        let mut context = scope_walker.into_context();
+        context.scopes.goto_root();
+
+        let mut walker = AsmTreeWalker::new(context);
+        let _ = walker.visit_function_def(&mut node);
+
+        let expected = vec![
+            RegCopy(Register(2), Register(0)),
+            Ret,
+        ];
+
+        assert_eq!(walker.instructions, expected);
     }
 
     #[test]
