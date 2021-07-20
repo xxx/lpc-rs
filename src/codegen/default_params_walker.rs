@@ -31,7 +31,9 @@ impl TreeWalker for DefaultParamsWalker {
             .iter()
             .map(|p| p.value.clone())
             .collect::<Vec<_>>();
-        self.context.default_function_params.insert(node.name.clone(), vec);
+        self.context
+            .default_function_params
+            .insert(node.name.clone(), vec);
 
         Ok(())
     }

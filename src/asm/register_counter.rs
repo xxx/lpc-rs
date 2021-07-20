@@ -24,7 +24,9 @@ impl RegisterCounter {
     }
 
     /// Get the current counter value
-    pub fn as_usize(&self) -> usize { self.count }
+    pub fn as_usize(&self) -> usize {
+        self.count
+    }
 }
 
 impl Iterator for RegisterCounter {

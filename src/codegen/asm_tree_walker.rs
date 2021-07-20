@@ -43,11 +43,13 @@ use crate::{
 };
 
 use crate::{
-    ast::{do_while_node::DoWhileNode, for_node::ForNode, ternary_node::TernaryNode},
+    ast::{
+        do_while_node::DoWhileNode, for_node::ForNode, function_def_node::ARGV,
+        ternary_node::TernaryNode,
+    },
     interpreter::efun::CALL_OTHER,
 };
 use std::rc::Rc;
-use crate::ast::function_def_node::ARGV;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -498,7 +500,8 @@ impl TreeWalker for AsmTreeWalker {
             if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
                 if prototype.ellipsis {
                     ellipsis = true;
-                    let ellipsis_arg_count = node.arguments.len().saturating_sub(function_args.len());
+                    let ellipsis_arg_count =
+                        node.arguments.len().saturating_sub(function_args.len());
 
                     if ellipsis_arg_count > 0 {
                         let ellipsis_args = &mut node.arguments[function_args.len()..];
@@ -536,9 +539,12 @@ impl TreeWalker for AsmTreeWalker {
                 let current_register = self.register_counter.next().unwrap();
                 argv.location = Some(current_register);
 
-                println!("argv? {:?}", argv);
                 self.current_result = current_register;
-                push_instruction!(self, Instruction::AConst(current_register, ellipsis_results), node.span);
+                push_instruction!(
+                    self,
+                    Instruction::AConst(current_register, ellipsis_results),
+                    node.span
+                );
                 arg_results.push(current_register);
             }
         } else {
@@ -1582,7 +1588,11 @@ mod tests {
                 RegCopy(Register(1), Register(4)),
                 RegCopy(Register(2), Register(5)),
                 RegCopy(Register(3), Register(6)),
-                Call { name: "my_func".into(), num_args: 3, initial_arg: Register(4) }
+                Call {
+                    name: "my_func".into(),
+                    num_args: 3,
+                    initial_arg: Register(4),
+                },
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1902,10 +1912,7 @@ mod tests {
         let mut walker = AsmTreeWalker::new(context);
         let _ = walker.visit_function_def(&mut node);
 
-        let expected = vec![
-            RegCopy(Register(2), Register(0)),
-            Ret,
-        ];
+        let expected = vec![RegCopy(Register(2), Register(0)), Ret];
 
         assert_eq!(walker.instructions, expected);
     }

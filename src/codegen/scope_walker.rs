@@ -9,12 +9,11 @@ use crate::{
     context::Context,
     errors::LpcError,
     semantic::{
-        function_prototype::FunctionPrototype, semantic_checks::check_var_redefinition,
-        symbol::Symbol,
+        function_prototype::FunctionPrototype, lpc_type::LpcType,
+        semantic_checks::check_var_redefinition, symbol::Symbol,
     },
     Result,
 };
-use crate::semantic::lpc_type::LpcType;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -87,7 +86,7 @@ impl TreeWalker for ScopeWalker {
                 static_: false,
                 location: None,
                 scope_id: scope_id.into(),
-                span: node.span
+                span: node.span,
             };
 
             self.insert_symbol(sym);

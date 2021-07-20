@@ -373,7 +373,8 @@ fn ellipsis_sets_the_flag_when_only_arg() {
             return 666;
         }
     "#
-    }.replace("\n", "");
+    }
+    .replace("\n", "");
 
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
@@ -389,7 +390,8 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
             return 666;
         }
     "#
-    }.replace("\n", "");
+    }
+    .replace("\n", "");
 
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
@@ -406,6 +408,6 @@ fn parse_prog(prog: &str) -> Result<ProgramNode> {
 
     match lpc_parser::ProgramParser::new().parse(&context, code) {
         Ok(pr) => Ok(pr),
-        Err(e) => Err(e.into())
+        Err(e) => Err(e.into()),
     }
 }

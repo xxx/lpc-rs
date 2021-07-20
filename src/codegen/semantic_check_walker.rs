@@ -9,7 +9,7 @@ use crate::{
         call_node::CallNode,
         expression_node::ExpressionNode,
         for_node::ForNode,
-        function_def_node::FunctionDefNode,
+        function_def_node::{FunctionDefNode, ARGV},
         int_node::IntNode,
         program_node::ProgramNode,
         range_node::RangeNode,
@@ -30,7 +30,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::function_def_node::ARGV;
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -262,10 +261,16 @@ impl TreeWalker for SemanticCheckWalker {
         is_keyword(&node.name)?;
 
         if node.name == ARGV {
-            if let Some(FunctionDefNode { ellipsis: true, span, .. }) = self.current_function {
-                let e = LpcError::new("Redeclaration of `argv` in a function with ellipsis arguments")
-                    .with_span(node.span)
-                    .with_label("Declared here", span);
+            if let Some(FunctionDefNode {
+                ellipsis: true,
+                span,
+                ..
+            }) = self.current_function
+            {
+                let e =
+                    LpcError::new("Redeclaration of `argv` in a function with ellipsis arguments")
+                        .with_span(node.span)
+                        .with_label("Declared here", span);
                 self.context.errors.push(e.clone());
                 return Err(e);
             }
@@ -1132,15 +1137,15 @@ mod tests {
                 parameters: vec![],
                 ellipsis: true,
                 body: vec![],
-                span: None
+                span: None,
             });
 
             let result = node.visit(&mut walker);
 
             if let Err(e) = result {
-                assert!(e.to_string().contains(
-                    "Redeclaration of `argv` in a function with ellipsis arguments"
-                ));
+                assert!(e
+                    .to_string()
+                    .contains("Redeclaration of `argv` in a function with ellipsis arguments"));
             } else {
                 panic!("didn't error?")
             }
@@ -1167,7 +1172,7 @@ mod tests {
                 parameters: vec![],
                 ellipsis: false,
                 body: vec![],
-                span: None
+                span: None,
             });
 
             let result = node.visit(&mut walker);

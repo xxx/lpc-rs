@@ -304,9 +304,7 @@ mod tests {
 
             tree.goto_root();
 
-            let looked_up_scope = tree
-                .function_scope_mut("foobar")
-                .unwrap();
+            let looked_up_scope = tree.function_scope_mut("foobar").unwrap();
 
             assert_eq!(&mut scope, looked_up_scope);
         }

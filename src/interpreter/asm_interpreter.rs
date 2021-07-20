@@ -1,5 +1,8 @@
 use crate::{
-    asm::{instruction::Instruction, register::Register},
+    asm::{
+        instruction::{Address, Instruction},
+        register::Register,
+    },
     errors::LpcError,
     interpreter::{
         efun::{EFUNS, EFUN_PROTOTYPES},
@@ -17,7 +20,6 @@ use crate::{
 use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
-use crate::asm::instruction::Address;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -462,7 +464,8 @@ impl AsmInterpreter {
                 };
 
                 let resolve_result = |receiver_ref, interpreter: &mut AsmInterpreter| {
-                    let resolved = interpreter.resolve_call_other_receiver(receiver_ref, function_name);
+                    let resolved =
+                        interpreter.resolve_call_other_receiver(receiver_ref, function_name);
 
                     if let Some(pr) = resolved {
                         let value = LpcValue::from(pr);
@@ -1006,9 +1009,7 @@ impl AsmInterpreter {
     fn lookup_address(&self, label: &str) -> Result<Address> {
         match self.process.labels.get(label) {
             Some(a) => Ok(*a),
-            None => {
-                Err(self.runtime_error(format!("Unable to find address for {}", label)))
-            }
+            None => Err(self.runtime_error(format!("Unable to find address for {}", label))),
         }
     }
 }
