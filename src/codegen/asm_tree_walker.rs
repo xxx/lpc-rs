@@ -357,7 +357,6 @@ impl AsmTreeWalker {
 
         let symbol = self.lookup_symbol_mut(name);
         if let Some(sym) = symbol {
-            println!("assigning location to {}", name);
             sym.location = Some(current_register);
         }
     }
