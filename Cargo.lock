@@ -824,6 +824,7 @@ version = "3.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7794b94034e62eef81e8b9ea0690b31f522fd38394ca51e7997d499d0372fb5"
 dependencies = [
+ "lazy_static",
  "once_cell",
 ]
 
