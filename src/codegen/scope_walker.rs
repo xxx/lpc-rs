@@ -14,7 +14,6 @@ use crate::{
     },
     Result,
 };
-use crate::semantic::function_flags::FunctionFlags;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -245,6 +244,7 @@ mod tests {
         use crate::semantic::lpc_type::LpcType;
 
         use super::*;
+        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn stores_the_prototype() {

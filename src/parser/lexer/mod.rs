@@ -207,6 +207,8 @@ pub enum Token {
     Return(Span),
     #[token("static", track_slice)]
     Static(Span),
+    #[token("varargs", track_slice)]
+    Varargs(Span),
     #[token("nomask", track_slice)]
     Nomask(Span),
     #[token("efun", track_slice)]
@@ -490,6 +492,7 @@ impl Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Varargs(x)
             | Token::Nomask(x)
             | Token::Efun(x)
             | Token::LParen(x)
@@ -592,6 +595,7 @@ impl Token {
             | Token::Void(x)
             | Token::Return(x)
             | Token::Static(x)
+            | Token::Varargs(x)
             | Token::Nomask(x)
             | Token::Efun(x)
             | Token::LParen(x)
@@ -711,6 +715,7 @@ impl Display for Token {
             Token::Void(_) => "void",
             Token::Return(_) => "return",
             Token::Static(_) => "static",
+            Token::Varargs(_) => "varargs",
             Token::Nomask(_) => "nomask",
             Token::Efun(_) => "efun",
             Token::Catch(_) => "catch",

@@ -99,6 +99,7 @@ extern {
         "void" => Token::Void(<Span>),
         "return" => Token::Return(<Span>),
         "static" => Token::Static(<Span>),
+        "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
         "efun" => Token::Efun(<Span>),
 
@@ -139,11 +140,13 @@ pub Def: AstNode = {
 };
 
 pub FunctionDef: FunctionDefNode = {
-    <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> "{" <body:Statements> "}" =>? {
+    <flags:FunctionFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> "{" <body:Statements> "}" =>? {
         let array = star.is_some();
         let (parameters, ellipsis) = parameter_tuple;
 
-        let l = if let Some((_, span)) = &r_type {
+        let l = if flags.len() > 0 {
+           flags.first().unwrap().1.l
+        } else if let Some((_, span)) = &r_type {
            span.l
         } else if let Some(span) = &star {
            span.l
@@ -176,10 +179,12 @@ pub FunctionDef: FunctionDefNode = {
             LpcType::Mixed(array)
         };
 
+        let flag_strs = flags.into_iter().map(|f| f.0).collect::<Vec<_>>();
+
         Ok(FunctionDefNode {
             name: name.1,
             parameters,
-            flags: FunctionFlags::default().with_ellipsis(ellipsis),
+            flags: FunctionFlags::from(flag_strs).with_ellipsis(ellipsis),
             body,
             return_type,
             span: Some(span)
@@ -225,6 +230,10 @@ Type: (String, Span) = {
     "mapping" => (String::from("mapping"), <>),
     "object" => (String::from("object"), <>),
     "void" => (String::from("void"), <>),
+};
+
+FunctionFlag: (String, Span) = {
+    "varargs" => (String::from("varargs"), <>),
 };
 
 pub Statement: AstNode = {

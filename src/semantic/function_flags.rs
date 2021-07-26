@@ -10,3 +10,22 @@ pub struct FunctionFlags {
     pub ellipsis: bool,
     pub varargs: bool,
 }
+
+impl<T> From<Vec<T>> for FunctionFlags
+where
+    T: AsRef<str>
+{
+    fn from(vec: Vec<T>) -> Self {
+        let mut flags = Self::default();
+        for s in vec {
+            match s.as_ref() {
+                "varargs" => {
+                    flags.set_varargs(true);
+                }
+                _ => {}
+            }
+        }
+
+        flags
+    }
+}

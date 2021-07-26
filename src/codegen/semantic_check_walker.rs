@@ -111,7 +111,7 @@ impl TreeWalker for SemanticCheckWalker {
             let arg_len = node.arguments.len();
 
             // Check function arity.
-            let minimum = prototype.num_args - prototype.num_default_args;
+            let minimum = if prototype.flags.varargs() { 0 } else { prototype.num_args - prototype.num_default_args };
             let valid = (minimum..=prototype.num_args).contains(&arg_len)
                 || (prototype.flags.ellipsis() && arg_len >= minimum);
             if !valid {
@@ -599,6 +599,50 @@ mod tests {
             });
 
             let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn handles_varargs_argument_arity() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: Box::new(None),
+                arguments: vec![],
+                name: "my_function".to_string(),
+                span: None,
+            });
+
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
+                String::from("my_function"),
+                FunctionPrototype {
+                    name: "my_function".into(),
+                    return_type: LpcType::Int(false),
+                    num_args: 5,
+                    num_default_args: 0,
+                    arg_types: vec![
+                        LpcType::Int(false),
+                        LpcType::Float(false),
+                        LpcType::Int(false),
+                        LpcType::String(false),
+                        LpcType::Int(false)
+                    ],
+                    span: None,
+                    arg_spans: vec![],
+                    flags: FunctionFlags::default().with_varargs(true),
+                },
+            );
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let context = Context {
+                scopes,
+                function_prototypes,
+                ..Context::default()
+            };
+
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
             assert!(walker.context.errors.is_empty());
