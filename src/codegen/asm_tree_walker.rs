@@ -361,11 +361,11 @@ impl AsmTreeWalker {
         }
     }
 
-    /// Emit the instruction(s) to take the range of an array
+    /// Emit the instruction(s) to take the range of an array or string
     /// # Arguments
-    /// `array` - The register holding the reference to the array we're taking a slice from.
-    /// `node` - A reference to the `RangeNode` that holds the range of the slice we're taking.
-    fn emit_range(&mut self, array: Register, node: &mut RangeNode) -> Result<()> {
+    /// `reference` - The [`Register`] holding the reference to the ref we're taking a slice from.
+    /// `node` - A reference to the [`RangeNode`] that holds the range of the slice we're taking.
+    fn emit_range(&mut self, reference: Register, node: &mut RangeNode) -> Result<()> {
         let first_index = if let Some(expr) = &mut *node.l {
             expr.visit(self)?;
             self.current_result
@@ -389,7 +389,7 @@ impl AsmTreeWalker {
         let result = self.register_counter.next().unwrap();
         self.current_result = result;
         self.instructions.push(Instruction::ARange(
-            array,
+            reference,
             first_index,
             second_index,
             result,

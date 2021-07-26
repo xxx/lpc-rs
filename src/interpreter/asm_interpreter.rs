@@ -303,11 +303,31 @@ impl AsmInterpreter {
             }
             Instruction::ARange(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
-                let return_array = |arr,
+
+                let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
+                    let to_idx = |i: LpcInt| {
+                        // We handle the potential overflow just below.
+                        if i >= 0 {
+                            i as usize
+                        } else {
+                            (len as LpcInt + i) as usize
+                        }
+                    };
+                    let real_start = to_idx(start);
+                    let mut real_end = to_idx(end);
+
+                    if real_end >= len {
+                        real_end = len - 1;
+                    }
+
+                    (real_start, real_end)
+                };
+
+                let return_value = |value,
                                     memory: &mut Pool<RefCell<LpcValue>>,
                                     stack: &mut Vec<StackFrame>|
                  -> Result<()> {
-                    let new_ref = value_to_ref!(LpcValue::from(arr), memory);
+                    let new_ref = value_to_ref!(value, memory);
                     let registers = current_registers_mut(stack)?;
                     registers[r4.index()] = new_ref;
 
@@ -316,50 +336,71 @@ impl AsmInterpreter {
 
                 let lpc_ref = self.register_to_lpc_ref(r1.index());
 
-                if let LpcRef::Array(v_ref) = lpc_ref {
-                    let value = v_ref.borrow();
-                    let vec = try_extract_value!(*value, LpcValue::Array);
+                match lpc_ref {
+                    LpcRef::Array(v_ref) => {
+                        let value = v_ref.borrow();
+                        let vec = try_extract_value!(*value, LpcValue::Array);
 
-                    if vec.is_empty() {
-                        return_array(vec![], &mut self.memory, &mut self.stack)?;
-                    }
+                        if vec.is_empty() {
+                            return_value(LpcValue::from(vec![]), &mut self.memory, &mut self.stack)?;
+                        }
 
-                    let index1 = self.register_to_lpc_ref(r2.index());
-                    let index2 = self.register_to_lpc_ref(r3.index());
+                        let index1 = self.register_to_lpc_ref(r2.index());
+                        let index2 = self.register_to_lpc_ref(r3.index());
 
-                    if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
-                        let to_idx = |i: LpcInt| {
-                            // We handle the potential overflow just below.
-                            if i >= 0 {
-                                i as usize
+                        if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+                            let (real_start, real_end) = resolve_range(start, end, vec.len());
+
+                            if real_start <= real_end {
+                                let slice = &vec[real_start..=real_end];
+                                let mut new_vec = vec![LpcRef::Int(0); slice.len()];
+                                new_vec.clone_from_slice(slice);
+                                return_value(LpcValue::from(new_vec), &mut self.memory, &mut self.stack)?;
                             } else {
-                                (vec.len() as LpcInt + i) as usize
+                                return_value(LpcValue::from(vec![]), &mut self.memory, &mut self.stack)?;
                             }
-                        };
-                        let real_start = to_idx(start);
-                        let mut real_end = to_idx(end);
-
-                        if real_end >= vec.len() {
-                            real_end = vec.len() - 1;
-                        }
-
-                        if real_start <= real_end {
-                            let slice = &vec[real_start..=real_end];
-                            let mut new_vec = vec![LpcRef::Int(0); slice.len()];
-                            new_vec.clone_from_slice(slice);
-                            return_array(new_vec, &mut self.memory, &mut self.stack)?;
                         } else {
-                            return_array(vec![], &mut self.memory, &mut self.stack)?;
+                            return Err(LpcError::new(
+                                "Invalid code was generated for an ARange instruction.",
+                            )
+                                .with_span(self.process.current_debug_span()));
                         }
-                    } else {
-                        return Err(LpcError::new(
-                            "Invalid code was generated for an ARange instruction.",
-                        )
-                        .with_span(self.process.current_debug_span()));
                     }
-                } else {
-                    return Err(LpcError::new("ARange's array isn't actually an array?")
-                        .with_span(self.process.current_debug_span()));
+                    LpcRef::String(v_ref) => {
+                        let value = v_ref.borrow();
+                        let string = try_extract_value!(*value, LpcValue::String);
+
+                        if string.is_empty() {
+                            return_value(LpcValue::from(""), &mut self.memory, &mut self.stack)?;
+                        }
+
+                        let index1 = self.register_to_lpc_ref(r2.index());
+                        let index2 = self.register_to_lpc_ref(r3.index());
+
+                        if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+                            let (real_start, real_end) = resolve_range(start, end, string.len());
+
+                            if real_start <= real_end {
+                                let len = real_end - real_start + 1;
+                                let new_string: String = string.chars().skip(real_start).take(len).collect();
+                                return_value(LpcValue::from(new_string), &mut self.memory, &mut self.stack)?;
+                            } else {
+                                return_value(LpcValue::from(""), &mut self.memory, &mut self.stack)?;
+                            }
+                        } else {
+                            return Err(LpcError::new(
+                                "Invalid code was generated for an ARange instruction.",
+                            )
+                                .with_span(self.process.current_debug_span()));
+                        }
+                    }
+                    LpcRef::Float(_)
+                    | LpcRef::Int(_)
+                    | LpcRef::Mapping(_)
+                    | LpcRef::Object(_) => {
+                        return Err(LpcError::new("ARange's receiver isn't actually an array or string?")
+                            .with_span(self.process.current_debug_span()));
+                    }
                 }
             }
             Instruction::EqEq(r1, r2, r3) => {
