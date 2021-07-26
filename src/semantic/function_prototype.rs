@@ -1,5 +1,6 @@
 use crate::{parser::span::Span, semantic::lpc_type::LpcType};
 use std::borrow::Cow;
+use crate::semantic::function_flags::FunctionFlags;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -28,7 +29,6 @@ pub struct FunctionPrototype {
     /// Spans for my arguments
     pub arg_spans: Vec<Span>,
 
-    /// Whether the signature of this function ends with an `...`, meaning any
-    /// number of arguments can be passed when calling it.
-    pub ellipsis: bool,
+    /// The flags that are set when the function was declared
+    pub flags: FunctionFlags,
 }

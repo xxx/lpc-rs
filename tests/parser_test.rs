@@ -380,7 +380,7 @@ fn ellipsis_sets_the_flag_when_only_arg() {
     let node = lpc_parser::FunctionDefParser::new()
         .parse(&Context::default(), lexer)
         .unwrap();
-    assert!(matches!(node, FunctionDefNode { ellipsis: true, .. }));
+    assert!(node.flags.ellipsis());
 }
 
 #[test]
@@ -397,7 +397,8 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
     let node = lpc_parser::FunctionDefParser::new()
         .parse(&Context::default(), lexer)
         .unwrap();
-    assert!(matches!(node, FunctionDefNode { ellipsis: true, .. }));
+
+    assert!(node.flags.ellipsis());
 }
 
 fn parse_prog(prog: &str) -> Result<ProgramNode> {

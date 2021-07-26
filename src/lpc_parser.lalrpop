@@ -36,6 +36,7 @@ use crate::errors::LpcError;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 use crate::LpcFloat;
 use crate::context::Context;
+use crate::semantic::function_flags::FunctionFlags;
 
 grammar<'context>(context: &'context Context);
 
@@ -178,7 +179,7 @@ pub FunctionDef: FunctionDefNode = {
         Ok(FunctionDefNode {
             name: name.1,
             parameters,
-            ellipsis,
+            flags: FunctionFlags::default().with_ellipsis(ellipsis),
             body,
             return_type,
             span: Some(span)

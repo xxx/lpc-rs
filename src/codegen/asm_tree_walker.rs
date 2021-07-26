@@ -497,7 +497,7 @@ impl TreeWalker for AsmTreeWalker {
 
             // generate code for ellipsis arguments
             if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
-                if prototype.ellipsis {
+                if prototype.flags.ellipsis() {
                     ellipsis = true;
                     let ellipsis_arg_count =
                         node.arguments.len().saturating_sub(function_args.len());
@@ -791,7 +791,7 @@ impl TreeWalker for AsmTreeWalker {
             self.visit_parameter(parameter);
         }
 
-        if node.ellipsis {
+        if node.flags.ellipsis() {
             self.assign_sym_location(ARGV);
         }
 
@@ -810,7 +810,7 @@ impl TreeWalker for AsmTreeWalker {
 
         self.context.scopes.pop();
 
-        let num_args = node.parameters.len() + (node.ellipsis as usize);
+        let num_args = node.parameters.len() + (node.flags.ellipsis() as usize);
 
         self.functions.insert(
             Rc::new(FunctionSymbol {
@@ -1349,6 +1349,7 @@ mod tests {
 
         use super::*;
         use crate::semantic::function_prototype::FunctionPrototype;
+        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn populates_the_instructions() {
@@ -1446,7 +1447,7 @@ mod tests {
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
             };
 
             context
@@ -1484,7 +1485,7 @@ mod tests {
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
             };
 
             context
@@ -1566,7 +1567,7 @@ mod tests {
                 arg_types: vec![LpcType::String(false)],
                 span: None,
                 arg_spans: vec![],
-                ellipsis: true,
+                flags: FunctionFlags::default().with_ellipsis(true),
             };
 
             context

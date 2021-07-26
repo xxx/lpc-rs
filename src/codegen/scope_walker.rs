@@ -14,6 +14,7 @@ use crate::{
     },
     Result,
 };
+use crate::semantic::function_flags::FunctionFlags;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -79,7 +80,7 @@ impl TreeWalker for ScopeWalker {
             parameter.visit(self)?;
         }
 
-        if node.ellipsis {
+        if node.flags.ellipsis() {
             let sym = Symbol {
                 name: "argv".to_string(),
                 type_: LpcType::Mixed(true),
@@ -118,7 +119,7 @@ impl TreeWalker for ScopeWalker {
                         .flat_map(|n| n.span)
                         .collect::<Vec<_>>()
                 },
-                ellipsis: node.ellipsis,
+                flags: node.flags
             },
         );
 
@@ -251,7 +252,7 @@ mod tests {
             let mut node = FunctionDefNode {
                 return_type: LpcType::Mixed(false),
                 name: "marf".to_string(),
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 parameters: vec![
                     VarInitNode::new("foo", LpcType::Int(false)),
                     VarInitNode::new("bar", LpcType::Mapping(true)),
@@ -273,7 +274,7 @@ mod tests {
                         arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
                         span: None,
                         arg_spans: vec![],
-                        ellipsis: false,
+                        flags: FunctionFlags::default(),
                     }
                 )
             } else {
@@ -287,7 +288,7 @@ mod tests {
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
                 name: "marf".to_string(),
-                ellipsis: true,
+                flags: FunctionFlags::default().with_ellipsis(true),
                 parameters: vec![],
                 body: vec![],
                 span: None,

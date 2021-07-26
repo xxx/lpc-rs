@@ -16,6 +16,7 @@ use clone_object::clone_object;
 use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
+use crate::semantic::function_flags::FunctionFlags;
 
 /// Signature for Efuns
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
@@ -55,7 +56,7 @@ lazy_static! {
             ],
             span: None,
             arg_spans: vec![],
-            ellipsis: true,
+            flags: FunctionFlags::default().with_ellipsis(true),
         });
 
         m.insert(CLONE_OBJECT, FunctionPrototype {
@@ -66,7 +67,7 @@ lazy_static! {
             arg_types: vec![LpcType::String(false)],
             span: None,
             arg_spans: vec![],
-            ellipsis: false,
+            flags: FunctionFlags::default().with_ellipsis(false),
         });
 
         m.insert(DUMP, FunctionPrototype {
@@ -77,7 +78,7 @@ lazy_static! {
             arg_types: vec![LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![],
-            ellipsis: false,
+            flags: FunctionFlags::default().with_ellipsis(false),
         });
 
         m.insert(FILE_NAME, FunctionPrototype {
@@ -88,7 +89,7 @@ lazy_static! {
             arg_types: vec![LpcType::Object(false)],
             span: None,
             arg_spans: vec![],
-            ellipsis: false,
+            flags: FunctionFlags::default().with_ellipsis(false),
         });
 
         m.insert(THIS_OBJECT, FunctionPrototype {
@@ -99,7 +100,7 @@ lazy_static! {
             arg_types: vec![],
             span: None,
             arg_spans: vec![],
-            ellipsis: false,
+            flags: FunctionFlags::default().with_ellipsis(false),
         });
 
         m

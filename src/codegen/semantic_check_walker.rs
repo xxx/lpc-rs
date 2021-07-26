@@ -113,7 +113,7 @@ impl TreeWalker for SemanticCheckWalker {
             // Check function arity.
             let minimum = prototype.num_args - prototype.num_default_args;
             let valid = (minimum..=prototype.num_args).contains(&arg_len)
-                || (prototype.ellipsis && arg_len >= minimum);
+                || (prototype.flags.ellipsis() && arg_len >= minimum);
             if !valid {
                 let e = LpcError::new(format!(
                     "Incorrect argument count in call to `{}`: expected: {}, received: {}",
@@ -262,17 +262,19 @@ impl TreeWalker for SemanticCheckWalker {
 
         if node.name == ARGV {
             if let Some(FunctionDefNode {
-                ellipsis: true,
+                flags,
                 span,
                 ..
             }) = self.current_function
             {
-                let e =
-                    LpcError::new("Redeclaration of `argv` in a function with ellipsis arguments")
-                        .with_span(node.span)
-                        .with_label("Declared here", span);
-                self.context.errors.push(e.clone());
-                return Err(e);
+                if flags.ellipsis() {
+                    let e =
+                        LpcError::new("Redeclaration of `argv` in a function with ellipsis arguments")
+                            .with_span(node.span)
+                            .with_label("Declared here", span);
+                    self.context.errors.push(e.clone());
+                    return Err(e);
+                }
             }
         }
 
@@ -495,6 +497,7 @@ mod tests {
 
     mod test_visit_call {
         use super::*;
+        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn allows_known_functions() {
@@ -516,7 +519,7 @@ mod tests {
                     arg_types: vec![],
                     span: None,
                     arg_spans: vec![],
-                    ellipsis: false,
+                    flags: FunctionFlags::default().with_ellipsis(false),
                 },
             );
 
@@ -621,7 +624,7 @@ mod tests {
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
-                    ellipsis: false,
+                    flags: FunctionFlags::default(),
                 },
             );
 
@@ -658,7 +661,7 @@ mod tests {
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
-                    ellipsis: false,
+                    flags: FunctionFlags::default(),
                 },
             );
 
@@ -695,7 +698,7 @@ mod tests {
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
-                    ellipsis: false,
+                    flags: FunctionFlags::default(),
                 },
             );
 
@@ -1033,6 +1036,7 @@ mod tests {
 
     mod test_visit_var_init {
         use super::*;
+        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn validates_both_sides() {
@@ -1135,7 +1139,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "moop".to_string(),
                 parameters: vec![],
-                ellipsis: true,
+                flags: FunctionFlags::default().with_ellipsis(true),
                 body: vec![],
                 span: None,
             });
@@ -1170,7 +1174,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "moop".to_string(),
                 parameters: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             });
@@ -1186,6 +1190,7 @@ mod tests {
             ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
             codegen::scope_walker::ScopeWalker,
         };
+        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn handles_scopes() {
@@ -1220,7 +1225,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![param1],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![AstNode::from(ExpressionNode::BinaryOp(BinaryOpNode {
                     op: BinaryOperation::Add,
                     l: Box::new(ExpressionNode::from("foo")),
@@ -1238,7 +1243,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "snuh".to_string(),
                 parameters: vec![param2],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             };
@@ -1263,7 +1268,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "while".to_string(),
                 parameters: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             };
@@ -1281,6 +1286,7 @@ mod tests {
 
     mod test_visit_return {
         use super::*;
+        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn test_visit_return() {
@@ -1298,7 +1304,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             };
@@ -1307,7 +1313,7 @@ mod tests {
                 return_type: LpcType::Int(false),
                 name: "snuh".to_string(),
                 parameters: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             };
@@ -1356,7 +1362,7 @@ mod tests {
                 return_type: LpcType::Void,
                 name: "foo".to_string(),
                 parameters: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             };
@@ -1388,7 +1394,7 @@ mod tests {
                 return_type: LpcType::Mixed(false),
                 name: "foo".to_string(),
                 parameters: vec![],
-                ellipsis: false,
+                flags: FunctionFlags::default(),
                 body: vec![],
                 span: None,
             };

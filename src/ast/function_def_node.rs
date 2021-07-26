@@ -14,6 +14,7 @@ use crate::{
     Result,
 };
 use itertools::Itertools;
+use crate::semantic::function_flags::FunctionFlags;
 
 /// A constant for the `argv` variable that's automatically created in functions with ellipsis args
 pub const ARGV: &str = "argv";
@@ -24,7 +25,7 @@ pub struct FunctionDefNode {
     pub return_type: LpcType,
     pub name: String,
     pub parameters: Vec<VarInitNode>,
-    pub ellipsis: bool,
+    pub flags: FunctionFlags,
     pub body: Vec<AstNode>,
     pub span: Option<Span>,
 }

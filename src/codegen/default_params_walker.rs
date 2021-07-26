@@ -47,6 +47,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::semantic::function_flags::FunctionFlags;
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
@@ -76,7 +77,7 @@ mod tests {
             return_type: LpcType::Void,
             name: "foo".to_string(),
             parameters,
-            ellipsis: false,
+            flags: FunctionFlags::default(),
             body: vec![],
             span: None,
         };

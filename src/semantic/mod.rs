@@ -6,3 +6,4 @@ pub mod lpc_type_union;
 pub mod scope_tree;
 pub mod semantic_checks;
 pub mod symbol;
+pub mod function_flags;
