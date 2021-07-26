@@ -9,14 +9,15 @@ use std::collections::HashMap;
 
 use crate::{
     interpreter::asm_interpreter::AsmInterpreter,
-    semantic::{function_prototype::FunctionPrototype, lpc_type::LpcType},
+    semantic::{
+        function_flags::FunctionFlags, function_prototype::FunctionPrototype, lpc_type::LpcType,
+    },
     Result,
 };
 use clone_object::clone_object;
 use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
-use crate::semantic::function_flags::FunctionFlags;
 
 /// Signature for Efuns
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;

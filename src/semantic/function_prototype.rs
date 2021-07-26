@@ -1,6 +1,8 @@
-use crate::{parser::span::Span, semantic::lpc_type::LpcType};
+use crate::{
+    parser::span::Span,
+    semantic::{function_flags::FunctionFlags, lpc_type::LpcType},
+};
 use std::borrow::Cow;
-use crate::semantic::function_flags::FunctionFlags;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -111,7 +111,11 @@ impl TreeWalker for SemanticCheckWalker {
             let arg_len = node.arguments.len();
 
             // Check function arity.
-            let minimum = if prototype.flags.varargs() { 0 } else { prototype.num_args - prototype.num_default_args };
+            let minimum = if prototype.flags.varargs() {
+                0
+            } else {
+                prototype.num_args - prototype.num_default_args
+            };
             let valid = (minimum..=prototype.num_args).contains(&arg_len)
                 || (prototype.flags.ellipsis() && arg_len >= minimum);
             if !valid {
@@ -261,17 +265,13 @@ impl TreeWalker for SemanticCheckWalker {
         is_keyword(&node.name)?;
 
         if node.name == ARGV {
-            if let Some(FunctionDefNode {
-                flags,
-                span,
-                ..
-            }) = self.current_function
-            {
+            if let Some(FunctionDefNode { flags, span, .. }) = self.current_function {
                 if flags.ellipsis() {
-                    let e =
-                        LpcError::new("Redeclaration of `argv` in a function with ellipsis arguments")
-                            .with_span(node.span)
-                            .with_label("Declared here", span);
+                    let e = LpcError::new(
+                        "Redeclaration of `argv` in a function with ellipsis arguments",
+                    )
+                    .with_span(node.span)
+                    .with_label("Declared here", span);
                     self.context.errors.push(e.clone());
                     return Err(e);
                 }
@@ -626,7 +626,7 @@ mod tests {
                         LpcType::Float(false),
                         LpcType::Int(false),
                         LpcType::String(false),
-                        LpcType::Int(false)
+                        LpcType::Int(false),
                     ],
                     span: None,
                     arg_spans: vec![],
@@ -1233,8 +1233,8 @@ mod tests {
         use crate::{
             ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
             codegen::scope_walker::ScopeWalker,
+            semantic::function_flags::FunctionFlags,
         };
-        use crate::semantic::function_flags::FunctionFlags;
 
         #[test]
         fn handles_scopes() {

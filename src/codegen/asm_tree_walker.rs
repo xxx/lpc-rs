@@ -1348,8 +1348,9 @@ mod tests {
         use crate::asm::instruction::Instruction::{Call, CallOther};
 
         use super::*;
-        use crate::semantic::function_prototype::FunctionPrototype;
-        use crate::semantic::function_flags::FunctionFlags;
+        use crate::semantic::{
+            function_flags::FunctionFlags, function_prototype::FunctionPrototype,
+        };
 
         #[test]
         fn populates_the_instructions() {
@@ -1621,7 +1622,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{Range, FConst, IConst0, IMul, Load, MAdd};
+        use crate::asm::instruction::Instruction::{FConst, IConst0, IMul, Load, MAdd, Range};
 
         use super::*;
 

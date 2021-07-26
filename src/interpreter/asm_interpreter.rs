@@ -585,7 +585,11 @@ impl AsmInterpreter {
                         let registers = current_registers_mut(&mut self.stack)?;
 
                         if let LpcRef::Int(i) = index {
-                            let idx = if i >= 0 { i } else { string.len() as LpcInt + i };
+                            let idx = if i >= 0 {
+                                i
+                            } else {
+                                string.len() as LpcInt + i
+                            };
 
                             if idx >= 0 {
                                 if let Some(v) = string.chars().nth(idx as usize) {
@@ -599,7 +603,8 @@ impl AsmInterpreter {
                         } else {
                             return Err(self.runtime_error(format!(
                                 "Attempting to access index {} in a string of length {}",
-                                index, string.len()
+                                index,
+                                string.len()
                             )));
                         }
                     }
@@ -691,7 +696,7 @@ impl AsmInterpreter {
                 let return_value = |value,
                                     memory: &mut Pool<RefCell<LpcValue>>,
                                     stack: &mut Vec<StackFrame>|
-                                    -> Result<()> {
+                 -> Result<()> {
                     let new_ref = value_to_ref!(value, memory);
                     let registers = current_registers_mut(stack)?;
                     registers[r4.index()] = new_ref;
@@ -707,7 +712,11 @@ impl AsmInterpreter {
                         let vec = try_extract_value!(*value, LpcValue::Array);
 
                         if vec.is_empty() {
-                            return_value(LpcValue::from(vec![]), &mut self.memory, &mut self.stack)?;
+                            return_value(
+                                LpcValue::from(vec![]),
+                                &mut self.memory,
+                                &mut self.stack,
+                            )?;
                         }
 
                         let index1 = self.register_to_lpc_ref(r2.index());
@@ -720,15 +729,23 @@ impl AsmInterpreter {
                                 let slice = &vec[real_start..=real_end];
                                 let mut new_vec = vec![LpcRef::Int(0); slice.len()];
                                 new_vec.clone_from_slice(slice);
-                                return_value(LpcValue::from(new_vec), &mut self.memory, &mut self.stack)?;
+                                return_value(
+                                    LpcValue::from(new_vec),
+                                    &mut self.memory,
+                                    &mut self.stack,
+                                )?;
                             } else {
-                                return_value(LpcValue::from(vec![]), &mut self.memory, &mut self.stack)?;
+                                return_value(
+                                    LpcValue::from(vec![]),
+                                    &mut self.memory,
+                                    &mut self.stack,
+                                )?;
                             }
                         } else {
                             return Err(LpcError::new(
                                 "Invalid code was generated for a Range instruction.",
                             )
-                                .with_span(self.process.current_debug_span()));
+                            .with_span(self.process.current_debug_span()));
                         }
                     }
                     LpcRef::String(v_ref) => {
@@ -747,24 +764,32 @@ impl AsmInterpreter {
 
                             if real_start <= real_end {
                                 let len = real_end - real_start + 1;
-                                let new_string: String = string.chars().skip(real_start).take(len).collect();
-                                return_value(LpcValue::from(new_string), &mut self.memory, &mut self.stack)?;
+                                let new_string: String =
+                                    string.chars().skip(real_start).take(len).collect();
+                                return_value(
+                                    LpcValue::from(new_string),
+                                    &mut self.memory,
+                                    &mut self.stack,
+                                )?;
                             } else {
-                                return_value(LpcValue::from(""), &mut self.memory, &mut self.stack)?;
+                                return_value(
+                                    LpcValue::from(""),
+                                    &mut self.memory,
+                                    &mut self.stack,
+                                )?;
                             }
                         } else {
                             return Err(LpcError::new(
                                 "Invalid code was generated for a Range instruction.",
                             )
-                                .with_span(self.process.current_debug_span()));
+                            .with_span(self.process.current_debug_span()));
                         }
                     }
-                    LpcRef::Float(_)
-                    | LpcRef::Int(_)
-                    | LpcRef::Mapping(_)
-                    | LpcRef::Object(_) => {
-                        return Err(LpcError::new("Range's receiver isn't actually an array or string?")
-                            .with_span(self.process.current_debug_span()));
+                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) => {
+                        return Err(LpcError::new(
+                            "Range's receiver isn't actually an array or string?",
+                        )
+                        .with_span(self.process.current_debug_span()));
                     }
                 }
             }

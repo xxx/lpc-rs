@@ -311,6 +311,11 @@ mod tests {
 
     #[test]
     fn test_as_in_game() {
-        assert_eq!(LpcPath::new_server("/some/root/foo.c").as_in_game("/some/root").as_os_str(), "/foo.c");
+        assert_eq!(
+            LpcPath::new_server("/some/root/foo.c")
+                .as_in_game("/some/root")
+                .as_os_str(),
+            "/foo.c"
+        );
     }
 }

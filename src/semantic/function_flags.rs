@@ -13,7 +13,7 @@ pub struct FunctionFlags {
 
 impl<T> From<Vec<T>> for FunctionFlags
 where
-    T: AsRef<str>
+    T: AsRef<str>,
 {
     fn from(vec: Vec<T>) -> Self {
         let mut flags = Self::default();
