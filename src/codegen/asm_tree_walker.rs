@@ -388,7 +388,7 @@ impl AsmTreeWalker {
 
         let result = self.register_counter.next().unwrap();
         self.current_result = result;
-        self.instructions.push(Instruction::ARange(
+        self.instructions.push(Instruction::Range(
             reference,
             first_index,
             second_index,
@@ -1620,7 +1620,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{ARange, FConst, IConst0, IMul, Load, MAdd};
+        use crate::asm::instruction::Instruction::{Range, FConst, IConst0, IMul, Load, MAdd};
 
         use super::*;
 
@@ -1791,7 +1791,7 @@ mod tests {
                 AConst(Register(2), vec![Register(1)]),
                 IConst1(Register(3)),
                 IConst(Register(4), -1),
-                ARange(Register(2), Register(3), Register(4), Register(5)),
+                Range(Register(2), Register(3), Register(4), Register(5)),
             ];
 
             assert_eq!(walker.instructions, expected);

@@ -17,10 +17,6 @@ pub enum Instruction {
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),
 
-    /// Create an array from some range of another array
-    /// x.4 = x.1[x.2 .. x.3]
-    ARange(Register, Register, Register, Register),
-
     /// Call a function
     Call {
         name: String,
@@ -115,6 +111,10 @@ pub enum Instruction {
     /// Check if x.0 is equal to 0
     Not(Register, Register),
 
+    /// Create a new value from some range of another value
+    /// x.4 = x.1[x.2 .. x.3]
+    Range(Register, Register, Register, Register),
+
     /// Copy x.0 to x.1
     RegCopy(Register, Register),
 
@@ -140,9 +140,6 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
-            }
-            Instruction::ARange(r1, r2, r3, r4) => {
-                write!(f, "arange {}, {}, {}, {}", r1, r2, r3, r4)
             }
             Instruction::Call {
                 name,
@@ -239,6 +236,9 @@ impl Display for Instruction {
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "not {}, {}", r1, r2)
+            }
+            Instruction::Range(r1, r2, r3, r4) => {
+                write!(f, "range {}, {}, {}, {}", r1, r2, r3, r4)
             }
             Instruction::RegCopy(r1, r2) => {
                 write!(f, "regcopy {}, {}", r1, r2)
