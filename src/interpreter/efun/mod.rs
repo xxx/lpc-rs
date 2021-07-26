@@ -1,5 +1,6 @@
 mod clone_object;
 mod dump;
+mod file_name;
 mod this_object;
 
 use lazy_static::lazy_static;
@@ -13,6 +14,7 @@ use crate::{
 };
 use clone_object::clone_object;
 use dump::dump;
+use file_name::file_name;
 use this_object::this_object;
 
 /// Signature for Efuns
@@ -21,13 +23,15 @@ pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
 pub const CALL_OTHER: &str = "call_other";
 pub const CLONE_OBJECT: &str = "clone_object";
 pub const DUMP: &str = "dump";
+pub const FILE_NAME: &str = "file_name";
 pub const THIS_OBJECT: &str = "this_object";
 
 /// Global static mapping of all efun names to the actual function
 pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
-    // "call_other" is implemented with a custom `Instruction`
+    // "call_other" is implemented with a custom [`Instruction`]
     "clone_object" => clone_object,
     "dump" => dump,
+    "file_name" => file_name,
     "this_object" => this_object,
 };
 
@@ -71,6 +75,17 @@ lazy_static! {
             num_args: 1,
             num_default_args: 0,
             arg_types: vec![LpcType::Mixed(false)],
+            span: None,
+            arg_spans: vec![],
+            ellipsis: false,
+        });
+
+        m.insert(FILE_NAME, FunctionPrototype {
+            name: FILE_NAME.into(),
+            return_type: LpcType::String(false),
+            num_args: 1,
+            num_default_args: 0,
+            arg_types: vec![LpcType::Object(false)],
             span: None,
             arg_spans: vec![],
             ellipsis: false,

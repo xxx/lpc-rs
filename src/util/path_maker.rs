@@ -80,16 +80,16 @@ impl LpcPath {
     /// # Arguments
     ///
     /// `root` - The root to strip off of `Server` variants.
-    pub fn as_in_game<P>(&self, root: P) -> &Path
+    pub fn as_in_game<P>(&self, root: P) -> Cow<Path>
     where
         P: AsRef<Path>,
     {
         match self {
             LpcPath::Server(x) => match x.strip_prefix(root) {
-                Ok(y) => y,
-                Err(_) => x,
+                Ok(y) => PathBuf::from(format!("/{}", y.display())).into(),
+                Err(_) => x.into(),
             },
-            LpcPath::InGame(x) => x,
+            LpcPath::InGame(x) => x.into(),
         }
     }
 }
@@ -307,5 +307,10 @@ mod tests {
                 .as_os_str(),
             ""
         );
+    }
+
+    #[test]
+    fn test_as_in_game() {
+        assert_eq!(LpcPath::new_server("/some/root/foo.c").as_in_game("/some/root").as_os_str(), "/foo.c");
     }
 }

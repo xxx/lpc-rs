@@ -87,6 +87,12 @@ impl From<&str> for LpcValue {
     }
 }
 
+impl From<String> for LpcValue {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
 impl From<&String> for LpcValue {
     fn from(s: &String) -> Self {
         Self::String(String::from(s))
