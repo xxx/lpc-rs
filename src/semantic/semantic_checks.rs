@@ -186,7 +186,7 @@ pub fn check_binary_operation_types(
         },
         BinaryOperation::Index => {
             if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
-                || (left_type.is_array()
+                || ((left_type.is_array() || matches!(left_type, LpcType::String(false)))
                     && (right_type == LpcType::Int(false)
                         || matches!(*node.r, ExpressionNode::Range(_))))
             {
@@ -630,10 +630,32 @@ mod check_binary_operation_tests {
         )
     }
 
+    fn string_range_literals(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<()> {
+        get_result(
+            op,
+            ExpressionNode::from("foobarbazquux"),
+            ExpressionNode::Range(RangeNode::new(Some(ExpressionNode::from(0)), None, None)),
+            scope_tree,
+        )
+    }
+
     fn array_range_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<()> {
         get_result(
             op,
             ExpressionNode::from(VarNode::new("array1")),
+            ExpressionNode::Range(RangeNode::new(
+                Some(ExpressionNode::from(VarNode::new("int1"))),
+                Some(ExpressionNode::from(VarNode::new("int2"))),
+                None,
+            )),
+            scope_tree,
+        )
+    }
+
+    fn string_range_vars(op: BinaryOperation, scope_tree: &ScopeTree) -> Result<()> {
+        get_result(
+            op,
+            ExpressionNode::from(VarNode::new("string1")),
             ExpressionNode::Range(RangeNode::new(
                 Some(ExpressionNode::from(VarNode::new("int1"))),
                 Some(ExpressionNode::from(VarNode::new("int2"))),
@@ -1038,22 +1060,24 @@ mod check_binary_operation_tests {
 
         assert!(int_int_literals(BinaryOperation::Index, &scope_tree).is_err());
         assert!(string_string_literals(BinaryOperation::Index, &scope_tree).is_err());
-        assert!(string_int_literals(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(int_string_literals(BinaryOperation::Index, &scope_tree).is_err());
         assert!(float_float_literals(BinaryOperation::Index, &scope_tree).is_err());
         assert!(array_array_literals(BinaryOperation::Index, &scope_tree).is_err());
         assert!(array_int_literals(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(array_range_literals(BinaryOperation::Index, &scope_tree).is_ok());
+        assert!(string_range_literals(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(mapping_mapping_literals(BinaryOperation::Index, &scope_tree).is_ok());
 
         assert!(int_int_vars(BinaryOperation::Index, &scope_tree).is_err());
         assert!(string_string_vars(BinaryOperation::Index, &scope_tree).is_err());
-        assert!(string_int_vars(BinaryOperation::Index, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(int_string_vars(BinaryOperation::Index, &scope_tree).is_err());
         assert!(float_float_vars(BinaryOperation::Index, &scope_tree).is_err());
         assert!(array_array_vars(BinaryOperation::Index, &scope_tree).is_err());
         assert!(array_int_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(array_range_vars(BinaryOperation::Index, &scope_tree).is_ok());
+        assert!(string_range_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(mapping_mapping_vars(BinaryOperation::Index, &scope_tree).is_ok());
         assert!(mixed_any_vars(BinaryOperation::Index, &scope_tree).is_ok());
 

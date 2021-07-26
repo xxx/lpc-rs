@@ -638,6 +638,32 @@ impl AsmInterpreter {
                             return Err(self.array_index_error(index, vec.len()));
                         }
                     }
+                    LpcRef::String(string_ref) => {
+                        let value = string_ref.borrow();
+                        let string = try_extract_value!(*value, LpcValue::String);
+
+                        let index = self.register_to_lpc_ref(r2.index());
+                        let registers = current_registers_mut(&mut self.stack)?;
+
+                        if let LpcRef::Int(i) = index {
+                            let idx = if i >= 0 { i } else { string.len() as LpcInt + i };
+
+                            if idx >= 0 {
+                                if let Some(v) = string.chars().nth(idx as usize) {
+                                    registers[r3.index()] = LpcRef::Int(v as i64);
+                                } else {
+                                    registers[r3.index()] = LpcRef::Int(0);
+                                }
+                            } else {
+                                registers[r3.index()] = LpcRef::Int(0);
+                            }
+                        } else {
+                            return Err(self.runtime_error(format!(
+                                "Attempting to access index {} in a string of length {}",
+                                index, string.len()
+                            )));
+                        }
+                    }
                     LpcRef::Mapping(map_ref) => {
                         let index = self.register_to_lpc_ref(r2.index());
                         let value = map_ref.borrow();
