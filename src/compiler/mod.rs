@@ -6,7 +6,7 @@ use fs_err as fs;
 use crate::{
     ast::ast_node::AstNodeTrait,
     codegen::{
-        asm_tree_walker::AsmTreeWalker, default_params_walker::DefaultParamsWalker,
+        codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
         tree_walker::ContextHolder,
     },
@@ -235,7 +235,7 @@ impl Compiler
         }
 
         // let scope_tree = ScopeTree::from(context);
-        let mut asm_walker = AsmTreeWalker::new(context);
+        let mut asm_walker = CodegenWalker::new(context);
 
         if let Err(e) = program.visit(&mut asm_walker) {
             errors::emit_diagnostics(&[e.clone()]);
