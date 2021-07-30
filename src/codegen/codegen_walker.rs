@@ -94,6 +94,9 @@ pub struct CodegenWalker {
     /// The counter for tracking globals
     global_counter: RegisterCounter,
 
+    /// The number of stack frame data registers needed to initialize all the globals
+    global_data_registers: usize,
+
     /// The compilation context
     context: Context,
 }
@@ -191,7 +194,8 @@ impl CodegenWalker {
             filename: self.context.filename.clone(),
             labels: self.labels.clone(),
             functions: self.function_map(),
-            num_globals: self.global_counter.as_usize() + 1, // +1 for r0, for return values
+            // add +1 to num_globals for r0, for call return values
+            num_globals: self.global_counter.as_usize() + self.global_data_registers + 1,
             pragmas: self.context.pragmas.clone(),
         })
     }
@@ -889,6 +893,7 @@ impl TreeWalker for CodegenWalker {
             // but makes it possible to skip a bunch of conditionals.
             let dest_register = self.global_counter.next().unwrap();
             let instruction = Instruction::GStore(current_register, dest_register);
+            self.global_data_registers = current_register.index();
             push_instruction!(self, instruction, node.span);
         }
 
@@ -1211,29 +1216,34 @@ mod tests {
 
     use super::*;
     use crate::asm::instruction::Address;
+    use crate::compiler::Compiler;
+
+    fn walk_prog(prog: &str) -> CodegenWalker {
+        let compiler = Compiler::default();
+        let mut scope_walker = ScopeWalker::new(Context::default());
+        let (code, preprocessor) = compiler.preprocess_string("foo.c", prog).unwrap();
+
+        let context = preprocessor.into_context();
+        let mut tree = lpc_parser::ProgramParser::new()
+            .parse(&context, TokenVecWrapper::new(&code))
+            .unwrap();
+
+        let _ = scope_walker.visit_program(&mut tree);
+        let context = scope_walker.into_context();
+
+        let mut walker = CodegenWalker::new(context);
+        let _ = tree.visit(&mut walker);
+
+        walker
+    }
+
+    fn generate_instructions(prog: &str) -> Vec<Instruction> {
+        walk_prog(prog).instructions
+    }
 
     mod test_visit_program {
         use super::*;
-        use crate::{asm::instruction::Instruction::MAdd, compiler::Compiler};
-
-        fn generate_instructions(prog: &str) -> Vec<Instruction> {
-            let compiler = Compiler::default();
-            let mut scope_walker = ScopeWalker::new(Context::default());
-            let (code, preprocessor) = compiler.preprocess_string("foo.c", prog).unwrap();
-
-            let context = preprocessor.into_context();
-            let mut tree = lpc_parser::ProgramParser::new()
-                .parse(&context, TokenVecWrapper::new(&code))
-                .unwrap();
-
-            let _ = scope_walker.visit_program(&mut tree);
-            let context = scope_walker.into_context();
-
-            let mut walker = CodegenWalker::new(context);
-            let _ = tree.visit(&mut walker);
-
-            walker.instructions
-        }
+        use crate::asm::instruction::Instruction::MAdd;
 
         #[test]
         fn populates_the_instructions() {
@@ -2470,6 +2480,67 @@ mod tests {
                 ]
             );
         }
+
+        #[test]
+        fn sets_up_globals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            let mut walker = CodegenWalker::new(context);
+
+            let mut node = VarInitNode {
+                type_: LpcType::Mixed(true),
+                name: "arr".to_string(),
+                value: Some(ExpressionNode::from(vec![
+                        ExpressionNode::from(12),
+                        ExpressionNode::from(4.3),
+                        ExpressionNode::from("hello"),
+                        ExpressionNode::from(vec![
+                            ExpressionNode::from(1),
+                            ExpressionNode::from(2),
+                            ExpressionNode::from(3),
+                        ]),
+                    ]
+                )),
+                array: false,
+                global: true,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+
+            let mut node2 = VarInitNode {
+                type_: LpcType::Mixed(true),
+                name: "str".to_string(),
+                value: Some(ExpressionNode::from("sup")),
+                array: false,
+                global: true,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
+            insert_symbol(&mut walker, Symbol::from(&mut node2.clone()));
+
+            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node2);
+
+            let expected = vec![
+                IConst(Register(1), 12),
+                FConst(Register(2), 4.3.into()),
+                SConst(Register(3), "hello".into()),
+                IConst1(Register(4)),
+                IConst(Register(5), 2),
+                IConst(Register(6), 3),
+                AConst(Register(7), vec![Register(4), Register(5), Register(6)]),
+                AConst(Register(8), vec![Register(1), Register(2), Register(3), Register(7)]),
+                GStore(Register(8), Register(1)),
+                SConst(Register(9), "sup".into()),
+                GStore(Register(9), Register(2)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker.global_counter.as_usize(), 2);
+            assert_eq!(walker.global_data_registers, 9);
+        }
     }
 
     mod test_visit_if {
@@ -2734,6 +2805,19 @@ mod tests {
 
             assert_eq!(walker.instructions, expected);
         }
+    }
+
+    #[test]
+    fn to_program_sets_num_globals() {
+        let code = r##"
+            int i = 123, j;
+            mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
+            string asdf = "asdf";
+            string b;
+        "##;
+
+        let program = walk_prog(code).to_program().expect("failed to compile");
+        assert_eq!(program.num_globals, 17)
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {
