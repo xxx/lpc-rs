@@ -1218,8 +1218,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::asm::instruction::Address;
-    use crate::compiler::Compiler;
+    use crate::{asm::instruction::Address, compiler::Compiler};
 
     fn walk_prog(prog: &str) -> CodegenWalker {
         let compiler = Compiler::default();
@@ -1376,8 +1375,7 @@ mod tests {
                 Ret,
                 IConst(Register(1), 3),
                 RegCopy(Register(1), Register(0)),
-                Ret
-
+                Ret,
             ];
 
             assert_eq!(instructions, expected);
@@ -2521,16 +2519,15 @@ mod tests {
                 type_: LpcType::Mixed(true),
                 name: "arr".to_string(),
                 value: Some(ExpressionNode::from(vec![
-                        ExpressionNode::from(12),
-                        ExpressionNode::from(4.3),
-                        ExpressionNode::from("hello"),
-                        ExpressionNode::from(vec![
-                            ExpressionNode::from(1),
-                            ExpressionNode::from(2),
-                            ExpressionNode::from(3),
-                        ]),
-                    ]
-                )),
+                    ExpressionNode::from(12),
+                    ExpressionNode::from(4.3),
+                    ExpressionNode::from("hello"),
+                    ExpressionNode::from(vec![
+                        ExpressionNode::from(1),
+                        ExpressionNode::from(2),
+                        ExpressionNode::from(3),
+                    ]),
+                ])),
                 array: false,
                 global: true,
                 span: None,
@@ -2561,7 +2558,10 @@ mod tests {
                 IConst(Register(5), 2),
                 IConst(Register(6), 3),
                 AConst(Register(7), vec![Register(4), Register(5), Register(6)]),
-                AConst(Register(8), vec![Register(1), Register(2), Register(3), Register(7)]),
+                AConst(
+                    Register(8),
+                    vec![Register(1), Register(2), Register(3), Register(7)],
+                ),
                 GStore(Register(8), Register(1)),
                 SConst(Register(9), "sup".into()),
                 GStore(Register(9), Register(2)),

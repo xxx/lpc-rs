@@ -1,11 +1,10 @@
 use crate::{
     errors::LpcError,
     interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
-    try_extract_value,
-    Result,
+    try_extract_value, Result,
 };
-use phf::phf_map;
 use itertools::Itertools;
+use phf::phf_map;
 
 type Operation = fn(&mut AsmInterpreter) -> Result<()>;
 
@@ -30,11 +29,17 @@ pub fn debug(interpreter: &mut AsmInterpreter) -> Result<()> {
             }
             None => {
                 let expected = OPERATIONS.keys().sorted_unstable().join(", ");
-                Err(interpreter.runtime_error(format!("Unknown operation `{}` passed to `debug()`. Expected one of {}", string, expected)))
+                Err(interpreter.runtime_error(format!(
+                    "Unknown operation `{}` passed to `debug()`. Expected one of {}",
+                    string, expected
+                )))
             }
         }
     } else {
-        Err(interpreter.runtime_error(format!("Unexpected argument `{}` passed to `debug()`.", lpc_ref)))
+        Err(interpreter.runtime_error(format!(
+            "Unexpected argument `{}` passed to `debug()`.",
+            lpc_ref
+        )))
     }
 }
 

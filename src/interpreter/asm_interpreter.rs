@@ -1130,15 +1130,15 @@ impl Default for AsmInterpreter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::Compiler;
+    use crate::{compiler::Compiler, extract_value, LpcFloat};
     use indoc::indoc;
-    use crate::LpcFloat;
-    use crate::extract_value;
     use std::hash::{Hash, Hasher};
 
     fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();
-        compiler.compile_string("~/my_file.c", code).expect("Failed to compile.")
+        compiler
+            .compile_string("~/my_file.c", code)
+            .expect("Failed to compile.")
     }
 
     fn run_prog(code: &str) -> AsmInterpreter {
@@ -1177,13 +1177,16 @@ mod tests {
                 LpcRef::Array(x) => {
                     let xb = x.borrow();
                     let a = extract_value!(&*xb, LpcValue::Array);
-                    let array = a.into_iter().map (|item| item.into()).collect::<Vec<_>>();
+                    let array = a.into_iter().map(|item| item.into()).collect::<Vec<_>>();
                     BareVal::Array(Box::new(array))
                 }
                 LpcRef::Mapping(x) => {
                     let xb = x.borrow();
                     let m = extract_value!(&*xb, LpcValue::Mapping);
-                    let mapping = m.into_iter().map (|(k, v)| (k.into(), v.into())).collect::<HashMap<_, _>>();
+                    let mapping = m
+                        .into_iter()
+                        .map(|(k, v)| (k.into(), v.into()))
+                        .collect::<HashMap<_, _>>();
                     BareVal::Mapping(mapping)
                 }
                 LpcRef::Object(_x) => {
@@ -1237,12 +1240,17 @@ mod tests {
                     BareVal::Int(2),
                     BareVal::Int(3),
                     BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
-                    BareVal::Array(vec![
-                        BareVal::Int(12),
-                        BareVal::Float(LpcFloat::from(4.3)),
-                        BareVal::String("hello".into()),
-                        BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
-                    ].into()),
+                    BareVal::Array(
+                        vec![
+                            BareVal::Int(12),
+                            BareVal::Float(LpcFloat::from(4.3)),
+                            BareVal::String("hello".into()),
+                            BareVal::Array(
+                                vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into(),
+                            ),
+                        ]
+                        .into(),
+                    ),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1262,10 +1270,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(666),
-                    BareVal::Int(666),
-                ];
+                let expected = vec![BareVal::Int(666), BareVal::Int(666)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1284,11 +1289,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(666),
-                    BareVal::Int(666),
-                    BareVal::Int(0),
-                ];
+                let expected = vec![BareVal::Int(666), BareVal::Int(666), BareVal::Int(0)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1329,10 +1330,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Float(3.14.into()),
-                ];
+                let expected = vec![BareVal::Int(0), BareVal::Float(3.14.into())];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1361,9 +1359,12 @@ mod tests {
 
                 assert_eq!(&expected, &registers);
 
-                let global_registers = interpreter.process.globals.iter().map(|global| {
-                    (*global.borrow()).clone()
-                }).collect::<Vec<_>>();
+                let global_registers = interpreter
+                    .process
+                    .globals
+                    .iter()
+                    .map(|global| (*global.borrow()).clone())
+                    .collect::<Vec<_>>();
 
                 let global_expected = vec![
                     BareVal::Int(0), // "wasted" global r0
@@ -1387,16 +1388,16 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Float(3.14.into()),
-                ];
+                let expected = vec![BareVal::Int(0), BareVal::Float(3.14.into())];
 
                 assert_eq!(&expected, &registers);
 
-                let global_registers = interpreter.process.globals.iter().map(|global| {
-                    (*global.borrow()).clone()
-                }).collect::<Vec<_>>();
+                let global_registers = interpreter
+                    .process
+                    .globals
+                    .iter()
+                    .map(|global| (*global.borrow()).clone())
+                    .collect::<Vec<_>>();
 
                 let global_expected = vec![
                     BareVal::Int(0), // "wasted" global r0
@@ -1423,15 +1424,12 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(1200),
                     BareVal::Int(1199),
                     BareVal::Int(1),
-
                     BareVal::Int(1199),
                     BareVal::Int(1200),
                     BareVal::Int(0),
-
                     BareVal::Int(1200),
                     BareVal::Int(1200),
                     BareVal::Int(0),
@@ -1457,15 +1455,12 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(1200),
                     BareVal::Int(1199),
                     BareVal::Int(1),
-
                     BareVal::Int(1199),
                     BareVal::Int(1200),
                     BareVal::Int(0),
-
                     BareVal::Int(1200),
                     BareVal::Int(1200),
                     BareVal::Int(1),
@@ -1491,11 +1486,9 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     // the constant expressions are folded at parse time
                     BareVal::Int(50),
                     BareVal::Int(8),
-
                     BareVal::Int(50),
                     BareVal::Int(8),
                     BareVal::Int(58),
@@ -1517,10 +1510,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Int(666),
-                ];
+                let expected = vec![BareVal::Int(0), BareVal::Int(666)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1538,10 +1528,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Int(0),
-                ];
+                let expected = vec![BareVal::Int(0), BareVal::Int(0)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1559,10 +1546,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Int(1),
-                ];
+                let expected = vec![BareVal::Int(0), BareVal::Int(1)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1584,11 +1568,9 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     // the constant expressions are folded at parse time
                     BareVal::Int(8),
                     BareVal::Int(-3),
-
                     BareVal::Int(8),
                     BareVal::Int(-3),
                     BareVal::Int(-2),
@@ -1611,7 +1593,10 @@ mod tests {
 
                 let r = interpreter.init_master(program);
 
-                assert_eq!(r.unwrap_err().to_string(), "Runtime Error: Division by zero")
+                assert_eq!(
+                    r.unwrap_err().to_string(),
+                    "Runtime Error: Division by zero"
+                )
             }
         }
 
@@ -1631,10 +1616,8 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(32),
                     BareVal::Int(-48),
-
                     BareVal::Int(32),
                     BareVal::Int(-48),
                     BareVal::Int(-1536),
@@ -1660,10 +1643,8 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(14),
                     BareVal::Int(16),
-
                     BareVal::Int(14),
                     BareVal::Int(16),
                     BareVal::Int(-2),
@@ -1699,17 +1680,19 @@ mod tests {
 
                 // The top of the stack in the snapshot is the frame for the efun call itself,
                 // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack.iter().rev().nth(1).expect("frame not found").registers;
+                let registers = &stack
+                    .iter()
+                    .rev()
+                    .nth(1)
+                    .expect("frame not found")
+                    .registers;
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(69),
-
                     BareVal::Int(12),
                     BareVal::Int(10),
                     BareVal::Int(1),
-
                     BareVal::Int(69),
                     BareVal::Int(0),
                     BareVal::String("in_memory_snapshot".into()),
@@ -1743,17 +1726,19 @@ mod tests {
 
                 // The top of the stack in the snapshot is the frame for the efun call itself,
                 // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack.iter().rev().nth(1).expect("frame not found").registers;
+                let registers = &stack
+                    .iter()
+                    .rev()
+                    .nth(1)
+                    .expect("frame not found")
+                    .registers;
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(8),
-
                     BareVal::Int(1),
                     BareVal::Int(8),
                     BareVal::Int(8),
-
                     BareVal::Int(0),
                     BareVal::String("in_memory_snapshot".into()),
                     BareVal::Int(0),
@@ -1778,13 +1763,10 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(12),
-
                     BareVal::Int(1000),
                     BareVal::Int(12),
                     BareVal::Int(12),
-
                     BareVal::Int(0),
                     BareVal::Int(0),
                     BareVal::Int(1000),
@@ -1809,23 +1791,11 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(1),
                     BareVal::Int(2),
                     BareVal::Int(3),
-
-                    BareVal::Array(vec![
-                        BareVal::Int(1),
-                        BareVal::Int(2),
-                        BareVal::Int(3),
-                    ].into()),
-
-                    BareVal::Array(vec![
-                        BareVal::Int(1),
-                        BareVal::Int(2),
-                        BareVal::Int(3),
-                    ].into()),
-
+                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
+                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
                     BareVal::Int(1),
                     BareVal::Int(2),
                 ];
@@ -1850,15 +1820,12 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(1200),
                     BareVal::Int(1199),
                     BareVal::Int(0),
-
                     BareVal::Int(1199),
                     BareVal::Int(1200),
                     BareVal::Int(1),
-
                     BareVal::Int(1200),
                     BareVal::Int(1200),
                     BareVal::Int(0),
@@ -1884,15 +1851,12 @@ mod tests {
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(1200),
                     BareVal::Int(1199),
                     BareVal::Int(0),
-
                     BareVal::Int(1199),
                     BareVal::Int(1200),
                     BareVal::Int(1),
-
                     BareVal::Int(1200),
                     BareVal::Int(1200),
                     BareVal::Int(1),
@@ -1927,7 +1891,7 @@ mod tests {
                     BareVal::Float(3.14.into()),
                     BareVal::String("asdf".into()),
                     BareVal::Int(123),
-                    BareVal::Mapping(hashmap)
+                    BareVal::Mapping(hashmap),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1954,7 +1918,7 @@ mod tests {
                     BareVal::Int(123),
                     BareVal::String("abc".into()),
                     BareVal::Int(123),
-                    BareVal::String("abc123".into())
+                    BareVal::String("abc123".into()),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1981,7 +1945,7 @@ mod tests {
                     BareVal::Int(4),
                     BareVal::String("abc".into()),
                     BareVal::Int(4),
-                    BareVal::String("abcabcabcabc".into())
+                    BareVal::String("abcabcabcabc".into()),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2007,8 +1971,24 @@ mod tests {
                     BareVal::Int(1),
                     BareVal::Int(2),
                     BareVal::Int(3),
-                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
-                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
+                    BareVal::Array(
+                        vec![
+                            BareVal::Int(1),
+                            BareVal::Int(1),
+                            BareVal::Int(2),
+                            BareVal::Int(3),
+                        ]
+                        .into(),
+                    ),
+                    BareVal::Array(
+                        vec![
+                            BareVal::Int(1),
+                            BareVal::Int(1),
+                            BareVal::Int(2),
+                            BareVal::Int(3),
+                        ]
+                        .into(),
+                    ),
                     BareVal::Int(1),
                     BareVal::Array(vec![BareVal::Int(1)].into()),
                     BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)].into()),
@@ -2037,7 +2017,7 @@ mod tests {
                     BareVal::Int(0),
                     BareVal::Int(4),
                     BareVal::Int(0),
-                    BareVal::Int(1)
+                    BareVal::Int(1),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2064,7 +2044,7 @@ mod tests {
                     BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
                     BareVal::Int(1),
                     BareVal::Int(-1),
-                    BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)].into())
+                    BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)].into()),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2137,21 +2117,25 @@ mod tests {
 
                 // The top of the stack in the snapshot is the frame for the efun call itself,
                 // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack.iter().rev().nth(1).expect("frame not found").registers;
+                let registers = &stack
+                    .iter()
+                    .rev()
+                    .nth(1)
+                    .expect("frame not found")
+                    .registers;
 
                 let expected = vec![
                     BareVal::Int(0),
-
                     BareVal::Int(1),
                     BareVal::Int(2),
                     BareVal::Int(3),
-                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(678)].into()),
-
+                    BareVal::Array(
+                        vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(678)].into(),
+                    ),
                     BareVal::Int(678),
                     BareVal::Int(2),
-
                     BareVal::String("in_memory_snapshot".into()),
-                    BareVal::Int(0)
+                    BareVal::Int(0),
                 ];
 
                 assert_eq!(&expected, registers);
@@ -2170,10 +2154,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::String("lolwut".into()),
-                ];
+                let expected = vec![BareVal::Int(0), BareVal::String("lolwut".into())];
 
                 assert_eq!(&expected, &registers);
             }
