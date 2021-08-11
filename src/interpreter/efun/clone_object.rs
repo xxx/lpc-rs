@@ -125,6 +125,7 @@ mod tests {
             labels: Default::default(),
             functions: Default::default(),
             num_globals: 0,
+            num_init_registers: 0,
             pragmas: Default::default(),
         };
 

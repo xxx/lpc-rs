@@ -94,8 +94,8 @@ pub struct CodegenWalker {
     /// The counter for tracking globals
     global_counter: RegisterCounter,
 
-    /// The number of stack frame data registers needed to initialize all the globals
-    global_data_registers: usize,
+    /// The number of [`Register`]s needed for global initialization
+    global_init_registers: usize,
 
     /// The compilation context
     context: Context,
@@ -195,7 +195,8 @@ impl CodegenWalker {
             labels: self.labels.clone(),
             functions: self.function_map(),
             // add +1 to num_globals for r0, for call return values
-            num_globals: self.global_counter.as_usize() + self.global_data_registers + 1,
+            num_globals: self.global_counter.as_usize() + 1,
+            num_init_registers: self.register_counter.as_usize(),
             pragmas: self.context.pragmas.clone(),
         })
     }
@@ -789,7 +790,7 @@ impl TreeWalker for CodegenWalker {
 
         let len = self.instructions.len();
         self.context.scopes.goto_function(&node.name)?;
-        self.register_counter.reset();
+        self.register_counter.push(0);
 
         for parameter in &node.parameters {
             self.visit_parameter(parameter);
@@ -825,6 +826,8 @@ impl TreeWalker for CodegenWalker {
             }),
             return_address,
         );
+
+        self.register_counter.pop();
 
         Ok(())
     }
@@ -893,7 +896,7 @@ impl TreeWalker for CodegenWalker {
             // but makes it possible to skip a bunch of conditionals.
             let dest_register = self.global_counter.next().unwrap();
             let instruction = Instruction::GStore(current_register, dest_register);
-            self.global_data_registers = current_register.index();
+            self.global_init_registers = current_register.index();
             push_instruction!(self, instruction, node.span);
         }
 
@@ -1348,6 +1351,33 @@ mod tests {
                     initial_arg: Register(3),
                 },
                 Ret, // end of create()
+            ];
+
+            assert_eq!(instructions, expected);
+        }
+
+        #[test]
+        fn tracks_global_registers_over_multiple_sections() {
+            let prog = r#"
+                int q = 666;
+                int marf() {
+                    return 3;
+                }
+                int r = 777;
+            "#;
+
+            let instructions = generate_instructions(prog);
+
+            let expected = [
+                IConst(Register(1), 666),
+                GStore(Register(1), Register(1)),
+                IConst(Register(2), 777),
+                GStore(Register(2), Register(2)),
+                Ret,
+                IConst(Register(1), 3),
+                RegCopy(Register(1), Register(0)),
+                Ret
+
             ];
 
             assert_eq!(instructions, expected);
@@ -2539,7 +2569,7 @@ mod tests {
 
             assert_eq!(walker.instructions, expected);
             assert_eq!(walker.global_counter.as_usize(), 2);
-            assert_eq!(walker.global_data_registers, 9);
+            assert_eq!(walker.global_init_registers, 9);
         }
     }
 
@@ -2807,17 +2837,48 @@ mod tests {
         }
     }
 
-    #[test]
-    fn to_program_sets_num_globals() {
-        let code = r##"
+    mod test_to_program {
+        use super::*;
+
+        #[test]
+        fn sets_num_globals() {
+            let code = r##"
             int i = 123, j;
             mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
             string asdf = "asdf";
             string b;
         "##;
 
-        let program = walk_prog(code).to_program().expect("failed to compile");
-        assert_eq!(program.num_globals, 17)
+            let program = walk_prog(code).to_program().expect("failed to compile");
+            assert_eq!(program.num_globals, 6)
+        }
+
+        #[test]
+        fn sets_num_init_registers() {
+            let code = r##"
+            int i = 123, j;
+            mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
+            string asdf = "asdf";
+            string b;
+        "##;
+
+            let program = walk_prog(code).to_program().expect("failed to compile");
+            assert_eq!(program.num_init_registers, 11)
+        }
+
+        #[test]
+        fn reserves_enough_global_registers_when_create_returns_non_void() {
+            let code = r##"
+                int create() {
+                    dump("sup dawg");
+                    int b = 123;
+                    return b;
+                }
+            "##;
+
+            let program = walk_prog(code).to_program().expect("failed to compile");
+            assert_eq!(program.num_init_registers, 1)
+        }
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {

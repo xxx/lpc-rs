@@ -31,6 +31,9 @@ pub struct Program {
     /// How many globals does this program need storage for?
     pub num_globals: usize,
 
+    /// How many [`Register`]s are needed to initialize this program?
+    pub num_init_registers: usize,
+
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
 }
