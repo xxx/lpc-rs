@@ -58,7 +58,7 @@ impl Repl {
     pub fn new(program: Program) -> Self {
         let mut vm = AsmInterpreter::default();
         let _ = vm.load_master(program);
-        vm.setup_program_globals_frame();
+        let _ = vm.setup_program_globals_frame();
 
         Self { vm }
     }
