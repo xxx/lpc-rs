@@ -72,6 +72,9 @@ pub struct AsmInterpreter {
 
     /// A spot to store a snapshot, used by the [`debug`]() efun
     pub snapshot: Option<Box<AsmInterpreter>>,
+
+    /// How many instructions have run during the current [`Task`]?
+    instruction_count: usize,
 }
 
 /// Get a reference to the passed stack frame's registers
@@ -244,6 +247,17 @@ impl AsmInterpreter {
         }
     }
 
+    pub fn increment_instruction_count(&mut self, amount: usize) -> Result<()> {
+        self.instruction_count += amount;
+
+        let max_instructions = self.config.max_task_instructions().unwrap_or(0);
+        if max_instructions > 0 && self.instruction_count > max_instructions {
+            return Err(self.runtime_error("Evaluation limit has been reached."));
+        }
+
+        Ok(())
+    }
+
     /// Push a new stack frame onto the call stack
     pub fn push_frame(&mut self, frame: StackFrame) -> Result<()> {
         try_push_frame!(frame, self);
@@ -292,6 +306,8 @@ impl AsmInterpreter {
     fn eval(&mut self) -> Result<()> {
         let mut halted = false;
 
+        self.instruction_count = 0;
+
         while !halted {
             halted = self.eval_one_instruction()?;
         }
@@ -302,6 +318,8 @@ impl AsmInterpreter {
     /// Evaluate the instruction at the current value of the PC
     /// The boolean represents whether we are at the end of input (i.e. we should halt the machine)
     pub fn eval_one_instruction(&mut self) -> Result<bool> {
+        self.increment_instruction_count(1)?;
+
         let instruction = match self.process.instruction() {
             Some(i) => i,
             None => return Ok(true),
@@ -1141,6 +1159,7 @@ impl Default for AsmInterpreter {
             memory: Pool::new(MEMORY_SIZE),
             popped_frame: None,
             snapshot: None,
+            instruction_count: 0,
         }
     }
 }
@@ -2185,12 +2204,12 @@ mod tests {
         #[test]
         fn errors_on_stack_overflow() {
             let code = indoc! { r##"
-                    int kab00m = marf();
+                int kab00m = marf();
 
-                    int marf() {
-                        return marf();
-                    }
-                "##};
+                int marf() {
+                    return marf();
+                }
+            "##};
 
             let config = Config::default().with_max_call_stack_size(Some(10));
             let mut interpreter = AsmInterpreter::new(config.into());
@@ -2200,6 +2219,25 @@ mod tests {
             assert_eq!(
                 r.unwrap_err().to_string(),
                 "Runtime Error: Stack overflow"
+            );
+        }
+
+        #[test]
+        fn errors_on_too_long_evaluation() {
+            let code = indoc! { r##"
+                void create() {
+                    while(1) {}
+                }
+            "##};
+
+            let config = Config::default().with_max_task_instructions(Some(10));
+            let mut interpreter = AsmInterpreter::new(config.into());
+            let program = compile_prog(code);
+            let r = interpreter.init_master(program);
+
+            assert_eq!(
+                r.unwrap_err().to_string(),
+                "Runtime Error: Evaluation limit has been reached."
             );
         }
     }

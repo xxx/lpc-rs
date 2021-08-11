@@ -7,6 +7,7 @@ const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
 const MAX_CALL_STACK_SIZE: &[&str] = &["lpc-rs", "max_call_stack_size"];
+const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
 const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
@@ -17,6 +18,7 @@ pub struct Config {
     system_include_dirs: Vec<String>,
     master_object: String,
     max_call_stack_size: Option<usize>,
+    max_task_instructions: Option<usize>,
 }
 
 impl Config {
@@ -96,11 +98,29 @@ impl Config {
             None => None,
         };
 
+        let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
+        let max_task_instructions = match dug {
+            Some(x) => {
+                match x.as_integer() {
+                    Some(y) => {
+                        if y < 1 {
+                            None
+                        } else {
+                            Some(y as usize)
+                        }
+                    }
+                    None => None,
+                }
+            }
+            None => None,
+        };
+
         Ok(Self {
             lib_dir,
             system_include_dirs,
             master_object,
             max_call_stack_size,
+            max_task_instructions,
         })
     }
 
@@ -139,6 +159,13 @@ impl Config {
         self
     }
 
+    pub fn with_max_task_instructions(mut self, max_task_instructions: Option<usize>) -> Self
+    {
+        self.max_task_instructions = max_task_instructions;
+
+        self
+    }
+
     #[inline]
     pub fn lib_dir(&self) -> &str {
         &self.lib_dir
@@ -152,6 +179,11 @@ impl Config {
     #[inline]
     pub fn max_call_stack_size(&self) -> Option<usize> {
         self.max_call_stack_size
+    }
+
+    #[inline]
+    pub fn max_task_instructions(&self) -> Option<usize> {
+        self.max_task_instructions
     }
 
     #[inline]

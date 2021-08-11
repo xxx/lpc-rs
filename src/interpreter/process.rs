@@ -11,6 +11,7 @@ use std::{
     path::Path,
     rc::Rc,
 };
+use std::fmt::{Display, Formatter};
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -107,5 +108,11 @@ impl Deref for Process {
 
     fn deref(&self) -> &Self::Target {
         &self.program
+    }
+}
+
+impl Display for Process {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.filename())
     }
 }

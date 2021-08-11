@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -67,6 +68,12 @@ impl From<Vec<u8>> for Program {
     /// Deserialize from msgpack data
     fn from(vec: Vec<u8>) -> Self {
         rmp_serde::from_slice(&vec).unwrap()
+    }
+}
+
+impl Display for Program {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.filename)
     }
 }
 
