@@ -9,10 +9,10 @@ lalrpop = "0.19.4"
 
 [dependencies]
 auto_impl = "0.4.1"
-cached = "0.23.0"
+cached = "0.24.0"
 codespan-reporting = "0.11.0"
 decorum = "0.3.1"
-delegate = "0.5.1"
+delegate = "0.6.1"
 enum_dispatch = "0.3.4"
 fs-err = "2.6.0"
 if_chain = "1.0.1"
@@ -26,7 +26,7 @@ modular-bitfield = "0.11.2"
 multimap = "0.8.2"
 parking_lot = "0.11.1"
 path-absolutize = { version = "3.0.6", features = ["lazy_static_cache"] }
-phf = { version = "0.8.0", features = ["macros"] }
+phf = { version = "0.10.0", features = ["macros"] }
 refpool = "0.4.3"
 regex = "1"
 rmp-serde = "0.15.4"
