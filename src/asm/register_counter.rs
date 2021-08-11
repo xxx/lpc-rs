@@ -49,7 +49,7 @@ impl RegisterCounter {
             return x;
         }
 
-        return self.count
+        self.count
     }
 }
 
