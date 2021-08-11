@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use if_chain::if_chain;
 
 use crate::{
     ast::{
@@ -130,23 +131,21 @@ impl TreeWalker for SemanticCheckWalker {
 
             // Check argument types.
             for (index, ty) in prototype.arg_types.iter().enumerate() {
-                if let Some(arg) = node.arguments.get(index) {
+                if_chain! {
+                    if let Some(arg) = node.arguments.get(index);
                     // Literal zero is always allowed
-                    if let ExpressionNode::Int(IntNode { value: 0, .. }) = *arg {
-                        // sigh.
-                    } else {
-                        let arg_type =
-                            node_type(arg, &self.context.scopes, &self.function_return_values())?;
-                        if !ty.matches_type(arg_type) {
-                            let e = LpcError::new(format!(
-                                "Unexpected argument type to `{}`: {}. Expected {}.",
-                                node.name, arg_type, ty
-                            ))
-                            .with_span(arg.span())
-                            .with_label("Declared here", prototype.arg_spans.get(index).cloned());
+                    if !matches!(arg, ExpressionNode::Int(IntNode { value: 0, .. }));
+                    let arg_type = node_type(arg, &self.context.scopes, &self.function_return_values())?;
+                    if !ty.matches_type(arg_type);
+                    then {
+                        let e = LpcError::new(format!(
+                            "Unexpected argument type to `{}`: {}. Expected {}.",
+                            node.name, arg_type, ty
+                        ))
+                        .with_span(arg.span())
+                        .with_label("Declared here", prototype.arg_spans.get(index).cloned());
 
-                            self.context.errors.push(e);
-                        }
+                        self.context.errors.push(e);
                     }
                 }
             }
@@ -264,17 +263,18 @@ impl TreeWalker for SemanticCheckWalker {
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         is_keyword(&node.name)?;
 
-        if node.name == ARGV {
-            if let Some(FunctionDefNode { flags, span, .. }) = self.current_function {
-                if flags.ellipsis() {
-                    let e = LpcError::new(
-                        "Redeclaration of `argv` in a function with ellipsis arguments",
-                    )
-                    .with_span(node.span)
-                    .with_label("Declared here", span);
-                    self.context.errors.push(e.clone());
-                    return Err(e);
-                }
+        if_chain! {
+            if node.name == ARGV;
+            if let Some(FunctionDefNode { flags, span, .. }) = self.current_function;
+            if flags.ellipsis();
+            then {
+                let e = LpcError::new(
+                    "Redeclaration of `argv` in a function with ellipsis arguments",
+                )
+                .with_span(node.span)
+                .with_label("Declared here", span);
+                self.context.errors.push(e.clone());
+                return Err(e);
             }
         }
 
