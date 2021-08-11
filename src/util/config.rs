@@ -6,6 +6,7 @@ use toml::{value::Index, Value};
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
+const MAX_CALL_STACK_SIZE: &[&str] = &["lpc-rs", "max_call_stack_size"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
 const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
@@ -15,6 +16,7 @@ pub struct Config {
     lib_dir: String,
     system_include_dirs: Vec<String>,
     master_object: String,
+    max_call_stack_size: Option<usize>,
 }
 
 impl Config {
@@ -77,10 +79,28 @@ impl Config {
             }
         };
 
+        let dug = dig(&config, MAX_CALL_STACK_SIZE);
+        let max_call_stack_size = match dug {
+            Some(x) => {
+                match x.as_integer() {
+                    Some(y) => {
+                        if y < 1 {
+                            None
+                        } else {
+                            Some(y as usize)
+                        }
+                    }
+                    None => None,
+                }
+            }
+            None => None,
+        };
+
         Ok(Self {
             lib_dir,
             system_include_dirs,
             master_object,
+            max_call_stack_size,
         })
     }
 
@@ -112,6 +132,13 @@ impl Config {
         self
     }
 
+    pub fn with_max_call_stack_size(mut self, max_call_stack_size: Option<usize>) -> Self
+    {
+        self.max_call_stack_size = max_call_stack_size;
+
+        self
+    }
+
     #[inline]
     pub fn lib_dir(&self) -> &str {
         &self.lib_dir
@@ -120,6 +147,11 @@ impl Config {
     #[inline]
     pub fn master_object(&self) -> &str {
         &self.master_object
+    }
+
+    #[inline]
+    pub fn max_call_stack_size(&self) -> Option<usize> {
+        self.max_call_stack_size
     }
 
     #[inline]

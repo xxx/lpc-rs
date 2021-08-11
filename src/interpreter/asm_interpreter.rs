@@ -97,6 +97,22 @@ fn current_registers_mut(stack: &mut Vec<StackFrame>) -> Result<&mut Vec<LpcRef>
     Ok(&mut stack.last_mut().unwrap().registers)
 }
 
+/// A macro for pushing new frames while evaluating [`Instruction`]s.
+macro_rules! try_push_frame {
+    ( $frame:expr, $interpreter:expr ) => {
+        let max_stack = $interpreter.config.max_call_stack_size().unwrap_or(0);
+
+        if max_stack > 0 && $interpreter.stack.len() >= max_stack {
+            return Err($interpreter.runtime_error("Stack overflow"));
+        }
+
+        $interpreter.stack.push($frame);
+
+        // Do not replace the process here, because the borrow checker already knows we have a
+        // reference to the current instruction.
+    };
+}
+
 impl AsmInterpreter {
     /// Create a new [`AsmInterpreter`] with the passed [`Config`]
     pub fn new(config: Rc<Config>) -> Self {
@@ -157,7 +173,7 @@ impl AsmInterpreter {
 
     /// Set up the stack frame for initializing the global vars, and calling `create`.
     /// No code is executed by this function - it merely sets up the stack frame.
-    pub fn setup_program_globals_frame(&mut self) {
+    pub fn setup_program_globals_frame(&mut self) -> Result<()> {
         let sym = FunctionSymbol {
             name: "_global-var-init".to_string(),
             num_args: 0,
@@ -165,14 +181,16 @@ impl AsmInterpreter {
             address: 0,
         };
         let create = StackFrame::new(self.process.clone(), Rc::new(sym), 0);
-        self.push_frame(create);
+        self.push_frame(create)?;
         self.process.set_pc(0);
+
+        Ok(())
     }
 
     /// Fully initialize the current [`Program`].
     /// This sets up all of the global variables and calls `create`.
     pub fn init(&mut self) -> Result<()> {
-        self.setup_program_globals_frame();
+        self.setup_program_globals_frame()?;
 
         self.eval()
     }
@@ -227,11 +245,11 @@ impl AsmInterpreter {
     }
 
     /// Push a new stack frame onto the call stack
-    pub fn push_frame(&mut self, frame: StackFrame) {
-        // println!("pushing frame in push_frame: {:?}", frame);
-
-        self.stack.push(frame);
+    pub fn push_frame(&mut self, frame: StackFrame) -> Result<()> {
+        try_push_frame!(frame, self);
         self.process = self.stack.last().unwrap().process.clone();
+
+        Ok(())
     }
 
     /// Pop the current stack frame off the call stack
@@ -346,7 +364,7 @@ impl AsmInterpreter {
                 }
 
                 // println!("pushing frame in Call: {:?}", new_frame);
-                self.stack.push(new_frame);
+                try_push_frame!(new_frame, self);
 
                 if let Some(x) = self.process.functions.get(name) {
                     self.process.set_pc(x.address);
@@ -952,7 +970,7 @@ impl AsmInterpreter {
         }
 
         // println!("pushing frame in CallOther: {:?}", new_frame);
-        self.stack.push(new_frame);
+        try_push_frame!(new_frame, self);
 
         self.process.set_pc(sym.address);
 
@@ -1075,7 +1093,7 @@ impl AsmInterpreter {
             StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, 0, args.len());
         frame.registers[1..=args.len()].clone_from_slice(&args);
 
-        self.push_frame(frame);
+        self.push_frame(frame)?;
         self.process.set_pc(addr);
 
         let result = self.eval();
@@ -2158,6 +2176,31 @@ mod tests {
 
                 assert_eq!(&expected, &registers);
             }
+        }
+    }
+
+    mod test_limits {
+        use super::*;
+
+        #[test]
+        fn errors_on_stack_overflow() {
+            let code = indoc! { r##"
+                    int kab00m = marf();
+
+                    int marf() {
+                        return marf();
+                    }
+                "##};
+
+            let config = Config::default().with_max_call_stack_size(Some(10));
+            let mut interpreter = AsmInterpreter::new(config.into());
+            let program = compile_prog(code);
+            let r = interpreter.init_master(program);
+
+            assert_eq!(
+                r.unwrap_err().to_string(),
+                "Runtime Error: Stack overflow"
+            );
         }
     }
 }

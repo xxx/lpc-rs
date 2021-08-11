@@ -151,11 +151,11 @@ mod tests {
         let path = value_to_ref!(LpcValue::from("./example"), &interpreter.memory);
         frame.registers[1] = path;
 
-        interpreter.push_frame(frame.clone());
+        interpreter.push_frame(frame.clone()).expect("stack overflow");
         assert!(clone_object(&mut interpreter).is_ok());
         interpreter.pop_frame();
 
-        interpreter.push_frame(frame);
+        interpreter.push_frame(frame).expect("stack overflow");
         assert!(clone_object(&mut interpreter).is_ok());
 
         // procs are empty.c, example.c, example.c#0, example.c#1
@@ -178,7 +178,7 @@ mod tests {
         let path = value_to_ref!(LpcValue::from("./no_clone.c"), &interpreter.memory);
         frame.registers[1] = path;
 
-        interpreter.push_frame(frame);
+        interpreter.push_frame(frame).expect("stack overflow");
 
         let re =
             Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.")
