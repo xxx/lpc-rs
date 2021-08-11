@@ -1171,6 +1171,7 @@ mod tests {
     use indoc::indoc;
     use std::hash::{Hash, Hasher};
 
+    /// TODO: share this
     fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();
         compiler
@@ -1182,8 +1183,6 @@ mod tests {
         let mut interpreter = AsmInterpreter::default();
 
         let program = compile_prog(code);
-
-        println!("{:?}", program.instructions);
 
         interpreter.init_master(program).expect("init failed?");
 
@@ -2216,10 +2215,7 @@ mod tests {
             let program = compile_prog(code);
             let r = interpreter.init_master(program);
 
-            assert_eq!(
-                r.unwrap_err().to_string(),
-                "Runtime Error: Stack overflow"
-            );
+            assert_eq!(r.unwrap_err().to_string(), "Runtime Error: Stack overflow");
         }
 
         #[test]

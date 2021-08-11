@@ -151,7 +151,9 @@ mod tests {
         let path = value_to_ref!(LpcValue::from("./example"), &interpreter.memory);
         frame.registers[1] = path;
 
-        interpreter.push_frame(frame.clone()).expect("stack overflow");
+        interpreter
+            .push_frame(frame.clone())
+            .expect("stack overflow");
         assert!(clone_object(&mut interpreter).is_ok());
         interpreter.pop_frame();
 

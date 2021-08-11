@@ -7,10 +7,10 @@ use serde::Serialize;
 use std::{
     borrow::Cow,
     collections::HashMap,
+    fmt::{Display, Formatter},
     path::{Path, PathBuf},
     rc::Rc,
 };
-use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

@@ -7,11 +7,11 @@ use delegate::delegate;
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
+    fmt::{Display, Formatter},
     ops::Deref,
     path::Path,
     rc::Rc,
 };
-use std::fmt::{Display, Formatter};
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.

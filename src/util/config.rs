@@ -83,35 +83,31 @@ impl Config {
 
         let dug = dig(&config, MAX_CALL_STACK_SIZE);
         let max_call_stack_size = match dug {
-            Some(x) => {
-                match x.as_integer() {
-                    Some(y) => {
-                        if y < 1 {
-                            None
-                        } else {
-                            Some(y as usize)
-                        }
+            Some(x) => match x.as_integer() {
+                Some(y) => {
+                    if y < 1 {
+                        None
+                    } else {
+                        Some(y as usize)
                     }
-                    None => None,
                 }
-            }
+                None => None,
+            },
             None => None,
         };
 
         let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
         let max_task_instructions = match dug {
-            Some(x) => {
-                match x.as_integer() {
-                    Some(y) => {
-                        if y < 1 {
-                            None
-                        } else {
-                            Some(y as usize)
-                        }
+            Some(x) => match x.as_integer() {
+                Some(y) => {
+                    if y < 1 {
+                        None
+                    } else {
+                        Some(y as usize)
                     }
-                    None => None,
                 }
-            }
+                None => None,
+            },
             None => None,
         };
 
@@ -152,15 +148,13 @@ impl Config {
         self
     }
 
-    pub fn with_max_call_stack_size(mut self, max_call_stack_size: Option<usize>) -> Self
-    {
+    pub fn with_max_call_stack_size(mut self, max_call_stack_size: Option<usize>) -> Self {
         self.max_call_stack_size = max_call_stack_size;
 
         self
     }
 
-    pub fn with_max_task_instructions(mut self, max_task_instructions: Option<usize>) -> Self
-    {
+    pub fn with_max_task_instructions(mut self, max_task_instructions: Option<usize>) -> Self {
         self.max_task_instructions = max_task_instructions;
 
         self

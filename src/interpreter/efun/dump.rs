@@ -1,30 +1,44 @@
 use crate::{
+    errors::LpcError,
     interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
-    Result,
+    try_extract_value, Result,
 };
 use std::collections::HashMap;
-use crate::errors::LpcError;
-use crate::try_extract_value;
 
 const MAX_RECURSION: usize = 20;
 
 fn recursion_too_deep(size: usize, interpreter: &AsmInterpreter) -> Result<()> {
     if size > MAX_RECURSION {
-        return Err(interpreter.runtime_error("Too deep recursion"));
+        return Err(interpreter.runtime_error("Too deep recursion."));
     }
 
     Ok(())
 }
 
-fn format_ref(lpc_ref: &LpcRef, interpreter: &mut AsmInterpreter, indent: usize, recurse_level: usize) -> Result<String> {
+fn format_ref(
+    lpc_ref: &LpcRef,
+    interpreter: &mut AsmInterpreter,
+    indent: usize,
+    recurse_level: usize,
+) -> Result<String> {
     recursion_too_deep(recurse_level, interpreter)?;
     interpreter.increment_instruction_count(1)?;
 
     match lpc_ref {
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
-        LpcRef::String(x) => Ok(format!("{:width$}{}", "", try_extract_value!(*x.borrow(), LpcValue::String), width = indent)),
-        LpcRef::Object(x) => Ok(format!("{:width$}{}", "", try_extract_value!(*x.borrow(), LpcValue::Object), width = indent)),
+        LpcRef::String(x) => Ok(format!(
+            "{:width$}{}",
+            "",
+            try_extract_value!(*x.borrow(), LpcValue::String),
+            width = indent
+        )),
+        LpcRef::Object(x) => Ok(format!(
+            "{:width$}{}",
+            "",
+            try_extract_value!(*x.borrow(), LpcValue::Object),
+            width = indent
+        )),
         LpcRef::Array(x) => {
             let xb = x.borrow();
             let arr = try_extract_value!(*xb, LpcValue::Array);
@@ -38,7 +52,12 @@ fn format_ref(lpc_ref: &LpcRef, interpreter: &mut AsmInterpreter, indent: usize,
     }
 }
 
-fn format_array(arr: &[LpcRef], interpreter: &mut AsmInterpreter, indent: usize, recurse_level: usize) -> Result<String> {
+fn format_array(
+    arr: &[LpcRef],
+    interpreter: &mut AsmInterpreter,
+    indent: usize,
+    recurse_level: usize,
+) -> Result<String> {
     recursion_too_deep(recurse_level, interpreter)?;
     interpreter.increment_instruction_count(arr.len())?;
 
@@ -89,12 +108,12 @@ fn format_mapping(
         })
         .collect::<Result<Vec<_>>>();
 
-        let inner = match inner {
-            Ok(x) => x,
-            Err(e) => return Err(e),
-        };
+    let inner = match inner {
+        Ok(x) => x,
+        Err(e) => return Err(e),
+    };
 
-        let inner = inner.join(",\n");
+    let inner = inner.join(",\n");
 
     result.push_str(&inner);
     result.push_str(&format!("\n{:width$}])", "", width = indent));
@@ -110,4 +129,69 @@ pub fn dump(interpreter: &mut AsmInterpreter) -> Result<()> {
     println!("{}", format_ref(&lpc_ref, interpreter, 0, 0)?);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        interpreter::{program::Program, stack_frame::StackFrame},
+        semantic::function_symbol::FunctionSymbol,
+        util::config::Config,
+    };
+    use fs_err as fs;
+    use regex::Regex;
+    use std::rc::Rc;
+    use crate::compiler::Compiler;
+
+    fn compile_prog(code: &str) -> Program {
+        let compiler = Compiler::default();
+        compiler
+            .compile_string("~/my_file.c", code)
+            .expect("Failed to compile.")
+    }
+
+    fn run_prog(code: &str) -> AsmInterpreter {
+        let mut interpreter = AsmInterpreter::default();
+
+        let program = compile_prog(code);
+
+        interpreter.init_master(program).expect("init failed?");
+
+        interpreter
+    }
+
+    #[test]
+    fn does_not_crash_on_recursive_structures() {
+        // arrays
+        let code = r##"
+                void create() {
+                    mixed a = ({ 1, 2, 3 });
+                    a[2] = a;
+                    dump(a);
+                }
+            "##;
+
+        let mut interpreter = AsmInterpreter::default();
+        let program = compile_prog(code);
+        let r = interpreter.init_master(program);
+
+        assert_eq!(
+            r.unwrap_err().to_string(),
+            "Runtime Error: Too deep recursion."
+        );
+
+        // mappings
+        let code = r##"
+                void create() {
+                    mixed a = ([]);
+                    a["marfin"] = a;
+                    dump(a);
+                }
+            "##;
+
+        let program = compile_prog(code);
+        let r = interpreter.init_master(program);
+
+    }
 }
