@@ -1,9 +1,10 @@
 use crate::asm::register::Register;
 
 /// A [`Register`]-aware counter, used during code generation.
-#[derive(Debug, Clone, Default, Copy)]
+#[derive(Debug, Clone, Default)]
 pub struct RegisterCounter {
     count: usize,
+    stack: Vec<usize>,
 }
 
 impl RegisterCounter {
@@ -26,6 +27,29 @@ impl RegisterCounter {
     /// Get the current counter value
     pub fn as_usize(&self) -> usize {
         self.count
+    }
+
+    /// Set a new value, and store the old one for `pop`ping.
+    /// # Returns
+    /// The previous value
+    pub fn push(&mut self, new_val: usize) -> usize {
+        self.stack.push(self.count);
+        let ret = self.count;
+        self.count = new_val;
+        ret
+    }
+
+    /// Pop a value, if there is one, and set the current `count` back to it.
+    /// # Returns
+    /// The popped value if there is one, else the current `count`
+    pub fn pop(&mut self) -> usize {
+        if let Some(x) = self.stack.pop() {
+            self.count = x;
+
+            return x;
+        }
+
+        return self.count
     }
 }
 
