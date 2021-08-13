@@ -523,7 +523,6 @@ impl TreeWalker for CodegenWalker {
             if ellipsis {
                 let mut argv = match self.context.scopes.function_scope_mut(&node.name) {
                     Some(scope) => {
-                        println!("current scope {:?}", scope);
                         match scope.lookup_mut(ARGV) {
                             Some(sym) => sym,
                             None => {
@@ -594,7 +593,7 @@ impl TreeWalker for CodegenWalker {
                 register = self.register_counter.next().unwrap();
             }
 
-            // Undo the final call to .next() to avoid wasting a register
+            // Undo the final call to .next() in the above for-loop to avoid wasting a register
             self.register_counter.go_back();
 
             if let Some(rcvr) = &mut *node.receiver {

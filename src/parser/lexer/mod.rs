@@ -215,8 +215,6 @@ pub enum Token {
     Efun(Span),
     #[token("catch", track_slice)]
     Catch(Span),
-    #[token("throw", track_slice)]
-    Throw(Span),
     #[token("switch", track_slice)]
     Switch(Span),
     #[token("default", track_slice)]
@@ -528,7 +526,6 @@ impl Token {
             | Token::Not(x)
             | Token::Pragma(StringToken(x, _))
             | Token::Catch(x)
-            | Token::Throw(x)
             | Token::Switch(x)
             | Token::Default(x)
             | Token::Foreach(x)
@@ -631,7 +628,6 @@ impl Token {
             | Token::Not(x)
             | Token::Pragma(StringToken(x, _))
             | Token::Catch(x)
-            | Token::Throw(x)
             | Token::Switch(x)
             | Token::Default(x)
             | Token::Foreach(x)
@@ -719,7 +715,6 @@ impl Display for Token {
             Token::Nomask(_) => "nomask",
             Token::Efun(_) => "efun",
             Token::Catch(_) => "catch",
-            Token::Throw(_) => "throw",
             Token::Switch(_) => "switch",
             Token::Default(_) => "default",
             Token::Foreach(_) => "foreach",

@@ -3,6 +3,7 @@ mod debug;
 mod dump;
 mod file_name;
 mod this_object;
+mod throw;
 
 use lazy_static::lazy_static;
 use phf::phf_map;
@@ -20,6 +21,7 @@ use debug::debug;
 use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
+use throw::throw;
 
 /// Signature for Efuns
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
@@ -30,6 +32,7 @@ pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
 pub const THIS_OBJECT: &str = "this_object";
+pub const THROW: &str = "throw";
 
 /// Global static mapping of all efun names to the actual function
 pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
@@ -39,6 +42,7 @@ pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
     "dump" => dump,
     "file_name" => file_name,
     "this_object" => this_object,
+    "throw" => throw,
 };
 
 lazy_static! {
@@ -114,6 +118,17 @@ lazy_static! {
             num_args: 0,
             num_default_args: 0,
             arg_types: vec![],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        });
+
+        m.insert(THROW, FunctionPrototype {
+            name: THROW.into(),
+            return_type: LpcType::Void,
+            num_args: 1,
+            num_default_args: 0,
+            arg_types: vec![LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![],
             flags: FunctionFlags::default().with_ellipsis(false),
