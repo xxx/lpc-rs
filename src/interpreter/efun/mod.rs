@@ -27,6 +27,7 @@ use throw::throw;
 pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
 
 pub const CALL_OTHER: &str = "call_other";
+pub const CATCH: &str = "catch";
 pub const CLONE_OBJECT: &str = "clone_object";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
@@ -37,6 +38,8 @@ pub const THROW: &str = "throw";
 /// Global static mapping of all efun names to the actual function
 pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
     // "call_other" is implemented with a custom [`Instruction`]
+    // "catch" is a special form of the language, implemented with custom [`Instruction`]s.
+    // A prototype is defined here to make it pass type checks, as it looks and acts like a function call.
     "clone_object" => clone_object,
     "debug" => debug,
     "dump" => dump,
@@ -66,6 +69,17 @@ lazy_static! {
             span: None,
             arg_spans: vec![],
             flags: FunctionFlags::default().with_ellipsis(true),
+        });
+
+        m.insert(CATCH, FunctionPrototype {
+            name: CATCH.into(),
+            return_type: LpcType::Mixed(false),
+            num_args: 1,
+            num_default_args: 0,
+            arg_types: vec![LpcType::Mixed(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
         });
 
         m.insert(CLONE_OBJECT, FunctionPrototype {
