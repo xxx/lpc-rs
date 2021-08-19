@@ -30,6 +30,19 @@ const STACK_SIZE: usize = 2_000;
 /// The initial size (in cells) of system memory
 const MEMORY_SIZE: usize = 100_000;
 
+/// A type to track where `catch` calls need to go if there is an error
+#[derive(Debug, Clone)]
+struct CatchPoint {
+    /// The index of the stack frame that contains this `catch`
+    frame_index: usize,
+
+    /// The address to jump in the stack frame's process, if there is an error
+    address: Address,
+
+    /// The register to put the error in, within the above [`StackFrame`]
+    register: Register,
+}
+
 /// An interpreter that executes instructions
 ///
 /// # Examples
@@ -75,6 +88,9 @@ pub struct AsmInterpreter {
 
     /// How many instructions have run during the current [`Task`]?
     instruction_count: usize,
+
+    /// stack of [`CatchPoint`]s
+    catch_points: Vec<CatchPoint>,
 }
 
 /// Get a reference to the passed stack frame's registers
@@ -309,7 +325,17 @@ impl AsmInterpreter {
         self.instruction_count = 0;
 
         while !halted {
-            halted = self.eval_one_instruction()?;
+            halted = match self.eval_one_instruction() {
+                Ok(x) => x,
+                Err(e) => {
+                    if !self.catch_points.is_empty() {
+                        self.catch_error(e)?;
+                        false
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
         }
 
         Ok(())
@@ -339,17 +365,6 @@ impl AsmInterpreter {
                 let new_ref = value_to_ref!(LpcValue::from(vars), &self.memory);
 
                 registers[r.index()] = new_ref;
-            }
-            Instruction::EqEq(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
-                let out = if registers[r1.index()] == registers[r2.index()] {
-                    1
-                } else {
-                    0
-                };
-
-                let registers = current_registers_mut(&mut self.stack)?;
-                registers[r3.index()] = LpcRef::Int(out);
             }
             Instruction::Call {
                 name,
@@ -493,6 +508,36 @@ impl AsmInterpreter {
                 };
 
                 self.return_efun_result(result_ref)
+            }
+            Instruction::EqEq(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                let out = if registers[r1.index()] == registers[r2.index()] {
+                    1
+                } else {
+                    0
+                };
+
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r3.index()] = LpcRef::Int(out);
+            }
+            Instruction::CatchEnd => {
+                self.catch_points.pop();
+            }
+            Instruction::CatchStart(r, label) => {
+                let address = match self.process.labels.get(label) {
+                    Some(x) => {
+                        *x
+                    }
+                    None => return Err(self.runtime_error(format!("Missing address for label `{}`", label)))
+                };
+
+                let catch_point = CatchPoint {
+                    frame_index: self.stack.len() - 1,
+                    register: *r,
+                    address
+                };
+
+                self.catch_points.push(catch_point);
             }
             Instruction::FConst(r, f) => {
                 let registers = current_registers_mut(&mut self.stack)?;
@@ -915,6 +960,43 @@ impl AsmInterpreter {
         Ok(false)
     }
 
+    /// Set the state to handle a caught error.
+    /// Panics if there aren't actually any catch points.
+    fn catch_error(&mut self, error: LpcError) -> Result<()> {
+        let catch_point = self.catch_points.last().unwrap();
+        let result_index = catch_point.register.index();
+        let frame_index = catch_point.frame_index;
+        let new_pc = catch_point.address;
+
+        // clear away stack frames that won't be executed any further, which lie between the
+        // error and the catch point's stack frame.
+        // Does nothing if you're already in the correct stack frame, or one away.
+        self.stack.truncate(frame_index + 2);
+
+        // If these aren't equal, we're already in the correct stack frame.
+        if self.stack.len() == frame_index + 2 {
+            // Pop the final frame via pop_frame(), to keep other state changes to a single
+            // code path, (e.g. changing the current process)
+            if let Some(frame) = self.pop_frame() {
+                self.popped_frame = Some(frame);
+            }
+        }
+
+        if self.stack.is_empty() {
+            return Err(self.runtime_error("Stack is empty after popping to catch point?"));
+        }
+
+        // set up the catch point's return value
+        let value = LpcValue::from(error.to_string());
+        let lpc_ref = value_to_ref!(value, self.memory);
+        self.stack.last_mut().unwrap().registers[result_index] = lpc_ref;
+
+        // jump to the corresponding catchend instruction
+        self.process.set_pc(new_pc);
+
+        Ok(())
+    }
+
     fn resolve_call_other_receiver(
         &self,
         receiver_ref: &LpcRef,
@@ -1160,6 +1242,7 @@ impl Default for AsmInterpreter {
             popped_frame: None,
             snapshot: None,
             instruction_count: 0,
+            catch_points: Vec::new(),
         }
     }
 }

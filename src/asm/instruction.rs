@@ -32,6 +32,14 @@ pub enum Instruction {
         initial_arg: Register,
     },
 
+    /// Finish a block of instructions that can catch errors and continue execution.
+    /// Store the error in x.0, and jump to x.1 to continue execution
+    CatchEnd,
+
+    /// Start a block of instructions that can catch errors and continue execution.
+    /// Store the error in x.0, and jump to x.1 to continue execution
+    CatchStart(Register, Label),
+
     /// == comparison
     EqEq(Register, Register, Register),
 
@@ -140,6 +148,12 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
+            }
+            Instruction::CatchEnd => {
+                write!(f, "catchend")
+            }
+            Instruction::CatchStart(r1, label) => {
+                write!(f, "catchstart {}, {}", r1, label)
             }
             Instruction::Call {
                 name,

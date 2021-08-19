@@ -50,6 +50,7 @@ use crate::{
     interpreter::efun::CALL_OTHER,
 };
 use std::rc::Rc;
+use crate::interpreter::efun::CATCH;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -335,9 +336,9 @@ impl CodegenWalker {
     /// choice between a numeric (i.e. held in registers) and mixed (i.e. tracked via references)
     /// Switching on the instructions lets us avoid some value lookups at runtime.
     fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
-    where
-        F: Fn() -> Instruction,
-        G: Fn() -> Instruction,
+        where
+            F: Fn() -> Instruction,
+            G: Fn() -> Instruction,
     {
         let left_type = self.to_operation_type(&node.l);
         let right_type = self.to_operation_type(&node.r);
@@ -406,12 +407,44 @@ impl CodegenWalker {
 
     /// Emit a numbered label with prefix `T`, tracking the current count.
     fn new_label<T>(&mut self, prefix: T) -> String
-    where
-        T: AsRef<str>,
+        where
+            T: AsRef<str>,
     {
         let r = format!("{}_{}", prefix.as_ref(), self.label_count);
         self.label_count += 1;
         r
+    }
+
+    // special case for `catch()`
+    fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
+        let result_register = self.register_counter.next().unwrap();
+        let label = self.new_label("catch_end");
+
+        push_instruction!(
+            self,
+            Instruction::CatchStart(result_register, label.clone()),
+            node.span
+        );
+
+        for argument in &mut node.arguments {
+            argument.visit(self)?;
+        }
+
+        // get the address of the `catchend` pseudo-instruction, so we can jump to a location
+        // that is both guaranteed to have an instruction, as well as clean up the handled
+        // catch point
+        let label_address = self.instructions.len();
+        self.labels.insert(label, label_address);
+
+        push_instruction!(
+            self,
+            Instruction::CatchEnd,
+            node.span
+        );
+
+        self.current_result = result_register;
+
+        Ok(())
     }
 }
 
@@ -477,6 +510,10 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+        if node.name == CATCH {
+            return self.emit_catch(node);
+        }
+
         let mut arg_results = Vec::new();
         let mut ellipsis_results = Vec::new();
         let default_params = self.context.default_function_params.get(&node.name);
