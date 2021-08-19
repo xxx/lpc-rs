@@ -95,6 +95,14 @@ impl LpcTypeUnion {
 
     /// Do we match against another type?
     pub fn matches_type(self, other: LpcType) -> bool {
+        if self.mixed() {
+            return true;
+        }
+
+        if self.mixed_array() {
+            return other.is_array();
+        }
+
         match other {
             LpcType::Void => self.void(),
             LpcType::Int(array) => {
@@ -287,5 +295,19 @@ mod tests {
         assert!(union.matches_type(LpcType::Void));
         assert!(!union.matches_type(LpcType::Int(false)));
         assert!(!union.matches_type(LpcType::Mapping(true)));
+
+        union.set_mixed(true);
+        assert!(union.matches_type(LpcType::Int(false)));
+        assert!(union.matches_type(LpcType::Int(true)));
+        assert!(union.matches_type(LpcType::Float(false)));
+        assert!(union.matches_type(LpcType::Float(true)));
+        assert!(union.matches_type(LpcType::String(false)));
+        assert!(union.matches_type(LpcType::String(true)));
+        assert!(union.matches_type(LpcType::Mapping(false)));
+        assert!(union.matches_type(LpcType::Mapping(true)));
+        assert!(union.matches_type(LpcType::Object(false)));
+        assert!(union.matches_type(LpcType::Mapping(true)));
+        assert!(union.matches_type(LpcType::Mixed(false)));
+        assert!(union.matches_type(LpcType::Mixed(true)));
     }
 }
