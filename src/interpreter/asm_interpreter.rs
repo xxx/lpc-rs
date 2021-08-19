@@ -1193,7 +1193,7 @@ impl AsmInterpreter {
 
         let mut frame =
             StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, 0, args.len());
-        frame.registers[1..=args.len()].clone_from_slice(&args);
+        frame.registers[1..=args.len()].clone_from_slice(args);
 
         self.push_frame(frame)?;
         self.process.set_pc(addr);
