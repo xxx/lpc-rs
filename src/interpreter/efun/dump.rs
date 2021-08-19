@@ -134,14 +134,8 @@ pub fn dump(interpreter: &mut AsmInterpreter) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        interpreter::{program::Program, stack_frame::StackFrame},
-        semantic::function_symbol::FunctionSymbol,
-        util::config::Config,
-    };
-    use fs_err as fs;
-    use regex::Regex;
-    use std::rc::Rc;
+    use crate::interpreter::program::Program;
+
     use crate::compiler::Compiler;
 
     fn compile_prog(code: &str) -> Program {
@@ -149,16 +143,6 @@ mod tests {
         compiler
             .compile_string("~/my_file.c", code)
             .expect("Failed to compile.")
-    }
-
-    fn run_prog(code: &str) -> AsmInterpreter {
-        let mut interpreter = AsmInterpreter::default();
-
-        let program = compile_prog(code);
-
-        interpreter.init_master(program).expect("init failed?");
-
-        interpreter
     }
 
     #[test]
@@ -193,5 +177,9 @@ mod tests {
         let program = compile_prog(code);
         let r = interpreter.init_master(program);
 
+        assert_eq!(
+            r.unwrap_err().to_string(),
+            "Runtime Error: Too deep recursion."
+        );
     }
 }

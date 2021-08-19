@@ -525,16 +525,18 @@ impl AsmInterpreter {
             }
             Instruction::CatchStart(r, label) => {
                 let address = match self.process.labels.get(label) {
-                    Some(x) => {
-                        *x
+                    Some(x) => *x,
+                    None => {
+                        return Err(
+                            self.runtime_error(format!("Missing address for label `{}`", label))
+                        )
                     }
-                    None => return Err(self.runtime_error(format!("Missing address for label `{}`", label)))
                 };
 
                 let catch_point = CatchPoint {
                     frame_index: self.stack.len() - 1,
                     register: *r,
-                    address
+                    address,
                 };
 
                 self.catch_points.push(catch_point);
