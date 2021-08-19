@@ -76,7 +76,7 @@ lazy_static! {
             return_type: LpcType::Mixed(false),
             num_args: 1,
             num_default_args: 0,
-            arg_types: vec![LpcType::Mixed(false)],
+            arg_types: vec![LpcType::Mixed(false) | LpcType::Void],
             span: None,
             arg_spans: vec![],
             flags: FunctionFlags::default().with_ellipsis(false),
