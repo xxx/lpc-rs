@@ -368,9 +368,9 @@ impl TreeWalker for SemanticCheckWalker {
         };
 
         // These must resolve to ints at some point.
-        let required_types = LpcType::Int(false) | LpcType::Mixed(false);
+        let required_type = LpcType::Int(false);
 
-        if left_type.matches_type(required_types) && right_type.matches_type(required_types) {
+        if left_type.matches_type(required_type) && right_type.matches_type(required_type) {
             Ok(())
         } else {
             let left_val = if let Some(node) = &*node.l {
@@ -1506,6 +1506,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
+            println!("{:?}", walker.context.errors);
             assert!(!walker.context.errors.is_empty());
         }
 
