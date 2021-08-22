@@ -1,6 +1,5 @@
 use crate::errors::lazy_files::FileId;
 use std::ops::Range;
-use crate::ast::expression_node::first_span;
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.

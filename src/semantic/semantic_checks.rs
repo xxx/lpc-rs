@@ -201,7 +201,7 @@ pub fn check_binary_operation_types(
             }
         }
         BinaryOperation::AndAnd => todo!(),
-        BinaryOperation::OrOr => todo!(),
+        BinaryOperation::OrOr => Ok(()),
         BinaryOperation::EqEq => Ok(()),
         BinaryOperation::Lt | BinaryOperation::Lte | BinaryOperation::Gt | BinaryOperation::Gte => {
             match tuple {
@@ -1228,6 +1228,56 @@ mod check_binary_operation_tests {
         assert!(array_int_vars(BinaryOperation::Gte, &scope_tree).is_err());
         assert!(array_range_vars(BinaryOperation::Gte, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Gte, &scope_tree).is_err());
+    }
+    
+    #[test]
+    fn test_eqeq() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(float_float_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(string_int_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(int_string_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(array_array_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(array_int_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(array_range_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(mapping_mapping_literals(BinaryOperation::EqEq, &scope_tree).is_ok());
+
+        assert!(int_int_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(float_float_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(string_int_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(int_string_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(array_array_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(array_int_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(array_range_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+        assert!(mapping_mapping_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
+    }
+    
+    #[test]
+    fn test_oror() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(float_float_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(string_int_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(int_string_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(array_array_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(array_int_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(array_range_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(mapping_mapping_literals(BinaryOperation::OrOr, &scope_tree).is_ok());
+
+        assert!(int_int_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(float_float_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(string_int_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(int_string_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(array_array_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(array_int_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(array_range_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
+        assert!(mapping_mapping_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
     }
 }
 

@@ -31,8 +31,11 @@ pub enum AssignmentOperation {
     /// Plus-equals assignment - `a *= 2`;
     MulEq,
 
-    /// Plus-equals assignment - `a /= `0`;
+    /// Plus-equals assignment - `a /= 0`;
     DivEq,
+
+    /// OrOr-equals assignment - `a ||= 12`;
+    OrOrEq,
 }
 
 impl Display for AssignmentOperation {
@@ -44,6 +47,7 @@ impl Display for AssignmentOperation {
             AssignmentOperation::SubEq => "-=",
             AssignmentOperation::MulEq => "*=",
             AssignmentOperation::DivEq => "/=",
+            AssignmentOperation::OrOrEq => "||=",
         };
 
         write!(f, "{}", s)

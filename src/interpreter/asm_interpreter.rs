@@ -757,6 +757,17 @@ impl AsmInterpreter {
                     LpcRef::Int(0)
                 };
             }
+            Instruction::OrOr(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+
+                let idx = if matches!(registers[r1.index()], LpcRef::Int(0)) {
+                    r2.index()
+                } else {
+                    r1.index()
+                };
+
+                registers[r3.index()] = registers[idx].clone();
+            }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
 
@@ -2215,6 +2226,39 @@ mod tests {
                     BareVal::Int(4),
                     BareVal::Int(0),
                     BareVal::Int(1),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_oror {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 123 || 333;
+                    mixed b = 0;
+                    mixed c = b || a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(123),
+                    Int(333),
+                    Int(123),
+
+                    Int(0),
+
+                    Int(0),
+                    Int(123),
+                    Int(123)
                 ];
 
                 assert_eq!(&expected, &registers);

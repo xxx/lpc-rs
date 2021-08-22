@@ -119,6 +119,10 @@ pub enum Instruction {
     /// Check if x.0 is equal to 0
     Not(Register, Register),
 
+    /// short-circuiting || comparison.
+    /// x.2 = x.0 || x.1
+    OrOr(Register, Register, Register),
+
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
     Range(Register, Register, Register, Register),
@@ -250,6 +254,9 @@ impl Display for Instruction {
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "not {}, {}", r1, r2)
+            }
+            Instruction::OrOr(r1, r2, r3) => {
+                write!(f, "oror {}, {}, {}", r1, r2, r3)
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {}, {}, {}, {}", r1, r2, r3, r4)

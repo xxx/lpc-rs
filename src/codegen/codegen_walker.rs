@@ -322,7 +322,7 @@ impl CodegenWalker {
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => todo!(),
-            BinaryOperation::OrOr => todo!(),
+            BinaryOperation::OrOr => Instruction::OrOr(reg_left, reg_right, reg_result),
             BinaryOperation::EqEq => Instruction::EqEq(reg_left, reg_right, reg_result),
             BinaryOperation::Lt => Instruction::Lt(reg_left, reg_right, reg_result),
             BinaryOperation::Lte => Instruction::Lte(reg_left, reg_right, reg_result),
