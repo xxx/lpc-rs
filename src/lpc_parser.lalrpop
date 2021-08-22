@@ -537,7 +537,12 @@ pub OrExpression: ExpressionNode = {
 };
 
 pub LogicalAndExpression: ExpressionNode = {
-    <OrExpression>
+    <OrExpression>,
+    <l:LogicalAndExpression> "&&" <r:OrExpression> => {
+        let span = combine_spans(l.span(), r.span());
+
+         collapse_binary_op(BinaryOperation::AndAnd, l, r, span)
+    }
 };
 
 pub LogicalOrExpression: ExpressionNode = {
@@ -582,6 +587,7 @@ AssignmentExpression: ExpressionNode = {
             | AssignmentOperation::SubEq
             | AssignmentOperation::MulEq
             | AssignmentOperation::DivEq
+            | AssignmentOperation::AndAndEq
             | AssignmentOperation::OrOrEq => {
                 let binary_op = match BinaryOperation::try_from(op) {
                     Ok(x) => x,
@@ -710,6 +716,7 @@ AssignmentOp: AssignmentOperation = {
     "-=" => AssignmentOperation::SubEq,
     "*=" => AssignmentOperation::MulEq,
     "/=" => AssignmentOperation::DivEq,
+    "&&=" => AssignmentOperation::AndAndEq,
     "||=" => AssignmentOperation::OrOrEq,
 };
 

@@ -200,7 +200,7 @@ pub fn check_binary_operation_types(
                 ))
             }
         }
-        BinaryOperation::AndAnd => todo!(),
+        BinaryOperation::AndAnd => Ok(()),
         BinaryOperation::OrOr => Ok(()),
         BinaryOperation::EqEq => Ok(()),
         BinaryOperation::Lt | BinaryOperation::Lte | BinaryOperation::Gt | BinaryOperation::Gte => {
@@ -1255,6 +1255,31 @@ mod check_binary_operation_tests {
         assert!(mapping_mapping_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
     }
     
+    #[test]
+    fn test_andand() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(float_float_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(string_int_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(int_string_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(array_array_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(array_int_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(array_range_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(mapping_mapping_literals(BinaryOperation::AndAnd, &scope_tree).is_ok());
+
+        assert!(int_int_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(float_float_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(string_int_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(int_string_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(array_array_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(array_int_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(array_range_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+        assert!(mapping_mapping_vars(BinaryOperation::AndAnd, &scope_tree).is_ok());
+    }
+
     #[test]
     fn test_oror() {
         let scope_tree = setup();

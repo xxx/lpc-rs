@@ -34,6 +34,9 @@ pub enum AssignmentOperation {
     /// Plus-equals assignment - `a /= 0`;
     DivEq,
 
+    /// AndAnd-equals assignment - `a &&= 12`;
+    AndAndEq,
+
     /// OrOr-equals assignment - `a ||= 12`;
     OrOrEq,
 }
@@ -47,6 +50,7 @@ impl Display for AssignmentOperation {
             AssignmentOperation::SubEq => "-=",
             AssignmentOperation::MulEq => "*=",
             AssignmentOperation::DivEq => "/=",
+            AssignmentOperation::AndAndEq => "&&=",
             AssignmentOperation::OrOrEq => "||=",
         };
 

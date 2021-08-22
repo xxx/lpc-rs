@@ -366,6 +366,17 @@ impl AsmInterpreter {
 
                 registers[r.index()] = new_ref;
             }
+            Instruction::AndAnd(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+
+                let idx = if matches!(registers[r1.index()], LpcRef::Int(0)) {
+                    r1.index()
+                } else {
+                    r2.index()
+                };
+
+                registers[r3.index()] = registers[idx].clone();
+            }
             Instruction::Call {
                 name,
                 num_args,
@@ -1389,6 +1400,39 @@ mod tests {
             }
         }
 
+        mod test_andand {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 123 && 333;
+                    mixed b = 0;
+                    mixed c = b && a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(123),
+                    Int(333),
+                    Int(333),
+
+                    Int(0),
+
+                    Int(0),
+                    Int(333),
+                    Int(0)
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_call {
             use super::*;
 
@@ -1496,7 +1540,6 @@ mod tests {
 
         mod test_catch_end {
             use super::*;
-            use crate::interpreter::asm_interpreter::tests::BareVal::{Int, String};
 
             #[test]
             fn pops_the_catch_point() {

@@ -68,6 +68,7 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
             AssignmentOperation::SubEq => Ok(Self::Sub),
             AssignmentOperation::MulEq => Ok(Self::Mul),
             AssignmentOperation::DivEq => Ok(Self::Div),
+            AssignmentOperation::AndAndEq => Ok(Self::AndAnd),
             AssignmentOperation::OrOrEq => Ok(Self::OrOr),
         }
     }

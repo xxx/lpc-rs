@@ -24,7 +24,6 @@ pub fn collapse_binary_op(
 ) -> ExpressionNode {
     match op {
         BinaryOperation::Add => collapse_add(op, l, r, span),
-        BinaryOperation::AndAnd => todo!(),
         BinaryOperation::Div => collapse_div(op, l, r, span),
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
@@ -34,6 +33,7 @@ pub fn collapse_binary_op(
         | BinaryOperation::Lte
         | BinaryOperation::Gt
         | BinaryOperation::Gte
+        | BinaryOperation::AndAnd
         | BinaryOperation::OrOr => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),

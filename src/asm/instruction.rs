@@ -17,6 +17,10 @@ pub enum Instruction {
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),
 
+    /// short-circuiting && comparison.
+    /// x.2 = x.0 && x.1
+    AndAnd(Register, Register, Register),
+
     /// Call a function
     Call {
         name: String,
@@ -152,6 +156,9 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
+            }
+            Instruction::AndAnd(r1, r2, r3) => {
+                write!(f, "andand {}, {}, {}", r1, r2, r3)
             }
             Instruction::CatchEnd => {
                 write!(f, "catchend")
