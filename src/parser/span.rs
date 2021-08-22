@@ -1,5 +1,6 @@
 use crate::errors::lazy_files::FileId;
 use std::ops::Range;
+use crate::ast::expression_node::first_span;
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
@@ -11,6 +12,36 @@ pub struct Span {
     pub r: usize,
     /// The ID of the file in the global [`FILE_CACHE`](struct@crate::errors::lazy_files::FILE_CACHE)
     pub file_id: FileId,
+}
+
+/// combine two [`Span`]s together, handling `None` cases.
+pub fn combine_spans(left: Option<Span>, right: Option<Span>) -> Span {
+    let file_id = match left {
+        Some(x) => x.file_id,
+        None => {
+            match right {
+                Some(x) => x.file_id,
+                None => 0
+            }
+        }
+    };
+
+    let l = if let Some(span) = left {
+        span.l
+    } else {
+        0
+    };
+    let r = if let Some(span) = right {
+        span.r
+    } else {
+        0
+    };
+
+    Span {
+        l,
+        r,
+        file_id
+    }
 }
 
 impl Span {

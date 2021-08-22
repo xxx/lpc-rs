@@ -30,7 +30,7 @@ use crate::ast::while_node::WhileNode;
 use crate::semantic::lpc_type::LpcType;
 use crate::parser::collapse_binary_op::collapse_binary_op;
 use crate::parser::collapse_unary_op::collapse_unary_op;
-use crate::parser::span::Span;
+use crate::parser::span::{Span, combine_spans};
 use crate::parser::lexer::Token;
 use crate::errors::LpcError;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
@@ -487,38 +487,18 @@ pub CastExpression: ExpressionNode = {
 pub MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
     <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> => {
-         let file_id = first_span(&[&l, &r]).file_id;
-         let left = if let Some(span) = l.span() {
-             span.l
-         } else {
-             0
-         };
-         let right = if let Some(span) = r.span() {
-             span.r
-         } else {
-             0
-         };
+        let span = combine_spans(l.span(), r.span());
 
-         collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
+        collapse_binary_op(op, l, r, span)
     },
 };
 
 pub AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
     <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
-        let file_id = first_span(&[&l, &r]).file_id;
-         let left = if let Some(span) = l.span() {
-             span.l
-         } else {
-             0
-         };
-         let right = if let Some(span) = r.span() {
-             span.r
-         } else {
-             0
-         };
+        let span = combine_spans(l.span(), r.span());
 
-        collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
+        collapse_binary_op(op, l, r, span)
     }
 };
 
@@ -529,38 +509,18 @@ pub ShiftExpression: ExpressionNode = {
 pub RelationalExpression: ExpressionNode = {
     <ShiftExpression>,
     <l:RelationalExpression> <op:RelationalOp> <r:ShiftExpression> => {
-         let file_id = first_span(&[&l, &r]).file_id;
-         let left = if let Some(span) = l.span() {
-             span.l
-         } else {
-             0
-         };
-         let right = if let Some(span) = r.span() {
-             span.r
-         } else {
-             0
-         };
+        let span = combine_spans(l.span(), r.span());
 
-         collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
+        collapse_binary_op(op, l, r, span)
     }
 };
 
 pub EqualityExpression: ExpressionNode = {
     <RelationalExpression>,
     <l:EqualityExpression> <op:EqualityOp> <r:RelationalExpression> => {
-         let file_id = first_span(&[&l, &r]).file_id;
-         let left = if let Some(span) = l.span() {
-             span.l
-         } else {
-             0
-         };
-         let right = if let Some(span) = r.span() {
-             span.r
-         } else {
-             0
-         };
+        let span = combine_spans(l.span(), r.span());
 
-         collapse_binary_op(op, l, r, Span { file_id, l: left, r: right })
+        collapse_binary_op(op, l, r, span)
     }
 };
 
@@ -581,7 +541,12 @@ pub LogicalAndExpression: ExpressionNode = {
 };
 
 pub LogicalOrExpression: ExpressionNode = {
-    <LogicalAndExpression>
+    <LogicalAndExpression>,
+    <l:LogicalOrExpression> "||" <r:LogicalAndExpression> => {
+        let span = combine_spans(l.span(), r.span());
+
+         collapse_binary_op(BinaryOperation::OrOr, l, r, span)
+    }
 };
 
 pub ConditionalExpression: ExpressionNode = {
@@ -606,17 +571,7 @@ pub ConditionalExpression: ExpressionNode = {
 AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => {
-        let file_id = first_span(&[&lhs, &rhs]).file_id;
-         let l = if let Some(span) = lhs.span() {
-             span.l
-         } else {
-             0
-         };
-         let r = if let Some(span) = rhs.span() {
-             span.r
-         } else {
-             0
-         };
+        let span = combine_spans(lhs.span(), rhs.span());
 
         // Decompose `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
         let rhs = match op {
@@ -647,7 +602,7 @@ AssignmentExpression: ExpressionNode = {
         ExpressionNode::Assignment(AssignmentNode {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-            span: Some(Span { file_id, l, r }),
+            span: Some(span),
         })
     }
 };
