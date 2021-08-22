@@ -1416,6 +1416,92 @@ mod tests {
             }
         }
 
+        mod test_catch {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::{Int, String};
+
+            #[test]
+            fn stores_the_error_string() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 0;
+                        catch(10 / j);
+
+                        debug("in_memory_snapshot");
+                    }
+                "##};
+
+                let interpreter = run_prog(code);
+                let stack = interpreter.snapshot.unwrap().stack;
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(0),
+                    String("Runtime Error: Division by zero".into()),
+                    Int(10),
+                    Int(0),
+                    String("in_memory_snapshot".into()),
+                    Int(0)
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+
+            #[test]
+            fn stores_zero_when_no_error() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 5;
+                        catch(10 / j);
+
+                        debug("in_memory_snapshot");
+                    }
+                "##};
+
+                let interpreter = run_prog(code);
+                let stack = interpreter.snapshot.unwrap().stack;
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(5),
+                    Int(0),
+                    Int(10),
+                    Int(2),
+                    String("in_memory_snapshot".into()),
+                    Int(0)
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+        }
+
+        mod test_catch_end {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::{Int, String};
+
+            #[test]
+            fn pops_the_catch_point() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 0;
+                        catch(catch(catch(catch(10 / j))));
+                    }
+                "##};
+
+                let interpreter = run_prog(code);
+
+                assert!(interpreter.catch_points.is_empty());
+            }
+        }
+
         mod test_eq_eq {
             use super::*;
 
@@ -1799,14 +1885,9 @@ mod tests {
                 let interpreter = run_prog(code);
                 let stack = interpreter.snapshot.unwrap().stack;
 
-                // The top of the stack in the snapshot is the frame for the efun call itself,
+                // The top of the stack in the snapshot is the object initialization frame,
                 // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack
-                    .iter()
-                    .rev()
-                    .nth(1)
-                    .expect("frame not found")
-                    .registers;
+                let registers = &stack[stack.len() - 2].registers;
 
                 let expected = vec![
                     BareVal::Int(0),
@@ -1845,14 +1926,9 @@ mod tests {
                 let interpreter = run_prog(code);
                 let stack = interpreter.snapshot.unwrap().stack;
 
-                // The top of the stack in the snapshot is the frame for the efun call itself,
+                // The top of the stack in the snapshot is the object initialization frame,
                 // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack
-                    .iter()
-                    .rev()
-                    .nth(1)
-                    .expect("frame not found")
-                    .registers;
+                let registers = &stack[stack.len() - 2].registers;
 
                 let expected = vec![
                     BareVal::Int(0),
@@ -2236,14 +2312,9 @@ mod tests {
                 let interpreter = run_prog(code);
                 let stack = interpreter.snapshot.unwrap().stack;
 
-                // The top of the stack in the snapshot is the frame for the efun call itself,
+                // The top of the stack in the snapshot is the object initialization frame,
                 // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack
-                    .iter()
-                    .rev()
-                    .nth(1)
-                    .expect("frame not found")
-                    .registers;
+                let registers = &stack[stack.len() - 2].registers;
 
                 let expected = vec![
                     BareVal::Int(0),

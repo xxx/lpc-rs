@@ -1412,7 +1412,7 @@ mod tests {
     }
 
     mod test_visit_call {
-        use crate::asm::instruction::Instruction::{Call, CallOther};
+        use crate::asm::instruction::Instruction::{Call, CallOther, IDiv, CatchEnd, CatchStart};
 
         use super::*;
         use crate::semantic::{
@@ -1462,6 +1462,27 @@ mod tests {
                     initial_arg: Register(1),
                 },
                 RegCopy(Register(0), Register(4)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_catch() {
+            let mut walker = CodegenWalker::default();
+            let call = "catch(12 / 0)";
+            let mut tree = lpc_parser::ExpressionParser::new()
+                .parse(&Context::default(), LexWrapper::new(call))
+                .unwrap();
+
+            let _ = tree.visit(&mut walker);
+
+            let expected = vec![
+                CatchStart(Register(1), "catch_end_0".into()),
+                IConst(Register(2), 12),
+                IConst0(Register(3)),
+                IDiv(Register(2), Register(3), Register(4)),
+                CatchEnd
             ];
 
             assert_eq!(walker.instructions, expected);
