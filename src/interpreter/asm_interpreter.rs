@@ -609,6 +609,15 @@ impl AsmInterpreter {
                     }
                 }
             }
+            Instruction::IMod(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                match &registers[r1.index()] % &registers[r2.index()] {
+                    Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+                    Err(e) => {
+                        return Err(e.with_span(self.process.current_debug_span()));
+                    }
+                }
+            }
             Instruction::IMul(r1, r2, r3) => {
                 let registers = current_registers_mut(&mut self.stack)?;
                 match &registers[r1.index()] * &registers[r2.index()] {
@@ -1835,6 +1844,34 @@ mod tests {
                     BareVal::Int(8),
                     BareVal::Int(-3),
                     BareVal::Int(-2),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_imod {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 16 % 7;
+                    mixed r = 12 % -7;
+                    mixed s = q % r;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    BareVal::Int(0),
+                    // the constant expressions are folded at parse time
+                    BareVal::Int(2),
+                    BareVal::Int(5),
+                    BareVal::Int(2),
+                    BareVal::Int(5),
+                    BareVal::Int(2),
                 ];
 
                 assert_eq!(&expected, &registers);

@@ -24,9 +24,10 @@ pub fn collapse_binary_op(
 ) -> ExpressionNode {
     match op {
         BinaryOperation::Add => collapse_add(op, l, r, span),
-        BinaryOperation::Div => collapse_div(op, l, r, span),
-        BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
+        BinaryOperation::Mul => collapse_mul(op, l, r, span),
+        BinaryOperation::Div => collapse_div(op, l, r, span),
+        BinaryOperation::Mod => collapse_mod(op, l, r, span),
         BinaryOperation::Index
         | BinaryOperation::EqEq
         | BinaryOperation::Lt
@@ -178,6 +179,39 @@ fn collapse_div(
             if node2.value != 0 {
                 ExpressionNode::Int(IntNode {
                     value: node.value / node2.value,
+                    span: Some(span),
+                })
+            } else {
+                // Push it off until runtime so errors are nicer
+                // This branch is only hit if you're dividing by a 0 int literal.
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(l),
+                    r: Box::new(r),
+                    op,
+                    span: Some(span),
+                })
+            }
+        }
+        _ => ExpressionNode::BinaryOp(BinaryOpNode {
+            l: Box::new(l),
+            r: Box::new(r),
+            op,
+            span: Some(span),
+        }),
+    }
+}
+
+fn collapse_mod(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
+    match (&l, &r) {
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
+            if node2.value != 0 {
+                ExpressionNode::Int(IntNode {
+                    value: node.value % node2.value,
                     span: Some(span),
                 })
             } else {

@@ -172,14 +172,15 @@ pub fn check_binary_operation_types(
                 right_type,
             )),
         },
-        BinaryOperation::Div => match tuple {
+        BinaryOperation::Div
+        | BinaryOperation::Mod => match tuple {
             (LpcType::Int(false), LpcType::Int(false))
             | (LpcType::Float(false), LpcType::Float(false))
             | (LpcType::Int(false), LpcType::Float(false))
             | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(
                 node,
-                BinaryOperation::Div,
+                node.op,
                 left_type,
                 right_type,
             )),
@@ -942,6 +943,83 @@ mod check_binary_operation_tests {
                     l: Box::new(ExpressionNode::from(-123)),
                     r: Box::new(ExpressionNode::from(82)),
                     op: BinaryOperation::Mul,
+                    span: None
+                })),
+                r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            &scope_tree,
+        )
+        .is_ok());
+
+        // invalid complex tree
+        assert!(get_result(
+            BinaryOperation::Mul,
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![222])),
+                r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                    op: BinaryOperation::Mul,
+                    span: None
+                })),
+                r: Box::new(ExpressionNode::from(-123)),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            &scope_tree,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_mod() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(string_string_literals(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(float_float_literals(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(string_int_literals(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(float_int_literals(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(int_float_literals(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(array_array_literals(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(array_range_literals(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(mapping_mapping_literals(BinaryOperation::Mod, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(string_string_vars(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(float_float_vars(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(string_int_vars(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(float_int_vars(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(int_float_vars(BinaryOperation::Mod, &scope_tree).is_ok());
+        assert!(array_array_vars(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(array_range_vars(BinaryOperation::Mod, &scope_tree).is_err());
+        assert!(mapping_mapping_vars(BinaryOperation::Mod, &scope_tree).is_err());
+
+        // valid complex tree
+        assert!(get_result(
+            BinaryOperation::Mod,
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(123)),
+                r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                op: BinaryOperation::Add,
+                span: None
+            }),
+            ExpressionNode::from(BinaryOpNode {
+                l: Box::new(ExpressionNode::from(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(-123)),
+                    r: Box::new(ExpressionNode::from(82)),
+                    op: BinaryOperation::Mod,
                     span: None
                 })),
                 r: Box::new(ExpressionNode::from(VarNode::new("int2"))),

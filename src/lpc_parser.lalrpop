@@ -726,6 +726,7 @@ AdditiveBinaryOp: BinaryOperation = {
 };
 
 MultiplicitiveBinaryOp: BinaryOperation = {
+    "%" => BinaryOperation::Mod,
     "*" => BinaryOperation::Mul,
     "/" => BinaryOperation::Div
 };

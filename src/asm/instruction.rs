@@ -81,6 +81,9 @@ pub enum Instruction {
     /// Integer division - x.2 = x.0 / x.1
     IDiv(Register, Register, Register),
 
+    /// Integer modulo division - x.2 = x.0 % x.1
+    IMod(Register, Register, Register),
+
     /// Integer division - x.2 = x.0 * x.1
     IMul(Register, Register, Register),
 
@@ -217,6 +220,9 @@ impl Display for Instruction {
             }
             Instruction::IDiv(r1, r2, r3) => {
                 write!(f, "idiv {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::IMod(r1, r2, r3) => {
+                write!(f, "imod {}, {}, {}", r1, r2, r3)
             }
             Instruction::IMul(r1, r2, r3) => {
                 write!(f, "imul {}, {}, {}", r1, r2, r3)

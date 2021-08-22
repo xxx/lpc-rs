@@ -320,6 +320,7 @@ impl CodegenWalker {
                 || Instruction::MMul(reg_left, reg_right, reg_result),
             ),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
+            BinaryOperation::Mod => Instruction::IMod(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => Instruction::AndAnd(reg_left, reg_right, reg_result),
             BinaryOperation::OrOr => Instruction::OrOr(reg_left, reg_right, reg_result),

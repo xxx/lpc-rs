@@ -12,6 +12,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
+use std::ops::Rem;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -304,6 +305,44 @@ impl Div for &LpcRef {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
                     Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
+                }
+            }
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+        }
+    }
+}
+
+impl Rem for &LpcRef {
+    type Output = Result<LpcValue>;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                if y == &0 {
+                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
+                } else {
+                    Ok(LpcValue::Int(x.wrapping_rem(*y)))
+                }
+            }
+            (LpcRef::Float(x), LpcRef::Float(y)) => {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(*x % *y))
+                }
+            }
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                if y == &0 {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(*x % *y as BaseFloat))
+                }
+            }
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
+                } else {
+                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) % *y))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
@@ -729,6 +768,71 @@ mod tests {
             let zero = LpcRef::Int(0);
 
             assert!((&int / &zero).is_err());
+        }
+    }
+
+    mod test_mod {
+        use super::*;
+
+        #[test]
+        fn int_int_overflow_does_not_panic() {
+            let int = LpcRef::Int(-1);
+            let int2 = LpcRef::Int(LpcInt::MAX);
+            let result = &int % &int2;
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn float_int() {
+            let float = LpcRef::from(666.66);
+            let int = LpcRef::Int(123);
+            let result = &float % &int;
+
+            if let Ok(LpcValue::Float(x)) = result {
+                assert_eq!(x, 51.65999999999997)
+            } else {
+                panic!("no match")
+            }
+        }
+
+        #[test]
+        fn float_int_overflow_does_not_panic() {
+            // I'm not sure it's possible to cause an overflow here?
+            let float = LpcRef::from(-1.0);
+            let int = LpcRef::Int(LpcInt::MAX);
+            let result = &float % &int;
+
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn int_float() {
+            let float = LpcRef::from(666.66);
+            let int = LpcRef::Int(123);
+            let result = &int % &float;
+
+            if let Ok(LpcValue::Float(x)) = result {
+                assert_eq!(x, 123.0)
+            } else {
+                panic!("no match")
+            }
+        }
+
+        #[test]
+        fn int_float_overflow_does_not_panic() {
+            let int = LpcRef::Int(-1);
+            let float = LpcRef::from(BaseFloat::MAX);
+            let result = &int % &float;
+
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn div_by_zero() {
+            let int = LpcRef::Int(123);
+            let zero = LpcRef::Int(0);
+
+            assert!((&int % &zero).is_err());
         }
     }
 }

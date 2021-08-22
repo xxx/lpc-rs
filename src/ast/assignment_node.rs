@@ -25,14 +25,17 @@ pub enum AssignmentOperation {
     /// Plus-equals assignment - `a += 1`;
     AddEq,
 
-    /// Plus-equals assignment - `a -= 1`;
+    /// Minus-equals assignment - `a -= 1`;
     SubEq,
 
-    /// Plus-equals assignment - `a *= 2`;
+    /// Times-equals assignment - `a *= 2`;
     MulEq,
 
-    /// Plus-equals assignment - `a /= 0`;
+    /// Divide-equals assignment - `a /= 0`;
     DivEq,
+
+    /// Modulo-equals assignment - `a %= 0`;
+    ModEq,
 
     /// AndAnd-equals assignment - `a &&= 12`;
     AndAndEq,
@@ -50,6 +53,7 @@ impl Display for AssignmentOperation {
             AssignmentOperation::SubEq => "-=",
             AssignmentOperation::MulEq => "*=",
             AssignmentOperation::DivEq => "/=",
+            AssignmentOperation::ModEq => "%=",
             AssignmentOperation::AndAndEq => "&&=",
             AssignmentOperation::OrOrEq => "||=",
         };
