@@ -1483,7 +1483,7 @@ mod tests {
                     Int(0),
 
                     Int(0),
-                    Int(333),
+                    Int(0),
                     Int(0)
                 ];
 
@@ -2409,8 +2409,8 @@ mod tests {
                     Int(0),
 
                     Int(123),
-                    Int(333),
                     Int(123),
+                    Int(0),
 
                     Int(0),
 

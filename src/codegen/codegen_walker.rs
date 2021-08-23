@@ -765,13 +765,58 @@ impl TreeWalker for CodegenWalker {
         node.l.visit(self)?;
         let reg_left = self.current_result;
 
-        // Ranges need special handling that complicates this function otherwise, due to
-        // the visit to node.r needing to handle multiple results.
-        if node.op == BinaryOperation::Index {
-            if let ExpressionNode::Range(range_node) = &mut *node.r {
-                self.emit_range(reg_left, range_node)?;
+        match node.op {
+            BinaryOperation::Index => {
+                // Ranges need special handling that complicates this function otherwise, due to
+                // the visit to node.r needing to handle multiple results.
+                if let ExpressionNode::Range(range_node) = &mut *node.r {
+                    self.emit_range(reg_left, range_node)?;
+                    return Ok(());
+                }
+            }
+            BinaryOperation::AndAnd => {
+                // Handle short-circuit behavior
+                let end_label = self.new_label("andand-end");
+                let instruction = Instruction::Jz(reg_left, end_label.clone());
+                push_instruction!(self, instruction, node.span);
+
+                node.r.visit(self)?;
+                let reg_right = self.current_result;
+                let instruction = Instruction::Jz(reg_right, end_label.clone());
+                push_instruction!(self, instruction, node.span);
+
+                let reg_result = self.register_counter.next().unwrap();
+                self.current_result = reg_result;
+
+                let instruction = Instruction::RegCopy(reg_right, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                self.labels.insert(end_label, self.instructions.len());
+
                 return Ok(());
             }
+            BinaryOperation::OrOr => {
+                // Handle short-circuit behavior
+                let end_label = self.new_label("oror-end");
+
+                let reg_result = self.register_counter.next().unwrap();
+                let instruction = Instruction::RegCopy(reg_left, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                let instruction = Instruction::Jnz(reg_result, end_label.clone());
+                push_instruction!(self, instruction, node.span);
+
+                node.r.visit(self)?;
+                let reg_right = self.current_result;
+                let instruction = Instruction::RegCopy(reg_right, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                self.labels.insert(end_label, self.instructions.len());
+                self.current_result = reg_result;
+
+                return Ok(());
+            }
+            _ => {}
         }
 
         node.r.visit(self)?;
@@ -1716,12 +1761,12 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{FConst, IConst0, IMul, Load, MAdd, Range};
+        use crate::asm::instruction::Instruction::{FConst, IConst0, IMul, Load, MAdd, Range, Jz, Jnz};
 
         use super::*;
 
         #[test]
-        fn test_visit_binary_op_populates_the_instructions_for_ints() {
+        fn populates_the_instructions_for_ints() {
             let mut walker = CodegenWalker::default();
 
             let mut node = BinaryOpNode {
@@ -1750,7 +1795,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_binary_op_populates_the_instructions_for_floats() {
+        fn populates_the_instructions_for_floats() {
             let mut context = Context::default();
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
@@ -1789,7 +1834,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_binary_op_populates_the_instructions_for_strings() {
+        fn populates_the_instructions_for_strings() {
             let mut walker = CodegenWalker::default();
 
             let mut node = BinaryOpNode {
@@ -1818,7 +1863,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_binary_op_populates_the_instructions_for_arrays() {
+        fn populates_the_instructions_for_arrays() {
             let mut walker = CodegenWalker::default();
 
             let mut node = BinaryOpNode {
@@ -1842,7 +1887,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_binary_op_populates_the_instructions_for_indexes() {
+        fn populates_the_instructions_for_indexes() {
             let context = Context::default();
             let mut walker = CodegenWalker::new(context);
 
@@ -1866,7 +1911,7 @@ mod tests {
         }
 
         #[test]
-        fn test_visit_binary_op_populates_the_instructions_for_slices() {
+        fn populates_the_instructions_for_slices() {
             let mut walker = CodegenWalker::default();
 
             let mut node = BinaryOpNode {
@@ -1888,6 +1933,62 @@ mod tests {
                 IConst1(Register(3)),
                 IConst(Register(4), -1),
                 Range(Register(2), Register(3), Register(4), Register(5)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_andand_expressions() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(123)),
+                r: Box::new(ExpressionNode::from("marf!")),
+                op: BinaryOperation::AndAnd,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                Jz(Register(1), "andand-end_0".into()),
+
+                // and also
+                SConst(Register(2), "marf!".into()),
+                Jz(Register(2), "andand-end_0".into()),
+                RegCopy(Register(2), Register(3)),
+
+                // end is here
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_oror_expressions() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(123)),
+                r: Box::new(ExpressionNode::from("sup?")),
+                op: BinaryOperation::OrOr,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                RegCopy(Register(1), Register(2)),
+                Jnz(Register(2), "oror-end_0".into()),
+
+                // else
+                SConst(Register(3), "sup?".into()),
+                RegCopy(Register(3), Register(2)),
+
+                // end is here
             ];
 
             assert_eq!(walker.instructions, expected);
