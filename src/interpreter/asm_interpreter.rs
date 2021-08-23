@@ -1421,16 +1421,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-
-                    Int(11),
-
-                    Int(0),
-                    Int(11),
-
-                    Int(0),
-                ];
+                let expected = vec![Int(0), Int(11), Int(0), Int(11), Int(0)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1453,16 +1444,13 @@ mod tests {
 
                 let expected = vec![
                     Int(0),
-
                     Int(123),
                     Int(333),
                     Int(333),
-
-                    Int(0),
-
                     Int(0),
                     Int(0),
-                    Int(0)
+                    Int(0),
+                    Int(0),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1536,7 +1524,7 @@ mod tests {
                     Int(10),
                     Int(0),
                     String("in_memory_snapshot".into()),
-                    Int(0)
+                    Int(0),
                 ];
 
                 assert_eq!(&expected, registers);
@@ -1567,7 +1555,7 @@ mod tests {
                     Int(10),
                     Int(2),
                     String("in_memory_snapshot".into()),
-                    Int(0)
+                    Int(0),
                 ];
 
                 assert_eq!(&expected, registers);
@@ -2353,16 +2341,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-
-                    Int(31),
-
-                    Int(0),
-                    Int(31),
-
-                    Int(31),
-                ];
+                let expected = vec![Int(0), Int(31), Int(0), Int(31), Int(31)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2385,16 +2364,13 @@ mod tests {
 
                 let expected = vec![
                     Int(0),
-
                     Int(123),
                     Int(123),
                     Int(0),
-
                     Int(0),
-
                     Int(0),
                     Int(123),
-                    Int(123)
+                    Int(123),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2546,16 +2522,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-
-                    Int(20),
-
-                    Int(0),
-                    Int(20),
-
-                    Int(20),
-                ];
+                let expected = vec![Int(0), Int(20), Int(0), Int(20), Int(20)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2575,16 +2542,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-
-                    Int(790080),
-
-                    Int(0),
-                    Int(790080),
-
-                    Int(0),
-                ];
+                let expected = vec![Int(0), Int(790080), Int(0), Int(790080), Int(0)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2604,16 +2562,7 @@ mod tests {
                 let interpreter = run_prog(code);
                 let registers = interpreter.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-
-                    Int(192),
-
-                    Int(0),
-                    Int(192),
-
-                    Int(0),
-                ];
+                let expected = vec![Int(0), Int(192), Int(0), Int(192), Int(0)];
 
                 assert_eq!(&expected, &registers);
             }

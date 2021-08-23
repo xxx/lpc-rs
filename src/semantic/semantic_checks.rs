@@ -172,18 +172,12 @@ pub fn check_binary_operation_types(
                 right_type,
             )),
         },
-        BinaryOperation::Div
-        | BinaryOperation::Mod => match tuple {
+        BinaryOperation::Div | BinaryOperation::Mod => match tuple {
             (LpcType::Int(false), LpcType::Int(false))
             | (LpcType::Float(false), LpcType::Float(false))
             | (LpcType::Int(false), LpcType::Float(false))
             | (LpcType::Float(false), LpcType::Int(false)) => Ok(()),
-            (left_type, right_type) => Err(create_error(
-                node,
-                node.op,
-                left_type,
-                right_type,
-            )),
+            (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
         },
         BinaryOperation::Index => {
             if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
@@ -207,11 +201,9 @@ pub fn check_binary_operation_types(
         | BinaryOperation::Or
         | BinaryOperation::Xor
         | BinaryOperation::Shl
-        | BinaryOperation::Shr => {
-            match tuple {
-                (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
-                (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
-            }
+        | BinaryOperation::Shr => match tuple {
+            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+            (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
         },
         BinaryOperation::EqEq => Ok(()),
         BinaryOperation::Lt | BinaryOperation::Lte | BinaryOperation::Gt | BinaryOperation::Gte => {
@@ -1115,7 +1107,7 @@ mod check_binary_operation_tests {
             }),
             &scope_tree,
         )
-            .is_ok());
+        .is_ok());
 
         // invalid complex tree
         assert!(get_result(
@@ -1139,7 +1131,7 @@ mod check_binary_operation_tests {
             }),
             &scope_tree,
         )
-            .is_err());
+        .is_err());
     }
 
     #[test]
@@ -1317,7 +1309,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::Gte, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Gte, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_eqeq() {
         let scope_tree = setup();
@@ -1342,7 +1334,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
         assert!(mapping_mapping_vars(BinaryOperation::EqEq, &scope_tree).is_ok());
     }
-    
+
     #[test]
     fn test_andand() {
         let scope_tree = setup();
@@ -1392,7 +1384,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
         assert!(mapping_mapping_vars(BinaryOperation::OrOr, &scope_tree).is_ok());
     }
-    
+
     #[test]
     fn test_and() {
         let scope_tree = setup();
@@ -1442,7 +1434,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::Or, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Or, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_xor() {
         let scope_tree = setup();
@@ -1467,7 +1459,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::Xor, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Xor, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_shl() {
         let scope_tree = setup();
@@ -1492,7 +1484,7 @@ mod check_binary_operation_tests {
         assert!(array_range_vars(BinaryOperation::Shl, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Shl, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_shr() {
         let scope_tree = setup();

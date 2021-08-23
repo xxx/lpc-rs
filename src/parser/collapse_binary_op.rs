@@ -246,12 +246,10 @@ fn collapse_and(
     span: Span,
 ) -> ExpressionNode {
     match (&l, &r) {
-        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
-            ExpressionNode::Int(IntNode {
-                value: node.value & node2.value,
-                span: Some(span),
-            })
-        }
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
+            value: node.value & node2.value,
+            span: Some(span),
+        }),
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
@@ -268,12 +266,10 @@ fn collapse_or(
     span: Span,
 ) -> ExpressionNode {
     match (&l, &r) {
-        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
-            ExpressionNode::Int(IntNode {
-                value: node.value | node2.value,
-                span: Some(span),
-            })
-        }
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
+            value: node.value | node2.value,
+            span: Some(span),
+        }),
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
@@ -290,12 +286,10 @@ fn collapse_xor(
     span: Span,
 ) -> ExpressionNode {
     match (&l, &r) {
-        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
-            ExpressionNode::Int(IntNode {
-                value: node.value ^ node2.value,
-                span: Some(span),
-            })
-        }
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
+            value: node.value ^ node2.value,
+            span: Some(span),
+        }),
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
@@ -312,12 +306,10 @@ fn collapse_shl(
     span: Span,
 ) -> ExpressionNode {
     match (&l, &r) {
-        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
-            ExpressionNode::Int(IntNode {
-                value: node.value << node2.value,
-                span: Some(span),
-            })
-        }
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
+            value: node.value << node2.value,
+            span: Some(span),
+        }),
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
@@ -334,12 +326,10 @@ fn collapse_shr(
     span: Span,
 ) -> ExpressionNode {
     match (&l, &r) {
-        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
-            ExpressionNode::Int(IntNode {
-                value: node.value >> node2.value,
-                span: Some(span),
-            })
-        }
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
+            value: node.value >> node2.value,
+            span: Some(span),
+        }),
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),

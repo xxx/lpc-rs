@@ -322,8 +322,12 @@ impl CodegenWalker {
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Mod => Instruction::IMod(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
-            BinaryOperation::AndAnd => unimplemented!("The short-circuiting behavior requires multiple instructions"),
-            BinaryOperation::OrOr => unimplemented!("The short-circuiting behavior requires multiple instructions"),
+            BinaryOperation::AndAnd => {
+                unimplemented!("The short-circuiting behavior requires multiple instructions")
+            }
+            BinaryOperation::OrOr => {
+                unimplemented!("The short-circuiting behavior requires multiple instructions")
+            }
             BinaryOperation::And => Instruction::And(reg_left, reg_right, reg_result),
             BinaryOperation::Or => Instruction::Or(reg_left, reg_right, reg_result),
             BinaryOperation::Xor => Instruction::Xor(reg_left, reg_right, reg_result),
@@ -1463,7 +1467,7 @@ mod tests {
     }
 
     mod test_visit_call {
-        use crate::asm::instruction::Instruction::{Call, CallOther, IDiv, CatchEnd, CatchStart};
+        use crate::asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
 
         use super::*;
         use crate::semantic::{
@@ -1533,7 +1537,7 @@ mod tests {
                 IConst(Register(2), 12),
                 IConst0(Register(3)),
                 IDiv(Register(2), Register(3), Register(4)),
-                CatchEnd
+                CatchEnd,
             ];
 
             assert_eq!(walker.instructions, expected);
@@ -1761,7 +1765,9 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{FConst, IConst0, IMul, Load, MAdd, Range, Jz, Jnz};
+        use crate::asm::instruction::Instruction::{
+            FConst, IConst0, IMul, Jnz, Jz, Load, MAdd, Range,
+        };
 
         use super::*;
 
@@ -1954,12 +1960,10 @@ mod tests {
             let expected = vec![
                 IConst(Register(1), 123),
                 Jz(Register(1), "andand-end_0".into()),
-
                 // and also
                 SConst(Register(2), "marf!".into()),
                 Jz(Register(2), "andand-end_0".into()),
                 RegCopy(Register(2), Register(3)),
-
                 // end is here
             ];
 
@@ -1983,11 +1987,9 @@ mod tests {
                 IConst(Register(1), 123),
                 RegCopy(Register(1), Register(2)),
                 Jnz(Register(2), "oror-end_0".into()),
-
                 // else
                 SConst(Register(3), "sup?".into()),
                 RegCopy(Register(3), Register(2)),
-
                 // end is here
             ];
 

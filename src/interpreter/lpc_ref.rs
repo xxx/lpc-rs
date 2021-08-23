@@ -9,10 +9,9 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub},
     ptr,
 };
-use std::ops::{Rem, BitOr, BitAnd, BitXor, Shl, Shr};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -398,7 +397,7 @@ impl Shl for &LpcRef {
                 };
 
                 Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
-            },
+            }
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
@@ -419,7 +418,7 @@ impl Shr for &LpcRef {
                 };
 
                 Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
-            },
+            }
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
