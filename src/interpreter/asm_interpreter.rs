@@ -777,6 +777,10 @@ impl AsmInterpreter {
                     LpcRef::Int(0)
                 };
             }
+            Instruction::Or(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x | y)?;
+            }
             Instruction::OrOr(r1, r2, r3) => {
                 let registers = current_registers_mut(&mut self.stack)?;
 
@@ -2339,6 +2343,35 @@ mod tests {
                     Int(0),
                     Int(123),
                     Int(123)
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_or {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 15 | 27;
+                    mixed b = 0 | a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(31),
+
+                    Int(0),
+                    Int(31),
+
+                    Int(31),
                 ];
 
                 assert_eq!(&expected, &registers);

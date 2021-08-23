@@ -130,6 +130,10 @@ pub enum Instruction {
     /// x.2 = x.0 || x.1
     OrOr(Register, Register, Register),
 
+    /// bitwise | comparison.
+    /// x.2 = x.0 | x.1
+    Or(Register, Register, Register),
+
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
     Range(Register, Register, Register, Register),
@@ -267,6 +271,9 @@ impl Display for Instruction {
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "not {}, {}", r1, r2)
+            }
+            Instruction::Or(r1, r2, r3) => {
+                write!(f, "or {}, {}, {}", r1, r2, r3)
             }
             Instruction::OrOr(r1, r2, r3) => {
                 write!(f, "oror {}, {}, {}", r1, r2, r3)

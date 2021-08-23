@@ -203,6 +203,12 @@ pub fn check_binary_operation_types(
         }
         BinaryOperation::AndAnd => Ok(()),
         BinaryOperation::OrOr => Ok(()),
+        BinaryOperation::Or => {
+            match tuple {
+                (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+                (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
+            }
+        },
         BinaryOperation::EqEq => Ok(()),
         BinaryOperation::Lt | BinaryOperation::Lte | BinaryOperation::Gt | BinaryOperation::Gte => {
             match tuple {

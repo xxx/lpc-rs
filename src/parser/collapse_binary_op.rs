@@ -28,6 +28,7 @@ pub fn collapse_binary_op(
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Div => collapse_div(op, l, r, span),
         BinaryOperation::Mod => collapse_mod(op, l, r, span),
+        BinaryOperation::Or => collapse_or(op, l, r, span),
         BinaryOperation::Index
         | BinaryOperation::EqEq
         | BinaryOperation::Lt
@@ -224,6 +225,28 @@ fn collapse_mod(
                     span: Some(span),
                 })
             }
+        }
+        _ => ExpressionNode::BinaryOp(BinaryOpNode {
+            l: Box::new(l),
+            r: Box::new(r),
+            op,
+            span: Some(span),
+        }),
+    }
+}
+
+fn collapse_or(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
+    match (&l, &r) {
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
+            ExpressionNode::Int(IntNode {
+                value: node.value | node2.value,
+                span: Some(span),
+            })
         }
         _ => ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),

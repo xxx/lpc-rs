@@ -533,7 +533,12 @@ pub ExclusiveOrExpression: ExpressionNode = {
 };
 
 pub OrExpression: ExpressionNode = {
-    <ExclusiveOrExpression>
+    <ExclusiveOrExpression>,
+    <l:OrExpression> "|" <r:ExclusiveOrExpression> => {
+        let span = combine_spans(l.span(), r.span());
+
+        collapse_binary_op(BinaryOperation::Or, l, r, span)
+    }
 };
 
 pub LogicalAndExpression: ExpressionNode = {
@@ -541,7 +546,7 @@ pub LogicalAndExpression: ExpressionNode = {
     <l:LogicalAndExpression> "&&" <r:OrExpression> => {
         let span = combine_spans(l.span(), r.span());
 
-         collapse_binary_op(BinaryOperation::AndAnd, l, r, span)
+        collapse_binary_op(BinaryOperation::AndAnd, l, r, span)
     }
 };
 
@@ -550,7 +555,7 @@ pub LogicalOrExpression: ExpressionNode = {
     <l:LogicalOrExpression> "||" <r:LogicalAndExpression> => {
         let span = combine_spans(l.span(), r.span());
 
-         collapse_binary_op(BinaryOperation::OrOr, l, r, span)
+        collapse_binary_op(BinaryOperation::OrOr, l, r, span)
     }
 };
 

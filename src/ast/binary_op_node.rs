@@ -30,6 +30,7 @@ pub enum BinaryOperation {
     Lte,
     Mod,
     Mul,
+    Or,
     OrOr,
     Sub,
 }
@@ -48,6 +49,7 @@ impl Display for BinaryOperation {
             BinaryOperation::Lte => "<=",
             BinaryOperation::Mod => "%",
             BinaryOperation::Mul => "*",
+            BinaryOperation::Or => "|",
             BinaryOperation::OrOr => "||",
             BinaryOperation::Sub => "-",
         };
@@ -73,6 +75,7 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
             AssignmentOperation::DivEq => Ok(Self::Div),
             AssignmentOperation::AndAndEq => Ok(Self::AndAnd),
             AssignmentOperation::OrOrEq => Ok(Self::OrOr),
+            AssignmentOperation::OrEq => Ok(Self::Or),
         }
     }
 }
