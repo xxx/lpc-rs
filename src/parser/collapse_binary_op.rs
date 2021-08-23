@@ -30,6 +30,7 @@ pub fn collapse_binary_op(
         BinaryOperation::Mod => collapse_mod(op, l, r, span),
         BinaryOperation::And => collapse_and(op, l, r, span),
         BinaryOperation::Or => collapse_or(op, l, r, span),
+        BinaryOperation::Xor => collapse_xor(op, l, r, span),
         BinaryOperation::Index
         | BinaryOperation::EqEq
         | BinaryOperation::Lt
@@ -280,6 +281,28 @@ fn collapse_or(
     }
 }
 
+fn collapse_xor(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
+    match (&l, &r) {
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
+            ExpressionNode::Int(IntNode {
+                value: node.value ^ node2.value,
+                span: Some(span),
+            })
+        }
+        _ => ExpressionNode::BinaryOp(BinaryOpNode {
+            l: Box::new(l),
+            r: Box::new(r),
+            op,
+            span: Some(span),
+        }),
+    }
+}
+
 /// handle string * int and int * string
 fn collapse_repeat_string(string: String, amount: LpcInt, span: Span) -> ExpressionNode {
     if amount >= 0 {
@@ -482,6 +505,23 @@ mod tests {
             result,
             ExpressionNode::Int(IntNode {
                 value: 124,
+                span: Some(span)
+            })
+        );
+    }
+
+    #[test]
+    fn test_collapses_xor_int_and_int() {
+        let node1 = ExpressionNode::from(120);
+        let node2 = ExpressionNode::from(36);
+        let op = BinaryOperation::Xor;
+        let span = Span::new(0, 0..1);
+
+        let result = collapse_binary_op(op, node1, node2, span);
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 92,
                 span: Some(span)
             })
         );

@@ -996,6 +996,10 @@ impl AsmInterpreter {
 
                 registers[r.index()] = new_ref;
             }
+            Instruction::Xor(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x ^ y)?;
+            }
         }
 
         Ok(false)
@@ -2349,6 +2353,35 @@ mod tests {
             }
         }
 
+        mod test_or {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 15 | 27;
+                    mixed b = 0 | a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(31),
+
+                    Int(0),
+                    Int(31),
+
+                    Int(31),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_oror {
             use super::*;
             use crate::interpreter::asm_interpreter::tests::BareVal::Int;
@@ -2376,35 +2409,6 @@ mod tests {
                     Int(0),
                     Int(123),
                     Int(123)
-                ];
-
-                assert_eq!(&expected, &registers);
-            }
-        }
-
-        mod test_or {
-            use super::*;
-            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
-
-            #[test]
-            fn stores_the_value() {
-                let code = indoc! { r##"
-                    mixed a = 15 | 27;
-                    mixed b = 0 | a;
-                "##};
-
-                let interpreter = run_prog(code);
-                let registers = interpreter.popped_frame.unwrap().registers;
-
-                let expected = vec![
-                    Int(0),
-
-                    Int(31),
-
-                    Int(0),
-                    Int(31),
-
-                    Int(31),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2537,6 +2541,35 @@ mod tests {
                 let registers = interpreter.popped_frame.unwrap().registers;
 
                 let expected = vec![BareVal::Int(0), BareVal::String("lolwut".into())];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_xor {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 15 ^ 27;
+                    mixed b = 0 ^ a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(20),
+
+                    Int(0),
+                    Int(20),
+
+                    Int(20),
+                ];
 
                 assert_eq!(&expected, &registers);
             }

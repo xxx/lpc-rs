@@ -48,6 +48,9 @@ pub enum AssignmentOperation {
 
     /// bitwise Or-equals assignment - `a |= 12`;
     OrEq,
+
+    /// bitwise Xor-equals assignment - `a ^= 12`;
+    XorEq,
 }
 
 impl Display for AssignmentOperation {
@@ -64,6 +67,7 @@ impl Display for AssignmentOperation {
             AssignmentOperation::OrOrEq => "||=",
             AssignmentOperation::AndEq => "&=",
             AssignmentOperation::OrEq => "|=",
+            AssignmentOperation::XorEq => "^=",
         };
 
         write!(f, "{}", s)

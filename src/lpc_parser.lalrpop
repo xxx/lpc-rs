@@ -531,11 +531,15 @@ pub AndExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::And, l, r, span)
     }
-
 };
 
 pub ExclusiveOrExpression: ExpressionNode = {
-    <AndExpression>
+    <AndExpression>,
+    <l:ExclusiveOrExpression> "^" <r:AndExpression> => {
+        let span = combine_spans(l.span(), r.span());
+
+        collapse_binary_op(BinaryOperation::Xor, l, r, span)
+    }
 };
 
 pub OrExpression: ExpressionNode = {

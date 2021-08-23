@@ -12,7 +12,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
-use std::ops::{Rem, BitOr, BitAnd};
+use std::ops::{Rem, BitOr, BitAnd, BitXor};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -367,6 +367,17 @@ impl BitOr for &LpcRef {
     fn bitor(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x | *y)),
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+        }
+    }
+}
+
+impl BitXor for &LpcRef {
+    type Output = Result<LpcValue>;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
@@ -884,6 +895,22 @@ mod tests {
             let result = &int | &int2;
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 23)
+            } else {
+                panic!("no match")
+            }
+        }
+    }
+
+    mod test_xor {
+        use super::*;
+
+        #[test]
+        fn int_int() {
+            let int = LpcRef::Int(7);
+            let int2 = LpcRef::Int(15);
+            let result = &int ^ &int2;
+            if let Ok(LpcValue::Int(x)) = result {
+                assert_eq!(x, 8)
             } else {
                 panic!("no match")
             }

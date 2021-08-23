@@ -34,6 +34,7 @@ pub enum BinaryOperation {
     Or,
     OrOr,
     Sub,
+    Xor,
 }
 
 impl Display for BinaryOperation {
@@ -54,6 +55,7 @@ impl Display for BinaryOperation {
             BinaryOperation::Or => "|",
             BinaryOperation::OrOr => "||",
             BinaryOperation::Sub => "-",
+            BinaryOperation::Xor => "^",
         };
 
         write!(f, "{}", s)
@@ -79,6 +81,7 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
             AssignmentOperation::OrOrEq => Ok(Self::OrOr),
             AssignmentOperation::AndEq => Ok(Self::And),
             AssignmentOperation::OrEq => Ok(Self::Or),
+            AssignmentOperation::XorEq => Ok(Self::Xor),
         }
     }
 }
