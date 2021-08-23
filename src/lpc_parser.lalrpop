@@ -504,6 +504,11 @@ pub AdditiveExpression: ExpressionNode = {
 
 pub ShiftExpression: ExpressionNode = {
     <AdditiveExpression>,
+    <l:ShiftExpression> <op:ShiftOp> <r:AdditiveExpression> => {
+        let span = combine_spans(l.span(), r.span());
+
+        collapse_binary_op(op, l, r, span)
+    }
 };
 
 pub RelationalExpression: ExpressionNode = {
@@ -733,6 +738,10 @@ AssignmentOp: AssignmentOperation = {
     "/=" => AssignmentOperation::DivEq,
     "&&=" => AssignmentOperation::AndAndEq,
     "||=" => AssignmentOperation::OrOrEq,
+    "&=" => AssignmentOperation::AndEq,
+    "|=" => AssignmentOperation::OrEq,
+    "<<=" => AssignmentOperation::ShlEq,
+    ">>=" => AssignmentOperation::ShrEq,
 };
 
 AdditiveBinaryOp: BinaryOperation = {
@@ -755,6 +764,11 @@ RelationalOp: BinaryOperation = {
     "<=" => BinaryOperation::Lte,
     ">" => BinaryOperation::Gt,
     ">=" => BinaryOperation::Gte,
+};
+
+ShiftOp: BinaryOperation = {
+    "<<" => BinaryOperation::Shl,
+    ">>" => BinaryOperation::Shr,
 };
 
 UnaryOp: (UnaryOperation, Range<usize>) = {

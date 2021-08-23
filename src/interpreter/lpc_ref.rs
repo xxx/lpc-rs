@@ -12,7 +12,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
-use std::ops::{Rem, BitOr, BitAnd, BitXor};
+use std::ops::{Rem, BitOr, BitAnd, BitXor, Shl, Shr};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -378,6 +378,48 @@ impl BitXor for &LpcRef {
     fn bitxor(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+        }
+    }
+}
+
+impl Shl for &LpcRef {
+    type Output = Result<LpcValue>;
+
+    fn shl(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
+
+                let shift_by: u32 = if modulo < 0 {
+                    LpcInt::BITS - (modulo.abs() as u32)
+                } else {
+                    modulo as u32
+                };
+
+                Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
+            },
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+        }
+    }
+}
+
+impl Shr for &LpcRef {
+    type Output = Result<LpcValue>;
+
+    fn shr(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
+
+                let shift_by: u32 = if modulo < 0 {
+                    LpcInt::BITS - (modulo.abs() as u32)
+                } else {
+                    modulo as u32
+                };
+
+                Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
+            },
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
@@ -911,6 +953,38 @@ mod tests {
             let result = &int ^ &int2;
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
+            } else {
+                panic!("no match")
+            }
+        }
+    }
+
+    mod test_shl {
+        use super::*;
+
+        #[test]
+        fn int_int() {
+            let int = LpcRef::Int(12345);
+            let int2 = LpcRef::Int(6);
+            let result = &int << &int2;
+            if let Ok(LpcValue::Int(x)) = result {
+                assert_eq!(x, 790_080)
+            } else {
+                panic!("no match")
+            }
+        }
+    }
+
+    mod test_shr {
+        use super::*;
+
+        #[test]
+        fn int_int() {
+            let int = LpcRef::Int(12345);
+            let int2 = LpcRef::Int(6);
+            let result = &int >> &int2;
+            if let Ok(LpcValue::Int(x)) = result {
+                assert_eq!(x, 192)
             } else {
                 panic!("no match")
             }

@@ -940,6 +940,14 @@ impl AsmInterpreter {
                     return Ok(true);
                 }
             }
+            Instruction::Shl(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x << y)?;
+            }
+            Instruction::Shr(r1, r2, r3) => {
+                let (n1, n2, n3) = (*r1, *r2, *r3);
+                self.binary_operation(n1, n2, n3, |x, y| x >> y)?;
+            }
             Instruction::Store(r1, r2, r3) => {
                 // r2[r3] = r1;
 
@@ -2569,6 +2577,64 @@ mod tests {
                     Int(20),
 
                     Int(20),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_shl {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 12345 << 6;
+                    mixed b = 0 << a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(790080),
+
+                    Int(0),
+                    Int(790080),
+
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_shr {
+            use super::*;
+            use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 12345 >> 6;
+                    mixed b = 0 >> a;
+                "##};
+
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+
+                    Int(192),
+
+                    Int(0),
+                    Int(192),
+
+                    Int(0),
                 ];
 
                 assert_eq!(&expected, &registers);

@@ -205,7 +205,9 @@ pub fn check_binary_operation_types(
         BinaryOperation::OrOr => Ok(()),
         BinaryOperation::And
         | BinaryOperation::Or
-        | BinaryOperation::Xor => {
+        | BinaryOperation::Xor
+        | BinaryOperation::Shl
+        | BinaryOperation::Shr => {
             match tuple {
                 (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
@@ -1464,6 +1466,56 @@ mod check_binary_operation_tests {
         assert!(array_int_vars(BinaryOperation::Xor, &scope_tree).is_err());
         assert!(array_range_vars(BinaryOperation::Xor, &scope_tree).is_err());
         assert!(mapping_mapping_vars(BinaryOperation::Xor, &scope_tree).is_err());
+    }
+    
+    #[test]
+    fn test_shl() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Shl, &scope_tree).is_ok());
+        assert!(float_float_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(string_string_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(array_range_literals(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(mapping_mapping_literals(BinaryOperation::Shl, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Shl, &scope_tree).is_ok());
+        assert!(float_float_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(string_string_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(array_range_vars(BinaryOperation::Shl, &scope_tree).is_err());
+        assert!(mapping_mapping_vars(BinaryOperation::Shl, &scope_tree).is_err());
+    }
+    
+    #[test]
+    fn test_shr() {
+        let scope_tree = setup();
+
+        assert!(int_int_literals(BinaryOperation::Shr, &scope_tree).is_ok());
+        assert!(float_float_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(string_string_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(string_int_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(int_string_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(array_array_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(array_int_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(array_range_literals(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(mapping_mapping_literals(BinaryOperation::Shr, &scope_tree).is_err());
+
+        assert!(int_int_vars(BinaryOperation::Shr, &scope_tree).is_ok());
+        assert!(float_float_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(string_string_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(string_int_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(int_string_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(array_array_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(array_int_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(array_range_vars(BinaryOperation::Shr, &scope_tree).is_err());
+        assert!(mapping_mapping_vars(BinaryOperation::Shr, &scope_tree).is_err());
     }
 }
 

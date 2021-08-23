@@ -148,6 +148,14 @@ pub enum Instruction {
     /// Return from current function
     Ret,
 
+    /// left shift
+    /// x.2 = x.0 << x.1
+    Shl(Register, Register, Register),
+
+    /// right shift
+    /// x.1 = x.1 >> x.1
+    Shr(Register, Register, Register),
+
     /// Store a single item into an array or mapping
     /// x.1[x.2] = x.0
     Store(Register, Register, Register),
@@ -297,6 +305,12 @@ impl Display for Instruction {
             }
             Instruction::Ret => {
                 write!(f, "ret")
+            }
+            Instruction::Shl(r1, r2, r3) => {
+                write!(f, "shl {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Shr(r1, r2, r3) => {
+                write!(f, "shr {}, {}, {}", r1, r2, r3)
             }
             Instruction::Store(r1, r2, r3) => {
                 write!(f, "store {}, {}, {}", r1, r2, r3)

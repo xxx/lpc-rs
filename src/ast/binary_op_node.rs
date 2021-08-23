@@ -33,6 +33,8 @@ pub enum BinaryOperation {
     Mul,
     Or,
     OrOr,
+    Shl,
+    Shr,
     Sub,
     Xor,
 }
@@ -55,6 +57,8 @@ impl Display for BinaryOperation {
             BinaryOperation::Or => "|",
             BinaryOperation::OrOr => "||",
             BinaryOperation::Sub => "-",
+            BinaryOperation::Shl => "<<",
+            BinaryOperation::Shr => ">>",
             BinaryOperation::Xor => "^",
         };
 
@@ -71,16 +75,18 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
                 "Failure to convert `{}` into a BinaryOperation",
                 value
             ))),
-            AssignmentOperation::Index => Ok(Self::Index),
             AssignmentOperation::AddEq => Ok(Self::Add),
-            AssignmentOperation::SubEq => Ok(Self::Sub),
+            AssignmentOperation::AndAndEq => Ok(Self::AndAnd),
+            AssignmentOperation::AndEq => Ok(Self::And),
+            AssignmentOperation::DivEq => Ok(Self::Div),
+            AssignmentOperation::Index => Ok(Self::Index),
             AssignmentOperation::ModEq => Ok(Self::Mod),
             AssignmentOperation::MulEq => Ok(Self::Mul),
-            AssignmentOperation::DivEq => Ok(Self::Div),
-            AssignmentOperation::AndAndEq => Ok(Self::AndAnd),
-            AssignmentOperation::OrOrEq => Ok(Self::OrOr),
-            AssignmentOperation::AndEq => Ok(Self::And),
             AssignmentOperation::OrEq => Ok(Self::Or),
+            AssignmentOperation::OrOrEq => Ok(Self::OrOr),
+            AssignmentOperation::ShlEq => Ok(Self::Shl),
+            AssignmentOperation::ShrEq => Ok(Self::Shr),
+            AssignmentOperation::SubEq => Ok(Self::Sub),
             AssignmentOperation::XorEq => Ok(Self::Xor),
         }
     }

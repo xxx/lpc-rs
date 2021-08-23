@@ -332,6 +332,8 @@ impl CodegenWalker {
             BinaryOperation::Lte => Instruction::Lte(reg_left, reg_right, reg_result),
             BinaryOperation::Gt => Instruction::Gt(reg_left, reg_right, reg_result),
             BinaryOperation::Gte => Instruction::Gte(reg_left, reg_right, reg_result),
+            BinaryOperation::Shl => Instruction::Shl(reg_left, reg_right, reg_result),
+            BinaryOperation::Shr => Instruction::Shr(reg_left, reg_right, reg_result),
         }
     }
 

@@ -19,35 +19,41 @@ pub enum AssignmentOperation {
     /// Simple assignment - `var = 2;`
     Simple,
 
-    /// Index assigment - `a[2] = "hello";`
-    Index,
-
     /// Plus-equals assignment - `a += 1`;
     AddEq,
-
-    /// Minus-equals assignment - `a -= 1`;
-    SubEq,
-
-    /// Times-equals assignment - `a *= 2`;
-    MulEq,
-
-    /// Divide-equals assignment - `a /= 0`;
-    DivEq,
-
-    /// Modulo-equals assignment - `a %= 0`;
-    ModEq,
 
     /// AndAnd-equals assignment - `a &&= 12`;
     AndAndEq,
 
-    /// OrOr-equals assignment - `a ||= 12`;
-    OrOrEq,
-
     /// bitwise And-equals assignment - `a &= 12`;
     AndEq,
 
+    /// Divide-equals assignment - `a /= 0`;
+    DivEq,
+
+    /// Index assigment - `a[2] = "hello";`
+    Index,
+
+    /// Modulo-equals assignment - `a %= 0`;
+    ModEq,
+
+    /// Times-equals assignment - `a *= 2`;
+    MulEq,
+
     /// bitwise Or-equals assignment - `a |= 12`;
     OrEq,
+
+    /// OrOr-equals assignment - `a ||= 12`;
+    OrOrEq,
+
+    /// shift-left-equals assignment - `a <<= 1`;
+    ShlEq,
+
+    /// shift-right-equals assignment - `a >>= 1`;
+    ShrEq,
+
+    /// Minus-equals assignment - `a -= 1`;
+    SubEq,
 
     /// bitwise Xor-equals assignment - `a ^= 12`;
     XorEq,
@@ -57,16 +63,18 @@ impl Display for AssignmentOperation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = match self {
             AssignmentOperation::Simple => "=",
-            AssignmentOperation::Index => "[]",
             AssignmentOperation::AddEq => "+=",
-            AssignmentOperation::SubEq => "-=",
-            AssignmentOperation::MulEq => "*=",
-            AssignmentOperation::DivEq => "/=",
-            AssignmentOperation::ModEq => "%=",
             AssignmentOperation::AndAndEq => "&&=",
-            AssignmentOperation::OrOrEq => "||=",
             AssignmentOperation::AndEq => "&=",
+            AssignmentOperation::DivEq => "/=",
+            AssignmentOperation::Index => "[]",
+            AssignmentOperation::ModEq => "%=",
+            AssignmentOperation::MulEq => "*=",
             AssignmentOperation::OrEq => "|=",
+            AssignmentOperation::OrOrEq => "||=",
+            AssignmentOperation::ShlEq => "<<=",
+            AssignmentOperation::ShrEq => ">>=",
+            AssignmentOperation::SubEq => "-=",
             AssignmentOperation::XorEq => "^=",
         };
 
