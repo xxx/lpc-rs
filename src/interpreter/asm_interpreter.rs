@@ -370,17 +370,6 @@ impl AsmInterpreter {
                 let (n1, n2, n3) = (*r1, *r2, *r3);
                 self.binary_operation(n1, n2, n3, |x, y| x & y)?;
             }
-            Instruction::AndAnd(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
-
-                let idx = if matches!(registers[r1.index()], LpcRef::Int(0)) {
-                    r1.index()
-                } else {
-                    r2.index()
-                };
-
-                registers[r3.index()] = registers[idx].clone();
-            }
             Instruction::Call {
                 name,
                 num_args,
@@ -784,17 +773,6 @@ impl AsmInterpreter {
             Instruction::Or(r1, r2, r3) => {
                 let (n1, n2, n3) = (*r1, *r2, *r3);
                 self.binary_operation(n1, n2, n3, |x, y| x | y)?;
-            }
-            Instruction::OrOr(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
-
-                let idx = if matches!(registers[r1.index()], LpcRef::Int(0)) {
-                    r2.index()
-                } else {
-                    r1.index()
-                };
-
-                registers[r3.index()] = registers[idx].clone();
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]

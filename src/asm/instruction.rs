@@ -17,10 +17,6 @@ pub enum Instruction {
     /// Create an array with values from the vector
     AConst(Register, Vec<Register>),
 
-    /// short-circuiting && comparison.
-    /// x.2 = x.0 && x.1
-    AndAnd(Register, Register, Register),
-
     /// bitwise-and combination.
     /// x.2 = x.0 & x.1
     And(Register, Register, Register),
@@ -134,10 +130,6 @@ pub enum Instruction {
     /// x.2 = x.0 | x.1
     Or(Register, Register, Register),
 
-    /// short-circuiting || comparison.
-    /// x.2 = x.0 || x.1
-    OrOr(Register, Register, Register),
-
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
     Range(Register, Register, Register, Register),
@@ -182,9 +174,6 @@ impl Display for Instruction {
             }
             Instruction::And(r1, r2, r3) => {
                 write!(f, "and {}, {}, {}", r1, r2, r3)
-            }
-            Instruction::AndAnd(r1, r2, r3) => {
-                write!(f, "andand {}, {}, {}", r1, r2, r3)
             }
             Instruction::CatchEnd => {
                 write!(f, "catchend")
@@ -293,9 +282,6 @@ impl Display for Instruction {
             }
             Instruction::Or(r1, r2, r3) => {
                 write!(f, "or {}, {}, {}", r1, r2, r3)
-            }
-            Instruction::OrOr(r1, r2, r3) => {
-                write!(f, "oror {}, {}, {}", r1, r2, r3)
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {}, {}, {}, {}", r1, r2, r3, r4)
