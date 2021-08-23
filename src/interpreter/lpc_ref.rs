@@ -12,7 +12,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
     ptr,
 };
-use std::ops::{Rem, BitOr};
+use std::ops::{Rem, BitOr, BitAnd};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -346,6 +346,17 @@ impl Rem for &LpcRef {
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
+        }
+    }
+}
+
+impl BitAnd for &LpcRef {
+    type Output = Result<LpcValue>;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x & *y)),
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
 }
@@ -844,6 +855,22 @@ mod tests {
             let zero = LpcRef::Int(0);
 
             assert!((&int % &zero).is_err());
+        }
+    }
+
+    mod test_and {
+        use super::*;
+
+        #[test]
+        fn int_int() {
+            let int = LpcRef::Int(8);
+            let int2 = LpcRef::Int(15);
+            let result = &int & &int2;
+            if let Ok(LpcValue::Int(x)) = result {
+                assert_eq!(x, 8)
+            } else {
+                panic!("no match")
+            }
         }
     }
 

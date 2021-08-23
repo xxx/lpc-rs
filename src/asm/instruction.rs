@@ -21,6 +21,10 @@ pub enum Instruction {
     /// x.2 = x.0 && x.1
     AndAnd(Register, Register, Register),
 
+    /// bitwise-and combination.
+    /// x.2 = x.0 & x.1
+    And(Register, Register, Register),
+
     /// Call a function
     Call {
         name: String,
@@ -163,6 +167,9 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "aconst {}, {}", r1, s)
+            }
+            Instruction::And(r1, r2, r3) => {
+                write!(f, "and {}, {}, {}", r1, r2, r3)
             }
             Instruction::AndAnd(r1, r2, r3) => {
                 write!(f, "andand {}, {}, {}", r1, r2, r3)

@@ -20,6 +20,7 @@ use std::convert::TryFrom;
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum BinaryOperation {
     Add,
+    And,
     AndAnd,
     Div,
     EqEq,
@@ -39,6 +40,7 @@ impl Display for BinaryOperation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = match self {
             BinaryOperation::Add => "+",
+            BinaryOperation::And => "&",
             BinaryOperation::AndAnd => "&&",
             BinaryOperation::Div => "/",
             BinaryOperation::EqEq => "==",
@@ -75,6 +77,7 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
             AssignmentOperation::DivEq => Ok(Self::Div),
             AssignmentOperation::AndAndEq => Ok(Self::AndAnd),
             AssignmentOperation::OrOrEq => Ok(Self::OrOr),
+            AssignmentOperation::AndEq => Ok(Self::And),
             AssignmentOperation::OrEq => Ok(Self::Or),
         }
     }

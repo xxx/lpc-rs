@@ -40,11 +40,14 @@ pub enum AssignmentOperation {
     /// AndAnd-equals assignment - `a &&= 12`;
     AndAndEq,
 
-    /// Or-equals assignment - `a |= 12`;
-    OrEq,
-
     /// OrOr-equals assignment - `a ||= 12`;
     OrOrEq,
+
+    /// bitwise And-equals assignment - `a &= 12`;
+    AndEq,
+
+    /// bitwise Or-equals assignment - `a |= 12`;
+    OrEq,
 }
 
 impl Display for AssignmentOperation {
@@ -58,8 +61,9 @@ impl Display for AssignmentOperation {
             AssignmentOperation::DivEq => "/=",
             AssignmentOperation::ModEq => "%=",
             AssignmentOperation::AndAndEq => "&&=",
-            AssignmentOperation::OrEq => "|=",
             AssignmentOperation::OrOrEq => "||=",
+            AssignmentOperation::AndEq => "&=",
+            AssignmentOperation::OrEq => "|=",
         };
 
         write!(f, "{}", s)

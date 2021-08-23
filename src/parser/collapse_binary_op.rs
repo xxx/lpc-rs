@@ -28,6 +28,7 @@ pub fn collapse_binary_op(
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
         BinaryOperation::Div => collapse_div(op, l, r, span),
         BinaryOperation::Mod => collapse_mod(op, l, r, span),
+        BinaryOperation::And => collapse_and(op, l, r, span),
         BinaryOperation::Or => collapse_or(op, l, r, span),
         BinaryOperation::Index
         | BinaryOperation::EqEq
@@ -235,6 +236,28 @@ fn collapse_mod(
     }
 }
 
+fn collapse_and(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
+    match (&l, &r) {
+        (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
+            ExpressionNode::Int(IntNode {
+                value: node.value & node2.value,
+                span: Some(span),
+            })
+        }
+        _ => ExpressionNode::BinaryOp(BinaryOpNode {
+            l: Box::new(l),
+            r: Box::new(r),
+            op,
+            span: Some(span),
+        }),
+    }
+}
+
 fn collapse_or(
     op: BinaryOperation,
     l: ExpressionNode,
@@ -346,6 +369,23 @@ mod tests {
     }
 
     #[test]
+    fn test_collapses_mod_int_and_int() {
+        let node1 = ExpressionNode::from(120);
+        let node2 = ExpressionNode::from(36);
+        let op = BinaryOperation::Mod;
+        let span = Span::new(0, 0..1);
+
+        let result = collapse_binary_op(op, node1, node2, span);
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 12,
+                span: Some(span)
+            })
+        );
+    }
+
+    #[test]
     fn test_collapses_add_int_and_string() {
         let node1 = ExpressionNode::from(123);
         let node2 = ExpressionNode::from("hello");
@@ -408,6 +448,40 @@ mod tests {
             result,
             ExpressionNode::String(StringNode {
                 value: "hellohellohellohello".to_string(),
+                span: Some(span)
+            })
+        );
+    }
+
+    #[test]
+    fn test_collapses_and_int_and_int() {
+        let node1 = ExpressionNode::from(120);
+        let node2 = ExpressionNode::from(36);
+        let op = BinaryOperation::And;
+        let span = Span::new(0, 0..1);
+
+        let result = collapse_binary_op(op, node1, node2, span);
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 32,
+                span: Some(span)
+            })
+        );
+    }
+
+    #[test]
+    fn test_collapses_or_int_and_int() {
+        let node1 = ExpressionNode::from(120);
+        let node2 = ExpressionNode::from(36);
+        let op = BinaryOperation::Or;
+        let span = Span::new(0, 0..1);
+
+        let result = collapse_binary_op(op, node1, node2, span);
+        assert_eq!(
+            result,
+            ExpressionNode::Int(IntNode {
+                value: 124,
                 span: Some(span)
             })
         );
