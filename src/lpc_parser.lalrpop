@@ -604,11 +604,17 @@ AssignmentExpression: ExpressionNode = {
                 rhs
             }
             AssignmentOperation::AddEq
-            | AssignmentOperation::SubEq
-            | AssignmentOperation::MulEq
-            | AssignmentOperation::DivEq
             | AssignmentOperation::AndAndEq
-            | AssignmentOperation::OrOrEq => {
+            | AssignmentOperation::AndEq
+            | AssignmentOperation::DivEq
+            | AssignmentOperation::ModEq
+            | AssignmentOperation::MulEq
+            | AssignmentOperation::OrEq
+            | AssignmentOperation::OrOrEq
+            | AssignmentOperation::ShlEq
+            | AssignmentOperation::ShrEq
+            | AssignmentOperation::SubEq
+            | AssignmentOperation::XorEq => {
                 let binary_op = match BinaryOperation::try_from(op) {
                     Ok(x) => x,
                     Err(_) => panic!("This only way for this to be reached is if a new op was added in the parent `match`, \
