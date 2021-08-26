@@ -173,7 +173,7 @@ impl Preprocessor {
                             let cwd = lpc_path
                                 .as_in_game(self.context.config.lib_dir())
                                 .parent()
-                                .unwrap_or_else (|| Path::new("/"))
+                                .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();
                             self.handle_local_include(t, &cwd, &mut output)?
                         }

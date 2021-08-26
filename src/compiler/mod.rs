@@ -4,7 +4,7 @@ use compiler_error::CompilerError;
 use fs_err as fs;
 
 use crate::{
-    ast::ast_node::AstNodeTrait,
+    ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
     codegen::{
         codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
@@ -23,27 +23,24 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{fmt::Debug, io::ErrorKind, rc::Rc};
-use crate::ast::program_node::ProgramNode;
 
 pub mod compiler_error;
 
 #[macro_export]
 macro_rules! apply_walker {
-    ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {
-        {
-            let mut walker = <$walker>::new($context);
-            let _ = $program.visit(&mut walker);
+    ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {{
+        let mut walker = <$walker>::new($context);
+        let _ = $program.visit(&mut walker);
 
-            let context = walker.into_context();
+        let context = walker.into_context();
 
-            if $fatal && !context.errors.is_empty() {
-                errors::emit_diagnostics(&context.errors);
-                return Err(CompilerError::Collection(context.errors));
-            }
-
-            context
+        if $fatal && !context.errors.is_empty() {
+            errors::emit_diagnostics(&context.errors);
+            return Err(CompilerError::Collection(context.errors));
         }
-    }
+
+        context
+    }};
 }
 
 #[derive(Debug, Default)]
@@ -246,10 +243,14 @@ impl Compiler {
     /// # Returns
     /// A [`Result`] with a tuple containing the parsed [`ProgramNode`],
     /// as well as the [`Preprocessor`]'s [`Context`]
-    pub fn parse_string<T, U>(&self, path: &T, code: U) -> Result<(ProgramNode, Context), CompilerError>
+    pub fn parse_string<T, U>(
+        &self,
+        path: &T,
+        code: U,
+    ) -> Result<(ProgramNode, Context), CompilerError>
     where
         T: AsRef<Path> + Into<LpcPath>,
-        U: AsRef<str>
+        U: AsRef<str>,
     {
         let (tokens, preprocessor) = self.preprocess_string(&path, code)?;
 

@@ -19,9 +19,7 @@ pub struct ContinueNode {
 
 impl ContinueNode {
     pub fn new(span: Option<Span>) -> Self {
-        Self {
-            span,
-        }
+        Self { span }
     }
 }
 

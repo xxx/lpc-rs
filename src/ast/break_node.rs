@@ -19,9 +19,7 @@ pub struct BreakNode {
 
 impl BreakNode {
     pub fn new(span: Option<Span>) -> Self {
-        Self {
-            span,
-        }
+        Self { span }
     }
 }
 

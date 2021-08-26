@@ -43,15 +43,14 @@ use crate::{
 };
 
 use crate::{
+    asm::instruction::Label,
     ast::{
-        do_while_node::DoWhileNode, for_node::ForNode, function_def_node::ARGV,
-        ternary_node::TernaryNode,
+        break_node::BreakNode, do_while_node::DoWhileNode, for_node::ForNode,
+        function_def_node::ARGV, ternary_node::TernaryNode,
     },
     interpreter::efun::{CALL_OTHER, CATCH},
 };
 use std::rc::Rc;
-use crate::ast::break_node::BreakNode;
-use crate::asm::instruction::Label;
 
 use crate::ast::continue_node::ContinueNode;
 
@@ -79,7 +78,10 @@ struct JumpTarget {
 
 impl JumpTarget {
     fn new(break_target: Label, continue_target: Label) -> Self {
-        Self { break_target, continue_target }
+        Self {
+            break_target,
+            continue_target,
+        }
     }
 }
 
@@ -642,9 +644,7 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
 
-        Err(LpcError::new(
-            "`break` statement without a jump target?"
-        ).with_span(node.span))
+        Err(LpcError::new("`break` statement without a jump target?").with_span(node.span))
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
@@ -864,15 +864,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
-        if let Some(JumpTarget { continue_target, .. }) = self.jump_targets.last() {
+        if let Some(JumpTarget {
+            continue_target, ..
+        }) = self.jump_targets.last()
+        {
             let instruction = Instruction::Jmp(continue_target.into());
             push_instruction!(self, instruction, node.span);
             return Ok(());
         }
 
-        Err(LpcError::new(
-            "`continue` statement without a jump target?"
-        ).with_span(node.span))
+        Err(LpcError::new("`continue` statement without a jump target?").with_span(node.span))
     }
 
     fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
@@ -1318,7 +1319,8 @@ impl TreeWalker for CodegenWalker {
 
         let start_label = self.new_label("while-start");
         let end_label = self.new_label("while-end");
-        self.jump_targets.push(JumpTarget::new(end_label.clone(), start_label.clone()));
+        self.jump_targets
+            .push(JumpTarget::new(end_label.clone(), start_label.clone()));
         let start_addr = self.instructions.len();
         self.labels.insert(start_label.clone(), start_addr);
 
@@ -1357,22 +1359,22 @@ mod tests {
         },
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
-        parser::{
-            lexer::LexWrapper,
-            span::Span,
-        },
+        parser::{lexer::LexWrapper, span::Span},
         semantic::lpc_type::LpcType,
         LpcFloat,
     };
 
     use super::*;
-    use crate::{asm::instruction::Address, compiler::Compiler};
-    use crate::compiler::compiler_error::CompilerError;
-    use crate::util::path_maker::LpcPath;
-    use crate::apply_walker;
-    use crate::errors;
-    use crate::codegen::semantic_check_walker::SemanticCheckWalker;
-    use crate::codegen::default_params_walker::DefaultParamsWalker;
+    use crate::{
+        apply_walker,
+        asm::instruction::Address,
+        codegen::{
+            default_params_walker::DefaultParamsWalker, semantic_check_walker::SemanticCheckWalker,
+        },
+        compiler::{compiler_error::CompilerError, Compiler},
+        errors,
+        util::path_maker::LpcPath,
+    };
 
     fn walk_prog(prog: &str) -> CodegenWalker {
         walk_code(prog).expect("failed to walk.")
@@ -1380,7 +1382,9 @@ mod tests {
 
     fn walk_code(code: &str) -> std::result::Result<CodegenWalker, CompilerError> {
         let compiler = Compiler::default();
-        let (mut program, context) = compiler.parse_string(&LpcPath::new_in_game("/my_test.c"), code).expect("failed to parse");
+        let (mut program, context) = compiler
+            .parse_string(&LpcPath::new_in_game("/my_test.c"), code)
+            .expect("failed to parse");
 
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);
@@ -1782,8 +1786,7 @@ mod tests {
 
     mod test_break {
         use super::*;
-        use crate::asm::instruction::Instruction::*;
-        use crate::asm::register::Register;
+        use crate::asm::{instruction::Instruction::*, register::Register};
 
         #[test]
         fn breaks_out_of_while_loops() {
@@ -1803,23 +1806,35 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "while-end_1".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
                 Jz(Register(5), "if-else_2".into()),
                 SConst(Register(6), "breaking".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(6),
+                },
                 Jmp("while-end_1".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
                 RegCopy(Register(8), Register(1)),
                 Jmp("while-start_0".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);
@@ -1842,18 +1857,30 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
                 IConst0(Register(1)),
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "for-end_1".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
                 Jz(Register(5), "if-else_3".into()),
                 SConst(Register(6), "breaking".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(6),
+                },
                 Jmp("for-end_1".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
@@ -1862,7 +1889,7 @@ mod tests {
                 IAdd(Register(1), Register(9), Register(10)),
                 RegCopy(Register(10), Register(1)),
                 Jmp("for-start_0".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);
@@ -1886,14 +1913,26 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 IConst(Register(2), 5),
                 Gt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "if-else_3".into()),
                 SConst(Register(4), "breaking".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(4) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(4),
+                },
                 Jmp("do-while-end_1".into()),
                 IConst1(Register(5)),
                 IAdd(Register(1), Register(5), Register(6)),
@@ -1901,7 +1940,7 @@ mod tests {
                 IConst(Register(7), 10),
                 Lt(Register(1), Register(7), Register(8)),
                 Jnz(Register(8), "do-while-start_0".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);
@@ -2261,8 +2300,7 @@ mod tests {
 
     mod test_continue {
         use super::*;
-        use crate::asm::instruction::Instruction::*;
-        use crate::asm::register::Register;
+        use crate::asm::{instruction::Instruction::*, register::Register};
 
         #[test]
         fn continues_while_loops() {
@@ -2282,23 +2320,35 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "while-end_1".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
                 Jz(Register(5), "if-else_2".into()),
                 SConst(Register(6), "goin' infinite!".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(6),
+                },
                 Jmp("while-start_0".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
                 RegCopy(Register(8), Register(1)),
                 Jmp("while-start_0".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);
@@ -2321,18 +2371,30 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
                 IConst0(Register(1)),
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "for-end_1".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
                 Jz(Register(5), "if-else_3".into()),
                 SConst(Register(6), "goin' infinite!".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(6),
+                },
                 Jmp("for-continue_2".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
@@ -2341,7 +2403,7 @@ mod tests {
                 IAdd(Register(1), Register(9), Register(10)),
                 RegCopy(Register(10), Register(1)),
                 Jmp("for-start_0".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);
@@ -2365,14 +2427,26 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
                 IConst(Register(2), 5),
                 Gt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "if-else_3".into()),
                 SConst(Register(4), "goin' infinite!".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(4) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(4),
+                },
                 Jmp("do-while-continue_2".into()),
                 IConst1(Register(5)),
                 IAdd(Register(1), Register(5), Register(6)),
@@ -2380,7 +2454,7 @@ mod tests {
                 IConst(Register(7), 10),
                 Lt(Register(1), Register(7), Register(8)),
                 Jnz(Register(8), "do-while-start_0".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);

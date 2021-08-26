@@ -7,7 +7,10 @@ use crate::{
         ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
         block_node::BlockNode,
+        break_node::BreakNode,
         call_node::CallNode,
+        continue_node::ContinueNode,
+        do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
@@ -18,6 +21,7 @@ use crate::{
         ternary_node::TernaryNode,
         unary_op_node::UnaryOpNode,
         var_init_node::VarInitNode,
+        while_node::WhileNode,
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     context::Context,
@@ -31,10 +35,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::break_node::BreakNode;
-use crate::ast::continue_node::ContinueNode;
-use crate::ast::while_node::WhileNode;
-use crate::ast::do_while_node::DoWhileNode;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -75,7 +75,8 @@ impl SemanticCheckWalker {
     }
 
     fn allow_jumps(&mut self) {
-        self.valid_jumps.push((BreakAllowed(true), ContinueAllowed(true)));
+        self.valid_jumps
+            .push((BreakAllowed(true), ContinueAllowed(true)));
     }
 
     fn prevent_jumps(&mut self) {
@@ -83,11 +84,11 @@ impl SemanticCheckWalker {
     }
 
     fn can_break(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0.0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0 .0
     }
 
     fn can_continue(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1.0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1 .0
     }
 }
 
@@ -161,8 +162,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
         if !self.can_break() {
-            let e = LpcError::new(format!("Invalid `break`."))
-                .with_span(node.span);
+            let e = LpcError::new(format!("Invalid `break`.")).with_span(node.span);
             self.context.errors.push(e);
 
             // non-fatal
@@ -246,8 +246,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if !self.can_continue() {
-            let e = LpcError::new(format!("Invalid `continue`."))
-                .with_span(node.span);
+            let e = LpcError::new(format!("Invalid `continue`.")).with_span(node.span);
             self.context.errors.push(e);
 
             // non-fatal
@@ -528,22 +527,25 @@ impl TreeWalker for SemanticCheckWalker {
 #[cfg(test)]
 mod tests {
     use crate::{
+        apply_walker,
         ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
+        compiler::compiler_error::CompilerError,
+        errors,
         semantic::{
             function_prototype::FunctionPrototype, lpc_type::LpcType, scope_tree::ScopeTree,
             symbol::Symbol,
         },
-        apply_walker,
-        errors,
-        compiler::compiler_error::CompilerError,
     };
 
     use super::*;
-    use crate::compiler::Compiler;
-    use crate::codegen::scope_walker::ScopeWalker;
-    use crate::codegen::default_params_walker::DefaultParamsWalker;
-    use crate::codegen::semantic_check_walker::SemanticCheckWalker;
-    use crate::util::path_maker::LpcPath;
+    use crate::{
+        codegen::{
+            default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
+            semantic_check_walker::SemanticCheckWalker,
+        },
+        compiler::Compiler,
+        util::path_maker::LpcPath,
+    };
 
     fn empty_context() -> Context {
         let mut scopes = ScopeTree::default();
@@ -556,7 +558,9 @@ mod tests {
 
     fn walk_code(code: &str) -> std::result::Result<Context, CompilerError> {
         let compiler = Compiler::default();
-        let (mut program, context) = compiler.parse_string(&LpcPath::new_in_game("/my_test.c"), code).expect("failed to parse");
+        let (mut program, context) = compiler
+            .parse_string(&LpcPath::new_in_game("/my_test.c"), code)
+            .expect("failed to parse");
 
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);
