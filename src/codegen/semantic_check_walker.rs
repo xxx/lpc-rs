@@ -162,7 +162,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
         if !self.can_break() {
-            let e = LpcError::new(format!("Invalid `break`.")).with_span(node.span);
+            let e = LpcError::new("Invalid `break`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
 
             // non-fatal
@@ -246,7 +246,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if !self.can_continue() {
-            let e = LpcError::new(format!("Invalid `continue`.")).with_span(node.span);
+            let e = LpcError::new("Invalid `continue`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
 
             // non-fatal
