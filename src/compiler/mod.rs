@@ -23,18 +23,35 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{fmt::Debug, io::ErrorKind, rc::Rc};
+use crate::ast::program_node::ProgramNode;
 
 pub mod compiler_error;
+
+#[macro_export]
+macro_rules! apply_walker {
+    ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {
+        {
+            let mut walker = <$walker>::new($context);
+            let _ = $program.visit(&mut walker);
+
+            let context = walker.into_context();
+
+            if $fatal && !context.errors.is_empty() {
+                errors::emit_diagnostics(&context.errors);
+                return Err(CompilerError::Collection(context.errors));
+            }
+
+            context
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Compiler {
     config: Rc<Config>,
 }
 
-impl Compiler
-// where
-//     LpcPath: From<&P>
-{
+impl Compiler {
     /// Create a new `Compiler` with the passed [`Config`]
     pub fn new(config: Rc<Config>) -> Self {
         Self { config }
@@ -191,49 +208,16 @@ impl Compiler
         T: AsRef<Path> + Into<LpcPath>,
         U: AsRef<str>,
     {
-        let (code, preprocessor) = self.preprocess_string(&path, code)?;
-
-        let code = TokenVecWrapper::new(&code);
-        let context = preprocessor.into_context();
-
-        let program = lpc_parser::ProgramParser::new().parse(&context, code);
-
-        let mut program = match program {
-            Ok(prog) => prog,
-            Err(e) => {
-                let err = LpcError::from(e);
-                errors::emit_diagnostics(&[err.clone()]);
-
-                // Parse errors are fatal, so we're done here.
-                return Err(CompilerError::LpcError(err));
-            }
-        };
+        let (mut program, context) = self.parse_string(&path, code)?;
 
         // println!("{:?}", program);
 
         // let mut printer = TreePrinter::new();
         // let _ = program.visit(&mut printer);
 
-        let mut scope_walker = ScopeWalker::new(context);
-        let _ = program.visit(&mut scope_walker);
-
-        let context = scope_walker.into_context();
-
-        let mut default_params_walker = DefaultParamsWalker::new(context);
-        let _ = program.visit(&mut default_params_walker);
-
-        let context = default_params_walker.into_context();
-
-        let mut semantic_check_walker = SemanticCheckWalker::new(context);
-        let _ = program.visit(&mut semantic_check_walker);
-
-        let context = semantic_check_walker.into_context();
-
-        if !context.errors.is_empty() {
-            errors::emit_diagnostics(&context.errors);
-            return Err(CompilerError::Collection(context.errors));
-        }
-
+        let context = apply_walker!(ScopeWalker, program, context, false);
+        let context = apply_walker!(DefaultParamsWalker, program, context, false);
+        let context = apply_walker!(SemanticCheckWalker, program, context, true);
         // let scope_tree = ScopeTree::from(context);
         let mut asm_walker = CodegenWalker::new(context);
 
@@ -255,6 +239,35 @@ impl Compiler
         // println!("{:?}", msgpack.len());
         // println!("{:?}", Program::from(msgpack));
         Ok(program)
+    }
+
+    /// Preprocess, then parse a string of code for the file at `path`
+    ///
+    /// # Returns
+    /// A [`Result`] with a tuple containing the parsed [`ProgramNode`],
+    /// as well as the [`Preprocessor`]'s [`Context`]
+    pub fn parse_string<T, U>(&self, path: &T, code: U) -> Result<(ProgramNode, Context), CompilerError>
+    where
+        T: AsRef<Path> + Into<LpcPath>,
+        U: AsRef<str>
+    {
+        let (tokens, preprocessor) = self.preprocess_string(&path, code)?;
+
+        let wrapper = TokenVecWrapper::new(&tokens);
+        let context = preprocessor.into_context();
+
+        let program = lpc_parser::ProgramParser::new().parse(&context, wrapper);
+
+        match program {
+            Ok(prog) => Ok((prog, context)),
+            Err(e) => {
+                let err = LpcError::from(e);
+                errors::emit_diagnostics(&[err.clone()]);
+
+                // Parse errors are fatal, so we're done here.
+                Err(CompilerError::LpcError(err))
+            }
+        }
     }
 }
 
