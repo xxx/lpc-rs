@@ -460,45 +460,147 @@ impl ContextHolder for CodegenWalker {
 }
 
 impl TreeWalker for CodegenWalker {
-    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
-        self.context.scopes.goto_root();
-
-        // Partition global variable initializations vs everything else
-        let (global_init, functions): (Vec<&mut AstNode>, Vec<&mut AstNode>) = program
-            .body
-            .iter_mut()
-            .partition(|x| matches!(**x, AstNode::Decl(_)));
-
-        // Hoist all global variables, and initialize them at the very start of the program
-        for node in global_init {
-            node.visit(self).unwrap();
+    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
+        let mut items = Vec::with_capacity(node.value.len());
+        for member in &mut node.value {
+            let _ = member.visit(self);
+            items.push(self.current_result);
         }
 
-        if self
-            .context
-            .function_prototypes
-            .contains_key(CREATE_FUNCTION)
-        {
-            let mut call = CallNode {
-                receiver: Box::new(None),
-                arguments: vec![],
-                name: "create".to_string(),
-                span: None,
-            };
-            call.visit(self)?;
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+        push_instruction!(self, Instruction::AConst(register, items), node.span);
+
+        Ok(())
+    }
+
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        node.rhs.visit(self)?;
+        let rhs_result = self.current_result;
+        let lhs = &mut *node.lhs;
+
+        if matches!(lhs, ExpressionNode::Var(_)) {
+            lhs.visit(self)?;
         }
 
-        let mut ret = ReturnNode {
-            value: None,
-            span: None,
-        };
-        ret.visit(self)?;
+        match lhs {
+            ExpressionNode::Var(VarNode { name, global, .. }) => {
+                let lhs_result = self.current_result;
 
-        for node in functions {
-            node.visit(self)?;
+                let assign = Instruction::RegCopy(rhs_result, lhs_result);
+
+                push_instruction!(self, assign, node.span);
+
+                // Copy over globals if necessary
+                if *global {
+                    if let Some(Symbol {
+                        scope_id: 0,
+                        location: Some(register),
+                        ..
+                    }) = self.lookup_global(name)
+                    {
+                        let store = Instruction::GStore(lhs_result, *register);
+                        push_instruction!(self, store, node.span);
+                    }
+                }
+
+                self.current_result = lhs_result;
+            }
+            ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                ref mut l,
+                ref mut r,
+                ..
+            }) => {
+                l.visit(self)?;
+                let var_result = self.current_result;
+                r.visit(self)?;
+                let index_result = self.current_result;
+
+                let store = Instruction::Store(rhs_result, var_result, index_result);
+
+                push_instruction!(self, store, node.span);
+
+                self.current_result = rhs_result;
+            }
+            x => {
+                return Err(LpcError::new(format!(
+                    "Attempt to assign to an invalid lvalue: `{}`",
+                    x
+                ))
+                .with_span(node.span))
+            }
         }
 
-        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
+        node.l.visit(self)?;
+        let reg_left = self.current_result;
+
+        match node.op {
+            BinaryOperation::Index => {
+                // Ranges need special handling that complicates this function otherwise, due to
+                // the visit to node.r needing to handle multiple results.
+                if let ExpressionNode::Range(range_node) = &mut *node.r {
+                    self.emit_range(reg_left, range_node)?;
+                    return Ok(());
+                }
+            }
+            BinaryOperation::AndAnd => {
+                // Handle short-circuit behavior
+                let end_label = self.new_label("andand-end");
+                let instruction = Instruction::Jz(reg_left, end_label.clone());
+                push_instruction!(self, instruction, node.span);
+
+                node.r.visit(self)?;
+                let reg_right = self.current_result;
+                let instruction = Instruction::Jz(reg_right, end_label.clone());
+                push_instruction!(self, instruction, node.span);
+
+                let reg_result = self.register_counter.next().unwrap();
+                self.current_result = reg_result;
+
+                let instruction = Instruction::RegCopy(reg_right, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                self.labels.insert(end_label, self.instructions.len());
+
+                return Ok(());
+            }
+            BinaryOperation::OrOr => {
+                // Handle short-circuit behavior
+                let end_label = self.new_label("oror-end");
+
+                let reg_result = self.register_counter.next().unwrap();
+                let instruction = Instruction::RegCopy(reg_left, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                let instruction = Instruction::Jnz(reg_result, end_label.clone());
+                push_instruction!(self, instruction, node.span);
+
+                node.r.visit(self)?;
+                let reg_right = self.current_result;
+                let instruction = Instruction::RegCopy(reg_right, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                self.labels.insert(end_label, self.instructions.len());
+                self.current_result = reg_result;
+
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        node.r.visit(self)?;
+        let reg_right = self.current_result;
+
+        let reg_result = self.register_counter.next().unwrap();
+        self.current_result = reg_result;
+
+        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
@@ -730,16 +832,29 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
-    fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
-        let register = self.register_counter.next().unwrap();
-        self.current_result = register;
-        let instruction = match node.value {
-            0 => Instruction::IConst0(register),
-            1 => Instruction::IConst1(register),
-            v => Instruction::IConst(register, v),
-        };
+    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
+        for init in &mut node.initializations {
+            self.visit_var_init(init)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        let start_label = self.new_label("do-while-start");
+        let start_addr = self.instructions.len();
+        self.labels.insert(start_label.clone(), start_addr);
+
+        node.body.visit(self)?;
+        node.condition.visit(self)?;
+
+        // Go back to the start of the loop if the result isn't zero
+        let instruction = Instruction::Jnz(self.current_result, start_label);
         push_instruction!(self, instruction, node.span);
 
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -752,120 +867,39 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
-    fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
-        let register = self.register_counter.next().unwrap();
-        self.current_result = register;
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
 
-        push_instruction!(
-            self,
-            Instruction::SConst(register, node.value.clone()),
-            node.span
-        );
-
-        Ok(())
-    }
-
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
-        node.l.visit(self)?;
-        let reg_left = self.current_result;
-
-        match node.op {
-            BinaryOperation::Index => {
-                // Ranges need special handling that complicates this function otherwise, due to
-                // the visit to node.r needing to handle multiple results.
-                if let ExpressionNode::Range(range_node) = &mut *node.r {
-                    self.emit_range(reg_left, range_node)?;
-                    return Ok(());
-                }
-            }
-            BinaryOperation::AndAnd => {
-                // Handle short-circuit behavior
-                let end_label = self.new_label("andand-end");
-                let instruction = Instruction::Jz(reg_left, end_label.clone());
-                push_instruction!(self, instruction, node.span);
-
-                node.r.visit(self)?;
-                let reg_right = self.current_result;
-                let instruction = Instruction::Jz(reg_right, end_label.clone());
-                push_instruction!(self, instruction, node.span);
-
-                let reg_result = self.register_counter.next().unwrap();
-                self.current_result = reg_result;
-
-                let instruction = Instruction::RegCopy(reg_right, reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                self.labels.insert(end_label, self.instructions.len());
-
-                return Ok(());
-            }
-            BinaryOperation::OrOr => {
-                // Handle short-circuit behavior
-                let end_label = self.new_label("oror-end");
-
-                let reg_result = self.register_counter.next().unwrap();
-                let instruction = Instruction::RegCopy(reg_left, reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                let instruction = Instruction::Jnz(reg_result, end_label.clone());
-                push_instruction!(self, instruction, node.span);
-
-                node.r.visit(self)?;
-                let reg_right = self.current_result;
-                let instruction = Instruction::RegCopy(reg_right, reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                self.labels.insert(end_label, self.instructions.len());
-                self.current_result = reg_result;
-
-                return Ok(());
-            }
-            _ => {}
+        if let Some(i) = &mut *node.initializer {
+            i.visit(self)?;
         }
 
-        node.r.visit(self)?;
-        let reg_right = self.current_result;
+        let start_label = self.new_label("for-start");
+        let end_label = self.new_label("for-end");
+        let start_addr = self.instructions.len();
+        self.labels.insert(start_label.clone(), start_addr);
 
-        let reg_result = self.register_counter.next().unwrap();
-        self.current_result = reg_result;
+        if let Some(cond) = &mut node.condition {
+            cond.visit(self)?;
 
-        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
-        push_instruction!(self, instruction, node.span);
-
-        Ok(())
-    }
-
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
-        node.expr.visit(self)?;
-        let reg_expr = self.current_result;
-
-        self.current_result = match node.op {
-            UnaryOperation::Negate => {
-                // multiply by -1
-                let reg = self.register_counter.next().unwrap();
-                let instruction = Instruction::IConst(reg, -1);
-                push_instruction!(self, instruction, node.span);
-
-                let reg_result = self.register_counter.next().unwrap();
-
-                let instruction = Instruction::MMul(reg_expr, reg, reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                reg_result
-            }
-            UnaryOperation::Inc => todo!(),
-            UnaryOperation::Dec => todo!(),
-            UnaryOperation::Bang => {
-                let reg_result = self.register_counter.next().unwrap();
-
-                let instruction = Instruction::Not(reg_expr, reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                reg_result
-            }
-            UnaryOperation::Tilde => todo!(),
+            let instruction = Instruction::Jz(self.current_result, end_label.clone());
+            push_instruction!(self, instruction, cond.span());
         };
 
+        node.body.visit(self)?;
+
+        if let Some(i) = &mut node.incrementer {
+            i.visit(self)?;
+        }
+
+        // go back to the start of the loop
+        let instruction = Instruction::Jmp(start_label);
+        push_instruction!(self, instruction, node.span);
+
+        let addr = self.instructions.len();
+        self.labels.insert(end_label, addr);
+
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -916,6 +950,115 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+        let else_label = self.new_label("if-else");
+        let end_label = self.new_label("if-end");
+
+        // Visit the condition
+        node.condition.visit(self)?;
+
+        // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the "then" body.
+        // Insert a placeholder address, which we correct below after the body's code is generated
+        let instruction = Instruction::Jz(self.current_result, else_label.clone());
+        push_instruction!(self, instruction, node.span);
+
+        // Generate the main body of the statement
+        node.body.visit(self)?;
+
+        if node.else_clause.is_some() {
+            let instruction = Instruction::Jmp(end_label.clone());
+            push_instruction!(self, instruction, node.span);
+        }
+
+        let addr = self.instructions.len();
+        self.labels.insert(else_label, addr);
+
+        // Generate the else clause code if necessary
+        if let Some(n) = &mut *node.else_clause {
+            n.visit(self)?;
+
+            let addr = self.instructions.len();
+            self.labels.insert(end_label, addr);
+        }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+        let instruction = match node.value {
+            0 => Instruction::IConst0(register),
+            1 => Instruction::IConst1(register),
+            v => Instruction::IConst(register, v),
+        };
+        push_instruction!(self, instruction, node.span);
+
+        Ok(())
+    }
+
+    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
+        let mut map = HashMap::new();
+        for (key, value) in &mut node.value {
+            key.visit(self)?;
+            let key_result = self.current_result;
+            value.visit(self)?;
+
+            map.insert(key_result, self.current_result);
+        }
+
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+        push_instruction!(self, Instruction::MapConst(register, map), node.span);
+
+        Ok(())
+    }
+
+    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
+        self.context.scopes.goto_root();
+
+        // Partition global variable initializations vs everything else
+        let (global_init, functions): (Vec<&mut AstNode>, Vec<&mut AstNode>) = program
+            .body
+            .iter_mut()
+            .partition(|x| matches!(**x, AstNode::Decl(_)));
+
+        // Hoist all global variables, and initialize them at the very start of the program
+        for node in global_init {
+            node.visit(self).unwrap();
+        }
+
+        if self
+            .context
+            .function_prototypes
+            .contains_key(CREATE_FUNCTION)
+        {
+            let mut call = CallNode {
+                receiver: Box::new(None),
+                arguments: vec![],
+                name: "create".to_string(),
+                span: None,
+            };
+            call.visit(self)?;
+        }
+
+        let mut ret = ReturnNode {
+            value: None,
+            span: None,
+        };
+        ret.visit(self)?;
+
+        for node in functions {
+            node.visit(self)?;
+        }
+
+        self.context.scopes.pop();
+
+        Ok(())
+    }
+
     fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
@@ -928,9 +1071,119 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
-    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
-        for init in &mut node.initializations {
-            self.visit_var_init(init)?;
+    fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
+        let register = self.register_counter.next().unwrap();
+        self.current_result = register;
+
+        push_instruction!(
+            self,
+            Instruction::SConst(register, node.value.clone()),
+            node.span
+        );
+
+        Ok(())
+    }
+
+    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
+        let result_reg = self.register_counter.next().unwrap();
+        let else_label = self.new_label("ternary-else");
+        let end_label = self.new_label("ternary-end");
+
+        node.condition.visit(self)?;
+
+        let instruction = Instruction::Jz(self.current_result, else_label.clone());
+        push_instruction!(self, instruction, node.span);
+
+        node.body.visit(self)?;
+        push_instruction!(
+            self,
+            Instruction::RegCopy(self.current_result, result_reg),
+            node.span
+        );
+
+        let instruction = Instruction::Jmp(end_label.clone());
+        push_instruction!(self, instruction, node.span);
+
+        let else_addr = self.instructions.len();
+        self.labels.insert(else_label, else_addr);
+
+        node.else_clause.visit(self)?;
+        push_instruction!(
+            self,
+            Instruction::RegCopy(self.current_result, result_reg),
+            node.span
+        );
+
+        let end_addr = self.instructions.len();
+        self.labels.insert(end_label, end_addr);
+
+        self.current_result = result_reg;
+        Ok(())
+    }
+
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        node.expr.visit(self)?;
+        let reg_expr = self.current_result;
+
+        self.current_result = match node.op {
+            UnaryOperation::Negate => {
+                // multiply by -1
+                let reg = self.register_counter.next().unwrap();
+                let instruction = Instruction::IConst(reg, -1);
+                push_instruction!(self, instruction, node.span);
+
+                let reg_result = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::MMul(reg_expr, reg, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                reg_result
+            }
+            UnaryOperation::Inc => todo!(),
+            UnaryOperation::Dec => todo!(),
+            UnaryOperation::Bang => {
+                let reg_result = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::Not(reg_expr, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                reg_result
+            }
+            UnaryOperation::Tilde => todo!(),
+        };
+
+        Ok(())
+    }
+
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+        let sym = match self.lookup_var_symbol(node) {
+            Some(s) => s,
+            None => {
+                return Err(
+                    LpcError::new(format!("Unable to find symbol `{}`", node.name))
+                        .with_span(node.span),
+                );
+            }
+        };
+
+        let sym_loc = match sym.location {
+            Some(l) => l,
+            None => {
+                return Err(
+                    LpcError::new(format!("Symbol `{}` has no location set.", sym.name))
+                        .with_span(node.span),
+                );
+            }
+        };
+
+        if sym.is_global() {
+            let result_register = self.register_counter.next().unwrap();
+            let instruction = Instruction::GLoad(sym_loc, result_register);
+            push_instruction!(self, instruction, node.span);
+
+            self.current_result = result_register;
+        } else {
+            self.current_result = sym_loc;
         }
 
         Ok(())
@@ -998,168 +1251,6 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
-        let sym = match self.lookup_var_symbol(node) {
-            Some(s) => s,
-            None => {
-                return Err(
-                    LpcError::new(format!("Unable to find symbol `{}`", node.name))
-                        .with_span(node.span),
-                );
-            }
-        };
-
-        let sym_loc = match sym.location {
-            Some(l) => l,
-            None => {
-                return Err(
-                    LpcError::new(format!("Symbol `{}` has no location set.", sym.name))
-                        .with_span(node.span),
-                );
-            }
-        };
-
-        if sym.is_global() {
-            let result_register = self.register_counter.next().unwrap();
-            let instruction = Instruction::GLoad(sym_loc, result_register);
-            push_instruction!(self, instruction, node.span);
-
-            self.current_result = result_register;
-        } else {
-            self.current_result = sym_loc;
-        }
-
-        Ok(())
-    }
-
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
-        node.rhs.visit(self)?;
-        let rhs_result = self.current_result;
-        let lhs = &mut *node.lhs;
-
-        if matches!(lhs, ExpressionNode::Var(_)) {
-            lhs.visit(self)?;
-        }
-
-        match lhs {
-            ExpressionNode::Var(VarNode { name, global, .. }) => {
-                let lhs_result = self.current_result;
-
-                let assign = Instruction::RegCopy(rhs_result, lhs_result);
-
-                push_instruction!(self, assign, node.span);
-
-                // Copy over globals if necessary
-                if *global {
-                    if let Some(Symbol {
-                        scope_id: 0,
-                        location: Some(register),
-                        ..
-                    }) = self.lookup_global(name)
-                    {
-                        let store = Instruction::GStore(lhs_result, *register);
-                        push_instruction!(self, store, node.span);
-                    }
-                }
-
-                self.current_result = lhs_result;
-            }
-            ExpressionNode::BinaryOp(BinaryOpNode {
-                op: BinaryOperation::Index,
-                ref mut l,
-                ref mut r,
-                ..
-            }) => {
-                l.visit(self)?;
-                let var_result = self.current_result;
-                r.visit(self)?;
-                let index_result = self.current_result;
-
-                let store = Instruction::Store(rhs_result, var_result, index_result);
-
-                push_instruction!(self, store, node.span);
-
-                self.current_result = rhs_result;
-            }
-            x => {
-                return Err(LpcError::new(format!(
-                    "Attempt to assign to an invalid lvalue: `{}`",
-                    x
-                ))
-                .with_span(node.span))
-            }
-        }
-
-        Ok(())
-    }
-
-    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
-        let mut items = Vec::with_capacity(node.value.len());
-        for member in &mut node.value {
-            let _ = member.visit(self);
-            items.push(self.current_result);
-        }
-
-        let register = self.register_counter.next().unwrap();
-        self.current_result = register;
-        push_instruction!(self, Instruction::AConst(register, items), node.span);
-
-        Ok(())
-    }
-
-    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
-        let mut map = HashMap::new();
-        for (key, value) in &mut node.value {
-            key.visit(self)?;
-            let key_result = self.current_result;
-            value.visit(self)?;
-
-            map.insert(key_result, self.current_result);
-        }
-
-        let register = self.register_counter.next().unwrap();
-        self.current_result = register;
-        push_instruction!(self, Instruction::MapConst(register, map), node.span);
-
-        Ok(())
-    }
-
-    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-        let else_label = self.new_label("if-else");
-        let end_label = self.new_label("if-end");
-
-        // Visit the condition
-        node.condition.visit(self)?;
-
-        // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the "then" body.
-        // Insert a placeholder address, which we correct below after the body's code is generated
-        let instruction = Instruction::Jz(self.current_result, else_label.clone());
-        push_instruction!(self, instruction, node.span);
-
-        // Generate the main body of the statement
-        node.body.visit(self)?;
-
-        if node.else_clause.is_some() {
-            let instruction = Instruction::Jmp(end_label.clone());
-            push_instruction!(self, instruction, node.span);
-        }
-
-        let addr = self.instructions.len();
-        self.labels.insert(else_label, addr);
-
-        // Generate the else clause code if necessary
-        if let Some(n) = &mut *node.else_clause {
-            n.visit(self)?;
-
-            let addr = self.instructions.len();
-            self.labels.insert(end_label, addr);
-        }
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
     fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
@@ -1185,97 +1276,6 @@ impl TreeWalker for CodegenWalker {
         self.labels.insert(end_label, addr);
 
         self.context.scopes.pop();
-        Ok(())
-    }
-
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        let start_label = self.new_label("do-while-start");
-        let start_addr = self.instructions.len();
-        self.labels.insert(start_label.clone(), start_addr);
-
-        node.body.visit(self)?;
-        node.condition.visit(self)?;
-
-        // Go back to the start of the loop if the result isn't zero
-        let instruction = Instruction::Jnz(self.current_result, start_label);
-        push_instruction!(self, instruction, node.span);
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        if let Some(i) = &mut *node.initializer {
-            i.visit(self)?;
-        }
-
-        let start_label = self.new_label("for-start");
-        let end_label = self.new_label("for-end");
-        let start_addr = self.instructions.len();
-        self.labels.insert(start_label.clone(), start_addr);
-
-        if let Some(cond) = &mut node.condition {
-            cond.visit(self)?;
-
-            let instruction = Instruction::Jz(self.current_result, end_label.clone());
-            push_instruction!(self, instruction, cond.span());
-        };
-
-        node.body.visit(self)?;
-
-        if let Some(i) = &mut node.incrementer {
-            i.visit(self)?;
-        }
-
-        // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label);
-        push_instruction!(self, instruction, node.span);
-
-        let addr = self.instructions.len();
-        self.labels.insert(end_label, addr);
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        let result_reg = self.register_counter.next().unwrap();
-        let else_label = self.new_label("ternary-else");
-        let end_label = self.new_label("ternary-end");
-
-        node.condition.visit(self)?;
-
-        let instruction = Instruction::Jz(self.current_result, else_label.clone());
-        push_instruction!(self, instruction, node.span);
-
-        node.body.visit(self)?;
-        push_instruction!(
-            self,
-            Instruction::RegCopy(self.current_result, result_reg),
-            node.span
-        );
-
-        let instruction = Instruction::Jmp(end_label.clone());
-        push_instruction!(self, instruction, node.span);
-
-        let else_addr = self.instructions.len();
-        self.labels.insert(else_label, else_addr);
-
-        node.else_clause.visit(self)?;
-        push_instruction!(
-            self,
-            Instruction::RegCopy(self.current_result, result_reg),
-            node.span
-        );
-
-        let end_addr = self.instructions.len();
-        self.labels.insert(end_label, end_addr);
-
-        self.current_result = result_reg;
         Ok(())
     }
 }
