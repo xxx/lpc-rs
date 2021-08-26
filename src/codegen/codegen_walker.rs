@@ -50,6 +50,10 @@ use crate::{
     interpreter::efun::{CALL_OTHER, CATCH},
 };
 use std::rc::Rc;
+use crate::ast::break_node::BreakNode;
+use crate::asm::instruction::Label;
+
+use crate::ast::continue_node::ContinueNode;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -65,6 +69,18 @@ const CREATE_FUNCTION: &str = "create";
 enum OperationType {
     Register,
     Memory,
+}
+
+#[derive(Debug)]
+struct JumpTarget {
+    pub break_target: Label,
+    pub continue_target: Label,
+}
+
+impl JumpTarget {
+    fn new(break_target: Label, continue_target: Label) -> Self {
+        Self { break_target, continue_target }
+    }
 }
 
 /// A tree walker that generates assembly language instructions based on an AST.
@@ -99,6 +115,9 @@ pub struct CodegenWalker {
 
     /// The compilation context
     context: Context,
+
+    /// The labels where jumps at any particular time need to go to.
+    jump_targets: Vec<JumpTarget>,
 }
 
 impl CodegenWalker {
@@ -616,6 +635,18 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
+        if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
+            let instruction = Instruction::Jmp(break_target.into());
+            push_instruction!(self, instruction, node.span);
+            return Ok(());
+        }
+
+        Err(LpcError::new(
+            "`break` statement without a jump target?"
+        ).with_span(node.span))
+    }
+
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         if node.name == CATCH {
             return self.emit_catch(node);
@@ -832,6 +863,18 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
+        if let Some(JumpTarget { continue_target, .. }) = self.jump_targets.last() {
+            let instruction = Instruction::Jmp(continue_target.into());
+            push_instruction!(self, instruction, node.span);
+            return Ok(());
+        }
+
+        Err(LpcError::new(
+            "`continue` statement without a jump target?"
+        ).with_span(node.span))
+    }
+
     fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
         for init in &mut node.initializations {
             self.visit_var_init(init)?;
@@ -844,17 +887,29 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.goto(node.scope_id);
 
         let start_label = self.new_label("do-while-start");
+        let end_label = self.new_label("do-while-end");
+        let continue_label = self.new_label("do-while-continue");
+        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        self.jump_targets.push(jump_target);
+
         let start_addr = self.instructions.len();
         self.labels.insert(start_label.clone(), start_addr);
 
         node.body.visit(self)?;
+
+        let continue_addr = self.instructions.len();
+        self.labels.insert(continue_label, continue_addr);
+
         node.condition.visit(self)?;
 
         // Go back to the start of the loop if the result isn't zero
         let instruction = Instruction::Jnz(self.current_result, start_label);
         push_instruction!(self, instruction, node.span);
+        let end_addr = self.instructions.len();
+        self.labels.insert(end_label, end_addr);
 
         self.context.scopes.pop();
+        self.jump_targets.pop();
         Ok(())
     }
 
@@ -876,6 +931,9 @@ impl TreeWalker for CodegenWalker {
 
         let start_label = self.new_label("for-start");
         let end_label = self.new_label("for-end");
+        let continue_label = self.new_label("for-continue");
+        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        self.jump_targets.push(jump_target);
         let start_addr = self.instructions.len();
         self.labels.insert(start_label.clone(), start_addr);
 
@@ -887,6 +945,9 @@ impl TreeWalker for CodegenWalker {
         };
 
         node.body.visit(self)?;
+
+        let continue_addr = self.instructions.len();
+        self.labels.insert(continue_label, continue_addr);
 
         if let Some(i) = &mut node.incrementer {
             i.visit(self)?;
@@ -900,6 +961,7 @@ impl TreeWalker for CodegenWalker {
         self.labels.insert(end_label, addr);
 
         self.context.scopes.pop();
+        self.jump_targets.pop();
         Ok(())
     }
 
@@ -1256,6 +1318,7 @@ impl TreeWalker for CodegenWalker {
 
         let start_label = self.new_label("while-start");
         let end_label = self.new_label("while-end");
+        self.jump_targets.push(JumpTarget::new(end_label.clone(), start_label.clone()));
         let start_addr = self.instructions.len();
         self.labels.insert(start_label.clone(), start_addr);
 
@@ -1276,6 +1339,7 @@ impl TreeWalker for CodegenWalker {
         self.labels.insert(end_label, addr);
 
         self.context.scopes.pop();
+        self.jump_targets.pop();
         Ok(())
     }
 }
@@ -1294,7 +1358,7 @@ mod tests {
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
         parser::{
-            lexer::{LexWrapper, TokenVecWrapper},
+            lexer::LexWrapper,
             span::Span,
         },
         semantic::lpc_type::LpcType,
@@ -1303,167 +1367,570 @@ mod tests {
 
     use super::*;
     use crate::{asm::instruction::Address, compiler::Compiler};
+    use crate::compiler::compiler_error::CompilerError;
+    use crate::util::path_maker::LpcPath;
+    use crate::apply_walker;
+    use crate::errors;
+    use crate::codegen::semantic_check_walker::SemanticCheckWalker;
+    use crate::codegen::default_params_walker::DefaultParamsWalker;
 
     fn walk_prog(prog: &str) -> CodegenWalker {
+        walk_code(prog).expect("failed to walk.")
+    }
+
+    fn walk_code(code: &str) -> std::result::Result<CodegenWalker, CompilerError> {
         let compiler = Compiler::default();
-        let mut scope_walker = ScopeWalker::new(Context::default());
-        let (code, preprocessor) = compiler.preprocess_string("foo.c", prog).unwrap();
+        let (mut program, context) = compiler.parse_string(&LpcPath::new_in_game("/my_test.c"), code).expect("failed to parse");
 
-        let context = preprocessor.into_context();
-        let mut tree = lpc_parser::ProgramParser::new()
-            .parse(&context, TokenVecWrapper::new(&code))
-            .unwrap();
-
-        let _ = scope_walker.visit_program(&mut tree);
-        let context = scope_walker.into_context();
+        let context = apply_walker!(ScopeWalker, program, context, false);
+        let context = apply_walker!(DefaultParamsWalker, program, context, false);
+        let context = apply_walker!(SemanticCheckWalker, program, context, false);
 
         let mut walker = CodegenWalker::new(context);
-        let _ = tree.visit(&mut walker);
+        let _ = program.visit(&mut walker);
 
-        walker
+        Ok(walker)
     }
 
     fn generate_instructions(prog: &str) -> Vec<Instruction> {
         walk_prog(prog).instructions
     }
 
-    mod test_visit_program {
+    #[test]
+    fn test_visit_array_populates_the_instructions() {
+        let mut walker = CodegenWalker::default();
+
+        let mut arr = ArrayNode::new(vec![
+            ExpressionNode::from(123),
+            ExpressionNode::from("foo"),
+            ExpressionNode::from(vec![ExpressionNode::from(666)]),
+        ]);
+
+        let _ = walker.visit_array(&mut arr);
+
+        let expected = vec![
+            IConst(Register(1), 123),
+            SConst(Register(2), String::from("foo")),
+            IConst(Register(3), 666),
+            AConst(Register(4), vec![Register(3)]),
+            AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
+        ];
+
+        assert_eq!(walker.instructions, expected);
+    }
+
+    mod test_visit_assignment {
         use super::*;
-        use crate::asm::instruction::Instruction::MAdd;
 
         #[test]
-        fn populates_the_instructions() {
-            let prog = "
-                void create() {
-                    1 + 3 - 5;
-                    dump(4 + 5);
-                }
-            ";
+        fn test_populates_the_instructions_for_globals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            let mut walker = CodegenWalker::new(context);
 
-            let instructions = generate_instructions(prog);
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 0,
+                span: None,
+            };
+            insert_symbol(&mut walker, sym);
+
+            // push a different, local `marf`, to ensure that we don't find it for this assignment.
+            walker.context.scopes.push_new();
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(123)),
+                scope_id: 1,
+                span: None,
+            };
+            insert_symbol(&mut walker, sym);
+
+            let mut node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode {
+                    name: "marf".to_string(),
+                    span: None,
+                    global: true,
+                })),
+                rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
+                span: None,
+            };
+
+            let _ = walker.visit_assignment(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), -12),
+                    GLoad(Register(666), Register(2)),
+                    RegCopy(Register(1), Register(2)),
+                    GStore(Register(2), Register(666))
+                ]
+            );
+        }
+
+        #[test]
+        fn test_populates_the_instructions_for_locals() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            context.scopes.push_new();
+            let mut walker = CodegenWalker::new(context);
+
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 1,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, sym);
+
+            let mut node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
+                rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
+                span: None,
+            };
+
+            let _ = walker.visit_assignment(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), -12),
+                    RegCopy(Register(1), Register(666))
+                ]
+            );
+        }
+
+        #[test]
+        fn test_populates_the_instructions_for_array_items() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            context.scopes.push_new();
+            let mut walker = CodegenWalker::new(context);
+
+            let sym = Symbol {
+                name: "marf".to_string(),
+                type_: LpcType::Int(true),
+                static_: false,
+                location: Some(Register(666)),
+                scope_id: 1,
+                span: None,
+            };
+
+            insert_symbol(&mut walker, sym);
+
+            let mut node = AssignmentNode {
+                lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
+                    r: Box::new(ExpressionNode::from(1)),
+                    op: BinaryOperation::Index,
+                    span: None,
+                })),
+                rhs: Box::new(ExpressionNode::from(-12)),
+                span: None,
+            };
+
+            let _ = walker.visit_assignment(&mut node);
+            assert_eq!(
+                walker.instructions,
+                [
+                    IConst(Register(1), -12),
+                    IConst1(Register(2)),
+                    Store(Register(1), Register(666), Register(2))
+                ]
+            );
+        }
+    }
+
+    mod test_binary_op {
+        use crate::asm::instruction::Instruction::{
+            FConst, IConst0, IMul, Jnz, Jz, Load, MAdd, Range,
+        };
+
+        use super::*;
+
+        #[test]
+        fn populates_the_instructions_for_ints() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::Int(IntNode::new(666))),
+                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::Int(IntNode::new(123))),
+                    r: Box::new(ExpressionNode::Int(IntNode::new(456))),
+                    op: BinaryOperation::Add,
+                    span: None,
+                })),
+                op: BinaryOperation::Mul,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                Call {
-                    name: String::from("create"),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
-                IConst(Register(1), -1),
-                IConst(Register(2), 9),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(2),
-                },
-                Ret, // Automatically added due to no explicit return
+                IConst(Register(1), 666),
+                IConst(Register(2), 123),
+                IConst(Register(3), 456),
+                IAdd(Register(2), Register(3), Register(4)),
+                IMul(Register(1), Register(4), Register(5)),
             ];
 
-            assert_eq!(instructions, expected);
+            assert_eq!(walker.instructions, expected);
         }
 
         #[test]
-        fn initializes_the_globals() {
-            let prog = r#"
-                int j = 123;
-                string q = "cool";
-                void marf() {
-                    dump(q + j);
-                }
-            "#;
+        fn populates_the_instructions_for_floats() {
+            let mut context = Context::default();
+            context.scopes.push_new();
+            let mut sym = Symbol::new("foo", LpcType::Float(false));
+            sym.location = Some(Register(1));
+            context.scopes.current_mut().unwrap().insert(sym);
 
-            let instructions = generate_instructions(prog);
+            let mut walker = CodegenWalker::new(context);
 
-            let expected = [
-                IConst(Register(1), 123),
-                GStore(Register(1), Register(1)),
-                SConst(Register(2), String::from("cool")),
-                GStore(Register(2), Register(2)),
-                Ret, // return from global init. if create() is defined, we just continue on to it
-                GLoad(Register(2), Register(1)),
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::Float(FloatNode::new(123.45))),
+                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::Var(VarNode {
+                        name: "foo".to_string(),
+                        span: None,
+                        global: false,
+                    })),
+                    r: Box::new(ExpressionNode::Int(IntNode::new(456))),
+                    op: BinaryOperation::Mul,
+                    span: None,
+                })),
+                op: BinaryOperation::Add,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                FConst(Register(1), LpcFloat::from(123.45)),
                 GLoad(Register(1), Register(2)),
-                MAdd(Register(1), Register(2), Register(3)),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(3),
-                },
-                Ret,
+                IConst(Register(3), 456),
+                IMul(Register(2), Register(3), Register(4)),
+                IAdd(Register(1), Register(4), Register(5)),
             ];
 
-            assert_eq!(instructions, expected);
+            assert_eq!(walker.instructions, expected);
         }
 
         #[test]
-        fn calls_create_if_create_is_defined() {
-            let prog = r#"
-                int q = 666;
-                int marf() {
-                    return 3;
-                }
+        fn populates_the_instructions_for_strings() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
+                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::String(StringNode::new("bar"))),
+                    r: Box::new(ExpressionNode::String(StringNode::new("baz"))),
+                    op: BinaryOperation::Add,
+                    span: None,
+                })),
+                op: BinaryOperation::Add,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                SConst(Register(1), String::from("foo")),
+                SConst(Register(2), String::from("bar")),
+                SConst(Register(3), String::from("baz")),
+                MAdd(Register(2), Register(3), Register(4)),
+                MAdd(Register(1), Register(4), Register(5)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_arrays() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
+                r: Box::new(ExpressionNode::from(vec![ExpressionNode::from(456)])),
+                op: BinaryOperation::Add,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                AConst(Register(2), vec![Register(1)]),
+                IConst(Register(3), 456),
+                AConst(Register(4), vec![Register(3)]),
+                MAdd(Register(2), Register(4), Register(5)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_indexes() {
+            let context = Context::default();
+            let mut walker = CodegenWalker::new(context);
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
+                r: Box::new(ExpressionNode::from(0)),
+                op: BinaryOperation::Index,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                AConst(Register(2), vec![Register(1)]),
+                IConst0(Register(3)),
+                Load(Register(2), Register(3), Register(4)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_slices() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
+                r: Box::new(ExpressionNode::Range(RangeNode {
+                    l: Box::new(Some(ExpressionNode::from(1))),
+                    r: Box::new(None),
+                    span: None,
+                })),
+                op: BinaryOperation::Index,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                AConst(Register(2), vec![Register(1)]),
+                IConst1(Register(3)),
+                IConst(Register(4), -1),
+                Range(Register(2), Register(3), Register(4), Register(5)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_andand_expressions() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(123)),
+                r: Box::new(ExpressionNode::from("marf!")),
+                op: BinaryOperation::AndAnd,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                Jz(Register(1), "andand-end_0".into()),
+                // and also
+                SConst(Register(2), "marf!".into()),
+                Jz(Register(2), "andand-end_0".into()),
+                RegCopy(Register(2), Register(3)),
+                // end is here
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_oror_expressions() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::from(123)),
+                r: Box::new(ExpressionNode::from("sup?")),
+                op: BinaryOperation::OrOr,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 123),
+                RegCopy(Register(1), Register(2)),
+                Jnz(Register(2), "oror-end_0".into()),
+                // else
+                SConst(Register(3), "sup?".into()),
+                RegCopy(Register(3), Register(2)),
+                // end is here
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    mod test_break {
+        use super::*;
+        use crate::asm::instruction::Instruction::*;
+        use crate::asm::register::Register;
+
+        #[test]
+        fn breaks_out_of_while_loops() {
+            let code = r#"
                 void create() {
-                    dump(marf() + " times a winner!");
+                    int i;
+                    while (i < 10) {
+                        dump(i);
+                        if (i > 5) {
+                            dump("breaking");
+                            break;
+                        }
+                        i += 1;
+                    }
                 }
             "#;
 
-            let instructions = generate_instructions(prog);
-
-            let expected = [
-                IConst(Register(1), 666),
-                GStore(Register(1), Register(1)),
-                Call {
-                    name: String::from("create"),
-                    num_args: 0,
-                    initial_arg: Register(2),
-                },
-                Ret, // end of initialization
-                IConst(Register(1), 3),
-                RegCopy(Register(1), Register(0)),
-                Ret, // end of marf()
-                Call {
-                    name: String::from("marf"),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                RegCopy(Register(0), Register(1)),
-                SConst(Register(2), String::from(" times a winner!")),
-                MAdd(Register(1), Register(2), Register(3)),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(3),
-                },
-                Ret, // end of create()
+            let program = walk_prog(code);
+            let expected = vec![
+                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Ret,
+                IConst(Register(2), 10),
+                Lt(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "while-end_1".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                IConst(Register(4), 5),
+                Gt(Register(1), Register(4), Register(5)),
+                Jz(Register(5), "if-else_2".into()),
+                SConst(Register(6), "breaking".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Jmp("while-end_1".into()),
+                IConst1(Register(7)),
+                IAdd(Register(1), Register(7), Register(8)),
+                RegCopy(Register(8), Register(1)),
+                Jmp("while-start_0".into()),
+                Ret
             ];
 
-            assert_eq!(instructions, expected);
+            assert_eq!(program.instructions, expected);
         }
 
         #[test]
-        fn tracks_global_registers_over_multiple_sections() {
-            let prog = r#"
-                int q = 666;
-                int marf() {
-                    return 3;
+        fn breaks_out_of_for_loops() {
+            let code = r#"
+                void create() {
+                    for (int i = 0; i < 10; i += 1) {
+                        dump(i);
+                        if (i > 5) {
+                            dump("breaking");
+                            break;
+                        }
+                        i += 1;
+                    }
                 }
-                int r = 777;
             "#;
 
-            let instructions = generate_instructions(prog);
-
-            let expected = [
-                IConst(Register(1), 666),
-                GStore(Register(1), Register(1)),
-                IConst(Register(2), 777),
-                GStore(Register(2), Register(2)),
+            let program = walk_prog(code);
+            let expected = vec![
+                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
                 Ret,
-                IConst(Register(1), 3),
-                RegCopy(Register(1), Register(0)),
-                Ret,
+                IConst0(Register(1)),
+                IConst(Register(2), 10),
+                Lt(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "for-end_1".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                IConst(Register(4), 5),
+                Gt(Register(1), Register(4), Register(5)),
+                Jz(Register(5), "if-else_3".into()),
+                SConst(Register(6), "breaking".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Jmp("for-end_1".into()),
+                IConst1(Register(7)),
+                IAdd(Register(1), Register(7), Register(8)),
+                RegCopy(Register(8), Register(1)),
+                IConst1(Register(9)),
+                IAdd(Register(1), Register(9), Register(10)),
+                RegCopy(Register(10), Register(1)),
+                Jmp("for-start_0".into()),
+                Ret
             ];
 
-            assert_eq!(instructions, expected);
+            assert_eq!(program.instructions, expected);
         }
+
+        #[test]
+        fn breaks_out_of_do_while_loops() {
+            let code = r#"
+                void create() {
+                    int i;
+                    do {
+                        dump(i);
+                        if (i > 5) {
+                            dump("breaking");
+                            break;
+                        }
+                        i += 1;
+                    } while (i < 10);
+                }
+            "#;
+
+            let program = walk_prog(code);
+            let expected = vec![
+                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Ret,
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                IConst(Register(2), 5),
+                Gt(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "if-else_3".into()),
+                SConst(Register(4), "breaking".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(4) },
+                Jmp("do-while-end_1".into()),
+                IConst1(Register(5)),
+                IAdd(Register(1), Register(5), Register(6)),
+                RegCopy(Register(6), Register(1)),
+                IConst(Register(7), 10),
+                Lt(Register(1), Register(7), Register(8)),
+                Jnz(Register(8), "do-while-start_0".into()),
+                Ret
+            ];
+
+            assert_eq!(program.instructions, expected);
+        }
+
+        // #[test]
+        // fn breaks_out_of_switch_statements() {
+        //     let code = r#"
+        //         void create() {
+        //             int i = 666;
+        //             switch (i) {
+        //                 case 10..200:
+        //                     dump("Weak");
+        //                     break;
+        //                 case 666:
+        //                     dump("YEAH BABY");
+        //                     break;
+        //                 default:
+        //                     dump("eh");
+        //             }
+        //         }
+        //     "#;
+        //
+        //     let program = walk_prog(code);
+        //     let expected = vec![
+        //     ];
+        //
+        //     assert_eq!(program.instructions, expected);
+        // }
     }
 
     mod test_visit_call {
@@ -1744,280 +2211,6 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_int_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
-
-        let mut tree = IntNode::new(666);
-        let mut tree0 = IntNode::new(0);
-        let mut tree1 = IntNode::new(1);
-
-        let _ = walker.visit_int(&mut tree);
-        let _ = walker.visit_int(&mut tree0);
-        let _ = walker.visit_int(&mut tree1);
-
-        let expected = vec![
-            IConst(Register(1), 666),
-            IConst0(Register(2)),
-            IConst1(Register(3)),
-        ];
-
-        assert_eq!(walker.instructions, expected);
-    }
-
-    mod test_binary_op {
-        use crate::asm::instruction::Instruction::{
-            FConst, IConst0, IMul, Jnz, Jz, Load, MAdd, Range,
-        };
-
-        use super::*;
-
-        #[test]
-        fn populates_the_instructions_for_ints() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::Int(IntNode::new(666))),
-                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::Int(IntNode::new(123))),
-                    r: Box::new(ExpressionNode::Int(IntNode::new(456))),
-                    op: BinaryOperation::Add,
-                    span: None,
-                })),
-                op: BinaryOperation::Mul,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 666),
-                IConst(Register(2), 123),
-                IConst(Register(3), 456),
-                IAdd(Register(2), Register(3), Register(4)),
-                IMul(Register(1), Register(4), Register(5)),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_floats() {
-            let mut context = Context::default();
-            context.scopes.push_new();
-            let mut sym = Symbol::new("foo", LpcType::Float(false));
-            sym.location = Some(Register(1));
-            context.scopes.current_mut().unwrap().insert(sym);
-
-            let mut walker = CodegenWalker::new(context);
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::Float(FloatNode::new(123.45))),
-                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::Var(VarNode {
-                        name: "foo".to_string(),
-                        span: None,
-                        global: false,
-                    })),
-                    r: Box::new(ExpressionNode::Int(IntNode::new(456))),
-                    op: BinaryOperation::Mul,
-                    span: None,
-                })),
-                op: BinaryOperation::Add,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                FConst(Register(1), LpcFloat::from(123.45)),
-                GLoad(Register(1), Register(2)),
-                IConst(Register(3), 456),
-                IMul(Register(2), Register(3), Register(4)),
-                IAdd(Register(1), Register(4), Register(5)),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_strings() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
-                r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::String(StringNode::new("bar"))),
-                    r: Box::new(ExpressionNode::String(StringNode::new("baz"))),
-                    op: BinaryOperation::Add,
-                    span: None,
-                })),
-                op: BinaryOperation::Add,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                SConst(Register(1), String::from("foo")),
-                SConst(Register(2), String::from("bar")),
-                SConst(Register(3), String::from("baz")),
-                MAdd(Register(2), Register(3), Register(4)),
-                MAdd(Register(1), Register(4), Register(5)),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_arrays() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
-                r: Box::new(ExpressionNode::from(vec![ExpressionNode::from(456)])),
-                op: BinaryOperation::Add,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 123),
-                AConst(Register(2), vec![Register(1)]),
-                IConst(Register(3), 456),
-                AConst(Register(4), vec![Register(3)]),
-                MAdd(Register(2), Register(4), Register(5)),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_indexes() {
-            let context = Context::default();
-            let mut walker = CodegenWalker::new(context);
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
-                r: Box::new(ExpressionNode::from(0)),
-                op: BinaryOperation::Index,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 123),
-                AConst(Register(2), vec![Register(1)]),
-                IConst0(Register(3)),
-                Load(Register(2), Register(3), Register(4)),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_slices() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
-                r: Box::new(ExpressionNode::Range(RangeNode {
-                    l: Box::new(Some(ExpressionNode::from(1))),
-                    r: Box::new(None),
-                    span: None,
-                })),
-                op: BinaryOperation::Index,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 123),
-                AConst(Register(2), vec![Register(1)]),
-                IConst1(Register(3)),
-                IConst(Register(4), -1),
-                Range(Register(2), Register(3), Register(4), Register(5)),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_andand_expressions() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::from(123)),
-                r: Box::new(ExpressionNode::from("marf!")),
-                op: BinaryOperation::AndAnd,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 123),
-                Jz(Register(1), "andand-end_0".into()),
-                // and also
-                SConst(Register(2), "marf!".into()),
-                Jz(Register(2), "andand-end_0".into()),
-                RegCopy(Register(2), Register(3)),
-                // end is here
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_for_oror_expressions() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = BinaryOpNode {
-                l: Box::new(ExpressionNode::from(123)),
-                r: Box::new(ExpressionNode::from("sup?")),
-                op: BinaryOperation::OrOr,
-                span: None,
-            };
-
-            let _ = walker.visit_binary_op(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 123),
-                RegCopy(Register(1), Register(2)),
-                Jnz(Register(2), "oror-end_0".into()),
-                // else
-                SConst(Register(3), "sup?".into()),
-                RegCopy(Register(3), Register(2)),
-                // end is here
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-    }
-
-    #[test]
-    fn test_visit_string_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
-        let mut node = StringNode::new("marf");
-        let mut node2 = StringNode::new("tacos");
-        let mut node3 = StringNode::new("marf");
-
-        let _ = walker.visit_string(&mut node);
-        let _ = walker.visit_string(&mut node2);
-        let _ = walker.visit_string(&mut node3);
-
-        let expected = vec![
-            SConst(Register(1), String::from("marf")),
-            SConst(Register(2), String::from("tacos")),
-            SConst(Register(3), String::from("marf")),
-        ];
-
-        assert_eq!(walker.instructions, expected);
-    }
-
-    #[test]
     fn test_visit_block_populates_instructions() {
         let block = "{ int a = '🏯'; dump(a); }";
         let mut tree = lpc_parser::BlockParser::new()
@@ -2041,6 +2234,335 @@ mod tests {
         ];
 
         assert_eq!(walker.instructions, expected);
+    }
+
+    #[test]
+    fn test_visit_comma_expression_populates_the_instructions() {
+        let mut walker = CodegenWalker::default();
+
+        let mut expr = CommaExpressionNode::new(vec![
+            ExpressionNode::from(123),
+            ExpressionNode::from("foo"),
+            ExpressionNode::from(vec![ExpressionNode::from(666)]),
+        ]);
+
+        let _ = walker.visit_comma_expression(&mut expr);
+
+        let expected = vec![
+            IConst(Register(1), 123),
+            SConst(Register(2), String::from("foo")),
+            IConst(Register(3), 666),
+            AConst(Register(4), vec![Register(3)]),
+        ];
+
+        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker.current_result, Register(4));
+    }
+
+    mod test_continue {
+        use super::*;
+        use crate::asm::instruction::Instruction::*;
+        use crate::asm::register::Register;
+
+        #[test]
+        fn continues_while_loops() {
+            let code = r#"
+                void create() {
+                    int i;
+                    while (i < 10) {
+                        dump(i);
+                        if (i > 5) {
+                            dump("goin' infinite!");
+                            continue;
+                        }
+                        i += 1;
+                    }
+                }
+            "#;
+
+            let program = walk_prog(code);
+            let expected = vec![
+                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Ret,
+                IConst(Register(2), 10),
+                Lt(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "while-end_1".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                IConst(Register(4), 5),
+                Gt(Register(1), Register(4), Register(5)),
+                Jz(Register(5), "if-else_2".into()),
+                SConst(Register(6), "goin' infinite!".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Jmp("while-start_0".into()),
+                IConst1(Register(7)),
+                IAdd(Register(1), Register(7), Register(8)),
+                RegCopy(Register(8), Register(1)),
+                Jmp("while-start_0".into()),
+                Ret
+            ];
+
+            assert_eq!(program.instructions, expected);
+        }
+
+        #[test]
+        fn continues_for_loops() {
+            let code = r#"
+                void create() {
+                    for (int i = 0; i < 10; i += 1) {
+                        dump(i);
+                        if (i > 5) {
+                            dump("goin' infinite!");
+                            continue;
+                        }
+                        i += 1;
+                    }
+                }
+            "#;
+
+            let program = walk_prog(code);
+            let expected = vec![
+                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Ret,
+                IConst0(Register(1)),
+                IConst(Register(2), 10),
+                Lt(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "for-end_1".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                IConst(Register(4), 5),
+                Gt(Register(1), Register(4), Register(5)),
+                Jz(Register(5), "if-else_3".into()),
+                SConst(Register(6), "goin' infinite!".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(6) },
+                Jmp("for-continue_2".into()),
+                IConst1(Register(7)),
+                IAdd(Register(1), Register(7), Register(8)),
+                RegCopy(Register(8), Register(1)),
+                IConst1(Register(9)),
+                IAdd(Register(1), Register(9), Register(10)),
+                RegCopy(Register(10), Register(1)),
+                Jmp("for-start_0".into()),
+                Ret
+            ];
+
+            assert_eq!(program.instructions, expected);
+        }
+
+        #[test]
+        fn continues_do_while_loops() {
+            let code = r#"
+                void create() {
+                    int i;
+                    do {
+                        dump(i);
+                        if (i > 5) {
+                            dump("goin' infinite!");
+                            continue;
+                        }
+                        i += 1;
+                    } while (i < 10);
+                }
+            "#;
+
+            let program = walk_prog(code);
+            let expected = vec![
+                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Ret,
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(1) },
+                IConst(Register(2), 5),
+                Gt(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "if-else_3".into()),
+                SConst(Register(4), "goin' infinite!".into()),
+                Call { name: "dump".into(), num_args: 1, initial_arg: Register(4) },
+                Jmp("do-while-continue_2".into()),
+                IConst1(Register(5)),
+                IAdd(Register(1), Register(5), Register(6)),
+                RegCopy(Register(6), Register(1)),
+                IConst(Register(7), 10),
+                Lt(Register(1), Register(7), Register(8)),
+                Jnz(Register(8), "do-while-start_0".into()),
+                Ret
+            ];
+
+            assert_eq!(program.instructions, expected);
+        }
+    }
+
+    #[test]
+    fn test_decl_sets_scope_and_instructions() {
+        let call = "int foo = 1, *bar = ({ 56 })";
+        let mut tree = lpc_parser::DeclParser::new()
+            .parse(&Context::default(), LexWrapper::new(call))
+            .unwrap();
+
+        let mut scope_walker = ScopeWalker::default();
+        let _ = scope_walker.visit_decl(&mut tree);
+
+        let context = scope_walker.into_context();
+        let mut walker = CodegenWalker::new(context);
+        let _ = walker.visit_decl(&mut tree);
+
+        let expected = vec![
+            IConst1(Register(1)),
+            GStore(Register(1), Register(1)),
+            IConst(Register(2), 56),
+            AConst(Register(3), vec![Register(2)]),
+            GStore(Register(3), Register(2)),
+        ];
+
+        assert_eq!(walker.instructions, expected);
+
+        let scope = walker.context.scopes.current().unwrap();
+        assert_eq!(
+            scope.lookup("foo").unwrap(),
+            Symbol {
+                name: String::from("foo"),
+                type_: LpcType::Int(false),
+                static_: false,
+                location: Some(Register(1)),
+                scope_id: 0,
+                span: Some(Span {
+                    file_id: 0,
+                    l: 4,
+                    r: 11
+                })
+            }
+        );
+        assert_eq!(
+            scope.lookup("bar").unwrap(),
+            Symbol {
+                name: String::from("bar"),
+                type_: LpcType::Int(true),
+                static_: false,
+                location: Some(Register(2)),
+                scope_id: 0,
+                span: Some(Span {
+                    file_id: 0,
+                    l: 13,
+                    r: 25
+                })
+            }
+        );
+    }
+
+    mod test_visit_do_while {
+        use super::*;
+        use crate::{
+            asm::instruction::Instruction::{EqEq, Jnz},
+            ast::do_while_node::DoWhileNode,
+        };
+
+        #[test]
+        fn test_populates_the_instructions() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = DoWhileNode {
+                condition: ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(666)),
+                    r: Box::new(ExpressionNode::from(777)),
+                    op: BinaryOperation::EqEq,
+                    span: None,
+                }),
+                body: Box::new(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
+                    arguments: vec![ExpressionNode::from("body")],
+                    name: "dump".to_string(),
+                    span: None,
+                })),
+                scope_id: None,
+                span: None,
+            };
+
+            let _ = walker.visit_do_while(&mut node);
+
+            let expected = vec![
+                SConst(Register(1), String::from("body")),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
+                IConst(Register(2), 666),
+                IConst(Register(3), 777),
+                EqEq(Register(2), Register(3), Register(4)),
+                Jnz(Register(4), "do-while-start_0".into()),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    mod test_visit_for {
+        use super::*;
+        use crate::{
+            asm::instruction::Instruction::{ISub, Jmp, Jz},
+            ast::for_node::ForNode,
+        };
+
+        #[test]
+        fn populates_the_instructions() {
+            let var = VarNode {
+                name: "i".to_string(),
+                span: None,
+                global: false,
+            };
+
+            let mut node = ForNode {
+                initializer: Box::new(Some(AstNode::VarInit(VarInitNode {
+                    type_: LpcType::Int(false),
+                    name: "i".to_string(),
+                    value: Some(ExpressionNode::from(10)),
+                    array: false,
+                    global: false,
+                    span: None,
+                }))),
+                condition: Some(ExpressionNode::Var(var.clone())),
+                incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
+                    lhs: Box::new(ExpressionNode::Var(var.clone())),
+                    rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                        l: Box::new(ExpressionNode::Var(var.clone())),
+                        r: Box::new(ExpressionNode::from(1)),
+                        op: BinaryOperation::Sub,
+                        span: None,
+                    })),
+                    span: None,
+                })),
+                body: Box::new(AstNode::Block(BlockNode {
+                    body: vec![AstNode::Call(CallNode {
+                        receiver: Box::new(None),
+                        arguments: vec![ExpressionNode::Var(var)],
+                        name: "dump".to_string(),
+                        span: None,
+                    })],
+                    scope_id: None,
+                })),
+                scope_id: None,
+                span: None,
+            };
+
+            let mut scope_walker = ScopeWalker::default();
+            let _ = scope_walker.visit_for(&mut node);
+
+            let context = scope_walker.into_context();
+            let mut walker = CodegenWalker::new(context);
+
+            let _ = walker.visit_for(&mut node).unwrap();
+
+            let expected = vec![
+                IConst(Register(1), 10),
+                Jz(Register(1), "for-end_1".into()),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
+                IConst1(Register(2)),
+                ISub(Register(1), Register(2), Register(3)),
+                RegCopy(Register(3), Register(1)),
+                Jmp("for-start_0".into()),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
     }
 
     #[test]
@@ -2115,6 +2637,223 @@ mod tests {
         assert_eq!(walker.instructions, expected);
     }
 
+    mod test_visit_if {
+        use super::*;
+        use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
+
+        #[test]
+        fn test_populates_the_instructions() {
+            let mut walker = CodegenWalker::default();
+
+            let mut node = IfNode {
+                condition: ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(666)),
+                    r: Box::new(ExpressionNode::from(777)),
+                    op: BinaryOperation::EqEq,
+                    span: None,
+                }),
+                body: Box::new(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
+                    arguments: vec![ExpressionNode::from("true")],
+                    name: "dump".to_string(),
+                    span: None,
+                })),
+                else_clause: Box::new(Some(AstNode::Call(CallNode {
+                    receiver: Box::new(None),
+                    arguments: vec![ExpressionNode::from("false")],
+                    name: "dump".to_string(),
+                    span: None,
+                }))),
+                scope_id: None,
+                span: None,
+            };
+
+            let _ = walker.visit_if(&mut node);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                IConst(Register(2), 777),
+                EqEq(Register(1), Register(2), Register(3)),
+                Jz(Register(3), "if-else_0".into()),
+                SConst(Register(4), String::from("true")),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(4),
+                },
+                Jmp("if-end_1".into()),
+                SConst(Register(5), String::from("false")),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(5),
+                },
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
+    }
+
+    #[test]
+    fn test_visit_int_populates_the_instructions() {
+        let mut walker = CodegenWalker::default();
+
+        let mut tree = IntNode::new(666);
+        let mut tree0 = IntNode::new(0);
+        let mut tree1 = IntNode::new(1);
+
+        let _ = walker.visit_int(&mut tree);
+        let _ = walker.visit_int(&mut tree0);
+        let _ = walker.visit_int(&mut tree1);
+
+        let expected = vec![
+            IConst(Register(1), 666),
+            IConst0(Register(2)),
+            IConst1(Register(3)),
+        ];
+
+        assert_eq!(walker.instructions, expected);
+    }
+
+    mod test_visit_program {
+        use super::*;
+        use crate::asm::instruction::Instruction::MAdd;
+
+        #[test]
+        fn populates_the_instructions() {
+            let prog = "
+                void create() {
+                    1 + 3 - 5;
+                    dump(4 + 5);
+                }
+            ";
+
+            let instructions = generate_instructions(prog);
+
+            let expected = vec![
+                Call {
+                    name: String::from("create"),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
+                Ret,
+                IConst(Register(1), -1),
+                IConst(Register(2), 9),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(2),
+                },
+                Ret, // Automatically added due to no explicit return
+            ];
+
+            assert_eq!(instructions, expected);
+        }
+
+        #[test]
+        fn initializes_the_globals() {
+            let prog = r#"
+                int j = 123;
+                string q = "cool";
+                void marf() {
+                    dump(q + j);
+                }
+            "#;
+
+            let instructions = generate_instructions(prog);
+
+            let expected = [
+                IConst(Register(1), 123),
+                GStore(Register(1), Register(1)),
+                SConst(Register(2), String::from("cool")),
+                GStore(Register(2), Register(2)),
+                Ret, // return from global init. if create() is defined, we just continue on to it
+                GLoad(Register(2), Register(1)),
+                GLoad(Register(1), Register(2)),
+                MAdd(Register(1), Register(2), Register(3)),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(3),
+                },
+                Ret,
+            ];
+
+            assert_eq!(instructions, expected);
+        }
+
+        #[test]
+        fn calls_create_if_create_is_defined() {
+            let prog = r#"
+                int q = 666;
+                int marf() {
+                    return 3;
+                }
+                void create() {
+                    dump(marf() + " times a winner!");
+                }
+            "#;
+
+            let instructions = generate_instructions(prog);
+
+            let expected = [
+                IConst(Register(1), 666),
+                GStore(Register(1), Register(1)),
+                Call {
+                    name: String::from("create"),
+                    num_args: 0,
+                    initial_arg: Register(2),
+                },
+                Ret, // end of initialization
+                IConst(Register(1), 3),
+                RegCopy(Register(1), Register(0)),
+                Ret, // end of marf()
+                Call {
+                    name: String::from("marf"),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
+                RegCopy(Register(0), Register(1)),
+                SConst(Register(2), String::from(" times a winner!")),
+                MAdd(Register(1), Register(2), Register(3)),
+                Call {
+                    name: String::from("dump"),
+                    num_args: 1,
+                    initial_arg: Register(3),
+                },
+                Ret, // end of create()
+            ];
+
+            assert_eq!(instructions, expected);
+        }
+
+        #[test]
+        fn tracks_global_registers_over_multiple_sections() {
+            let prog = r#"
+                int q = 666;
+                int marf() {
+                    return 3;
+                }
+                int r = 777;
+            "#;
+
+            let instructions = generate_instructions(prog);
+
+            let expected = [
+                IConst(Register(1), 666),
+                GStore(Register(1), Register(1)),
+                IConst(Register(2), 777),
+                GStore(Register(2), Register(2)),
+                Ret,
+                IConst(Register(1), 3),
+                RegCopy(Register(1), Register(0)),
+                Ret,
+            ];
+
+            assert_eq!(instructions, expected);
+        }
+    }
+
     #[test]
     fn visit_return_populates_the_instructions() {
         let mut walker = CodegenWalker::default();
@@ -2142,60 +2881,64 @@ mod tests {
     }
 
     #[test]
-    fn test_decl_sets_scope_and_instructions() {
-        let call = "int foo = 1, *bar = ({ 56 })";
-        let mut tree = lpc_parser::DeclParser::new()
-            .parse(&Context::default(), LexWrapper::new(call))
-            .unwrap();
+    fn test_visit_string_populates_the_instructions() {
+        let mut walker = CodegenWalker::default();
+        let mut node = StringNode::new("marf");
+        let mut node2 = StringNode::new("tacos");
+        let mut node3 = StringNode::new("marf");
 
-        let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_decl(&mut tree);
-
-        let context = scope_walker.into_context();
-        let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_decl(&mut tree);
+        let _ = walker.visit_string(&mut node);
+        let _ = walker.visit_string(&mut node2);
+        let _ = walker.visit_string(&mut node3);
 
         let expected = vec![
-            IConst1(Register(1)),
-            GStore(Register(1), Register(1)),
-            IConst(Register(2), 56),
-            AConst(Register(3), vec![Register(2)]),
-            GStore(Register(3), Register(2)),
+            SConst(Register(1), String::from("marf")),
+            SConst(Register(2), String::from("tacos")),
+            SConst(Register(3), String::from("marf")),
         ];
 
         assert_eq!(walker.instructions, expected);
+    }
 
-        let scope = walker.context.scopes.current().unwrap();
-        assert_eq!(
-            scope.lookup("foo").unwrap(),
-            Symbol {
-                name: String::from("foo"),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(1)),
-                scope_id: 0,
-                span: Some(Span {
-                    file_id: 0,
-                    l: 4,
-                    r: 11
-                })
-            }
-        );
-        assert_eq!(
-            scope.lookup("bar").unwrap(),
-            Symbol {
-                name: String::from("bar"),
-                type_: LpcType::Int(true),
-                static_: false,
-                location: Some(Register(2)),
-                scope_id: 0,
-                span: Some(Span {
-                    file_id: 0,
-                    l: 13,
-                    r: 25
-                })
-            }
-        );
+    mod test_visit_ternary {
+        use super::*;
+        use crate::{
+            asm::instruction::Instruction::{Jmp, Jz, Lte},
+            ast::ternary_node::TernaryNode,
+        };
+
+        #[test]
+        fn populates_the_instructions() {
+            let mut node = TernaryNode {
+                condition: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from(2)),
+                    r: Box::new(ExpressionNode::from(3)),
+                    op: BinaryOperation::Lte,
+                    span: None,
+                })),
+                body: Box::new(ExpressionNode::from(666)),
+                else_clause: Box::new(ExpressionNode::from(777)),
+                span: None,
+            };
+
+            let mut walker = CodegenWalker::new(Context::default());
+
+            let _ = walker.visit_ternary(&mut node).unwrap();
+
+            let expected = vec![
+                IConst(Register(2), 2),
+                IConst(Register(3), 3),
+                Lte(Register(2), Register(3), Register(4)),
+                Jz(Register(4), "ternary-else_0".into()), // jump to else
+                IConst(Register(5), 666),
+                RegCopy(Register(5), Register(1)),
+                Jmp("ternary-end_1".into()), // jump to end
+                IConst(Register(6), 777),
+                RegCopy(Register(6), Register(1)),
+            ];
+
+            assert_eq!(walker.instructions, expected);
+        }
     }
 
     mod test_visit_var {
@@ -2285,180 +3028,6 @@ mod tests {
             let expected = vec![];
             assert_eq!(walker.instructions, expected);
         }
-    }
-
-    mod test_visit_assignment {
-        use super::*;
-
-        #[test]
-        fn test_populates_the_instructions_for_globals() {
-            let mut context = Context::default();
-            context.scopes.push_new();
-            let mut walker = CodegenWalker::new(context);
-
-            let sym = Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(666)),
-                scope_id: 0,
-                span: None,
-            };
-            insert_symbol(&mut walker, sym);
-
-            // push a different, local `marf`, to ensure that we don't find it for this assignment.
-            walker.context.scopes.push_new();
-            let sym = Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(123)),
-                scope_id: 1,
-                span: None,
-            };
-            insert_symbol(&mut walker, sym);
-
-            let mut node = AssignmentNode {
-                lhs: Box::new(ExpressionNode::Var(VarNode {
-                    name: "marf".to_string(),
-                    span: None,
-                    global: true,
-                })),
-                rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
-                span: None,
-            };
-
-            let _ = walker.visit_assignment(&mut node);
-            assert_eq!(
-                walker.instructions,
-                [
-                    IConst(Register(1), -12),
-                    GLoad(Register(666), Register(2)),
-                    RegCopy(Register(1), Register(2)),
-                    GStore(Register(2), Register(666))
-                ]
-            );
-        }
-
-        #[test]
-        fn test_populates_the_instructions_for_locals() {
-            let mut context = Context::default();
-            context.scopes.push_new();
-            context.scopes.push_new();
-            let mut walker = CodegenWalker::new(context);
-
-            let sym = Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(666)),
-                scope_id: 1,
-                span: None,
-            };
-
-            insert_symbol(&mut walker, sym);
-
-            let mut node = AssignmentNode {
-                lhs: Box::new(ExpressionNode::Var(VarNode::new("marf"))),
-                rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
-                span: None,
-            };
-
-            let _ = walker.visit_assignment(&mut node);
-            assert_eq!(
-                walker.instructions,
-                [
-                    IConst(Register(1), -12),
-                    RegCopy(Register(1), Register(666))
-                ]
-            );
-        }
-
-        #[test]
-        fn test_populates_the_instructions_for_array_items() {
-            let mut context = Context::default();
-            context.scopes.push_new();
-            context.scopes.push_new();
-            let mut walker = CodegenWalker::new(context);
-
-            let sym = Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(true),
-                static_: false,
-                location: Some(Register(666)),
-                scope_id: 1,
-                span: None,
-            };
-
-            insert_symbol(&mut walker, sym);
-
-            let mut node = AssignmentNode {
-                lhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(VarNode::new("marf"))),
-                    r: Box::new(ExpressionNode::from(1)),
-                    op: BinaryOperation::Index,
-                    span: None,
-                })),
-                rhs: Box::new(ExpressionNode::from(-12)),
-                span: None,
-            };
-
-            let _ = walker.visit_assignment(&mut node);
-            assert_eq!(
-                walker.instructions,
-                [
-                    IConst(Register(1), -12),
-                    IConst1(Register(2)),
-                    Store(Register(1), Register(666), Register(2))
-                ]
-            );
-        }
-    }
-
-    #[test]
-    fn test_visit_array_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
-
-        let mut arr = ArrayNode::new(vec![
-            ExpressionNode::from(123),
-            ExpressionNode::from("foo"),
-            ExpressionNode::from(vec![ExpressionNode::from(666)]),
-        ]);
-
-        let _ = walker.visit_array(&mut arr);
-
-        let expected = vec![
-            IConst(Register(1), 123),
-            SConst(Register(2), String::from("foo")),
-            IConst(Register(3), 666),
-            AConst(Register(4), vec![Register(3)]),
-            AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
-        ];
-
-        assert_eq!(walker.instructions, expected);
-    }
-
-    #[test]
-    fn test_visit_comma_expression_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
-
-        let mut expr = CommaExpressionNode::new(vec![
-            ExpressionNode::from(123),
-            ExpressionNode::from("foo"),
-            ExpressionNode::from(vec![ExpressionNode::from(666)]),
-        ]);
-
-        let _ = walker.visit_comma_expression(&mut expr);
-
-        let expected = vec![
-            IConst(Register(1), 123),
-            SConst(Register(2), String::from("foo")),
-            IConst(Register(3), 666),
-            AConst(Register(4), vec![Register(3)]),
-        ];
-
-        assert_eq!(walker.instructions, expected);
-        assert_eq!(walker.current_result, Register(4));
     }
 
     mod test_visit_var_init {
@@ -2732,63 +3301,6 @@ mod tests {
         }
     }
 
-    mod test_visit_if {
-        use super::*;
-        use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
-
-        #[test]
-        fn test_populates_the_instructions() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = IfNode {
-                condition: ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(666)),
-                    r: Box::new(ExpressionNode::from(777)),
-                    op: BinaryOperation::EqEq,
-                    span: None,
-                }),
-                body: Box::new(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
-                    arguments: vec![ExpressionNode::from("true")],
-                    name: "dump".to_string(),
-                    span: None,
-                })),
-                else_clause: Box::new(Some(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
-                    arguments: vec![ExpressionNode::from("false")],
-                    name: "dump".to_string(),
-                    span: None,
-                }))),
-                scope_id: None,
-                span: None,
-            };
-
-            let _ = walker.visit_if(&mut node);
-
-            let expected = vec![
-                IConst(Register(1), 666),
-                IConst(Register(2), 777),
-                EqEq(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "if-else_0".into()),
-                SConst(Register(4), String::from("true")),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(4),
-                },
-                Jmp("if-end_1".into()),
-                SConst(Register(5), String::from("false")),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(5),
-                },
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-    }
-
     mod test_visit_while {
         use super::*;
         use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
@@ -2828,168 +3340,6 @@ mod tests {
                     initial_arg: Register(4),
                 },
                 Jmp("while-start_0".into()),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-    }
-
-    mod test_visit_do_while {
-        use super::*;
-        use crate::{
-            asm::instruction::Instruction::{EqEq, Jnz},
-            ast::do_while_node::DoWhileNode,
-        };
-
-        #[test]
-        fn test_populates_the_instructions() {
-            let mut walker = CodegenWalker::default();
-
-            let mut node = DoWhileNode {
-                condition: ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(666)),
-                    r: Box::new(ExpressionNode::from(777)),
-                    op: BinaryOperation::EqEq,
-                    span: None,
-                }),
-                body: Box::new(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
-                    arguments: vec![ExpressionNode::from("body")],
-                    name: "dump".to_string(),
-                    span: None,
-                })),
-                scope_id: None,
-                span: None,
-            };
-
-            let _ = walker.visit_do_while(&mut node);
-
-            let expected = vec![
-                SConst(Register(1), String::from("body")),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(1),
-                },
-                IConst(Register(2), 666),
-                IConst(Register(3), 777),
-                EqEq(Register(2), Register(3), Register(4)),
-                Jnz(Register(4), "do-while-start_0".into()),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-    }
-
-    mod test_visit_for {
-        use super::*;
-        use crate::{
-            asm::instruction::Instruction::{ISub, Jmp, Jz},
-            ast::for_node::ForNode,
-        };
-
-        #[test]
-        fn populates_the_instructions() {
-            let var = VarNode {
-                name: "i".to_string(),
-                span: None,
-                global: false,
-            };
-
-            let mut node = ForNode {
-                initializer: Box::new(Some(AstNode::VarInit(VarInitNode {
-                    type_: LpcType::Int(false),
-                    name: "i".to_string(),
-                    value: Some(ExpressionNode::from(10)),
-                    array: false,
-                    global: false,
-                    span: None,
-                }))),
-                condition: Some(ExpressionNode::Var(var.clone())),
-                incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
-                    lhs: Box::new(ExpressionNode::Var(var.clone())),
-                    rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                        l: Box::new(ExpressionNode::Var(var.clone())),
-                        r: Box::new(ExpressionNode::from(1)),
-                        op: BinaryOperation::Sub,
-                        span: None,
-                    })),
-                    span: None,
-                })),
-                body: Box::new(AstNode::Block(BlockNode {
-                    body: vec![AstNode::Call(CallNode {
-                        receiver: Box::new(None),
-                        arguments: vec![ExpressionNode::Var(var)],
-                        name: "dump".to_string(),
-                        span: None,
-                    })],
-                    scope_id: None,
-                })),
-                scope_id: None,
-                span: None,
-            };
-
-            let mut scope_walker = ScopeWalker::default();
-            let _ = scope_walker.visit_for(&mut node);
-
-            let context = scope_walker.into_context();
-            let mut walker = CodegenWalker::new(context);
-
-            let _ = walker.visit_for(&mut node).unwrap();
-
-            let expected = vec![
-                IConst(Register(1), 10),
-                Jz(Register(1), "for-end_1".into()),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(1),
-                },
-                IConst1(Register(2)),
-                ISub(Register(1), Register(2), Register(3)),
-                RegCopy(Register(3), Register(1)),
-                Jmp("for-start_0".into()),
-            ];
-
-            assert_eq!(walker.instructions, expected);
-        }
-    }
-
-    mod test_visit_ternary {
-        use super::*;
-        use crate::{
-            asm::instruction::Instruction::{Jmp, Jz, Lte},
-            ast::ternary_node::TernaryNode,
-        };
-
-        #[test]
-        fn populates_the_instructions() {
-            let mut node = TernaryNode {
-                condition: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(2)),
-                    r: Box::new(ExpressionNode::from(3)),
-                    op: BinaryOperation::Lte,
-                    span: None,
-                })),
-                body: Box::new(ExpressionNode::from(666)),
-                else_clause: Box::new(ExpressionNode::from(777)),
-                span: None,
-            };
-
-            let mut walker = CodegenWalker::new(Context::default());
-
-            let _ = walker.visit_ternary(&mut node).unwrap();
-
-            let expected = vec![
-                IConst(Register(2), 2),
-                IConst(Register(3), 3),
-                Lte(Register(2), Register(3), Register(4)),
-                Jz(Register(4), "ternary-else_0".into()), // jump to else
-                IConst(Register(5), 666),
-                RegCopy(Register(5), Register(1)),
-                Jmp("ternary-end_1".into()), // jump to end
-                IConst(Register(6), 777),
-                RegCopy(Register(6), Register(1)),
             ];
 
             assert_eq!(walker.instructions, expected);
