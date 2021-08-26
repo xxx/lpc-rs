@@ -21,12 +21,16 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use crate::ast::break_node::BreakNode;
+use crate::ast::continue_node::ContinueNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum AstNode {
     Block(BlockNode),
+    Break(BreakNode),
     Call(CallNode),
+    Continue(ContinueNode),
     Decl(DeclNode),
     DoWhile(DoWhileNode),
     Expression(ExpressionNode),
@@ -65,7 +69,9 @@ macro_rules! node_defs {
 
 node_defs!(
     Block,
+    Break,
     Call,
+    Continue,
     Decl,
     DoWhile,
     Expression,
@@ -81,6 +87,18 @@ node_defs!(
 impl Display for AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl From<BreakNode> for AstNode {
+    fn from(node: BreakNode) -> Self {
+        AstNode::Break(node)
+    }
+}
+
+impl From<ContinueNode> for AstNode {
+    fn from(node: ContinueNode) -> Self {
+        AstNode::Continue(node)
     }
 }
 

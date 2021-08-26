@@ -7,8 +7,10 @@ use crate::ast::assignment_node::{AssignmentOperation, AssignmentNode};
 use crate::ast::array_node::ArrayNode;
 use crate::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::ast::block_node::BlockNode;
+use crate::ast::break_node::BreakNode;
 use crate::ast::call_node::CallNode;
 use crate::ast::comma_expression_node::CommaExpressionNode;
+use crate::ast::continue_node::ContinueNode;
 use crate::ast::decl_node::DeclNode;
 use crate::ast::do_while_node::DoWhileNode;
 use crate::ast::expression_node::{ExpressionNode, first_span};
@@ -254,7 +256,19 @@ pub SimpleStatement: AstNode = {
     <Return> ";" => AstNode::from(<>),
     <Decl> ";" => AstNode::from(<>),
     <Block> => AstNode::from(<>),
-    <DoWhile> => AstNode::from(<>)
+    <DoWhile> => AstNode::from(<>),
+    <JumpStatement>
+};
+
+JumpStatement: AstNode = {
+    <span:"break"> ";" => {
+        let n = BreakNode { span: Some(span) };
+        AstNode::from(n)
+    },
+    <span:"continue"> ";" => {
+        let n = ContinueNode { span: Some(span) };
+        AstNode::from(n)
+    }
 };
 
 OpenStatement: AstNode = {

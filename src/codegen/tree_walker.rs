@@ -13,6 +13,8 @@ use crate::{
     context::Context,
     Result,
 };
+use crate::ast::break_node::BreakNode;
+use crate::ast::continue_node::ContinueNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -70,6 +72,14 @@ pub trait TreeWalker {
         Ok(())
     }
 
+    /// Visit a break node
+    fn visit_break(&mut self, _node: &mut BreakNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        Ok(())
+    }
+
     /// Visit a function call node
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()>
     where
@@ -91,6 +101,14 @@ pub trait TreeWalker {
             let _ = expr.visit(self);
         }
 
+        Ok(())
+    }
+
+    /// Visit a continue node
+    fn visit_continue(&mut self, _node: &mut ContinueNode) -> Result<()>
+    where
+        Self: Sized,
+    {
         Ok(())
     }
 
