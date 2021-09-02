@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-use multimap::MultiMap;
-use tree_walker::TreeWalker;
 use crate::{
     asm::{
-        instruction::{Address, Instruction},
+        instruction::{Address, Instruction, Label},
         register::Register,
         register_counter::RegisterCounter,
     },
@@ -13,18 +10,25 @@ use crate::{
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
         binary_op_node::{BinaryOpNode, BinaryOperation},
         block_node::BlockNode,
+        break_node::BreakNode,
         call_node::CallNode,
+        continue_node::ContinueNode,
         decl_node::DeclNode,
+        do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
         float_node::FloatNode,
-        function_def_node::FunctionDefNode,
+        for_node::ForNode,
+        function_def_node::{FunctionDefNode, ARGV},
         if_node::IfNode,
         int_node::IntNode,
+        label_node::LabelNode,
         mapping_node::MappingNode,
         program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
         string_node::StringNode,
+        switch_node::SwitchNode,
+        ternary_node::TernaryNode,
         unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
@@ -33,23 +37,17 @@ use crate::{
     codegen::{tree_walker, tree_walker::ContextHolder},
     context::Context,
     errors::LpcError,
-    interpreter::{efun::EFUN_PROTOTYPES, program::Program},
+    interpreter::{
+        efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES},
+        program::Program,
+    },
     parser::span::Span,
     semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
     Result,
 };
-use crate::{
-    asm::instruction::Label,
-    ast::{
-        break_node::BreakNode, do_while_node::DoWhileNode, for_node::ForNode,
-        function_def_node::ARGV, ternary_node::TernaryNode,
-    },
-    interpreter::efun::{CALL_OTHER, CATCH},
-};
-use std::rc::Rc;
-use crate::ast::continue_node::ContinueNode;
-use crate::ast::switch_node::SwitchNode;
-use crate::ast::label_node::LabelNode;
+use multimap::MultiMap;
+use std::{collections::HashMap, rc::Rc};
+use tree_walker::TreeWalker;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -89,7 +87,9 @@ impl JumpTarget {
 struct SwitchCase(Option<ExpressionNode>);
 impl SwitchCase {
     #[inline]
-    pub fn is_default(&self) -> bool { self.0.is_none() }
+    pub fn is_default(&self) -> bool {
+        self.0.is_none()
+    }
 }
 
 /// A tree walker that generates assembly language instructions based on an AST.
@@ -1086,11 +1086,10 @@ impl TreeWalker for CodegenWalker {
                 x.push((case, address));
                 Ok(())
             }
-            None => {
-                Err(LpcError::new(
-                    "Found a label in the code generator, but nowhere to store the address?"
-                ).with_span(node.span))
-            }
+            None => Err(LpcError::new(
+                "Found a label in the code generator, but nowhere to store the address?",
+            )
+            .with_span(node.span)),
         }
     }
 
@@ -1233,7 +1232,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         for case_address in case_addresses {
-            match case_address.0.0 {
+            match case_address.0 .0 {
                 Some(mut case_expr) => {
                     case_expr.visit(self)?;
                     let case_result = self.current_result;
@@ -1264,7 +1263,8 @@ impl TreeWalker for CodegenWalker {
                         let instruction = Instruction::And(gte_result, lte_result, test_result);
                         push_instruction!(self, instruction, node.span);
                     } else {
-                        let instruction = Instruction::EqEq(expr_result, self.current_result, test_result);
+                        let instruction =
+                            Instruction::EqEq(expr_result, self.current_result, test_result);
                         push_instruction!(self, instruction, node.span);
                     }
 
@@ -2109,17 +2109,33 @@ mod tests {
 
             let program = walk_prog(code);
             let expected = vec![
-                Call { name: "create".into(), num_args: 0, initial_arg: Register(1) },
+                Call {
+                    name: "create".into(),
+                    num_args: 0,
+                    initial_arg: Register(1),
+                },
                 Ret,
                 IConst(Register(1), 666),
                 Jmp("switch-test_0".into()),
                 SConst(Register(2), "YEAH BABY".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(2) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(2),
+                },
                 Jmp("switch-end_1".into()),
                 SConst(Register(3), "very".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(3) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(3),
+                },
                 SConst(Register(4), "weak".into()),
-                Call { name: "dump".into(), num_args: 1, initial_arg: Register(4) },
+                Call {
+                    name: "dump".into(),
+                    num_args: 1,
+                    initial_arg: Register(4),
+                },
                 Jmp("switch-end_1".into()),
                 IConst(Register(5), 666),
                 EqEq(Register(1), Register(5), Register(6)),
@@ -2131,7 +2147,7 @@ mod tests {
                 And(Register(10), Register(11), Register(9)),
                 Jnz(Register(9), "switch-case_3".into()),
                 Jmp("switch-default_4".into()),
-                Ret
+                Ret,
             ];
 
             assert_eq!(program.instructions, expected);

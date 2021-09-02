@@ -16,8 +16,7 @@ pub struct Span {
 /// combine two [`Span`]s together, handling `None` cases.
 pub fn combine_spans(left: Option<Span>, right: Option<Span>) -> Span {
     match (left, right) {
-        (Some(x), None)
-        | (None, Some(x)) => x,
+        (Some(x), None) | (None, Some(x)) => x,
         (Some(ls), Some(rs)) => {
             // We're not going to deal with it when they cross file boundaries.
             if ls.file_id != rs.file_id {
@@ -31,9 +30,11 @@ pub fn combine_spans(left: Option<Span>, right: Option<Span>) -> Span {
 
             Span { l, r, file_id }
         }
-        (None, None) => {
-            Span { l: 0, r: 0, file_id: 0 }
-        }
+        (None, None) => Span {
+            l: 0,
+            r: 0,
+            file_id: 0,
+        },
     }
 }
 

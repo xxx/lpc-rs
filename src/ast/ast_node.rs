@@ -15,15 +15,14 @@ use crate::{
         binary_op_node::BinaryOpNode, block_node::BlockNode, break_node::BreakNode,
         call_node::CallNode, continue_node::ContinueNode, decl_node::DeclNode,
         do_while_node::DoWhileNode, expression_node, for_node::ForNode,
-        function_def_node::FunctionDefNode, if_node::IfNode, int_node, program_node,
-        return_node::ReturnNode, var_init_node::VarInitNode, while_node::WhileNode,
+        function_def_node::FunctionDefNode, if_node::IfNode, int_node,
+        labeled_statement_node::LabeledStatementNode, program_node, return_node::ReturnNode,
+        switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
     Result,
 };
-use crate::ast::switch_node::SwitchNode;
-use crate::ast::labeled_statement_node::LabeledStatementNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

@@ -15,9 +15,11 @@ use crate::{
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
         int_node::IntNode,
+        label_node::LabelNode,
         program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
+        switch_node::SwitchNode,
         ternary_node::TernaryNode,
         unary_op_node::UnaryOpNode,
         var_init_node::VarInitNode,
@@ -35,8 +37,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::label_node::LabelNode;
-use crate::ast::switch_node::SwitchNode;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -104,11 +104,11 @@ impl SemanticCheckWalker {
     }
 
     fn can_break(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0.0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0 .0
     }
 
     fn can_continue(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1.0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1 .0
     }
 
     fn can_use_labels(&self) -> bool {

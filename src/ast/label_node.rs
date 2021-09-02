@@ -4,12 +4,14 @@ use std::{
 };
 
 use crate::{
-    ast::ast_node::{AstNodeTrait, SpannedNode},
+    ast::{
+        ast_node::{AstNodeTrait, SpannedNode},
+        expression_node::ExpressionNode,
+    },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
     Result,
 };
-use crate::ast::expression_node::ExpressionNode;
 
 /// A node representing a `switch` label
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
@@ -26,16 +28,13 @@ impl LabelNode {
     pub fn new(case: ExpressionNode, span: Option<Span>) -> Self {
         Self {
             case: Some(case),
-            span
+            span,
         }
     }
 
     /// Create a new `default` [`LabelNode`]
     pub fn new_default(span: Option<Span>) -> Self {
-        Self {
-            case: None,
-            span
-        }
+        Self { case: None, span }
     }
 
     pub fn is_default(&self) -> bool {
