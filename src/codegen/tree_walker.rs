@@ -13,6 +13,8 @@ use crate::{
     context::Context,
     Result,
 };
+use crate::ast::label_node::LabelNode;
+use crate::ast::switch_node::SwitchNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -194,6 +196,18 @@ pub trait TreeWalker {
         Ok(())
     }
 
+    /// Visit a case label
+    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        if let Some(expr) = &mut node.case {
+            expr.visit(self)?;
+        }
+
+        Ok(())
+    }
+
     /// Visit a mapping literal node
     fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()>
     where
@@ -250,6 +264,15 @@ pub trait TreeWalker {
     /// Visit a string (literal) node
     fn visit_string(&mut self, _node: &mut StringNode) -> Result<()> {
         Ok(())
+    }
+
+    /// Visit a `switch` statement
+    fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        node.expression.visit(self)?;
+        node.body.visit(self)
     }
 
     /// Visit a ternary expression

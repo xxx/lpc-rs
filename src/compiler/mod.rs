@@ -223,9 +223,9 @@ impl Compiler {
             return Err(CompilerError::LpcError(e));
         }
 
-        // for s in asm_walker.listing() {
-        //     println!("{}", s);
-        // }
+        for s in asm_walker.listing() {
+            println!("{}", s);
+        }
 
         let program = match asm_walker.to_program() {
             Ok(p) => p,

@@ -22,6 +22,8 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use crate::ast::switch_node::SwitchNode;
+use crate::ast::labeled_statement_node::LabeledStatementNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -36,8 +38,10 @@ pub enum AstNode {
     For(ForNode),
     FunctionDef(FunctionDefNode),
     If(IfNode),
+    LabeledStatement(LabeledStatementNode),
     Program(ProgramNode),
     Return(ReturnNode),
+    Switch(SwitchNode),
     VarInit(VarInitNode),
     While(WhileNode),
 }
@@ -77,8 +81,10 @@ node_defs!(
     For,
     FunctionDef,
     If,
+    LabeledStatement,
     Program,
     Return,
+    Switch,
     VarInit,
     While
 );
@@ -86,6 +92,18 @@ node_defs!(
 impl Display for AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl From<BinaryOpNode> for AstNode {
+    fn from(node: BinaryOpNode) -> Self {
+        AstNode::Expression(ExpressionNode::BinaryOp(node))
+    }
+}
+
+impl From<BlockNode> for AstNode {
+    fn from(node: BlockNode) -> Self {
+        AstNode::Block(node)
     }
 }
 
@@ -98,6 +116,18 @@ impl From<BreakNode> for AstNode {
 impl From<ContinueNode> for AstNode {
     fn from(node: ContinueNode) -> Self {
         AstNode::Continue(node)
+    }
+}
+
+impl From<DeclNode> for AstNode {
+    fn from(node: DeclNode) -> Self {
+        AstNode::Decl(node)
+    }
+}
+
+impl From<DoWhileNode> for AstNode {
+    fn from(node: DoWhileNode) -> Self {
+        AstNode::DoWhile(node)
     }
 }
 
@@ -119,15 +149,21 @@ impl From<FunctionDefNode> for AstNode {
     }
 }
 
+impl From<IfNode> for AstNode {
+    fn from(node: IfNode) -> Self {
+        AstNode::If(node)
+    }
+}
+
 impl From<IntNode> for AstNode {
     fn from(node: IntNode) -> Self {
         AstNode::Expression(ExpressionNode::Int(node))
     }
 }
 
-impl From<BinaryOpNode> for AstNode {
-    fn from(node: BinaryOpNode) -> Self {
-        AstNode::Expression(ExpressionNode::BinaryOp(node))
+impl From<LabeledStatementNode> for AstNode {
+    fn from(node: LabeledStatementNode) -> Self {
+        AstNode::LabeledStatement(node)
     }
 }
 
@@ -143,9 +179,9 @@ impl From<ReturnNode> for AstNode {
     }
 }
 
-impl From<DeclNode> for AstNode {
-    fn from(node: DeclNode) -> Self {
-        AstNode::Decl(node)
+impl From<SwitchNode> for AstNode {
+    fn from(node: SwitchNode) -> Self {
+        AstNode::Switch(node)
     }
 }
 
@@ -155,26 +191,8 @@ impl From<VarInitNode> for AstNode {
     }
 }
 
-impl From<BlockNode> for AstNode {
-    fn from(node: BlockNode) -> Self {
-        AstNode::Block(node)
-    }
-}
-
-impl From<IfNode> for AstNode {
-    fn from(node: IfNode) -> Self {
-        AstNode::If(node)
-    }
-}
-
 impl From<WhileNode> for AstNode {
     fn from(node: WhileNode) -> Self {
         AstNode::While(node)
-    }
-}
-
-impl From<DoWhileNode> for AstNode {
-    fn from(node: DoWhileNode) -> Self {
-        AstNode::DoWhile(node)
     }
 }

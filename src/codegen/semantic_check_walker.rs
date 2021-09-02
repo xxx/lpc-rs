@@ -35,9 +35,12 @@ use crate::{
     },
     Result,
 };
+use crate::ast::label_node::LabelNode;
+use crate::ast::switch_node::SwitchNode;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
+struct LabelAllowed(bool);
 
 /// A tree walker to handle various semantic & type checks
 pub struct SemanticCheckWalker {
@@ -46,6 +49,9 @@ pub struct SemanticCheckWalker {
 
     /// Are break / continue allowed at this time?
     valid_jumps: Vec<(BreakAllowed, ContinueAllowed)>,
+
+    /// Are `case` and `default` statements currently allowed?
+    valid_labels: Vec<LabelAllowed>,
 
     context: Context,
 }
@@ -56,6 +62,7 @@ impl SemanticCheckWalker {
             context,
             current_function: None,
             valid_jumps: Vec::new(),
+            valid_labels: Vec::new(),
         }
     }
 
@@ -79,16 +86,33 @@ impl SemanticCheckWalker {
             .push((BreakAllowed(true), ContinueAllowed(true)));
     }
 
+    fn allow_breaks(&mut self) {
+        self.valid_jumps
+            .push((BreakAllowed(true), ContinueAllowed(false)));
+    }
+
     fn prevent_jumps(&mut self) {
         self.valid_jumps.pop();
     }
 
+    fn allow_labels(&mut self) {
+        self.valid_labels.push(LabelAllowed(true));
+    }
+
+    fn prevent_labels(&mut self) {
+        self.valid_labels.pop();
+    }
+
     fn can_break(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0 .0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0.0
     }
 
     fn can_continue(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1 .0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1.0
+    }
+
+    fn can_use_labels(&self) -> bool {
+        !self.valid_labels.is_empty() && self.valid_labels.last().unwrap().0
     }
 }
 
@@ -307,6 +331,29 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
+    /// Visit a case label
+    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        if !self.can_use_labels() {
+            let msg = if node.is_default() {
+                "Invalid `default`."
+            } else {
+                "Invalid `case` statement."
+            };
+
+            let err = LpcError::new(msg).with_span(node.span);
+            self.context.errors.push(err);
+        }
+
+        if let Some(expr) = &mut node.case {
+            expr.visit(self)?;
+        }
+
+        Ok(())
+    }
+
     fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
 
@@ -416,10 +463,20 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
+        self.allow_labels();
+        self.allow_breaks();
+
+        node.expression.visit(self)?;
+        node.body.visit(self)?;
+
+        self.prevent_jumps();
+        self.prevent_labels();
+
+        Ok(())
+    }
+
+    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
         let _ = node.condition.visit(self);
         let _ = node.body.visit(self);
         let _ = node.else_clause.visit(self);
@@ -883,23 +940,23 @@ mod tests {
             assert!(context.errors.is_empty());
         }
 
-        // #[test]
-        // fn allows_in_switch() {
-        //     let code = r#"
-        //         void create() {
-        //             int i = 5;
-        //             switch (i) {
-        //                 case 5:
-        //                     dump("nice!");
-        //                     break;
-        //                 default:
-        //                     dump("weeeeak");
-        //             }
-        //         }"#;
-        //     let context = walk_code(code).expect("failed to parse?");
-        //
-        //     assert!(context.errors.is_empty());
-        // }
+        #[test]
+        fn allows_in_switch() {
+            let code = r#"
+                void create() {
+                    int i = 5;
+                    switch (i) {
+                        case 5:
+                            dump("nice!");
+                            break;
+                        default:
+                            dump("weeeeak");
+                    }
+                }"#;
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(context.errors.is_empty());
+        }
     }
 
     mod test_visit_call {
@@ -1279,6 +1336,45 @@ mod tests {
             } else {
                 panic!("didn't error?")
             }
+        }
+    }
+
+    mod test_visit_label {
+        use super::*;
+
+        #[test]
+        fn disallows_case_outside_of_switch() {
+            let code = "void create() { case 12: 1; }";
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(!context.errors.is_empty());
+            assert_eq!(context.errors[0].to_string(), "Invalid `case` statement.");
+        }
+
+        #[test]
+        fn disallows_default_outside_of_switch() {
+            let code = "void create() { default: 1; }";
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(!context.errors.is_empty());
+            assert_eq!(context.errors[0].to_string(), "Invalid `default`.");
+        }
+
+        #[test]
+        fn allows_in_switch() {
+            let code = r#"
+                void create() {
+                    int i = 5;
+                    switch (i) {
+                    case 5:
+                        dump("nice!");
+                        break;
+                    default:
+                        dump("weeeeak");
+                    }
+                }"#;
+            let context = walk_code(code).expect("failed to parse?");
+            assert!(context.errors.is_empty());
         }
     }
 

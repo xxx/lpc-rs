@@ -19,11 +19,14 @@ use crate::ast::for_node::ForNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::if_node::IfNode;
 use crate::ast::int_node::IntNode;
+use crate::ast::labeled_statement_node::LabeledStatementNode;
+use crate::ast::label_node::LabelNode;
 use crate::ast::mapping_node::MappingNode;
 use crate::ast::program_node::ProgramNode;
 use crate::ast::range_node::RangeNode;
 use crate::ast::return_node::ReturnNode;
 use crate::ast::string_node::StringNode;
+use crate::ast::switch_node::SwitchNode;
 use crate::ast::ternary_node::TernaryNode;
 use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 use crate::ast::var_node::VarNode;
@@ -104,6 +107,8 @@ extern {
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
         "efun" => Token::Efun(<Span>),
+        "switch" => Token::Switch(<Span>),
+        "default" => Token::Default(<Span>),
 
         "(" => Token::LParen(<Span>),
         ")" => Token::RParen(<Span>),
@@ -288,6 +293,19 @@ OpenStatement: AstNode = {
     <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:OpenStatement> => {
         let node = ForNode::new(init, cond, inc, body, Some(for_t));
         AstNode::from(node)
+    },
+    <l:"switch"> "(" <expression:Expression> <r:")"> <body:OpenStatement> => {
+        let span = combine_spans(Some(l), Some(r));
+        let node = SwitchNode {
+            expression,
+            body: body.into(),
+            span: Some(l),
+        };
+        AstNode::from(node)
+    },
+    <label:Label> <statement:OpenStatement> => {
+        let labeled = LabeledStatementNode::new(statement, label);
+        AstNode::from(labeled)
     }
 };
 
@@ -304,6 +322,19 @@ ClosedStatement: AstNode = {
     <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:ClosedStatement> => {
         let node = ForNode::new(init, cond, inc, body, Some(for_t));
         AstNode::from(node)
+    },
+    <l:"switch"> "(" <expression:Expression> <r:")"> <body:ClosedStatement> => {
+        let span = combine_spans(Some(l), Some(r));
+        let node = SwitchNode {
+            expression,
+            body: body.into(),
+            span: Some(l),
+        };
+        AstNode::from(node)
+    },
+    <label:Label> <statement:ClosedStatement> => {
+        let labeled = LabeledStatementNode::new(statement, label);
+        AstNode::from(labeled)
     }
 };
 
@@ -316,6 +347,32 @@ DoWhile: DoWhileNode = {
     <do_t:"do"> <body:Statement> "while" "(" <cond:Expression> ")" ";" => {
         DoWhileNode::new(body, cond, Some(do_t))
     }
+};
+
+Label: LabelNode = {
+    <word:"case"> <case:SwitchCase> <colon:":"> => {
+        let span = combine_spans(Some(word), Some(colon));
+        LabelNode::new(case, Some(span))
+    },
+    <d:"default"> ":" => {
+        LabelNode::new_default(Some(d))
+    }
+};
+
+SwitchCase: ExpressionNode = {
+    <Expression>,
+    <e1:ConditionalExpression> ".." <e2:ConditionalExpression> => {
+        let span = combine_spans(e1.span(), e2.span());
+        RangeNode::new(Some(e1), Some(e2), Some(span)).into()
+    },
+    <rng:".."> <e:ConditionalExpression> => {
+        let span = combine_spans(Some(rng), e.span());
+        RangeNode::new(None, Some(e), Some(span)).into()
+    },
+    <e:ConditionalExpression> <rng:".."> => {
+        let span = combine_spans(e.span(), Some(rng));
+        RangeNode::new(Some(e), None, Some(span)).into()
+    },
 };
 
 VarInit: VarInitNode = {

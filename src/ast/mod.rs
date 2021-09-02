@@ -15,13 +15,17 @@ pub mod for_node;
 pub mod function_def_node;
 pub mod if_node;
 pub mod int_node;
+pub mod label_node;
 pub mod mapping_node;
 pub mod program_node;
 pub mod range_node;
 pub mod return_node;
 pub mod string_node;
+pub mod switch_node;
 pub mod ternary_node;
 pub mod unary_op_node;
 pub mod var_init_node;
 pub mod var_node;
 pub mod while_node;
+
+pub mod labeled_statement_node;
