@@ -15,5 +15,5 @@ void create() {
     dump(MSG);
 }
 ```
-6. `cd ..` (This step is needed only because it's making an assumption that `config.toml` is in the same directory you're running from. It will eventually be squeezed out.)
-7. `cargo run --bin lpcc lib/hello.c`
+7. `cd ..` (This step is needed only because it's making an assumption that `config.toml` is in the same directory you're running from. It will eventually be squeezed out.)
+8. `cargo run --bin lpcc lib/hello.c`
