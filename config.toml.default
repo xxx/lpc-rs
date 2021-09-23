@@ -1,0 +1,61 @@
+# The main configuration file for the the lpc-rs suite.
+# If named "config.toml", it will be used by default when any of the binaries from the suite are
+# used. A different config file can be specified on the command line for any of the binaries with
+# the `--config <path>` or `-c <path>` options.
+
+#
+# Common configuration for all the binaries included in the lpc-rs package
+#
+[lpc-rs]
+
+# What is the in-game root directory?
+# Nothing above this directory is directly accessible from within the game.
+# This does *not* have to be a subdirectory of the driver. It can be any
+# directory in the filesystem.
+#
+# This can be overridden from the command line with the `--lib` / `-l` options
+lib_dir = "./lib"
+
+# Which directories are searched for `#include <foo.c>`-type directives?
+# Directories are searched in the order given here, and the paths are in-game paths,
+# rooted at, and relative to `lib_dir`.
+#
+# This can be overridden from the command line with the `--includes` / `-i` options.
+# Multiple directories passed on the command line can be separated by a comma.
+# Where applicable, the mudlib itself can also override this setting directly.
+system_include_dirs = ["/sys"]
+
+# How many frames are allowed in the call stack before it overflows?
+# Set to 0 (or comment the line out) to have a stack size limited
+# only by system memory
+max_call_stack_size = 10240
+
+# How many instructions / efun loop iterations can execute in a given
+# Task before the driver breaks-in.
+# Useful for preventing infinite loops from taking down a server.
+# Set to 0 (or comment the line out) to disable this check.
+max_task_instructions = 14000
+
+#
+# Configuration that's specific to the game driver.
+#
+[driver]
+
+# The in-game path to the Master object
+# This is the first object to get created when the driver starts, and the one that the driver uses
+# to communicate with directly. You can think of it as the Pope.
+# This path is relative to `lib_dir`.
+master_object = "/secure/master.c"
+
+# Which port to accept connections on? This is the unencrypted port.
+#
+# This can be overridden from the command line with the `--port` or `-p` options.
+port = 2020
+
+# Which port to accept TLS connections on? This port is encrypted.
+# Comment this out if you prefer not to deploy a TLS-enabled endpoint.
+# TODO: link up instructions for setting up TLS, once they exist
+#
+# This can be overridden on the command line with the `--tlsport` option
+#tls_port = 4040
+
