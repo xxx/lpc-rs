@@ -11,7 +11,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let config = Rc::new(Config::new(None::<&str>).unwrap());
-    println!("config {:?}", config);
+    // println!("config {:?}", config);
 
     let compiler = Compiler::new(config.clone());
 
