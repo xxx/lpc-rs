@@ -13,6 +13,7 @@ pub enum LpcType {
     String(bool),
     Mapping(bool),
     Mixed(bool),
+    Function(bool),
 
     // To allow efuns to declare prototypes with multiple allowed types
     Union(LpcTypeUnion),
@@ -56,7 +57,8 @@ impl LpcType {
             | LpcType::Float(arr)
             | LpcType::Object(arr)
             | LpcType::Mapping(arr)
-            | LpcType::Mixed(arr) => arr,
+            | LpcType::Mixed(arr)
+            | LpcType::Function(arr) => arr,
             LpcType::Union(union) => union.is_array(),
         }
     }
@@ -70,6 +72,7 @@ impl LpcType {
             LpcType::Mapping(_) => LpcType::Mapping(arr),
             LpcType::Mixed(_) => LpcType::Mixed(arr),
             LpcType::Object(_) => LpcType::Object(arr),
+            LpcType::Function(_) => LpcType::Function(arr),
             LpcType::Void => self,
             LpcType::Union(_) => self,
         }
@@ -118,6 +121,7 @@ impl Display for LpcType {
             LpcType::Object(array) => format!("object{}", to_star(array)),
             LpcType::Mapping(array) => format!("mapping{}", to_star(array)),
             LpcType::Mixed(array) => format!("mixed{}", to_star(array)),
+            LpcType::Function(array) => format!("function{}", to_star(array)),
             LpcType::Union(union) => format!("{}", union),
         };
 
@@ -134,6 +138,7 @@ impl From<String> for LpcType {
             "string" => LpcType::String(false),
             "object" => LpcType::Object(false),
             "mapping" => LpcType::Mapping(false),
+            "function" => LpcType::Function(false),
             _ => LpcType::Mixed(false),
         }
     }

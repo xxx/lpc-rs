@@ -11,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+use crate::asm::instruction::Address;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -53,6 +54,19 @@ impl<'a> Program {
         T: AsRef<str>,
     {
         self.functions.get(name.as_ref())
+    }
+
+    /// Get the instruction address of a function within this [`Program`]
+    pub fn function_address<T>(&self, name: T) -> Option<Address>
+    where
+        T: AsRef<str>,
+    {
+        match self.lookup_function(name) {
+            Some(fs) => {
+                Some(fs.address)
+            }
+            None => None
+        }
     }
 
     /// Get the directory of this program. Used for clone_object, etc.

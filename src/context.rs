@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ast::expression_node::ExpressionNode,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
+    interpreter::efun::EFUN_PROTOTYPES,
 };
 
 use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
@@ -70,6 +71,29 @@ impl Context {
     #[inline]
     pub fn system_include_dirs(&self) -> &Vec<String> {
         self.config.system_include_dirs()
+    }
+
+    /// Look-up a function by name
+    pub fn lookup_function<T>(&self, name: T) -> Option<&FunctionPrototype>
+    where
+        T: AsRef<str>
+    {
+        let r = name.as_ref();
+        self.function_prototypes.get(r)
+    }
+
+    /// Look-up a function locally, and fall back to checking the efuns if a local function with
+    /// the passed name isn't found locally.
+    pub fn lookup_function_complete<T>(&self, name: T) -> Option<&FunctionPrototype>
+    where
+        T: AsRef<str>
+    {
+        let r = name.as_ref();
+        if let Some(prototype) = self.function_prototypes.get(r) {
+            Some(prototype)
+        } else {
+            EFUN_PROTOTYPES.get(r)
+        }
     }
 }
 

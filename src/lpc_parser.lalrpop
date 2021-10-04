@@ -16,6 +16,7 @@ use crate::ast::do_while_node::DoWhileNode;
 use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::float_node::FloatNode;
 use crate::ast::for_node::ForNode;
+use crate::ast::function_ptr_node::FunctionPtrNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::if_node::IfNode;
 use crate::ast::int_node::IntNode;
@@ -101,6 +102,7 @@ extern {
         "object" => Token::Object(<Span>),
         "mapping" => Token::Mapping(<Span>),
         "mixed" => Token::Mixed(<Span>),
+        "function" => Token::Function(<Span>),
         "void" => Token::Void(<Span>),
         "return" => Token::Return(<Span>),
         "static" => Token::Static(<Span>),
@@ -236,6 +238,7 @@ Type: (String, Span) = {
     "mixed" => (String::from("mixed"), <>),
     "mapping" => (String::from("mapping"), <>),
     "object" => (String::from("object"), <>),
+    "function" => (String::from("function"), <>),
     "void" => (String::from("void"), <>),
 };
 
@@ -428,6 +431,7 @@ pub PrimaryExpression: ExpressionNode = {
     <Float>,
     <String>,
     <Var>,
+    <FunctionPointer>,
     "(" <Expression> ")",
     "(" "{" <l:(ExpressionList ","?)?>  "}" ")" => {
         let vec = if let Some(v) = l {
@@ -440,7 +444,7 @@ pub PrimaryExpression: ExpressionNode = {
     },
     <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> => {
          let vec = if let Some(v) = list {
-             // Deduplicate kv pairs, in reverse to later-declared pairs override earlier ones.
+             // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
              v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
          } else {
              Vec::new()
@@ -518,7 +522,7 @@ pub PostfixExpression: ExpressionNode = {
     <e:(<PostfixExpression> "->")?> <mut c:Call> => {
         if let Some(rcvr) = e {
             let span = Span::combine(rcvr.span(), c.span);
-            c.receiver = Box::new(Some(rcvr));
+            c.receiver = Some(Box::new(rcvr));
             c.span = span;
 
             ExpressionNode::from(c)
@@ -664,12 +668,12 @@ pub ConditionalExpression: ExpressionNode = {
     }
 };
 
-AssignmentExpression: ExpressionNode = {
+pub AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => {
         let span = combine_spans(lhs.span(), rhs.span());
 
-        // Decompose `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
+        // Desugar `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
         let rhs = match op {
             AssignmentOperation::Simple => {
                 rhs
@@ -688,8 +692,7 @@ AssignmentExpression: ExpressionNode = {
             | AssignmentOperation::XorEq => {
                 let binary_op = match BinaryOperation::try_from(op) {
                     Ok(x) => x,
-                    Err(_) => panic!("This only way for this to be reached is if a new op was added in the parent `match`, \
-                                without updating the TryFrom implementation, which shouldn't compile.")
+                    Err(_) => unreachable!("This only way for this to be reached is if a new op was added in the parent `match`, without updating the TryFrom implementation, which shouldn't compile.")
                 };
 
                 ExpressionNode::BinaryOp(BinaryOpNode {
@@ -799,7 +802,7 @@ pub Call: CallNode = {
         let r = right.r;
 
         CallNode {
-            receiver: Box::new(None),
+            receiver: None,
             arguments,
             name: name.1,
             span: Some(Span { file_id, l, r })
@@ -861,7 +864,8 @@ Var: ExpressionNode = <name:"ID"> => {
         VarNode {
             name: name.1,
             span: Some(name.0),
-            global: false
+            global: false,
+            function_name: false,
         }
     )
 };
@@ -915,4 +919,31 @@ String: ExpressionNode = {
             _ => unimplemented!()
         }
     },
+};
+
+FunctionPointer: ExpressionNode = {
+    <l:"&"> <rcvr:("(" <PostfixExpression> ")" "->")?> <name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> => {
+        let receiver = match rcvr {
+            Some(n) => Some(Box::new(n)),
+            None => None
+        };
+
+        let ptr_node = FunctionPtrNode {
+            receiver,
+            arguments,
+            name: name.1.clone(),
+            span: Some(combine_spans(Some(l), Some(r)))
+        };
+
+        ExpressionNode::from(ptr_node)
+    }
+};
+
+PartialArgumentExpressionList: Vec<Option<ExpressionNode>> = {
+    <AssignmentExpression> => vec![Some(<>)],
+    <list:PartialArgumentExpressionList> "," <arg:AssignmentExpression?> => {
+        let mut v = list;
+        v.push(arg);
+        v
+    }
 };

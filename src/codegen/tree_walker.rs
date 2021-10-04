@@ -14,6 +14,7 @@ use crate::{
     context::Context,
     Result,
 };
+use crate::ast::function_ptr_node::FunctionPtrNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -84,6 +85,10 @@ pub trait TreeWalker {
     where
         Self: Sized,
     {
+        if let Some(rcvr) = &mut node.receiver {
+            rcvr.visit(self)?;
+        }
+
         for argument in &mut node.arguments {
             argument.visit(self)?;
         }
@@ -171,6 +176,26 @@ pub trait TreeWalker {
 
         for expression in &mut node.body {
             expression.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    /// Visit a function pointer node
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        if let Some(rcvr) = &mut node.receiver {
+            rcvr.visit(self)?;
+        }
+
+        if let Some(args) = &mut node.arguments {
+            for argument in args {
+                if let Some(n) = argument {
+                    n.visit(self)?;
+                }
+            }
         }
 
         Ok(())

@@ -5,6 +5,7 @@ use crate::{
 use itertools::Itertools;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
+use crate::interpreter::function_type::LpcFunction;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -16,6 +17,7 @@ pub enum LpcValue {
     Array(Vec<LpcRef>),
     Mapping(HashMap<LpcRef, LpcRef>),
     Object(Rc<Process>),
+    Function(LpcFunction),
 }
 
 /// Extract the final value (or reference to such, in the case of non-`Copy` value types)
@@ -49,6 +51,7 @@ impl LpcValue {
             LpcValue::Array(_) => "array",
             LpcValue::Mapping(_) => "mapping",
             LpcValue::Object(_) => "object",
+            LpcValue::Function(_) => "function",
         }
     }
 }
@@ -65,6 +68,7 @@ impl Display for LpcValue {
             }
             LpcValue::Mapping(x) => write!(f, "([ {:?} ])", x),
             LpcValue::Object(x) => write!(f, "< {:?} >", x),
+            LpcValue::Function(x) => write!(f, "{:?}", x),
         }
     }
 }
@@ -114,6 +118,12 @@ impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
 impl From<Rc<Process>> for LpcValue {
     fn from(o: Rc<Process>) -> Self {
         Self::Object(o)
+    }
+}
+
+impl From<LpcFunction> for LpcValue {
+    fn from(f: LpcFunction) -> Self {
+        Self::Function(f)
     }
 }
 

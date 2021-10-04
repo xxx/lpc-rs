@@ -36,6 +36,9 @@ macro_rules! value_to_ref {
             LpcValue::Object(x) => {
                 LpcRef::Object(PoolRef::new(&$m, RefCell::new(LpcValue::Object(x))))
             }
+            LpcValue::Function(x) => {
+                LpcRef::Function(PoolRef::new(&$m, RefCell::new(LpcValue::Function(x))))
+            }
         }
     };
 }
@@ -70,6 +73,9 @@ pub enum LpcRef {
 
     /// Reference type, pointing to an LPC `object`
     Object(PoolRef<RefCell<LpcValue>>),
+
+    /// Reference type, a function pointer or closure
+    Function(PoolRef<RefCell<LpcValue>>),
 }
 
 impl LpcRef {
@@ -82,6 +88,7 @@ impl LpcRef {
             LpcRef::Array(_) => "array",
             LpcRef::Mapping(_) => "mapping",
             LpcRef::Object(_) => "object",
+            LpcRef::Function(_) => "function",
         }
     }
 
@@ -112,6 +119,7 @@ impl Hash for LpcRef {
             LpcRef::Array(x) => ptr::hash(&**x, state),
             LpcRef::Mapping(x) => ptr::hash(&**x, state),
             LpcRef::Object(x) => ptr::hash(&**x, state),
+            LpcRef::Function(x) => ptr::hash(&**x, state),
         }
     }
 }
@@ -127,6 +135,7 @@ impl PartialEq for LpcRef {
             }
             (LpcRef::Array(x), LpcRef::Array(y)) => PoolRef::ptr_eq(x, y),
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => PoolRef::ptr_eq(x, y),
+            (LpcRef::Function(x), LpcRef::Function(y)) => PoolRef::ptr_eq(x, y),
             _ => false,
         }
     }
@@ -154,7 +163,11 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{}", x),
             LpcRef::Int(x) => write!(f, "{}", x),
-            LpcRef::String(x) | LpcRef::Array(x) | LpcRef::Mapping(x) | LpcRef::Object(x) => {
+            LpcRef::String(x)
+            | LpcRef::Array(x)
+            | LpcRef::Mapping(x)
+            | LpcRef::Object(x)
+            | LpcRef::Function(x) => {
                 write!(f, "{}", x.borrow())
             }
         }
@@ -207,7 +220,8 @@ impl Add for &LpcRef {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Object(_) => Err(self.to_error(BinaryOperation::Add, rhs)),
+            LpcRef::Object(_)
+            | LpcRef::Function(_) => Err(self.to_error(BinaryOperation::Add, rhs)),
         }
     }
 }

@@ -16,7 +16,8 @@ pub fn file_name(interpreter: &mut AsmInterpreter) -> Result<()> {
         | LpcRef::Int(_)
         | LpcRef::String(_)
         | LpcRef::Array(_)
-        | LpcRef::Mapping(_) => LpcValue::from(0),
+        | LpcRef::Mapping(_)
+        | LpcRef::Function(_) => LpcValue::from(0),
         LpcRef::Object(x) => {
             let b = x.borrow();
             let proc = try_extract_value!(*b, LpcValue::Object);

@@ -39,6 +39,12 @@ fn format_ref(
             try_extract_value!(*x.borrow(), LpcValue::Object),
             width = indent
         )),
+        LpcRef::Function(x) => Ok(format!(
+            "{:width$}{}",
+            "",
+            try_extract_value!(*x.borrow(), LpcValue::Function),
+            width = indent
+        )),
         LpcRef::Array(x) => {
             let xb = x.borrow();
             let arr = try_extract_value!(*xb, LpcValue::Array);

@@ -25,6 +25,7 @@ use crate::{
     BaseFloat, LpcInt, Result,
 };
 use std::collections::HashMap;
+use crate::ast::function_ptr_node::FunctionPtrNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -35,6 +36,7 @@ pub enum ExpressionNode {
     Call(CallNode),
     CommaExpression(CommaExpressionNode),
     Float(FloatNode),
+    FunctionPtr(FunctionPtrNode),
     Int(IntNode),
     Range(RangeNode),
     String(StringNode),
@@ -68,6 +70,7 @@ impl SpannedNode for ExpressionNode {
             ExpressionNode::Call(node) => node.span,
             ExpressionNode::CommaExpression(node) => node.span,
             ExpressionNode::Float(node) => node.span,
+            ExpressionNode::FunctionPtr(node) => node.span,
             ExpressionNode::Int(node) => node.span,
             ExpressionNode::Range(node) => node.span,
             ExpressionNode::String(node) => node.span,
@@ -110,6 +113,7 @@ delegated_traits!(
     ExpressionNode::Call,
     ExpressionNode::CommaExpression,
     ExpressionNode::Float,
+    ExpressionNode::FunctionPtr,
     ExpressionNode::Int,
     ExpressionNode::Range,
     ExpressionNode::String,
@@ -165,6 +169,12 @@ impl From<RangeNode> for ExpressionNode {
 impl From<TernaryNode> for ExpressionNode {
     fn from(node: TernaryNode) -> Self {
         Self::Ternary(node)
+    }
+}
+
+impl From<FunctionPtrNode> for ExpressionNode {
+    fn from(node: FunctionPtrNode) -> Self {
+        Self::FunctionPtr(node)
     }
 }
 

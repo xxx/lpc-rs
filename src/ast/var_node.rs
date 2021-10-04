@@ -22,6 +22,12 @@ pub struct VarNode {
     /// Is this node referring to a global? Tracked in case a var is used,
     /// then subsequently defined.
     pub global: bool,
+
+    /// Is this variable actually the name of a function? Function pointers create this ambiguity.
+    /// The only time this ends up true is in the case of a bareword function var init, e.g.:
+    /// `function f = dump;` as `dump` in this case would otherwise be seen as a variable.
+    /// The alternate `&name()` syntax is parsed as a function pointer from the start.
+    pub function_name: bool,
 }
 
 impl VarNode {
@@ -30,12 +36,14 @@ impl VarNode {
             name: String::from(name),
             span: None,
             global: false,
+            function_name: false
         }
     }
 
     pub fn set_global(&mut self, val: bool) {
         self.global = val;
     }
+    pub fn set_function_name(&mut self, val: bool) { self.function_name = val; }
 }
 
 impl SpannedNode for VarNode {

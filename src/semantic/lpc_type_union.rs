@@ -25,6 +25,8 @@ pub struct LpcTypeUnion {
     pub mapping_array: bool,
     pub mixed: bool,
     pub mixed_array: bool,
+    pub function: bool,
+    pub function_array: bool,
 }
 
 impl LpcTypeUnion {
@@ -72,6 +74,13 @@ impl LpcTypeUnion {
                     self.set_mixed_array(true)
                 } else {
                     self.set_mixed(true)
+                }
+            }
+            LpcType::Function(array) => {
+                if array {
+                    self.set_function_array(true)
+                } else {
+                    self.set_function(true)
                 }
             }
             LpcType::Union(other) => {
@@ -152,6 +161,13 @@ impl LpcTypeUnion {
                         || self.mixed()
                 }
             }
+            LpcType::Function(array) => {
+                if array {
+                    self.function_array()
+                } else {
+                    self.function()
+                }
+            }
             LpcType::Union(other_union) => self.into_bytes() == other_union.into_bytes(),
         }
     }
@@ -164,6 +180,7 @@ impl LpcTypeUnion {
             || self.object_array()
             || self.mapping_array()
             || self.mixed_array()
+            || self.function_array()
     }
 }
 
@@ -225,6 +242,10 @@ impl Display for LpcTypeUnion {
             vec.push(LpcType::Mixed(true));
         }
 
+        if self.function_array() {
+            vec.push(LpcType::Function(true));
+        }
+
         let s = vec
             .iter()
             .map(|i| format!("{}", i))
@@ -281,6 +302,8 @@ mod tests {
             assert!(!union.mapping_array());
             assert!(!union.mixed());
             assert!(!union.mixed_array());
+            assert!(!union.function());
+            assert!(!union.function_array());
         }
     }
 
@@ -309,5 +332,7 @@ mod tests {
         assert!(union.matches_type(LpcType::Mapping(true)));
         assert!(union.matches_type(LpcType::Mixed(false)));
         assert!(union.matches_type(LpcType::Mixed(true)));
+        assert!(union.matches_type(LpcType::Function(false)));
+        assert!(union.matches_type(LpcType::Function(true)));
     }
 }

@@ -208,6 +208,7 @@ impl TreeWalker for SemanticCheckWalker {
         // Check function existence.
         if !self.context.function_prototypes.contains_key(&node.name)
             && !EFUN_PROTOTYPES.contains_key(node.name.as_str())
+            && self.context.scopes.lookup(&node.name).is_none() // check for fptrs & closures
         {
             let e = LpcError::new(format!("Call to unknown function `{}`", node.name))
                 .with_span(node.span);
@@ -1288,6 +1289,7 @@ mod tests {
                         name: "a".to_string(),
                         span: None,
                         global: false,
+                        function_name: false,
                     })),
                     span: None,
                 }))],

@@ -151,10 +151,18 @@ impl TreeWalker for ScopeWalker {
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         let sym = self.context.scopes.lookup(&node.name);
 
+        if sym.is_none() {
+            // check for functions e.g. declaring function pointers with no arguments
+            if self.context.lookup_function_complete(&node.name).is_some() {
+                node.set_function_name(true);
+                return Ok(());
+            }
+        };
+
         if let Some(symbol) = sym {
             if symbol.is_global() {
                 // Set the node to global, so we know whether to look at the program registers,
-                //or the global registers, during codegen.
+                // or the global registers, during codegen.
                 node.set_global(true);
             }
         } else {
@@ -386,8 +394,9 @@ mod tests {
             let walker = ScopeWalker::default();
             let node = VarNode {
                 name: "foo".to_string(),
-                global: false,
                 span: None,
+                global: false,
+                function_name: false,
             };
 
             (walker, node)

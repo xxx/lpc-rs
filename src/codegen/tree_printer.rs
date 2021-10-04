@@ -13,6 +13,7 @@ use crate::{
     codegen::tree_walker,
     Result,
 };
+use crate::ast::function_ptr_node::FunctionPtrNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -52,13 +53,30 @@ impl Default for TreePrinter {
 }
 
 impl TreeWalker for TreePrinter {
-    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
-        println!("Program");
+    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
+        self.println_indented("Array ({");
         self.indent += 2;
-        for expr in &mut program.body {
-            expr.visit(self)?;
+        for node in &mut node.value {
+            node.visit(self)?;
         }
         self.indent -= 2;
+        self.println_indented("})");
+
+        Ok(())
+    }
+
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
+        self.println_indented("Binary Op");
+        self.indent += 2;
+        self.println_indented(&format!("operation: {:?}", node.op));
+        self.println_indented("l: ");
+        self.indent += 2;
+        node.l.visit(self)?;
+        self.indent -= 2;
+        self.println_indented("r: ");
+        self.indent += 2;
+        node.r.visit(self)?;
+        self.indent -= 4;
 
         Ok(())
     }
@@ -83,7 +101,7 @@ impl TreeWalker for TreePrinter {
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        if let Some(rcvr) = &*node.receiver {
+        if let Some(rcvr) = &node.receiver {
             self.println_indented("Call Other");
             self.indent += 2;
             self.println_indented(&format!("receiver: {}", rcvr));
@@ -102,48 +120,46 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
-        self.println_indented(&format!("Int: {}", node.value));
+    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<()> {
+        self.println_indented("Comma Expression");
+        self.indent += 2;
+        for expr in &mut node.value {
+            let _ = expr.visit(self);
+        }
+        self.indent -= 2;
+
+        Ok(())
+    }
+
+    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
+        self.println_indented("Decl");
+        self.indent += 2;
+        self.println_indented(&format!("type: {}", node.type_));
+        self.println_indented("initializations:");
+        self.indent += 2;
+        for init in &mut node.initializations {
+            init.visit(self)?;
+        }
+        self.indent -= 4;
+
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+        self.println_indented("Do");
+        self.indent += 2;
+        let _ = node.body.visit(self);
+        self.indent -= 2;
+        self.println_indented("while:");
+        self.indent += 2;
+        let _ = node.condition.visit(self);
+        self.indent -= 2;
 
         Ok(())
     }
 
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
         self.println_indented(&format!("Float: {}", node.value));
-
-        Ok(())
-    }
-
-    fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
-        self.println_indented(&format!("String: {}", node.value));
-
-        Ok(())
-    }
-
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
-        self.println_indented("Binary Op");
-        self.indent += 2;
-        self.println_indented(&format!("operation: {:?}", node.op));
-        self.println_indented("l: ");
-        self.indent += 2;
-        node.l.visit(self)?;
-        self.indent -= 2;
-        self.println_indented("r: ");
-        self.indent += 2;
-        node.r.visit(self)?;
-        self.indent -= 4;
-
-        Ok(())
-    }
-
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
-        self.println_indented("Unary Op");
-        self.indent += 2;
-        self.println_indented(&format!("operation: {:?}", node.op));
-        self.println_indented("expr: ");
-        self.indent += 2;
-        node.expr.visit(self)?;
-        self.indent -= 4;
 
         Ok(())
     }
@@ -169,67 +185,63 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
-        self.println_indented("Return");
+    /// Visit a function pointer node
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.println_indented("Function Ptr");
         self.indent += 2;
-        if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
-        }
-        self.indent -= 2;
 
-        Ok(())
-    }
-
-    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
-        self.println_indented("Decl");
-        self.indent += 2;
-        self.println_indented(&format!("type: {}", node.type_));
-        self.println_indented("initializations:");
-        self.indent += 2;
-        for init in &mut node.initializations {
-            init.visit(self)?;
+        if let Some(rcvr) = &mut node.receiver {
+            self.println_indented(&format!("receiver: {}", rcvr));
+        } else {
+            self.println_indented("receiver: None");
         }
+
+        self.println_indented(&format!("name: {}", node.name));
+
+        self.println_indented("arguments:");
+        self.indent += 2;
+
+        if let Some(args) = &mut node.arguments {
+            for argument in args {
+                if let Some(n) = argument {
+                    n.visit(self)?;
+                }
+            }
+        } else {
+            self.println_indented("None");
+        }
+
         self.indent -= 4;
 
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
-        self.println_indented("VarInit");
+    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+        self.println_indented("If");
         self.indent += 2;
-        self.println_indented(&format!("name: {}", node.name));
-        self.println_indented(&format!("type: {}", node.type_));
-        if let Some(node) = &mut node.value {
-            self.println_indented("value:");
+        let _ = node.condition.visit(self);
+        self.indent -= 2;
+        self.println_indented("then");
+        self.indent += 2;
+        let _ = node.body.visit(self);
+        self.indent -= 2;
+
+        if let Some(n) = &mut *node.else_clause {
+            self.println_indented("else");
             self.indent += 2;
-            node.visit(self)?;
+
+            let _ = n.visit(self);
             self.indent -= 2;
-        } else {
-            self.println_indented("value: None");
         }
-        self.println_indented(&format!("array: {}", node.array));
-        self.indent -= 2;
 
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
-        self.println_indented("Var");
-        self.indent += 2;
-        self.println_indented(&format!("name: {}", node.name));
-        self.indent -= 2;
-
-        Ok(())
-    }
-
-    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
-        self.println_indented("Array ({");
-        self.indent += 2;
-        for node in &mut node.value {
-            node.visit(self)?;
-        }
-        self.indent -= 2;
-        self.println_indented("})");
+    fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
+        self.println_indented(&format!("Int: {}", node.value));
 
         Ok(())
     }
@@ -244,6 +256,17 @@ impl TreeWalker for TreePrinter {
         }
         self.indent -= 2;
         self.println_indented("])");
+
+        Ok(())
+    }
+
+    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
+        println!("Program");
+        self.indent += 2;
+        for expr in &mut program.body {
+            expr.visit(self)?;
+        }
+        self.indent -= 2;
 
         Ok(())
     }
@@ -273,34 +296,59 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<()> {
-        self.println_indented("Comma Expression");
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
+        self.println_indented("Return");
         self.indent += 2;
-        for expr in &mut node.value {
-            let _ = expr.visit(self);
+        if let Some(expression) = &mut node.value {
+            expression.visit(self)?;
         }
         self.indent -= 2;
 
         Ok(())
     }
 
-    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
-        self.println_indented("If");
+    fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
+        self.println_indented(&format!("String: {}", node.value));
+
+        Ok(())
+    }
+
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        self.println_indented("Unary Op");
         self.indent += 2;
-        let _ = node.condition.visit(self);
-        self.indent -= 2;
-        self.println_indented("then");
+        self.println_indented(&format!("operation: {:?}", node.op));
+        self.println_indented("expr: ");
         self.indent += 2;
-        let _ = node.body.visit(self);
+        node.expr.visit(self)?;
+        self.indent -= 4;
+
+        Ok(())
+    }
+
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+        self.println_indented("Var");
+        self.indent += 2;
+        self.println_indented(&format!("name: {}", node.name));
         self.indent -= 2;
 
-        if let Some(n) = &mut *node.else_clause {
-            self.println_indented("else");
+        Ok(())
+    }
+
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+        self.println_indented("VarInit");
+        self.indent += 2;
+        self.println_indented(&format!("name: {}", node.name));
+        self.println_indented(&format!("type: {}", node.type_));
+        if let Some(node) = &mut node.value {
+            self.println_indented("value:");
             self.indent += 2;
-
-            let _ = n.visit(self);
+            node.visit(self)?;
             self.indent -= 2;
+        } else {
+            self.println_indented("value: None");
         }
+        self.println_indented(&format!("array: {}", node.array));
+        self.indent -= 2;
 
         Ok(())
     }
@@ -313,19 +361,6 @@ impl TreeWalker for TreePrinter {
         self.println_indented("body:");
         self.indent += 2;
         let _ = node.body.visit(self);
-        self.indent -= 2;
-
-        Ok(())
-    }
-
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
-        self.println_indented("Do");
-        self.indent += 2;
-        let _ = node.body.visit(self);
-        self.indent -= 2;
-        self.println_indented("while:");
-        self.indent += 2;
-        let _ = node.condition.visit(self);
         self.indent -= 2;
 
         Ok(())

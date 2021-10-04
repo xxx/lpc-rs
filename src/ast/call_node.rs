@@ -19,7 +19,7 @@ use itertools::Itertools;
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
 pub struct CallNode {
     /// The receiver, for the case of `call_other`
-    pub receiver: Box<Option<ExpressionNode>>,
+    pub receiver: Option<Box<ExpressionNode>>,
 
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,
@@ -47,7 +47,7 @@ impl Display for CallNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let args = self.arguments.iter().map(|a| a.to_string()).join(" ,");
         let fmt = lazy_format!(
-            if let Some(e) = &*self.receiver => ("{}->{}({})", e, self.name, args)
+            if let Some(e) = &self.receiver => ("{}->{}({})", e, self.name, args)
             else ("{}({})", self.name, args)
         );
         write!(f, "{}", fmt.to_string())

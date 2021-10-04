@@ -48,6 +48,8 @@ use crate::{
 use multimap::MultiMap;
 use std::{collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::ast::function_ptr_node::FunctionPtrNode;
+use crate::interpreter::function_type::{FunctionReceiver, FunctionTarget, FunctionName};
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -280,16 +282,17 @@ impl CodegenWalker {
     /// helper to choose operation instructions
     fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
         match node {
-            ExpressionNode::Int(_) |
-            ExpressionNode::Float(_) => OperationType::Register,
+            ExpressionNode::Int(_)
+            | ExpressionNode::Float(_) => OperationType::Register,
 
-            ExpressionNode::String(_) |
-            ExpressionNode::Array(_) |
-            ExpressionNode::Mapping(_) |
+            ExpressionNode::String(_)
+            | ExpressionNode::Array(_)
+            | ExpressionNode::Mapping(_)
             // TODO: Calls can be optimized if we can get the return types available here
-            ExpressionNode::Call(_) |
-            ExpressionNode::CommaExpression(_) |
-            ExpressionNode::Range(_) => OperationType::Memory,
+            | ExpressionNode::Call(_)
+            | ExpressionNode::CommaExpression(_)
+            | ExpressionNode::Range(_)
+            | ExpressionNode::FunctionPtr(_) => OperationType::Memory,
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs),
             ExpressionNode::BinaryOp(node) => {
                 let left_type = self.to_operation_type(&node.l);
@@ -748,7 +751,7 @@ impl TreeWalker for CodegenWalker {
 
         let instruction = if arg_results.len() == 1 {
             // no need to serialize args for the `Call` instruction if there's only one.
-            if let Some(rcvr) = &mut *node.receiver {
+            if let Some(rcvr) = &mut node.receiver {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
                 let name_register = self.register_counter.next().unwrap();
@@ -784,7 +787,7 @@ impl TreeWalker for CodegenWalker {
             // Undo the final call to .next() in the above for-loop to avoid wasting a register
             self.register_counter.go_back();
 
-            if let Some(rcvr) = &mut *node.receiver {
+            if let Some(rcvr) = &mut node.receiver {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
 
@@ -827,45 +830,28 @@ impl TreeWalker for CodegenWalker {
         self.instructions.push(instruction);
         self.debug_spans.push(node.span);
 
-        // Take care of the result after the call returns.
-        if let Some(func) = self.context.function_prototypes.get(&node.name) {
-            if func.return_type == LpcType::Void {
-                self.current_result = Register(0);
-            } else {
-                let next_register = self.register_counter.next().unwrap();
-
-                push_instruction!(
-                    self,
-                    Instruction::RegCopy(Register(0), next_register),
-                    node.span()
-                );
-
-                self.current_result = next_register;
-            }
-        } else if let Some(func) = EFUN_PROTOTYPES.get(node.name.as_str()) {
-            if func.return_type == LpcType::Void {
-                self.current_result = Register(0);
-            } else {
-                let next_register = self.register_counter.next().unwrap();
-
-                push_instruction!(
-                    self,
-                    Instruction::RegCopy(Register(0), next_register),
-                    node.span()
-                );
-
-                self.current_result = next_register;
-            }
-        } else if node.receiver.is_some() {
-            let next_register = self.register_counter.next().unwrap();
+        let push_copy = |walker: &mut CodegenWalker| {
+            let next_register = walker.register_counter.next().unwrap();
 
             push_instruction!(
-                self,
-                Instruction::RegCopy(Register(0), next_register),
-                node.span()
-            );
+                    walker,
+                    Instruction::RegCopy(Register(0), next_register),
+                    node.span()
+                );
 
-            self.current_result = next_register;
+            walker.current_result = next_register;
+        };
+
+        // Take care of the result after the call returns.
+        if let Some(func) = self.context.lookup_function_complete(&node.name) {
+            if func.return_type == LpcType::Void {
+                self.current_result = Register(0);
+            } else {
+                push_copy(self);
+            }
+        } else if node.receiver.is_some()
+        || matches!(self.context.scopes.lookup(&node.name), Some(Symbol { type_: LpcType::Function(false), .. })) {
+            push_copy(self);
         } else {
             return Err(LpcError::new(format!(
                 "Unable to find return type for `{}`. This is a weird issue that indicates \
@@ -1028,6 +1014,87 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    /// Visit a function pointer node
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        let receiver = if let Some(rcvr) = &mut node.receiver {
+            rcvr.visit(self)?;
+            FunctionReceiver::Value(self.current_result)
+        } else {
+            FunctionReceiver::None
+        };
+
+        let mut applied_arguments = Vec::new();
+        if let Some(args) = &mut node.arguments {
+            for argument in args {
+                if let Some(n) = argument {
+                    n.visit(self)?;
+                    applied_arguments.push(Some(self.current_result));
+                } else {
+                    applied_arguments.push(None);
+                }
+            }
+        }
+
+        let location = self.register_counter.next().unwrap();
+        self.current_result = location;
+
+        let target = if matches!(receiver, FunctionReceiver::Value(_)) {
+            // If there is a receiver, the function name is assumed to be literal.
+            let name = FunctionName::Literal(node.name.clone());
+            FunctionTarget::CallOther(name, receiver)
+        } else {
+            // Determine if the name is a var, or a literal function name.
+            // Vars take precedence.
+            let name = match self.lookup_symbol(&node.name) {
+                Some(s) => {
+                    let sym_loc = match s.location {
+                        Some(l) => l,
+                        None => {
+                            return Err(
+                                LpcError::new(format!("Symbol `{}` has no location set.", s.name))
+                                    .with_span(node.span),
+                            );
+                        }
+                    };
+
+                    FunctionName::Var(sym_loc)
+                },
+                None => {
+                    FunctionName::Literal(node.name.clone())
+                }
+            };
+
+            // See if there is a local function with this name first
+            if self.context.lookup_function(&node.name).is_some() {
+                FunctionTarget::Local(name)
+            } else if EFUN_PROTOTYPES.get(node.name.as_str()).is_some() {
+                FunctionTarget::Efun(name)
+            } else {
+                return Err(
+                    LpcError::new(format!("Unknown function: `{}`", &node.name))
+                        .with_span(node.span),
+                );
+            }
+        };
+
+        let instruction = Instruction::FunctionPtrConst {
+            location,
+            target,
+            applied_arguments,
+        };
+
+        push_instruction!(
+            self,
+            instruction,
+            node.span
+        );
+
+        Ok(())
+    }
+
     fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
         let else_label = self.new_label("if-else");
@@ -1130,7 +1197,7 @@ impl TreeWalker for CodegenWalker {
             .contains_key(CREATE_FUNCTION)
         {
             let mut call = CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![],
                 name: "create".to_string(),
                 span: None,
@@ -1362,6 +1429,17 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+        if node.function_name {
+            let mut fptr_node = FunctionPtrNode {
+                receiver: None,
+                arguments: None,
+                name: node.name.clone(),
+                span: node.span
+            };
+
+            return self.visit_function_ptr(&mut fptr_node);
+        }
+
         let sym = match self.lookup_var_symbol(node) {
             Some(s) => s,
             None => {
@@ -1602,6 +1680,7 @@ mod tests {
                     name: "marf".to_string(),
                     span: None,
                     global: true,
+                    function_name: false,
                 })),
                 rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
                 span: None,
@@ -1747,6 +1826,7 @@ mod tests {
                         name: "foo".to_string(),
                         span: None,
                         global: false,
+                        function_name: false,
                     })),
                     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
                     op: BinaryOperation::Mul,
@@ -2719,7 +2799,7 @@ mod tests {
                     span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
+                    receiver: None,
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
                     span: None,
@@ -2760,6 +2840,7 @@ mod tests {
                 name: "i".to_string(),
                 span: None,
                 global: false,
+                function_name: false,
             };
 
             let mut node = ForNode {
@@ -2784,7 +2865,7 @@ mod tests {
                 })),
                 body: Box::new(AstNode::Block(BlockNode {
                     body: vec![AstNode::Call(CallNode {
-                        receiver: Box::new(None),
+                        receiver: None,
                         arguments: vec![ExpressionNode::Var(var)],
                         name: "dump".to_string(),
                         span: None,
@@ -2909,13 +2990,13 @@ mod tests {
                     span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
+                    receiver: None,
                     arguments: vec![ExpressionNode::from("true")],
                     name: "dump".to_string(),
                     span: None,
                 })),
                 else_clause: Box::new(Some(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
+                    receiver: None,
                     arguments: vec![ExpressionNode::from("false")],
                     name: "dump".to_string(),
                     span: None,
@@ -3236,6 +3317,7 @@ mod tests {
                 name: "marf".to_string(),
                 span: None,
                 global: true,
+                function_name: false,
             };
 
             let _ = walker.visit_var(&mut node);
@@ -3465,7 +3547,7 @@ mod tests {
                 type_: LpcType::Object(false),
                 name: "muffins".to_string(),
                 value: Some(ExpressionNode::Call(CallNode {
-                    receiver: Box::new(None),
+                    receiver: None,
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
                     name: "clone_object".to_string(),
                     span: None,
@@ -3573,7 +3655,7 @@ mod tests {
                     span: None,
                 }),
                 body: Box::new(AstNode::Call(CallNode {
-                    receiver: Box::new(None),
+                    receiver: None,
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
                     span: None,

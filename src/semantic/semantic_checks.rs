@@ -368,6 +368,7 @@ pub fn node_type(
             Ok(node_type(body, scope_tree, function_return_types)?)
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
+        ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
     }
 }
 
@@ -1847,7 +1848,7 @@ mod test_node_type {
             let function_return_types = HashMap::new();
 
             let node = ExpressionNode::Call(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![ExpressionNode::from("foo/bar.c")],
                 name: "clone_object".to_string(),
                 span: None,

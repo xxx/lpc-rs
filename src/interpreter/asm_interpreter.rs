@@ -20,6 +20,8 @@ use crate::{
 use decorum::Total;
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
+use crate::interpreter::function_type::{FunctionPtr, FunctionAddress, FunctionTarget, FunctionName, FunctionReceiver, LpcFunction};
+use std::borrow::Cow;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -420,6 +422,63 @@ impl AsmInterpreter {
                     )));
                 }
             }
+            Instruction::CallFp {
+                location,
+                num_args,
+                initial_arg,
+            } => {
+                let func_ref = self.register_to_lpc_ref(location.index());
+
+                todo!();
+
+
+
+
+                // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
+                //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
+                // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                //     let sym = FunctionSymbol {
+                //         name: name.clone(),
+                //         num_args: prototype.num_args,
+                //         num_locals: 0,
+                //         address: 0,
+                //     };
+                //
+                //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
+                // } else {
+                //     println!("proc {:#?}", self.process);
+                //     println!("functions {:#?}", self.process.functions);
+                //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
+                // };
+                //
+                // // copy argument registers from old frame to new
+                // if *num_args > 0_usize {
+                //     let index = initial_arg.index();
+                //     let current_frame = self.stack.last().unwrap();
+                //     new_frame.registers[1..=*num_args]
+                //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
+                // }
+                //
+                // // println!("pushing frame in Call: {:?}", new_frame);
+                // try_push_frame!(new_frame, self);
+                //
+                // if let Some(x) = self.process.functions.get(name) {
+                //     self.process.set_pc(x.address);
+                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
+                //     // the efun is responsible for populating the return value in its own frame
+                //     efun(self)?;
+                //
+                //     if let Some(frame) = self.pop_frame() {
+                //         self.copy_call_result(&frame)?;
+                //         self.popped_frame = Some(frame);
+                //     }
+                // } else {
+                //     return Err(self.runtime_error(format!(
+                //         "Call to unknown function (that had a valid prototype?) `{}`",
+                //         name
+                //     )));
+                // }
+            }
             Instruction::CallOther {
                 receiver,
                 name,
@@ -513,17 +572,6 @@ impl AsmInterpreter {
 
                 self.return_efun_result(result_ref)
             }
-            Instruction::EqEq(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
-                let out = if registers[r1.index()] == registers[r2.index()] {
-                    1
-                } else {
-                    0
-                };
-
-                let registers = current_registers_mut(&mut self.stack)?;
-                registers[r3.index()] = LpcRef::Int(out);
-            }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
             }
@@ -545,9 +593,92 @@ impl AsmInterpreter {
 
                 self.catch_points.push(catch_point);
             }
+            Instruction::EqEq(r1, r2, r3) => {
+                let registers = current_registers_mut(&mut self.stack)?;
+                let out = if registers[r1.index()] == registers[r2.index()] {
+                    1
+                } else {
+                    0
+                };
+
+                let registers = current_registers_mut(&mut self.stack)?;
+                registers[r3.index()] = LpcRef::Int(out);
+            }
             Instruction::FConst(r, f) => {
                 let registers = current_registers_mut(&mut self.stack)?;
                 registers[r.index()] = LpcRef::Float(*f);
+            }
+            Instruction::FunctionPtrConst { location, target, applied_arguments } => {
+                let address = match target {
+                    FunctionTarget::Efun(func_name) => {
+                        FunctionAddress::Efun(self.resolve_function_name(func_name)?.into_owned())
+                    }
+                    FunctionTarget::Local(func_name) => {
+                        let s = self.resolve_function_name(func_name)?;
+                        let address = self.process.function_address(&*s);
+                        if address.is_none() {
+                            return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
+                        }
+
+                        FunctionAddress::Local(address.unwrap())
+                    }
+                    FunctionTarget::CallOther(func_name, func_receiver) => {
+                        let proc = match func_receiver {
+                            FunctionReceiver::Value(receiver_reg) => {
+                                let receiver_ref = self.register_to_lpc_ref(receiver_reg.index());
+                                match receiver_ref {
+                                    LpcRef::Object(x) => {
+                                        let b = x.borrow();
+                                        let process = try_extract_value!(*b, LpcValue::Object);
+                                        process.clone()
+                                    }
+                                    LpcRef::String(_) => todo!(),
+                                    LpcRef::Array(_)
+                                    | LpcRef::Mapping(_)
+                                    | LpcRef::Float(_)
+                                    | LpcRef::Int(_)
+                                    | LpcRef::Function(_) => {
+                                        return Err(self.runtime_error("Receiver was not object or string"));
+                                    }
+                                }
+                            }
+                            FunctionReceiver::Argument => todo!(),
+                            FunctionReceiver::None => {
+                                return Err(self.runtime_error("A None receiver for a CallOther target? Should be unreachable."));
+                            }
+                        };
+                        let s = self.resolve_function_name(func_name)?;
+                        let address = self.process.function_address(&*s);
+                        if address.is_none() {
+                            return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
+                        }
+
+                        FunctionAddress::Remote(proc, address.unwrap())
+                    }
+                };
+
+                let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
+                    match arg {
+                        Some(register) => {
+                            Some(self.register_to_lpc_ref(register.index()))
+                        }
+                        None => None,
+                    }
+                }).collect();
+
+                let fp = FunctionPtr {
+                    owner: Rc::new(Default::default()),
+                    address,
+                    args
+                };
+
+                let func = LpcFunction::FunctionPtr(fp);
+                
+                let new_ref = value_to_ref!(LpcValue::from(func), &self.memory);
+
+                let registers = current_registers_mut(&mut self.stack)?;
+
+                registers[location.index()] = new_ref;
             }
             Instruction::GLoad(r1, r2) => {
                 // load from global r1, into local r2
@@ -888,7 +1019,7 @@ impl AsmInterpreter {
                             .with_span(self.process.current_debug_span()));
                         }
                     }
-                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) => {
+                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
                         return Err(LpcError::new(
                             "Range's receiver isn't actually an array or string?",
                         )
@@ -1064,6 +1195,23 @@ impl AsmInterpreter {
             Some(process)
         } else {
             None
+        }
+    }
+
+    fn resolve_function_name<'a>(&'a self, name: &'a FunctionName) -> Result<Cow<'a, str>> {
+        match name {
+            FunctionName::Var(reg) => {
+                let name_ref = self.register_to_lpc_ref(reg.index());
+
+                if let LpcRef::String(s) = name_ref {
+                    let b = s.borrow();
+                    let str = try_extract_value!(*b, LpcValue::String);
+                    Ok(str.clone().into())
+                } else {
+                    Err(self.runtime_error(format!("Found function var that didn't resolve to a string?")))
+                }
+            }
+            FunctionName::Literal(s) => Ok(s.into())
         }
     }
 

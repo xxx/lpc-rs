@@ -2,6 +2,7 @@ use crate::{
     asm::register::Register, ast::var_init_node::VarInitNode, parser::span::Span,
     semantic::lpc_type::LpcType,
 };
+use crate::semantic::function_prototype::FunctionPrototype;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -47,6 +48,19 @@ impl From<&mut VarInitNode> for Symbol {
         Self {
             span: node.span,
             ..s
+        }
+    }
+}
+
+impl From<&FunctionPrototype> for Symbol {
+    fn from(proto: &FunctionPrototype) -> Self {
+        Self {
+            name: proto.name.clone().into_owned(),
+            type_: LpcType::Function(false),
+            static_: false, // proto.flags.static_()
+            location: None,
+            scope_id: 0,
+            span: proto.span,
         }
     }
 }

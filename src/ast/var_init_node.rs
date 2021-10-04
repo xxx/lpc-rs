@@ -58,6 +58,7 @@ impl VarInitNode {
             LpcType::Object(_) => LpcType::Object(self.array),
             LpcType::Mapping(_) => LpcType::Mapping(self.array),
             LpcType::Mixed(_) => LpcType::Mixed(self.array),
+            LpcType::Function(_) => LpcType::Function(self.array),
             LpcType::Union(x) => LpcType::Union(x),
         };
 

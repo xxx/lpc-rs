@@ -4,6 +4,8 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lazy_format::lazy_format;
+use crate::interpreter::function_type::{FunctionName, FunctionTarget};
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -24,6 +26,13 @@ pub enum Instruction {
     /// Call a function
     Call {
         name: String,
+        num_args: usize,
+        initial_arg: Register,
+    },
+
+    /// Call a function pointer, located in `location`
+    CallFp {
+        location: Register,
         num_args: usize,
         initial_arg: Register,
     },
@@ -49,6 +58,13 @@ pub enum Instruction {
 
     /// Float Constant
     FConst(Register, LpcFloat),
+
+    /// A function pointer constant
+    FunctionPtrConst {
+        location: Register,
+        target: FunctionTarget,
+        applied_arguments: Vec<Option<Register>>,
+    },
 
     /// Copy a global from the global registers, into the current stack frame.
     /// Copies *global* register x.0 to *local* register x.1.
@@ -188,6 +204,13 @@ impl Display for Instruction {
             } => {
                 write!(f, "call {}, {}, {}", name, num_args, initial_arg)
             }
+            Instruction::CallFp {
+                location,
+                num_args,
+                initial_arg,
+            } => {
+                write!(f, "callfp {}, {}, {}", location, num_args, initial_arg)
+            }
             Instruction::CallOther {
                 receiver,
                 name,
@@ -205,6 +228,25 @@ impl Display for Instruction {
             }
             Instruction::FConst(r, fl) => {
                 write!(f, "fconst {}, {}", r, fl)
+            }
+            Instruction::FunctionPtrConst {
+                location,
+                target,
+                applied_arguments
+            } => {
+                let args = applied_arguments
+                    .iter()
+                    .map(|i| {
+                        if let Some(reg) = i {
+                            format!("{}", reg)
+                        } else {
+                            "None".into()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                // TODO: implement Display on FunctionTarget and use it here.
+                write!(f, "functionptrconst {}, {:?}, {}", location, target, args)
             }
             Instruction::GLoad(r1, r2) => {
                 write!(f, "gload {}, {}", r1, r2)
