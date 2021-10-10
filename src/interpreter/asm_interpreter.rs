@@ -22,6 +22,7 @@ use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
 use crate::interpreter::function_type::{FunctionPtr, FunctionAddress, FunctionTarget, FunctionName, FunctionReceiver, LpcFunction};
 use std::borrow::Cow;
+use crate::codegen::codegen_walker::INIT_PROGRAM;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -38,7 +39,7 @@ struct CatchPoint {
     /// The index of the stack frame that contains this `catch`
     frame_index: usize,
 
-    /// The address to jump in the stack frame's process, if there is an error
+    /// The address to jump in the current function, if there is an error
     address: Address,
 
     /// The register to put the error in, within the above [`StackFrame`]
@@ -108,24 +109,46 @@ pub fn current_registers(stack: &[StackFrame]) -> Result<&Vec<LpcRef>> {
 
 /// Get a mutable reference to the passed stack frame's registers
 #[inline]
-fn current_registers_mut(stack: &mut Vec<StackFrame>) -> Result<&mut Vec<LpcRef>> {
-    if stack.is_empty() {
-        return Err(LpcError::new(
-            "Trying to get the current registers (mutable) with an empty stack.",
-        ));
+fn current_registers_mut(frame: &mut StackFrame) -> Result<&mut Vec<LpcRef>> {
+    Ok(&mut frame.registers)
+    // if stack.is_empty() {
+    //     return Err(LpcError::new(
+    //         "Trying to get the current registers (mutable) with an empty stack.",
+    //     ));
+    // }
+    //
+    // Ok(&mut stack.last_mut().unwrap().registers)
+}
+
+// #[inline]
+// fn current_registers_mut(stack: &mut Vec<StackFrame>) -> Result<&mut Vec<LpcRef>> {
+//     if stack.is_empty() {
+//         return Err(LpcError::new(
+//             "Trying to get the current registers (mutable) with an empty stack.",
+//         ));
+//     }
+//
+//     Ok(&mut stack.last_mut().unwrap().registers)
+// }
+//
+/// Return the current frame, if there is one
+#[inline]
+pub fn current_frame_mut(stack: &mut Vec<StackFrame>) -> Result<&mut StackFrame> {
+    if let Some(x) = stack.last_mut() {
+        return Ok(x);
     }
 
-    Ok(&mut stack.last_mut().unwrap().registers)
+    Err(LpcError::new("Runtime Error: No current stack frame"))
 }
 
 /// A macro for pushing new frames while evaluating [`Instruction`]s.
 macro_rules! try_push_frame {
     ( $frame:expr, $interpreter:expr ) => {
-        let max_stack = $interpreter.config.max_call_stack_size().unwrap_or(0);
-
-        if max_stack > 0 && $interpreter.stack.len() >= max_stack {
-            return Err($interpreter.runtime_error("Stack overflow"));
-        }
+        // let max_stack = $interpreter.config.max_call_stack_size().unwrap_or(0);
+        //
+        // if max_stack > 0 && $interpreter.stack.len() >= max_stack {
+        //     return Err($interpreter.runtime_error("Stack overflow"));
+        // }
 
         $interpreter.stack.push($frame);
 
@@ -195,15 +218,11 @@ impl AsmInterpreter {
     /// Set up the stack frame for initializing the global vars, and calling `create`.
     /// No code is executed by this function - it merely sets up the stack frame.
     pub fn setup_program_globals_frame(&mut self) -> Result<()> {
-        let sym = FunctionSymbol {
-            name: "_global-var-init".to_string(),
-            num_args: 0,
-            num_locals: self.process.num_init_registers,
-            address: 0,
-        };
-        let create = StackFrame::new(self.process.clone(), Rc::new(sym), 0);
+        let process = self.process.clone();
+        let sym = process.functions.get(INIT_PROGRAM).unwrap();
+        let create = StackFrame::new(self.process.clone(), sym.clone());
+
         self.push_frame(create)?;
-        self.process.set_pc(0);
 
         Ok(())
     }
@@ -257,10 +276,7 @@ impl AsmInterpreter {
                     return self.lookup_process(owned);
                 }
 
-                Err(
-                    LpcError::new(format!("Unable to find object `{}`", path.as_ref()))
-                        .with_span(self.process.current_debug_span()),
-                )
+                Err(self.runtime_error(format!("Unable to find object `{}`", path.as_ref())))
             }
         }
     }
@@ -296,6 +312,11 @@ impl AsmInterpreter {
         previous_frame
     }
 
+    /// Return the current frame, if there is one
+    pub fn current_frame(&self) -> Result<&StackFrame> {
+        self.stack.last().ok_or_else(|| self.runtime_error("No current stack frame"))
+    }
+
     /// Get the in-game directory of the current process
     pub fn in_game_cwd(&self) -> Result<PathBuf> {
         match self.process.cwd().strip_prefix(self.config.lib_dir()) {
@@ -314,10 +335,7 @@ impl AsmInterpreter {
     /// # Panics
     /// Panics if the stack is empty, or if there is nothing in the registers at the requested index
     pub fn register_to_lpc_ref(&self, index: usize) -> LpcRef {
-        let len = self.stack.len();
-        let registers = &self.stack[len - 1].registers;
-
-        registers.get(index).unwrap().clone()
+        self.current_frame().unwrap().resolve_lpc_ref(index)
     }
 
     /// Evaluate loaded instructions, starting from the current value of the PC
@@ -348,18 +366,27 @@ impl AsmInterpreter {
     pub fn eval_one_instruction(&mut self) -> Result<bool> {
         self.increment_instruction_count(1)?;
 
-        let instruction = match self.process.instruction() {
-            Some(i) => i,
+        if self.stack.is_empty() {
+            return Ok(true);
+        }
+
+        let mut frame = current_frame_mut(&mut self.stack)?;
+        frame.inc_pc();
+        let (instruction, registers) = frame.current_eval_context();
+        // let mut registers = &mut frame.registers;
+
+        let instruction = match instruction {
+            Some(i) => i.clone(),
             None => return Ok(true),
         };
+        let instruction = &instruction;
 
         // println!("evaling ({}) {}", self.process.filename, instruction);
 
-        self.process.inc_pc();
-
         match instruction {
             Instruction::AConst(r, vec) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                // let registers = current_registers_mut(&mut frame)?;
+                // let registers = &mut frame.registers;
                 let vars = vec
                     .iter()
                     .map(|i| registers[i.index()].clone())
@@ -378,36 +405,33 @@ impl AsmInterpreter {
                 initial_arg,
             } => {
                 let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-                    StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
+                    StackFrame::new(self.process.clone(), func.clone())
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = FunctionSymbol {
-                        name: name.clone(),
-                        num_args: prototype.num_args,
-                        num_locals: 0,
-                        address: 0,
-                    };
+                    let sym = FunctionSymbol::new(name.clone(), prototype.num_args, 0);
 
-                    StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
+                    StackFrame::new(self.process.clone(), Rc::new(sym))
                 } else {
                     println!("proc {:#?}", self.process);
                     println!("functions {:#?}", self.process.functions);
-                    return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
+                    let msg = format!("Call to unknown function `{}`", name);
+                    return Err(self.runtime_error(msg));
                 };
 
                 // copy argument registers from old frame to new
                 if *num_args > 0_usize {
                     let index = initial_arg.index();
-                    let current_frame = self.stack.last().unwrap();
+                    // let current_frame = self.stack.last().unwrap();
                     new_frame.registers[1..=*num_args]
-                        .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
+                        .clone_from_slice(&self.current_frame()?.registers[index..(index + num_args)]);
                 }
 
                 // println!("pushing frame in Call: {:?}", new_frame);
                 try_push_frame!(new_frame, self);
 
-                if let Some(x) = self.process.functions.get(name) {
-                    self.process.set_pc(x.address);
-                } else if let Some(efun) = EFUNS.get(name.as_str()) {
+                // if let Some(x) = self.process.functions.get(name) {
+                //     frame.set_pc(x.address);
+                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
+                if let Some(efun) = EFUNS.get(name.as_str()) {
                     // the efun is responsible for populating the return value in its own frame
                     efun(self)?;
 
@@ -415,7 +439,7 @@ impl AsmInterpreter {
                         self.copy_call_result(&frame)?;
                         self.popped_frame = Some(frame);
                     }
-                } else {
+                } else if !self.process.functions.contains_key(name) {
                     return Err(self.runtime_error(format!(
                         "Call to unknown function (that had a valid prototype?) `{}`",
                         name
@@ -427,7 +451,7 @@ impl AsmInterpreter {
                 num_args,
                 initial_arg,
             } => {
-                let func_ref = self.register_to_lpc_ref(location.index());
+                let func_ref = &frame.registers[location.index()];
 
                 todo!();
 
@@ -486,24 +510,25 @@ impl AsmInterpreter {
                 initial_arg,
             } => {
                 // get receiver process and make it the current one
-                let receiver_ref = self.register_to_lpc_ref(receiver.index());
+                let receiver_ref = &frame.registers[receiver.index()];
 
                 // Figure out which function we're calling
-                let name_ref = self.register_to_lpc_ref(name.index());
+                let name_ref = &frame.registers[name.index()];
                 let pool_ref = if let LpcRef::String(r) = name_ref {
                     r
                 } else {
-                    return Err(self.runtime_error(format!(
+                    let str = format!(
                         "Invalid name passed to `call_other`: {}",
                         name_ref
-                    )));
+                    );
+                    return Err(self.runtime_error(str));
                 };
                 let borrowed = pool_ref.borrow();
                 let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
                 let num_args = *num_args;
                 let initial_index = initial_arg.index();
-                let return_address = self.process.pc();
+                // let return_address = self.process.pc();
 
                 let get_result = |value: LpcValue, interpreter: &mut AsmInterpreter| match value {
                     LpcValue::Object(receiver) => {
@@ -511,7 +536,7 @@ impl AsmInterpreter {
                             [initial_index..(initial_index + num_args)]
                             .to_vec();
                         let closure = |inner: &mut AsmInterpreter| {
-                            inner.call_other(receiver, function_name, return_address, args)
+                            inner.call_other(receiver, function_name, args)
                         };
 
                         interpreter.with_clean_stack(closure)
@@ -562,11 +587,10 @@ impl AsmInterpreter {
                         value_to_ref!(with_results, &self.memory)
                     }
                     _ => {
-                        return Err(LpcError::new(format!(
+                        return Err(self.runtime_error(format!(
                             "What are you trying to call `{}` on?",
                             function_name
-                        ))
-                        .with_span(self.process.current_debug_span()))
+                        )))
                     }
                 };
 
@@ -576,7 +600,7 @@ impl AsmInterpreter {
                 self.catch_points.pop();
             }
             Instruction::CatchStart(r, label) => {
-                let address = match self.process.labels.get(label) {
+                let address = match self.current_frame()?.lookup_label(label) {
                     Some(x) => *x,
                     None => {
                         return Err(
@@ -594,18 +618,18 @@ impl AsmInterpreter {
                 self.catch_points.push(catch_point);
             }
             Instruction::EqEq(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 let out = if registers[r1.index()] == registers[r2.index()] {
                     1
                 } else {
                     0
                 };
 
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r3.index()] = LpcRef::Int(out);
             }
             Instruction::FConst(r, f) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r.index()] = LpcRef::Float(*f);
             }
             Instruction::FunctionPtrConst { location, target, applied_arguments } => {
@@ -615,17 +639,18 @@ impl AsmInterpreter {
                     }
                     FunctionTarget::Local(func_name) => {
                         let s = self.resolve_function_name(func_name)?;
-                        let address = self.process.function_address(&*s);
-                        if address.is_none() {
+                        let sym = self.process.lookup_function(s);
+                        if sym.is_none() {
                             return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
                         }
 
-                        FunctionAddress::Local(address.unwrap())
+                        FunctionAddress::Local(sym.unwrap().clone())
                     }
                     FunctionTarget::CallOther(func_name, func_receiver) => {
                         let proc = match func_receiver {
                             FunctionReceiver::Value(receiver_reg) => {
-                                let receiver_ref = self.register_to_lpc_ref(receiver_reg.index());
+                                // let receiver_ref = self.register_to_lpc_ref(receiver_reg.index());
+                                let receiver_ref = &frame.registers[receiver_reg.index()];
                                 match receiver_ref {
                                     LpcRef::Object(x) => {
                                         let b = x.borrow();
@@ -648,19 +673,19 @@ impl AsmInterpreter {
                             }
                         };
                         let s = self.resolve_function_name(func_name)?;
-                        let address = self.process.function_address(&*s);
-                        if address.is_none() {
+                        let sym = self.process.lookup_function(s);
+                        if sym.is_none() {
                             return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
                         }
 
-                        FunctionAddress::Remote(proc, address.unwrap())
+                        FunctionAddress::Remote(proc, sym.unwrap().clone())
                     }
                 };
 
                 let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
                     match arg {
                         Some(register) => {
-                            Some(self.register_to_lpc_ref(register.index()))
+                            Some(frame.resolve_lpc_ref(register))
                         }
                         None => None,
                     }
@@ -676,19 +701,19 @@ impl AsmInterpreter {
                 
                 let new_ref = value_to_ref!(LpcValue::from(func), &self.memory);
 
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
 
                 registers[location.index()] = new_ref;
             }
             Instruction::GLoad(r1, r2) => {
                 // load from global r1, into local r2
                 let global = self.process.globals[r1.index()].borrow().clone();
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r2.index()] = global
             }
             Instruction::GStore(r1, r2) => {
                 // store local r1 into global r2
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 self.process.globals[r2.index()].replace(registers[r1.index()].clone());
             }
             Instruction::Gt(r1, r2, r3) => {
@@ -700,7 +725,7 @@ impl AsmInterpreter {
                 self.binary_boolean_operation(n1, n2, n3, |x, y| x >= y)?;
             }
             Instruction::IAdd(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 match &registers[r1.index()] + &registers[r2.index()] {
                     Ok(result) => {
                         let out = value_to_ref!(result, self.memory);
@@ -708,88 +733,88 @@ impl AsmInterpreter {
                         registers[r3.index()] = out
                     }
                     Err(e) => {
-                        return Err(e.with_span(self.process.current_debug_span()));
+                        return Err(e.with_span(self.current_frame()?.current_debug_span()));
                     }
                 }
             }
             Instruction::IConst(r, i) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r.index()] = LpcRef::Int(*i);
             }
             Instruction::IConst0(r) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r.index()] = LpcRef::Int(0);
             }
             Instruction::IConst1(r) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r.index()] = LpcRef::Int(1);
             }
             Instruction::IDiv(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 match &registers[r1.index()] / &registers[r2.index()] {
                     Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                     Err(e) => {
-                        return Err(e.with_span(self.process.current_debug_span()));
+                        return Err(e.with_span(self.current_frame()?.current_debug_span()));
                     }
                 }
             }
             Instruction::IMod(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 match &registers[r1.index()] % &registers[r2.index()] {
                     Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                     Err(e) => {
-                        return Err(e.with_span(self.process.current_debug_span()));
+                        return Err(e.with_span(self.current_frame()?.current_debug_span()));
                     }
                 }
             }
             Instruction::IMul(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 match &registers[r1.index()] * &registers[r2.index()] {
                     Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                     Err(e) => {
-                        return Err(e.with_span(self.process.current_debug_span()));
+                        return Err(e.with_span(self.current_frame()?.current_debug_span()));
                     }
                 }
             }
             Instruction::ISub(r1, r2, r3) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 match &registers[r1.index()] - &registers[r2.index()] {
                     Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
                     Err(e) => {
-                        return Err(e.with_span(self.process.current_debug_span()));
+                        return Err(e.with_span(self.current_frame()?.current_debug_span()));
                     }
                 }
             }
             Instruction::Jmp(label) => {
                 let address = self.lookup_address(label)?;
-                self.process.set_pc(address);
+                self.current_frame()?.set_pc(address);
             }
             Instruction::Jnz(r1, label) => {
-                let v = &current_registers_mut(&mut self.stack)?[r1.index()];
+                let v = &current_registers_mut(&mut frame)?[r1.index()];
 
                 if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
                     let address = self.lookup_address(label)?;
-                    self.process.set_pc(address);
+                    self.current_frame()?.set_pc(address);
                 }
             }
             Instruction::Jz(r1, label) => {
-                let v = &current_registers_mut(&mut self.stack)?[r1.index()];
+                let v = &current_registers_mut(&mut frame)?[r1.index()];
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
                     let address = self.lookup_address(label)?;
-                    self.process.set_pc(address);
+                    self.current_frame()?.set_pc(address);
                 }
             }
             Instruction::Load(r1, r2, r3) => {
-                let container_ref = self.register_to_lpc_ref(r1.index());
+                let container_ref = frame.resolve_lpc_ref(r1);
 
                 match container_ref {
                     LpcRef::Array(vec_ref) => {
                         let value = vec_ref.borrow();
                         let vec = try_extract_value!(*value, LpcValue::Array);
 
-                        let index = self.register_to_lpc_ref(r2.index());
-                        let registers = current_registers_mut(&mut self.stack)?;
+                        let index = frame.resolve_lpc_ref(r2);
+                        let registers = current_registers_mut(&mut frame)?;
 
                         if let LpcRef::Int(i) = index {
                             let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
@@ -811,8 +836,8 @@ impl AsmInterpreter {
                         let value = string_ref.borrow();
                         let string = try_extract_value!(*value, LpcValue::String);
 
-                        let index = self.register_to_lpc_ref(r2.index());
-                        let registers = current_registers_mut(&mut self.stack)?;
+                        let index = frame.resolve_lpc_ref(r2);
+                        let registers = current_registers_mut(&mut frame)?;
 
                         if let LpcRef::Int(i) = index {
                             let idx = if i >= 0 {
@@ -839,7 +864,7 @@ impl AsmInterpreter {
                         }
                     }
                     LpcRef::Mapping(map_ref) => {
-                        let index = self.register_to_lpc_ref(r2.index());
+                        let index = frame.resolve_lpc_ref(r2);
                         let value = map_ref.borrow();
                         let map = try_extract_value!(*value, LpcValue::Mapping);
 
@@ -849,7 +874,7 @@ impl AsmInterpreter {
                             LpcRef::Int(0)
                         };
 
-                        let registers = current_registers_mut(&mut self.stack)?;
+                        let registers = current_registers_mut(&mut frame)?;
                         registers[r3.index()] = var;
                     }
                     x => {
@@ -870,14 +895,14 @@ impl AsmInterpreter {
             Instruction::MapConst(r, map) => {
                 let mut register_map = HashMap::new();
                 for (key, value) in map {
-                    let registers = current_registers_mut(&mut self.stack)?;
+                    let registers = current_registers_mut(&mut frame)?;
                     let r = registers[key.index()].clone();
 
                     register_map.insert(r, registers[value.index()].clone());
                 }
 
                 let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
 
                 registers[r.index()] = new_ref;
             }
@@ -894,7 +919,7 @@ impl AsmInterpreter {
                 self.binary_operation(n1, n2, n3, |x, y| x - y)?;
             }
             Instruction::Not(r1, r2) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r2.index()] = if matches!(registers[r1.index()], LpcRef::Int(0)) {
                     LpcRef::Int(1)
                 } else {
@@ -932,13 +957,13 @@ impl AsmInterpreter {
                                     stack: &mut Vec<StackFrame>|
                  -> Result<()> {
                     let new_ref = value_to_ref!(value, memory);
-                    let registers = current_registers_mut(stack)?;
+                    let registers = &mut frame.registers;
                     registers[r4.index()] = new_ref;
 
                     Ok(())
                 };
 
-                let lpc_ref = self.register_to_lpc_ref(r1.index());
+                let lpc_ref = frame.resolve_lpc_ref(r1);
 
                 match lpc_ref {
                     LpcRef::Array(v_ref) => {
@@ -953,8 +978,8 @@ impl AsmInterpreter {
                             )?;
                         }
 
-                        let index1 = self.register_to_lpc_ref(r2.index());
-                        let index2 = self.register_to_lpc_ref(r3.index());
+                        let index1 = frame.resolve_lpc_ref(r2);
+                        let index2 = frame.resolve_lpc_ref(r3);
 
                         if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
                             let (real_start, real_end) = resolve_range(start, end, vec.len());
@@ -979,7 +1004,7 @@ impl AsmInterpreter {
                             return Err(LpcError::new(
                                 "Invalid code was generated for a Range instruction.",
                             )
-                            .with_span(self.process.current_debug_span()));
+                            .with_span(self.current_frame()?.current_debug_span()));
                         }
                     }
                     LpcRef::String(v_ref) => {
@@ -990,8 +1015,8 @@ impl AsmInterpreter {
                             return_value(LpcValue::from(""), &mut self.memory, &mut self.stack)?;
                         }
 
-                        let index1 = self.register_to_lpc_ref(r2.index());
-                        let index2 = self.register_to_lpc_ref(r3.index());
+                        let index1 = frame.resolve_lpc_ref(r2);
+                        let index2 = frame.resolve_lpc_ref(r3);
 
                         if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
                             let (real_start, real_end) = resolve_range(start, end, string.len());
@@ -1016,30 +1041,30 @@ impl AsmInterpreter {
                             return Err(LpcError::new(
                                 "Invalid code was generated for a Range instruction.",
                             )
-                            .with_span(self.process.current_debug_span()));
+                            .with_span(self.current_frame()?.current_debug_span()));
                         }
                     }
                     LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
                         return Err(LpcError::new(
                             "Range's receiver isn't actually an array or string?",
                         )
-                        .with_span(self.process.current_debug_span()));
+                        .with_span(self.current_frame()?.current_debug_span()));
                     }
                 }
             }
             Instruction::RegCopy(r1, r2) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 registers[r2.index()] = registers[r1.index()].clone()
             }
             Instruction::Ret => {
                 if let Some(frame) = self.pop_frame() {
                     self.copy_call_result(&frame)?;
 
-                    if !self.stack.is_empty()
-                        && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process)
-                    {
-                        self.process.set_pc(frame.return_address);
-                    }
+                    // if !self.stack.is_empty()
+                    //     && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process)
+                    // {
+                    //     self.current_frame()?.set_pc(frame.return_address);
+                    // }
 
                     self.popped_frame = Some(frame);
                 }
@@ -1060,8 +1085,8 @@ impl AsmInterpreter {
             Instruction::Store(r1, r2, r3) => {
                 // r2[r3] = r1;
 
-                let mut container = self.register_to_lpc_ref(r2.index());
-                let index = self.register_to_lpc_ref(r3.index());
+                let mut container = frame.resolve_lpc_ref(r2);
+                let index = frame.resolve_lpc_ref(r3);
                 let array_idx = if let LpcRef::Int(i) = index { i } else { 0 };
 
                 match container {
@@ -1108,7 +1133,7 @@ impl AsmInterpreter {
                 }
             }
             Instruction::SConst(r, s) => {
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = current_registers_mut(&mut frame)?;
                 let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
 
                 registers[r.index()] = new_ref;
@@ -1154,7 +1179,7 @@ impl AsmInterpreter {
         self.stack.last_mut().unwrap().registers[result_index] = lpc_ref;
 
         // jump to the corresponding catchend instruction
-        self.process.set_pc(new_pc);
+        self.current_frame()?.set_pc(new_pc);
 
         Ok(())
     }
@@ -1220,7 +1245,7 @@ impl AsmInterpreter {
         &mut self,
         receiver: Rc<Process>,
         name: &str,
-        return_address: usize,
+        // return_address: usize,
         mut args: Vec<LpcRef>,
     ) -> Result<LpcRef> {
         self.process = receiver;
@@ -1239,7 +1264,7 @@ impl AsmInterpreter {
         let mut new_frame = StackFrame::with_minimum_arg_capacity(
             self.process.clone(),
             sym.clone(),
-            return_address,
+            // return_address,
             num_args + 1, // +1 for r0
         );
 
@@ -1250,8 +1275,8 @@ impl AsmInterpreter {
 
         // println!("pushing frame in CallOther: {:?}", new_frame);
         try_push_frame!(new_frame, self);
-
-        self.process.set_pc(sym.address);
+        
+        // self.current_frame()?.set_pc(sym.address);
 
         self.eval()?;
 
@@ -1279,11 +1304,11 @@ impl AsmInterpreter {
             Ok(result) => {
                 let var = value_to_ref!(result, self.memory);
 
-                let registers = current_registers_mut(&mut self.stack)?;
+                let registers = &mut current_frame_mut(&mut self.stack)?.registers;
                 registers[r3.index()] = var
             }
             Err(e) => {
-                return Err(e.with_span(self.process.current_debug_span()));
+                return Err(e.with_span(self.current_frame()?.current_debug_span()));
             }
         }
 
@@ -1306,7 +1331,7 @@ impl AsmInterpreter {
 
         let out = if operation(ref1, ref2) { 1 } else { 0 };
 
-        let registers = current_registers_mut(&mut self.stack)?;
+        let registers = &mut current_frame_mut(&mut self.stack)?.registers;
         registers[r3.index()] = LpcRef::Int(out);
 
         Ok(())
@@ -1320,15 +1345,19 @@ impl AsmInterpreter {
     /// Convenience helper to copy a return value from a given stack frame, back to the current one.
     fn copy_call_result(&mut self, from: &StackFrame) -> Result<()> {
         if !self.stack.is_empty() {
-            current_registers_mut(&mut self.stack)?[0] = from.registers[0].clone();
+            current_frame_mut(&mut self.stack)?.registers[0] = from.registers[0].clone();
         }
 
         Ok(())
     }
 
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        let span = match self.current_frame() {
+            Ok(frame) => frame.current_debug_span(),
+            Err(e) => None
+        };
         LpcError::new(format!("Runtime Error: {}", msg.as_ref()))
-            .with_span(self.process.current_debug_span())
+            .with_span(span)
     }
 
     fn array_index_error<T: Display>(&self, index: T, length: usize) -> LpcError {
@@ -1360,7 +1389,6 @@ impl AsmInterpreter {
             }
         };
 
-        let addr = f.address;
         let sym = f.clone();
 
         // use a pristine stack for the apply
@@ -1369,11 +1397,10 @@ impl AsmInterpreter {
         let current_stack = std::mem::replace(&mut self.stack, clean_stack);
 
         let mut frame =
-            StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, 0, args.len());
+            StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, args.len());
         frame.registers[1..=args.len()].clone_from_slice(args);
 
         self.push_frame(frame)?;
-        self.process.set_pc(addr);
 
         let result = self.eval();
 
@@ -1399,7 +1426,7 @@ impl AsmInterpreter {
     }
 
     fn lookup_address(&self, label: &str) -> Result<Address> {
-        match self.process.labels.get(label) {
+        match self.current_frame()?.lookup_label(label) {
             Some(a) => Ok(*a),
             None => Err(self.runtime_error(format!("Unable to find address for {}", label))),
         }
@@ -1421,7 +1448,7 @@ impl Default for AsmInterpreter {
             popped_frame: None,
             snapshot: None,
             instruction_count: 0,
-            catch_points: Vec::new(),
+            catch_points: Vec::new()
         }
     }
 }

@@ -21,7 +21,7 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
     match interpreter.lookup_process(path_str) {
         Ok(proc) => Ok(proc.clone()),
         Err(_) => {
-            match compiler.compile_in_game_file(full_path, interpreter.process.current_debug_span())
+            match compiler.compile_in_game_file(full_path, interpreter.current_frame()?.current_debug_span())
             {
                 Ok(prog) => {
                     let closure = |interpreter: &mut AsmInterpreter| {
@@ -36,7 +36,7 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
                     interpreter.with_clean_stack(closure)
                 }
                 Err(e) => {
-                    let debug_span = frame.process.current_debug_span();
+                    let debug_span = frame.current_debug_span();
 
                     let err = match e {
                         CompilerError::LpcError(x) => x,
@@ -67,7 +67,7 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
                 "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
                 master.program.filename
             ))
-            .with_span(interpreter.process.current_debug_span()));
+            .with_span(interpreter.current_frame()?.current_debug_span()));
         }
 
         let new_clone = master.program.clone();
@@ -94,7 +94,7 @@ pub fn clone_object(interpreter: &mut AsmInterpreter) -> Result<()> {
             "Invalid argument passed to `clone_object`: {}",
             arg
         ))
-        .with_span(frame.process.current_debug_span()));
+        .with_span(frame.current_debug_span()));
     }
 
     Ok(())

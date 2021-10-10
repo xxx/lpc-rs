@@ -16,16 +16,16 @@ use crate::asm::instruction::Address;
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
     /// The actual program to execute
-    pub instructions: Vec<Instruction>,
+    // pub instructions: Vec<Instruction>,
 
     /// The path to the file that this program was compiled from. Used for error messaging.
     pub filename: String,
 
-    /// Code spans corresponding to instructions, for use in error messages
-    pub debug_spans: Vec<Option<Span>>,
+    // /// Code spans corresponding to instructions, for use in error messages
+    // pub debug_spans: Vec<Option<Span>>,
 
     /// jump labels
-    pub labels: HashMap<String, usize>,
+    // pub labels: HashMap<String, usize>,
 
     /// function mapping of name to Symbol
     pub functions: HashMap<String, Rc<FunctionSymbol>>,
@@ -56,18 +56,18 @@ impl<'a> Program {
         self.functions.get(name.as_ref())
     }
 
-    /// Get the instruction address of a function within this [`Program`]
-    pub fn function_address<T>(&self, name: T) -> Option<Address>
-    where
-        T: AsRef<str>,
-    {
-        match self.lookup_function(name) {
-            Some(fs) => {
-                Some(fs.address)
-            }
-            None => None
-        }
-    }
+    // /// Get the instruction address of a function within this [`Program`]
+    // pub fn function_address<T>(&self, name: T) -> Option<Address>
+    // where
+    //     T: AsRef<str>,
+    // {
+    //     match self.lookup_function(name) {
+    //         Some(fs) => {
+    //             Some(fs.address)
+    //         }
+    //         None => None
+    //     }
+    // }
 
     /// Get the directory of this program. Used for clone_object, etc.
     pub fn cwd(&'a self) -> Cow<'a, Path> {

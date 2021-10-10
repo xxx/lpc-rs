@@ -18,6 +18,18 @@ impl Display for Register {
     }
 }
 
+impl Into<usize> for Register {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
+impl Into<usize> for &Register {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

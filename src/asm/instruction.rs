@@ -4,8 +4,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lazy_format::lazy_format;
-use crate::interpreter::function_type::{FunctionName, FunctionTarget};
+use crate::interpreter::function_type::FunctionTarget;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;

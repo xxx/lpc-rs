@@ -19,7 +19,6 @@ use std::{
 pub struct Process {
     pub program: Rc<Program>,
     pub globals: Vec<RefCell<LpcRef>>,
-    pc: Cell<usize>,
     /// What is the clone ID of this process? If `None`, this is a master object
     clone_id: Option<usize>,
 }
@@ -31,7 +30,6 @@ impl Process {
         Self {
             program: program.into(),
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
-            pc: Cell::new(0),
             clone_id: None,
         }
     }
@@ -42,7 +40,6 @@ impl Process {
         Self {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
-            pc: Cell::new(0),
             clone_id: Some(clone_id),
         }
     }
@@ -52,34 +49,6 @@ impl Process {
             /// Get the program's current working directory
             pub fn cwd(&self) -> Cow<'_, Path>;
         }
-    }
-
-    #[inline]
-    pub fn current_debug_span(&self) -> Option<Span> {
-        match self.program.debug_spans.get(self.pc.get()) {
-            Some(o) => *o,
-            None => None,
-        }
-    }
-
-    #[inline]
-    pub fn set_pc(&self, new_val: usize) {
-        self.pc.replace(new_val);
-    }
-
-    #[inline]
-    pub fn inc_pc(&self) {
-        self.pc.replace(self.pc.get() + 1);
-    }
-
-    #[inline]
-    pub fn pc(&self) -> usize {
-        self.pc.get()
-    }
-
-    #[inline]
-    pub fn instruction(&self) -> Option<&Instruction> {
-        self.instructions.get(self.pc.get())
     }
 
     /// Get the filename of this process, including the clone ID suffix if present.
