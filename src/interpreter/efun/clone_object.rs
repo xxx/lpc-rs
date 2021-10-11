@@ -116,13 +116,13 @@ mod tests {
         let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests");
 
         let program = Program {
-            instructions: vec![],
+            // instructions: vec![],
             filename: fs::canonicalize("./tests/fixtures/code/empty.c")
                 .unwrap()
                 .to_string_lossy()
                 .to_string(),
-            debug_spans: vec![],
-            labels: Default::default(),
+            // debug_spans: vec![],
+            // labels: Default::default(),
             functions: Default::default(),
             num_globals: 0,
             num_init_registers: 0,
@@ -139,14 +139,9 @@ mod tests {
     fn does_not_create_multiple_master_objects() {
         let mut interpreter = fixture();
 
-        let sym = FunctionSymbol {
-            name: "clone_object".to_string(),
-            num_args: 1,
-            num_locals: 0,
-            address: 0,
-        };
+        let sym = FunctionSymbol::new("clone_object", 1, 0);
 
-        let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym), 0);
+        let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym));
 
         let path = value_to_ref!(LpcValue::from("./example"), &interpreter.memory);
         frame.registers[1] = path;
@@ -168,14 +163,9 @@ mod tests {
     fn returns_error_if_no_clone() {
         let mut interpreter = fixture();
 
-        let sym = FunctionSymbol {
-            name: "clone_object".to_string(),
-            num_args: 1,
-            num_locals: 0,
-            address: 0,
-        };
+        let sym = FunctionSymbol::new("clone_object", 1, 0);
 
-        let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym), 0);
+        let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym));
 
         let path = value_to_ref!(LpcValue::from("./no_clone.c"), &interpreter.memory);
         frame.registers[1] = path;

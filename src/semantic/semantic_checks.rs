@@ -1884,6 +1884,7 @@ mod test_node_type {
                 name: "foo".to_string(),
                 span: None,
                 global: true,
+                function_name: false,
             });
             let r = ExpressionNode::from(1);
 
@@ -1919,6 +1920,7 @@ mod test_node_type {
                 name: "foo".to_string(),
                 span: None,
                 global: true,
+                function_name: false,
             });
             let r = ExpressionNode::from(1);
 

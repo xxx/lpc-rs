@@ -47,12 +47,12 @@ pub enum FunctionTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionAddress {
     /// The function being called is local to the object the pointer is declared in.
-    // Local(Rc<FunctionSymbol>),
-    Local(Address),
+    Local(Rc<FunctionSymbol>),
+    // Local(Address),
 
     /// The function being called is located in another object.
-    // Remote(Rc<Process>, Rc<FunctionSymbol>),
-    Remote(Rc<Process>, Address),
+    Remote(Rc<Process>, Rc<FunctionSymbol>),
+    // Remote(Rc<Process>, Address),
 
     /// The function being called is an efun, and requires the name.
     Efun(String),

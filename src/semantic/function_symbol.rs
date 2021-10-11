@@ -1,6 +1,7 @@
 use crate::asm::instruction::{Instruction, Address};
 use crate::parser::span::Span;
 use std::collections::HashMap;
+use multimap::MultiMap;
 
 /// A representation of a function symbol, used during
 /// semantic checks and codegen.
@@ -15,9 +16,6 @@ pub struct FunctionSymbol {
 
     /// The number of non-argument, non-return-value locals. Used for register allocation.
     pub num_locals: usize,
-
-    /// The address of this function in memory.
-    // pub address: usize,
 
     /// The actual instructions of this function
     pub instructions: Vec<Instruction>,
@@ -38,7 +36,6 @@ impl FunctionSymbol {
             name: name.into(),
             num_args,
             num_locals,
-            // address: 0,
             instructions: Vec::new(),
             debug_spans: Vec::new(),
             labels: HashMap::new(),
@@ -55,5 +52,34 @@ impl FunctionSymbol {
         T: Into<String>
     {
         self.labels.insert(label.into(), address);
+    }
+
+    /// Get a listing of this function's instructions, for use in debugging.
+    pub fn listing(&self) -> Vec<String> {
+        let mut v = Vec::new();
+
+        v.push(format!(
+            "fn {} num_args={} num_locals={}:",
+            self.name, self.num_args, self.num_locals
+        ));
+
+        // use MultiMap as multiple labels can be at the same address
+        let labels_by_pc = self
+            .labels
+            .values()
+            .zip(self.labels.keys())
+            .collect::<MultiMap<_, _>>();
+
+        for (counter, instruction) in self.instructions.iter().enumerate() {
+            if let Some(vec) = labels_by_pc.get_vec(&counter) {
+                for label in vec {
+                    v.push(format!("{}:", label));
+                }
+            }
+
+            v.push(format!("    {}", instruction));
+        }
+
+        v
     }
 }

@@ -967,7 +967,7 @@ mod tests {
         #[test]
         fn allows_known_functions() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
@@ -1005,7 +1005,7 @@ mod tests {
         #[test]
         fn allows_known_efuns() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "dump".to_string(),
                 span: None,
@@ -1021,7 +1021,7 @@ mod tests {
         #[test]
         fn disallows_unknown_functions() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![],
                 name: "unknown".to_string(),
                 span: None,
@@ -1036,7 +1036,7 @@ mod tests {
         #[test]
         fn disallows_incorrect_function_arity() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![],
                 name: "dump".to_string(),
                 span: None,
@@ -1051,7 +1051,7 @@ mod tests {
         #[test]
         fn handles_ellipsis_argument_arity() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![
                     ExpressionNode::from("bar.c"),
                     ExpressionNode::from("my_function"),
@@ -1072,7 +1072,7 @@ mod tests {
         #[test]
         fn handles_varargs_argument_arity() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![],
                 name: "my_function".to_string(),
                 span: None,
@@ -1116,7 +1116,7 @@ mod tests {
         #[test]
         fn understands_argument_defaults() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![],
                 name: "my_func".to_string(),
                 span: None,
@@ -1153,7 +1153,7 @@ mod tests {
         #[test]
         fn disallows_invalid_arg_types() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![ExpressionNode::from(123)],
                 name: "my_func".to_string(),
                 span: None,
@@ -1190,7 +1190,7 @@ mod tests {
         #[test]
         fn allows_0() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(None),
+                receiver: None,
                 arguments: vec![ExpressionNode::from(0)],
                 name: "my_func".to_string(),
                 span: None,
@@ -1227,7 +1227,7 @@ mod tests {
         #[test]
         fn allows_bad_data_with_call_other() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Box::new(Some(ExpressionNode::from(23))),
+                receiver: Some(Box::new((ExpressionNode::from(23)))),
                 arguments: vec![],
                 name: "dump".to_string(),
                 span: None,

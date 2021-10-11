@@ -50,6 +50,8 @@ use std::{collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
 use crate::ast::function_ptr_node::FunctionPtrNode;
 use crate::interpreter::function_type::{FunctionReceiver, FunctionTarget, FunctionName};
+use std::cmp::Ordering;
+use itertools::Itertools;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -159,10 +161,18 @@ impl CodegenWalker {
     /// # Arguments
     /// `context` - The [`Context`] state that this tree walker will use for its internal workings.
     pub fn new(context: Context) -> Self {
-        Self {
+        let mut result = Self {
             context,
             ..Self::default()
-        }
+        };
+
+        result.setup_init();
+
+        result
+    }
+
+    pub fn setup_init(&mut self) {
+        self.function_stack.push(FunctionSymbol::new(INIT_PROGRAM, 0, 0));
     }
 
     /// Get a listing of a translated AST, suitable for printing
@@ -174,6 +184,7 @@ impl CodegenWalker {
     /// use lpc_rs::ast::expression_node::ExpressionNode;
     /// use lpc_rs::codegen::codegen_walker::CodegenWalker;
     /// use lpc_rs::codegen::tree_walker::TreeWalker;
+    /// use lpc_rs::context::Context;
     ///
     /// let mut node = BinaryOpNode {
     ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
@@ -181,7 +192,7 @@ impl CodegenWalker {
     ///     op: BinaryOperation::Sub,
     ///     span: None
     /// };
-    /// let mut walker = CodegenWalker::default();
+    /// let mut walker = CodegenWalker::new(Context::default());
     ///
     /// walker.visit_binary_op(&mut node);
     ///
@@ -190,53 +201,21 @@ impl CodegenWalker {
     /// }
     /// ```
     pub fn listing(&self) -> Vec<String> {
-        todo!()
-        // let mut v = vec![];
-        //
-        // // invert these maps for by-address lookup
-        // let functions_by_pc = self
-        //     .functions
-        //     .values()
-        //     .zip(self.functions.keys())
-        //     .collect::<HashMap<_, _>>();
-        //
-        // // use MultiMap as multiple labels can be at the same address
-        // let labels_by_pc = self
-        //     .labels
-        //     .values()
-        //     .zip(self.labels.keys())
-        //     .collect::<MultiMap<_, _>>();
-        //
-        // for (counter, instruction) in self.instructions.iter().enumerate() {
-        //     if let Some(name) = functions_by_pc.get(&counter) {
-        //         if let Some(sym) = self.functions.get(name) {
-        //             v.push(format!(
-        //                 "fn {} num_args={} num_locals={}:",
-        //                 sym.name, sym.num_args, sym.num_locals
-        //             ));
-        //         }
-        //     }
-        //     if let Some(vec) = labels_by_pc.get_vec(&counter) {
-        //         for label in vec {
-        //             v.push(format!("{}:", label));
-        //         }
-        //     }
-        //     v.push(format!("    {}", instruction));
-        // }
-        //
-        // v
-    }
+        let functions = self.functions.values().sorted_unstable_by(|a, b| {
+            if a.name == INIT_PROGRAM {
+                return Ordering::Less;
+            }
+            if b.name == INIT_PROGRAM {
+                return Ordering::Greater;
+            }
 
-    /// Return a map of function names to their corresponding full symbol
-    // pub fn function_map(&self) -> HashMap<String, Rc<FunctionSymbol>> {
-    //     let mut map = HashMap::new();
-    // 
-    //     for sym in self.functions.keys() {
-    //         map.insert(sym.name.clone(), sym.clone());
-    //     }
-    // 
-    //     map
-    // }
+            Ord::cmp(&a.name, &b.name)
+        });
+
+        functions.flat_map(|func| {
+            func.listing()
+        }).collect()
+    }
 
     /// Convert this walker's data into a [`Program`]
     pub fn to_program(&self) -> Result<Program> {
@@ -244,10 +223,7 @@ impl CodegenWalker {
         self.ensure_sync()?;
 
         Ok(Program {
-            // instructions: self.instructions.clone(),
-            // debug_spans: self.debug_spans.clone(),
             filename: self.context.filename.clone(),
-            // labels: self.labels.clone(),
             functions: self.functions.clone(),
             // add +1 to num_globals for r0, for call return values
             num_globals: self.global_counter.as_usize() + 1,
@@ -257,20 +233,18 @@ impl CodegenWalker {
     }
 
     fn ensure_sync(&self) -> Result<()> {
-        todo!()
-        // let a = self.current_address();
-        // let b = self.debug_spans.len();
-        //
-        // if a != b {
-        //     return Err(LpcError::new(format!(
-        //         "Instructions (length {}) and `debug_spans` (length {}) are out \
-        //                 of sync. This would be catastrophic at runtime, and indicates \
-        //                 a major bug in the code generator.",
-        //         a, b
-        //     )));
-        // }
-        //
-        // Ok(())
+        for func in self.functions.values() {
+            let a = func.instructions.len();
+            let b = func.debug_spans.len();
+            if a != b {
+                    return Err(LpcError::new(format!(
+                        "Instructions (length {}) and `debug_spans` (length {}) for function `{}` are out of sync. This would be catastrophic at runtime, and indicates a major bug in the code generator.",
+                        a, b, &func.name
+                    )));
+            }
+        }
+
+        Ok(())
     }
 
     /// Get a reference to a symbol in the current scope
@@ -1644,6 +1618,12 @@ mod tests {
         util::path_maker::LpcPath,
     };
 
+    fn default_walker() -> CodegenWalker {
+        let mut walker = CodegenWalker::default();
+        walker.setup_init();
+        walker
+    }
+
     fn walk_prog(prog: &str) -> CodegenWalker {
         walk_code(prog).expect("failed to walk.")
     }
@@ -1664,13 +1644,27 @@ mod tests {
         Ok(walker)
     }
 
-    fn generate_instructions(prog: &str) -> Vec<Instruction> {
-        walk_prog(prog).instructions
+    fn walker_function_instructions<T>(walker: &mut CodegenWalker, name: T) -> Vec<Instruction>
+    where
+        T: AsRef<str>
+    {
+        println!("walker {:?}", walker);
+        let function = walker.functions.get_mut(name.as_ref()).unwrap();
+        function.instructions.clone()
+    }
+
+    fn walker_init_instructions(walker: &mut CodegenWalker) -> Vec<Instruction> {
+        walker.function_stack.last().unwrap().instructions.clone()
+    }
+
+    fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
+        // walker_init_instructions(&mut walk_prog(prog))
+        walk_prog(prog).functions.get_mut(INIT_PROGRAM).unwrap().instructions.clone()
     }
 
     #[test]
     fn test_visit_array_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
+        let mut walker = default_walker();
 
         let mut arr = ArrayNode::new(vec![
             ExpressionNode::from(123),
@@ -1688,7 +1682,7 @@ mod tests {
             AConst(Register(5), vec![Register(1), Register(2), Register(4)]),
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
     mod test_visit_assignment {
@@ -1735,7 +1729,7 @@ mod tests {
 
             let _ = walker.visit_assignment(&mut node);
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [
                     IConst(Register(1), -12),
                     GLoad(Register(666), Register(2)),
@@ -1771,7 +1765,7 @@ mod tests {
 
             let _ = walker.visit_assignment(&mut node);
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [
                     IConst(Register(1), -12),
                     RegCopy(Register(1), Register(666))
@@ -1810,7 +1804,7 @@ mod tests {
 
             let _ = walker.visit_assignment(&mut node);
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [
                     IConst(Register(1), -12),
                     IConst1(Register(2)),
@@ -1829,7 +1823,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_ints() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::Int(IntNode::new(666))),
@@ -1853,7 +1847,7 @@ mod tests {
                 IMul(Register(1), Register(4), Register(5)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -1893,12 +1887,12 @@ mod tests {
                 IAdd(Register(1), Register(4), Register(5)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_strings() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
@@ -1922,12 +1916,12 @@ mod tests {
                 MAdd(Register(1), Register(4), Register(5)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_arrays() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -1946,7 +1940,7 @@ mod tests {
                 MAdd(Register(2), Register(4), Register(5)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -1970,12 +1964,12 @@ mod tests {
                 Load(Register(2), Register(3), Register(4)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_slices() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -1998,12 +1992,12 @@ mod tests {
                 Range(Register(2), Register(3), Register(4), Register(5)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_andand_expressions() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(123)),
@@ -2024,12 +2018,12 @@ mod tests {
                 // end is here
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_oror_expressions() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(123)),
@@ -2050,7 +2044,7 @@ mod tests {
                 // end is here
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
@@ -2074,14 +2068,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "while-end_1".into()),
@@ -2107,7 +2095,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
         }
 
         #[test]
@@ -2125,14 +2113,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 IConst0(Register(1)),
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
@@ -2162,7 +2144,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
         }
 
         #[test]
@@ -2181,14 +2163,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 Call {
                     name: "dump".into(),
                     num_args: 1,
@@ -2213,7 +2189,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
         }
 
         #[test]
@@ -2234,14 +2210,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 IConst(Register(1), 666),
                 Jmp("switch-test_0".into()),
                 SConst(Register(2), "YEAH BABY".into()),
@@ -2277,7 +2247,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
         }
     }
 
@@ -2291,7 +2261,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
             let call = "dump(4 - 5)";
             let mut tree = lpc_parser::CallParser::new()
                 .parse(&Context::default(), LexWrapper::new(call))
@@ -2308,12 +2278,12 @@ mod tests {
                 },
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_call_other() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
             let call = "\"foo\"->print(4 - 5)";
             let mut tree = lpc_parser::ExpressionParser::new()
                 .parse(&Context::default(), LexWrapper::new(call))
@@ -2334,12 +2304,12 @@ mod tests {
                 RegCopy(Register(0), Register(4)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn populates_the_instructions_for_catch() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
             let call = "catch(12 / 0)";
             let mut tree = lpc_parser::ExpressionParser::new()
                 .parse(&Context::default(), LexWrapper::new(call))
@@ -2355,7 +2325,7 @@ mod tests {
                 CatchEnd,
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -2392,7 +2362,7 @@ mod tests {
                 },
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -2430,7 +2400,7 @@ mod tests {
                 RegCopy(Register(0), Register(2)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -2467,12 +2437,12 @@ mod tests {
                 },
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn copies_non_void_efun_results() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
             let call = r#"clone_object("/foo.c")"#;
             let mut tree = lpc_parser::CallParser::new()
                 .parse(&Context::default(), LexWrapper::new(call))
@@ -2490,12 +2460,12 @@ mod tests {
                 RegCopy(Register(0), Register(2)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
         fn does_not_copy_void_efun_results() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
             let call = r#"dump("lkajsdflkajsdf")"#;
             let mut tree = lpc_parser::CallParser::new()
                 .parse(&Context::default(), LexWrapper::new(call))
@@ -2512,7 +2482,7 @@ mod tests {
                 },
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -2554,7 +2524,7 @@ mod tests {
                 },
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
@@ -2581,12 +2551,12 @@ mod tests {
             },
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
     #[test]
     fn test_visit_comma_expression_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
+        let mut walker = default_walker();
 
         let mut expr = CommaExpressionNode::new(vec![
             ExpressionNode::from(123),
@@ -2603,7 +2573,7 @@ mod tests {
             AConst(Register(4), vec![Register(3)]),
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
         assert_eq!(walker.current_result, Register(4));
     }
 
@@ -2627,14 +2597,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
                 Jz(Register(3), "while-end_1".into()),
@@ -2660,7 +2624,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
         }
 
         #[test]
@@ -2678,14 +2642,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 IConst0(Register(1)),
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
@@ -2715,7 +2673,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, CREATE_FUNCTION), expected);
         }
 
         #[test]
@@ -2734,14 +2692,8 @@ mod tests {
                 }
             "#;
 
-            let program = walk_prog(code);
+            let mut walker = walk_prog(code);
             let expected = vec![
-                Call {
-                    name: "create".into(),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                Ret,
                 Call {
                     name: "dump".into(),
                     num_args: 1,
@@ -2766,7 +2718,7 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(program.instructions, expected);
+            assert_eq!(walker_function_instructions(&mut walker, CREATE_FUNCTION), expected);
         }
     }
 
@@ -2792,7 +2744,7 @@ mod tests {
             GStore(Register(3), Register(2)),
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
 
         let scope = walker.context.scopes.current().unwrap();
         assert_eq!(
@@ -2836,7 +2788,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = DoWhileNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -2870,7 +2822,7 @@ mod tests {
                 Jnz(Register(4), "do-while-start_0".into()),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
@@ -2945,7 +2897,7 @@ mod tests {
                 Jmp("for-start_0".into()),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
@@ -2979,18 +2931,7 @@ mod tests {
             Ret,
         ];
 
-        assert_eq!(walker.instructions, expected);
-
-        let address: Address = 0;
-
-        let sym = FunctionSymbol {
-            name: "main".to_string(),
-            num_args: 1,
-            num_locals: 2,
-            // address,
-        };
-
-        assert_eq!(walker.functions.get(&sym).unwrap(), &address);
+        assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
     }
 
     #[test]
@@ -3018,7 +2959,7 @@ mod tests {
 
         let expected = vec![RegCopy(Register(2), Register(0)), Ret];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
     }
 
     mod test_visit_if {
@@ -3027,7 +2968,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = IfNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -3074,13 +3015,13 @@ mod tests {
                 },
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
     #[test]
     fn test_visit_int_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
+        let mut walker = default_walker();
 
         let mut tree = IntNode::new(666);
         let mut tree0 = IntNode::new(0);
@@ -3096,7 +3037,7 @@ mod tests {
             IConst1(Register(3)),
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
     mod test_visit_program {
@@ -3112,7 +3053,7 @@ mod tests {
                 }
             ";
 
-            let instructions = generate_instructions(prog);
+            let walker = walk_prog(prog);
 
             let expected = vec![
                 Call {
@@ -3121,6 +3062,11 @@ mod tests {
                     initial_arg: Register(1),
                 },
                 Ret,
+            ];
+
+            assert_eq!(walker.functions.get(INIT_PROGRAM).unwrap().instructions, expected);
+
+            let expected = vec![
                 IConst(Register(1), -1),
                 IConst(Register(2), 9),
                 Call {
@@ -3131,7 +3077,7 @@ mod tests {
                 Ret, // Automatically added due to no explicit return
             ];
 
-            assert_eq!(instructions, expected);
+            assert_eq!(walker.functions.get(CREATE_FUNCTION).unwrap().instructions, expected);
         }
 
         #[test]
@@ -3144,23 +3090,14 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_instructions(prog);
+            let instructions = generate_init_instructions(prog);
 
             let expected = [
                 IConst(Register(1), 123),
                 GStore(Register(1), Register(1)),
                 SConst(Register(2), String::from("cool")),
                 GStore(Register(2), Register(2)),
-                Ret, // return from global init. if create() is defined, we just continue on to it
-                GLoad(Register(2), Register(1)),
-                GLoad(Register(1), Register(2)),
-                MAdd(Register(1), Register(2), Register(3)),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(3),
-                },
-                Ret,
+                Ret
             ];
 
             assert_eq!(instructions, expected);
@@ -3178,7 +3115,7 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_instructions(prog);
+            let instructions = generate_init_instructions(prog);
 
             let expected = [
                 IConst(Register(1), 666),
@@ -3189,23 +3126,23 @@ mod tests {
                     initial_arg: Register(2),
                 },
                 Ret, // end of initialization
-                IConst(Register(1), 3),
-                RegCopy(Register(1), Register(0)),
-                Ret, // end of marf()
-                Call {
-                    name: String::from("marf"),
-                    num_args: 0,
-                    initial_arg: Register(1),
-                },
-                RegCopy(Register(0), Register(1)),
-                SConst(Register(2), String::from(" times a winner!")),
-                MAdd(Register(1), Register(2), Register(3)),
-                Call {
-                    name: String::from("dump"),
-                    num_args: 1,
-                    initial_arg: Register(3),
-                },
-                Ret, // end of create()
+                // IConst(Register(1), 3),
+                // RegCopy(Register(1), Register(0)),
+                // Ret, // end of marf()
+                // Call {
+                //     name: String::from("marf"),
+                //     num_args: 0,
+                //     initial_arg: Register(1),
+                // },
+                // RegCopy(Register(0), Register(1)),
+                // SConst(Register(2), String::from(" times a winner!")),
+                // MAdd(Register(1), Register(2), Register(3)),
+                // Call {
+                //     name: String::from("dump"),
+                //     num_args: 1,
+                //     initial_arg: Register(3),
+                // },
+                // Ret, // end of create()
             ];
 
             assert_eq!(instructions, expected);
@@ -3221,16 +3158,13 @@ mod tests {
                 int r = 777;
             "#;
 
-            let instructions = generate_instructions(prog);
+            let instructions = generate_init_instructions(prog);
 
             let expected = [
                 IConst(Register(1), 666),
                 GStore(Register(1), Register(1)),
                 IConst(Register(2), 777),
                 GStore(Register(2), Register(2)),
-                Ret,
-                IConst(Register(1), 3),
-                RegCopy(Register(1), Register(0)),
                 Ret,
             ];
 
@@ -3240,7 +3174,7 @@ mod tests {
 
     #[test]
     fn visit_return_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
+        let mut walker = default_walker();
 
         let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
         let _ = walker.visit_return(&mut node);
@@ -3251,22 +3185,22 @@ mod tests {
             Ret,
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
 
         /* === */
 
-        let mut walker = CodegenWalker::default();
+        let mut walker = default_walker();
         let mut node = ReturnNode::new(None);
         let _ = walker.visit_return(&mut node);
 
         let expected = vec![Ret];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
     #[test]
     fn test_visit_string_populates_the_instructions() {
-        let mut walker = CodegenWalker::default();
+        let mut walker = default_walker();
         let mut node = StringNode::new("marf");
         let mut node2 = StringNode::new("tacos");
         let mut node3 = StringNode::new("marf");
@@ -3281,7 +3215,7 @@ mod tests {
             SConst(Register(3), String::from("marf")),
         ];
 
-        assert_eq!(walker.instructions, expected);
+        assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
     mod test_visit_ternary {
@@ -3321,7 +3255,7 @@ mod tests {
                 RegCopy(Register(6), Register(1)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
@@ -3371,7 +3305,7 @@ mod tests {
             assert_eq!(walker.current_result, Register(1)); // global loaded into r1
 
             let expected = vec![GLoad(Register(666), Register(1))];
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
         #[test]
@@ -3411,7 +3345,7 @@ mod tests {
             assert_eq!(walker.current_result, Register(666));
 
             let expected = vec![];
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 
@@ -3477,7 +3411,7 @@ mod tests {
             let mut map = HashMap::new();
             map.insert(Register(1), Register(2));
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [
                     SConst(Register(1), String::from("foo")),
                     SConst(Register(2), String::from("bar")),
@@ -3491,7 +3425,7 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Mapping(false), &mut walker);
 
-            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
         }
 
         #[test]
@@ -3503,7 +3437,7 @@ mod tests {
                 &mut walker,
             );
 
-            assert_eq!(walker.instructions, [IConst(Register(1), 123)]);
+            assert_eq!(walker_init_instructions(&mut walker), [IConst(Register(1), 123)]);
         }
 
         #[test]
@@ -3511,7 +3445,7 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Int(false), &mut walker);
 
-            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
         }
 
         #[test]
@@ -3524,7 +3458,7 @@ mod tests {
             );
 
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [FConst(Register(1), Total::from(123.0))]
             );
         }
@@ -3534,7 +3468,7 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Float(false), &mut walker);
 
-            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
         }
 
         #[test]
@@ -3547,7 +3481,7 @@ mod tests {
             );
 
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [SConst(Register(1), String::from("foo"))]
             );
         }
@@ -3557,7 +3491,7 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::String(false), &mut walker);
 
-            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
         }
 
         #[test]
@@ -3570,7 +3504,7 @@ mod tests {
             );
 
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [
                     IConst(Register(1), 1234),
                     AConst(Register(2), vec![Register(1)])
@@ -3583,7 +3517,7 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Int(true), &mut walker);
 
-            assert_eq!(walker.instructions, [RegCopy(Register(1), Register(2))]);
+            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
         }
 
         #[test]
@@ -3609,7 +3543,7 @@ mod tests {
             let _ = walker.visit_var_init(&mut node);
 
             assert_eq!(
-                walker.instructions,
+                walker_init_instructions(&mut walker),
                 [
                     SConst(Register(1), String::from("/foo/bar.c")),
                     Call {
@@ -3680,7 +3614,7 @@ mod tests {
                 GStore(Register(9), Register(2)),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
             assert_eq!(walker.global_counter.as_usize(), 2);
             assert_eq!(walker.global_init_registers, 9);
         }
@@ -3692,7 +3626,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-            let mut walker = CodegenWalker::default();
+            let mut walker = default_walker();
 
             let mut node = WhileNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -3727,7 +3661,7 @@ mod tests {
                 Jmp("while-start_0".into()),
             ];
 
-            assert_eq!(walker.instructions, expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 

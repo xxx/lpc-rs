@@ -83,10 +83,6 @@ impl StackFrame {
         }
     }
 
-    pub fn current_eval_context(&mut self) -> (Option<&Instruction>, &mut Vec<LpcRef>) {
-        (self.instruction(), &mut self.registers)
-    }
-
     #[inline]
     pub fn set_pc(&self, new_val: usize) {
         self.pc.replace(new_val);
@@ -134,14 +130,9 @@ mod tests {
     fn new_sets_up_registers() {
         let process = Process::default();
 
-        let fs = FunctionSymbol {
-            name: "my_function".to_string(),
-            num_args: 4,
-            num_locals: 7,
-            address: 123,
-        };
+        let fs = FunctionSymbol::new("my_function", 4, 7);
 
-        let frame = StackFrame::new(Rc::new(process), Rc::new(fs), 5);
+        let frame = StackFrame::new(Rc::new(process), Rc::new(fs));
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -154,14 +145,9 @@ mod tests {
         fn sets_up_registers_if_greater_max_is_passed() {
             let process = Process::default();
 
-            let fs = FunctionSymbol {
-                name: "my_function".to_string(),
-                num_args: 4,
-                num_locals: 7,
-                address: 123,
-            };
+            let fs = FunctionSymbol::new("my_function", 4, 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 5, 30);
+            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 30);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -171,14 +157,9 @@ mod tests {
         fn sets_up_registers_if_lesser_max_is_passed() {
             let process = Process::default();
 
-            let fs = FunctionSymbol {
-                name: "my_function".to_string(),
-                num_args: 4,
-                num_locals: 7,
-                address: 123,
-            };
+            let fs = FunctionSymbol::new("my_function", 4, 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 5, 2);
+            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 2);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));

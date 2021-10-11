@@ -13,6 +13,7 @@ use lpc_rs::{
 };
 use rustyline::{error::ReadlineError, Editor};
 use std::rc::Rc;
+use lpc_rs::interpreter::asm_interpreter::current_frame_mut;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 
@@ -81,12 +82,12 @@ impl Repl {
                         "help" | "?" => {
                             println!("{}", HELP);
                         }
-                        "i" | "instruction" => match self.vm.process.instruction() {
+                        "i" | "instruction" => match current_frame_mut(&mut self.vm.stack)?.instruction() {
                             Some(x) => println!("{}", x),
                             None => println!("There's no instruction at the current address."),
                         },
                         "pc" => {
-                            println!("{}", self.vm.process.pc())
+                            println!("{}", current_frame_mut(&mut self.vm.stack)?.pc())
                         }
                         "r" | "registers" => {
                             let r = match current_registers(&self.vm.stack) {
@@ -106,7 +107,7 @@ impl Repl {
                             );
                         }
                         "n" | "next" => {
-                            if let Some(i) = self.vm.process.instruction() {
+                            if let Some(i) = current_frame_mut(&mut self.vm.stack)?.instruction() {
                                 println!("executing: {}", i);
                             }
                             match self.vm.eval_one_instruction() {
