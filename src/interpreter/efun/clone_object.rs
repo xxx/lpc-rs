@@ -105,7 +105,7 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{program::Program, stack_frame::StackFrame},
-        semantic::function_symbol::FunctionSymbol,
+        semantic::program_function::ProgramFunction,
         util::config::Config,
     };
     use fs_err as fs;
@@ -139,7 +139,7 @@ mod tests {
     fn does_not_create_multiple_master_objects() {
         let mut interpreter = fixture();
 
-        let sym = FunctionSymbol::new("clone_object", 1, 0);
+        let sym = ProgramFunction::new("clone_object", 1, 0);
 
         let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym));
 
@@ -163,7 +163,7 @@ mod tests {
     fn returns_error_if_no_clone() {
         let mut interpreter = fixture();
 
-        let sym = FunctionSymbol::new("clone_object", 1, 0);
+        let sym = ProgramFunction::new("clone_object", 1, 0);
 
         let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym));
 

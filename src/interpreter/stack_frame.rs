@@ -1,6 +1,6 @@
 use crate::{
     interpreter::{lpc_ref::LpcRef, process::Process},
-    semantic::function_symbol::FunctionSymbol,
+    semantic::program_function::ProgramFunction,
 };
 use std::{
     fmt,
@@ -16,8 +16,8 @@ use crate::asm::instruction::{Instruction, Address};
 pub struct StackFrame {
     /// A pointer to the process that owns the function being called
     pub process: Rc<Process>,
-    /// The function symbol that this frame represents a call to
-    pub symbol: Rc<FunctionSymbol>,
+    /// The function that this frame is a call to
+    pub function: Rc<ProgramFunction>,
     /// Our registers. By convention, `registers[0]` is for the return value of the call.
     pub registers: Vec<LpcRef>,
     /// Track where the pc is pointing in this frame's function's instructions.
@@ -30,14 +30,14 @@ impl StackFrame {
     /// # Arguments
     ///
     /// * `process` - The process that owns the function being called
-    /// * `symbol` - The symbol representing the function being called
-    pub fn new(process: Rc<Process>, symbol: Rc<FunctionSymbol>) -> Self {
+    /// * `function` - The function being called
+    pub fn new(process: Rc<Process>, function: Rc<ProgramFunction>) -> Self {
         // add +1 for r0 (where return value is stored)
-        let reg_len = symbol.num_args + symbol.num_locals + 1;
+        let reg_len = function.num_args + function.num_locals + 1;
 
         Self {
             process,
-            symbol,
+            function,
             registers: vec![LpcRef::Int(0); reg_len],
             pc: 0.into(),
         }
@@ -48,22 +48,22 @@ impl StackFrame {
     /// # Arguments
     ///
     /// * `process` - The process that owns the function being called
-    /// * `symbol` - The symbol representing the function being called
+    /// * `function` - The function being called
     /// * `arg_capacity` - Reserve space for at least this many registers
     ///     (this is used for ellipsis args and `call_other`)
     pub fn with_minimum_arg_capacity(
         process: Rc<Process>,
-        symbol: Rc<FunctionSymbol>,
+        function: Rc<ProgramFunction>,
         arg_capacity: usize,
     ) -> Self {
         // add +1 for r0 (where return value is stored)
-        let reg_len = symbol.num_args + symbol.num_locals + 1;
-        let arg_len = arg_capacity + symbol.num_locals + 1;
+        let reg_len = function.num_args + function.num_locals + 1;
+        let arg_len = arg_capacity + function.num_locals + 1;
         let reservation = std::cmp::max(reg_len, arg_len);
 
         Self {
             registers: vec![LpcRef::Int(0); reservation],
-            ..Self::new(process, symbol)
+            ..Self::new(process, function)
         }
     }
 
@@ -77,7 +77,7 @@ impl StackFrame {
 
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
-        match self.symbol.debug_spans.get(self.pc.get()) {
+        match self.function.debug_spans.get(self.pc.get()) {
             Some(o) => *o,
             None => None,
         }
@@ -100,7 +100,7 @@ impl StackFrame {
 
     #[inline]
     pub fn instruction(&self) -> Option<&Instruction> {
-        self.symbol.instructions.get(self.pc.get())
+        self.function.instructions.get(self.pc.get())
     }
 
     #[inline]
@@ -108,7 +108,7 @@ impl StackFrame {
     where
         T: AsRef<str>
     {
-        self.symbol.labels.get(label.as_ref())
+        self.function.labels.get(label.as_ref())
     }
 }
 
@@ -117,7 +117,7 @@ impl Display for StackFrame {
         write!(
             f,
             "Calling {}; Process {}\n\n",
-            self.symbol.name, self.process.filename
+            self.function.name, self.process.filename
         )
     }
 }
@@ -130,7 +130,7 @@ mod tests {
     fn new_sets_up_registers() {
         let process = Process::default();
 
-        let fs = FunctionSymbol::new("my_function", 4, 7);
+        let fs = ProgramFunction::new("my_function", 4, 7);
 
         let frame = StackFrame::new(Rc::new(process), Rc::new(fs));
 
@@ -145,7 +145,7 @@ mod tests {
         fn sets_up_registers_if_greater_max_is_passed() {
             let process = Process::default();
 
-            let fs = FunctionSymbol::new("my_function", 4, 7);
+            let fs = ProgramFunction::new("my_function", 4, 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 30);
 
@@ -157,7 +157,7 @@ mod tests {
         fn sets_up_registers_if_lesser_max_is_passed() {
             let process = Process::default();
 
-            let fs = FunctionSymbol::new("my_function", 4, 7);
+            let fs = ProgramFunction::new("my_function", 4, 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 2);
 

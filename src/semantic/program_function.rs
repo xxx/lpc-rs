@@ -3,10 +3,10 @@ use crate::parser::span::Span;
 use std::collections::HashMap;
 use multimap::MultiMap;
 
-/// A representation of a function symbol, used during
-/// semantic checks and codegen.
+/// A [`Program`] function, which stores its actual code, along with
+/// metadata for type checking, etc.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct FunctionSymbol {
+pub struct ProgramFunction {
     /// Yep, the name of the function
     pub name: String,
 
@@ -27,7 +27,7 @@ pub struct FunctionSymbol {
     pub labels: HashMap<String, Address>,
 }
 
-impl FunctionSymbol {
+impl ProgramFunction {
     pub fn new<T>(name: T, num_args: usize, num_locals: usize) -> Self
     where
         T: Into<String>
@@ -42,11 +42,13 @@ impl FunctionSymbol {
         }
     }
 
+    /// Push and [`Instruction`] and corresponding [`Span`] into this function's code.
     pub fn push_instruction(&mut self, instruction: Instruction, debug_span: Option<Span>) {
         self.instructions.push(instruction);
         self.debug_spans.push(debug_span);
     }
 
+    /// Insert a label at the specified address into this function
     pub fn insert_label<T>(&mut self, label: T, address: Address)
     where
         T: Into<String>

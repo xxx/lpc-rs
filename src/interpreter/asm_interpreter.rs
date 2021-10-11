@@ -12,7 +12,7 @@ use crate::{
         program::Program,
         stack_frame::StackFrame,
     },
-    semantic::function_symbol::FunctionSymbol,
+    semantic::program_function::ProgramFunction,
     try_extract_value,
     util::config::Config,
     value_to_ref, LpcInt, Result,
@@ -405,7 +405,7 @@ impl AsmInterpreter {
                 let mut new_frame = if let Some(func) = self.process.functions.get(&name) {
                     StackFrame::new(self.process.clone(), func.clone())
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = FunctionSymbol::new(name.clone(), prototype.num_args, 0);
+                    let sym = ProgramFunction::new(name.clone(), prototype.num_args, 0);
 
                     StackFrame::new(self.process.clone(), Rc::new(sym))
                 } else {

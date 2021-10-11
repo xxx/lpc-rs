@@ -6,7 +6,7 @@ use crate::interpreter::lpc_ref::LpcRef;
 use crate::asm::register::Register;
 use crate::interpreter::asm_interpreter::AsmInterpreter;
 use std::fmt::{Display, Formatter};
-use crate::semantic::function_symbol::FunctionSymbol;
+use crate::semantic::program_function::ProgramFunction;
 
 /// An enum to handle function names that are either vars or literal names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,11 +47,11 @@ pub enum FunctionTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionAddress {
     /// The function being called is local to the object the pointer is declared in.
-    Local(Rc<FunctionSymbol>),
+    Local(Rc<ProgramFunction>),
     // Local(Address),
 
     /// The function being called is located in another object.
-    Remote(Rc<Process>, Rc<FunctionSymbol>),
+    Remote(Rc<Process>, Rc<ProgramFunction>),
     // Remote(Rc<Process>, Address),
 
     /// The function being called is an efun, and requires the name.

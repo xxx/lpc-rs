@@ -42,7 +42,7 @@ use crate::{
         program::Program,
     },
     parser::span::Span,
-    semantic::{function_symbol::FunctionSymbol, lpc_type::LpcType, symbol::Symbol},
+    semantic::{program_function::ProgramFunction, lpc_type::LpcType, symbol::Symbol},
     Result,
 };
 use multimap::MultiMap;
@@ -119,14 +119,14 @@ pub struct CodegenWalker {
     // pub labels: HashMap<String, Address>,
 
     // Keep track of the current function being generated (including global initialization)
-    function_stack: Vec<FunctionSymbol>,
+    function_stack: Vec<ProgramFunction>,
 
     /// Counter for labels, as they need to be unique.
     label_count: usize,
 
     /// Map of function Symbols, to their respective addresses
     // pub functions: HashMap<Rc<FunctionSymbol>, Address>,
-    pub functions: HashMap<String, Rc<FunctionSymbol>>,
+    pub functions: HashMap<String, Rc<ProgramFunction>>,
 
     /// Track where the result of a child branch is
     current_result: Register,
@@ -172,7 +172,7 @@ impl CodegenWalker {
     }
 
     pub fn setup_init(&mut self) {
-        self.function_stack.push(FunctionSymbol::new(INIT_PROGRAM, 0, 0));
+        self.function_stack.push(ProgramFunction::new(INIT_PROGRAM, 0, 0));
     }
 
     /// Get a listing of a translated AST, suitable for printing
@@ -977,7 +977,7 @@ impl TreeWalker for CodegenWalker {
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let num_args = node.parameters.len() + (node.flags.ellipsis() as usize);
 
-        let sym = FunctionSymbol::new(&node.name, num_args, 0);
+        let sym = ProgramFunction::new(&node.name, num_args, 0);
         self.function_stack.push(sym);
 
         let len = self.current_address();
@@ -1192,7 +1192,7 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.goto_root();
 
         let init_name: String = INIT_PROGRAM.into();
-        let sym = FunctionSymbol::new(init_name.clone(), 0, 0);
+        let sym = ProgramFunction::new(init_name.clone(), 0, 0);
         self.function_stack.push(sym);
 
         // Partition global variable initializations vs everything else

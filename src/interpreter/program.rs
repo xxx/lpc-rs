@@ -1,6 +1,6 @@
 use crate::{
     asm::instruction::Instruction, interpreter::pragma_flags::PragmaFlags, parser::span::Span,
-    semantic::function_symbol::FunctionSymbol,
+    semantic::program_function::ProgramFunction,
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
@@ -19,7 +19,7 @@ pub struct Program {
     pub filename: String,
 
     /// function mapping of name to Symbol
-    pub functions: HashMap<String, Rc<FunctionSymbol>>,
+    pub functions: HashMap<String, Rc<ProgramFunction>>,
 
     /// How many globals does this program need storage for?
     pub num_globals: usize,
@@ -40,7 +40,7 @@ impl<'a> Program {
     }
 
     /// Look up a function by its name
-    pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<FunctionSymbol>>
+    pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {

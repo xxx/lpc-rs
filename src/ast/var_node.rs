@@ -40,9 +40,12 @@ impl VarNode {
         }
     }
 
+    /// Set whether this node is global
     pub fn set_global(&mut self, val: bool) {
         self.global = val;
     }
+
+    /// Set whether this node is actually a known function name, rather than a variable.
     pub fn set_function_name(&mut self, val: bool) { self.function_name = val; }
 }
 
