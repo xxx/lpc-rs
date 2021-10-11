@@ -1,10 +1,8 @@
-use crate::{
-    interpreter::{lpc_ref::LpcRef, program::Program},
-};
+use crate::interpreter::{lpc_ref::LpcRef, program::Program};
 use delegate::delegate;
 use std::{
     borrow::Cow,
-    cell::{RefCell},
+    cell::RefCell,
     fmt::{Display, Formatter},
     ops::Deref,
     path::Path,

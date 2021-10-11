@@ -1,15 +1,15 @@
 use crate::{
+    asm::instruction::{Address, Instruction},
     interpreter::{lpc_ref::LpcRef, process::Process},
+    parser::span::Span,
     semantic::program_function::ProgramFunction,
 };
 use std::{
+    cell::Cell,
     fmt,
     fmt::{Display, Formatter},
     rc::Rc,
 };
-use std::cell::Cell;
-use crate::parser::span::Span;
-use crate::asm::instruction::{Instruction, Address};
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -70,7 +70,7 @@ impl StackFrame {
     /// Resolve a register
     pub fn resolve_lpc_ref<I>(&self, register: I) -> LpcRef
     where
-        I: Into<usize>
+        I: Into<usize>,
     {
         self.registers[register.into()].clone()
     }
@@ -106,7 +106,7 @@ impl StackFrame {
     #[inline]
     pub fn lookup_label<T>(&self, label: T) -> Option<&Address>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         self.function.labels.get(label.as_ref())
     }

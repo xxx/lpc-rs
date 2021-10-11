@@ -3,7 +3,7 @@
 use lpc_rs::{
     compiler::Compiler,
     errors,
-    interpreter::{asm_interpreter::AsmInterpreter},
+    interpreter::asm_interpreter::AsmInterpreter,
     util::{config::Config, path_maker::LpcPath},
 };
 

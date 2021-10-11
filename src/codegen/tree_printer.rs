@@ -5,15 +5,15 @@ use crate::{
         array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
         block_node::BlockNode, call_node::CallNode, comma_expression_node::CommaExpressionNode,
         decl_node::DeclNode, do_while_node::DoWhileNode, float_node::FloatNode,
-        function_def_node::FunctionDefNode, if_node::IfNode, int_node::IntNode,
-        mapping_node::MappingNode, program_node::ProgramNode, range_node::RangeNode,
-        return_node::ReturnNode, string_node::StringNode, unary_op_node::UnaryOpNode,
-        var_init_node::VarInitNode, var_node::VarNode, while_node::WhileNode,
+        function_def_node::FunctionDefNode, function_ptr_node::FunctionPtrNode, if_node::IfNode,
+        int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
+        range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
+        unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
+        while_node::WhileNode,
     },
     codegen::tree_walker,
     Result,
 };
-use crate::ast::function_ptr_node::FunctionPtrNode;
 
 /// A tree walker for pretty-printing an AST
 ///

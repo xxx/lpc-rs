@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ast::expression_node::ExpressionNode,
-    semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
     interpreter::efun::EFUN_PROTOTYPES,
+    semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 
 use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
@@ -76,7 +76,7 @@ impl Context {
     /// Look-up a function by name
     pub fn lookup_function<T>(&self, name: T) -> Option<&FunctionPrototype>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         let r = name.as_ref();
         self.function_prototypes.get(r)
@@ -86,7 +86,7 @@ impl Context {
     /// the passed name isn't found locally.
     pub fn lookup_function_complete<T>(&self, name: T) -> Option<&FunctionPrototype>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         let r = name.as_ref();
         if let Some(prototype) = self.function_prototypes.get(r) {

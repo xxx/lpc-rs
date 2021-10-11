@@ -220,8 +220,9 @@ impl Add for &LpcRef {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Object(_)
-            | LpcRef::Function(_) => Err(self.to_error(BinaryOperation::Add, rhs)),
+            LpcRef::Object(_) | LpcRef::Function(_) => {
+                Err(self.to_error(BinaryOperation::Add, rhs))
+            }
         }
     }
 }

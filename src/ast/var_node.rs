@@ -36,7 +36,7 @@ impl VarNode {
             name: String::from(name),
             span: None,
             global: false,
-            function_name: false
+            function_name: false,
         }
     }
 
@@ -46,7 +46,9 @@ impl VarNode {
     }
 
     /// Set whether this node is actually a known function name, rather than a variable.
-    pub fn set_function_name(&mut self, val: bool) { self.function_name = val; }
+    pub fn set_function_name(&mut self, val: bool) {
+        self.function_name = val;
+    }
 }
 
 impl SpannedNode for VarNode {

@@ -1,11 +1,10 @@
 use crate::{
-    interpreter::{lpc_ref::LpcRef, process::Process},
+    interpreter::{function_type::LpcFunction, lpc_ref::LpcRef, process::Process},
     BaseFloat, LpcFloat, LpcInt,
 };
 use itertools::Itertools;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
-use crate::interpreter::function_type::LpcFunction;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.

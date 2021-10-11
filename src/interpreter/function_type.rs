@@ -1,12 +1,10 @@
 use crate::interpreter::process::Process;
 use std::rc::Rc;
 
+use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
 
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::asm::register::Register;
-
-use std::fmt::{Display, Formatter};
 use crate::semantic::program_function::ProgramFunction;
+use std::fmt::{Display, Formatter};
 
 /// An enum to handle function names that are either vars or literal names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +25,7 @@ pub enum FunctionReceiver {
     None,
 
     /// The receiver will be filled-in at call time, with the first argument passed to the call.
-    Argument
+    Argument,
 }
 
 /// Used as the target that's stored for a function pointer
@@ -40,7 +38,7 @@ pub enum FunctionTarget {
     Local(FunctionName),
 
     /// The call will be a call_other in another object.
-    CallOther(FunctionName, FunctionReceiver)
+    CallOther(FunctionName, FunctionReceiver),
 }
 
 /// Different ways to store a function address, for handling at runtime.
@@ -49,11 +47,9 @@ pub enum FunctionAddress {
     /// The function being called is local to the object the pointer is declared in.
     Local(Rc<ProgramFunction>),
     // Local(Address),
-
     /// The function being called is located in another object.
     Remote(Rc<Process>, Rc<ProgramFunction>),
     // Remote(Rc<Process>, Address),
-
     /// The function being called is an efun, and requires the name.
     Efun(String),
 }
@@ -85,16 +81,14 @@ pub struct FunctionPtr {
 /// `function` type variations
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LpcFunction {
-    FunctionPtr(FunctionPtr)
+    FunctionPtr(FunctionPtr),
 }
 
 impl LpcFunction {
     /// How many arguments do we expect to be called with at runtime?
     pub fn arity(&self) -> usize {
         match self {
-            LpcFunction::FunctionPtr(x) => {
-                x.args.iter().filter(|x| x.is_none()).count()
-            }
+            LpcFunction::FunctionPtr(x) => x.args.iter().filter(|x| x.is_none()).count(),
         }
     }
 }

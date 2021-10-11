@@ -21,7 +21,8 @@ fn load_master(interpreter: &mut AsmInterpreter, path: &str) -> Result<Rc<Proces
     match interpreter.lookup_process(path_str) {
         Ok(proc) => Ok(proc.clone()),
         Err(_) => {
-            match compiler.compile_in_game_file(full_path, interpreter.current_frame()?.current_debug_span())
+            match compiler
+                .compile_in_game_file(full_path, interpreter.current_frame()?.current_debug_span())
             {
                 Ok(prog) => {
                     let closure = |interpreter: &mut AsmInterpreter| {

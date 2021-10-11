@@ -139,7 +139,7 @@ pub fn dump(interpreter: &mut AsmInterpreter) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    
+
     use crate::interpreter::program::Program;
 
     use crate::compiler::Compiler;

@@ -1,7 +1,4 @@
-use crate::{
-    interpreter::pragma_flags::PragmaFlags,
-    semantic::program_function::ProgramFunction,
-};
+use crate::{interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction};
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::{
@@ -11,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
-
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

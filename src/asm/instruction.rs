@@ -1,10 +1,11 @@
-use crate::{asm::register::Register, LpcFloat, LpcInt};
+use crate::{
+    asm::register::Register, interpreter::function_type::FunctionTarget, LpcFloat, LpcInt,
+};
 use std::{
     collections::HashMap,
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::interpreter::function_type::FunctionTarget;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -231,7 +232,7 @@ impl Display for Instruction {
             Instruction::FunctionPtrConst {
                 location,
                 target,
-                applied_arguments
+                applied_arguments,
             } => {
                 let args = applied_arguments
                     .iter()

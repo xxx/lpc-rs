@@ -41,20 +41,24 @@ use crate::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES},
         program::Program,
     },
-    semantic::{program_function::ProgramFunction, lpc_type::LpcType, symbol::Symbol},
+    semantic::{lpc_type::LpcType, program_function::ProgramFunction, symbol::Symbol},
     Result,
 };
 
-use std::{collections::HashMap, rc::Rc};
-use tree_walker::TreeWalker;
-use crate::ast::function_ptr_node::FunctionPtrNode;
-use crate::interpreter::function_type::{FunctionReceiver, FunctionTarget, FunctionName};
-use std::cmp::Ordering;
+use crate::{
+    ast::function_ptr_node::FunctionPtrNode,
+    interpreter::function_type::{FunctionName, FunctionReceiver, FunctionTarget},
+};
 use itertools::Itertools;
+use std::{cmp::Ordering, collections::HashMap, rc::Rc};
+use tree_walker::TreeWalker;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
-        $slf.function_stack.last_mut().unwrap().push_instruction($inst, $span);
+        $slf.function_stack
+            .last_mut()
+            .unwrap()
+            .push_instruction($inst, $span);
     };
 }
 
@@ -171,7 +175,8 @@ impl CodegenWalker {
     }
 
     pub fn setup_init(&mut self) {
-        self.function_stack.push(ProgramFunction::new(INIT_PROGRAM, 0, 0));
+        self.function_stack
+            .push(ProgramFunction::new(INIT_PROGRAM, 0, 0));
     }
 
     /// Get a listing of a translated AST, suitable for printing
@@ -211,9 +216,7 @@ impl CodegenWalker {
             Ord::cmp(&a.name, &b.name)
         });
 
-        functions.flat_map(|func| {
-            func.listing()
-        }).collect()
+        functions.flat_map(|func| func.listing()).collect()
     }
 
     /// Convert this walker's data into a [`Program`]
@@ -236,7 +239,7 @@ impl CodegenWalker {
             let a = func.instructions.len();
             let b = func.debug_spans.len();
             if a != b {
-                    return Err(LpcError::new(format!(
+                return Err(LpcError::new(format!(
                         "Instructions (length {}) and `debug_spans` (length {}) for function `{}` are out of sync. This would be catastrophic at runtime, and indicates a major bug in the code generator.",
                         a, b, &func.name
                     )));
@@ -432,12 +435,11 @@ impl CodegenWalker {
 
         let result = self.register_counter.next().unwrap();
         self.current_result = result;
-        push_instruction!(self, Instruction::Range(
-            reference,
-            first_index,
-            second_index,
-            result,
-        ), node.span);
+        push_instruction!(
+            self,
+            Instruction::Range(reference, first_index, second_index, result,),
+            node.span
+        );
 
         Ok(())
     }
@@ -479,7 +481,7 @@ impl CodegenWalker {
 
         Ok(())
     }
-    
+
     #[inline]
     fn current_address(&self) -> Address {
         match self.function_stack.last() {
@@ -491,9 +493,13 @@ impl CodegenWalker {
     #[inline]
     fn insert_label<T>(&mut self, label: T, address: Address)
     where
-        T: Into<String>
+        T: Into<String>,
     {
-        self.function_stack.last_mut().unwrap().labels.insert(label.into(), address);
+        self.function_stack
+            .last_mut()
+            .unwrap()
+            .labels
+            .insert(label.into(), address);
     }
 }
 
@@ -840,10 +846,10 @@ impl TreeWalker for CodegenWalker {
             let next_register = walker.register_counter.next().unwrap();
 
             push_instruction!(
-                    walker,
-                    Instruction::RegCopy(Register(0), next_register),
-                    node.span()
-                );
+                walker,
+                Instruction::RegCopy(Register(0), next_register),
+                node.span()
+            );
 
             walker.current_result = next_register;
         };
@@ -856,7 +862,14 @@ impl TreeWalker for CodegenWalker {
                 push_copy(self);
             }
         } else if node.receiver.is_some()
-        || matches!(self.context.scopes.lookup(&node.name), Some(Symbol { type_: LpcType::Function(false), .. })) {
+            || matches!(
+                self.context.scopes.lookup(&node.name),
+                Some(Symbol {
+                    type_: LpcType::Function(false),
+                    ..
+                })
+            )
+        {
             push_copy(self);
         } else {
             return Err(LpcError::new(format!(
@@ -1007,17 +1020,14 @@ impl TreeWalker for CodegenWalker {
         // insert a final return if one isn't already there.
         if sym.instructions.len() == len
             || (!sym.instructions.is_empty()
-            && *sym.instructions.last().unwrap() != Instruction::Ret)
+                && *sym.instructions.last().unwrap() != Instruction::Ret)
         {
             // TODO: This should emit a warning unless the return type is void
             sym.push_instruction(Instruction::Ret, node.span);
             // push_instruction!(self, Instruction::Ret, node.span);
         }
 
-        self.functions.insert(
-            node.name.clone(),
-            sym.into()
-        );
+        self.functions.insert(node.name.clone(), sym.into());
 
         self.register_counter.pop();
 
@@ -1063,18 +1073,17 @@ impl TreeWalker for CodegenWalker {
                     let sym_loc = match s.location {
                         Some(l) => l,
                         None => {
-                            return Err(
-                                LpcError::new(format!("Symbol `{}` has no location set.", s.name))
-                                    .with_span(node.span),
-                            );
+                            return Err(LpcError::new(format!(
+                                "Symbol `{}` has no location set.",
+                                s.name
+                            ))
+                            .with_span(node.span));
                         }
                     };
 
                     FunctionName::Var(sym_loc)
-                },
-                None => {
-                    FunctionName::Literal(node.name.clone())
                 }
+                None => FunctionName::Literal(node.name.clone()),
             };
 
             // See if there is a local function with this name first
@@ -1083,10 +1092,8 @@ impl TreeWalker for CodegenWalker {
             } else if EFUN_PROTOTYPES.get(node.name.as_str()).is_some() {
                 FunctionTarget::Efun(name)
             } else {
-                return Err(
-                    LpcError::new(format!("Unknown function: `{}`", &node.name))
-                        .with_span(node.span),
-                );
+                return Err(LpcError::new(format!("Unknown function: `{}`", &node.name))
+                    .with_span(node.span));
             }
         };
 
@@ -1096,11 +1103,7 @@ impl TreeWalker for CodegenWalker {
             applied_arguments,
         };
 
-        push_instruction!(
-            self,
-            instruction,
-            node.span
-        );
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
@@ -1228,7 +1231,7 @@ impl TreeWalker for CodegenWalker {
 
         let mut sym = self.function_stack.pop().unwrap();
         sym.num_locals = self.register_counter.as_usize(); // TODO: is this correct?
-        //     num_locals: self.process.num_init_registers,
+                                                           //     num_locals: self.process.num_init_registers,
 
         self.functions.insert(sym.name.clone(), sym.into());
 
@@ -1300,7 +1303,15 @@ impl TreeWalker for CodegenWalker {
         // skip over the tests that we're about to generate.
         let instruction = Instruction::Jmp(end_label.clone());
         // skip this jump if the final case statement ended with its own `break`.
-        if self.function_stack.last().unwrap().instructions.last().unwrap() != &instruction {
+        if self
+            .function_stack
+            .last()
+            .unwrap()
+            .instructions
+            .last()
+            .unwrap()
+            != &instruction
+        {
             push_instruction!(self, instruction, node.span);
         }
 
@@ -1451,7 +1462,7 @@ impl TreeWalker for CodegenWalker {
                 receiver: None,
                 arguments: None,
                 name: node.name.clone(),
-                span: node.span
+                span: node.span,
             };
 
             return self.visit_function_ptr(&mut fptr_node);
@@ -1641,7 +1652,7 @@ mod tests {
 
     fn walker_function_instructions<T>(walker: &mut CodegenWalker, name: T) -> Vec<Instruction>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         println!("walker {:?}", walker);
         let function = walker.functions.get_mut(name.as_ref()).unwrap();
@@ -1654,7 +1665,12 @@ mod tests {
 
     fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
         // walker_init_instructions(&mut walk_prog(prog))
-        walk_prog(prog).functions.get_mut(INIT_PROGRAM).unwrap().instructions.clone()
+        walk_prog(prog)
+            .functions
+            .get_mut(INIT_PROGRAM)
+            .unwrap()
+            .instructions
+            .clone()
     }
 
     #[test]
@@ -2090,7 +2106,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
         }
 
         #[test]
@@ -2139,7 +2158,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
         }
 
         #[test]
@@ -2184,7 +2206,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
         }
 
         #[test]
@@ -2242,7 +2267,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
         }
     }
 
@@ -2619,7 +2647,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, "create"), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
         }
 
         #[test]
@@ -2668,7 +2699,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, CREATE_FUNCTION), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, CREATE_FUNCTION),
+                expected
+            );
         }
 
         #[test]
@@ -2713,7 +2747,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker_function_instructions(&mut walker, CREATE_FUNCTION), expected);
+            assert_eq!(
+                walker_function_instructions(&mut walker, CREATE_FUNCTION),
+                expected
+            );
         }
     }
 
@@ -3037,7 +3074,6 @@ mod tests {
 
     mod test_visit_program {
         use super::*;
-        
 
         #[test]
         fn populates_the_instructions() {
@@ -3059,7 +3095,10 @@ mod tests {
                 Ret,
             ];
 
-            assert_eq!(walker.functions.get(INIT_PROGRAM).unwrap().instructions, expected);
+            assert_eq!(
+                walker.functions.get(INIT_PROGRAM).unwrap().instructions,
+                expected
+            );
 
             let expected = vec![
                 IConst(Register(1), -1),
@@ -3072,7 +3111,10 @@ mod tests {
                 Ret, // Automatically added due to no explicit return
             ];
 
-            assert_eq!(walker.functions.get(CREATE_FUNCTION).unwrap().instructions, expected);
+            assert_eq!(
+                walker.functions.get(CREATE_FUNCTION).unwrap().instructions,
+                expected
+            );
         }
 
         #[test]
@@ -3092,7 +3134,7 @@ mod tests {
                 GStore(Register(1), Register(1)),
                 SConst(Register(2), String::from("cool")),
                 GStore(Register(2), Register(2)),
-                Ret
+                Ret,
             ];
 
             assert_eq!(instructions, expected);
@@ -3121,23 +3163,23 @@ mod tests {
                     initial_arg: Register(2),
                 },
                 Ret, // end of initialization
-                // IConst(Register(1), 3),
-                // RegCopy(Register(1), Register(0)),
-                // Ret, // end of marf()
-                // Call {
-                //     name: String::from("marf"),
-                //     num_args: 0,
-                //     initial_arg: Register(1),
-                // },
-                // RegCopy(Register(0), Register(1)),
-                // SConst(Register(2), String::from(" times a winner!")),
-                // MAdd(Register(1), Register(2), Register(3)),
-                // Call {
-                //     name: String::from("dump"),
-                //     num_args: 1,
-                //     initial_arg: Register(3),
-                // },
-                // Ret, // end of create()
+                     // IConst(Register(1), 3),
+                     // RegCopy(Register(1), Register(0)),
+                     // Ret, // end of marf()
+                     // Call {
+                     //     name: String::from("marf"),
+                     //     num_args: 0,
+                     //     initial_arg: Register(1),
+                     // },
+                     // RegCopy(Register(0), Register(1)),
+                     // SConst(Register(2), String::from(" times a winner!")),
+                     // MAdd(Register(1), Register(2), Register(3)),
+                     // Call {
+                     //     name: String::from("dump"),
+                     //     num_args: 1,
+                     //     initial_arg: Register(3),
+                     // },
+                     // Ret, // end of create()
             ];
 
             assert_eq!(instructions, expected);
@@ -3420,7 +3462,10 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Mapping(false), &mut walker);
 
-            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
+            assert_eq!(
+                walker_init_instructions(&mut walker),
+                [RegCopy(Register(1), Register(2))]
+            );
         }
 
         #[test]
@@ -3432,7 +3477,10 @@ mod tests {
                 &mut walker,
             );
 
-            assert_eq!(walker_init_instructions(&mut walker), [IConst(Register(1), 123)]);
+            assert_eq!(
+                walker_init_instructions(&mut walker),
+                [IConst(Register(1), 123)]
+            );
         }
 
         #[test]
@@ -3440,7 +3488,10 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Int(false), &mut walker);
 
-            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
+            assert_eq!(
+                walker_init_instructions(&mut walker),
+                [RegCopy(Register(1), Register(2))]
+            );
         }
 
         #[test]
@@ -3463,7 +3514,10 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Float(false), &mut walker);
 
-            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
+            assert_eq!(
+                walker_init_instructions(&mut walker),
+                [RegCopy(Register(1), Register(2))]
+            );
         }
 
         #[test]
@@ -3486,7 +3540,10 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::String(false), &mut walker);
 
-            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
+            assert_eq!(
+                walker_init_instructions(&mut walker),
+                [RegCopy(Register(1), Register(2))]
+            );
         }
 
         #[test]
@@ -3512,7 +3569,10 @@ mod tests {
             let mut walker = setup();
             setup_var(LpcType::Int(true), &mut walker);
 
-            assert_eq!(walker_init_instructions(&mut walker), [RegCopy(Register(1), Register(2))]);
+            assert_eq!(
+                walker_init_instructions(&mut walker),
+                [RegCopy(Register(1), Register(2))]
+            );
         }
 
         #[test]

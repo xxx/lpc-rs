@@ -4,12 +4,14 @@ use std::{
 };
 
 use crate::{
-    ast::ast_node::{AstNodeTrait, SpannedNode},
+    ast::{
+        ast_node::{AstNodeTrait, SpannedNode},
+        expression_node::ExpressionNode,
+    },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
     Result,
 };
-use crate::ast::expression_node::ExpressionNode;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 
@@ -40,14 +42,13 @@ impl Display for FunctionPtrNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let args = match &self.arguments {
             None => "".into(),
-            Some(args) => {
-                args.iter().map(|a| {
-                    match a {
-                        Some(x) => x.to_string(),
-                        None => String::new()
-                    }
-                }).join(" ,")
-            }
+            Some(args) => args
+                .iter()
+                .map(|a| match a {
+                    Some(x) => x.to_string(),
+                    None => String::new(),
+                })
+                .join(" ,"),
         };
         let arg_fmt = lazy_format!(
             if args.is_empty() => ("")

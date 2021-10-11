@@ -1,7 +1,9 @@
-use crate::asm::instruction::{Instruction, Address};
-use crate::parser::span::Span;
-use std::collections::HashMap;
+use crate::{
+    asm::instruction::{Address, Instruction},
+    parser::span::Span,
+};
 use multimap::MultiMap;
+use std::collections::HashMap;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -30,7 +32,7 @@ pub struct ProgramFunction {
 impl ProgramFunction {
     pub fn new<T>(name: T, num_args: usize, num_locals: usize) -> Self
     where
-        T: Into<String>
+        T: Into<String>,
     {
         Self {
             name: name.into(),
@@ -51,7 +53,7 @@ impl ProgramFunction {
     /// Insert a label at the specified address into this function
     pub fn insert_label<T>(&mut self, label: T, address: Address)
     where
-        T: Into<String>
+        T: Into<String>,
     {
         self.labels.insert(label.into(), address);
     }

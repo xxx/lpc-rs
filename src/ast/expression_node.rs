@@ -12,6 +12,7 @@ use crate::{
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         float_node::FloatNode,
+        function_ptr_node::FunctionPtrNode,
         int_node::IntNode,
         mapping_node::MappingNode,
         range_node::RangeNode,
@@ -25,7 +26,6 @@ use crate::{
     BaseFloat, LpcInt, Result,
 };
 use std::collections::HashMap;
-use crate::ast::function_ptr_node::FunctionPtrNode;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

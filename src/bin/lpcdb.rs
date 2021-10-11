@@ -6,14 +6,13 @@ use lazy_format::lazy_format;
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{
-        asm_interpreter::{current_registers, AsmInterpreter},
+        asm_interpreter::{current_frame_mut, current_registers, AsmInterpreter},
         program::Program,
     },
     util::config::Config,
 };
 use rustyline::{error::ReadlineError, Editor};
 use std::rc::Rc;
-use lpc_rs::interpreter::asm_interpreter::current_frame_mut;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 
@@ -82,10 +81,12 @@ impl Repl {
                         "help" | "?" => {
                             println!("{}", HELP);
                         }
-                        "i" | "instruction" => match current_frame_mut(&mut self.vm.stack)?.instruction() {
-                            Some(x) => println!("{}", x),
-                            None => println!("There's no instruction at the current address."),
-                        },
+                        "i" | "instruction" => {
+                            match current_frame_mut(&mut self.vm.stack)?.instruction() {
+                                Some(x) => println!("{}", x),
+                                None => println!("There's no instruction at the current address."),
+                            }
+                        }
                         "pc" => {
                             println!("{}", current_frame_mut(&mut self.vm.stack)?.pc())
                         }
