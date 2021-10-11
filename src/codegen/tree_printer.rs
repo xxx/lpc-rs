@@ -208,6 +208,8 @@ impl TreeWalker for TreePrinter {
             for argument in args {
                 if let Some(n) = argument {
                     n.visit(self)?;
+                } else {
+                    self.println_indented("None");
                 }
             }
         } else {

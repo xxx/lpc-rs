@@ -1255,7 +1255,7 @@ impl AsmInterpreter {
                     let str = try_extract_value!(*b, LpcValue::String);
                     Ok(str.clone().into())
                 } else {
-                    Err(self.runtime_error(format!("Found function var that didn't resolve to a string?")))
+                    Err(self.runtime_error("Found function var that didn't resolve to a string?"))
                 }
             }
             FunctionName::Literal(s) => Ok(s.into())

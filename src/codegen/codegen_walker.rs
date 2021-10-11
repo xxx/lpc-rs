@@ -1189,10 +1189,7 @@ impl TreeWalker for CodegenWalker {
 
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
-
-        let init_name: String = INIT_PROGRAM.into();
-        let sym = ProgramFunction::new(init_name.clone(), 0, 0);
-        self.function_stack.push(sym);
+        self.setup_init();
 
         // Partition global variable initializations vs everything else
         let (global_init, functions): (Vec<&mut AstNode>, Vec<&mut AstNode>) = program

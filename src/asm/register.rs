@@ -18,15 +18,15 @@ impl Display for Register {
     }
 }
 
-impl Into<usize> for Register {
-    fn into(self) -> usize {
-        self.0
+impl From<Register> for usize {
+    fn from(f: Register) -> Self {
+        f.0
     }
 }
 
-impl Into<usize> for &Register {
-    fn into(self) -> usize {
-        self.0
+impl From<&Register> for usize {
+    fn from(f: &Register) -> Self {
+        f.0
     }
 }
 

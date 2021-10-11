@@ -191,10 +191,8 @@ pub trait TreeWalker {
         }
 
         if let Some(args) = &mut node.arguments {
-            for argument in args {
-                if let Some(n) = argument {
-                    n.visit(self)?;
-                }
+            for argument in args.into_iter().flatten() {
+                argument.visit(self)?;
             }
         }
 
