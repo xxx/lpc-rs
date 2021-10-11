@@ -1,12 +1,10 @@
 use crate::{
-    asm::instruction::Instruction,
     interpreter::{lpc_ref::LpcRef, program::Program},
-    parser::span::Span,
 };
 use delegate::delegate;
 use std::{
     borrow::Cow,
-    cell::{Cell, RefCell},
+    cell::{RefCell},
     fmt::{Display, Formatter},
     ops::Deref,
     path::Path,

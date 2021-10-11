@@ -15,12 +15,12 @@ use crate::{
     semantic::program_function::ProgramFunction,
     try_extract_value,
     util::config::Config,
-    value_to_ref, LpcInt, Result,
+    value_to_ref, Result,
 };
-use decorum::Total;
+
 use refpool::{Pool, PoolRef};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
-use crate::interpreter::function_type::{FunctionPtr, FunctionAddress, FunctionTarget, FunctionName, FunctionReceiver, LpcFunction};
+use crate::interpreter::function_type::{FunctionName};
 use std::borrow::Cow;
 use crate::codegen::codegen_walker::INIT_PROGRAM;
 
@@ -447,10 +447,10 @@ impl AsmInterpreter {
             }
             Instruction::CallFp {
                 location,
-                num_args,
-                initial_arg,
+                num_args: _,
+                initial_arg: _,
             } => {
-                let func_ref = &frame.registers[location.index()];
+                let _func_ref = &frame.registers[location.index()];
 
                 todo!();
 
@@ -1376,7 +1376,7 @@ impl AsmInterpreter {
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         let span = match self.current_frame() {
             Ok(frame) => frame.current_debug_span(),
-            Err(e) => None
+            Err(_e) => None
         };
         LpcError::new(format!("Runtime Error: {}", msg.as_ref()))
             .with_span(span)

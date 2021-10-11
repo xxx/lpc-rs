@@ -41,11 +41,10 @@ use crate::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES},
         program::Program,
     },
-    parser::span::Span,
     semantic::{program_function::ProgramFunction, lpc_type::LpcType, symbol::Symbol},
     Result,
 };
-use multimap::MultiMap;
+
 use std::{collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
 use crate::ast::function_ptr_node::FunctionPtrNode;
@@ -1609,7 +1608,6 @@ mod tests {
     use super::*;
     use crate::{
         apply_walker,
-        asm::instruction::Address,
         codegen::{
             default_params_walker::DefaultParamsWalker, semantic_check_walker::SemanticCheckWalker,
         },
@@ -3042,7 +3040,7 @@ mod tests {
 
     mod test_visit_program {
         use super::*;
-        use crate::asm::instruction::Instruction::MAdd;
+        
 
         #[test]
         fn populates_the_instructions() {

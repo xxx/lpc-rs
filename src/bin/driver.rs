@@ -3,9 +3,8 @@
 use lpc_rs::{
     compiler::Compiler,
     errors,
-    interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{asm_interpreter::AsmInterpreter},
     util::{config::Config, path_maker::LpcPath},
-    value_to_ref,
 };
 
 use std::rc::Rc;

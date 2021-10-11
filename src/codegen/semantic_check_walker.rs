@@ -1227,7 +1227,7 @@ mod tests {
         #[test]
         fn allows_bad_data_with_call_other() {
             let mut node = ExpressionNode::from(CallNode {
-                receiver: Some(Box::new((ExpressionNode::from(23)))),
+                receiver: Some(Box::new(ExpressionNode::from(23))),
                 arguments: vec![],
                 name: "dump".to_string(),
                 span: None,
