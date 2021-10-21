@@ -107,12 +107,10 @@ impl Compiler {
     pub fn compile_in_game_file<T>(
         &self,
         path: T,
-        // cwd: U,
         span: Option<Span>,
     ) -> Result<Program, CompilerError>
     where
         T: AsRef<Path> + Into<LpcPath>,
-        // U: AsRef<Path>,
     {
         let lpc_path = path.into();
         let absolute_file_path = lpc_path.as_server(self.config.lib_dir());
