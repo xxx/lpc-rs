@@ -1,9 +1,10 @@
-use crate::{errors::LpcError, interpreter::asm_interpreter::AsmInterpreter, Result};
+use crate::{errors::LpcError, Result};
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `throw`, intentionally throw an error. Can be caught by `catch`.
-pub fn throw(interpreter: &mut AsmInterpreter) -> Result<()> {
-    let arg = interpreter.register_to_lpc_ref(1);
+pub fn throw(context: &mut EfunContext) -> Result<()> {
+    let arg = context.resolve_lpc_ref(1_usize);
 
     return Err(LpcError::new(format!("{}", arg))
-        .with_span(interpreter.current_frame()?.current_debug_span()));
+        .with_span(context.frame().current_debug_span()));
 }

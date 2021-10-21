@@ -1,15 +1,16 @@
 use crate::{
     errors::LpcError,
-    interpreter::{asm_interpreter::AsmInterpreter, lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value, Result,
 };
 use std::collections::HashMap;
+use crate::interpreter::efun::efun_context::EfunContext;
 
 const MAX_RECURSION: usize = 20;
 
-fn recursion_too_deep(size: usize, interpreter: &AsmInterpreter) -> Result<()> {
+fn recursion_too_deep(size: usize, context: &EfunContext) -> Result<()> {
     if size > MAX_RECURSION {
-        return Err(interpreter.runtime_error("Too deep recursion."));
+        return Err(context.runtime_error("Too deep recursion."));
     }
 
     Ok(())
@@ -17,12 +18,12 @@ fn recursion_too_deep(size: usize, interpreter: &AsmInterpreter) -> Result<()> {
 
 fn format_ref(
     lpc_ref: &LpcRef,
-    interpreter: &mut AsmInterpreter,
+    context: &mut EfunContext,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
-    recursion_too_deep(recurse_level, interpreter)?;
-    interpreter.increment_instruction_count(1)?;
+    recursion_too_deep(recurse_level, context)?;
+    context.increment_instruction_count(1)?;
 
     match lpc_ref {
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
@@ -36,7 +37,7 @@ fn format_ref(
         LpcRef::Object(x) => Ok(format!(
             "{:width$}{}",
             "",
-            try_extract_value!(*x.borrow(), LpcValue::Object),
+            try_extract_value!(*x.borrow(), LpcValue::Object).borrow(),
             width = indent
         )),
         LpcRef::Function(x) => Ok(format!(
@@ -48,30 +49,30 @@ fn format_ref(
         LpcRef::Array(x) => {
             let xb = x.borrow();
             let arr = try_extract_value!(*xb, LpcValue::Array);
-            format_array(arr, interpreter, indent, recurse_level + 1)
+            format_array(arr, context, indent, recurse_level + 1)
         }
         LpcRef::Mapping(x) => {
             let xb = x.borrow();
             let map = try_extract_value!(*xb, LpcValue::Mapping);
-            format_mapping(map, interpreter, indent, recurse_level + 1)
+            format_mapping(map, context, indent, recurse_level + 1)
         }
     }
 }
 
 fn format_array(
     arr: &[LpcRef],
-    interpreter: &mut AsmInterpreter,
+    context: &mut EfunContext,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
-    recursion_too_deep(recurse_level, interpreter)?;
-    interpreter.increment_instruction_count(arr.len())?;
+    recursion_too_deep(recurse_level, context)?;
+    context.increment_instruction_count(arr.len())?;
 
     let mut result = format!("{:width$}({{\n", "", width = indent);
 
     let inner = arr
         .iter()
-        .map(|var| format_ref(var, interpreter, indent + 2, recurse_level + 1))
+        .map(|var| format_ref(var, context, indent + 2, recurse_level + 1))
         .collect::<Result<Vec<_>>>();
 
     let inner = match inner {
@@ -89,20 +90,20 @@ fn format_array(
 
 fn format_mapping(
     map: &HashMap<LpcRef, LpcRef>,
-    interpreter: &mut AsmInterpreter,
+    context: &mut EfunContext,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
-    recursion_too_deep(recurse_level, interpreter)?;
-    interpreter.increment_instruction_count(map.len())?;
+    recursion_too_deep(recurse_level, context)?;
+    context.increment_instruction_count(map.len())?;
 
     let mut result = format!("{:width$}([\n", "", width = indent);
 
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_format = format_ref(key, interpreter, 0, recurse_level + 1)?;
-            let v_format = format_ref(val, interpreter, 2, recurse_level + 1)?;
+            let k_format = format_ref(key, context, 0, recurse_level + 1)?;
+            let v_format = format_ref(val, context, 2, recurse_level + 1)?;
 
             Ok(format!(
                 "{:width$}{k}: {v}",
@@ -128,11 +129,11 @@ fn format_mapping(
 }
 
 /// The dump() Efun
-pub fn dump(interpreter: &mut AsmInterpreter) -> Result<()> {
+pub fn dump(context: &mut EfunContext) -> Result<()> {
     // function arguments start in register 1, and we know this function has only 1 arg.
-    let lpc_ref = interpreter.register_to_lpc_ref(1);
+    let lpc_ref = context.resolve_lpc_ref(1_usize);
 
-    println!("{}", format_ref(&lpc_ref, interpreter, 0, 0)?);
+    println!("{}", format_ref(&lpc_ref, context, 0, 0)?);
 
     Ok(())
 }

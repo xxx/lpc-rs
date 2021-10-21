@@ -8,6 +8,7 @@ edition = "2018"
 lalrpop = "0.19.4"
 
 [dependencies]
+arrayvec = "0.7.1"
 auto_impl = "0.4.1"
 cached = "0.24.0"
 codespan-reporting = "0.11.0"

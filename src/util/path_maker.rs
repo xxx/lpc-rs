@@ -8,7 +8,7 @@ use std::{
 
 #[derive(Debug)]
 pub enum LpcPath {
-    /// Represent an on-server path. Relative paths a relative to the running process' dir.
+    /// Represent an on-server path. Relative paths are relative to the running process' dir.
     Server(PathBuf),
 
     /// Represent an in-game path. Relative paths are relative to `lib_dir`.

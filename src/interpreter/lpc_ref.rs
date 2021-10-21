@@ -439,6 +439,12 @@ impl Shr for &LpcRef {
     }
 }
 
+impl Default for LpcRef {
+    fn default() -> Self {
+        LpcRef::Int(0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

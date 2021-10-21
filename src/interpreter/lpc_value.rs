@@ -5,6 +5,7 @@ use crate::{
 use itertools::Itertools;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
+use std::cell::RefCell;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -15,7 +16,7 @@ pub enum LpcValue {
     String(String),
     Array(Vec<LpcRef>),
     Mapping(HashMap<LpcRef, LpcRef>),
-    Object(Rc<Process>),
+    Object(Rc<RefCell<Process>>),
     Function(LpcFunction),
 }
 
@@ -114,8 +115,8 @@ impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
     }
 }
 
-impl From<Rc<Process>> for LpcValue {
-    fn from(o: Rc<Process>) -> Self {
+impl From<Rc<RefCell<Process>>> for LpcValue {
+    fn from(o: Rc<RefCell<Process>>) -> Self {
         Self::Object(o)
     }
 }

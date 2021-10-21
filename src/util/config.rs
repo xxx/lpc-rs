@@ -6,6 +6,7 @@ use toml::{value::Index, Value};
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
+// TODO: Get rid of this, as the max call stack size is now a compile-time constant
 const MAX_CALL_STACK_SIZE: &[&str] = &["lpc-rs", "max_call_stack_size"];
 const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];

@@ -8,6 +8,7 @@ use crate::{
 
 use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
 use std::{path::Path, rc::Rc};
+use crate::util::path_maker::{canonicalize_server_path, LpcPath};
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -41,7 +42,7 @@ impl Context {
     ///
     /// # Arguments
     ///
-    /// `filename` - The path to the file (from `root_dir`) this context will be collected for.
+    /// `filename` - The path to the file (relative to config's `root_dir`) this context will be collected for.
     /// `config` - The [`Config`] from `config.toml` or the command line
     ///
     /// # Examples
@@ -57,7 +58,8 @@ impl Context {
         T: AsRef<Path>,
     {
         Self {
-            filename: filename.as_ref().to_string_lossy().into_owned(),
+            // filename: filename.as_ref().to_string_lossy().into_owned(),
+            filename: canonicalize_server_path(filename, ".", config.lib_dir()).to_string_lossy().to_string(),
             config,
             ..Self::default()
         }

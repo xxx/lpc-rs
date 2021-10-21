@@ -16,14 +16,13 @@ use crate::{
     try_extract_value,
     util::config::Config,
     value_to_ref, Result,
+    try_push_frame
 };
 
 use crate::{codegen::codegen_walker::INIT_PROGRAM, interpreter::function_type::FunctionName};
 use refpool::{Pool, PoolRef};
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, path::PathBuf, rc::Rc};
-
-/// The initial size (in objects) of the object space
-const OBJECT_SPACE_SIZE: usize = 100_000;
+use crate::interpreter::object_space::ObjectSpace;
 
 /// The initial size (in frames) of the call stack
 const STACK_SIZE: usize = 2_000;
@@ -70,13 +69,10 @@ pub struct AsmInterpreter {
     pub process: Rc<Process>,
 
     /// Our object space
-    pub processes: HashMap<String, Rc<Process>>,
+    pub processes: ObjectSpace,
 
     /// The call stack
     pub stack: Vec<StackFrame>,
-
-    /// How many clones have been created so far?
-    pub clone_count: usize,
 
     /// Our memory
     pub memory: Pool<RefCell<LpcValue>>,
@@ -140,20 +136,20 @@ pub fn current_frame_mut(stack: &mut Vec<StackFrame>) -> Result<&mut StackFrame>
 }
 
 /// A macro for pushing new frames while evaluating [`Instruction`]s.
-macro_rules! try_push_frame {
-    ( $frame:expr, $interpreter:expr ) => {
-        // let max_stack = $interpreter.config.max_call_stack_size().unwrap_or(0);
-        //
-        // if max_stack > 0 && $interpreter.stack.len() >= max_stack {
-        //     return Err($interpreter.runtime_error("Stack overflow"));
-        // }
-
-        $interpreter.stack.push($frame);
-
-        // Do not replace the process here, because the borrow checker already knows we have a
-        // reference to the current instruction.
-    };
-}
+// macro_rules! try_push_frame {
+//     ( $frame:expr, $interpreter:expr ) => {
+//         // let max_stack = $interpreter.config.max_call_stack_size().unwrap_or(0);
+//         //
+//         // if max_stack > 0 && $interpreter.stack.len() >= max_stack {
+//         //     return Err($interpreter.runtime_error("Stack overflow"));
+//         // }
+//
+//         $interpreter.stack.push($frame);
+//
+//         // Do not replace the process here, because the borrow checker already knows we have a
+//         // reference to the current instruction.
+//     };
+// }
 
 impl AsmInterpreter {
     /// Create a new [`AsmInterpreter`] with the passed [`Config`]
@@ -171,8 +167,8 @@ impl AsmInterpreter {
     ///
     /// * `program` - The Program to load
     pub fn load_master(&mut self, program: Program) -> Rc<Process> {
-        let r = self.insert_master(program);
-        self.process = r.clone();
+        let r = self.processes.insert_master(program);
+        // self.process = r.clone();
         r
     }
 
@@ -184,43 +180,43 @@ impl AsmInterpreter {
     /// * `program` - The Program to load. Assumed to already be wrapped in an [`Rc`]
     ///   from cloning from an existing process.
     pub fn load_clone(&mut self, program: Rc<Program>) -> Rc<Process> {
-        let r = self.insert_clone(program);
+        let r = self.processes.insert_clone(program);
         self.process = r.clone();
         r
     }
 
-    /// Create a [`Process`] from a [`Program`], and add add it to the process table.
-    /// If a new program with the same filename as an existing one is added,
-    /// the new will overwrite the old in the table.
-    /// Storage keys are the in-game filename
-    pub fn insert_master(&mut self, program: Program) -> Rc<Process> {
-        let process = Rc::new(Process::new(program));
-        self.insert_process(process.clone());
-        process
-    }
-
-    pub fn insert_clone(&mut self, program: Rc<Program>) -> Rc<Process> {
-        let cnt = self.clone_count;
-        self.clone_count += 1;
-        let process = Rc::new(Process::new_clone(program, cnt));
-        self.insert_process(process.clone());
-        process
-    }
-
-    pub fn insert_process(&mut self, process: Rc<Process>) {
-        let name = process.localized_filename(self.config.lib_dir());
-
-        self.processes.insert(name, process);
-    }
+    // /// Create a [`Process`] from a [`Program`], and add add it to the process table.
+    // /// If a new program with the same filename as an existing one is added,
+    // /// the new will overwrite the old in the table.
+    // /// Storage keys are the in-game filename
+    // pub fn insert_master(&mut self, program: Program) -> Rc<Process> {
+    //     let process = Rc::new(Process::new(program));
+    //     self.insert_process(process.clone());
+    //     process
+    // }
+    //
+    // pub fn insert_clone(&mut self, program: Rc<Program>) -> Rc<Process> {
+    //     let cnt = self.clone_count;
+    //     self.clone_count += 1;
+    //     let process = Rc::new(Process::new_clone(program, cnt));
+    //     self.insert_process(process.clone());
+    //     process
+    // }
+    //
+    // pub fn insert_process(&mut self, process: Rc<Process>) {
+    //     let name = process.localized_filename(self.config.lib_dir());
+    //
+    //     self.processes.insert(name, process);
+    // }
 
     /// Set up the stack frame for initializing the global vars, and calling `create`.
     /// No code is executed by this function - it merely sets up the stack frame.
     pub fn setup_program_globals_frame(&mut self) -> Result<()> {
         let process = self.process.clone();
         let sym = process.functions.get(INIT_PROGRAM).unwrap();
-        let create = StackFrame::new(self.process.clone(), sym.clone());
-
-        self.push_frame(create)?;
+        // let create = StackFrame::new(self.process.clone(), sym.clone());
+        //
+        // self.push_frame(create)?;
 
         Ok(())
     }
@@ -259,25 +255,25 @@ impl AsmInterpreter {
         result
     }
 
-    pub fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
-    where
-        T: AsRef<str>,
-    {
-        let s = path.as_ref();
-
-        match self.processes.get(s) {
-            Some(proc) => Ok(proc),
-            None => {
-                if !s.ends_with(".c") {
-                    let mut owned = s.to_string();
-                    owned.push_str(".c");
-                    return self.lookup_process(owned);
-                }
-
-                Err(self.runtime_error(format!("Unable to find object `{}`", path.as_ref())))
-            }
-        }
-    }
+    // pub fn lookup_process<T>(&self, path: T) -> Result<&Rc<Process>>
+    // where
+    //     T: AsRef<str>,
+    // {
+    //     let s = path.as_ref();
+    //
+    //     match self.processes.get(s) {
+    //         Some(proc) => Ok(proc),
+    //         None => {
+    //             if !s.ends_with(".c") {
+    //                 let mut owned = s.to_string();
+    //                 owned.push_str(".c");
+    //                 return self.lookup_process(owned);
+    //             }
+    //
+    //             Err(self.runtime_error(format!("Unable to find object `{}`", path.as_ref())))
+    //         }
+    //     }
+    // }
 
     pub fn increment_instruction_count(&mut self, amount: usize) -> Result<()> {
         self.instruction_count += amount;
@@ -292,8 +288,8 @@ impl AsmInterpreter {
 
     /// Push a new stack frame onto the call stack
     pub fn push_frame(&mut self, frame: StackFrame) -> Result<()> {
-        try_push_frame!(frame, self);
-        self.process = self.stack.last().unwrap().process.clone();
+        // try_push_frame!(frame, self);
+        // self.process = self.stack.last().unwrap().process.clone();
 
         Ok(())
     }
@@ -303,9 +299,9 @@ impl AsmInterpreter {
         let previous_frame = self.stack.pop();
         // println!("popped frame: {:?}", previous_frame);
 
-        if !self.stack.is_empty() {
-            self.process = self.stack.last().unwrap().process.clone();
-        }
+        // if !self.stack.is_empty() {
+        //     self.process = self.stack.last().unwrap().process.clone();
+        // }
 
         previous_frame
     }
@@ -382,786 +378,786 @@ impl AsmInterpreter {
 
         // println!("evaling ({}) {}", self.process.filename, instruction);
 
-        match instruction {
-            Instruction::AConst(r, vec) => {
-                // let registers = current_registers_mut(&mut frame)?;
-                // let registers = &mut frame.registers;
-                let vars = vec
-                    .iter()
-                    .map(|i| registers[i.index()].clone())
-                    .collect::<Vec<_>>();
-                let new_ref = value_to_ref!(LpcValue::from(vars), &self.memory);
-
-                registers[r.index()] = new_ref;
-            }
-            Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x & y)?;
-            }
-            Instruction::Call {
-                name,
-                num_args,
-                initial_arg,
-            } => {
-                let mut new_frame = if let Some(func) = self.process.functions.get(&name) {
-                    StackFrame::new(self.process.clone(), func.clone())
-                } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = ProgramFunction::new(name.clone(), prototype.num_args, 0);
-
-                    StackFrame::new(self.process.clone(), Rc::new(sym))
-                } else {
-                    println!("proc {:#?}", self.process);
-                    println!("functions {:#?}", self.process.functions);
-                    let msg = format!("Call to unknown function `{}`", name);
-                    return Err(self.runtime_error(msg));
-                };
-
-                // copy argument registers from old frame to new
-                if num_args > 0_usize {
-                    let index = initial_arg.index();
-                    // let current_frame = self.stack.last().unwrap();
-                    new_frame.registers[1..=num_args]
-                        .clone_from_slice(&registers[index..(index + num_args)]);
-                }
-
-                // println!("pushing frame in Call: {:?}", new_frame);
-                try_push_frame!(new_frame, self);
-
-                // if let Some(x) = self.process.functions.get(name) {
-                //     frame.set_pc(x.address);
-                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
-                if let Some(efun) = EFUNS.get(name.as_str()) {
-                    // TODO this is almost certain broken for efun overrides
-                    // the efun is responsible for populating the return value in its own frame
-                    efun(self)?;
-
-                    if let Some(frame) = self.pop_frame() {
-                        self.copy_call_result(&frame)?;
-                        self.popped_frame = Some(frame);
-                    }
-                } else if !self.process.functions.contains_key(&name) {
-                    return Err(self.runtime_error(format!(
-                        "Call to unknown function (that had a valid prototype?) `{}`",
-                        name
-                    )));
-                }
-            }
-            Instruction::CallFp {
-                location,
-                num_args: _,
-                initial_arg: _,
-            } => {
-                let _func_ref = &frame.registers[location.index()];
-
-                todo!();
-
-                // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-                //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
-                // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                //     let sym = FunctionSymbol {
-                //         name: name.clone(),
-                //         num_args: prototype.num_args,
-                //         num_locals: 0,
-                //         address: 0,
-                //     };
-                //
-                //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
-                // } else {
-                //     println!("proc {:#?}", self.process);
-                //     println!("functions {:#?}", self.process.functions);
-                //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
-                // };
-                //
-                // // copy argument registers from old frame to new
-                // if *num_args > 0_usize {
-                //     let index = initial_arg.index();
-                //     let current_frame = self.stack.last().unwrap();
-                //     new_frame.registers[1..=*num_args]
-                //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
-                // }
-                //
-                // // println!("pushing frame in Call: {:?}", new_frame);
-                // try_push_frame!(new_frame, self);
-                //
-                // if let Some(x) = self.process.functions.get(name) {
-                //     self.process.set_pc(x.address);
-                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
-                //     // the efun is responsible for populating the return value in its own frame
-                //     efun(self)?;
-                //
-                //     if let Some(frame) = self.pop_frame() {
-                //         self.copy_call_result(&frame)?;
-                //         self.popped_frame = Some(frame);
-                //     }
-                // } else {
-                //     return Err(self.runtime_error(format!(
-                //         "Call to unknown function (that had a valid prototype?) `{}`",
-                //         name
-                //     )));
-                // }
-            }
-            // Instruction::CallOther {
-            //     receiver,
-            //     name,
-            //     num_args,
-            //     initial_arg,
-            // } => {
-            //     // get receiver process and make it the current one
-            //     let receiver_ref = &frame.registers[receiver.index()];
-            //
-            //     // Figure out which function we're calling
-            //     let name_ref = &frame.registers[name.index()];
-            //     let pool_ref = if let LpcRef::String(r) = name_ref {
-            //         r
-            //     } else {
-            //         let str = format!(
-            //             "Invalid name passed to `call_other`: {}",
-            //             name_ref
-            //         );
-            //         return Err(self.runtime_error(str));
-            //     };
-            //     let borrowed = pool_ref.borrow();
-            //     let function_name = try_extract_value!(*borrowed, LpcValue::String);
-            //
-            //     let initial_index = initial_arg.index();
-            //     // let return_address = self.process.pc();
-            //
-            //     fn resolve_result(interpreter: &mut AsmInterpreter, receiver_ref: &LpcRef, function_name: &str, registers: &Vec<LpcRef>) -> Result<LpcRef> {
-            //         let resolved =
-            //             interpreter.resolve_call_other_receiver(receiver_ref, function_name);
-            //
-            //         if let Some(pr) = resolved {
-            //             let value = LpcValue::from(pr);
-            //             let result = match value {
-            //                 LpcValue::Object(receiver) => {
-            //                     let args = registers
-            //                         [initial_index..(initial_index + num_args)]
-            //                         .to_vec();
-            //                     let closure = |inner: &mut AsmInterpreter| {
-            //                         inner.call_other(receiver, function_name, args)
-            //                     };
-            //
-            //                     interpreter.with_clean_stack(closure)?
-            //                 }
-            //                 _ => LpcRef::Int(0),
-            //             };
-            //             Ok(result)
-            //         } else {
-            //             Err(interpreter.runtime_error("Unable to find the receiver."))
-            //         }
-            //     }
-            //     // let resolve_result = |receiver_ref, interpreter: &mut AsmInterpreter| {
-            //     //     let resolved =
-            //     //         interpreter.resolve_call_other_receiver(receiver_ref, function_name);
-            //     //
-            //     //     if let Some(pr) = resolved {
-            //     //         let value = LpcValue::from(pr);
-            //     //         let result = match value {
-            //     //             LpcValue::Object(receiver) => {
-            //     //                 let args = registers
-            //     //                     [initial_index..(initial_index + num_args)]
-            //     //                     .to_vec();
-            //     //                 let closure = |inner: &mut AsmInterpreter| {
-            //     //                     inner.call_other(receiver, function_name, args)
-            //     //                 };
-            //     //
-            //     //                 interpreter.with_clean_stack(closure)?
-            //     //             }
-            //     //             _ => LpcRef::Int(0),
-            //     //         };
-            //     //         Ok(result)
-            //     //     } else {
-            //     //         Err(interpreter.runtime_error("Unable to find the receiver."))
-            //     //     }
-            //     // };
-            //
-            //     let result_ref = match &receiver_ref {
-            //         LpcRef::String(_) | LpcRef::Object(_) => resolve_result(self, &receiver_ref, function_name, registers)?,
-            //         LpcRef::Array(r) => {
-            //             let b = r.borrow();
-            //             let array = try_extract_value!(*b, LpcValue::Array);
-            //
-            //             let array_value: LpcValue = array
-            //                 .iter()
-            //                 .map(|lpc_ref| resolve_result(self, lpc_ref, function_name, registers).unwrap_or(LpcRef::Int(0)))
-            //                 .collect::<Vec<_>>()
-            //                 .into();
-            //             value_to_ref!(array_value, &self.memory)
-            //         }
-            //         LpcRef::Mapping(m) => {
-            //             let b = m.borrow();
-            //             let hashmap = try_extract_value!(*b, LpcValue::Mapping);
-            //
-            //             let with_results: LpcValue = hashmap
-            //                 .iter()
-            //                 .map(|(key_ref, value_ref)| {
-            //                     (
-            //                         key_ref.clone(),
-            //                         resolve_result(self, value_ref, function_name, registers).unwrap_or(LpcRef::Int(0)),
-            //                     )
-            //                 })
-            //                 .collect::<HashMap<_, _>>()
-            //                 .into();
-            //
-            //             value_to_ref!(with_results, &self.memory)
-            //         }
-            //         _ => {
-            //             return Err(self.runtime_error(format!(
-            //                 "What are you trying to call `{}` on?",
-            //                 function_name
-            //             )))
-            //         }
-            //     };
-            //
-            //     self.return_efun_result(result_ref)
-            // }
-            //     Instruction::CatchEnd => {
-            //         self.catch_points.pop();
-            //     }
-            //     Instruction::CatchStart(r, label) => {
-            //         let address = match self.current_frame()?.lookup_label(label) {
-            //             Some(x) => *x,
-            //             None => {
-            //                 return Err(
-            //                     self.runtime_error(format!("Missing address for label `{}`", label))
-            //                 )
-            //             }
-            //         };
-            //
-            //         let catch_point = CatchPoint {
-            //             frame_index: self.stack.len() - 1,
-            //             register: *r,
-            //             address,
-            //         };
-            //
-            //         self.catch_points.push(catch_point);
-            //     }
-            //     Instruction::EqEq(r1, r2, r3) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         let out = if registers[r1.index()] == registers[r2.index()] {
-            //             1
-            //         } else {
-            //             0
-            //         };
-            //
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r3.index()] = LpcRef::Int(out);
-            //     }
-            //     Instruction::FConst(r, f) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r.index()] = LpcRef::Float(*f);
-            //     }
-            //     Instruction::FunctionPtrConst { location, target, applied_arguments } => {
-            //         let address = match target {
-            //             FunctionTarget::Efun(func_name) => {
-            //                 FunctionAddress::Efun(self.resolve_function_name(func_name)?.into_owned())
-            //             }
-            //             FunctionTarget::Local(func_name) => {
-            //                 let s = self.resolve_function_name(func_name)?;
-            //                 let sym = self.process.lookup_function(s);
-            //                 if sym.is_none() {
-            //                     return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
-            //                 }
-            //
-            //                 FunctionAddress::Local(sym.unwrap().clone())
-            //             }
-            //             FunctionTarget::CallOther(func_name, func_receiver) => {
-            //                 let proc = match func_receiver {
-            //                     FunctionReceiver::Value(receiver_reg) => {
-            //                         // let receiver_ref = self.register_to_lpc_ref(receiver_reg.index());
-            //                         let receiver_ref = &frame.registers[receiver_reg.index()];
-            //                         match receiver_ref {
-            //                             LpcRef::Object(x) => {
-            //                                 let b = x.borrow();
-            //                                 let process = try_extract_value!(*b, LpcValue::Object);
-            //                                 process.clone()
-            //                             }
-            //                             LpcRef::String(_) => todo!(),
-            //                             LpcRef::Array(_)
-            //                             | LpcRef::Mapping(_)
-            //                             | LpcRef::Float(_)
-            //                             | LpcRef::Int(_)
-            //                             | LpcRef::Function(_) => {
-            //                                 return Err(self.runtime_error("Receiver was not object or string"));
-            //                             }
-            //                         }
-            //                     }
-            //                     FunctionReceiver::Argument => todo!(),
-            //                     FunctionReceiver::None => {
-            //                         return Err(self.runtime_error("A None receiver for a CallOther target? Should be unreachable."));
-            //                     }
-            //                 };
-            //                 let s = self.resolve_function_name(func_name)?;
-            //                 let sym = self.process.lookup_function(s);
-            //                 if sym.is_none() {
-            //                     return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
-            //                 }
-            //
-            //                 FunctionAddress::Remote(proc, sym.unwrap().clone())
-            //             }
-            //         };
-            //
-            //         let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
-            //             match arg {
-            //                 Some(register) => {
-            //                     Some(frame.resolve_lpc_ref(register))
-            //                 }
-            //                 None => None,
-            //             }
-            //         }).collect();
-            //
-            //         let fp = FunctionPtr {
-            //             owner: Rc::new(Default::default()),
-            //             address,
-            //             args
-            //         };
-            //
-            //         let func = LpcFunction::FunctionPtr(fp);
-            //
-            //         let new_ref = value_to_ref!(LpcValue::from(func), &self.memory);
-            //
-            //         let registers = current_registers_mut(&mut frame)?;
-            //
-            //         registers[location.index()] = new_ref;
-            //     }
-            //     Instruction::GLoad(r1, r2) => {
-            //         // load from global r1, into local r2
-            //         let global = self.process.globals[r1.index()].borrow().clone();
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r2.index()] = global
-            //     }
-            //     Instruction::GStore(r1, r2) => {
-            //         // store local r1 into global r2
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         self.process.globals[r2.index()].replace(registers[r1.index()].clone());
-            //     }
-            //     Instruction::Gt(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_boolean_operation(n1, n2, n3, |x, y| x > y)?;
-            //     }
-            //     Instruction::Gte(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_boolean_operation(n1, n2, n3, |x, y| x >= y)?;
-            //     }
-            //     Instruction::IAdd(r1, r2, r3) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         match &registers[r1.index()] + &registers[r2.index()] {
-            //             Ok(result) => {
-            //                 let out = value_to_ref!(result, self.memory);
-            //
-            //                 registers[r3.index()] = out
-            //             }
-            //             Err(e) => {
-            //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
-            //             }
-            //         }
-            //     }
-            //     Instruction::IConst(r, i) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r.index()] = LpcRef::Int(*i);
-            //     }
-            //     Instruction::IConst0(r) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r.index()] = LpcRef::Int(0);
-            //     }
-            //     Instruction::IConst1(r) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r.index()] = LpcRef::Int(1);
-            //     }
-            //     Instruction::IDiv(r1, r2, r3) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         match &registers[r1.index()] / &registers[r2.index()] {
-            //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-            //             Err(e) => {
-            //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
-            //             }
-            //         }
-            //     }
-            //     Instruction::IMod(r1, r2, r3) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         match &registers[r1.index()] % &registers[r2.index()] {
-            //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-            //             Err(e) => {
-            //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
-            //             }
-            //         }
-            //     }
-            //     Instruction::IMul(r1, r2, r3) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         match &registers[r1.index()] * &registers[r2.index()] {
-            //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-            //             Err(e) => {
-            //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
-            //             }
-            //         }
-            //     }
-            //     Instruction::ISub(r1, r2, r3) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         match &registers[r1.index()] - &registers[r2.index()] {
-            //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
-            //             Err(e) => {
-            //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
-            //             }
-            //         }
-            //     }
-            //     Instruction::Jmp(label) => {
-            //         let address = self.lookup_address(label)?;
-            //         self.current_frame()?.set_pc(address);
-            //     }
-            //     Instruction::Jnz(r1, label) => {
-            //         let v = &current_registers_mut(&mut frame)?[r1.index()];
-            //
-            //         if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
-            //             let address = self.lookup_address(label)?;
-            //             self.current_frame()?.set_pc(address);
-            //         }
-            //     }
-            //     Instruction::Jz(r1, label) => {
-            //         let v = &current_registers_mut(&mut frame)?[r1.index()];
-            //
-            //         if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-            //             let address = self.lookup_address(label)?;
-            //             self.current_frame()?.set_pc(address);
-            //         }
-            //     }
-            //     Instruction::Load(r1, r2, r3) => {
-            //         let container_ref = frame.resolve_lpc_ref(r1);
-            //
-            //         match container_ref {
-            //             LpcRef::Array(vec_ref) => {
-            //                 let value = vec_ref.borrow();
-            //                 let vec = try_extract_value!(*value, LpcValue::Array);
-            //
-            //                 let index = frame.resolve_lpc_ref(r2);
-            //                 let registers = current_registers_mut(&mut frame)?;
-            //
-            //                 if let LpcRef::Int(i) = index {
-            //                     let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
-            //
-            //                     if idx >= 0 {
-            //                         if let Some(v) = vec.get(idx as usize) {
-            //                             registers[r3.index()] = v.clone();
-            //                         } else {
-            //                             return Err(self.array_index_error(idx, vec.len()));
-            //                         }
-            //                     } else {
-            //                         return Err(self.array_index_error(idx, vec.len()));
-            //                     }
-            //                 } else {
-            //                     return Err(self.array_index_error(index, vec.len()));
-            //                 }
-            //             }
-            //             LpcRef::String(string_ref) => {
-            //                 let value = string_ref.borrow();
-            //                 let string = try_extract_value!(*value, LpcValue::String);
-            //
-            //                 let index = frame.resolve_lpc_ref(r2);
-            //                 let registers = current_registers_mut(&mut frame)?;
-            //
-            //                 if let LpcRef::Int(i) = index {
-            //                     let idx = if i >= 0 {
-            //                         i
-            //                     } else {
-            //                         string.len() as LpcInt + i
-            //                     };
-            //
-            //                     if idx >= 0 {
-            //                         if let Some(v) = string.chars().nth(idx as usize) {
-            //                             registers[r3.index()] = LpcRef::Int(v as i64);
-            //                         } else {
-            //                             registers[r3.index()] = LpcRef::Int(0);
-            //                         }
-            //                     } else {
-            //                         registers[r3.index()] = LpcRef::Int(0);
-            //                     }
-            //                 } else {
-            //                     return Err(self.runtime_error(format!(
-            //                         "Attempting to access index {} in a string of length {}",
-            //                         index,
-            //                         string.len()
-            //                     )));
-            //                 }
-            //             }
-            //             LpcRef::Mapping(map_ref) => {
-            //                 let index = frame.resolve_lpc_ref(r2);
-            //                 let value = map_ref.borrow();
-            //                 let map = try_extract_value!(*value, LpcValue::Mapping);
-            //
-            //                 let var = if let Some(v) = map.get(&index) {
-            //                     v.clone()
-            //                 } else {
-            //                     LpcRef::Int(0)
-            //                 };
-            //
-            //                 let registers = current_registers_mut(&mut frame)?;
-            //                 registers[r3.index()] = var;
-            //             }
-            //             x => {
-            //                 return Err(
-            //                     self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
-            //                 );
-            //             }
-            //         }
-            //     }
-            //     Instruction::Lt(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_boolean_operation(n1, n2, n3, |x, y| x < y)?;
-            //     }
-            //     Instruction::Lte(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_boolean_operation(n1, n2, n3, |x, y| x <= y)?;
-            //     }
-            //     Instruction::MapConst(r, map) => {
-            //         let mut register_map = HashMap::new();
-            //         for (key, value) in map {
-            //             let registers = current_registers_mut(&mut frame)?;
-            //             let r = registers[key.index()].clone();
-            //
-            //             register_map.insert(r, registers[value.index()].clone());
-            //         }
-            //
-            //         let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
-            //         let registers = current_registers_mut(&mut frame)?;
-            //
-            //         registers[r.index()] = new_ref;
-            //     }
-            //     Instruction::MAdd(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x + y)?;
-            //     }
-            //     Instruction::MMul(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x * y)?;
-            //     }
-            //     Instruction::MSub(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x - y)?;
-            //     }
-            //     Instruction::Not(r1, r2) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r2.index()] = if matches!(registers[r1.index()], LpcRef::Int(0)) {
-            //             LpcRef::Int(1)
-            //         } else {
-            //             LpcRef::Int(0)
-            //         };
-            //     }
-            //     Instruction::Or(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x | y)?;
-            //     }
-            //     Instruction::Range(r1, r2, r3, r4) => {
-            //         // r4 = r1[r2..r3]
-            //
-            //         let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
-            //             let to_idx = |i: LpcInt| {
-            //                 // We handle the potential overflow just below.
-            //                 if i >= 0 {
-            //                     i as usize
-            //                 } else {
-            //                     (len as LpcInt + i) as usize
-            //                 }
-            //             };
-            //             let real_start = to_idx(start);
-            //             let mut real_end = to_idx(end);
-            //
-            //             if real_end >= len {
-            //                 real_end = len - 1;
-            //             }
-            //
-            //             (real_start, real_end)
-            //         };
-            //
-            //         let return_value = |value,
-            //                             memory: &mut Pool<RefCell<LpcValue>>,
-            //                             stack: &mut Vec<StackFrame>|
-            //          -> Result<()> {
-            //             let new_ref = value_to_ref!(value, memory);
-            //             let registers = &mut frame.registers;
-            //             registers[r4.index()] = new_ref;
-            //
-            //             Ok(())
-            //         };
-            //
-            //         let lpc_ref = frame.resolve_lpc_ref(r1);
-            //
-            //         match lpc_ref {
-            //             LpcRef::Array(v_ref) => {
-            //                 let value = v_ref.borrow();
-            //                 let vec = try_extract_value!(*value, LpcValue::Array);
-            //
-            //                 if vec.is_empty() {
-            //                     return_value(
-            //                         LpcValue::from(vec![]),
-            //                         &mut self.memory,
-            //                         &mut self.stack,
-            //                     )?;
-            //                 }
-            //
-            //                 let index1 = frame.resolve_lpc_ref(r2);
-            //                 let index2 = frame.resolve_lpc_ref(r3);
-            //
-            //                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
-            //                     let (real_start, real_end) = resolve_range(start, end, vec.len());
-            //
-            //                     if real_start <= real_end {
-            //                         let slice = &vec[real_start..=real_end];
-            //                         let mut new_vec = vec![LpcRef::Int(0); slice.len()];
-            //                         new_vec.clone_from_slice(slice);
-            //                         return_value(
-            //                             LpcValue::from(new_vec),
-            //                             &mut self.memory,
-            //                             &mut self.stack,
-            //                         )?;
-            //                     } else {
-            //                         return_value(
-            //                             LpcValue::from(vec![]),
-            //                             &mut self.memory,
-            //                             &mut self.stack,
-            //                         )?;
-            //                     }
-            //                 } else {
-            //                     return Err(LpcError::new(
-            //                         "Invalid code was generated for a Range instruction.",
-            //                     )
-            //                     .with_span(self.current_frame()?.current_debug_span()));
-            //                 }
-            //             }
-            //             LpcRef::String(v_ref) => {
-            //                 let value = v_ref.borrow();
-            //                 let string = try_extract_value!(*value, LpcValue::String);
-            //
-            //                 if string.is_empty() {
-            //                     return_value(LpcValue::from(""), &mut self.memory, &mut self.stack)?;
-            //                 }
-            //
-            //                 let index1 = frame.resolve_lpc_ref(r2);
-            //                 let index2 = frame.resolve_lpc_ref(r3);
-            //
-            //                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
-            //                     let (real_start, real_end) = resolve_range(start, end, string.len());
-            //
-            //                     if real_start <= real_end {
-            //                         let len = real_end - real_start + 1;
-            //                         let new_string: String =
-            //                             string.chars().skip(real_start).take(len).collect();
-            //                         return_value(
-            //                             LpcValue::from(new_string),
-            //                             &mut self.memory,
-            //                             &mut self.stack,
-            //                         )?;
-            //                     } else {
-            //                         return_value(
-            //                             LpcValue::from(""),
-            //                             &mut self.memory,
-            //                             &mut self.stack,
-            //                         )?;
-            //                     }
-            //                 } else {
-            //                     return Err(LpcError::new(
-            //                         "Invalid code was generated for a Range instruction.",
-            //                     )
-            //                     .with_span(self.current_frame()?.current_debug_span()));
-            //                 }
-            //             }
-            //             LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
-            //                 return Err(LpcError::new(
-            //                     "Range's receiver isn't actually an array or string?",
-            //                 )
-            //                 .with_span(self.current_frame()?.current_debug_span()));
-            //             }
-            //         }
-            //     }
-            //     Instruction::RegCopy(r1, r2) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         registers[r2.index()] = registers[r1.index()].clone()
-            //     }
-            //     Instruction::Ret => {
-            //         if let Some(frame) = self.pop_frame() {
-            //             self.copy_call_result(&frame)?;
-            //
-            //             // if !self.stack.is_empty()
-            //             //     && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process)
-            //             // {
-            //             //     self.current_frame()?.set_pc(frame.return_address);
-            //             // }
-            //
-            //             self.popped_frame = Some(frame);
-            //         }
-            //
-            //         // halt at the end of all input
-            //         if self.stack.is_empty() {
-            //             return Ok(true);
-            //         }
-            //     }
-            //     Instruction::Shl(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x << y)?;
-            //     }
-            //     Instruction::Shr(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x >> y)?;
-            //     }
-            //     Instruction::Store(r1, r2, r3) => {
-            //         // r2[r3] = r1;
-            //
-            //         let mut container = frame.resolve_lpc_ref(r2);
-            //         let index = frame.resolve_lpc_ref(r3);
-            //         let array_idx = if let LpcRef::Int(i) = index { i } else { 0 };
-            //
-            //         match container {
-            //             LpcRef::Array(vec_ref) => {
-            //                 let mut r = vec_ref.borrow_mut();
-            //                 let vec = match *r {
-            //                     LpcValue::Array(ref mut v) => v,
-            //                     _ => return Err(self.runtime_error(
-            //                         "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
-            //                     )
-            //                 };
-            //
-            //                 let len = vec.len();
-            //
-            //                 // handle negative indices
-            //                 let idx = if array_idx >= 0 {
-            //                     array_idx
-            //                 } else {
-            //                     len as LpcInt + array_idx
-            //                 };
-            //
-            //                 if idx >= 0 && (idx as usize) < len {
-            //                     vec[idx as usize] = current_registers(&self.stack)?[r1.index()].clone();
-            //                 } else {
-            //                     return Err(self.array_index_error(idx, len));
-            //                 }
-            //             }
-            //             LpcRef::Mapping(ref mut map_ref) => {
-            //                 let mut r = map_ref.borrow_mut();
-            //                 let map = match *r {
-            //                     LpcValue::Mapping(ref mut m) => m,
-            //                     _ => return Err(self.runtime_error(
-            //                         "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
-            //                     )
-            //                 };
-            //
-            //                 map.insert(index, current_registers(&self.stack)?[r1.index()].clone());
-            //             }
-            //             x => {
-            //                 return Err(
-            //                     self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
-            //                 )
-            //             }
-            //         }
-            //     }
-            //     Instruction::SConst(r, s) => {
-            //         let registers = current_registers_mut(&mut frame)?;
-            //         let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
-            //
-            //         registers[r.index()] = new_ref;
-            //     }
-            //     Instruction::Xor(r1, r2, r3) => {
-            //         let (n1, n2, n3) = (*r1, *r2, *r3);
-            //         self.binary_operation(n1, n2, n3, |x, y| x ^ y)?;
-            //     }
-            _ => (),
-        }
+        // match instruction {
+        //     Instruction::AConst(r, vec) => {
+        //         // let registers = current_registers_mut(&mut frame)?;
+        //         // let registers = &mut frame.registers;
+        //         let vars = vec
+        //             .iter()
+        //             .map(|i| registers[i.index()].clone())
+        //             .collect::<Vec<_>>();
+        //         let new_ref = value_to_ref!(LpcValue::from(vars), &self.memory);
+        //
+        //         registers[r.index()] = new_ref;
+        //     }
+        //     Instruction::And(r1, r2, r3) => {
+        //         self.binary_operation(r1, r2, r3, |x, y| x & y)?;
+        //     }
+        //     Instruction::Call {
+        //         name,
+        //         num_args,
+        //         initial_arg,
+        //     } => {
+        //         let mut new_frame = if let Some(func) = self.process.functions.get(&name) {
+        //             StackFrame::new(self.process.clone(), func.clone())
+        //         } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+        //             let sym = ProgramFunction::new(name.clone(), prototype.num_args, 0);
+        //
+        //             StackFrame::new(self.process.clone(), Rc::new(sym))
+        //         } else {
+        //             println!("proc {:#?}", self.process);
+        //             println!("functions {:#?}", self.process.functions);
+        //             let msg = format!("Call to unknown function `{}`", name);
+        //             return Err(self.runtime_error(msg));
+        //         };
+        //
+        //         // copy argument registers from old frame to new
+        //         if num_args > 0_usize {
+        //             let index = initial_arg.index();
+        //             // let current_frame = self.stack.last().unwrap();
+        //             new_frame.registers[1..=num_args]
+        //                 .clone_from_slice(&registers[index..(index + num_args)]);
+        //         }
+        //
+        //         // println!("pushing frame in Call: {:?}", new_frame);
+        //         // try_push_frame!(new_frame, self);
+        //
+        //         // if let Some(x) = self.process.functions.get(name) {
+        //         //     frame.set_pc(x.address);
+        //         // } else if let Some(efun) = EFUNS.get(name.as_str()) {
+        //         if let Some(efun) = EFUNS.get(name.as_str()) {
+        //             // TODO this is almost certain broken for efun overrides
+        //             // the efun is responsible for populating the return value in its own frame
+        //             efun(self)?;
+        //
+        //             if let Some(frame) = self.pop_frame() {
+        //                 self.copy_call_result(&frame)?;
+        //                 self.popped_frame = Some(frame);
+        //             }
+        //         } else if !self.process.functions.contains_key(&name) {
+        //             return Err(self.runtime_error(format!(
+        //                 "Call to unknown function (that had a valid prototype?) `{}`",
+        //                 name
+        //             )));
+        //         }
+        //     }
+        //     Instruction::CallFp {
+        //         location,
+        //         num_args: _,
+        //         initial_arg: _,
+        //     } => {
+        //         let _func_ref = &frame.registers[location.index()];
+        //
+        //         todo!();
+        //
+        //         // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
+        //         //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
+        //         // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+        //         //     let sym = FunctionSymbol {
+        //         //         name: name.clone(),
+        //         //         num_args: prototype.num_args,
+        //         //         num_locals: 0,
+        //         //         address: 0,
+        //         //     };
+        //         //
+        //         //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
+        //         // } else {
+        //         //     println!("proc {:#?}", self.process);
+        //         //     println!("functions {:#?}", self.process.functions);
+        //         //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
+        //         // };
+        //         //
+        //         // // copy argument registers from old frame to new
+        //         // if *num_args > 0_usize {
+        //         //     let index = initial_arg.index();
+        //         //     let current_frame = self.stack.last().unwrap();
+        //         //     new_frame.registers[1..=*num_args]
+        //         //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
+        //         // }
+        //         //
+        //         // // println!("pushing frame in Call: {:?}", new_frame);
+        //         // try_push_frame!(new_frame, self);
+        //         //
+        //         // if let Some(x) = self.process.functions.get(name) {
+        //         //     self.process.set_pc(x.address);
+        //         // } else if let Some(efun) = EFUNS.get(name.as_str()) {
+        //         //     // the efun is responsible for populating the return value in its own frame
+        //         //     efun(self)?;
+        //         //
+        //         //     if let Some(frame) = self.pop_frame() {
+        //         //         self.copy_call_result(&frame)?;
+        //         //         self.popped_frame = Some(frame);
+        //         //     }
+        //         // } else {
+        //         //     return Err(self.runtime_error(format!(
+        //         //         "Call to unknown function (that had a valid prototype?) `{}`",
+        //         //         name
+        //         //     )));
+        //         // }
+        //     }
+        //     // Instruction::CallOther {
+        //     //     receiver,
+        //     //     name,
+        //     //     num_args,
+        //     //     initial_arg,
+        //     // } => {
+        //     //     // get receiver process and make it the current one
+        //     //     let receiver_ref = &frame.registers[receiver.index()];
+        //     //
+        //     //     // Figure out which function we're calling
+        //     //     let name_ref = &frame.registers[name.index()];
+        //     //     let pool_ref = if let LpcRef::String(r) = name_ref {
+        //     //         r
+        //     //     } else {
+        //     //         let str = format!(
+        //     //             "Invalid name passed to `call_other`: {}",
+        //     //             name_ref
+        //     //         );
+        //     //         return Err(self.runtime_error(str));
+        //     //     };
+        //     //     let borrowed = pool_ref.borrow();
+        //     //     let function_name = try_extract_value!(*borrowed, LpcValue::String);
+        //     //
+        //     //     let initial_index = initial_arg.index();
+        //     //     // let return_address = self.process.pc();
+        //     //
+        //     //     fn resolve_result(interpreter: &mut AsmInterpreter, receiver_ref: &LpcRef, function_name: &str, registers: &Vec<LpcRef>) -> Result<LpcRef> {
+        //     //         let resolved =
+        //     //             interpreter.resolve_call_other_receiver(receiver_ref, function_name);
+        //     //
+        //     //         if let Some(pr) = resolved {
+        //     //             let value = LpcValue::from(pr);
+        //     //             let result = match value {
+        //     //                 LpcValue::Object(receiver) => {
+        //     //                     let args = registers
+        //     //                         [initial_index..(initial_index + num_args)]
+        //     //                         .to_vec();
+        //     //                     let closure = |inner: &mut AsmInterpreter| {
+        //     //                         inner.call_other(receiver, function_name, args)
+        //     //                     };
+        //     //
+        //     //                     interpreter.with_clean_stack(closure)?
+        //     //                 }
+        //     //                 _ => LpcRef::Int(0),
+        //     //             };
+        //     //             Ok(result)
+        //     //         } else {
+        //     //             Err(interpreter.runtime_error("Unable to find the receiver."))
+        //     //         }
+        //     //     }
+        //     //     // let resolve_result = |receiver_ref, interpreter: &mut AsmInterpreter| {
+        //     //     //     let resolved =
+        //     //     //         interpreter.resolve_call_other_receiver(receiver_ref, function_name);
+        //     //     //
+        //     //     //     if let Some(pr) = resolved {
+        //     //     //         let value = LpcValue::from(pr);
+        //     //     //         let result = match value {
+        //     //     //             LpcValue::Object(receiver) => {
+        //     //     //                 let args = registers
+        //     //     //                     [initial_index..(initial_index + num_args)]
+        //     //     //                     .to_vec();
+        //     //     //                 let closure = |inner: &mut AsmInterpreter| {
+        //     //     //                     inner.call_other(receiver, function_name, args)
+        //     //     //                 };
+        //     //     //
+        //     //     //                 interpreter.with_clean_stack(closure)?
+        //     //     //             }
+        //     //     //             _ => LpcRef::Int(0),
+        //     //     //         };
+        //     //     //         Ok(result)
+        //     //     //     } else {
+        //     //     //         Err(interpreter.runtime_error("Unable to find the receiver."))
+        //     //     //     }
+        //     //     // };
+        //     //
+        //     //     let result_ref = match &receiver_ref {
+        //     //         LpcRef::String(_) | LpcRef::Object(_) => resolve_result(self, &receiver_ref, function_name, registers)?,
+        //     //         LpcRef::Array(r) => {
+        //     //             let b = r.borrow();
+        //     //             let array = try_extract_value!(*b, LpcValue::Array);
+        //     //
+        //     //             let array_value: LpcValue = array
+        //     //                 .iter()
+        //     //                 .map(|lpc_ref| resolve_result(self, lpc_ref, function_name, registers).unwrap_or(LpcRef::Int(0)))
+        //     //                 .collect::<Vec<_>>()
+        //     //                 .into();
+        //     //             value_to_ref!(array_value, &self.memory)
+        //     //         }
+        //     //         LpcRef::Mapping(m) => {
+        //     //             let b = m.borrow();
+        //     //             let hashmap = try_extract_value!(*b, LpcValue::Mapping);
+        //     //
+        //     //             let with_results: LpcValue = hashmap
+        //     //                 .iter()
+        //     //                 .map(|(key_ref, value_ref)| {
+        //     //                     (
+        //     //                         key_ref.clone(),
+        //     //                         resolve_result(self, value_ref, function_name, registers).unwrap_or(LpcRef::Int(0)),
+        //     //                     )
+        //     //                 })
+        //     //                 .collect::<HashMap<_, _>>()
+        //     //                 .into();
+        //     //
+        //     //             value_to_ref!(with_results, &self.memory)
+        //     //         }
+        //     //         _ => {
+        //     //             return Err(self.runtime_error(format!(
+        //     //                 "What are you trying to call `{}` on?",
+        //     //                 function_name
+        //     //             )))
+        //     //         }
+        //     //     };
+        //     //
+        //     //     self.return_efun_result(result_ref)
+        //     // }
+        //     //     Instruction::CatchEnd => {
+        //     //         self.catch_points.pop();
+        //     //     }
+        //     //     Instruction::CatchStart(r, label) => {
+        //     //         let address = match self.current_frame()?.lookup_label(label) {
+        //     //             Some(x) => *x,
+        //     //             None => {
+        //     //                 return Err(
+        //     //                     self.runtime_error(format!("Missing address for label `{}`", label))
+        //     //                 )
+        //     //             }
+        //     //         };
+        //     //
+        //     //         let catch_point = CatchPoint {
+        //     //             frame_index: self.stack.len() - 1,
+        //     //             register: *r,
+        //     //             address,
+        //     //         };
+        //     //
+        //     //         self.catch_points.push(catch_point);
+        //     //     }
+        //     //     Instruction::EqEq(r1, r2, r3) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         let out = if registers[r1.index()] == registers[r2.index()] {
+        //     //             1
+        //     //         } else {
+        //     //             0
+        //     //         };
+        //     //
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r3.index()] = LpcRef::Int(out);
+        //     //     }
+        //     //     Instruction::FConst(r, f) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r.index()] = LpcRef::Float(*f);
+        //     //     }
+        //     //     Instruction::FunctionPtrConst { location, target, applied_arguments } => {
+        //     //         let address = match target {
+        //     //             FunctionTarget::Efun(func_name) => {
+        //     //                 FunctionAddress::Efun(self.resolve_function_name(func_name)?.into_owned())
+        //     //             }
+        //     //             FunctionTarget::Local(func_name) => {
+        //     //                 let s = self.resolve_function_name(func_name)?;
+        //     //                 let sym = self.process.lookup_function(s);
+        //     //                 if sym.is_none() {
+        //     //                     return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
+        //     //                 }
+        //     //
+        //     //                 FunctionAddress::Local(sym.unwrap().clone())
+        //     //             }
+        //     //             FunctionTarget::CallOther(func_name, func_receiver) => {
+        //     //                 let proc = match func_receiver {
+        //     //                     FunctionReceiver::Value(receiver_reg) => {
+        //     //                         // let receiver_ref = self.register_to_lpc_ref(receiver_reg.index());
+        //     //                         let receiver_ref = &frame.registers[receiver_reg.index()];
+        //     //                         match receiver_ref {
+        //     //                             LpcRef::Object(x) => {
+        //     //                                 let b = x.borrow();
+        //     //                                 let process = try_extract_value!(*b, LpcValue::Object);
+        //     //                                 process.clone()
+        //     //                             }
+        //     //                             LpcRef::String(_) => todo!(),
+        //     //                             LpcRef::Array(_)
+        //     //                             | LpcRef::Mapping(_)
+        //     //                             | LpcRef::Float(_)
+        //     //                             | LpcRef::Int(_)
+        //     //                             | LpcRef::Function(_) => {
+        //     //                                 return Err(self.runtime_error("Receiver was not object or string"));
+        //     //                             }
+        //     //                         }
+        //     //                     }
+        //     //                     FunctionReceiver::Argument => todo!(),
+        //     //                     FunctionReceiver::None => {
+        //     //                         return Err(self.runtime_error("A None receiver for a CallOther target? Should be unreachable."));
+        //     //                     }
+        //     //                 };
+        //     //                 let s = self.resolve_function_name(func_name)?;
+        //     //                 let sym = self.process.lookup_function(s);
+        //     //                 if sym.is_none() {
+        //     //                     return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
+        //     //                 }
+        //     //
+        //     //                 FunctionAddress::Remote(proc, sym.unwrap().clone())
+        //     //             }
+        //     //         };
+        //     //
+        //     //         let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
+        //     //             match arg {
+        //     //                 Some(register) => {
+        //     //                     Some(frame.resolve_lpc_ref(register))
+        //     //                 }
+        //     //                 None => None,
+        //     //             }
+        //     //         }).collect();
+        //     //
+        //     //         let fp = FunctionPtr {
+        //     //             owner: Rc::new(Default::default()),
+        //     //             address,
+        //     //             args
+        //     //         };
+        //     //
+        //     //         let func = LpcFunction::FunctionPtr(fp);
+        //     //
+        //     //         let new_ref = value_to_ref!(LpcValue::from(func), &self.memory);
+        //     //
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //
+        //     //         registers[location.index()] = new_ref;
+        //     //     }
+        //     //     Instruction::GLoad(r1, r2) => {
+        //     //         // load from global r1, into local r2
+        //     //         let global = self.process.globals[r1.index()].borrow().clone();
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r2.index()] = global
+        //     //     }
+        //     //     Instruction::GStore(r1, r2) => {
+        //     //         // store local r1 into global r2
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         self.process.globals[r2.index()].replace(registers[r1.index()].clone());
+        //     //     }
+        //     //     Instruction::Gt(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_boolean_operation(n1, n2, n3, |x, y| x > y)?;
+        //     //     }
+        //     //     Instruction::Gte(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_boolean_operation(n1, n2, n3, |x, y| x >= y)?;
+        //     //     }
+        //     //     Instruction::IAdd(r1, r2, r3) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         match &registers[r1.index()] + &registers[r2.index()] {
+        //     //             Ok(result) => {
+        //     //                 let out = value_to_ref!(result, self.memory);
+        //     //
+        //     //                 registers[r3.index()] = out
+        //     //             }
+        //     //             Err(e) => {
+        //     //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::IConst(r, i) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r.index()] = LpcRef::Int(*i);
+        //     //     }
+        //     //     Instruction::IConst0(r) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r.index()] = LpcRef::Int(0);
+        //     //     }
+        //     //     Instruction::IConst1(r) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r.index()] = LpcRef::Int(1);
+        //     //     }
+        //     //     Instruction::IDiv(r1, r2, r3) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         match &registers[r1.index()] / &registers[r2.index()] {
+        //     //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+        //     //             Err(e) => {
+        //     //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::IMod(r1, r2, r3) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         match &registers[r1.index()] % &registers[r2.index()] {
+        //     //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+        //     //             Err(e) => {
+        //     //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::IMul(r1, r2, r3) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         match &registers[r1.index()] * &registers[r2.index()] {
+        //     //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+        //     //             Err(e) => {
+        //     //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::ISub(r1, r2, r3) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         match &registers[r1.index()] - &registers[r2.index()] {
+        //     //             Ok(result) => registers[r3.index()] = value_to_ref!(result, self.memory),
+        //     //             Err(e) => {
+        //     //                 return Err(e.with_span(self.current_frame()?.current_debug_span()));
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::Jmp(label) => {
+        //     //         let address = self.lookup_address(label)?;
+        //     //         self.current_frame()?.set_pc(address);
+        //     //     }
+        //     //     Instruction::Jnz(r1, label) => {
+        //     //         let v = &current_registers_mut(&mut frame)?[r1.index()];
+        //     //
+        //     //         if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
+        //     //             let address = self.lookup_address(label)?;
+        //     //             self.current_frame()?.set_pc(address);
+        //     //         }
+        //     //     }
+        //     //     Instruction::Jz(r1, label) => {
+        //     //         let v = &current_registers_mut(&mut frame)?[r1.index()];
+        //     //
+        //     //         if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
+        //     //             let address = self.lookup_address(label)?;
+        //     //             self.current_frame()?.set_pc(address);
+        //     //         }
+        //     //     }
+        //     //     Instruction::Load(r1, r2, r3) => {
+        //     //         let container_ref = frame.resolve_lpc_ref(r1);
+        //     //
+        //     //         match container_ref {
+        //     //             LpcRef::Array(vec_ref) => {
+        //     //                 let value = vec_ref.borrow();
+        //     //                 let vec = try_extract_value!(*value, LpcValue::Array);
+        //     //
+        //     //                 let index = frame.resolve_lpc_ref(r2);
+        //     //                 let registers = current_registers_mut(&mut frame)?;
+        //     //
+        //     //                 if let LpcRef::Int(i) = index {
+        //     //                     let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+        //     //
+        //     //                     if idx >= 0 {
+        //     //                         if let Some(v) = vec.get(idx as usize) {
+        //     //                             registers[r3.index()] = v.clone();
+        //     //                         } else {
+        //     //                             return Err(self.array_index_error(idx, vec.len()));
+        //     //                         }
+        //     //                     } else {
+        //     //                         return Err(self.array_index_error(idx, vec.len()));
+        //     //                     }
+        //     //                 } else {
+        //     //                     return Err(self.array_index_error(index, vec.len()));
+        //     //                 }
+        //     //             }
+        //     //             LpcRef::String(string_ref) => {
+        //     //                 let value = string_ref.borrow();
+        //     //                 let string = try_extract_value!(*value, LpcValue::String);
+        //     //
+        //     //                 let index = frame.resolve_lpc_ref(r2);
+        //     //                 let registers = current_registers_mut(&mut frame)?;
+        //     //
+        //     //                 if let LpcRef::Int(i) = index {
+        //     //                     let idx = if i >= 0 {
+        //     //                         i
+        //     //                     } else {
+        //     //                         string.len() as LpcInt + i
+        //     //                     };
+        //     //
+        //     //                     if idx >= 0 {
+        //     //                         if let Some(v) = string.chars().nth(idx as usize) {
+        //     //                             registers[r3.index()] = LpcRef::Int(v as i64);
+        //     //                         } else {
+        //     //                             registers[r3.index()] = LpcRef::Int(0);
+        //     //                         }
+        //     //                     } else {
+        //     //                         registers[r3.index()] = LpcRef::Int(0);
+        //     //                     }
+        //     //                 } else {
+        //     //                     return Err(self.runtime_error(format!(
+        //     //                         "Attempting to access index {} in a string of length {}",
+        //     //                         index,
+        //     //                         string.len()
+        //     //                     )));
+        //     //                 }
+        //     //             }
+        //     //             LpcRef::Mapping(map_ref) => {
+        //     //                 let index = frame.resolve_lpc_ref(r2);
+        //     //                 let value = map_ref.borrow();
+        //     //                 let map = try_extract_value!(*value, LpcValue::Mapping);
+        //     //
+        //     //                 let var = if let Some(v) = map.get(&index) {
+        //     //                     v.clone()
+        //     //                 } else {
+        //     //                     LpcRef::Int(0)
+        //     //                 };
+        //     //
+        //     //                 let registers = current_registers_mut(&mut frame)?;
+        //     //                 registers[r3.index()] = var;
+        //     //             }
+        //     //             x => {
+        //     //                 return Err(
+        //     //                     self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+        //     //                 );
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::Lt(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_boolean_operation(n1, n2, n3, |x, y| x < y)?;
+        //     //     }
+        //     //     Instruction::Lte(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_boolean_operation(n1, n2, n3, |x, y| x <= y)?;
+        //     //     }
+        //     //     Instruction::MapConst(r, map) => {
+        //     //         let mut register_map = HashMap::new();
+        //     //         for (key, value) in map {
+        //     //             let registers = current_registers_mut(&mut frame)?;
+        //     //             let r = registers[key.index()].clone();
+        //     //
+        //     //             register_map.insert(r, registers[value.index()].clone());
+        //     //         }
+        //     //
+        //     //         let new_ref = value_to_ref!(LpcValue::from(register_map), self.memory);
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //
+        //     //         registers[r.index()] = new_ref;
+        //     //     }
+        //     //     Instruction::MAdd(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x + y)?;
+        //     //     }
+        //     //     Instruction::MMul(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x * y)?;
+        //     //     }
+        //     //     Instruction::MSub(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x - y)?;
+        //     //     }
+        //     //     Instruction::Not(r1, r2) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r2.index()] = if matches!(registers[r1.index()], LpcRef::Int(0)) {
+        //     //             LpcRef::Int(1)
+        //     //         } else {
+        //     //             LpcRef::Int(0)
+        //     //         };
+        //     //     }
+        //     //     Instruction::Or(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x | y)?;
+        //     //     }
+        //     //     Instruction::Range(r1, r2, r3, r4) => {
+        //     //         // r4 = r1[r2..r3]
+        //     //
+        //     //         let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
+        //     //             let to_idx = |i: LpcInt| {
+        //     //                 // We handle the potential overflow just below.
+        //     //                 if i >= 0 {
+        //     //                     i as usize
+        //     //                 } else {
+        //     //                     (len as LpcInt + i) as usize
+        //     //                 }
+        //     //             };
+        //     //             let real_start = to_idx(start);
+        //     //             let mut real_end = to_idx(end);
+        //     //
+        //     //             if real_end >= len {
+        //     //                 real_end = len - 1;
+        //     //             }
+        //     //
+        //     //             (real_start, real_end)
+        //     //         };
+        //     //
+        //     //         let return_value = |value,
+        //     //                             memory: &mut Pool<RefCell<LpcValue>>,
+        //     //                             stack: &mut Vec<StackFrame>|
+        //     //          -> Result<()> {
+        //     //             let new_ref = value_to_ref!(value, memory);
+        //     //             let registers = &mut frame.registers;
+        //     //             registers[r4.index()] = new_ref;
+        //     //
+        //     //             Ok(())
+        //     //         };
+        //     //
+        //     //         let lpc_ref = frame.resolve_lpc_ref(r1);
+        //     //
+        //     //         match lpc_ref {
+        //     //             LpcRef::Array(v_ref) => {
+        //     //                 let value = v_ref.borrow();
+        //     //                 let vec = try_extract_value!(*value, LpcValue::Array);
+        //     //
+        //     //                 if vec.is_empty() {
+        //     //                     return_value(
+        //     //                         LpcValue::from(vec![]),
+        //     //                         &mut self.memory,
+        //     //                         &mut self.stack,
+        //     //                     )?;
+        //     //                 }
+        //     //
+        //     //                 let index1 = frame.resolve_lpc_ref(r2);
+        //     //                 let index2 = frame.resolve_lpc_ref(r3);
+        //     //
+        //     //                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+        //     //                     let (real_start, real_end) = resolve_range(start, end, vec.len());
+        //     //
+        //     //                     if real_start <= real_end {
+        //     //                         let slice = &vec[real_start..=real_end];
+        //     //                         let mut new_vec = vec![LpcRef::Int(0); slice.len()];
+        //     //                         new_vec.clone_from_slice(slice);
+        //     //                         return_value(
+        //     //                             LpcValue::from(new_vec),
+        //     //                             &mut self.memory,
+        //     //                             &mut self.stack,
+        //     //                         )?;
+        //     //                     } else {
+        //     //                         return_value(
+        //     //                             LpcValue::from(vec![]),
+        //     //                             &mut self.memory,
+        //     //                             &mut self.stack,
+        //     //                         )?;
+        //     //                     }
+        //     //                 } else {
+        //     //                     return Err(LpcError::new(
+        //     //                         "Invalid code was generated for a Range instruction.",
+        //     //                     )
+        //     //                     .with_span(self.current_frame()?.current_debug_span()));
+        //     //                 }
+        //     //             }
+        //     //             LpcRef::String(v_ref) => {
+        //     //                 let value = v_ref.borrow();
+        //     //                 let string = try_extract_value!(*value, LpcValue::String);
+        //     //
+        //     //                 if string.is_empty() {
+        //     //                     return_value(LpcValue::from(""), &mut self.memory, &mut self.stack)?;
+        //     //                 }
+        //     //
+        //     //                 let index1 = frame.resolve_lpc_ref(r2);
+        //     //                 let index2 = frame.resolve_lpc_ref(r3);
+        //     //
+        //     //                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+        //     //                     let (real_start, real_end) = resolve_range(start, end, string.len());
+        //     //
+        //     //                     if real_start <= real_end {
+        //     //                         let len = real_end - real_start + 1;
+        //     //                         let new_string: String =
+        //     //                             string.chars().skip(real_start).take(len).collect();
+        //     //                         return_value(
+        //     //                             LpcValue::from(new_string),
+        //     //                             &mut self.memory,
+        //     //                             &mut self.stack,
+        //     //                         )?;
+        //     //                     } else {
+        //     //                         return_value(
+        //     //                             LpcValue::from(""),
+        //     //                             &mut self.memory,
+        //     //                             &mut self.stack,
+        //     //                         )?;
+        //     //                     }
+        //     //                 } else {
+        //     //                     return Err(LpcError::new(
+        //     //                         "Invalid code was generated for a Range instruction.",
+        //     //                     )
+        //     //                     .with_span(self.current_frame()?.current_debug_span()));
+        //     //                 }
+        //     //             }
+        //     //             LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
+        //     //                 return Err(LpcError::new(
+        //     //                     "Range's receiver isn't actually an array or string?",
+        //     //                 )
+        //     //                 .with_span(self.current_frame()?.current_debug_span()));
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::RegCopy(r1, r2) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         registers[r2.index()] = registers[r1.index()].clone()
+        //     //     }
+        //     //     Instruction::Ret => {
+        //     //         if let Some(frame) = self.pop_frame() {
+        //     //             self.copy_call_result(&frame)?;
+        //     //
+        //     //             // if !self.stack.is_empty()
+        //     //             //     && Rc::ptr_eq(&frame.process, &self.stack.last().unwrap().process)
+        //     //             // {
+        //     //             //     self.current_frame()?.set_pc(frame.return_address);
+        //     //             // }
+        //     //
+        //     //             self.popped_frame = Some(frame);
+        //     //         }
+        //     //
+        //     //         // halt at the end of all input
+        //     //         if self.stack.is_empty() {
+        //     //             return Ok(true);
+        //     //         }
+        //     //     }
+        //     //     Instruction::Shl(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x << y)?;
+        //     //     }
+        //     //     Instruction::Shr(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x >> y)?;
+        //     //     }
+        //     //     Instruction::Store(r1, r2, r3) => {
+        //     //         // r2[r3] = r1;
+        //     //
+        //     //         let mut container = frame.resolve_lpc_ref(r2);
+        //     //         let index = frame.resolve_lpc_ref(r3);
+        //     //         let array_idx = if let LpcRef::Int(i) = index { i } else { 0 };
+        //     //
+        //     //         match container {
+        //     //             LpcRef::Array(vec_ref) => {
+        //     //                 let mut r = vec_ref.borrow_mut();
+        //     //                 let vec = match *r {
+        //     //                     LpcValue::Array(ref mut v) => v,
+        //     //                     _ => return Err(self.runtime_error(
+        //     //                         "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
+        //     //                     )
+        //     //                 };
+        //     //
+        //     //                 let len = vec.len();
+        //     //
+        //     //                 // handle negative indices
+        //     //                 let idx = if array_idx >= 0 {
+        //     //                     array_idx
+        //     //                 } else {
+        //     //                     len as LpcInt + array_idx
+        //     //                 };
+        //     //
+        //     //                 if idx >= 0 && (idx as usize) < len {
+        //     //                     vec[idx as usize] = current_registers(&self.stack)?[r1.index()].clone();
+        //     //                 } else {
+        //     //                     return Err(self.array_index_error(idx, len));
+        //     //                 }
+        //     //             }
+        //     //             LpcRef::Mapping(ref mut map_ref) => {
+        //     //                 let mut r = map_ref.borrow_mut();
+        //     //                 let map = match *r {
+        //     //                     LpcValue::Mapping(ref mut m) => m,
+        //     //                     _ => return Err(self.runtime_error(
+        //     //                         "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
+        //     //                     )
+        //     //                 };
+        //     //
+        //     //                 map.insert(index, current_registers(&self.stack)?[r1.index()].clone());
+        //     //             }
+        //     //             x => {
+        //     //                 return Err(
+        //     //                     self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+        //     //                 )
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     Instruction::SConst(r, s) => {
+        //     //         let registers = current_registers_mut(&mut frame)?;
+        //     //         let new_ref = value_to_ref!(LpcValue::from(s), self.memory);
+        //     //
+        //     //         registers[r.index()] = new_ref;
+        //     //     }
+        //     //     Instruction::Xor(r1, r2, r3) => {
+        //     //         let (n1, n2, n3) = (*r1, *r2, *r3);
+        //     //         self.binary_operation(n1, n2, n3, |x, y| x ^ y)?;
+        //     //     }
+        //     _ => (),
+        // }
 
         Ok(false)
     }
@@ -1217,9 +1213,9 @@ impl AsmInterpreter {
                     return None;
                 };
 
-                match self.lookup_process(str) {
-                    Ok(proc) => proc.clone(),
-                    Err(_) => return None,
+                match self.processes.lookup(str) {
+                    Some(proc) => proc.clone(),
+                    None => return None,
                 }
             }
             LpcRef::Object(o) => {
@@ -1280,20 +1276,20 @@ impl AsmInterpreter {
 
         // Because call_other args aren't arity-checked at compile time, there might
         // be more passed than expected, so we might need to reserve more space
-        let mut new_frame = StackFrame::with_minimum_arg_capacity(
-            self.process.clone(),
-            sym.clone(),
-            // return_address,
-            num_args + 1, // +1 for r0
-        );
+        // let mut new_frame = StackFrame::with_minimum_arg_capacity(
+        //     self.process.clone(),
+        //     sym.clone(),
+        //     // return_address,
+        //     num_args + 1, // +1 for r0
+        // );
 
         // put the arguments into the new correct place in the new frame.
-        if num_args > 0_usize {
-            new_frame.registers[1..=num_args].swap_with_slice(&mut args);
-        }
+        // if num_args > 0_usize {
+        //     new_frame.registers[1..=num_args].swap_with_slice(&mut args);
+        // }
 
         // println!("pushing frame in CallOther: {:?}", new_frame);
-        try_push_frame!(new_frame, self);
+        // try_push_frame!(new_frame, self);
 
         // self.current_frame()?.set_pc(sym.address);
 
@@ -1414,11 +1410,11 @@ impl AsmInterpreter {
         let clean_stack = Vec::with_capacity(20);
         let current_stack = std::mem::replace(&mut self.stack, clean_stack);
 
-        let mut frame =
-            StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, args.len());
-        frame.registers[1..=args.len()].clone_from_slice(args);
-
-        self.push_frame(frame)?;
+        // let mut frame =
+        //     StackFrame::with_minimum_arg_capacity(self.process.clone(), sym, args.len());
+        // frame.registers[1..=args.len()].clone_from_slice(args);
+        //
+        // self.push_frame(frame)?;
 
         let result = self.eval();
 
@@ -1453,20 +1449,14 @@ impl AsmInterpreter {
 
 impl Default for AsmInterpreter {
     fn default() -> Self {
-        let programs = HashMap::with_capacity(OBJECT_SPACE_SIZE);
         let program = Rc::new(Process::new(Program::default()));
 
         Self {
             config: Rc::new(Config::default()),
             process: program,
-            processes: programs,
-            clone_count: 0,
             stack: Vec::with_capacity(STACK_SIZE),
             memory: Pool::new(MEMORY_SIZE),
-            popped_frame: None,
-            snapshot: None,
-            instruction_count: 0,
-            catch_points: Vec::new(),
+            ..Default::default()
         }
     }
 }

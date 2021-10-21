@@ -1,3 +1,5 @@
+pub mod efun_context;
+
 mod clone_object;
 mod debug;
 mod dump;
@@ -10,7 +12,6 @@ use phf::phf_map;
 use std::collections::HashMap;
 
 use crate::{
-    interpreter::asm_interpreter::AsmInterpreter,
     semantic::{
         function_flags::FunctionFlags, function_prototype::FunctionPrototype, lpc_type::LpcType,
     },
@@ -22,9 +23,10 @@ use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
 use throw::throw;
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// Signature for Efuns
-pub type Efun = fn(&mut AsmInterpreter) -> Result<()>;
+pub type Efun = fn(&mut EfunContext) -> Result<()>;
 
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
@@ -38,8 +40,6 @@ pub const THROW: &str = "throw";
 /// Global static mapping of all efun names to the actual function
 pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
     // "call_other" is implemented with a custom [`Instruction`]
-    // "catch" is a special form of the language, implemented with custom [`Instruction`]s.
-    // A prototype is defined here to make it pass type checks, as it looks and acts like a function call.
     "clone_object" => clone_object,
     "debug" => debug,
     "dump" => dump,
@@ -71,6 +71,9 @@ lazy_static! {
             flags: FunctionFlags::default().with_ellipsis(true),
         });
 
+        // "catch" is a special form of the language, implemented with custom [`Instruction`]s.
+        //   A prototype is defined here to enforce type checks,
+        //   as `catch` looks and acts like a function call.
         m.insert(CATCH, FunctionPrototype {
             name: CATCH.into(),
             return_type: LpcType::Mixed(false),

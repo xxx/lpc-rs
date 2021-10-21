@@ -13,18 +13,26 @@ use std::{
 /// mutable runtime pieces together.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct Process {
+    /// The [`Program`] that this process is running
     pub program: Rc<Program>,
+
+    /// The stored global variable data for this instance
     pub globals: Vec<RefCell<LpcRef>>,
+
     /// What is the clone ID of this process? If `None`, this is a master object
     clone_id: Option<usize>,
 }
 
 impl Process {
-    pub fn new(program: Program) -> Self {
+    pub fn new<T>(prog: T) -> Self
+    where
+        T: Into<Rc<Program>>
+    {
+        let program = prog.into();
         let num_globals = program.num_globals;
 
         Self {
-            program: program.into(),
+            program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             clone_id: None,
         }
@@ -79,5 +87,11 @@ impl Deref for Process {
 impl Display for Process {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename())
+    }
+}
+
+impl From<Process> for Rc<RefCell<Process>> {
+    fn from(process: Process) -> Self {
+        Rc::new(RefCell::new(process))
     }
 }

@@ -23,6 +23,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{fmt::Debug, io::ErrorKind, rc::Rc};
+use std::ffi::OsStr;
 
 pub mod compiler_error;
 
@@ -72,14 +73,13 @@ impl Compiler {
     {
         let lpc_path = path.into();
         let absolute = lpc_path.as_server(self.config.lib_dir());
+
         let file_content = match fs::read_to_string(&*absolute) {
             Ok(s) => s,
             Err(e) => {
                 return match e.kind() {
                     ErrorKind::NotFound => {
-                        // let mut dot_c = AsRef::<str>::as_ref(&path).to_string();
-
-                        if absolute.ends_with(".c") {
+                        if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
                             return Err(CompilerError::LpcError(LpcError::new(format!(
                                 "Cannot read file `{}`: {}",
                                 absolute.display(),

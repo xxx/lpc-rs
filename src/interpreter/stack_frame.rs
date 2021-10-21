@@ -10,12 +10,14 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use crate::errors::LpcError;
+use std::cell::RefCell;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
 pub struct StackFrame {
     /// A pointer to the process that owns the function being called
-    pub process: Rc<Process>,
+    pub process: Rc<RefCell<Process>>,
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,
     /// Our registers. By convention, `registers[0]` is for the return value of the call.
@@ -31,12 +33,15 @@ impl StackFrame {
     ///
     /// * `process` - The process that owns the function being called
     /// * `function` - The function being called
-    pub fn new(process: Rc<Process>, function: Rc<ProgramFunction>) -> Self {
+    pub fn new<P>(process: P, function: Rc<ProgramFunction>) -> Self
+    where
+        P: Into<Rc<RefCell<Process>>>,
+    {
         // add +1 for r0 (where return value is stored)
         let reg_len = function.num_args + function.num_locals + 1;
 
         Self {
-            process,
+            process: process.into(),
             function,
             registers: vec![LpcRef::Int(0); reg_len],
             pc: 0.into(),
@@ -51,11 +56,14 @@ impl StackFrame {
     /// * `function` - The function being called
     /// * `arg_capacity` - Reserve space for at least this many registers
     ///     (this is used for ellipsis args and `call_other`)
-    pub fn with_minimum_arg_capacity(
-        process: Rc<Process>,
+    pub fn with_minimum_arg_capacity<P>(
+        process: P,
         function: Rc<ProgramFunction>,
         arg_capacity: usize,
-    ) -> Self {
+    ) -> Self
+    where
+        P: Into<Rc<RefCell<Process>>>,
+    {
         // add +1 for r0 (where return value is stored)
         let reg_len = function.num_args + function.num_locals + 1;
         let arg_len = arg_capacity + function.num_locals + 1;
@@ -68,6 +76,7 @@ impl StackFrame {
     }
 
     /// Resolve a register
+    #[inline]
     pub fn resolve_lpc_ref<I>(&self, register: I) -> LpcRef
     where
         I: Into<usize>,
@@ -110,6 +119,11 @@ impl StackFrame {
     {
         self.function.labels.get(label.as_ref())
     }
+
+    #[inline]
+    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        LpcError::new(format!("runtime error: {}", msg.as_ref())).with_span(self.current_debug_span())
+    }
 }
 
 impl Display for StackFrame {
@@ -117,7 +131,7 @@ impl Display for StackFrame {
         write!(
             f,
             "Calling {}; Process {}\n\n",
-            self.function.name, self.process.filename
+            self.function.name, self.process.borrow().filename
         )
     }
 }
@@ -132,7 +146,7 @@ mod tests {
 
         let fs = ProgramFunction::new("my_function", 4, 7);
 
-        let frame = StackFrame::new(Rc::new(process), Rc::new(fs));
+        let frame = StackFrame::new(process, Rc::new(fs));
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -147,7 +161,7 @@ mod tests {
 
             let fs = ProgramFunction::new("my_function", 4, 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 30);
+            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 30);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -159,7 +173,7 @@ mod tests {
 
             let fs = ProgramFunction::new("my_function", 4, 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(Rc::new(process), Rc::new(fs), 2);
+            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 2);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
