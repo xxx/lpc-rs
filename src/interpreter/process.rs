@@ -58,9 +58,11 @@ impl Process {
     /// Get the filename of this process, including the clone ID suffix if present.
     #[inline]
     pub fn filename(&self) -> Cow<str> {
+        let filename: &str = self.program.filename.as_ref();
+        let name = filename.strip_suffix(".c").unwrap_or(filename);
         match self.clone_id {
-            Some(x) => Cow::Owned(format!("{}#{}", self.program.filename, x)),
-            None => Cow::Borrowed(&self.program.filename),
+            Some(x) => Cow::Owned(format!("{}#{}", name, x)),
+            None => Cow::Borrowed(name),
         }
     }
 
@@ -68,9 +70,11 @@ impl Process {
     /// if that fails.
     #[inline]
     pub fn localized_filename(&self, prefix: &str) -> String {
-        self.filename()
+        let filename: &str = &*self.filename();
+
+        filename
             .strip_prefix(prefix)
-            .unwrap_or_else(|| self.program.filename.as_ref())
+            .unwrap_or_else(|| filename)
             .into()
     }
 }
@@ -93,5 +97,34 @@ impl Display for Process {
 impl From<Process> for Rc<RefCell<Process>> {
     fn from(process: Process) -> Self {
         Rc::new(RefCell::new(process))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_filename() {
+        let prog = Program {
+            filename: "/foo/bar/baz.c".into(),
+            ..Default::default()
+        };
+        let proc = Process::new(prog);
+        assert_eq!(proc.filename(), "/foo/bar/baz");
+    }
+
+    #[test]
+    fn test_localized_filename() {
+        let prog = Program {
+            filename: "/foo/bar/baz.c".into(),
+            ..Default::default()
+        };
+        let proc = Process::new(prog);
+        assert_eq!(proc.localized_filename(""), "/foo/bar/baz");
+
+        assert_eq!(proc.localized_filename("/foo"), "/bar/baz");
+
+        assert_eq!(proc.localized_filename("/alksdjf"), "/foo/bar/baz");
     }
 }
