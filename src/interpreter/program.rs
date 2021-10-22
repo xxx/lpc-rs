@@ -8,11 +8,13 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+use crate::util::path_maker::LpcPath;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
     /// The path to the file that this program was compiled from. Used for error messaging.
-    pub filename: String,
+    /// This is intended to be the fully-expanded, in-game path.
+    pub filename: LpcPath,
 
     /// function mapping of name to Symbol
     pub functions: HashMap<String, Rc<ProgramFunction>>,
