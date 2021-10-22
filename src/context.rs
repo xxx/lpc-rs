@@ -16,7 +16,7 @@ use crate::util::path_maker::{canonicalize_server_path, LpcPath};
 #[derive(Debug)]
 pub struct Context {
     /// The name of the main file being compiled.
-    pub filename: String,
+    pub filename: LpcPath,
 
     pub config: Rc<Config>,
 
@@ -55,11 +55,10 @@ impl Context {
     /// ```
     pub fn new<T>(filename: T, config: Rc<Config>) -> Self
     where
-        T: AsRef<Path>,
+        T: Into<LpcPath>,
     {
         Self {
-            // filename: filename.as_ref().to_string_lossy().into_owned(),
-            filename: canonicalize_server_path(filename, ".", config.lib_dir()).to_string_lossy().to_string(),
+            filename: filename.into(),
             config,
             ..Self::default()
         }
@@ -102,7 +101,7 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
-            filename: String::from(""),
+            filename: LpcPath::default(),
             config: Rc::new(Config::default()),
             errors: Vec::new(),
             scopes: ScopeTree::default(),
