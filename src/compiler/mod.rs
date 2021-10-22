@@ -286,7 +286,7 @@ mod tests {
         #[test]
         fn disallows_going_outside_the_root() {
             let config = Config::new(None::<&str>).unwrap().with_lib_dir("tests");
-            let path = LpcPath::new_in_game_with_cwd("../../secure.c", "/", config.lib_dir());
+            let path = LpcPath::new_server("../../secure.c");
             let compiler = Compiler::new(config.into());
 
             assert!(compiler
