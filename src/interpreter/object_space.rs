@@ -68,31 +68,20 @@ impl ObjectSpace {
     {
         let process = process.into();
         let name = process.borrow().localized_filename(self.config.lib_dir());
+        let name = match name.strip_suffix(".c") {
+            Some(x) => x.to_string(),
+            None => name
+        };
 
         self.processes.insert(name, process);
-        println!("inserted process? {:?}", self.processes);
     }
 
-    /// Lookup a process from its path. `.c` will be appended and checked,
-    /// if the passed name doesn't have an exact match.
+    /// Lookup a process from its path.
     pub fn lookup<T>(&self, path: T) -> Option<&Rc<RefCell<Process>>>
     where
         T: AsRef<str>,
     {
-        let s = path.as_ref();
-
-        match self.processes.get(s) {
-            Some(proc) => Some(proc),
-            None => {
-                if !s.ends_with(".c") {
-                    let mut owned = s.to_string();
-                    owned.push_str(".c");
-                    return self.lookup(owned);
-                }
-
-                None
-            }
-        }
+        self.processes.get(path.as_ref())
     }
 }
 
@@ -114,3 +103,57 @@ impl From<ObjectSpace> for Rc<RefCell<ObjectSpace>> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::util::path_maker::LpcPath;
+    use super::*;
+
+    #[test]
+    fn test_insert_master() {
+        let mut space = ObjectSpace::default();
+        let prog = Program::default();
+        space.insert_master(prog.clone());
+        let filename = prog.filename.to_str().unwrap();
+
+        assert_eq!(space.len(), 1);
+        assert!(space.processes.contains_key(filename));
+    }
+
+    #[test]
+    fn test_insert_clone() {
+        let mut space = ObjectSpace::default();
+        let prog: Rc<Program> = Program::default().into();
+        let filename = prog.filename.to_str().unwrap();
+
+        let mut prog2: Program = Program::default();
+        let filename2: LpcPath = "/foo/bar/baz".into();
+        prog2.filename = filename2.clone();
+
+        space.insert_clone(prog.clone());
+        space.insert_clone(prog.clone());
+        space.insert_clone(prog2.clone().into());
+        space.insert_clone(prog.clone());
+
+        assert_eq!(space.len(), 4);
+        assert!(space.processes.contains_key(&format!("{}#{}", filename, 0)));
+        assert!(space.processes.contains_key(&format!("{}#{}", filename, 1)));
+        assert!(space.processes.contains_key(&format!("{}#{}", filename2, 2)));
+        assert!(space.processes.contains_key(&format!("{}#{}", filename, 3)));
+    }
+
+    #[test]
+    fn test_insert_process() {
+        let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code/");
+        let mut space = ObjectSpace::new(config);
+
+        let mut prog: Program = Program::default();
+        let filename: LpcPath = "./tests/fixtures/code/foo/bar/baz.c".into();
+        prog.filename = filename.clone();
+
+        let process = Process::new(prog);
+        space.insert_process(Rc::new(RefCell::new(process)));
+
+        assert_eq!(space.len(), 1);
+        assert!(space.processes.contains_key("/foo/bar/baz"));
+    }
+}
