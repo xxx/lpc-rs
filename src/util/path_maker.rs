@@ -5,8 +5,10 @@ use std::{
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
 };
+use std::ops::Deref;
+use parking_lot::RwLock;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LpcPath {
     /// Represent an on-server path. Relative paths are relative to the running process' dir.
     Server(PathBuf),
@@ -30,30 +32,32 @@ impl LpcPath {
         Self::Server(canon)
     }
 
-    /// Create a new in-game path. It assumes that any interaction with the real file system
-    /// will require canonicalization
-    pub fn new_in_game<T>(path: T) -> Self
-    where
-        T: AsRef<Path>,
-    {
-        Self::InGame(path.as_ref().to_path_buf())
-    }
-
-    /// Create a new in-game path. It assumes that any interaction with the real file system
-    /// will require canonicalization.
-    /// This is just a convenience function that combines the cwd and path, mostly used for
-    /// resolving relative `#include` paths.
+    /// Create a new in-game path.
+    /// This will expand relative paths to (in-game) absolute, if necessary.
     ///
     /// # Arguments
     /// `path` - The relative path to the file
     /// `cwd` - The current directory used when resolving `.`s in `path`.
-    pub fn new_in_game_with_cwd<T, U>(path: T, cwd: U) -> Self
+    /// `lib_dir` - The `LIB_DIR` configuration that's in use.
+    pub fn new_in_game<T, U, V>(path: T, cwd: U, lib_dir: V) -> Self
     where
         T: AsRef<Path>,
         U: AsRef<Path>,
+        V: AsRef<OsStr>,
     {
-        let buf = cwd.as_ref().join(path);
+        let buf = canonicalize_in_game_path(path, cwd, lib_dir);
         Self::InGame(buf)
+    }
+
+    /// Return this LpcPath, but with the passed extension added.
+    pub fn with_extension<S>(&self, extension: S) -> LpcPath
+    where
+        S: AsRef<OsStr>
+    {
+        match self {
+            LpcPath::Server(x) => LpcPath::Server(x.with_extension(extension)),
+            LpcPath::InGame(x) => LpcPath::InGame(x.with_extension(extension)),
+        }
     }
 
     /// Return the full, absolute on-server path for a file
@@ -98,15 +102,6 @@ pub trait ToLpcPath {
     fn to_lpc_path(&self) -> LpcPath;
 }
 
-impl<T> From<&T> for LpcPath
-where
-    T: AsRef<Path>,
-{
-    fn from(p: &T) -> Self {
-        Self::new_server(p.as_ref())
-    }
-}
-
 impl From<PathBuf> for LpcPath {
     fn from(pb: PathBuf) -> Self {
         Self::new_server(pb)
@@ -128,6 +123,12 @@ impl From<Cow<'_, Path>> for LpcPath {
 impl From<OsString> for LpcPath {
     fn from(c: OsString) -> Self {
         Self::new_server(c.as_os_str())
+    }
+}
+
+impl From<&LpcPath> for LpcPath {
+    fn from(p: &LpcPath) -> Self {
+        p.clone()
     }
 }
 
@@ -159,6 +160,15 @@ impl AsRef<str> for LpcPath {
     }
 }
 
+impl AsRef<OsStr> for LpcPath {
+    fn as_ref(&self) -> &OsStr {
+        match self {
+            LpcPath::Server(x)
+            | LpcPath::InGame(x) => x.as_os_str(),
+        }
+    }
+}
+
 impl AsRef<Path> for LpcPath {
     fn as_ref(&self) -> &Path {
         match self {
@@ -173,6 +183,23 @@ impl Display for LpcPath {
         let p: &Path = self.as_ref();
 
         write!(f, "{}", p.display())
+    }
+}
+
+impl Default for LpcPath {
+    fn default() -> Self {
+        Self::Server("/".into())
+    }
+}
+
+impl Deref for LpcPath {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            LpcPath::Server(x)
+            | LpcPath::InGame(x) => x
+        }
     }
 }
 
@@ -228,18 +255,17 @@ where
     V: AsRef<OsStr>,
 {
     let canon = canonicalize_server_path(path, cwd, lib_dir.as_ref());
-    let buf = canon.as_os_str();
-    let root_len = lib_dir.as_ref().len();
 
     // Strip off the root_dir prefix, then clean up the rest.
-    PathBuf::from(
-        &buf.to_string_lossy()
-            .chars()
-            .skip(root_len)
-            .collect::<String>()
-            .replace("//", "/")
-            .replace("/./", "/"),
-    )
+    let stripped = canon.strip_prefix(lib_dir.as_ref()).unwrap_or(&canon);
+    let mut result = stripped.to_string_lossy().into_owned()
+        .replace("//", "/")
+        .replace("/./", "/");
+    if !result.starts_with("/") {
+        result = format!("/{}", result);
+    }
+
+    PathBuf::from(result)
 }
 
 #[cfg(test)]
@@ -305,7 +331,7 @@ mod tests {
         assert_eq!(
             canonicalize_in_game_path("../../../../../../../../../my_file.c", CWD, LIB_DIR)
                 .as_os_str(),
-            ""
+            "/my_file.c"
         );
     }
 
@@ -316,6 +342,33 @@ mod tests {
                 .as_in_game("/some/root")
                 .as_os_str(),
             "/foo.c"
+        );
+    }
+
+    #[test]
+    fn test_new_in_game() {
+        assert_eq!(
+            LpcPath::new_in_game("/some/root/foo.c", "/taccos", "/my_hero")
+                .as_os_str(),
+            "/some/root/foo.c"
+        );
+
+        assert_eq!(
+            LpcPath::new_in_game("./some/root/foo.c", "/taccos", "/my_hero")
+                .as_os_str(),
+            "/taccos/some/root/foo.c"
+        );
+
+        assert_eq!(
+            LpcPath::new_in_game("../some/root/foo.c", "/marf/taccos", "/my_hero")
+                .as_os_str(),
+            "/marf/some/root/foo.c"
+        );
+
+        assert_eq!(
+            LpcPath::new_in_game("../../../../../../some/foo.c", "/marf/taccos", "/my_hero")
+                .as_os_str(),
+            "/some/foo.c"
         );
     }
 }
