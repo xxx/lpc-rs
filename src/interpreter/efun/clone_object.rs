@@ -19,7 +19,7 @@ use crate::util::path_maker::canonicalize_in_game_path;
 fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
 
-    let full_path = LpcPath::new_in_game_with_cwd(path, context.in_game_cwd()?, context.config().lib_dir());
+    let full_path = LpcPath::new_in_game(path, context.in_game_cwd()?, context.config().lib_dir());
     // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 
