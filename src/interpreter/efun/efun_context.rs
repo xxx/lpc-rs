@@ -12,6 +12,7 @@ use crate::Result;
 use crate::interpreter::process::Process;
 use crate::interpreter::memory::Memory;
 use std::cell::RefCell;
+use crate::interpreter::program::Program;
 
 /// A structure to hold various pieces of interpreter state, to be passed to Efuns
 #[derive(Debug)]
@@ -42,6 +43,10 @@ impl<'task> EfunContext<'task> {
 
             /// Increment the current task instruction count, checking for too-long-evaluations
             pub fn increment_instruction_count(&self, amount: usize) -> Result<usize>;
+
+            /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
+            /// then insert it into the object space.
+            pub fn insert_clone(&self, program: Rc<Program>) -> Rc<RefCell<Process>>;
         }
 
         to self.memory {
