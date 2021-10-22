@@ -69,7 +69,7 @@ impl Compiler {
     /// ```
     pub fn compile_file<T>(&self, path: T) -> Result<Program, CompilerError>
     where
-        T: AsRef<Path> + Into<LpcPath>,
+        T: Into<LpcPath>,
     {
         let lpc_path = path.into();
         let absolute = lpc_path.as_server(self.config.lib_dir());
@@ -87,9 +87,8 @@ impl Compiler {
                             ))));
                         }
 
-                        let mut owned = absolute.into_owned().into_os_string();
-                        owned.push(".c");
-                        self.compile_file(owned)
+                        let dot_c = lpc_path.with_extension("c");
+                        self.compile_file(dot_c)
                     }
                     _ => Err(CompilerError::LpcError(LpcError::new(format!(
                         "Cannot read file `{}`: {}",
@@ -100,31 +99,27 @@ impl Compiler {
             }
         };
 
-        self.compile_string(absolute, file_content)
+        self.compile_string(lpc_path, file_content)
     }
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
-    pub fn compile_in_game_file<T>(
+    pub fn compile_in_game_file(
         &self,
-        path: T,
+        path: &LpcPath,
         span: Option<Span>,
-    ) -> Result<Program, CompilerError>
-    where
-        T: AsRef<Path> + Into<LpcPath>,
-    {
-        let lpc_path = path.into();
-        let absolute_file_path = lpc_path.as_server(self.config.lib_dir());
+    ) -> Result<Program, CompilerError> {
+        let true_path = path.as_server(self.config.lib_dir());
 
-        if !absolute_file_path.starts_with(self.config.lib_dir()) {
+        if path.as_os_str().is_empty() || !true_path.starts_with(self.config.lib_dir()) {
             return Err(CompilerError::LpcError(LpcError::new(&format!(
-                "Attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                AsRef::<Path>::as_ref(&*absolute_file_path).display(),
-                absolute_file_path.display(),
+                "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
+                path,
+                true_path.display(),
                 self.config.lib_dir()
             )).with_span(span)));
         }
 
-        self.compile_file(absolute_file_path)
+        self.compile_file(path)
     }
 
     /// Take a str and preprocess it into a vector of Span tuples, and also returns the Preprocessor
@@ -157,13 +152,14 @@ impl Compiler {
         code: U,
     ) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
     where
-        T: AsRef<Path> + Into<LpcPath>,
+        T: Into<LpcPath>,
         U: AsRef<str>,
     {
-        let context = Context::new(&path, self.config.clone());
+        let lpc_path = path.into();
+        let context = Context::new(&lpc_path, self.config.clone());
 
         let mut preprocessor = Preprocessor::new(context);
-        let code = match preprocessor.scan(&path, &code) {
+        let code = match preprocessor.scan(&lpc_path, &code) {
             Ok(c) => c,
             Err(e) => {
                 let err = e;
@@ -200,10 +196,10 @@ impl Compiler {
     /// ```
     pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program, CompilerError>
     where
-        T: AsRef<Path> + Into<LpcPath>,
+        T: Into<LpcPath>,
         U: AsRef<str>,
     {
-        let (mut program, context) = self.parse_string(&path, code)?;
+        let (mut program, context) = self.parse_string(&path.into(), code)?;
 
         // println!("{:?}", program);
 
@@ -241,16 +237,15 @@ impl Compiler {
     /// # Returns
     /// A [`Result`] with a tuple containing the parsed [`ProgramNode`],
     /// as well as the [`Preprocessor`]'s [`Context`]
-    pub fn parse_string<T, U>(
+    pub fn parse_string<T>(
         &self,
-        path: &T,
-        code: U,
+        path: &LpcPath,
+        code: T,
     ) -> Result<(ProgramNode, Context), CompilerError>
     where
-        T: AsRef<Path> + Into<LpcPath>,
-        U: AsRef<str>,
+        T: AsRef<str>,
     {
-        let (tokens, preprocessor) = self.preprocess_string(&path, code)?;
+        let (tokens, preprocessor) = self.preprocess_string(path, code)?;
 
         let wrapper = TokenVecWrapper::new(&tokens);
         let context = preprocessor.into_context();
@@ -291,13 +286,14 @@ mod tests {
         #[test]
         fn disallows_going_outside_the_root() {
             let config = Config::new(None::<&str>).unwrap().with_lib_dir("tests");
+            let path = LpcPath::new_in_game_with_cwd("../../secure.c", "/", config.lib_dir());
             let compiler = Compiler::new(config.into());
 
             assert!(compiler
-                .compile_in_game_file("../../secure.c", None)
+                .compile_in_game_file(&path, None)
                 .unwrap_err()
                 .to_string()
-                .starts_with("Attempt to access a file outside of lib_dir"));
+                .starts_with("attempt to access a file outside of lib_dir"));
         }
     }
 }
