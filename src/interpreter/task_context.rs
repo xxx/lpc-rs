@@ -8,6 +8,7 @@ use crate::Result;
 use crate::interpreter::instruction_counter::InstructionCounter;
 use delegate::delegate;
 use std::cell::RefCell;
+use crate::interpreter::program::Program;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]
@@ -70,7 +71,7 @@ impl TaskContext {
         }
     }
 
-    /// Directly insert the passed [`Process`] into the space, with in-game local filename.
+    /// Directly insert the passed [`Process`] into the object space, with in-game local filename.
     #[inline]
     pub fn insert_process<P>(&self, process: P)
     where
@@ -79,11 +80,28 @@ impl TaskContext {
         self.object_space.borrow_mut().insert_process(process);
     }
 
+    /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
+    /// then insert it into the object space.
+    pub fn insert_clone(&self, program: Rc<Program>) -> Rc<RefCell<Process>> {
+        self.object_space.borrow_mut().insert_clone(program)
+    }
+
     /// Get the in-game directory of the current process
     pub fn in_game_cwd(&self) -> Result<PathBuf> {
-        println!("in=game cwd {:?} || {:?}", self.process.borrow().cwd(), self.config.lib_dir());
         match self.process.borrow().cwd().strip_prefix(self.config.lib_dir()) {
-            Ok(x) => Ok(x.to_path_buf()),
+            Ok(x) => {
+                let buf = if x.as_os_str().is_empty() {
+                    PathBuf::from("/")
+                } else {
+                    if x.starts_with("/") {
+                        x.to_path_buf()
+                    } else {
+                        PathBuf::from(format!("/{}", x.display()))
+                    }
+                };
+
+                Ok(buf)
+            },
             Err(e) => Err(LpcError::new(format!("{} in TaskContext", e.to_string()))),
         }
     }
@@ -102,5 +120,23 @@ impl TaskContext {
     /// Return the [`ObjectSpace`]
     pub fn object_space(&self) -> &Rc<RefCell<ObjectSpace>> {
         &self.object_space
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::util::path_maker::LpcPath;
+    use super::*;
+
+    #[test]
+    fn test_in_game_cwd() {
+        let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code/");
+        let space = ObjectSpace::default();
+        let mut program = Program::default();
+        program.filename = LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c");
+        let process = Process::new(program);
+        let context = TaskContext::new(config, process, space);
+
+        assert_eq!(context.in_game_cwd().unwrap().to_str().unwrap(), "/foo/bar");
     }
 }
