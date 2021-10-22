@@ -14,20 +14,20 @@ use crate::interpreter::function_evaluator::FunctionEvaluator;
 use crate::codegen::codegen_walker::INIT_PROGRAM;
 use crate::interpreter::MAX_CALL_STACK_SIZE;
 use crate::interpreter::task_context::TaskContext;
+use crate::util::path_maker::canonicalize_in_game_path;
 
 fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
 
-    let full_path = LpcPath::new_in_game_with_cwd(path, context.in_game_cwd()?);
-    println!("full path in load_master {:?} {:?}", full_path, context.in_game_cwd()?);
+    let full_path = LpcPath::new_in_game_with_cwd(path, context.in_game_cwd()?, context.config().lib_dir());
+    // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 
     match context.lookup_process(path_str) {
         Some(proc) => Ok(proc.clone()),
         None => {
-            println!("load master path {:?}", full_path);
             match compiler
-                .compile_in_game_file(full_path, context.current_debug_span())
+                .compile_in_game_file(&full_path, context.current_debug_span())
             {
                 Ok(prog) => {
                     let mut evaluator: FunctionEvaluator<MAX_CALL_STACK_SIZE> = FunctionEvaluator::new(context.memory());
@@ -87,8 +87,8 @@ pub fn clone_object(context: &mut EfunContext) -> Result<()> {
         }
 
         let new_prog = master.borrow().program.clone();
-        let new_clone: Rc<RefCell<Process>> = Process::new(new_prog).into();
-        context.insert_process(new_clone.clone());
+
+        let new_clone = context.insert_clone(new_prog);
 
         let mut evaluator: FunctionEvaluator<MAX_CALL_STACK_SIZE> = FunctionEvaluator::new(context.memory());
         {
@@ -133,12 +133,13 @@ mod tests {
     use crate::interpreter::memory::Memory;
     use crate::interpreter::task_context::TaskContext;
     use indoc::indoc;
+    use regex::Regex;
     use crate::interpreter::object_space::ObjectSpace;
 
     fn compile_prog(code: &str, config: Rc<Config>) -> Program {
         let compiler = Compiler::new(config);
         compiler
-            .compile_string("./my_file.c", code)
+            .compile_string("./tests/fixtures/code/my_file.c", code)
             .expect("Failed to compile.")
     }
 
@@ -169,49 +170,36 @@ mod tests {
         let context = task_context_fixture(program, config);
         let mut task = fixture();
 
-        let result = task.eval(func, &[], context.clone());
+        let _result1 = task.eval(func.clone(), &[], context.clone());
+        let _result2 = task.eval(func, &[], context.clone());
 
-        assert_eq!(context.object_space().borrow().len(), 4);
-
-        println!("result \n\n {:?} \n\n {:?}", result, task);
-        //
-        // let sym = ProgramFunction::new("clone_object", 1, 0);
-        //
-        // let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym));
-        //
-        // let path = value_to_ref!(LpcValue::from("./example"), &interpreter.memory);
-        // frame.registers[1] = path;
-        //
-        // interpreter
-        //     .push_frame(frame.clone())
-        //     .expect("stack overflow");
-        // assert!(clone_object(&mut interpreter).is_ok());
-        // interpreter.pop_frame();
-        //
-        // interpreter.push_frame(frame).expect("stack overflow");
-        // assert!(clone_object(&mut interpreter).is_ok());
-        //
-        // // procs are empty.c, example.c, example.c#0, example.c#1
-        // assert_eq!(interpreter.processes.len(), 4);
+        // procs are /example, /example#0, /example#1
+        assert_eq!(context.object_space().borrow().len(), 3);
     }
 
-    // #[test]
-    // fn returns_error_if_no_clone() {
-    //     let mut interpreter = fixture();
-    //
-    //     let sym = ProgramFunction::new("clone_object", 1, 0);
-    //
-    //     let mut frame = StackFrame::new(interpreter.process.clone(), Rc::new(sym));
-    //
-    //     let path = value_to_ref!(LpcValue::from("./no_clone.c"), &interpreter.memory);
-    //     frame.registers[1] = path;
-    //
-    //     interpreter.push_frame(frame).expect("stack overflow");
-    //
-    //     let re =
-    //         Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.")
-    //             .unwrap();
-    //
-    //     assert!(re.is_match(&clone_object(&mut interpreter).unwrap_err().to_string()));
-    // }
+    #[test]
+    fn returns_error_if_no_clone() {
+        let prog = indoc! { r#"
+            object foo = clone_object("./no_clone.c");
+        "# };
+
+        let config: Rc<Config> = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code").into();
+
+        let program = compile_prog(prog, config.clone());
+        let func = program
+            .functions
+            .get(INIT_PROGRAM)
+            .expect("no init found?")
+            .clone();
+        let context = task_context_fixture(program, config);
+        let mut task = fixture();
+
+        let result = task.eval(func.clone(), &[], context.clone());
+
+        let re =
+            Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.")
+                .unwrap();
+
+        assert!(re.is_match(&result.unwrap_err().to_string()));
+    }
 }
