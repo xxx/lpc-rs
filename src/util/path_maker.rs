@@ -6,7 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use std::ops::Deref;
-use parking_lot::RwLock;
+use std::os::unix::ffi::OsStrExt;
+use bstr::ByteSlice;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LpcPath {
@@ -94,6 +95,21 @@ impl LpcPath {
                 Err(_) => x.into(),
             },
             LpcPath::InGame(x) => x.into(),
+        }
+    }
+
+    /// Is this path underneath the given root? Used to check for traversal attacks
+    pub fn is_within_root<P>(&self, root: P) -> bool
+    where
+        P: AsRef<Path>
+    {
+        match self {
+            LpcPath::Server(x) => {
+                let slice = <[u8]>::from_path(x)
+                    .expect("Path must be valid UTF-8 on Windows. This error should never occur on Unix.");
+                slice.starts_with_str(root.as_ref().as_os_str().as_bytes())
+            }
+            LpcPath::InGame(x) => !x.as_os_str().is_empty()
         }
     }
 }
@@ -217,12 +233,14 @@ where
     V: Into<OsString>,
 {
     let path_ref = path.as_ref().as_os_str();
-    let sep = String::from(std::path::MAIN_SEPARATOR);
+    let mut buf: [u8; 4] = [0; 4];
+    let sep: &str = std::path::MAIN_SEPARATOR.encode_utf8(&mut buf);
     let os_sep = OsString::from(&sep);
     let mut lib_string = lib_dir.into();
 
     // turn relative paths into absolute
-    if !path_ref.to_string_lossy().starts_with(&sep) {
+    let slice = <[u8]>::from_os_str(path_ref).expect("Paths must be valid UTF-8 on Windows");
+    if !slice.starts_with_str(sep) {
         lib_string.push(&os_sep);
         lib_string.push(cwd.as_ref().as_os_str());
     }
@@ -257,11 +275,11 @@ where
     let canon = canonicalize_server_path(path, cwd, lib_dir.as_ref());
 
     // Strip off the root_dir prefix, then clean up the rest.
-    let stripped = canon.strip_prefix(lib_dir.as_ref()).unwrap_or(&canon);
+    let stripped = canon.strip_prefix(lib_dir.as_ref()).unwrap_or_else(|_| AsRef::<Path>::as_ref(""));
     let mut result = stripped.to_string_lossy().into_owned()
         .replace("//", "/")
         .replace("/./", "/");
-    if !result.starts_with("/") {
+    if !result.is_empty() && !result.starts_with("/") {
         result = format!("/{}", result);
     }
 
@@ -331,7 +349,7 @@ mod tests {
         assert_eq!(
             canonicalize_in_game_path("../../../../../../../../../my_file.c", CWD, LIB_DIR)
                 .as_os_str(),
-            "/my_file.c"
+            ""
         );
     }
 
@@ -368,7 +386,13 @@ mod tests {
         assert_eq!(
             LpcPath::new_in_game("../../../../../../some/foo.c", "/marf/taccos", "/my_hero")
                 .as_os_str(),
-            "/some/foo.c"
+            ""
+        );
+
+        assert_eq!(
+            LpcPath::new_in_game("/../../../../../../some/foo.c", "/marf/taccos", "/my_hero")
+                .as_os_str(),
+            ""
         );
     }
 }
