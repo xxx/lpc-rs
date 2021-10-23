@@ -122,7 +122,7 @@ impl Preprocessor {
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
     ///
     /// # Arguments
-    /// `path` - The [`Path`]like representing the file.
+    /// `path` - The in-game [`Path`]like representing the file.
     /// `code` - The code to scan.
     ///
     /// # Examples
@@ -148,12 +148,13 @@ impl Preprocessor {
     /// ```
     pub fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
     where
-        P: AsRef<Path> + Into<LpcPath>,
+        P: Into<LpcPath>,
         C: AsRef<str>,
     {
         let mut output = Vec::new();
 
-        let file_id = FileCache::insert(path.as_ref().display());
+        let lpc_path = path.into();
+        let file_id = FileCache::insert(&lpc_path);
 
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
@@ -169,7 +170,6 @@ impl Preprocessor {
 
                     match token {
                         Token::LocalInclude(t) => {
-                            let lpc_path = path.as_ref().to_lpc_path();
                             let cwd = lpc_path
                                 .as_in_game(self.context.config.lib_dir())
                                 .parent()
@@ -178,7 +178,6 @@ impl Preprocessor {
                             self.handle_local_include(t, &cwd, &mut output)?
                         }
                         Token::SysInclude(t) => {
-                            let lpc_path = path.as_ref().to_lpc_path();
                             let cwd = lpc_path
                                 .as_in_game(self.context.config.lib_dir())
                                 .parent()
@@ -393,7 +392,7 @@ impl Preprocessor {
 
         let check_duplicate = |key, error_span| {
             if !self.skipping_lines() && self.defines.contains_key(key) {
-                return Err(LpcError::new(format!("Duplicate `#define`: `{}`", key))
+                return Err(LpcError::new(format!("duplicate `#define`: `{}`", key))
                     .with_span(Some(error_span)));
             }
 
@@ -468,7 +467,7 @@ impl Preprocessor {
             self.defines.insert(name, define);
             Ok(())
         } else {
-            Err(LpcError::new("Invalid `#define`.").with_span(Some(token.0)))
+            Err(LpcError::new("invalid `#define`.").with_span(Some(token.0)))
         }
     }
 
@@ -506,7 +505,7 @@ impl Preprocessor {
 
             let config = self.context.config.clone();
             for dir in config.system_include_dirs() {
-                let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), dir);
+                let to_include = LpcPath::new_in_game(matched.as_str(), dir, config.lib_dir());
                 return match self.include_local_file(&to_include, token.0) {
                     Ok(included) => {
                         for spanned in included {
@@ -518,7 +517,7 @@ impl Preprocessor {
                     Err(e) => {
                         // TODO: bleeeeeeech
                         // If the error is just "file not found", keep looking
-                        if e.as_ref().contains("Unable to read include file") {
+                        if e.as_ref().contains("unable to read include file") {
                             continue;
                         }
 
@@ -527,9 +526,9 @@ impl Preprocessor {
                 };
             }
 
-            let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), &cwd);
+            let to_include = LpcPath::new_in_game(matched.as_str(), &cwd, config.lib_dir());
 
-            // Fall back to trying local paths
+            // Fall back to trying the path directly
             let included = self.include_local_file(&to_include, token.0)?;
 
             for spanned in included {
@@ -538,7 +537,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("Invalid `#include`.").with_span(Some(token.0)))
+            Err(LpcError::new("invalid `#include`.").with_span(Some(token.0)))
         }
     }
 
@@ -563,7 +562,7 @@ impl Preprocessor {
 
         if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
-            let to_include = LpcPath::new_in_game_with_cwd(matched.as_str(), cwd);
+            let to_include = LpcPath::new_in_game(matched.as_str(), cwd, self.context.config.lib_dir());
 
             let included = self.include_local_file(&to_include, token.0)?;
 
@@ -573,7 +572,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("Invalid `#include`.").with_span(Some(token.0)))
+            Err(LpcError::new("invalid `#include`.").with_span(Some(token.0)))
         }
     }
 
@@ -626,7 +625,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0)))
+            Err(LpcError::new("invalid `#ifdef`.").with_span(Some(token.0)))
         }
     }
 
@@ -679,7 +678,7 @@ impl Preprocessor {
                     }
                 } else {
                     Err(
-                        LpcError::new(format!("Unable to resolve into an int: `{}`", x))
+                        LpcError::new(format!("unable to resolve into an int: `{}`", x))
                             .with_span(span),
                     )
                 }
@@ -703,7 +702,7 @@ impl Preprocessor {
                 }
             }
             _ => Err(LpcError::new(format!(
-                "Attempt to convert unknown node type to int: `{}`",
+                "attempt to convert unknown node type to int: `{}`",
                 expr
             ))
             .with_span(span)),
@@ -714,7 +713,7 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         IFDEF.captures(&token.1).map_or_else(
-            || Err(LpcError::new("Invalid `#ifdef`.").with_span(Some(token.0))),
+            || Err(LpcError::new("invalid `#ifdef`.").with_span(Some(token.0))),
             |captures| {
                 self.ifdefs.push(IfDef {
                     code: String::from(&captures[1]),
@@ -732,7 +731,7 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         IFNDEF.captures(&token.1).map_or_else(
-            || Err(LpcError::new("Invalid `#ifndef`.").with_span(Some(token.0))),
+            || Err(LpcError::new("invalid `#ifndef`.").with_span(Some(token.0))),
             |captures| {
                 self.ifdefs.push(IfDef {
                     code: String::from(&captures[1]),
@@ -758,7 +757,7 @@ impl Preprocessor {
             }
 
             if let Some(else_span) = &self.current_else {
-                let err = LpcError::new("Duplicate `#else` found")
+                let err = LpcError::new("duplicate `#else` found")
                     .with_span(Some(token.0))
                     .with_label("First used here", Some(*else_span));
 
@@ -774,7 +773,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("Invalid `#else`.").with_span(Some(token.0)))
+            Err(LpcError::new("invalid `#else`.").with_span(Some(token.0)))
         }
     }
 
@@ -825,30 +824,38 @@ impl Preprocessor {
     /// `span` - The [`Span`] of the `#include` token.
     fn include_local_file(
         &mut self,
-        // path: T,
-        // cwd: U,
         path: &LpcPath,
         span: Span,
     ) -> Result<Vec<Spanned<Token>>> {
         let canon_include_path = path.as_server(self.context.lib_dir());
-        // let canon_include_path = canonicalize_server_path(&path, &cwd, &self.context.lib_dir());
 
-        // println!("local include {:?} {:?} {:?}", path.as_ref(), cwd.as_ref(), canon_include_path);
-        if !canon_include_path.starts_with(self.context.lib_dir()) {
+        println!("include local file path & canon {:?} {:?}", path, canon_include_path);
+
+        if !path.is_within_root(self.context.lib_dir()) {
             return Err(LpcError::new(&format!(
-                "Attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
+                "attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 canon_include_path.display(),
                 self.context.lib_dir()
             ))
-            .with_span(Some(span)));
+                .with_span(Some(span)));
+        }
+
+        if canon_include_path.is_dir() {
+            return Err(LpcError::new(&format!(
+                "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
+                path,
+                canon_include_path.display(),
+                self.context.lib_dir()
+            ))
+                .with_span(Some(span)));
         }
 
         let file_content = match fs::read_to_string(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
                 return Err(LpcError::new(&format!(
-                    "Unable to read include file `{}`: {:?}",
+                    "unable to read include file `{}`: {:?}",
                     path, e
                 ))
                 .with_span(Some(span)));
@@ -889,7 +896,7 @@ impl Preprocessor {
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
         if !self.last_slice.ends_with('\n') {
             return Err(LpcError::new(
-                "Preprocessor directives must appear on their own line.".to_string(),
+                "preprocessor directives must appear on their own line.".to_string(),
             )
             .with_span(Some(span)));
         }
@@ -929,7 +936,7 @@ mod tests {
 
     fn test_valid(input: &str, expected: &[&str]) {
         let mut preprocessor = fixture();
-        match preprocessor.scan("test.c", input) {
+        match preprocessor.scan("/test.c", input) {
             Ok(result) => {
                 let mapped = result.iter().map(|i| i.1.to_string()).collect::<Vec<_>>();
 
@@ -944,7 +951,7 @@ mod tests {
     // `expected` is converted to a Regex, for easier matching on errors.
     fn test_invalid(input: &str, expected: &str) {
         let mut preprocessor = fixture();
-        match preprocessor.scan("test.c", input) {
+        match preprocessor.scan("/test.c", input) {
             Ok(result) => {
                 panic!("Expected to fail, but passed with {:?}", result);
             }
@@ -1026,14 +1033,14 @@ mod tests {
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include <nonexistent.h>"#;
 
-            test_invalid(input, "Unable to read include file `nonexistent.h`");
+            test_invalid(input, "unable to read include file `/nonexistent.h`");
         }
 
         #[test]
         fn test_errors_for_traversal_attacks() {
             let input = r#"#include </../../some_file.h>"#;
 
-            test_invalid(input, "Attempt to include a file outside the root");
+            test_invalid(input, "attempt to include a file outside the root");
         }
 
         #[test]
@@ -1045,7 +1052,7 @@ mod tests {
 
             test_invalid(
                 prog,
-                "Preprocessor directives must appear on their own line",
+                "preprocessor directives must appear on their own line",
             );
         }
 
@@ -1056,7 +1063,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Invalid `#include`");
+            test_invalid(prog, "invalid `#include`");
         }
     }
 
@@ -1121,14 +1128,14 @@ mod tests {
         fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
-            test_invalid(input, "Unable to read include file `/askdf/foo.h`");
+            test_invalid(input, "unable to read include file `/askdf/foo.h`");
         }
 
         #[test]
         fn test_errors_for_traversal_attacks() {
             let input = r#"#include "/../../some_file.h""#;
 
-            test_invalid(input, "Attempt to include a file outside the root");
+            test_invalid(input, "attempt to include a file outside the root");
         }
 
         #[test]
@@ -1140,7 +1147,7 @@ mod tests {
 
             test_invalid(
                 prog,
-                "Preprocessor directives must appear on their own line",
+                "preprocessor directives must appear on their own line",
             );
         }
 
@@ -1151,7 +1158,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Invalid `#include`");
+            test_invalid(prog, "invalid `#include`");
         }
     }
 
@@ -1225,7 +1232,7 @@ mod tests {
                     panic!("Expected an error due to duplicate definition.");
                 }
                 Err(e) => {
-                    assert_eq!(e.to_string(), "Duplicate `#define`: `ASS`");
+                    assert_eq!(e.to_string(), "duplicate `#define`: `ASS`");
                 }
             }
         }
@@ -1290,7 +1297,7 @@ mod tests {
 
             test_invalid(
                 prog,
-                "Preprocessor directives must appear on their own line",
+                "preprocessor directives must appear on their own line",
             );
         }
 
@@ -1301,7 +1308,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Invalid `#define`");
+            test_invalid(prog, "invalid `#define`");
         }
     }
 
@@ -1374,7 +1381,7 @@ mod tests {
 
             test_invalid(
                 prog,
-                "Preprocessor directives must appear on their own line",
+                "preprocessor directives must appear on their own line",
             );
         }
 
@@ -1387,7 +1394,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Invalid `#ifdef`");
+            test_invalid(prog, "invalid `#ifdef`");
         }
     }
 
@@ -1448,7 +1455,7 @@ mod tests {
 
             test_invalid(
                 prog,
-                "Preprocessor directives must appear on their own line",
+                "preprocessor directives must appear on their own line",
             );
         }
 
@@ -1461,7 +1468,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Invalid `#ifndef`");
+            test_invalid(prog, "invalid `#ifndef`");
         }
     }
 
@@ -1523,7 +1530,7 @@ mod tests {
                 #endif
             "# };
 
-            test_invalid(prog, "Duplicate `#else`");
+            test_invalid(prog, "duplicate `#else`");
         }
 
         #[test]
@@ -1535,7 +1542,7 @@ mod tests {
 
             test_invalid(
                 prog,
-                "Preprocessor directives must appear on their own line",
+                "preprocessor directives must appear on their own line",
             );
         }
 
@@ -1548,7 +1555,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "Invalid `#else`");
+            test_invalid(prog, "invalid `#else`");
         }
     }
 
