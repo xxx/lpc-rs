@@ -9,7 +9,7 @@ use lpc_rs::interpreter::function_evaluator::FunctionEvaluator;
 use lpc_rs::interpreter::MAX_CALL_STACK_SIZE;
 use lpc_rs::interpreter::memory::Memory;
 use lpc_rs::interpreter::object_space::ObjectSpace;
-use lpc_rs::interpreter::task_context::TaskContext;
+
 
 fn main() {
     // let args: Vec<String> = env::args().collect();

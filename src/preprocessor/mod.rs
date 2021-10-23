@@ -20,7 +20,7 @@ use crate::{
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
-    util::path_maker::{LpcPath, ToLpcPath},
+    util::path_maker::{LpcPath},
     LpcInt, Result,
 };
 use std::iter::Peekable;

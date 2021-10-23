@@ -1,16 +1,13 @@
-use lpc_rs::Result;
+
 use std::env;
 
-use itertools::Itertools;
-use lazy_format::lazy_format;
+
+
 use lpc_rs::{
     compiler::Compiler,
-    interpreter::{
-        program::Program,
-    },
     util::config::Config,
 };
-use rustyline::{error::ReadlineError, Editor};
+
 use std::rc::Rc;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
@@ -40,7 +37,7 @@ fn main() {
     let filename = args.get(1).map_or(DEFAULT_FILE, |name| name);
 
     match compiler.compile_file(filename) {
-        Ok(program) => {
+        Ok(_program) => {
             // let mut repl = Repl::new(program);
             // let _ = repl.repl();
         }

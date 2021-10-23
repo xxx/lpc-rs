@@ -71,7 +71,7 @@ impl Display for Program {
 mod tests {
     use super::*;
     use crate::compiler::Compiler;
-    use crate::util::config::Config;
+    
 
     #[test]
     fn test_serialization_and_deserialization() {

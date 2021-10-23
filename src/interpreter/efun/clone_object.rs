@@ -13,8 +13,8 @@ use crate::interpreter::efun::efun_context::EfunContext;
 use crate::interpreter::function_evaluator::FunctionEvaluator;
 use crate::codegen::codegen_walker::INIT_PROGRAM;
 use crate::interpreter::MAX_CALL_STACK_SIZE;
-use crate::interpreter::task_context::TaskContext;
-use crate::util::path_maker::canonicalize_in_game_path;
+
+
 
 fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
