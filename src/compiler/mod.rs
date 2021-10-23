@@ -285,12 +285,19 @@ mod tests {
 
         #[test]
         fn disallows_going_outside_the_root() {
-            let config = Config::new(None::<&str>).unwrap().with_lib_dir("tests");
-            let path = LpcPath::new_server("../../secure.c");
-            let compiler = Compiler::new(config.into());
+            let config: Rc<Config> = Config::new(None::<&str>).unwrap().with_lib_dir("tests").into();
+            let compiler = Compiler::new(config.clone());
+            let server_path = LpcPath::new_server("../../secure.c");
+            let in_game_path = LpcPath::new_in_game("../../secure.c", "/", config.lib_dir());
 
             assert!(compiler
-                .compile_in_game_file(&path, None)
+                .compile_in_game_file(&server_path, None)
+                .unwrap_err()
+                .to_string()
+                .starts_with("attempt to access a file outside of lib_dir"));
+
+            assert!(compiler
+                .compile_in_game_file(&in_game_path, None)
                 .unwrap_err()
                 .to_string()
                 .starts_with("attempt to access a file outside of lib_dir"));
