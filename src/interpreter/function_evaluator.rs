@@ -17,6 +17,11 @@ use crate::interpreter::task_context::TaskContext;
 use crate::interpreter::instruction_counter::InstructionCounter;
 use crate::interpreter::efun::efun_context::EfunContext;
 use std::borrow::Cow;
+use std::cell::RefCell;
+use crate::codegen::codegen_walker::INIT_PROGRAM;
+use crate::interpreter::object_space::ObjectSpace;
+use crate::interpreter::process::Process;
+use crate::interpreter::program::Program;
 
 /// Store the various limits we need to check against often, in a single place,
 /// so we don't have to query the config every time.
@@ -75,6 +80,32 @@ impl<'pool, const STACKSIZE: usize> FunctionEvaluator<'pool, STACKSIZE> {
             stack: CallStack::default(),
             instruction_counter: InstructionCounter::default(),
             catch_points: Vec::new()
+        }
+    }
+
+    /// Convenience helper to get a Program initialized.
+    pub fn initialize_program<C, O>(&mut self, program: Program, config: C, object_space: O) -> Result<Rc<RefCell<Process>>>
+    where
+        C: Into<Rc<Config>>,
+        O: Into<Rc<RefCell<ObjectSpace>>>
+    {
+        let process: Rc<RefCell<Process>> = Process::new(program).into();
+        let context = TaskContext::new(config, process.clone(), object_space);
+        context.insert_process(process.clone());
+        let borrowed = process.borrow();
+        let function = borrowed.lookup_function(INIT_PROGRAM);
+
+        match function {
+            Some(init_function) => {
+                self.eval(
+                    init_function.clone(),
+                    &[],
+                    context,
+                )?;
+
+                Ok(process.clone())
+            }
+            None => Err(LpcError::new("Init function not found?"))
         }
     }
 

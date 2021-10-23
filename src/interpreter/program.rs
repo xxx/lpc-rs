@@ -47,7 +47,7 @@ impl<'a> Program {
 
     /// Get the directory of this program. Used for clone_object, etc.
     pub fn cwd(&'a self) -> Cow<'a, Path> {
-        match Path::new(&self.filename).parent() {
+        match self.filename.parent() {
             None => Cow::Owned(PathBuf::from("")),
             Some(path) => Cow::Borrowed(path),
         }
@@ -71,6 +71,7 @@ impl Display for Program {
 mod tests {
     use super::*;
     use crate::compiler::Compiler;
+    use crate::util::config::Config;
 
     #[test]
     fn test_serialization_and_deserialization() {
@@ -98,12 +99,13 @@ mod tests {
             ..Program::default()
         };
 
-        assert_eq!(&*program.cwd().to_str().unwrap(), "foo/bar");
+        let full_path = Path::new(".").canonicalize().unwrap().display().to_string();
+        assert_eq!(&*program.cwd().to_str().unwrap(), format!("{}/foo/bar", full_path));
 
         program.filename = "marf.c".into();
-        assert_eq!(&*program.cwd().to_str().unwrap(), "");
+        assert_eq!(&*program.cwd().to_str().unwrap(), full_path);
 
-        program.filename = "".into();
+        program.filename = LpcPath::Server(Path::new("").to_path_buf());
         assert_eq!(&*program.cwd().to_str().unwrap(), "");
     }
 }
