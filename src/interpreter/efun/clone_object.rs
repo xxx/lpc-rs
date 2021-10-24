@@ -10,7 +10,7 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 use crate::interpreter::efun::efun_context::EfunContext;
-use crate::interpreter::function_evaluator::FunctionEvaluator;
+use crate::interpreter::task::Task;
 use crate::codegen::codegen_walker::INIT_PROGRAM;
 use crate::interpreter::MAX_CALL_STACK_SIZE;
 
@@ -30,7 +30,7 @@ fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Proce
                 .compile_in_game_file(&full_path, context.current_debug_span())
             {
                 Ok(prog) => {
-                    let mut evaluator: FunctionEvaluator<MAX_CALL_STACK_SIZE> = FunctionEvaluator::new(context.memory());
+                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
                     let process: Rc<RefCell<Process>> = Process::new(prog).into();
                     context.insert_process(process.clone());
                     let borrowed = process.borrow();
@@ -38,7 +38,7 @@ fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Proce
                     match function {
                         Some(prog_function) => {
                             let new_context = context.clone_task_context().with_process(process.clone());
-                            evaluator.eval(
+                            task.eval(
                                 prog_function.clone(),
                                 &[],
                                 new_context,
@@ -90,7 +90,7 @@ pub fn clone_object(context: &mut EfunContext) -> Result<()> {
 
         let new_clone = context.insert_clone(new_prog);
 
-        let mut evaluator: FunctionEvaluator<MAX_CALL_STACK_SIZE> = FunctionEvaluator::new(context.memory());
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
         {
             let borrowed = new_clone.borrow();
             let function = borrowed.lookup_function(INIT_PROGRAM);
@@ -98,7 +98,7 @@ pub fn clone_object(context: &mut EfunContext) -> Result<()> {
             match function {
                 Some(prog_function) => {
                     let new_context = context.clone_task_context().with_process(new_clone.clone());
-                    evaluator.eval(
+                    task.eval(
                         prog_function.clone(),
                         &[],
                         new_context,
@@ -149,8 +149,8 @@ mod tests {
         TaskContext::new(config, process, ObjectSpace::default())
     }
 
-    fn fixture<'pool>() -> FunctionEvaluator<'pool, MAX_CALL_STACK_SIZE> {
-        FunctionEvaluator::new(Memory::new(10))
+    fn fixture<'pool>() -> Task<'pool, MAX_CALL_STACK_SIZE> {
+        Task::new(Memory::new(10))
     }
 
     #[test]

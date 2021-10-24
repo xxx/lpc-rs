@@ -56,7 +56,7 @@ struct CatchPoint {
 /// An abstraction to allow for isolated running to completion of a specified function.
 /// It represents a single thread of execution
 #[derive(Debug)]
-pub struct FunctionEvaluator<'pool, const STACKSIZE: usize> {
+pub struct Task<'pool, const STACKSIZE: usize> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
@@ -70,7 +70,7 @@ pub struct FunctionEvaluator<'pool, const STACKSIZE: usize> {
     memory: Cow<'pool, Memory>,
 }
 
-impl<'pool, const STACKSIZE: usize> FunctionEvaluator<'pool, STACKSIZE> {
+impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     pub fn new<T>(memory: T) -> Self
     where
         T: Into<Cow<'pool, Memory>>

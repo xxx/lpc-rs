@@ -4,7 +4,7 @@ use lpc_rs::{
     compiler::Compiler, errors, util::config::Config,
 };
 use std::rc::Rc;
-use lpc_rs::interpreter::function_evaluator::FunctionEvaluator;
+use lpc_rs::interpreter::task::Task;
 use lpc_rs::interpreter::MAX_CALL_STACK_SIZE;
 use lpc_rs::interpreter::memory::Memory;
 use lpc_rs::interpreter::object_space::ObjectSpace;
@@ -27,7 +27,7 @@ fn main() {
         Ok(program) => {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
-            let mut task: FunctionEvaluator<MAX_CALL_STACK_SIZE> = FunctionEvaluator::new(&memory);
+            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory);
             if let Err(e) = task.initialize_program(program, config, object_space) {
                 errors::emit_diagnostics(&[e]);
             }
