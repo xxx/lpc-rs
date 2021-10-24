@@ -6,8 +6,6 @@ use toml::{value::Index, Value};
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
-// TODO: Get rid of this, as the max call stack size is now a compile-time constant
-const MAX_CALL_STACK_SIZE: &[&str] = &["lpc-rs", "max_call_stack_size"];
 const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
@@ -18,7 +16,6 @@ pub struct Config {
     lib_dir: String,
     system_include_dirs: Vec<String>,
     master_object: String,
-    max_call_stack_size: Option<usize>,
     max_task_instructions: Option<usize>,
 }
 
@@ -82,21 +79,6 @@ impl Config {
             }
         };
 
-        let dug = dig(&config, MAX_CALL_STACK_SIZE);
-        let max_call_stack_size = match dug {
-            Some(x) => match x.as_integer() {
-                Some(y) => {
-                    if y < 1 {
-                        None
-                    } else {
-                        Some(y as usize)
-                    }
-                }
-                None => None,
-            },
-            None => None,
-        };
-
         let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
         let max_task_instructions = match dug {
             Some(x) => match x.as_integer() {
@@ -116,7 +98,6 @@ impl Config {
             lib_dir,
             system_include_dirs,
             master_object,
-            max_call_stack_size,
             max_task_instructions,
         })
     }
@@ -149,12 +130,6 @@ impl Config {
         self
     }
 
-    pub fn with_max_call_stack_size(mut self, max_call_stack_size: Option<usize>) -> Self {
-        self.max_call_stack_size = max_call_stack_size;
-
-        self
-    }
-
     pub fn with_max_task_instructions(mut self, max_task_instructions: Option<usize>) -> Self {
         self.max_task_instructions = max_task_instructions;
 
@@ -169,11 +144,6 @@ impl Config {
     #[inline]
     pub fn master_object(&self) -> &str {
         &self.master_object
-    }
-
-    #[inline]
-    pub fn max_call_stack_size(&self) -> Option<usize> {
-        self.max_call_stack_size
     }
 
     #[inline]

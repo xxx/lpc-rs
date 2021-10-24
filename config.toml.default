@@ -25,11 +25,6 @@ lib_dir = "./lib"
 # Where applicable, the mudlib itself can also override this setting directly.
 system_include_dirs = ["/sys"]
 
-# How many frames are allowed in the call stack before it overflows?
-# Set to 0 (or comment the line out) to have a stack size limited
-# only by system memory
-max_call_stack_size = 10240
-
 # How many instructions / efun loop iterations can execute in a given
 # Task before the driver breaks-in.
 # Useful for preventing infinite loops from taking down a server.
