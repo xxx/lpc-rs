@@ -1,3 +1,4 @@
+use std::ops::Index;
 use crate::{
     errors::LpcError,
     interpreter::{lpc_ref::LpcRef, stack_frame::StackFrame},
@@ -86,5 +87,13 @@ impl<const STACKSIZE: usize> Default for CallStack<STACKSIZE> {
         Self {
             stack: ArrayVec::<_, STACKSIZE>::new(),
         }
+    }
+}
+
+impl<const STACKSIZE: usize> Index<usize> for CallStack<STACKSIZE> {
+    type Output = StackFrame;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.stack[index]
     }
 }
