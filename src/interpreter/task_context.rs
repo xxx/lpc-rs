@@ -1,14 +1,14 @@
-use std::rc::Rc;
-use crate::util::config::Config;
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::process::Process;
-use std::path::PathBuf;
-use crate::errors::LpcError;
-use crate::Result;
-use crate::interpreter::instruction_counter::InstructionCounter;
+use crate::{
+    errors::LpcError,
+    interpreter::{
+        instruction_counter::InstructionCounter, object_space::ObjectSpace, process::Process,
+        program::Program,
+    },
+    util::config::Config,
+    Result,
+};
 use delegate::delegate;
-use std::cell::RefCell;
-use crate::interpreter::program::Program;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ pub struct TaskContext {
     /// The global [`ObjectSpace`]
     object_space: Rc<RefCell<ObjectSpace>>,
     /// A counter, to ensure that too-long-evaluations do not occur
-    instruction_counter: InstructionCounter
+    instruction_counter: InstructionCounter,
 }
 
 impl TaskContext {
@@ -37,10 +37,10 @@ impl TaskContext {
     where
         C: Into<Rc<Config>>,
         P: Into<Rc<RefCell<Process>>>,
-        O: Into<Rc<RefCell<ObjectSpace>>>
+        O: Into<Rc<RefCell<ObjectSpace>>>,
     {
         let config = config.into();
-        let instruction_counter =  InstructionCounter::new_from_config(&*config);
+        let instruction_counter = InstructionCounter::new_from_config(&*config);
         Self {
             config,
             process: process.into(),
@@ -85,7 +85,12 @@ impl TaskContext {
 
     /// Get the in-game directory of the current process
     pub fn in_game_cwd(&self) -> Result<PathBuf> {
-        match self.process.borrow().cwd().strip_prefix(self.config.lib_dir()) {
+        match self
+            .process
+            .borrow()
+            .cwd()
+            .strip_prefix(self.config.lib_dir())
+        {
             Ok(x) => {
                 let buf = if x.as_os_str().is_empty() {
                     PathBuf::from("/")
@@ -96,7 +101,7 @@ impl TaskContext {
                 };
 
                 Ok(buf)
-            },
+            }
             Err(e) => Err(LpcError::new(format!("{} in TaskContext", e.to_string()))),
         }
     }
@@ -120,12 +125,14 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::path_maker::LpcPath;
     use super::*;
+    use crate::util::path_maker::LpcPath;
 
     #[test]
     fn test_in_game_cwd() {
-        let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code/");
+        let config = Config::new(None::<&str>)
+            .unwrap()
+            .with_lib_dir("./tests/fixtures/code/");
         let space = ObjectSpace::default();
         let mut program = Program::default();
         program.filename = LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c");

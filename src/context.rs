@@ -6,9 +6,12 @@ use crate::{
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 
-use crate::{errors::LpcError, interpreter::pragma_flags::PragmaFlags, util::config::Config};
-use std::{rc::Rc};
-use crate::util::path_maker::{LpcPath};
+use crate::{
+    errors::LpcError,
+    interpreter::pragma_flags::PragmaFlags,
+    util::{config::Config, path_maker::LpcPath},
+};
+use std::rc::Rc;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in

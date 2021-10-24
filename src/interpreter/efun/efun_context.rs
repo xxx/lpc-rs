@@ -1,18 +1,15 @@
-use crate::interpreter::stack_frame::StackFrame;
-use crate::interpreter::task_context::TaskContext;
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::lpc_value::LpcValue;
-use crate::parser::span::Span;
-use crate::errors::LpcError;
+use crate::{
+    errors::LpcError,
+    interpreter::{
+        lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory, process::Process, program::Program,
+        stack_frame::StackFrame, task_context::TaskContext,
+    },
+    parser::span::Span,
+    util::config::Config,
+    Result,
+};
 use delegate::delegate;
-use std::path::PathBuf;
-use std::rc::Rc;
-use crate::util::config::Config;
-use crate::Result;
-use crate::interpreter::process::Process;
-use crate::interpreter::memory::Memory;
-use std::cell::RefCell;
-use crate::interpreter::program::Program;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 /// A structure to hold various pieces of interpreter state, to be passed to Efuns
 #[derive(Debug)]
@@ -24,12 +21,16 @@ pub struct EfunContext<'task> {
 }
 
 impl<'task> EfunContext<'task> {
-    pub fn new(frame: &'task mut StackFrame, task_context: &'task TaskContext, memory: &'task Memory) -> Self {
+    pub fn new(
+        frame: &'task mut StackFrame,
+        task_context: &'task TaskContext,
+        memory: &'task Memory,
+    ) -> Self {
         Self {
             frame,
             task_context,
             memory,
-            snapshot: None
+            snapshot: None,
         }
     }
 

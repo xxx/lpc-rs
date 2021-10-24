@@ -1,17 +1,16 @@
 use crate::{
     asm::instruction::{Address, Instruction},
+    errors::LpcError,
     interpreter::{lpc_ref::LpcRef, process::Process},
     parser::span::Span,
     semantic::program_function::ProgramFunction,
 };
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     fmt,
     fmt::{Display, Formatter},
     rc::Rc,
 };
-use crate::errors::LpcError;
-use std::cell::RefCell;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -122,7 +121,8 @@ impl StackFrame {
 
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        LpcError::new(format!("runtime error: {}", msg.as_ref())).with_span(self.current_debug_span())
+        LpcError::new(format!("runtime error: {}", msg.as_ref()))
+            .with_span(self.current_debug_span())
     }
 }
 
@@ -131,7 +131,8 @@ impl Display for StackFrame {
         write!(
             f,
             "Calling {}; Process {}\n\n",
-            self.function.name, self.process.borrow().filename
+            self.function.name,
+            self.process.borrow().filename
         )
     }
 }

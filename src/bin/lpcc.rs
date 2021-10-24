@@ -1,14 +1,12 @@
 use std::env;
 
 use lpc_rs::{
-    compiler::Compiler, errors, util::config::Config,
+    compiler::Compiler,
+    errors,
+    interpreter::{memory::Memory, object_space::ObjectSpace, task::Task, MAX_CALL_STACK_SIZE},
+    util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
-use lpc_rs::interpreter::task::Task;
-use lpc_rs::interpreter::MAX_CALL_STACK_SIZE;
-use lpc_rs::interpreter::memory::Memory;
-use lpc_rs::interpreter::object_space::ObjectSpace;
-use lpc_rs::util::path_maker::LpcPath;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 

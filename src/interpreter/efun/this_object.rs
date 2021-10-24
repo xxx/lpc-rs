@@ -1,8 +1,7 @@
 use crate::{
-    interpreter::{lpc_value::LpcValue},
+    interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue},
     Result,
 };
-use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `this_object`, an efun for returning a reference to the object it was called within.
 pub fn this_object(context: &mut EfunContext) -> Result<()> {

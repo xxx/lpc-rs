@@ -1,20 +1,16 @@
 use crate::{
+    codegen::codegen_walker::INIT_PROGRAM,
     compiler::{compiler_error::CompilerError, Compiler},
     errors::LpcError,
     interpreter::{
-        lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
+        efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
+        task::Task, MAX_CALL_STACK_SIZE,
     },
     try_extract_value,
     util::path_maker::LpcPath,
     Result,
 };
 use std::{cell::RefCell, rc::Rc};
-use crate::interpreter::efun::efun_context::EfunContext;
-use crate::interpreter::task::Task;
-use crate::codegen::codegen_walker::INIT_PROGRAM;
-use crate::interpreter::MAX_CALL_STACK_SIZE;
-
-
 
 fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
@@ -26,9 +22,7 @@ fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Proce
     match context.lookup_process(path_str) {
         Some(proc) => Ok(proc),
         None => {
-            match compiler
-                .compile_in_game_file(&full_path, context.current_debug_span())
-            {
+            match compiler.compile_in_game_file(&full_path, context.current_debug_span()) {
                 Ok(prog) => {
                     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
                     let process: Rc<RefCell<Process>> = Process::new(prog).into();
@@ -37,16 +31,13 @@ fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Proce
                     let function = borrowed.lookup_function(INIT_PROGRAM);
                     match function {
                         Some(prog_function) => {
-                            let new_context = context.clone_task_context().with_process(process.clone());
-                            task.eval(
-                                prog_function.clone(),
-                                &[],
-                                new_context,
-                            )?;
+                            let new_context =
+                                context.clone_task_context().with_process(process.clone());
+                            task.eval(prog_function.clone(), &[], new_context)?;
 
                             Ok(process.clone())
                         }
-                        None => Err(LpcError::new("Init function not found on master?"))
+                        None => Err(LpcError::new("Init function not found on master?")),
                     }
                 }
                 Err(e) => {
@@ -98,13 +89,9 @@ pub fn clone_object(context: &mut EfunContext) -> Result<()> {
             match function {
                 Some(prog_function) => {
                     let new_context = context.clone_task_context().with_process(new_clone.clone());
-                    task.eval(
-                        prog_function.clone(),
-                        &[],
-                        new_context,
-                    )?;
+                    task.eval(prog_function.clone(), &[], new_context)?;
                 }
-                None => return Err(LpcError::new("Init function not found in clone?"))
+                None => return Err(LpcError::new("Init function not found in clone?")),
             }
         }
 
@@ -127,14 +114,13 @@ pub fn clone_object(context: &mut EfunContext) -> Result<()> {
 mod tests {
     use super::*;
     use crate::{
-        interpreter::{program::Program},
+        interpreter::{
+            memory::Memory, object_space::ObjectSpace, program::Program, task_context::TaskContext,
+        },
         util::config::Config,
     };
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::task_context::TaskContext;
     use indoc::indoc;
     use regex::Regex;
-    use crate::interpreter::object_space::ObjectSpace;
 
     fn compile_prog(code: &str, config: Rc<Config>) -> Program {
         let compiler = Compiler::new(config);
@@ -159,7 +145,10 @@ mod tests {
             object foo = clone_object("./example");
         "# };
 
-        let config: Rc<Config> = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code").into();
+        let config: Rc<Config> = Config::new(None::<&str>)
+            .unwrap()
+            .with_lib_dir("./tests/fixtures/code")
+            .into();
 
         let program = compile_prog(prog, config.clone());
         let func = program
@@ -183,7 +172,10 @@ mod tests {
             object foo = clone_object("./no_clone.c");
         "# };
 
-        let config: Rc<Config> = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code").into();
+        let config: Rc<Config> = Config::new(None::<&str>)
+            .unwrap()
+            .with_lib_dir("./tests/fixtures/code")
+            .into();
 
         let program = compile_prog(prog, config.clone());
         let func = program

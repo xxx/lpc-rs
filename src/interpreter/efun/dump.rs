@@ -1,10 +1,9 @@
 use crate::{
     errors::LpcError,
-    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value, Result,
 };
 use std::collections::HashMap;
-use crate::interpreter::efun::efun_context::EfunContext;
 
 const MAX_RECURSION: usize = 20;
 

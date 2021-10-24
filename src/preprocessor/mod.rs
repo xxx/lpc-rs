@@ -20,7 +20,7 @@ use crate::{
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
-    util::path_maker::{LpcPath},
+    util::path_maker::LpcPath,
     LpcInt, Result,
 };
 use std::iter::Peekable;
@@ -562,7 +562,8 @@ impl Preprocessor {
 
         if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
-            let to_include = LpcPath::new_in_game(matched.as_str(), cwd, self.context.config.lib_dir());
+            let to_include =
+                LpcPath::new_in_game(matched.as_str(), cwd, self.context.config.lib_dir());
 
             let included = self.include_local_file(&to_include, token.0)?;
 
@@ -822,14 +823,13 @@ impl Preprocessor {
     ///     the `#include` directive.
     /// `cwd` - The current working directory. Used for resolving relative pathnames.
     /// `span` - The [`Span`] of the `#include` token.
-    fn include_local_file(
-        &mut self,
-        path: &LpcPath,
-        span: Span,
-    ) -> Result<Vec<Spanned<Token>>> {
+    fn include_local_file(&mut self, path: &LpcPath, span: Span) -> Result<Vec<Spanned<Token>>> {
         let canon_include_path = path.as_server(self.context.lib_dir());
 
-        println!("include local file path & canon {:?} {:?}", path, canon_include_path);
+        println!(
+            "include local file path & canon {:?} {:?}",
+            path, canon_include_path
+        );
 
         if !path.is_within_root(self.context.lib_dir()) {
             return Err(LpcError::new(&format!(
@@ -848,7 +848,7 @@ impl Preprocessor {
                 canon_include_path.display(),
                 self.context.lib_dir()
             ))
-                .with_span(Some(span)));
+            .with_span(Some(span)));
         }
 
         let file_content = match fs::read_to_string(&canon_include_path) {

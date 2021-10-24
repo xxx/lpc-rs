@@ -1,27 +1,29 @@
-use crate::interpreter::stack_frame::StackFrame;
-use crate::semantic::program_function::ProgramFunction;
-use crate::Result;
-use std::rc::Rc;
-use crate::asm::instruction::{Address, Instruction};
-use crate::asm::register::Register;
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::util::config::Config;
-use crate::errors::LpcError;
-use crate::interpreter::lpc_value::LpcValue;
-use crate::interpreter::memory::Memory;
-use crate::interpreter::efun::{EFUNS};
-use crate::interpreter::call_stack::CallStack;
+use crate::{
+    asm::{
+        instruction::{Address, Instruction},
+        register::Register,
+    },
+    codegen::codegen_walker::INIT_PROGRAM,
+    errors::LpcError,
+    interpreter::{
+        call_stack::CallStack,
+        efun::{efun_context::EfunContext, EFUNS, EFUN_PROTOTYPES},
+        instruction_counter::InstructionCounter,
+        lpc_ref::LpcRef,
+        lpc_value::LpcValue,
+        memory::Memory,
+        object_space::ObjectSpace,
+        process::Process,
+        program::Program,
+        stack_frame::StackFrame,
+        task_context::TaskContext,
+    },
+    semantic::program_function::ProgramFunction,
+    util::config::Config,
+    Result,
+};
 use delegate::delegate;
-use crate::interpreter::efun::EFUN_PROTOTYPES;
-use crate::interpreter::task_context::TaskContext;
-use crate::interpreter::instruction_counter::InstructionCounter;
-use crate::interpreter::efun::efun_context::EfunContext;
-use std::borrow::Cow;
-use std::cell::RefCell;
-use crate::codegen::codegen_walker::INIT_PROGRAM;
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::process::Process;
-use crate::interpreter::program::Program;
+use std::{borrow::Cow, cell::RefCell, rc::Rc};
 
 /// Store the various limits we need to check against often, in a single place,
 /// so we don't have to query the config every time.
@@ -35,7 +37,7 @@ struct Limits {
 impl From<&Config> for Limits {
     fn from(config: &Config) -> Self {
         Self {
-            max_task_instructions: config.max_task_instructions().unwrap_or(0)
+            max_task_instructions: config.max_task_instructions().unwrap_or(0),
         }
     }
 }
@@ -73,21 +75,26 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     pub fn new<T>(memory: T) -> Self
     where
-        T: Into<Cow<'pool, Memory>>
+        T: Into<Cow<'pool, Memory>>,
     {
         Self {
             memory: memory.into(),
             stack: CallStack::default(),
             instruction_counter: InstructionCounter::default(),
-            catch_points: Vec::new()
+            catch_points: Vec::new(),
         }
     }
 
     /// Convenience helper to get a Program initialized.
-    pub fn initialize_program<C, O>(&mut self, program: Program, config: C, object_space: O) -> Result<Rc<RefCell<Process>>>
+    pub fn initialize_program<C, O>(
+        &mut self,
+        program: Program,
+        config: C,
+        object_space: O,
+    ) -> Result<Rc<RefCell<Process>>>
     where
         C: Into<Rc<Config>>,
-        O: Into<Rc<RefCell<ObjectSpace>>>
+        O: Into<Rc<RefCell<ObjectSpace>>>,
     {
         let process: Rc<RefCell<Process>> = Process::new(program).into();
         let context = TaskContext::new(config, process.clone(), object_space);
@@ -97,22 +104,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         match function {
             Some(init_function) => {
-                self.eval(
-                    init_function.clone(),
-                    &[],
-                    context,
-                )?;
+                self.eval(init_function.clone(), &[], context)?;
 
                 Ok(process.clone())
             }
-            None => Err(LpcError::new("Init function not found?"))
+            None => Err(LpcError::new("Init function not found?")),
         }
     }
 
     /// Evaluate `f` to completion, or an error
     pub fn eval<F>(&mut self, f: F, args: &[LpcRef], task_context: TaskContext) -> Result<()>
     where
-        F: Into<Rc<ProgramFunction>>
+        F: Into<Rc<ProgramFunction>>,
     {
         let function = f.into();
         let process = task_context.process();
@@ -171,7 +174,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x & y)?;
             }
-            Instruction::Call {..} => {
+            Instruction::Call { .. } => {
                 self.handle_call(&instruction, task_context)?;
             }
             Instruction::GStore(r1, r2) => {
@@ -216,10 +219,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.handle_sconst(&instruction)?;
             }
 
-            x => todo!("{}", x)
+            x => todo!("{}", x),
         }
 
-       Ok(false)
+        Ok(false)
     }
 
     fn handle_aconst(&mut self, instruction: &Instruction) -> Result<()> {
@@ -236,9 +239,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 Ok(())
             }
-            _ => {
-                Err(self.runtime_error("non-AConst instruction passed to `handle_aconst`"))
-            }
+            _ => Err(self.runtime_error("non-AConst instruction passed to `handle_aconst`")),
         }
     }
 
@@ -305,11 +306,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
 
                 Ok(())
-            },
-
-            _ => {
-                Err(self.runtime_error("non-Call instruction passed to `handle_call`"))
             }
+
+            _ => Err(self.runtime_error("non-Call instruction passed to `handle_call`")),
         }
     }
 
@@ -322,9 +321,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 registers[r.index()] = new_ref;
                 Ok(())
             }
-            _ => {
-                Err(self.runtime_error("non-SConst instruction passed to `handle_sconst`"))
-            }
+            _ => Err(self.runtime_error("non-SConst instruction passed to `handle_sconst`")),
         }
     }
 

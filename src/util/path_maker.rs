@@ -1,13 +1,13 @@
+use bstr::ByteSlice;
 use path_absolutize::Absolutize;
 use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
     fmt::{Display, Formatter},
+    ops::Deref,
+    os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
 };
-use std::ops::Deref;
-use std::os::unix::ffi::OsStrExt;
-use bstr::ByteSlice;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LpcPath {
@@ -53,7 +53,7 @@ impl LpcPath {
     /// Return this LpcPath, but with the passed extension added.
     pub fn with_extension<S>(&self, extension: S) -> LpcPath
     where
-        S: AsRef<OsStr>
+        S: AsRef<OsStr>,
     {
         match self {
             LpcPath::Server(x) => LpcPath::Server(x.with_extension(extension)),
@@ -101,15 +101,16 @@ impl LpcPath {
     /// Is this path underneath the given root? Used to check for traversal attacks
     pub fn is_within_root<P>(&self, root: P) -> bool
     where
-        P: AsRef<Path>
+        P: AsRef<Path>,
     {
         match self {
             LpcPath::Server(x) => {
-                let slice = <[u8]>::from_path(x)
-                    .expect("Path must be valid UTF-8 on Windows. This error should never occur on Unix.");
+                let slice = <[u8]>::from_path(x).expect(
+                    "Path must be valid UTF-8 on Windows. This error should never occur on Unix.",
+                );
                 slice.starts_with_str(root.as_ref().as_os_str().as_bytes())
             }
-            LpcPath::InGame(x) => !x.as_os_str().is_empty()
+            LpcPath::InGame(x) => !x.as_os_str().is_empty(),
         }
     }
 }
@@ -179,8 +180,7 @@ impl AsRef<str> for LpcPath {
 impl AsRef<OsStr> for LpcPath {
     fn as_ref(&self) -> &OsStr {
         match self {
-            LpcPath::Server(x)
-            | LpcPath::InGame(x) => x.as_os_str(),
+            LpcPath::Server(x) | LpcPath::InGame(x) => x.as_os_str(),
         }
     }
 }
@@ -213,8 +213,7 @@ impl Deref for LpcPath {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            LpcPath::Server(x)
-            | LpcPath::InGame(x) => x
+            LpcPath::Server(x) | LpcPath::InGame(x) => x,
         }
     }
 }
@@ -275,8 +274,12 @@ where
     let canon = canonicalize_server_path(path, cwd, lib_dir.as_ref());
 
     // Strip off the root_dir prefix, then clean up the rest.
-    let stripped = canon.strip_prefix(lib_dir.as_ref()).unwrap_or_else(|_| AsRef::<Path>::as_ref(""));
-    let mut result = stripped.to_string_lossy().into_owned()
+    let stripped = canon
+        .strip_prefix(lib_dir.as_ref())
+        .unwrap_or_else(|_| AsRef::<Path>::as_ref(""));
+    let mut result = stripped
+        .to_string_lossy()
+        .into_owned()
         .replace("//", "/")
         .replace("/./", "/");
     if !result.is_empty() && !result.starts_with('/') {
@@ -366,20 +369,17 @@ mod tests {
     #[test]
     fn test_new_in_game() {
         assert_eq!(
-            LpcPath::new_in_game("/some/root/foo.c", "/taccos", "/my_hero")
-                .as_os_str(),
+            LpcPath::new_in_game("/some/root/foo.c", "/taccos", "/my_hero").as_os_str(),
             "/some/root/foo.c"
         );
 
         assert_eq!(
-            LpcPath::new_in_game("./some/root/foo.c", "/taccos", "/my_hero")
-                .as_os_str(),
+            LpcPath::new_in_game("./some/root/foo.c", "/taccos", "/my_hero").as_os_str(),
             "/taccos/some/root/foo.c"
         );
 
         assert_eq!(
-            LpcPath::new_in_game("../some/root/foo.c", "/marf/taccos", "/my_hero")
-                .as_os_str(),
+            LpcPath::new_in_game("../some/root/foo.c", "/marf/taccos", "/my_hero").as_os_str(),
             "/marf/some/root/foo.c"
         );
 

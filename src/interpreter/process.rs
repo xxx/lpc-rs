@@ -26,7 +26,7 @@ pub struct Process {
 impl Process {
     pub fn new<T>(prog: T) -> Self
     where
-        T: Into<Rc<Program>>
+        T: Into<Rc<Program>>,
     {
         let program = prog.into();
         let num_globals = program.num_globals;
@@ -72,10 +72,7 @@ impl Process {
     pub fn localized_filename(&self, prefix: &str) -> String {
         let filename: &str = &*self.filename();
 
-        filename
-            .strip_prefix(prefix)
-            .unwrap_or(filename)
-            .into()
+        filename.strip_prefix(prefix).unwrap_or(filename).into()
     }
 }
 

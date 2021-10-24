@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-use crate::interpreter::process::Process;
-use std::rc::Rc;
-use crate::interpreter::program::Program;
+use crate::{
+    interpreter::{process::Process, program::Program},
+    util::config::Config,
+};
 use delegate::delegate;
-use crate::util::config::Config;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to encapsulate
 /// the cloning behavior, etc.
@@ -38,7 +37,7 @@ impl ObjectSpace {
     /// Create a new [`ObjectSpace`] with the passed [`Config`]
     pub fn new<T>(config: T) -> Self
     where
-        T: Into<Rc<Config>>
+        T: Into<Rc<Config>>,
     {
         Self {
             config: config.into(),
@@ -67,13 +66,13 @@ impl ObjectSpace {
     /// Directly insert the passed [`Process`] into the space, with in-game local filename.
     pub fn insert_process<P>(&mut self, process: P)
     where
-        P: Into<Rc<RefCell<Process>>>
+        P: Into<Rc<RefCell<Process>>>,
     {
         let process = process.into();
         let name = process.borrow().localized_filename(self.config.lib_dir());
         let name = match name.strip_suffix(".c") {
             Some(x) => x.to_string(),
-            None => name
+            None => name,
         };
 
         self.processes.insert(name, process);
@@ -95,7 +94,7 @@ impl Default for ObjectSpace {
         Self {
             processes,
             clone_count: 0,
-            config: Config::default().into()
+            config: Config::default().into(),
         }
     }
 }
@@ -108,8 +107,8 @@ impl From<ObjectSpace> for Rc<RefCell<ObjectSpace>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::path_maker::LpcPath;
     use super::*;
+    use crate::util::path_maker::LpcPath;
 
     #[test]
     fn test_insert_master() {
@@ -140,13 +139,17 @@ mod tests {
         assert_eq!(space.len(), 4);
         assert!(space.processes.contains_key(&format!("{}#{}", filename, 0)));
         assert!(space.processes.contains_key(&format!("{}#{}", filename, 1)));
-        assert!(space.processes.contains_key(&format!("{}#{}", filename2, 2)));
+        assert!(space
+            .processes
+            .contains_key(&format!("{}#{}", filename2, 2)));
         assert!(space.processes.contains_key(&format!("{}#{}", filename, 3)));
     }
 
     #[test]
     fn test_insert_process() {
-        let config = Config::new(None::<&str>).unwrap().with_lib_dir("./tests/fixtures/code/");
+        let config = Config::new(None::<&str>)
+            .unwrap()
+            .with_lib_dir("./tests/fixtures/code/");
         let mut space = ObjectSpace::new(config);
 
         let mut prog: Program = Program::default();

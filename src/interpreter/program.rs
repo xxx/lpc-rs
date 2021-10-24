@@ -1,4 +1,7 @@
-use crate::{interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction};
+use crate::{
+    interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction,
+    util::path_maker::LpcPath,
+};
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::{
@@ -8,7 +11,6 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
-use crate::util::path_maker::LpcPath;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -71,7 +73,6 @@ impl Display for Program {
 mod tests {
     use super::*;
     use crate::compiler::Compiler;
-    
 
     #[test]
     fn test_serialization_and_deserialization() {
@@ -100,7 +101,10 @@ mod tests {
         };
 
         let full_path = Path::new(".").canonicalize().unwrap().display().to_string();
-        assert_eq!(&*program.cwd().to_str().unwrap(), format!("{}/foo/bar", full_path));
+        assert_eq!(
+            &*program.cwd().to_str().unwrap(),
+            format!("{}/foo/bar", full_path)
+        );
 
         program.filename = "marf.c".into();
         assert_eq!(&*program.cwd().to_str().unwrap(), full_path);

@@ -1,5 +1,3 @@
-
-
 use compiler_error::CompilerError;
 use fs_err as fs;
 
@@ -22,8 +20,7 @@ use crate::{
     preprocessor::Preprocessor,
     util::{config::Config, path_maker::LpcPath},
 };
-use std::{fmt::Debug, io::ErrorKind, rc::Rc};
-use std::ffi::OsStr;
+use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 
 pub mod compiler_error;
 
@@ -285,7 +282,10 @@ mod tests {
 
         #[test]
         fn disallows_going_outside_the_root() {
-            let config: Rc<Config> = Config::new(None::<&str>).unwrap().with_lib_dir("tests").into();
+            let config: Rc<Config> = Config::new(None::<&str>)
+                .unwrap()
+                .with_lib_dir("tests")
+                .into();
             let compiler = Compiler::new(config.clone());
             let server_path = LpcPath::new_server("../../secure.c");
             let in_game_path = LpcPath::new_in_game("../../secure.c", "/", config.lib_dir());

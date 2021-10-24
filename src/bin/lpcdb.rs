@@ -1,12 +1,6 @@
-
 use std::env;
 
-
-
-use lpc_rs::{
-    compiler::Compiler,
-    util::config::Config,
-};
+use lpc_rs::{compiler::Compiler, util::config::Config};
 
 use std::rc::Rc;
 

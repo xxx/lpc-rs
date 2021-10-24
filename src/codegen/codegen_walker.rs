@@ -1622,7 +1622,10 @@ mod tests {
     fn walk_code(code: &str) -> std::result::Result<CodegenWalker, CompilerError> {
         let compiler = Compiler::default();
         let (mut program, context) = compiler
-            .parse_string(&LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"), code)
+            .parse_string(
+                &LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"),
+                code,
+            )
             .expect("failed to parse");
 
         let context = apply_walker!(ScopeWalker, program, context, false);

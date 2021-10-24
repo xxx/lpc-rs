@@ -4,12 +4,10 @@ use lpc_rs::{
     util::{config::Config, path_maker::LpcPath},
 };
 
+use lpc_rs::interpreter::{
+    memory::Memory, object_space::ObjectSpace, task::Task, MAX_CALL_STACK_SIZE,
+};
 use std::rc::Rc;
-use lpc_rs::interpreter::task::Task;
-use lpc_rs::interpreter::MAX_CALL_STACK_SIZE;
-use lpc_rs::interpreter::memory::Memory;
-use lpc_rs::interpreter::object_space::ObjectSpace;
-
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -66,6 +64,10 @@ fn main() {
             // let ob = interpreter.apply(master, "thing", &args);
             // println!("ob??? {:?}", ob);
         }
-        Err(e) => eprintln!("unable to compile {}: {:?}", lpc_path.as_server(config.lib_dir()).display(), e),
+        Err(e) => eprintln!(
+            "unable to compile {}: {:?}",
+            lpc_path.as_server(config.lib_dir()).display(),
+            e
+        ),
     }
 }

@@ -1,11 +1,10 @@
 use crate::{
     errors::LpcError,
-    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value, Result,
 };
 use itertools::Itertools;
 use phf::phf_map;
-use crate::interpreter::efun::efun_context::EfunContext;
 
 type Operation = fn(&mut EfunContext) -> Result<()>;
 

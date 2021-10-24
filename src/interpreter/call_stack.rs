@@ -1,9 +1,10 @@
-use crate::interpreter::stack_frame::StackFrame;
-use crate::Result;
-use crate::errors::LpcError;
+use crate::{
+    errors::LpcError,
+    interpreter::{lpc_ref::LpcRef, stack_frame::StackFrame},
+    Result,
+};
 use arrayvec::ArrayVec;
 use delegate::delegate;
-use crate::interpreter::lpc_ref::LpcRef;
 
 #[derive(Debug)]
 pub struct CallStack<const STACKSIZE: usize> {
@@ -27,12 +28,16 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
     #[inline]
     pub fn current_frame(&self) -> Result<&StackFrame> {
-        self.stack.last().ok_or_else(|| LpcError::new("stack is somehow empty"))
+        self.stack
+            .last()
+            .ok_or_else(|| LpcError::new("stack is somehow empty"))
     }
 
     #[inline]
     pub fn current_frame_mut(&mut self) -> Result<&mut StackFrame> {
-        self.stack.last_mut().ok_or_else(|| LpcError::new("stack is somehow empty"))
+        self.stack
+            .last_mut()
+            .ok_or_else(|| LpcError::new("stack is somehow empty"))
     }
 
     /// Push a new frame onto the stack. Will return `Err` in the
@@ -40,7 +45,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     pub fn push(&mut self, frame: StackFrame) -> Result<()> {
         match self.stack.try_push(frame) {
             Ok(_) => Ok(()),
-            Err(_e) => Err(LpcError::new("stack overflow"))
+            Err(_e) => Err(LpcError::new("stack overflow")),
         }
     }
 
@@ -79,7 +84,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 impl<const STACKSIZE: usize> Default for CallStack<STACKSIZE> {
     fn default() -> Self {
         Self {
-            stack: ArrayVec::<_, STACKSIZE>::new()
+            stack: ArrayVec::<_, STACKSIZE>::new(),
         }
     }
 }

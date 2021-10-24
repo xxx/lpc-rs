@@ -4,8 +4,7 @@ use crate::{
 };
 use itertools::Itertools;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use std::{collections::HashMap, fmt, fmt::Display, rc::Rc};
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap, fmt, fmt::Display, rc::Rc};
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
