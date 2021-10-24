@@ -116,9 +116,9 @@ impl<'pool, const STACKSIZE: usize> FunctionEvaluator<'pool, STACKSIZE> {
     {
         let function = f.into();
         let process = task_context.process();
-        let mut frame = StackFrame::new(process.clone(), function);
+        let mut frame = StackFrame::new(process, function);
         // TODO: handle partial applications
-        if args.len() > 0_usize {
+        if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
 

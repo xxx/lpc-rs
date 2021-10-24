@@ -24,7 +24,7 @@ fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Proce
     let path_str: &str = full_path.as_ref();
 
     match context.lookup_process(path_str) {
-        Some(proc) => Ok(proc.clone()),
+        Some(proc) => Ok(proc),
         None => {
             match compiler
                 .compile_in_game_file(&full_path, context.current_debug_span())

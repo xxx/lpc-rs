@@ -58,12 +58,12 @@ impl<'task> EfunContext<'task> {
     /// Get a reference to the current [`StackFrame`]
     #[inline]
     pub fn frame(&mut self) -> &StackFrame {
-        &self.frame
+        self.frame
     }
 
     #[inline]
     pub fn memory(&self) -> &Memory {
-        &self.memory
+        self.memory
     }
 
     #[inline]

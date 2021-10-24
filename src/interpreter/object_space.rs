@@ -29,6 +29,9 @@ impl ObjectSpace {
         to self.processes {
             /// Get the number of objects in the space
             pub fn len(&self) -> usize;
+
+            /// Get whether or not the space is empty
+            pub fn is_empty(&self) -> bool;
         }
     }
 

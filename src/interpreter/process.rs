@@ -74,7 +74,7 @@ impl Process {
 
         filename
             .strip_prefix(prefix)
-            .unwrap_or_else(|| filename)
+            .unwrap_or(filename)
             .into()
     }
 }

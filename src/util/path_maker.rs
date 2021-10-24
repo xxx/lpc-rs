@@ -279,7 +279,7 @@ where
     let mut result = stripped.to_string_lossy().into_owned()
         .replace("//", "/")
         .replace("/./", "/");
-    if !result.is_empty() && !result.starts_with("/") {
+    if !result.is_empty() && !result.starts_with('/') {
         result = format!("/{}", result);
     }
 

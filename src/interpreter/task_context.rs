@@ -65,10 +65,7 @@ impl TaskContext {
     where
         T: AsRef<str>,
     {
-        match self.object_space.borrow().lookup(path) {
-            Some(x) => Some(x.clone()),
-            None => None
-        }
+        self.object_space.borrow().lookup(path).cloned()
     }
 
     /// Directly insert the passed [`Process`] into the object space, with in-game local filename.
@@ -92,12 +89,10 @@ impl TaskContext {
             Ok(x) => {
                 let buf = if x.as_os_str().is_empty() {
                     PathBuf::from("/")
+                } else if x.starts_with("/") {
+                    x.to_path_buf()
                 } else {
-                    if x.starts_with("/") {
-                        x.to_path_buf()
-                    } else {
-                        PathBuf::from(format!("/{}", x.display()))
-                    }
+                    PathBuf::from(format!("/{}", x.display()))
                 };
 
                 Ok(buf)
