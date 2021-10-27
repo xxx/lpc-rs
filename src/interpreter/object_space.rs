@@ -5,8 +5,8 @@ use crate::{
 use delegate::delegate;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-/// A wrapper around a [`HashMap`] of [`Process`]es, to encapsulate
-/// the cloning behavior, etc.
+/// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master and cloned objects.
+/// In other words, this is the map that `find_object()` uses.
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
