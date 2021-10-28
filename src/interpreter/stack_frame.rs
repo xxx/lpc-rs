@@ -11,6 +11,8 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use crate::asm::instruction::Label;
+use crate::Result;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -94,6 +96,19 @@ impl StackFrame {
     #[inline]
     pub fn set_pc(&self, new_val: usize) {
         self.pc.replace(new_val);
+    }
+
+    /// Set the pc to the address for the passed [`Label`].
+    /// Returns an error if the label is not found.
+    #[inline]
+    pub fn set_pc_from_label(&self, label: &Label) -> Result<()> {
+        match self.lookup_label(label) {
+            Some(a) => {
+                self.pc.replace(*a);
+                Ok(())
+            },
+            None => Err(self.runtime_error(format!("Unable to find address for {}", label))),
+        }
     }
 
     #[inline]

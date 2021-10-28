@@ -1,4 +1,3 @@
-use std::ops::Index;
 use crate::{
     errors::LpcError,
     interpreter::{lpc_ref::LpcRef, stack_frame::StackFrame},
@@ -6,6 +5,7 @@ use crate::{
 };
 use arrayvec::ArrayVec;
 use delegate::delegate;
+use std::ops::Index;
 
 #[derive(Debug)]
 pub struct CallStack<const STACKSIZE: usize> {
@@ -56,7 +56,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     }
 
     /// Convenience helper to copy a return value from a given stack frame, back to the current one.
-    pub fn set_call_result(&mut self, result: LpcRef) -> Result<()> {
+    pub fn set_result(&mut self, result: LpcRef) -> Result<()> {
         if !self.stack.is_empty() {
             self.current_frame_mut()?.registers[0] = result;
         }
@@ -65,12 +65,8 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     }
 
     /// Convenience helper to copy a return value from a given stack frame, back to the current one.
-    pub fn copy_call_result(&mut self, from: &StackFrame) -> Result<()> {
-        if !self.stack.is_empty() {
-            self.current_frame_mut()?.registers[0] = from.registers[0].clone();
-        }
-
-        Ok(())
+    pub fn copy_result(&mut self, from: &StackFrame) -> Result<()> {
+        self.set_result(from.registers[0].clone())
     }
 
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {

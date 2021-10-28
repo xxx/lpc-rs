@@ -31,4 +31,9 @@ impl InstructionCounter {
 
         Ok(new_val)
     }
+
+    /// Get the current instruction count
+    pub fn count(&self) -> usize {
+        self.count.get()
+    }
 }

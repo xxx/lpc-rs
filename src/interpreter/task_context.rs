@@ -1,8 +1,8 @@
 use crate::{
     errors::LpcError,
     interpreter::{
-        instruction_counter::InstructionCounter, object_space::ObjectSpace, process::Process,
-        program::Program,
+        instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
+        process::Process, program::Program,
     },
     util::config::Config,
     Result,
@@ -21,6 +21,8 @@ pub struct TaskContext {
     object_space: Rc<RefCell<ObjectSpace>>,
     /// A counter, to ensure that too-long-evaluations do not occur
     instruction_counter: InstructionCounter,
+    /// The final result of the original function that was called
+    result: RefCell<LpcRef>,
 }
 
 impl TaskContext {
@@ -29,6 +31,10 @@ impl TaskContext {
             /// Increment the current task instruction count, checking for too-long-evaluations
             #[call(increment)]
             pub fn increment_instruction_count(&self, amount: usize) -> Result<usize>;
+
+            /// Get the current instruction count
+            #[call(count)]
+            pub fn instruction_count(&self) -> usize;
         }
     }
 
@@ -46,6 +52,7 @@ impl TaskContext {
             process: process.into(),
             object_space: object_space.into(),
             instruction_counter,
+            result: RefCell::new(LpcRef::default()),
         }
     }
 
@@ -104,6 +111,16 @@ impl TaskContext {
             }
             Err(e) => Err(LpcError::new(format!("{} in TaskContext", e.to_string()))),
         }
+    }
+
+    /// Update the context's `result` with the passed [`LpcRef`]
+    pub fn set_result(&self, new_result: LpcRef) {
+        self.result.replace(new_result);
+    }
+
+    /// Consume this context, and return its `result` field.
+    pub fn into_result(self) -> LpcRef {
+        self.result.into_inner()
     }
 
     /// Return the [`Config`] used for the task

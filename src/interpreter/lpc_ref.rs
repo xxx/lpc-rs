@@ -57,6 +57,7 @@ macro_rules! extract_value {
 
 /// Represent a variable stored in a `Register`. Value types store the actual value.
 /// Reference types store a reference to the actual value.
+/// This type is intended to be cheap to clone.
 #[derive(Eq, Debug, Clone)]
 pub enum LpcRef {
     Float(LpcFloat),
