@@ -11,6 +11,7 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 use crate::{
+    errors::LpcError,
     interpreter::efun::efun_context::EfunContext,
     semantic::{
         function_flags::FunctionFlags, function_prototype::FunctionPrototype, lpc_type::LpcType,
@@ -23,8 +24,6 @@ use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
 use throw::throw;
-use crate::errors::LpcError;
-use crate::interpreter::MAX_CALL_STACK_SIZE;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
@@ -154,12 +153,9 @@ pub fn call_efun<const N: usize>(name: &str, context: &mut EfunContext<N>) -> Re
         FILE_NAME => file_name(context),
         THIS_OBJECT => this_object(context),
         THROW => throw(context),
-        _ => {
-            Err(LpcError::new(format!(
-                "runtime error: call to unknown function (that had a valid prototype?) `{}`",
-                name
-            )))
-        }
+        _ => Err(LpcError::new(format!(
+            "runtime error: call to unknown function (that had a valid prototype?) `{}`",
+            name
+        ))),
     }
-
 }

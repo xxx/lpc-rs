@@ -1,18 +1,15 @@
 use crate::{
     errors::LpcError,
     interpreter::{
-        lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory, process::Process, program::Program,
-        stack_frame::StackFrame, task_context::TaskContext,
+        call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory,
+        process::Process, program::Program, stack_frame::StackFrame, task_context::TaskContext,
     },
     parser::span::Span,
     util::config::Config,
     Result,
 };
 use delegate::delegate;
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
-use std::fmt::{Debug};
-use crate::interpreter::call_stack::CallStack;
-use cached::proc_macro::cached;
+use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
 
 /// A structure to hold various pieces of interpreter state, to be passed to Efuns
 #[derive(Debug)]
@@ -38,7 +35,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             memory,
 
             #[cfg(test)]
-            snapshot: None
+            snapshot: None,
         }
     }
 

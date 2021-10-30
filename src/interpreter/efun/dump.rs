@@ -4,7 +4,6 @@ use crate::{
     try_extract_value, Result,
 };
 use std::collections::HashMap;
-use crate::interpreter::MAX_CALL_STACK_SIZE;
 
 const MAX_RECURSION: usize = 20;
 

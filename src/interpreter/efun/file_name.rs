@@ -5,7 +5,6 @@ use crate::{
     util::path_maker::LpcPath,
     Result,
 };
-use crate::interpreter::MAX_CALL_STACK_SIZE;
 
 /// `file_name`, an efun for returning the full path and clone number of an object
 pub fn file_name<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {

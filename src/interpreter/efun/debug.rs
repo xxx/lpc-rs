@@ -3,8 +3,6 @@ use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value, Result,
 };
-use itertools::Itertools;
-use crate::interpreter::MAX_CALL_STACK_SIZE;
 
 const SNAPSHOT_STACK: &str = "snapshot_stack";
 
@@ -29,10 +27,8 @@ pub fn debug<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
                 }
             }
             x => {
-                Err(context.runtime_error(format!(
-                    "Unknown operation `{}` passed to `debug()`.",
-                    x
-                )))
+                Err(context
+                    .runtime_error(format!("Unknown operation `{}` passed to `debug()`.", x)))
             }
         }
     } else {

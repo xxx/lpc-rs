@@ -1,9 +1,10 @@
 use crate::{
-    asm::instruction::{Address, Instruction},
+    asm::instruction::{Address, Instruction, Label},
     errors::LpcError,
     interpreter::{lpc_ref::LpcRef, process::Process},
     parser::span::Span,
     semantic::program_function::ProgramFunction,
+    Result,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -11,8 +12,6 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
-use crate::asm::instruction::Label;
-use crate::Result;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -106,7 +105,7 @@ impl StackFrame {
             Some(a) => {
                 self.pc.replace(*a);
                 Ok(())
-            },
+            }
             None => Err(self.runtime_error(format!("Unable to find address for {}", label))),
         }
     }

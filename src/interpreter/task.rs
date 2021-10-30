@@ -1,23 +1,31 @@
-use crate::{asm::{
-    instruction::{Address, Instruction},
-    register::Register,
-}, codegen::codegen_walker::INIT_PROGRAM, errors::LpcError, interpreter::{
-    call_stack::CallStack,
-    efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
-    instruction_counter::InstructionCounter,
-    lpc_ref::LpcRef,
-    lpc_value::LpcValue,
-    memory::Memory,
-    object_space::ObjectSpace,
-    process::Process,
-    program::Program,
-    stack_frame::StackFrame,
-    task_context::TaskContext,
-    MAX_CALL_STACK_SIZE,
-}, semantic::program_function::ProgramFunction, try_extract_value, util::config::Config, Result, LpcInt};
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
+use crate::{
+    asm::{
+        instruction::{Address, Instruction},
+        register::Register,
+    },
+    codegen::codegen_walker::INIT_PROGRAM,
+    errors::LpcError,
+    interpreter::{
+        call_stack::CallStack,
+        efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
+        instruction_counter::InstructionCounter,
+        lpc_ref::LpcRef,
+        lpc_value::LpcValue,
+        memory::Memory,
+        object_space::ObjectSpace,
+        process::Process,
+        program::Program,
+        stack_frame::StackFrame,
+        task_context::TaskContext,
+        MAX_CALL_STACK_SIZE,
+    },
+    semantic::program_function::ProgramFunction,
+    try_extract_value,
+    util::config::Config,
+    LpcInt, Result,
+};
 use decorum::Total;
-use crate::interpreter::efun::call_efun;
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -434,7 +442,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         initial_index: usize,
                         num_args: usize,
                         task_context: &TaskContext,
-                        memory: &Memory
+                        memory: &Memory,
                     ) -> Result<LpcRef> {
                         let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
                             receiver_ref,
@@ -446,7 +454,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let value = LpcValue::from(pr);
                             let result = match value {
                                 LpcValue::Object(receiver) => {
-                                    let args = &registers[initial_index..(initial_index + num_args)];
+                                    let args =
+                                        &registers[initial_index..(initial_index + num_args)];
 
                                     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(memory);
 
@@ -482,7 +491,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             initial_index,
                             *num_args,
                             task_context,
-                            &*self.memory
+                            &*self.memory,
                         )?,
                         LpcRef::Array(r) => {
                             let b = r.borrow();
@@ -498,9 +507,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         initial_index,
                                         *num_args,
                                         task_context,
-                                        &*self.memory
+                                        &*self.memory,
                                     )
-                                        .unwrap_or(LpcRef::Int(0))
+                                    .unwrap_or(LpcRef::Int(0))
                                 })
                                 .collect::<Vec<_>>()
                                 .into();
@@ -522,9 +531,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             initial_index,
                                             *num_args,
                                             task_context,
-                                            &*self.memory
+                                            &*self.memory,
                                         )
-                                            .unwrap_or(LpcRef::Int(0)),
+                                        .unwrap_or(LpcRef::Int(0)),
                                     )
                                 })
                                 .collect::<HashMap<_, _>>()
@@ -931,7 +940,7 @@ mod tests {
                     Int(666),
                     Object("/my_file".into()),
                     String("tacos".into()),
-                    Int(666)
+                    Int(666),
                 ];
 
                 assert_eq!(&expected, registers);
@@ -1493,33 +1502,33 @@ mod tests {
         //             }
         //         }
         //
-                mod test_jz {
-                    use super::*;
+        mod test_jz {
+            use super::*;
 
-                    #[test]
-                    fn stores_the_value() {
-                        let code = indoc! { r##"
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
                             int i = 12;
                             int j = i > 12 ? 10 : 1000;
                         "##};
 
-                        let interpreter = run_prog(code);
-                        let registers = interpreter.popped_frame.unwrap().registers;
+                let interpreter = run_prog(code);
+                let registers = interpreter.popped_frame.unwrap().registers;
 
-                        let expected = vec![
-                            BareVal::Int(0),
-                            BareVal::Int(12),
-                            BareVal::Int(1000),
-                            BareVal::Int(12),
-                            BareVal::Int(12),
-                            BareVal::Int(0),
-                            BareVal::Int(0),
-                            BareVal::Int(1000),
-                        ];
+                let expected = vec![
+                    BareVal::Int(0),
+                    BareVal::Int(12),
+                    BareVal::Int(1000),
+                    BareVal::Int(12),
+                    BareVal::Int(12),
+                    BareVal::Int(0),
+                    BareVal::Int(0),
+                    BareVal::Int(1000),
+                ];
 
-                        assert_eq!(&expected, &registers);
-                    }
-                }
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_load {
         //             use super::*;
