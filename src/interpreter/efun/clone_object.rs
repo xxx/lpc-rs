@@ -12,7 +12,7 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 
-fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Process>>> {
+fn load_master<const N: usize>(context: &mut EfunContext<N>, path: &str) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
 
     let full_path = LpcPath::new_in_game(path, context.in_game_cwd()?, context.config().lib_dir());
@@ -62,7 +62,7 @@ fn load_master(context: &mut EfunContext, path: &str) -> Result<Rc<RefCell<Proce
 }
 
 /// `clone_object`, the efun for creating new object instances.
-pub fn clone_object(context: &mut EfunContext) -> Result<()> {
+pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     let arg = context.resolve_lpc_ref(1_usize);
 
     if let LpcRef::String(s) = arg {

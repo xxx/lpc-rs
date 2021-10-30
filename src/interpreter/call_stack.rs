@@ -7,7 +7,7 @@ use arrayvec::ArrayVec;
 use delegate::delegate;
 use std::ops::Index;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
     /// The call stack
     stack: ArrayVec<StackFrame, STACKSIZE>,
@@ -24,6 +24,12 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
             /// truncate the stack down to the specified length, if it's longer than that
             pub fn truncate(&mut self, new_len: usize);
+
+            /// get a reference to the top frame in the stack
+            pub fn last(&self) -> Option<&StackFrame>;
+
+            /// get a mutable reference to the top frame in the stack
+            pub fn last_mut(&mut self) -> Option<&mut StackFrame>;
         }
     }
 

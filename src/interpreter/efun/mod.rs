@@ -8,7 +8,6 @@ mod this_object;
 mod throw;
 
 use lazy_static::lazy_static;
-use phf::phf_map;
 use std::collections::HashMap;
 
 use crate::{
@@ -24,9 +23,11 @@ use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
 use throw::throw;
+use crate::errors::LpcError;
+use crate::interpreter::MAX_CALL_STACK_SIZE;
 
 /// Signature for Efuns
-pub type Efun = fn(&mut EfunContext) -> Result<()>;
+pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
 
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
@@ -36,17 +37,6 @@ pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THROW: &str = "throw";
-
-/// Global static mapping of all efun names to the actual function
-pub static EFUNS: phf::Map<&'static str, Efun> = phf_map! {
-    // "call_other" is implemented with a custom [`Instruction`]
-    "clone_object" => clone_object,
-    "debug" => debug,
-    "dump" => dump,
-    "file_name" => file_name,
-    "this_object" => this_object,
-    "throw" => throw,
-};
 
 lazy_static! {
     /// Global static mapping of all efun names to their prototype
@@ -153,4 +143,23 @@ lazy_static! {
 
         m
     };
+}
+
+/// call the actual function, from the given name, with the passed context.
+pub fn call_efun<const N: usize>(name: &str, context: &mut EfunContext<N>) -> Result<()> {
+    match name {
+        CLONE_OBJECT => clone_object(context),
+        DEBUG => debug(context),
+        DUMP => dump(context),
+        FILE_NAME => file_name(context),
+        THIS_OBJECT => this_object(context),
+        THROW => throw(context),
+        _ => {
+            Err(LpcError::new(format!(
+                "runtime error: call to unknown function (that had a valid prototype?) `{}`",
+                name
+            )))
+        }
+    }
+
 }

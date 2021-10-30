@@ -4,10 +4,11 @@ use crate::{
     try_extract_value, Result,
 };
 use std::collections::HashMap;
+use crate::interpreter::MAX_CALL_STACK_SIZE;
 
 const MAX_RECURSION: usize = 20;
 
-fn recursion_too_deep(size: usize, context: &EfunContext) -> Result<()> {
+fn recursion_too_deep<const N: usize>(size: usize, context: &EfunContext<N>) -> Result<()> {
     if size > MAX_RECURSION {
         return Err(context.runtime_error("Too deep recursion."));
     }
@@ -15,9 +16,9 @@ fn recursion_too_deep(size: usize, context: &EfunContext) -> Result<()> {
     Ok(())
 }
 
-fn format_ref(
+fn format_ref<const N: usize>(
     lpc_ref: &LpcRef,
-    context: &mut EfunContext,
+    context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
@@ -58,9 +59,9 @@ fn format_ref(
     }
 }
 
-fn format_array(
+fn format_array<const N: usize>(
     arr: &[LpcRef],
-    context: &mut EfunContext,
+    context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
@@ -87,9 +88,9 @@ fn format_array(
     Ok(result)
 }
 
-fn format_mapping(
+fn format_mapping<const N: usize>(
     map: &HashMap<LpcRef, LpcRef>,
-    context: &mut EfunContext,
+    context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
@@ -128,7 +129,7 @@ fn format_mapping(
 }
 
 /// The dump() Efun
-pub fn dump(context: &mut EfunContext) -> Result<()> {
+pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     // function arguments start in register 1, and we know this function has only 1 arg.
     let lpc_ref = context.resolve_lpc_ref(1_usize);
 

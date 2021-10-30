@@ -3,7 +3,7 @@ use crate::{asm::{
     register::Register,
 }, codegen::codegen_walker::INIT_PROGRAM, errors::LpcError, interpreter::{
     call_stack::CallStack,
-    efun::{efun_context::EfunContext, EFUNS, EFUN_PROTOTYPES},
+    efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
     instruction_counter::InstructionCounter,
     lpc_ref::LpcRef,
     lpc_value::LpcValue,
@@ -17,6 +17,7 @@ use crate::{asm::{
 }, semantic::program_function::ProgramFunction, try_extract_value, util::config::Config, Result, LpcInt};
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
 use decorum::Total;
+use crate::interpreter::efun::call_efun;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -65,7 +66,7 @@ struct CatchPoint {
 
 /// An abstraction to allow for isolated running to completion of a specified function.
 /// It represents a single thread of execution
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Task<'pool, const STACKSIZE: usize> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
@@ -85,7 +86,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
     /// Store a snapshot of a specific state, for testing
     #[cfg(test)]
-    pub snapshot: Option<Box<Task<'pool, STACKSIZE>>>,
+    pub snapshot: Option<CallStack<STACKSIZE>>,
 }
 
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
@@ -361,7 +362,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 // copy argument registers from old frame to new
                 if num_args > 0_usize {
                     let index = initial_arg.index();
-                    // let current_frame = self.stack.last().unwrap();
                     let registers = &frame.registers;
                     new_frame.registers[1..=num_args]
                         .clone_from_slice(&registers[index..(index + num_args)]);
@@ -372,30 +372,19 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
 
-                // if let Some(x) = self.process.functions.get(name) {
-                //     frame.set_pc(x.address);
-                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
-                if let Some(efun) = EFUNS.get(name.as_str()) {
-                    // TODO this is almost certain broken for efun overrides
-                    // the efun is responsible for populating the return value in its own frame
-                    let frame = self.stack.current_frame_mut()?;
-                    let mut ctx = EfunContext::new(frame, task_context, &self.memory);
-                    efun(&mut ctx)?;
+                if !function_is_local {
+                    let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
+
+                    call_efun(name.as_str(), &mut ctx)?;
+
+                    #[cfg(test)]
+                    {
+                        if ctx.snapshot.is_some() {
+                            self.snapshot = ctx.snapshot;
+                        }
+                    }
 
                     pop_frame!(self, task_context);
-                    //
-                    // if let Some(frame) = self.pop_frame() {
-                    //     self.stack.copy_result(&frame)?;
-                    //
-                    //     if self.stack.is_empty() {
-                    //         task_context.set_result(frame.registers[0].clone());
-                    //     }
-                    // }
-                } else if !function_is_local {
-                    return Err(self.runtime_error(format!(
-                        "Call to unknown function (that had a valid prototype?) `{}`",
-                        name
-                    )));
                 }
 
                 Ok(())
@@ -959,12 +948,12 @@ mod tests {
                         int j = 0;
                         catch(10 / j);
 
-                        debug("in_memory_snapshot");
+                        debug("snapshot_stack");
                     }
                 "##};
 
                 let task = run_prog(code);
-                let stack = task.snapshot.unwrap().stack;
+                let stack = task.snapshot.unwrap();
 
                 // The top of the stack in the snapshot is the object initialization frame,
                 // which is not what we care about here, so we get the second-to-top frame instead.
@@ -976,7 +965,7 @@ mod tests {
                     String("Runtime Error: Division by zero".into()),
                     Int(10),
                     Int(0),
-                    String("in_memory_snapshot".into()),
+                    String("snapshot_stack".into()),
                     Int(0),
                 ];
 
@@ -990,12 +979,12 @@ mod tests {
                         int j = 5;
                         catch(10 / j);
 
-                        debug("in_memory_snapshot");
+                        debug("snapshot_stack");
                     }
                 "##};
 
                 let task = run_prog(code);
-                let stack = task.snapshot.unwrap().stack;
+                let stack = task.snapshot.unwrap();
 
                 // The top of the stack in the snapshot is the object initialization frame,
                 // which is not what we care about here, so we get the second-to-top frame instead.
@@ -1007,7 +996,7 @@ mod tests {
                     Int(0),
                     Int(10),
                     Int(2),
-                    String("in_memory_snapshot".into()),
+                    String("snapshot_stack".into()),
                     Int(0),
                 ];
 

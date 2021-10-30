@@ -4,34 +4,34 @@ use crate::{
     try_extract_value, Result,
 };
 use itertools::Itertools;
-use phf::phf_map;
+use crate::interpreter::MAX_CALL_STACK_SIZE;
 
-type Operation = fn(&mut EfunContext) -> Result<()>;
-
-/// The enumeration of all operations that can be done through this efun
-static OPERATIONS: phf::Map<&'static str, Operation> = phf_map! {
-    "in_memory_snapshot" => in_memory_snapshot,
-};
+const SNAPSHOT_STACK: &str = "snapshot_stack";
 
 /// `debug`, the kitchen sink efun to do things around getting
 /// information from, or debugging the vm itself.
-pub fn debug(context: &mut EfunContext) -> Result<()> {
+pub fn debug<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     let lpc_ref = context.resolve_lpc_ref(1_usize);
     if let LpcRef::String(x) = lpc_ref {
         let b = x.borrow();
         let string = try_extract_value!(*b, LpcValue::String);
 
-        match OPERATIONS.get(string.as_str()) {
-            Some(func) => {
-                func(context)?;
+        match string.as_str() {
+            SNAPSHOT_STACK => {
+                #[cfg(test)]
+                {
+                    snapshot_stack(context)
+                }
 
-                Ok(())
+                #[cfg(not(test))]
+                {
+                    Err(context.runtime_error("Stack snapshots are only for testing."))
+                }
             }
-            None => {
-                let expected = OPERATIONS.keys().sorted_unstable().join(", ");
+            x => {
                 Err(context.runtime_error(format!(
-                    "Unknown operation `{}` passed to `debug()`. Expected one of {}",
-                    string, expected
+                    "Unknown operation `{}` passed to `debug()`.",
+                    x
                 )))
             }
         }
@@ -43,9 +43,10 @@ pub fn debug(context: &mut EfunContext) -> Result<()> {
     }
 }
 
-fn in_memory_snapshot(_context: &mut EfunContext) -> Result<()> {
-    // let klone = context.clone();
-    // context.snapshot = Some(klone.into());
+#[cfg(test)]
+fn snapshot_stack<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
+    let klone = context.clone_stack();
+    context.snapshot = Some(klone.into());
 
     Ok(())
 }
