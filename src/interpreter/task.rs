@@ -26,6 +26,7 @@ use crate::{
 };
 use decorum::Total;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
+use std::fmt::Display;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -299,6 +300,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     frame.set_pc_from_label(label);
                 }
             }
+            Instruction::MapConst(r, map) => {
+                let frame = self.stack.current_frame_mut()?;
+                let mut register_map = HashMap::new();
+                for (key, value) in map {
+                    let registers = &mut frame.registers;
+                    let r = registers[key.index()].clone();
+
+                    register_map.insert(r, registers[value.index()].clone());
+                }
+
+                let new_ref = self.memory.value_to_ref(LpcValue::from(register_map));
+                let registers = &mut frame.registers;
+
+                registers[r.index()] = new_ref;
+            }
             Instruction::RegCopy(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r2.index()] = registers[r1.index()].clone()
@@ -312,7 +328,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     return Ok(true);
                 }
             }
-
+            Instruction::Store(..) => {
+                // r2[r3] = r1;
+                self.handle_store(&instruction)?;
+            }
             Instruction::SConst(..) => {
                 self.handle_sconst(&instruction)?;
             }
@@ -572,6 +591,69 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    fn handle_store(&mut self, instruction: &Instruction) -> Result<()> {
+        match instruction {
+            Instruction::Store(r1, r2, r3) => {
+                let frame = self.stack.current_frame()?;
+
+                let mut container = frame.resolve_lpc_ref(r2);
+                let index = frame.resolve_lpc_ref(r3);
+                let array_idx = if let LpcRef::Int(i) = index { i } else { 0 };
+
+                match container {
+                    LpcRef::Array(vec_ref) => {
+                        let mut r = vec_ref.borrow_mut();
+                        let vec = match *r {
+                            LpcValue::Array(ref mut v) => v,
+                            _ => return Err(self.runtime_error(
+                                "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
+                            )
+                        };
+
+                        let len = vec.len();
+
+                        // handle negative indices
+                        let idx = if array_idx >= 0 {
+                            array_idx
+                        } else {
+                            len as LpcInt + array_idx
+                        };
+
+                        if idx >= 0 && (idx as usize) < len {
+                            let registers = &mut self.stack.current_frame_mut()?.registers;
+
+                            vec[idx as usize] = registers[r1.index()].clone();
+                        } else {
+                            return Err(self.array_index_error(idx, len));
+                        }
+
+                        Ok(())
+                    }
+                    LpcRef::Mapping(ref mut map_ref) => {
+                        let mut r = map_ref.borrow_mut();
+                        let map = match *r {
+                            LpcValue::Mapping(ref mut m) => m,
+                            _ => return Err(self.runtime_error(
+                                "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
+                            )
+                        };
+                        let registers = &mut self.stack.current_frame_mut()?.registers;
+
+                        map.insert(index, registers[r1.index()].clone());
+
+                        Ok(())
+                    }
+                    x => {
+                        Err(
+                            self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+                        )
+                    }
+                }
+            },
+            _ => Err(self.runtime_error("non-Store instruction passed to `handle_store`")),
+        }
+    }
+
     fn resolve_call_other_receiver(
         receiver_ref: &LpcRef,
         name: &str,
@@ -704,6 +786,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         self.stack.runtime_error(msg)
     }
 
+    #[inline]
+    fn array_index_error<T>(&self, index: T, length: usize) -> LpcError
+    where
+        T: Display
+    {
+        self.runtime_error(format!(
+            "Attempting to access index {} in an array of length {}",
+            index, length
+        ))
+    }
     /// Pop the top frame from the stack, and return it.
     #[inline]
     fn pop_frame(&mut self) -> Option<StackFrame> {
@@ -1620,37 +1712,37 @@ mod tests {
         //             }
         //         }
         //
-        //         mod test_mapconst {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = ([
-        //                         "asdf": 123,
-        //                         456: 3.14
-        //                     ]);
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let mut hashmap = HashMap::new();
-        //                 hashmap.insert(BareVal::String("asdf".into()), BareVal::Int(123));
-        //                 hashmap.insert(BareVal::Int(456), BareVal::Float(3.14.into()));
-        //
-        //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(456),
-        //                     BareVal::Float(3.14.into()),
-        //                     BareVal::String("asdf".into()),
-        //                     BareVal::Int(123),
-        //                     BareVal::Mapping(hashmap),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+        mod test_mapconst {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = ([
+                        "asdf": 123,
+                        456: 3.14
+                    ]);
+                "##};
+
+                let task = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let mut hashmap = HashMap::new();
+                hashmap.insert(String("asdf".into()), Int(123));
+                hashmap.insert(Int(456), Float(3.14.into()));
+
+                let expected = vec![
+                    Int(0),
+                    Int(456),
+                    Float(3.14.into()),
+                    String("asdf".into()),
+                    Int(123),
+                    Mapping(hashmap),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_madd {
         //             use super::*;
@@ -1900,64 +1992,64 @@ mod tests {
         //             }
         //         }
         //
-        //         mod test_store {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     void create() {
-        //                         mixed a = ({ 1, 2, 3 });
-        //                         a[2] = 678;
-        //
-        //                         // Store a snapshot, so we can test this even though this stack
-        //                         // frame would otherwise have been popped off into the aether.
-        //                         debug("in_memory_snapshot");
-        //                     }
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let stack = interpreter.snapshot.unwrap().stack;
-        //
-        //                 // The top of the stack in the snapshot is the object initialization frame,
-        //                 // which is not what we care about here, so we get the second-to-top frame instead.
-        //                 let registers = &stack[stack.len() - 2].registers;
-        //
-        //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(3),
-        //                     BareVal::Array(
-        //                         vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(678)].into(),
-        //                     ),
-        //                     BareVal::Int(678),
-        //                     BareVal::Int(2),
-        //                     BareVal::String("in_memory_snapshot".into()),
-        //                     BareVal::Int(0),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, registers);
-        //             }
-        //         }
-        //
-        //         mod test_sconst {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     string foo = "lolwut";
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![BareVal::Int(0), BareVal::String("lolwut".into())];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+        mod test_store {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    void create() {
+                        mixed a = ({ 1, 2, 3 });
+                        a[2] = 678;
+
+                        // Store a snapshot, so we can test this even though this stack
+                        // frame would otherwise have been popped off into the aether.
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let task = run_prog(code);
+                let stack = task.snapshot.unwrap();
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(2),
+                    Int(3),
+                    Array(
+                        vec![Int(1), Int(2), Int(678)].into(),
+                    ),
+                    Int(678),
+                    Int(2),
+                    String("snapshot_stack".into()),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+        }
+
+        mod test_sconst {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    string foo = "lolwut";
+                "##};
+
+                let task = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), String("lolwut".into())];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_xor {
         //             use super::*;

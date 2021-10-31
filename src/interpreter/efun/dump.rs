@@ -143,6 +143,10 @@ mod tests {
     use crate::interpreter::program::Program;
 
     use crate::compiler::Compiler;
+    use crate::interpreter::memory::Memory;
+    use crate::interpreter::object_space::ObjectSpace;
+    use crate::interpreter::task::Task;
+    use crate::util::config::Config;
 
     fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();
@@ -151,42 +155,42 @@ mod tests {
             .expect("Failed to compile.")
     }
 
-    // TODO: re-enable this test after the interpreter is rebuilt
-    // #[test]
-    // fn does_not_crash_on_recursive_structures() {
-    //     // arrays
-    //     let code = r##"
-    //             void create() {
-    //                 mixed a = ({ 1, 2, 3 });
-    //                 a[2] = a;
-    //                 dump(a);
-    //             }
-    //         "##;
-    //
-    //     let mut interpreter = AsmInterpreter::default();
-    //     let program = compile_prog(code);
-    //     let r = interpreter.init_master(program);
-    //
-    //     assert_eq!(
-    //         r.unwrap_err().to_string(),
-    //         "Runtime Error: Too deep recursion."
-    //     );
-    //
-    //     // mappings
-    //     let code = r##"
-    //             void create() {
-    //                 mixed a = ([]);
-    //                 a["marfin"] = a;
-    //                 dump(a);
-    //             }
-    //         "##;
-    //
-    //     let program = compile_prog(code);
-    //     let r = interpreter.init_master(program);
-    //
-    //     assert_eq!(
-    //         r.unwrap_err().to_string(),
-    //         "Runtime Error: Too deep recursion."
-    //     );
-    // }
+    #[test]
+    fn does_not_crash_on_recursive_structures() {
+        // arrays
+        let code = r##"
+            void create() {
+                mixed a = ({ 1, 2, 3 });
+                a[2] = a;
+                dump(a);
+            }
+        "##;
+
+        let program = compile_prog(code);
+        let mut task: Task<5> = Task::new(Memory::new(10));
+        let result = task.initialize_program(program, Config::default(), ObjectSpace::default());
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "runtime error: Too deep recursion."
+        );
+
+        // mappings
+        let code = r##"
+            void create() {
+                mixed a = ([]);
+                a["marfin"] = a;
+                dump(a);
+            }
+        "##;
+
+        let program = compile_prog(code);
+        let mut task: Task<5> = Task::new(Memory::new(10));
+        let result = task.initialize_program(program, Config::default(), ObjectSpace::default());
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "runtime error: Too deep recursion."
+        );
+    }
 }
