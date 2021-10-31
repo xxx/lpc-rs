@@ -247,6 +247,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 self.catch_points.push(catch_point);
             }
+            Instruction::EqEq(r1, r2, r3) => {
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+
+                let out = (registers[r1.index()] == registers[r2.index()]) as LpcInt;
+
+                registers[r3.index()] = LpcRef::Int(out);
+            }
             Instruction::FConst(r, f) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r.index()] = LpcRef::Float(f);
@@ -1122,29 +1130,29 @@ mod tests {
                 assert!(interpreter.catch_points.is_empty());
             }
         }
-        //
-        //         mod test_eq_eq {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 2 == 2;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(1),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_eq_eq {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 2 == 2;
+                "##};
+
+                let task = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(2),
+                    Int(2),
+                    Int(1),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_fconst {
         //             use super::*;
