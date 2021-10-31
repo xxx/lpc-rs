@@ -390,6 +390,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Lt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x < y)?;
             }
+            Instruction::Lte(r1, r2, r3) => {
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
+            }
             Instruction::MAdd(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x + y)?;
             }
@@ -1879,38 +1882,38 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_lte {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 1200 <= 1199;
-        //                     mixed r = 1199 <= 1200;
-        //                     mixed s = 1200 <= 1200;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(1200),
-        //                     Int(1199),
-        //                     Int(0),
-        //                     Int(1199),
-        //                     Int(1200),
-        //                     Int(1),
-        //                     Int(1200),
-        //                     Int(1200),
-        //                     Int(1),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
+
+        mod test_lte {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 1200 <= 1199;
+                    mixed r = 1199 <= 1200;
+                    mixed s = 1200 <= 1200;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1200),
+                    Int(1199),
+                    Int(0),
+                    Int(1199),
+                    Int(1200),
+                    Int(1),
+                    Int(1200),
+                    Int(1200),
+                    Int(1),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_mapconst {
             use super::*;
 
