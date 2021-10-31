@@ -279,6 +279,20 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
+            Instruction::IAdd(r1, r2, r3) => {
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+                match &registers[r1.index()] + &registers[r2.index()] {
+                    Ok(result) => {
+                        let out = self.memory.value_to_ref(result);
+
+                        registers[r3.index()] = out
+                    }
+                    Err(e) => {
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
+                }
+            }
             Instruction::IConst(r, i) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r.index()] = LpcRef::Int(i);
@@ -343,6 +357,23 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 };
                 frame.set_pc(address);
             }
+            Instruction::Jnz(r1, label) => {
+                let frame = self.stack.current_frame()?;
+                let registers = &frame.registers;
+                let v = &registers[r1.index()];
+
+                if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
+                    let address = match frame.lookup_label(&label) {
+                        Some(x) => *x,
+                        None => {
+                            return Err(
+                                self.runtime_error(format!("Missing address for label `{}`", label))
+                            )
+                        }
+                    };
+                    frame.set_pc(address);
+                }
+            }
             Instruction::Jz(r1, ref label) => {
                 let frame = self.stack.current_frame_mut()?;
                 let registers = &mut frame.registers;
@@ -352,6 +383,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
                     frame.set_pc_from_label(label)?;
                 }
+            }
+            Instruction::Lt(r1, r2, r3) => {
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x < y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x + y)?;
@@ -1362,9 +1396,9 @@ mod tests {
             #[test]
             fn stores_the_value() {
                 let code = indoc! { r##"
-                    mixed q = 16 + 34;
-                    mixed r = 12 + -4;
-                    mixed s = q + r;
+                    int q = 16 + 34;
+                    int r = 12 + -4;
+                    int s = q + r;
                 "##};
 
                 let (task, _) = run_prog(code);
@@ -1629,47 +1663,47 @@ mod tests {
                 assert_eq!(&expected, registers);
             }
         }
-        //
-        //         mod test_jnz {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     void create() {
-        //                         int j;
-        //                         do {
-        //                             j += 1;
-        //                         } while(j < 8);
-        //
-        //                         // Store a snapshot, so we can test this even though this stack
-        //                         // frame would otherwise have been popped off into the aether.
-        //                         debug("in_memory_snapshot");
-        //                     }
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let stack = interpreter.snapshot.unwrap().stack;
-        //
-        //                 // The top of the stack in the snapshot is the object initialization frame,
-        //                 // which is not what we care about here, so we get the second-to-top frame instead.
-        //                 let registers = &stack[stack.len() - 2].registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(8),
-        //                     Int(1),
-        //                     Int(8),
-        //                     Int(8),
-        //                     Int(0),
-        //                     String("in_memory_snapshot".into()),
-        //                     Int(0),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, registers);
-        //             }
-        //         }
-        //
+
+        mod test_jnz {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j;
+                        do {
+                            j += 1;
+                        } while(j < 8);
+
+                        // Store a snapshot, so we can test this even though this stack
+                        // frame would otherwise have been popped off into the aether.
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let stack = task.snapshot.unwrap();
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(8),
+                    Int(1),
+                    Int(8),
+                    Int(8),
+                    Int(0),
+                    String("snapshot_stack".into()),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+        }
+
         mod test_jz {
             use super::*;
 
@@ -1726,36 +1760,36 @@ mod tests {
         //             }
         //         }
         //
-        //         mod test_lt {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 1200 < 1199;
-        //                     mixed r = 1199 < 1200;
-        //                     mixed s = 1200 < 1200;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(1200),
-        //                     Int(1199),
-        //                     Int(0),
-        //                     Int(1199),
-        //                     Int(1200),
-        //                     Int(1),
-        //                     Int(1200),
-        //                     Int(1200),
-        //                     Int(0),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+        mod test_lt {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 1200 < 1199;
+                    mixed r = 1199 < 1200;
+                    mixed s = 1200 < 1200;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1200),
+                    Int(1199),
+                    Int(0),
+                    Int(1199),
+                    Int(1200),
+                    Int(1),
+                    Int(1200),
+                    Int(1200),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_lte {
         //             use super::*;
