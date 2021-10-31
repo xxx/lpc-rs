@@ -399,15 +399,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::MapConst(r, map) => {
                 let frame = self.stack.current_frame_mut()?;
                 let mut register_map = HashMap::new();
+                let registers = &mut frame.registers;
+
                 for (key, value) in map {
-                    let registers = &mut frame.registers;
                     let r = registers[key.index()].clone();
 
                     register_map.insert(r, registers[value.index()].clone());
                 }
 
                 let new_ref = self.memory.value_to_ref(LpcValue::from(register_map));
-                let registers = &mut frame.registers;
 
                 registers[r.index()] = new_ref;
             }
