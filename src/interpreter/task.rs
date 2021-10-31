@@ -138,7 +138,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         };
         let process: Rc<RefCell<Process>> = Process::new(program).into();
         let context = TaskContext::new(config, process.clone(), object_space);
-        context.insert_process(process.clone());
+        context.insert_process(process);
 
         self.eval(init_function, &[], context)
     }
@@ -305,8 +305,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let v = &registers[r1.index()];
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                    frame.set_pc_from_label(label);
+                    frame.set_pc_from_label(label)?;
                 }
+            }
+            Instruction::MAdd(r1, r2, r3) => {
+                self.binary_operation(r1, r2, r3, |x, y| x + y)?;
             }
             Instruction::MapConst(r, map) => {
                 let frame = self.stack.current_frame_mut()?;
@@ -838,14 +841,14 @@ mod tests {
             .expect("Failed to compile.")
     }
 
-    fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
+    fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
         let mut task = Task::new(Memory::default());
         let program = compile_prog(code);
-        let _ = task
+        let ctx = task
             .initialize_program(program, Config::default(), ObjectSpace::default())
             .expect("failed to initialize");
 
-        task
+        (task, ctx)
     }
 
     /// A type to make it easier to set up test expectations for register contents
@@ -929,7 +932,7 @@ mod tests {
                     mixed *a = ({ 12, 4.3, "hello", ({ 1, 2, 3 }) });
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -966,7 +969,7 @@ mod tests {
                     mixed b = 0 & a;
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(11), Int(0), Int(11), Int(0)];
@@ -986,7 +989,7 @@ mod tests {
                     mixed c = b && a;
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -1014,7 +1017,7 @@ mod tests {
                     int tacos() { return 666; }
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(666), Int(666)];
@@ -1033,7 +1036,7 @@ mod tests {
                     int tacos() { return 666; }
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -1061,7 +1064,7 @@ mod tests {
                     }
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let stack = task.snapshot.unwrap();
 
                 // The top of the stack in the snapshot is the object initialization frame,
@@ -1092,7 +1095,7 @@ mod tests {
                     }
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let stack = task.snapshot.unwrap();
 
                 // The top of the stack in the snapshot is the object initialization frame,
@@ -1125,9 +1128,9 @@ mod tests {
                     }
                 "##};
 
-                let interpreter = run_prog(code);
+                let (task, _) = run_prog(code);
 
-                assert!(interpreter.catch_points.is_empty());
+                assert!(task.catch_points.is_empty());
             }
         }
 
@@ -1140,7 +1143,7 @@ mod tests {
                     mixed q = 2 == 2;
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -1153,97 +1156,99 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_fconst {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 3.14;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![BareVal::Int(0), BareVal::Float(3.14.into())];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
-        //         mod test_gload {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 3.14;
-        //                     mixed j = q + 1.1;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Float(3.14.into()),
-        //                     BareVal::Float(3.14.into()),
-        //                     BareVal::Float(1.1.into()),
-        //                     BareVal::Float(4.24.into()),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //
-        //                 let global_registers = interpreter
-        //                     .process
-        //                     .globals
-        //                     .iter()
-        //                     .map(|global| (*global.borrow()).clone())
-        //                     .collect::<Vec<_>>();
-        //
-        //                 let global_expected = vec![
-        //                     BareVal::Int(0), // "wasted" global r0
-        //                     BareVal::Float(3.14.into()),
-        //                     BareVal::Float(4.24.into()),
-        //                 ];
-        //
-        //                 assert_eq!(&global_expected, &global_registers);
-        //             }
-        //         }
-        //
-        //         mod test_gstore {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 3.14;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![BareVal::Int(0), BareVal::Float(3.14.into())];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //
-        //                 let global_registers = interpreter
-        //                     .process
-        //                     .globals
-        //                     .iter()
-        //                     .map(|global| (*global.borrow()).clone())
-        //                     .collect::<Vec<_>>();
-        //
-        //                 let global_expected = vec![
-        //                     BareVal::Int(0), // "wasted" global r0
-        //                     BareVal::Float(3.14.into()),
-        //                 ];
-        //
-        //                 assert_eq!(&global_expected, &global_registers);
-        //             }
-        //         }
-        //
+
+        mod test_fconst {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed pi = 3.14;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Float(3.14.into())];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_gload {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 3.14;
+                    mixed j = q + 1.1;
+                "##};
+
+                let (task, ctx) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Float(3.14.into()),
+                    Float(3.14.into()),
+                    Float(1.1.into()),
+                    Float(4.24.into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+
+                let global_registers = ctx
+                    .process()
+                    .borrow()
+                    .globals
+                    .iter()
+                    .map(|global| (*global.borrow()).clone())
+                    .collect::<Vec<_>>();
+
+                let global_expected = vec![
+                    Int(0), // "wasted" global r0
+                    Float(3.14.into()),
+                    Float(4.24.into()),
+                ];
+
+                assert_eq!(&global_expected, &global_registers);
+            }
+        }
+
+        mod test_gstore {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 3.14;
+                "##};
+
+                let (task, ctx) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Float(3.14.into())];
+
+                assert_eq!(&expected, &registers);
+
+                let global_registers = ctx
+                    .process()
+                    .borrow()
+                    .globals
+                    .iter()
+                    .map(|global| (*global.borrow()).clone())
+                    .collect::<Vec<_>>();
+
+                let global_expected = vec![
+                    Int(0), // "wasted" global r0
+                    Float(3.14.into()),
+                ];
+
+                assert_eq!(&global_expected, &global_registers);
+            }
+        }
+
         mod test_gt {
             use super::*;
 
@@ -1255,8 +1260,8 @@ mod tests {
                     mixed s = 1200 > 1200;
                 "##};
 
-                let interpreter = run_prog(code);
-                let registers = interpreter.popped_frame.unwrap().registers;
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
                     BareVal::Int(0),
@@ -1399,8 +1404,8 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                let interpreter = run_prog(code);
-                let registers = interpreter.popped_frame.unwrap().registers;
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
                     BareVal::Int(0),
@@ -1612,8 +1617,8 @@ mod tests {
                             int j = i > 12 ? 10 : 1000;
                         "##};
 
-                let interpreter = run_prog(code);
-                let registers = interpreter.popped_frame.unwrap().registers;
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
                     BareVal::Int(0),
@@ -1732,7 +1737,7 @@ mod tests {
                     ]);
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut hashmap = HashMap::new();
@@ -1751,33 +1756,33 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_madd {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = "abc";
-        //                     mixed b = 123;
-        //                     mixed c = a + b;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::String("abc".into()),
-        //                     BareVal::Int(123),
-        //                     BareVal::String("abc".into()),
-        //                     BareVal::Int(123),
-        //                     BareVal::String("abc123".into()),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_madd {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = "abc";
+                    mixed b = 123;
+                    mixed c = a + b;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    BareVal::Int(0),
+                    BareVal::String("abc".into()),
+                    BareVal::Int(123),
+                    BareVal::String("abc".into()),
+                    BareVal::Int(123),
+                    BareVal::String("abc123".into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_mmul {
         //             use super::*;
@@ -2016,7 +2021,7 @@ mod tests {
                     }
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let stack = task.snapshot.unwrap();
 
                 // The top of the stack in the snapshot is the object initialization frame,
@@ -2050,7 +2055,7 @@ mod tests {
                     string foo = "lolwut";
                 "##};
 
-                let task = run_prog(code);
+                let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), String("lolwut".into())];
