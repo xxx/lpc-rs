@@ -301,6 +301,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
+            Instruction::IMod(r1, r2, r3) => {
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+                match &registers[r1.index()] % &registers[r2.index()] {
+                    Ok(result) => registers[r3.index()] = self.memory.value_to_ref(result),
+                    Err(e) => {
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
+                }
+            }
             Instruction::Jz(r1, ref label) => {
                 let frame = self.stack.current_frame_mut()?;
                 let registers = &mut frame.registers;
@@ -1422,55 +1432,73 @@ mod tests {
 
                 assert_eq!(&expected, &registers);
             }
+
+            #[test]
+            fn errors_on_division_by_zero() {
+                let code = indoc! { r##"
+                    mixed q = 5;
+                    mixed r = 0;
+                    mixed s = q / r;
+                "##};
+
+                let mut task: Task<10> = Task::new(Memory::default());
+                let program = compile_prog(code);
+                let r = task
+                    .initialize_program(program, Config::default(), ObjectSpace::default());
+
+                assert_eq!(
+                    r.unwrap_err().to_string(),
+                    "Runtime Error: Division by zero"
+                )
+            }
         }
-        //
-        //         mod test_imod {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 16 % 7;
-        //                     mixed r = 12 % -7;
-        //                     mixed s = q % r;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     // the constant expressions are folded at parse time
-        //                     Int(2),
-        //                     Int(5),
-        //                     Int(2),
-        //                     Int(5),
-        //                     Int(2),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //
-        //             #[test]
-        //             fn errors_on_division_by_zero() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 5;
-        //                     mixed r = 0;
-        //                     mixed s = q / r;
-        //                 "##};
-        //
-        //                 let mut interpreter = AsmInterpreter::default();
-        //
-        //                 let program = compile_prog(code);
-        //
-        //                 let r = interpreter.init_master(program);
-        //
-        //                 assert_eq!(
-        //                     r.unwrap_err().to_string(),
-        //                     "Runtime Error: Division by zero"
-        //                 )
-        //             }
-        //         }
+
+        mod test_imod {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 16 % 7;
+                    mixed r = 12 % -7;
+                    mixed s = q % r;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    // the constant expressions are folded at parse time
+                    Int(2),
+                    Int(5),
+                    Int(2),
+                    Int(5),
+                    Int(2),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn errors_on_division_by_zero() {
+                let code = indoc! { r##"
+                    mixed q = 5;
+                    mixed r = 0;
+                    mixed s = q % r;
+                "##};
+
+                let mut task: Task<10> = Task::new(Memory::default());
+                let program = compile_prog(code);
+                let r = task
+                    .initialize_program(program, Config::default(), ObjectSpace::default());
+
+                assert_eq!(
+                    r.unwrap_err().to_string(),
+                    "Runtime Error: Remainder division by zero"
+                )
+            }
+        }
         //
         //         mod test_imul {
         //             use super::*;
