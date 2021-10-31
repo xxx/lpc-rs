@@ -276,6 +276,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x > y)?;
             }
+            Instruction::Gte(r1, r2, r3) => {
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
+            }
             Instruction::IConst(r, i) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r.index()] = LpcRef::Int(i);
@@ -1264,52 +1267,52 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Int(1200),
-                    BareVal::Int(1199),
-                    BareVal::Int(1),
-                    BareVal::Int(1199),
-                    BareVal::Int(1200),
-                    BareVal::Int(0),
-                    BareVal::Int(1200),
-                    BareVal::Int(1200),
-                    BareVal::Int(0),
+                    Int(0),
+                    Int(1200),
+                    Int(1199),
+                    Int(1),
+                    Int(1199),
+                    Int(1200),
+                    Int(0),
+                    Int(1200),
+                    Int(1200),
+                    Int(0),
                 ];
 
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_gte {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 1200 >= 1199;
-        //                     mixed r = 1199 >= 1200;
-        //                     mixed s = 1200 >= 1200;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1199),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(1199),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_gte {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 1200 >= 1199;
+                    mixed r = 1199 >= 1200;
+                    mixed s = 1200 >= 1200;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1200),
+                    Int(1199),
+                    Int(1),
+                    Int(1199),
+                    Int(1200),
+                    Int(0),
+                    Int(1200),
+                    Int(1200),
+                    Int(1),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_iadd {
         //             use super::*;
@@ -1326,13 +1329,13 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
+        //                     Int(0),
         //                     // the constant expressions are folded at parse time
-        //                     BareVal::Int(50),
-        //                     BareVal::Int(8),
-        //                     BareVal::Int(50),
-        //                     BareVal::Int(8),
-        //                     BareVal::Int(58),
+        //                     Int(50),
+        //                     Int(8),
+        //                     Int(50),
+        //                     Int(8),
+        //                     Int(58),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1351,7 +1354,7 @@ mod tests {
         //                 let interpreter = run_prog(code);
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
-        //                 let expected = vec![BareVal::Int(0), BareVal::Int(666)];
+        //                 let expected = vec![Int(0), Int(666)];
         //
         //                 assert_eq!(&expected, &registers);
         //             }
@@ -1369,7 +1372,7 @@ mod tests {
         //                 let interpreter = run_prog(code);
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
-        //                 let expected = vec![BareVal::Int(0), BareVal::Int(0)];
+        //                 let expected = vec![Int(0), Int(0)];
         //
         //                 assert_eq!(&expected, &registers);
         //             }
@@ -1387,7 +1390,7 @@ mod tests {
         //                 let interpreter = run_prog(code);
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
-        //                 let expected = vec![BareVal::Int(0), BareVal::Int(1)];
+        //                 let expected = vec![Int(0), Int(1)];
         //
         //                 assert_eq!(&expected, &registers);
         //             }
@@ -1408,13 +1411,13 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    BareVal::Int(0),
+                    Int(0),
                     // the constant expressions are folded at parse time
-                    BareVal::Int(8),
-                    BareVal::Int(-3),
-                    BareVal::Int(8),
-                    BareVal::Int(-3),
-                    BareVal::Int(-2),
+                    Int(8),
+                    Int(-3),
+                    Int(8),
+                    Int(-3),
+                    Int(-2),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1436,13 +1439,13 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
+        //                     Int(0),
         //                     // the constant expressions are folded at parse time
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(5),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(5),
-        //                     BareVal::Int(2),
+        //                     Int(2),
+        //                     Int(5),
+        //                     Int(2),
+        //                     Int(5),
+        //                     Int(2),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1484,12 +1487,12 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(32),
-        //                     BareVal::Int(-48),
-        //                     BareVal::Int(32),
-        //                     BareVal::Int(-48),
-        //                     BareVal::Int(-1536),
+        //                     Int(0),
+        //                     Int(32),
+        //                     Int(-48),
+        //                     Int(32),
+        //                     Int(-48),
+        //                     Int(-1536),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1511,12 +1514,12 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(14),
-        //                     BareVal::Int(16),
-        //                     BareVal::Int(14),
-        //                     BareVal::Int(16),
-        //                     BareVal::Int(-2),
+        //                     Int(0),
+        //                     Int(14),
+        //                     Int(16),
+        //                     Int(14),
+        //                     Int(16),
+        //                     Int(-2),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1552,15 +1555,15 @@ mod tests {
         //                 let registers = &stack[stack.len() - 2].registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(69),
-        //                     BareVal::Int(12),
-        //                     BareVal::Int(10),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(69),
-        //                     BareVal::Int(0),
-        //                     BareVal::String("in_memory_snapshot".into()),
-        //                     BareVal::Int(0),
+        //                     Int(0),
+        //                     Int(69),
+        //                     Int(12),
+        //                     Int(10),
+        //                     Int(1),
+        //                     Int(69),
+        //                     Int(0),
+        //                     String("in_memory_snapshot".into()),
+        //                     Int(0),
         //                 ];
         //
         //                 assert_eq!(&expected, registers);
@@ -1593,14 +1596,14 @@ mod tests {
         //                 let registers = &stack[stack.len() - 2].registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(8),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(8),
-        //                     BareVal::Int(8),
-        //                     BareVal::Int(0),
-        //                     BareVal::String("in_memory_snapshot".into()),
-        //                     BareVal::Int(0),
+        //                     Int(0),
+        //                     Int(8),
+        //                     Int(1),
+        //                     Int(8),
+        //                     Int(8),
+        //                     Int(0),
+        //                     String("in_memory_snapshot".into()),
+        //                     Int(0),
         //                 ];
         //
         //                 assert_eq!(&expected, registers);
@@ -1621,14 +1624,14 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::Int(12),
-                    BareVal::Int(1000),
-                    BareVal::Int(12),
-                    BareVal::Int(12),
-                    BareVal::Int(0),
-                    BareVal::Int(0),
-                    BareVal::Int(1000),
+                    Int(0),
+                    Int(12),
+                    Int(1000),
+                    Int(12),
+                    Int(12),
+                    Int(0),
+                    Int(0),
+                    Int(1000),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1649,14 +1652,14 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(3),
-        //                     BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
-        //                     BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(2),
+        //                     Int(0),
+        //                     Int(1),
+        //                     Int(2),
+        //                     Int(3),
+        //                     Array(vec![Int(1), Int(2), Int(3)].into()),
+        //                     Array(vec![Int(1), Int(2), Int(3)].into()),
+        //                     Int(1),
+        //                     Int(2),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1678,16 +1681,16 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1199),
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1199),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(0),
+        //                     Int(0),
+        //                     Int(1200),
+        //                     Int(1199),
+        //                     Int(0),
+        //                     Int(1199),
+        //                     Int(1200),
+        //                     Int(1),
+        //                     Int(1200),
+        //                     Int(1200),
+        //                     Int(0),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1709,16 +1712,16 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1199),
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1199),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1200),
-        //                     BareVal::Int(1),
+        //                     Int(0),
+        //                     Int(1200),
+        //                     Int(1199),
+        //                     Int(0),
+        //                     Int(1199),
+        //                     Int(1200),
+        //                     Int(1),
+        //                     Int(1200),
+        //                     Int(1200),
+        //                     Int(1),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1772,12 +1775,12 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    BareVal::Int(0),
-                    BareVal::String("abc".into()),
-                    BareVal::Int(123),
-                    BareVal::String("abc".into()),
-                    BareVal::Int(123),
-                    BareVal::String("abc123".into()),
+                    Int(0),
+                    String("abc".into()),
+                    Int(123),
+                    String("abc".into()),
+                    Int(123),
+                    String("abc123".into()),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -1799,12 +1802,12 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::String("abc".into()),
-        //                     BareVal::Int(4),
-        //                     BareVal::String("abc".into()),
-        //                     BareVal::Int(4),
-        //                     BareVal::String("abcabcabcabc".into()),
+        //                     Int(0),
+        //                     String("abc".into()),
+        //                     Int(4),
+        //                     String("abc".into()),
+        //                     Int(4),
+        //                     String("abcabcabcabc".into()),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1825,32 +1828,32 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(3),
-        //                     BareVal::Array(
+        //                     Int(0),
+        //                     Int(1),
+        //                     Int(1),
+        //                     Int(2),
+        //                     Int(3),
+        //                     Array(
         //                         vec![
-        //                             BareVal::Int(1),
-        //                             BareVal::Int(1),
-        //                             BareVal::Int(2),
-        //                             BareVal::Int(3),
+        //                             Int(1),
+        //                             Int(1),
+        //                             Int(2),
+        //                             Int(3),
         //                         ]
         //                         .into(),
         //                     ),
-        //                     BareVal::Array(
+        //                     Array(
         //                         vec![
-        //                             BareVal::Int(1),
-        //                             BareVal::Int(1),
-        //                             BareVal::Int(2),
-        //                             BareVal::Int(3),
+        //                             Int(1),
+        //                             Int(1),
+        //                             Int(2),
+        //                             Int(3),
         //                         ]
         //                         .into(),
         //                     ),
-        //                     BareVal::Int(1),
-        //                     BareVal::Array(vec![BareVal::Int(1)].into()),
-        //                     BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)].into()),
+        //                     Int(1),
+        //                     Array(vec![Int(1)].into()),
+        //                     Array(vec![Int(2), Int(3)].into()),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1871,12 +1874,12 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(4),
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1),
+        //                     Int(0),
+        //                     Int(2),
+        //                     Int(0),
+        //                     Int(4),
+        //                     Int(0),
+        //                     Int(1),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1885,7 +1888,7 @@ mod tests {
         //
         //         mod test_or {
         //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+        //             use crate::interpreter::asm_interpreter::tests::Int;
         //
         //             #[test]
         //             fn stores_the_value() {
@@ -1905,7 +1908,7 @@ mod tests {
         //
         //         mod test_oror {
         //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+        //             use crate::interpreter::asm_interpreter::tests::Int;
         //
         //             #[test]
         //             fn stores_the_value() {
@@ -1946,14 +1949,14 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(2),
-        //                     BareVal::Int(3),
-        //                     BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)].into()),
-        //                     BareVal::Int(1),
-        //                     BareVal::Int(-1),
-        //                     BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)].into()),
+        //                     Int(0),
+        //                     Int(1),
+        //                     Int(2),
+        //                     Int(3),
+        //                     Array(vec![Int(1), Int(2), Int(3)].into()),
+        //                     Int(1),
+        //                     Int(-1),
+        //                     Array(vec![Int(2), Int(3)].into()),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1974,10 +1977,10 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(0),
-        //                     BareVal::Int(4),
-        //                     BareVal::Int(4),
-        //                     BareVal::Int(4),
+        //                     Int(0),
+        //                     Int(4),
+        //                     Int(4),
+        //                     Int(4),
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -1997,8 +2000,8 @@ mod tests {
         //                 let registers = interpreter.popped_frame.unwrap().registers;
         //
         //                 let expected = vec![
-        //                     BareVal::Int(666), // return value from create()
-        //                     BareVal::Int(666), // The copy of the call return value into its own register
+        //                     Int(666), // return value from create()
+        //                     Int(666), // The copy of the call return value into its own register
         //                 ];
         //
         //                 assert_eq!(&expected, &registers);
@@ -2066,7 +2069,7 @@ mod tests {
         //
         //         mod test_xor {
         //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+        //             use crate::interpreter::asm_interpreter::tests::Int;
         //
         //             #[test]
         //             fn stores_the_value() {
@@ -2086,7 +2089,7 @@ mod tests {
         //
         //         mod test_shl {
         //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+        //             use crate::interpreter::asm_interpreter::tests::Int;
         //
         //             #[test]
         //             fn stores_the_value() {
@@ -2106,7 +2109,7 @@ mod tests {
         //
         //         mod test_shr {
         //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::BareVal::Int;
+        //             use crate::interpreter::asm_interpreter::tests::Int;
         //
         //             #[test]
         //             fn stores_the_value() {
