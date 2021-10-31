@@ -331,6 +331,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
+            Instruction::Jmp(label) => {
+                let frame = self.stack.current_frame_mut()?;
+                let address = match frame.lookup_label(&label) {
+                    Some(x) => *x,
+                    None => {
+                        return Err(
+                            self.runtime_error(format!("Missing address for label `{}`", label))
+                        )
+                    }
+                };
+                frame.set_pc(address);
+            }
             Instruction::Jz(r1, ref label) => {
                 let frame = self.stack.current_frame_mut()?;
                 let registers = &mut frame.registers;
@@ -1573,50 +1585,50 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_jmp {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     void create() {
-        //                         mixed j;
-        //                         int i = 12;
-        //                         if (i > 10) {
-        //                             j = 69;
-        //                         } else {
-        //                             j = 3;
-        //                         }
-        //
-        //                         // Store a snapshot, so we can test this even though this stack
-        //                         // frame would otherwise have been popped off into the aether.
-        //                         debug("in_memory_snapshot");
-        //                     }
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let stack = interpreter.snapshot.unwrap().stack;
-        //
-        //                 // The top of the stack in the snapshot is the object initialization frame,
-        //                 // which is not what we care about here, so we get the second-to-top frame instead.
-        //                 let registers = &stack[stack.len() - 2].registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(69),
-        //                     Int(12),
-        //                     Int(10),
-        //                     Int(1),
-        //                     Int(69),
-        //                     Int(0),
-        //                     String("in_memory_snapshot".into()),
-        //                     Int(0),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, registers);
-        //             }
-        //         }
+
+        mod test_jmp {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    void create() {
+                        mixed j;
+                        int i = 12;
+                        if (i > 10) {
+                            j = 69;
+                        } else {
+                            j = 3;
+                        }
+
+                        // Store a snapshot, so we can test this even though this stack
+                        // frame would otherwise have been popped off into the aether.
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let stack = task.snapshot.unwrap();
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(69),
+                    Int(12),
+                    Int(10),
+                    Int(1),
+                    Int(69),
+                    Int(0),
+                    String("snapshot_stack".into()),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+        }
         //
         //         mod test_jnz {
         //             use super::*;
