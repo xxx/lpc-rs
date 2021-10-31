@@ -411,11 +411,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 registers[r.index()] = new_ref;
             }
+            Instruction::MMul(r1, r2, r3) => {
+                self.binary_operation(r1, r2, r3, |x, y| x * y)?;
+            }
             Instruction::RegCopy(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r2.index()] = registers[r1.index()].clone()
             }
-
             Instruction::Ret => {
                 pop_frame!(self, task_context);
 
@@ -1972,33 +1974,33 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_mmul {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = "abc";
-        //                     mixed b = 4;
-        //                     mixed c = a * b;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     String("abc".into()),
-        //                     Int(4),
-        //                     String("abc".into()),
-        //                     Int(4),
-        //                     String("abcabcabcabc".into()),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_mmul {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = "abc";
+                    mixed b = 4;
+                    mixed c = a * b;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    String("abc".into()),
+                    Int(4),
+                    String("abc".into()),
+                    Int(4),
+                    String("abcabcabcabc".into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_msub {
         //             use super::*;
