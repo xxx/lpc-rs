@@ -1313,34 +1313,34 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_iadd {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 16 + 34;
-        //                     mixed r = 12 + -4;
-        //                     mixed s = q + r;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     // the constant expressions are folded at parse time
-        //                     Int(50),
-        //                     Int(8),
-        //                     Int(50),
-        //                     Int(8),
-        //                     Int(58),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_iadd {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 16 + 34;
+                    mixed r = 12 + -4;
+                    mixed s = q + r;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    // the constant expressions are folded at parse time
+                    Int(50),
+                    Int(8),
+                    Int(50),
+                    Int(8),
+                    Int(58),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_iconst {
         //             use super::*;
