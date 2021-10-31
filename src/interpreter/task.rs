@@ -311,6 +311,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
+            Instruction::IMul(r1, r2, r3) => {
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+                match &registers[r1.index()] * &registers[r2.index()] {
+                    Ok(result) => registers[r3.index()] = self.memory.value_to_ref(result),
+                    Err(e) => {
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
+                }
+            }
             Instruction::Jz(r1, ref label) => {
                 let frame = self.stack.current_frame_mut()?;
                 let registers = &mut frame.registers;
@@ -1499,33 +1509,33 @@ mod tests {
                 )
             }
         }
-        //
-        //         mod test_imul {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 16 * 2;
-        //                     mixed r = 12 * -4;
-        //                     mixed s = q * r;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(32),
-        //                     Int(-48),
-        //                     Int(32),
-        //                     Int(-48),
-        //                     Int(-1536),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_imul {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    int q = 16 * 2;
+                    int r = 12 * -4;
+                    int s = q * r;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(32),
+                    Int(-48),
+                    Int(32),
+                    Int(-48),
+                    Int(-1536),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_isub {
         //             use super::*;
