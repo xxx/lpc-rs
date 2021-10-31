@@ -384,6 +384,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     frame.set_pc_from_label(label)?;
                 }
             }
+            Instruction::Load(..) => {
+                self.handle_load(&instruction)?;
+            }
             Instruction::Lt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x < y)?;
             }
@@ -665,6 +668,92 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 Ok(())
             }
             _ => Err(self.runtime_error("non-Call instruction passed to `handle_call`")),
+        }
+    }
+
+    fn handle_load(&mut self, instruction: &Instruction) -> Result<()> {
+        match instruction {
+            Instruction::Load(r1, r2, r3) => {
+                let frame = self.stack.current_frame_mut()?;
+                let container_ref = frame.resolve_lpc_ref(r1);
+                let lpc_ref = frame.resolve_lpc_ref(r2);
+                let registers = &mut frame.registers;
+
+                match container_ref {
+                    LpcRef::Array(vec_ref) => {
+                        let value = vec_ref.borrow();
+                        let vec = try_extract_value!(*value, LpcValue::Array);
+
+                        if let LpcRef::Int(i) = lpc_ref {
+                            let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+
+                            if idx >= 0 {
+                                if let Some(v) = vec.get(idx as usize) {
+                                    registers[r3.index()] = v.clone();
+                                } else {
+                                    return Err(self.array_index_error(idx, vec.len()));
+                                }
+                            } else {
+                                return Err(self.array_index_error(idx, vec.len()));
+                            }
+                        } else {
+                            return Err(self.array_index_error(lpc_ref, vec.len()));
+                        }
+
+                        Ok(())
+                    }
+                    LpcRef::String(string_ref) => {
+                        let value = string_ref.borrow();
+                        let string = try_extract_value!(*value, LpcValue::String);
+
+                        if let LpcRef::Int(i) = lpc_ref {
+                            let idx = if i >= 0 {
+                                i
+                            } else {
+                                string.len() as LpcInt + i
+                            };
+
+                            if idx >= 0 {
+                                if let Some(v) = string.chars().nth(idx as usize) {
+                                    registers[r3.index()] = LpcRef::Int(v as i64);
+                                } else {
+                                    registers[r3.index()] = LpcRef::Int(0);
+                                }
+                            } else {
+                                registers[r3.index()] = LpcRef::Int(0);
+                            }
+                        } else {
+                            return Err(frame.runtime_error(format!(
+                                "Attempting to access index {} in a string of length {}",
+                                lpc_ref,
+                                string.len()
+                            )));
+                        }
+
+                        Ok(())
+                    }
+                    LpcRef::Mapping(map_ref) => {
+                        let value = map_ref.borrow();
+                        let map = try_extract_value!(*value, LpcValue::Mapping);
+
+                        let var = if let Some(v) = map.get(&lpc_ref) {
+                            v.clone()
+                        } else {
+                            LpcRef::Int(0)
+                        };
+
+                        registers[r3.index()] = var;
+
+                        Ok(())
+                    }
+                    x => {
+                        Err(
+                            frame.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+                        )
+                    }
+                }
+            }
+            _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
         }
     }
 
@@ -1731,35 +1820,35 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_load {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     int *i = ({ 1, 2, 3 });
-        //                     int j = i[1];
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(1),
-        //                     Int(2),
-        //                     Int(3),
-        //                     Array(vec![Int(1), Int(2), Int(3)].into()),
-        //                     Array(vec![Int(1), Int(2), Int(3)].into()),
-        //                     Int(1),
-        //                     Int(2),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
+
+        mod test_load {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    int *i = ({ 1, 2, 3 });
+                    int j = i[1];
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(2),
+                    Int(3),
+                    Array(vec![Int(1), Int(2), Int(3)].into()),
+                    Array(vec![Int(1), Int(2), Int(3)].into()),
+                    Int(1),
+                    Int(2),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_lt {
             use super::*;
 
