@@ -1341,61 +1341,61 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_iconst {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 666;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![Int(0), Int(666)];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
-        //         mod test_iconst0 {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 0;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![Int(0), Int(0)];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
-        //         mod test_iconst1 {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed q = 1;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![Int(0), Int(1)];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
+
+        mod test_iconst {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 666;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(666)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_iconst0 {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 0;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(0)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_iconst1 {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = 1;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(1)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_idiv {
             use super::*;
 
