@@ -2102,35 +2102,35 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_oror {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = 123 || 333;
-        //                     mixed b = 0;
-        //                     mixed c = b || a;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(123),
-        //                     Int(123),
-        //                     Int(0),
-        //                     Int(0),
-        //                     Int(0),
-        //                     Int(123),
-        //                     Int(123),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_oror {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 123 || 333;
+                    mixed b = 0;
+                    mixed c = b || a;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(123),
+                    Int(123),
+                    Int(0),
+                    Int(0),
+                    Int(0),
+                    Int(123),
+                    Int(123),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_range {
         //             use super::*;
