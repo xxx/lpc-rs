@@ -2159,51 +2159,51 @@ mod tests {
         //             }
         //         }
         //
-        //         mod test_regcopy {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = 4;
-        //                     mixed b = a;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(4),
-        //                     Int(4),
-        //                     Int(4),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
-        //         mod test_ret {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     int create() { return 666; }
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(666), // return value from create()
-        //                     Int(666), // The copy of the call return value into its own register
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
+        mod test_regcopy {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 4;
+                    mixed b = a;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(4),
+                    Int(4),
+                    Int(4),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_ret {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    int create() { return 666; }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(666), // return value from create()
+                    Int(666), // The copy of the call return value into its own register
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_store {
             use super::*;
 
