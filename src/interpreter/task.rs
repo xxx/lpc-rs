@@ -164,6 +164,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     {
         let function = f.into();
         let process = task_context.process();
+
+        self.instruction_counter.set_max_instructions(task_context.config().max_task_instructions().unwrap_or(0));
+
         let mut frame = StackFrame::new(process, function);
         // TODO: handle partial applications
         if !args.is_empty() {
@@ -2449,46 +2452,47 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //     }
-        //
-        //     mod test_limits {
-        //         use super::*;
-        //
-        //         #[test]
-        //         fn errors_on_stack_overflow() {
-        //             let code = indoc! { r##"
-        //                 int kab00m = marf();
-        //
-        //                 int marf() {
-        //                     return marf();
-        //                 }
-        //             "##};
-        //
-        //             let config = Config::default().with_max_call_stack_size(Some(10));
-        //             let mut interpreter = AsmInterpreter::new(config.into());
-        //             let program = compile_prog(code);
-        //             let r = interpreter.init_master(program);
-        //
-        //             assert_eq!(r.unwrap_err().to_string(), "Runtime Error: Stack overflow");
-        //         }
-        //
-        //         #[test]
-        //         fn errors_on_too_long_evaluation() {
-        //             let code = indoc! { r##"
-        //                 void create() {
-        //                     while(1) {}
-        //                 }
-        //             "##};
-        //
-        //             let config = Config::default().with_max_task_instructions(Some(10));
-        //             let mut interpreter = AsmInterpreter::new(config.into());
-        //             let program = compile_prog(code);
-        //             let r = interpreter.init_master(program);
-        //
-        //             assert_eq!(
-        //                 r.unwrap_err().to_string(),
-        //                 "Runtime Error: Evaluation limit has been reached."
-        //             );
-        //         }
+    }
+
+    mod test_limits {
+        use super::*;
+
+        #[test]
+        fn errors_on_stack_overflow() {
+            let code = indoc! { r##"
+                int kab00m = marf();
+
+                int marf() {
+                    return marf();
+                }
+            "##};
+
+            let mut task: Task<5> = Task::new(Memory::default());
+            let program = compile_prog(code);
+            let r = task
+                .initialize_program(program, Config::default(), ObjectSpace::default());
+
+            assert_eq!(r.unwrap_err().to_string(), "stack overflow");
+        }
+
+        #[test]
+        fn errors_on_too_long_evaluation() {
+            let code = indoc! { r##"
+                void create() {
+                    while(1) {}
+                }
+            "##};
+
+            let config = Config::default().with_max_task_instructions(Some(10));
+            let program = compile_prog(code);
+            let mut task: Task<5> = Task::new(Memory::default());
+            let r = task
+                .initialize_program(program, config, ObjectSpace::default());
+
+            assert_eq!(
+                r.unwrap_err().to_string(),
+                "evaluation limit of `10` instructions has been reached."
+            );
+        }
     }
 }
