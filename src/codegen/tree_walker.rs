@@ -11,7 +11,7 @@ use crate::{
         switch_node::SwitchNode, ternary_node::TernaryNode, unary_op_node::UnaryOpNode,
         var_init_node::VarInitNode, var_node::VarNode, while_node::WhileNode,
     },
-    context::Context,
+    compilation_context::CompilationContext,
     Result,
 };
 
@@ -20,7 +20,7 @@ pub trait ContextHolder {
     ///
     /// This is intended for use after a walker has completed processing, and
     /// you're ready to re-take ownership of the context for the next step.
-    fn into_context(self) -> Context;
+    fn into_context(self) -> CompilationContext;
 }
 
 /// A trait for types that can walk abstract syntax trees

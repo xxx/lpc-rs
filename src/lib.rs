@@ -2,7 +2,7 @@ pub mod asm;
 pub mod ast;
 pub mod codegen;
 pub mod compiler;
-pub mod context;
+pub mod compilation_context;
 pub mod errors;
 pub mod interpreter;
 pub mod parser;

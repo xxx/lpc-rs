@@ -17,7 +17,7 @@ use std::rc::Rc;
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
 /// that file will share this state object when they are compiled, as well.)
 #[derive(Debug)]
-pub struct Context {
+pub struct CompilationContext {
     /// The name of the main file being compiled.
     pub filename: LpcPath,
 
@@ -40,7 +40,7 @@ pub struct Context {
     pub pragmas: PragmaFlags,
 }
 
-impl Context {
+impl CompilationContext {
     /// Create a new `Context`
     ///
     /// # Arguments
@@ -51,10 +51,10 @@ impl Context {
     /// # Examples
     /// ```
     /// use std::rc::Rc;
-    /// use lpc_rs::context::Context;
+    /// use lpc_rs::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     ///
-    /// let context = Context::new("./test.c", Rc::new(Config::default()));
+    /// let context = CompilationContext::new("./test.c", Rc::new(Config::default()));
     /// ```
     pub fn new<T>(filename: T, config: Rc<Config>) -> Self
     where
@@ -101,7 +101,7 @@ impl Context {
     }
 }
 
-impl Default for Context {
+impl Default for CompilationContext {
     fn default() -> Self {
         Self {
             filename: LpcPath::default(),

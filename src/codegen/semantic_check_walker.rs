@@ -26,7 +26,7 @@ use crate::{
         while_node::WhileNode,
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
-    context::Context,
+    compilation_context::CompilationContext,
     errors::LpcError,
     interpreter::efun::EFUN_PROTOTYPES,
     semantic::{
@@ -53,11 +53,11 @@ pub struct SemanticCheckWalker {
     /// Are `case` and `default` statements currently allowed?
     valid_labels: Vec<LabelAllowed>,
 
-    context: Context,
+    context: CompilationContext,
 }
 
 impl SemanticCheckWalker {
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: CompilationContext) -> Self {
         Self {
             context,
             current_function: None,
@@ -117,7 +117,7 @@ impl SemanticCheckWalker {
 }
 
 impl ContextHolder for SemanticCheckWalker {
-    fn into_context(self) -> Context {
+    fn into_context(self) -> CompilationContext {
         self.context
     }
 }
@@ -606,16 +606,16 @@ mod tests {
         util::path_maker::LpcPath,
     };
 
-    fn empty_context() -> Context {
+    fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
         scopes.push_new();
-        Context {
+        CompilationContext {
             scopes,
-            ..Context::default()
+            ..CompilationContext::default()
         }
     }
 
-    fn walk_code(code: &str) -> std::result::Result<Context, CompilerError> {
+    fn walk_code(code: &str) -> std::result::Result<CompilationContext, CompilerError> {
         let compiler = Compiler::default();
         let (mut program, context) = compiler
             .parse_string(
@@ -647,10 +647,10 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -670,10 +670,10 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -693,10 +693,10 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -726,9 +726,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -769,9 +769,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -816,9 +816,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Mixed(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -850,9 +850,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -872,9 +872,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -995,10 +995,10 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
 
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
@@ -1106,10 +1106,10 @@ mod tests {
             let mut scopes = ScopeTree::default();
             scopes.push_new();
 
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1143,10 +1143,10 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1180,10 +1180,10 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1217,10 +1217,10 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1424,9 +1424,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1447,9 +1447,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1542,10 +1542,10 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1591,10 +1591,10 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1623,10 +1623,10 @@ mod tests {
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
                 function_prototypes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1655,9 +1655,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::Int(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1677,9 +1677,9 @@ mod tests {
             scopes.push_new();
             let sym = Symbol::new("foo", LpcType::String(false));
             scopes.current_mut().unwrap().insert(sym);
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1740,9 +1740,9 @@ mod tests {
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
-            let context = Context {
+            let context = CompilationContext {
                 scopes,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = SemanticCheckWalker::new(context);
@@ -1850,7 +1850,7 @@ mod tests {
                 span: None,
             });
 
-            let mut walker = SemanticCheckWalker::new(Context::default());
+            let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             let _ = node.visit(&mut walker);
 
             assert!(!walker.context.errors.is_empty());

@@ -8,7 +8,7 @@ use std::{collections::HashMap, path::Path};
 
 use crate::{
     ast::binary_op_node::BinaryOperation,
-    context::Context,
+    compilation_context::CompilationContext,
     convert_escapes,
     errors::{format_expected, lazy_files::FileCache, LpcError},
     parser::{
@@ -72,7 +72,7 @@ struct IfDef {
 #[derive(Debug)]
 pub struct Preprocessor {
     /// The compilation context
-    context: Context,
+    context: CompilationContext,
 
     /// We keep track of `#define`d things here.
     defines: HashMap<String, Define>,
@@ -96,15 +96,15 @@ impl Preprocessor {
     /// # Examples
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
-    /// use lpc_rs::context::Context;
+    /// use lpc_rs::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     /// use std::rc::Rc;
     ///
     /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
-    /// let context = Context::new("test.c", Rc::new(config));
+    /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let preprocessor = Preprocessor::new(context);
     /// ```
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: CompilationContext) -> Self {
         Self {
             context,
             ..Self::default()
@@ -115,7 +115,7 @@ impl Preprocessor {
     ///
     /// This is intended for use after preprocessing has completed, and
     /// you're ready to re-take ownership of the context for the next step.
-    pub fn into_context(self) -> Context {
+    pub fn into_context(self) -> CompilationContext {
         self.context
     }
 
@@ -128,12 +128,12 @@ impl Preprocessor {
     /// # Examples
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
-    /// use lpc_rs::context::Context;
+    /// use lpc_rs::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     /// use std::rc::Rc;
     ///
     /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
-    /// let context = Context::new("test.c", Rc::new(config));
+    /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let mut preprocessor = Preprocessor::new(context);
     ///
     /// let code = r#"
@@ -908,7 +908,7 @@ impl Preprocessor {
 impl Default for Preprocessor {
     fn default() -> Self {
         Self {
-            context: Context::default(),
+            context: CompilationContext::default(),
             defines: HashMap::new(),
             ifdefs: Vec::new(),
             current_else: None,
@@ -930,7 +930,7 @@ mod tests {
             .with_lib_dir("./tests/fixtures/code")
             .with_system_include_dirs(vec!["/sys", "sys2"]);
 
-        let context = Context::new("test.c", Rc::new(config));
+        let context = CompilationContext::new("test.c", Rc::new(config));
         Preprocessor::new(context)
     }
 

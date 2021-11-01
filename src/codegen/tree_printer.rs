@@ -23,11 +23,11 @@ use crate::{
 /// use lpc_rs::codegen::tree_printer::TreePrinter;
 /// use lpc_rs::codegen::tree_walker::TreeWalker;
 /// use lpc_rs::parser::lexer::LexWrapper;
-/// use lpc_rs::context::Context;
+/// use lpc_rs::compilation_context::CompilationContext;
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let lexer = LexWrapper::new(prog);
-/// let mut program_node = lpc_parser::ProgramParser::new().parse(&Context::default(), lexer).unwrap();
+/// let mut program_node = lpc_parser::ProgramParser::new().parse(&CompilationContext::default(), lexer).unwrap();
 /// let mut walker = TreePrinter::new();
 /// walker.visit_program(&mut program_node);
 /// ```

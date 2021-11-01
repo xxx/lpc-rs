@@ -8,7 +8,7 @@ use crate::{
         scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
         tree_walker::ContextHolder,
     },
-    context::Context,
+    compilation_context::CompilationContext,
     errors,
     errors::LpcError,
     interpreter::program::Program,
@@ -153,7 +153,7 @@ impl Compiler {
         U: AsRef<str>,
     {
         let lpc_path = path.into();
-        let context = Context::new(&lpc_path, self.config.clone());
+        let context = CompilationContext::new(&lpc_path, self.config.clone());
 
         let mut preprocessor = Preprocessor::new(context);
         let code = match preprocessor.scan(&lpc_path, &code) {
@@ -238,7 +238,7 @@ impl Compiler {
         &self,
         path: &LpcPath,
         code: T,
-    ) -> Result<(ProgramNode, Context), CompilerError>
+    ) -> Result<(ProgramNode, CompilationContext), CompilerError>
     where
         T: AsRef<str>,
     {

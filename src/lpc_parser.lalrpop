@@ -41,10 +41,10 @@ use crate::parser::lexer::Token;
 use crate::errors::LpcError;
 use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 use crate::LpcFloat;
-use crate::context::Context;
+use crate::compilation_context::CompilationContext;
 use crate::semantic::function_flags::FunctionFlags;
 
-grammar<'context>(context: &'context Context);
+grammar<'context>(context: &'context CompilationContext);
 
 extern {
     type Location = usize;

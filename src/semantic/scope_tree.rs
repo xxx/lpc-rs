@@ -1,5 +1,5 @@
 use crate::{
-    context::Context,
+    compilation_context::CompilationContext,
     errors::LpcError,
     semantic::{local_scope::LocalScope, symbol::Symbol},
     Result,
@@ -216,8 +216,8 @@ impl Default for ScopeTree {
     }
 }
 
-impl From<Context> for ScopeTree {
-    fn from(context: Context) -> Self {
+impl From<CompilationContext> for ScopeTree {
+    fn from(context: CompilationContext) -> Self {
         context.scopes
     }
 }

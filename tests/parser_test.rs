@@ -15,7 +15,7 @@ use lpc_rs::{
         var_node::VarNode,
     },
     compiler::Compiler,
-    context::Context,
+    compilation_context::CompilationContext,
     lpc_parser,
     parser::{
         lexer::{LexWrapper, TokenVecWrapper},
@@ -29,7 +29,7 @@ use lpc_rs::{
 fn assert_int(value: LpcInt, expr: &str) {
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::Int(IntNode {
@@ -49,7 +49,7 @@ fn program_global_vars() {
     let prog = "int i = 123; int j = i - 8; string *k;";
     let lexer = LexWrapper::new(prog);
     let node = lpc_parser::ProgramParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ProgramNode {
@@ -180,7 +180,7 @@ fn float_literal_underscores() {
     let expr = "1_1.234_332e2_2";
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::Float(FloatNode {
@@ -200,7 +200,7 @@ fn string_literal_concat() {
     let expr = r##""foo" + "bar" + "baz" + "quux""##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
@@ -220,7 +220,7 @@ fn string_literal_repeat() {
     let expr = r##""foo" * 3"##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
@@ -238,7 +238,7 @@ fn string_literal_repeat() {
     let expr = r##""foo" * -3"##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
@@ -258,7 +258,7 @@ fn compound_assignment_decompose() {
     let expr = "a += 2";
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
@@ -316,7 +316,7 @@ fn typeless_functions_are_mixed() {
     .replace("\n", "");
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     assert!(matches!(
@@ -381,7 +381,7 @@ fn ellipsis_sets_the_flag_when_only_arg() {
 
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
     assert!(node.flags.ellipsis());
 }
@@ -398,7 +398,7 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
 
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
-        .parse(&Context::default(), lexer)
+        .parse(&CompilationContext::default(), lexer)
         .unwrap();
 
     assert!(node.flags.ellipsis());

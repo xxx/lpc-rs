@@ -1,7 +1,7 @@
 use crate::{
     ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
-    context::Context,
+    compilation_context::CompilationContext,
     Result,
 };
 
@@ -9,17 +9,17 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct DefaultParamsWalker {
     /// The compilation context
-    context: Context,
+    context: CompilationContext,
 }
 
 impl DefaultParamsWalker {
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: CompilationContext) -> Self {
         Self { context }
     }
 }
 
 impl ContextHolder for DefaultParamsWalker {
-    fn into_context(self) -> Context {
+    fn into_context(self) -> CompilationContext {
         self.context
     }
 }
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
-        let context = Context::default();
+        let context = CompilationContext::default();
         let mut walker = DefaultParamsWalker::new(context);
 
         let parameters = vec![

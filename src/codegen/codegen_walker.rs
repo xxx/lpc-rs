@@ -35,7 +35,7 @@ use crate::{
         while_node::WhileNode,
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
-    context::Context,
+    compilation_context::CompilationContext,
     errors::LpcError,
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES},
@@ -128,14 +128,12 @@ pub struct CodegenWalker {
     global_init_registers: usize,
 
     /// Compilation context
-    context: Context,
+    context: CompilationContext,
 
     /// Labels where jumps at any particular time need to go to.
     jump_targets: Vec<JumpTarget>,
 
     /// Mapping of `switch` cases to the address of the first instruction for a match
-    /// [`IndexMap`] is used to keep a consistent iteration order during codegen, to make
-    /// testing easier.
     case_addresses: Vec<Vec<(SwitchCase, Address)>>,
 
     /// Because Ranges have two results, we store the registers when we `visit_range`.
@@ -147,7 +145,7 @@ impl CodegenWalker {
     ///
     /// # Arguments
     /// `context` - The [`Context`] state that this tree walker will use for its internal workings.
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: CompilationContext) -> Self {
         let mut result = Self {
             context,
             ..Self::default()
@@ -172,7 +170,7 @@ impl CodegenWalker {
     /// use lpc_rs::ast::expression_node::ExpressionNode;
     /// use lpc_rs::codegen::codegen_walker::CodegenWalker;
     /// use lpc_rs::codegen::tree_walker::TreeWalker;
-    /// use lpc_rs::context::Context;
+    /// use lpc_rs::compilation_context::CompilationContext;
     ///
     /// let mut node = BinaryOpNode {
     ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
@@ -180,7 +178,7 @@ impl CodegenWalker {
     ///     op: BinaryOperation::Sub,
     ///     span: None
     /// };
-    /// let mut walker = CodegenWalker::new(Context::default());
+    /// let mut walker = CodegenWalker::new(CompilationContext::default());
     ///
     /// walker.visit_binary_op(&mut node);
     ///
@@ -488,7 +486,7 @@ impl CodegenWalker {
 }
 
 impl ContextHolder for CodegenWalker {
-    fn into_context(self) -> Context {
+    fn into_context(self) -> CompilationContext {
         self.context
     }
 }
@@ -1688,7 +1686,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_globals() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
 
@@ -1739,7 +1737,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_locals() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -1773,7 +1771,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_array_items() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -1850,7 +1848,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_floats() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
             sym.location = Some(Register(1));
@@ -1943,7 +1941,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_indexes() {
-            let context = Context::default();
+            let context = CompilationContext::default();
             let mut walker = CodegenWalker::new(context);
 
             let mut node = BinaryOpNode {
@@ -2274,7 +2272,7 @@ mod tests {
             let mut walker = default_walker();
             let call = "dump(4 - 5)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&Context::default(), LexWrapper::new(call))
+                .parse(&CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2296,7 +2294,7 @@ mod tests {
             let mut walker = default_walker();
             let call = "\"foo\"->print(4 - 5)";
             let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&Context::default(), LexWrapper::new(call))
+                .parse(&CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = tree.visit(&mut walker);
@@ -2322,7 +2320,7 @@ mod tests {
             let mut walker = default_walker();
             let call = "catch(12 / 0)";
             let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&Context::default(), LexWrapper::new(call))
+                .parse(&CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = tree.visit(&mut walker);
@@ -2347,9 +2345,9 @@ mod tests {
                 vec![None, Some(ExpressionNode::from("muffuns"))],
             );
 
-            let context = Context {
+            let context = CompilationContext {
                 default_function_params,
-                ..Context::default()
+                ..CompilationContext::default()
             };
 
             let mut walker = CodegenWalker::new(context);
@@ -2377,7 +2375,7 @@ mod tests {
 
         #[test]
         fn copies_non_void_call_results() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             let prototype = FunctionPrototype {
                 name: "marfin".into(),
                 return_type: LpcType::Int(false),
@@ -2415,7 +2413,7 @@ mod tests {
 
         #[test]
         fn does_not_copy_void_call_results() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             let prototype = FunctionPrototype {
                 name: "void_thing".into(),
                 return_type: LpcType::Void,
@@ -2455,7 +2453,7 @@ mod tests {
             let mut walker = default_walker();
             let call = r#"clone_object("/foo.c")"#;
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&Context::default(), LexWrapper::new(call))
+                .parse(&CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2478,7 +2476,7 @@ mod tests {
             let mut walker = default_walker();
             let call = r#"dump("lkajsdflkajsdf")"#;
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&Context::default(), LexWrapper::new(call))
+                .parse(&CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2497,7 +2495,7 @@ mod tests {
 
         #[test]
         fn handles_ellipsis_functions() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             let prototype = FunctionPrototype {
                 name: "my_func".into(),
                 return_type: LpcType::Void,
@@ -2542,7 +2540,7 @@ mod tests {
     fn test_visit_block_populates_instructions() {
         let block = "{ int a = '🏯'; dump(a); }";
         let mut tree = lpc_parser::BlockParser::new()
-            .parse(&Context::default(), LexWrapper::new(block))
+            .parse(&CompilationContext::default(), LexWrapper::new(block))
             .unwrap();
 
         let mut scope_walker = ScopeWalker::default();
@@ -2745,7 +2743,7 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let call = "int foo = 1, *bar = ({ 56 })";
         let mut tree = lpc_parser::DeclParser::new()
-            .parse(&Context::default(), LexWrapper::new(call))
+            .parse(&CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
 
         let mut scope_walker = ScopeWalker::default();
@@ -2926,7 +2924,7 @@ mod tests {
         let _walker = CodegenWalker::default();
         let call = "int main(int i) { return i + 4; }";
         let tree = lpc_parser::DefParser::new()
-            .parse(&Context::default(), LexWrapper::new(call))
+            .parse(&CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
 
         let mut node = if let AstNode::FunctionDef(node) = tree {
@@ -2959,7 +2957,7 @@ mod tests {
         let _walker = CodegenWalker::default();
         let call = "int main(int i, ...) { return argv; }";
         let tree = lpc_parser::DefParser::new()
-            .parse(&Context::default(), LexWrapper::new(call))
+            .parse(&CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
 
         let mut node = if let AstNode::FunctionDef(node) = tree {
@@ -3263,7 +3261,7 @@ mod tests {
                 span: None,
             };
 
-            let mut walker = CodegenWalker::new(Context::default());
+            let mut walker = CodegenWalker::new(CompilationContext::default());
 
             let _ = walker.visit_ternary(&mut node).unwrap();
 
@@ -3288,7 +3286,7 @@ mod tests {
 
         #[test]
         fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
 
             let mut walker = CodegenWalker::new(context);
@@ -3334,7 +3332,7 @@ mod tests {
 
         #[test]
         fn test_visit_var_sets_the_result_for_locals() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
 
@@ -3379,7 +3377,7 @@ mod tests {
         use decorum::Total;
 
         fn setup() -> CodegenWalker {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             context.scopes.push_new();
             CodegenWalker::new(context)
@@ -3600,7 +3598,7 @@ mod tests {
 
         #[test]
         fn sets_up_globals() {
-            let mut context = Context::default();
+            let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
 

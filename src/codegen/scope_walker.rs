@@ -6,7 +6,7 @@ use crate::{
         while_node::WhileNode,
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
-    context::Context,
+    compilation_context::CompilationContext,
     errors::LpcError,
     semantic::{
         function_prototype::FunctionPrototype, lpc_type::LpcType,
@@ -20,12 +20,12 @@ use crate::{
 #[derive(Debug)]
 pub struct ScopeWalker {
     /// The compilation context
-    context: Context,
+    context: CompilationContext,
 }
 
 impl ScopeWalker {
     /// Create a new `ScopeWalker`, with `context` as the context.
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: CompilationContext) -> Self {
         Self { context }
     }
 
@@ -38,7 +38,7 @@ impl ScopeWalker {
 }
 
 impl ContextHolder for ScopeWalker {
-    fn into_context(self) -> Context {
+    fn into_context(self) -> CompilationContext {
         self.context
     }
 }
@@ -236,7 +236,7 @@ impl TreeWalker for ScopeWalker {
 
 impl Default for ScopeWalker {
     fn default() -> Self {
-        let mut context = Context::default();
+        let mut context = CompilationContext::default();
         // Push a default global scope.
         context.scopes.push_new();
 
