@@ -414,6 +414,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::MMul(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x * y)?;
             }
+            Instruction::MSub(r1, r2, r3) => {
+                self.binary_operation(r1, r2, r3, |x, y| x - y)?;
+            }
             Instruction::RegCopy(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r2.index()] = registers[r1.index()].clone()
@@ -2001,52 +2004,52 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_msub {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = ({ 1, 1, 2, 3 });
-        //                     mixed b = a - ({ 1 });
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(1),
-        //                     Int(1),
-        //                     Int(2),
-        //                     Int(3),
-        //                     Array(
-        //                         vec![
-        //                             Int(1),
-        //                             Int(1),
-        //                             Int(2),
-        //                             Int(3),
-        //                         ]
-        //                         .into(),
-        //                     ),
-        //                     Array(
-        //                         vec![
-        //                             Int(1),
-        //                             Int(1),
-        //                             Int(2),
-        //                             Int(3),
-        //                         ]
-        //                         .into(),
-        //                     ),
-        //                     Int(1),
-        //                     Array(vec![Int(1)].into()),
-        //                     Array(vec![Int(2), Int(3)].into()),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_msub {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = ({ 1, 1, 2, 3 });
+                    mixed b = a - ({ 1 });
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(1),
+                    Int(2),
+                    Int(3),
+                    Array(
+                        vec![
+                            Int(1),
+                            Int(1),
+                            Int(2),
+                            Int(3),
+                        ]
+                        .into(),
+                    ),
+                    Array(
+                        vec![
+                            Int(1),
+                            Int(1),
+                            Int(2),
+                            Int(3),
+                        ]
+                        .into(),
+                    ),
+                    Int(1),
+                    Array(vec![Int(1)].into()),
+                    Array(vec![Int(2), Int(3)].into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_not {
         //             use super::*;
