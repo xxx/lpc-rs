@@ -424,6 +424,127 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x | y)?;
             }
+            Instruction::Range(r1, r2, r3, r4) => {
+                // r4 = r1[r2..r3]
+                let mut frame = self.stack.current_frame_mut()?;
+
+                let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
+                    let to_idx = |i: LpcInt| {
+                        // We handle the potential overflow just below.
+                        if i >= 0 {
+                            i as usize
+                        } else {
+                            (len as LpcInt + i) as usize
+                        }
+                    };
+                    let real_start = to_idx(start);
+                    let mut real_end = to_idx(end);
+
+                    if real_end >= len {
+                        real_end = len - 1;
+                    }
+
+                    (real_start, real_end)
+                };
+
+                let return_value = |value, memory: &Memory, frame: &mut StackFrame| -> Result<()> {
+                    let new_ref = memory.value_to_ref(value);
+                    let registers = &mut frame.registers;
+                    registers[r4.index()] = new_ref;
+
+                    Ok(())
+                };
+
+                let lpc_ref = frame.resolve_lpc_ref(r1);
+
+                match lpc_ref {
+                    LpcRef::Array(v_ref) => {
+                        let value = v_ref.borrow();
+                        let vec = try_extract_value!(*value, LpcValue::Array);
+
+                        if vec.is_empty() {
+                            return_value(
+                                LpcValue::from(vec![]),
+                                &self.memory,
+                                &mut frame
+                            )?;
+                        }
+
+                        let index1 = frame.resolve_lpc_ref(r2);
+                        let index2 = frame.resolve_lpc_ref(r3);
+
+                        if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+                            let (real_start, real_end) = resolve_range(start, end, vec.len());
+
+                            if real_start <= real_end {
+                                let slice = &vec[real_start..=real_end];
+                                let mut new_vec = vec![LpcRef::Int(0); slice.len()];
+                                new_vec.clone_from_slice(slice);
+                                return_value(
+                                    LpcValue::from(new_vec),
+                                    &self.memory,
+                                    &mut frame
+                                )?;
+                            } else {
+                                return_value(
+                                    LpcValue::from(vec![]),
+                                    &self.memory,
+                                    &mut frame
+                                )?;
+                            }
+                        } else {
+                            return Err(LpcError::new(
+                                "Invalid code was generated for a Range instruction.",
+                            )
+                            .with_span(frame.current_debug_span()));
+                        }
+                    }
+                    LpcRef::String(v_ref) => {
+                        let value = v_ref.borrow();
+                        let string = try_extract_value!(*value, LpcValue::String);
+
+                        if string.is_empty() {
+                            return_value(LpcValue::from(""), &self.memory, &mut frame)?;
+                        }
+
+                        let index1 = frame.resolve_lpc_ref(r2);
+                        let index2 = frame.resolve_lpc_ref(r3);
+
+                        if let (LpcRef::Int(start), LpcRef::Int(end)) = (index1, index2) {
+                            let (real_start, real_end) = resolve_range(start, end, string.len());
+
+                            if real_start <= real_end {
+                                let len = real_end - real_start + 1;
+                                let new_string: String =
+                                    string.chars().skip(real_start).take(len).collect();
+                                return_value(
+                                    LpcValue::from(new_string),
+                                    &self.memory,
+                                    &mut frame
+                                )?;
+                            } else {
+                                return_value(
+                                    LpcValue::from(""),
+                                    &self.memory,
+                                    &mut frame
+                                )?;
+                            }
+                        } else {
+                            return Err(LpcError::new(
+                                "Invalid code was generated for a Range instruction.",
+                            )
+                            .with_span(frame.current_debug_span()));
+                        }
+                    }
+                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
+                        return Err(LpcError::new(
+                            "Range's receiver isn't actually an array or string?",
+                        )
+                        .with_span(frame.current_debug_span()));
+                    }
+                }
+            }
+
             Instruction::RegCopy(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r2.index()] = registers[r1.index()].clone();
@@ -2131,34 +2252,34 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_range {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = ({ 1, 2, 3 })[1..];
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(1),
-        //                     Int(2),
-        //                     Int(3),
-        //                     Array(vec![Int(1), Int(2), Int(3)].into()),
-        //                     Int(1),
-        //                     Int(-1),
-        //                     Array(vec![Int(2), Int(3)].into()),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
+
+        mod test_range {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = ({ 1, 2, 3 })[1..];
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(2),
+                    Int(3),
+                    Array(vec![Int(1), Int(2), Int(3)].into()),
+                    Int(1),
+                    Int(-1),
+                    Array(vec![Int(2), Int(3)].into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_regcopy {
             use super::*;
 
