@@ -106,14 +106,13 @@ impl SwitchCase {
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug, Default)]
 pub struct CodegenWalker {
-    // Keep track of the current function being generated (including global initialization)
+    /// Keep track of the current function being generated (including global initialization)
     function_stack: Vec<ProgramFunction>,
 
     /// Counter for labels, as they need to be unique.
     label_count: usize,
 
     /// Map of function Symbols, to their respective addresses
-    // pub functions: HashMap<Rc<FunctionSymbol>, Address>,
     pub functions: HashMap<String, Rc<ProgramFunction>>,
 
     /// Track where the result of a child branch is
