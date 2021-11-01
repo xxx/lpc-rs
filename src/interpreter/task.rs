@@ -204,6 +204,61 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CallOther { .. } => {
                 self.handle_call_other(&instruction, task_context)?;
             }
+            //     Instruction::CallFp {
+            //         location,
+            //         num_args: _,
+            //         initial_arg: _,
+            //     } => {
+            //         let _func_ref = &frame.registers[location.index()];
+            //
+            //         todo!();
+            //
+            //         // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
+            //         //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
+            //         // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+            //         //     let sym = FunctionSymbol {
+            //         //         name: name.clone(),
+            //         //         num_args: prototype.num_args,
+            //         //         num_locals: 0,
+            //         //         address: 0,
+            //         //     };
+            //         //
+            //         //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
+            //         // } else {
+            //         //     println!("proc {:#?}", self.process);
+            //         //     println!("functions {:#?}", self.process.functions);
+            //         //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
+            //         // };
+            //         //
+            //         // // copy argument registers from old frame to new
+            //         // if *num_args > 0_usize {
+            //         //     let index = initial_arg.index();
+            //         //     let current_frame = self.stack.last().unwrap();
+            //         //     new_frame.registers[1..=*num_args]
+            //         //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
+            //         // }
+            //         //
+            //         // // println!("pushing frame in Call: {:?}", new_frame);
+            //         // try_push_frame!(new_frame, self);
+            //         //
+            //         // if let Some(x) = self.process.functions.get(name) {
+            //         //     self.process.set_pc(x.address);
+            //         // } else if let Some(efun) = EFUNS.get(name.as_str()) {
+            //         //     // the efun is responsible for populating the return value in its own frame
+            //         //     efun(self)?;
+            //         //
+            //         //     if let Some(frame) = self.pop_frame() {
+            //         //         self.copy_call_result(&frame)?;
+            //         //         self.popped_frame = Some(frame);
+            //         //     }
+            //         // } else {
+            //         //     return Err(self.runtime_error(format!(
+            //         //         "Call to unknown function (that had a valid prototype?) `{}`",
+            //         //         name
+            //         //     )));
+            //         // }
+            //     }
+
             Instruction::CatchEnd => {
                 self.catch_points.pop();
             }
