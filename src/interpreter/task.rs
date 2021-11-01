@@ -417,6 +417,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::MSub(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x - y)?;
             }
+            Instruction::Not(r1, r2) => {
+                let registers = &mut self.stack.current_frame_mut()?.registers;
+                registers[r2.index()] = LpcRef::Int(matches!(registers[r1.index()], LpcRef::Int(0)) as LpcInt);
+            }
             Instruction::RegCopy(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r2.index()] = registers[r1.index()].clone()
@@ -2050,32 +2054,32 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_not {
-        //             use super::*;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = !2;
-        //                     mixed b = !!4;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![
-        //                     Int(0),
-        //                     Int(2),
-        //                     Int(0),
-        //                     Int(4),
-        //                     Int(0),
-        //                     Int(1),
-        //                 ];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_not {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = !2;
+                    mixed b = !!4;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(2),
+                    Int(0),
+                    Int(4),
+                    Int(0),
+                    Int(1),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_or {
         //             use super::*;
