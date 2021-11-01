@@ -421,9 +421,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r2.index()] = LpcRef::Int(matches!(registers[r1.index()], LpcRef::Int(0)) as LpcInt);
             }
+            Instruction::Or(r1, r2, r3) => {
+                self.binary_operation(r1, r2, r3, |x, y| x | y)?;
+            }
             Instruction::RegCopy(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
-                registers[r2.index()] = registers[r1.index()].clone()
+                registers[r2.index()] = registers[r1.index()].clone();
             }
             Instruction::Ret => {
                 pop_frame!(self, task_context);
@@ -2080,30 +2083,28 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_or {
-        //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::Int;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = 15 | 27;
-        //                     mixed b = 0 | a;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![Int(0), Int(31), Int(0), Int(31), Int(31)];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_or {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 15 | 27;
+                    mixed b = 0 | a;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(31), Int(0), Int(31), Int(31)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_oror {
         //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::Int;
         //
         //             #[test]
         //             fn stores_the_value() {
