@@ -11,6 +11,7 @@ const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
 const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
 
+/// The main struct that handles runtime use configurations.
 #[derive(Debug, Default)]
 pub struct Config {
     lib_dir: String,
