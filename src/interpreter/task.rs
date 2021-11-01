@@ -8,7 +8,6 @@ use crate::{
     interpreter::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        instruction_counter::InstructionCounter,
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
         memory::Memory,
@@ -80,9 +79,6 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
-    /// How many instructions have run during the current [`Task`]?
-    instruction_counter: InstructionCounter,
-
     /// Stack of [`CatchPoint`]s
     catch_points: Vec<CatchPoint>,
 
@@ -106,7 +102,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Self {
             memory: memory.into(),
             stack: CallStack::default(),
-            instruction_counter: InstructionCounter::default(),
             catch_points: Vec::new(),
 
             #[cfg(test)]
@@ -165,8 +160,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let function = f.into();
         let process = task_context.process();
 
-        self.instruction_counter.set_max_instructions(task_context.config().max_task_instructions().unwrap_or(0));
-
         let mut frame = StackFrame::new(process, function);
         // TODO: handle partial applications
         if !args.is_empty() {
@@ -201,7 +194,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             return Ok(true);
         }
 
-        self.instruction_counter.increment(1)?;
+        task_context.increment_instruction_count(1)?;
 
         let frame = match self.stack.current_frame() {
             Ok(x) => x,

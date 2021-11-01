@@ -36,9 +36,4 @@ impl InstructionCounter {
     pub fn count(&self) -> usize {
         self.count.get()
     }
-
-    /// Set the allowed maximum number of instructions
-    pub fn set_max_instructions(&mut self, val: usize) {
-        self.max_instructions = val;
-    }
 }
