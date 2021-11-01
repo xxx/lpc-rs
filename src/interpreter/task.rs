@@ -42,23 +42,6 @@ macro_rules! pop_frame {
     }};
 }
 
-/// Store the various limits we need to check against often, in a single place,
-/// so we don't have to query the config every time.
-#[derive(Debug, Clone, Default)]
-struct Limits {
-    /// How many instructions can run during this task, before we throw an error for
-    /// too long execution? `0` means unlimited.
-    max_task_instructions: usize,
-}
-
-impl From<&Config> for Limits {
-    fn from(config: &Config) -> Self {
-        Self {
-            max_task_instructions: config.max_task_instructions().unwrap_or(0),
-        }
-    }
-}
-
 /// A type to track where `catch` calls need to go if there is an error
 #[derive(Debug, Clone)]
 struct CatchPoint {
