@@ -564,6 +564,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::SConst(..) => {
                 self.handle_sconst(&instruction)?;
             }
+            Instruction::Shl(r1, r2, r3) => {
+                self.binary_operation(r1, r2, r3, |x, y| x << y)?;
+            }
+            Instruction::Xor(r1, r2, r3) => {
+                self.binary_operation(r1, r2, r3, |x, y| x ^ y)?;
+            }
 
             x => todo!("{}", x),
         }
@@ -2325,6 +2331,25 @@ mod tests {
             }
         }
 
+        mod test_shl {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 12345 << 6;
+                    mixed b = 0 << a;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(790080), Int(0), Int(790080), Int(0)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_store {
             use super::*;
 
@@ -2383,46 +2408,25 @@ mod tests {
                 assert_eq!(&expected, &registers);
             }
         }
-        //
-        //         mod test_xor {
-        //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::Int;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = 15 ^ 27;
-        //                     mixed b = 0 ^ a;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![Int(0), Int(20), Int(0), Int(20), Int(20)];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
-        //
-        //         mod test_shl {
-        //             use super::*;
-        //             use crate::interpreter::asm_interpreter::tests::Int;
-        //
-        //             #[test]
-        //             fn stores_the_value() {
-        //                 let code = indoc! { r##"
-        //                     mixed a = 12345 << 6;
-        //                     mixed b = 0 << a;
-        //                 "##};
-        //
-        //                 let interpreter = run_prog(code);
-        //                 let registers = interpreter.popped_frame.unwrap().registers;
-        //
-        //                 let expected = vec![Int(0), Int(790080), Int(0), Int(790080), Int(0)];
-        //
-        //                 assert_eq!(&expected, &registers);
-        //             }
-        //         }
+
+        mod test_xor {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed a = 15 ^ 27;
+                    mixed b = 0 ^ a;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(20), Int(0), Int(20), Int(20)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
         //
         //         mod test_shr {
         //             use super::*;
