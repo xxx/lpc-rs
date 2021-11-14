@@ -52,6 +52,7 @@ use crate::{
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use if_chain::if_chain;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -761,10 +762,23 @@ impl TreeWalker for CodegenWalker {
                     initial_arg: arg_results[0],
                 }
             } else {
-                Instruction::Call {
-                    name: node.name.clone(),
-                    num_args: arg_results.len(),
-                    initial_arg: arg_results[0],
+                if_chain! {
+                    if let Some(x) = self.lookup_symbol(&node.name);
+                    if x.type_ == LpcType::Function(false);
+                    then {
+                        // if there's a function pointer with this name in scope, call that.
+                        Instruction::CallFp {
+                            location: x.location.unwrap(),
+                            num_args: arg_results.len(),
+                            initial_arg: arg_results[0],
+                        }
+                    } else {
+                        Instruction::Call {
+                            name: node.name.clone(),
+                            num_args: arg_results.len(),
+                            initial_arg: arg_results[0],
+                        }
+                    }
                 }
             }
         } else {
@@ -812,10 +826,23 @@ impl TreeWalker for CodegenWalker {
                     },
                 }
             } else {
-                Instruction::Call {
-                    name: node.name.clone(),
-                    num_args: arg_results.len(),
-                    initial_arg: start_register,
+                if_chain! {
+                    if let Some(x) = self.lookup_symbol(&node.name);
+                    if x.type_ == LpcType::Function(false);
+                    then {
+                        // if there's a function pointer with this name in scope, call that.
+                        Instruction::CallFp {
+                            location: x.location.unwrap(),
+                            num_args: arg_results.len(),
+                            initial_arg: start_register,
+                        }
+                    } else {
+                        Instruction::Call {
+                            name: node.name.clone(),
+                            num_args: arg_results.len(),
+                            initial_arg: start_register,
+                        }
+                    }
                 }
             }
         };
@@ -1580,10 +1607,7 @@ impl TreeWalker for CodegenWalker {
 #[cfg(test)]
 mod tests {
     use crate::{
-        asm::instruction::Instruction::{
-            AConst, Call, GLoad, GStore, IAdd, IConst, IConst0, IConst1, RegCopy, Ret, SConst,
-            Store,
-        },
+        asm::instruction::Instruction::*,
         ast::{
             ast_node::AstNode, comma_expression_node::CommaExpressionNode,
             expression_node::ExpressionNode,
@@ -2331,6 +2355,46 @@ mod tests {
                 IConst0(Register(3)),
                 IDiv(Register(2), Register(3), Register(4)),
                 CatchEnd,
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_function_pointers() {
+            let mut context = CompilationContext::default();
+            let prototype = FunctionPrototype {
+                name: "marfin".into(),
+                return_type: LpcType::Int(false),
+                num_args: 1,
+                num_default_args: 0,
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default(),
+            };
+
+            context
+                .function_prototypes
+                .insert("marfin".into(), prototype);
+
+            context.scopes.push_new(); // push a global scope
+            let mut sym = Symbol::new("my_func", LpcType::Function(false));
+            sym.location = Some(Register(1));
+            context.scopes.current_mut().unwrap().insert(sym);
+
+            let call = "my_func(666)";
+            let mut tree = lpc_parser::ExpressionParser::new()
+                .parse(&context, LexWrapper::new(call))
+                .unwrap();
+
+            let mut walker = CodegenWalker::new(context);
+            let _ = tree.visit(&mut walker);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                CallFp { location: Register(1), num_args: 1, initial_arg: Register(1) },
+                RegCopy(Register(0), Register(2))
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
