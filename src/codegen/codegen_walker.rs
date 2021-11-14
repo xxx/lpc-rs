@@ -38,7 +38,7 @@ use crate::{
     compilation_context::CompilationContext,
     errors::LpcError,
     interpreter::{
-        efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES},
+        efun::{CALL_OTHER, CATCH},
         program::Program,
     },
     semantic::{lpc_type::LpcType, program_function::ProgramFunction, symbol::Symbol},
@@ -52,7 +52,6 @@ use crate::{
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::interpreter::function_type::FunctionAddress::Efun;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
