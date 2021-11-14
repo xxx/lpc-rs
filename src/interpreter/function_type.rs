@@ -7,6 +7,16 @@ use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
 use crate::semantic::program_function::ProgramFunction;
 use std::fmt::{Display, Formatter};
 
+/// used for local Debug implementations, to avoid stack overflow when dumping function pointers
+fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
+    f.write_str(&*owner.filename())
+}
+
+/// used for local Debug implementations, to avoid stack overflow when dumping function pointers
+fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
+    f.write_str(&*owner.borrow().filename())
+}
+
 /// An enum to handle function names that are either vars or literal names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionName {
@@ -42,10 +52,16 @@ pub enum FunctionTarget {
 
 /// Different ways to store a function address, for handling at runtime.
 /// This is the run-time equivalent of [`FunctionTarget`]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Educe, Clone, PartialEq, Eq)]
+#[educe(Debug)]
 pub enum FunctionAddress {
     /// The function being called is located in an object.
-    Local(Rc<RefCell<Process>>, Rc<ProgramFunction>),
+    Local(
+        #[educe(Debug(method = "borrowed_owner_name"))]
+        Rc<RefCell<Process>>,
+
+        Rc<ProgramFunction>
+    ),
 
     /// The function being called is an efun, and requires the name.
     Efun(String),
@@ -71,10 +87,12 @@ impl FunctionAddress {
 
 /// A pointer to a function, created with the `&` syntax.
 /// Partially-applied functions
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Educe, Clone, PartialEq, Eq)]
+#[educe(Debug)]
 pub struct FunctionPtr {
     // TODO: owner and address can be replaced by Rc<FunctionSymbol>
     /// The object that this pointer was declared in.
+    #[educe(Debug(method = "owner_name"))]
     pub owner: Rc<Process>,
 
     /// Address of the function, in either the receiver or owner

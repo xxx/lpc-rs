@@ -1315,7 +1315,7 @@ mod tests {
                     let o = extract_value!(&*xb, LpcValue::Function);
                     match o {
                         LpcFunction::FunctionPtr(f) => {
-                            let args = f.args.iter().map(|item| item.as_ref().map(|r| BareVal::from(r))).collect::<Vec<_>>();
+                            let args = f.args.iter().map(|item| item.as_ref().map(|r| r.into())).collect::<Vec<_>>();
 
                             BareVal::Function(f.name().into(), args)
                         }
@@ -1620,6 +1620,74 @@ mod tests {
                     Int(0),
                     Function("dump".to_string(), vec![]),
                     Function("dump".to_string(), vec![]),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_call_other() {
+                let code = indoc! { r##"
+                    function f = &(this_object())->tacco();
+
+                    void tacco() {
+                        dump("tacco!");
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Object("/my_file".into()),
+                    Object("/my_file".into()),
+                    Function("tacco".to_string(), vec![]),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_with_args() {
+                let code = indoc! { r##"
+                    function f = &tacco(1, 666);
+
+                    void tacco(int a, int b) {
+                        dump(a + b);
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(666),
+                    Function("tacco".to_string(), vec![Some(Int(1)), Some(Int(666))]),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_with_partial_applications() {
+                let code = indoc! { r##"
+                    function f = &tacco(1, , , 42, );
+
+                    void tacco(int a, int b, int c, int d, int e) {
+                        dump(a + b - c * (d + e));
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(42),
+                    Function("tacco".to_string(), vec![Some(Int(1)), None, None, Some(Int(42)), None]),
                 ];
 
                 assert_eq!(&expected, &registers);
