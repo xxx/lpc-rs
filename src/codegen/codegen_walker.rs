@@ -52,6 +52,7 @@ use crate::{
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::interpreter::function_type::FunctionAddress::Efun;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1021,13 +1022,6 @@ impl TreeWalker for CodegenWalker {
     where
         Self: Sized,
     {
-        let receiver = if let Some(rcvr) = &mut node.receiver {
-            rcvr.visit(self)?;
-            FunctionReceiver::Value(self.current_result)
-        } else {
-            FunctionReceiver::None
-        };
-
         let mut applied_arguments = Vec::new();
         if let Some(args) = &mut node.arguments {
             for argument in args {
@@ -1040,44 +1034,51 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        let location = self.register_counter.next().unwrap();
-        self.current_result = location;
+        let target = if let Some(rcvr) = &mut node.receiver {
+            // remote receiver, i.e. `call_other`
+            rcvr.visit(self)?;
+            let receiver = FunctionReceiver::Var(self.current_result);
 
-        let target = if matches!(receiver, FunctionReceiver::Value(_)) {
-            // If there is a receiver, the function name is assumed to be literal.
+            // `call_other` always assumes a literal name
             let name = FunctionName::Literal(node.name.clone());
-            FunctionTarget::CallOther(name, receiver)
-        } else {
+
+            FunctionTarget::Local(name, receiver)
+        } else if self.context.lookup_function(node.name.as_str()).is_some() {
+            // A local / inherited function
+
             // Determine if the name is a var, or a literal function name.
             // Vars take precedence.
             let name = match self.lookup_symbol(&node.name) {
                 Some(s) => {
-                    let sym_loc = match s.location {
-                        Some(l) => l,
-                        None => {
-                            return Err(LpcError::new(format!(
-                                "Symbol `{}` has no location set.",
-                                s.name
-                            ))
-                            .with_span(node.span));
-                        }
-                    };
+                    if !matches!(s.type_, LpcType::Function(false)) {
+                        // if there are no function-type vars of this name, assume the name is literal
+                        FunctionName::Literal(node.name.clone())
+                    } else {
+                        let sym_loc = match s.location {
+                            Some(l) => l,
+                            None => {
+                                return Err(LpcError::new(format!(
+                                    "Symbol `{}` has no location set.",
+                                    s.name
+                                ))
+                                    .with_span(node.span));
+                            }
+                        };
 
-                    FunctionName::Var(sym_loc)
+                        FunctionName::Var(sym_loc)
+                    }
                 }
                 None => FunctionName::Literal(node.name.clone()),
             };
 
-            // See if there is a local function with this name first
-            if self.context.lookup_function(&node.name).is_some() {
-                FunctionTarget::Local(name)
-            } else if EFUN_PROTOTYPES.get(node.name.as_str()).is_some() {
-                FunctionTarget::Efun(name)
-            } else {
-                return Err(LpcError::new(format!("Unknown function: `{}`", &node.name))
-                    .with_span(node.span));
-            }
+            FunctionTarget::Local(name, FunctionReceiver::Local)
+        } else {
+            // Default to assume Efun
+            FunctionTarget::Efun(node.name.clone())
         };
+
+        let location = self.register_counter.next().unwrap();
+        self.current_result = location;
 
         let instruction = Instruction::FunctionPtrConst {
             location,

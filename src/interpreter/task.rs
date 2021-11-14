@@ -26,6 +26,7 @@ use crate::{
 use decorum::Total;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
 use std::fmt::Display;
+use crate::interpreter::function_type::{FunctionAddress, FunctionPtr, FunctionReceiver, FunctionTarget, LpcFunction};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -292,6 +293,74 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::FConst(r, f) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r.index()] = LpcRef::Float(f);
+            }
+            Instruction::FunctionPtrConst { location, target, applied_arguments } => {
+                let address = match target {
+                    FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name.clone()),
+                    FunctionTarget::Local(func_name, func_receiver) => {
+                        let proc = match func_receiver {
+                            FunctionReceiver::Var(receiver_reg) => {
+                                let frame = self.stack.current_frame()?;
+                                let receiver_ref = &frame.registers[receiver_reg.index()];
+                                match receiver_ref {
+                                    LpcRef::Object(x) => {
+                                        let b = x.borrow();
+                                        let process = try_extract_value!(*b, LpcValue::Object);
+                                        process.clone()
+                                    }
+                                    LpcRef::String(_) => todo!(),
+                                    LpcRef::Array(_)
+                                    | LpcRef::Mapping(_)
+                                    | LpcRef::Float(_)
+                                    | LpcRef::Int(_)
+                                    | LpcRef::Function(_) => {
+                                        return Err(self.runtime_error("Receiver was not object or string"));
+                                    }
+                                }
+                            },
+                            FunctionReceiver::Local => {
+                                let frame = self.stack.current_frame()?;
+                                let proc = &frame.process;
+
+                                proc.clone()
+                            }
+                            FunctionReceiver::Argument => todo!(),
+                        };
+
+                        let s = frame.resolve_function_name(&func_name)?;
+                        let proc_ref = &frame.process;
+                        let borrowed_proc = proc_ref.borrow();
+                        let sym = borrowed_proc.lookup_function(&*s);
+                        if sym.is_none() {
+                            return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
+                        }
+
+                        FunctionAddress::Local(proc, sym.unwrap().clone())
+                    }
+                };
+
+                let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
+                    match arg {
+                        Some(register) => {
+                            Some(frame.resolve_lpc_ref(register))
+                        }
+                        None => None,
+                    }
+                }).collect();
+
+                let fp = FunctionPtr {
+                    owner: Rc::new(Default::default()),
+                    address,
+                    args
+                };
+
+                let func = LpcFunction::FunctionPtr(fp);
+
+                let new_ref = self.memory.value_to_ref(LpcValue::from(func));
+
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+                registers[location.index()] = new_ref;
             }
             Instruction::GLoad(r1, r2) => {
                 // load from global r1, into local r2
@@ -1204,9 +1273,10 @@ mod tests {
         String(String),
         Int(LpcInt),
         Float(LpcFloat),
-        Array(Box<Vec<BareVal>>),
+        Array(Vec<BareVal>),
         Mapping(HashMap<BareVal, BareVal>),
         Object(String), // Just the filename
+        Function(String, Vec<Option<BareVal>>), // name and args
     }
 
     impl From<&LpcRef> for BareVal {
@@ -1223,7 +1293,7 @@ mod tests {
                     let xb = x.borrow();
                     let a = extract_value!(&*xb, LpcValue::Array);
                     let array = a.into_iter().map(|item| item.into()).collect::<Vec<_>>();
-                    BareVal::Array(Box::new(array))
+                    BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
                     let xb = x.borrow();
@@ -1240,8 +1310,16 @@ mod tests {
                     let filename = o.borrow().filename().into_owned();
                     BareVal::Object(filename)
                 }
-                LpcRef::Function(_x) => {
-                    todo!()
+                LpcRef::Function(x) => {
+                    let xb = x.borrow();
+                    let o = extract_value!(&*xb, LpcValue::Function);
+                    match o {
+                        LpcFunction::FunctionPtr(f) => {
+                            let args = f.args.iter().map(|item| item.as_ref().map(|r| BareVal::from(r))).collect::<Vec<_>>();
+
+                            BareVal::Function(f.name().into(), args)
+                        }
+                    }
                 }
             }
         }
@@ -1262,6 +1340,10 @@ mod tests {
                 BareVal::Array(x) => std::ptr::hash(&**x, state),
                 BareVal::Mapping(x) => std::ptr::hash(&*x, state),
                 BareVal::Object(x) => std::ptr::hash(&*x, state),
+                BareVal::Function(x, y) => {
+                    x.hash(state);
+                    y.hash(state);
+                },
             }
         }
     }
@@ -1510,13 +1592,35 @@ mod tests {
             #[test]
             fn stores_the_value() {
                 let code = indoc! { r##"
-                    mixed pi = 3.14;
+                    float pi = 3.14;
                 "##};
 
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Float(3.14.into())];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_functionptrconst {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    function f = dump;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Function("dump".to_string(), vec![]),
+                    Function("dump".to_string(), vec![]),
+                ];
 
                 assert_eq!(&expected, &registers);
             }

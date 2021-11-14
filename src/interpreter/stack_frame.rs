@@ -1,7 +1,7 @@
 use crate::{
     asm::instruction::{Address, Instruction, Label},
     errors::LpcError,
-    interpreter::{lpc_ref::LpcRef, process::Process},
+    interpreter::{lpc_ref::LpcRef, process::Process, lpc_value::LpcValue},
     parser::span::Span,
     semantic::program_function::ProgramFunction,
     Result,
@@ -12,6 +12,9 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use std::borrow::Cow;
+use crate::interpreter::function_type::FunctionName;
+use crate::try_extract_value;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -82,6 +85,24 @@ impl StackFrame {
         I: Into<usize>,
     {
         self.registers[register.into()].clone()
+    }
+
+    /// Get the true name of the function to call.
+    pub fn resolve_function_name<'a>(&'a self, name: &'a FunctionName) -> Result<Cow<'a, str>> {
+        match name {
+            FunctionName::Var(reg) => {
+                let name_ref = self.resolve_lpc_ref(reg.index());
+
+                if let LpcRef::String(s) = name_ref {
+                    let b = s.borrow();
+                    let str = try_extract_value!(*b, LpcValue::String);
+                    Ok(str.clone().into())
+                } else {
+                    Err(self.runtime_error("Found function var that didn't resolve to a string?"))
+                }
+            }
+            FunctionName::Literal(s) => Ok(s.into()),
+        }
     }
 
     #[inline]

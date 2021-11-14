@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::interpreter::process::Process;
 use std::rc::Rc;
 
@@ -18,13 +19,14 @@ pub enum FunctionName {
 /// The possible receivers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionReceiver {
-    /// The receiver is the Process stored in the [`Register`].
-    Value(Register),
+    /// The receiver is the object that defines the function.
+    Local,
 
-    /// There is no receiver.
-    None,
+    /// The receiver is the Process stored in the [`Register`].
+    Var(Register),
 
     /// The receiver will be filled-in at call time, with the first argument passed to the call.
+    /// i.e. the `&->foo()` syntax
     Argument,
 }
 
@@ -32,26 +34,32 @@ pub enum FunctionReceiver {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionTarget {
     /// The call will be to an efun
-    Efun(FunctionName),
+    Efun(String),
 
-    /// The call will be to a function that's in the same object as the pointer.
-    Local(FunctionName),
-
-    /// The call will be a call_other in another object.
-    CallOther(FunctionName, FunctionReceiver),
+    /// The call will be to an lfun defined in some object
+    Local(FunctionName, FunctionReceiver),
 }
 
 /// Different ways to store a function address, for handling at runtime.
+/// This is the run-time equivalent of [`FunctionTarget`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionAddress {
-    /// The function being called is local to the object the pointer is declared in.
-    Local(Rc<ProgramFunction>),
-    // Local(Address),
-    /// The function being called is located in another object.
-    Remote(Rc<Process>, Rc<ProgramFunction>),
-    // Remote(Rc<Process>, Address),
+    /// The function being called is located in an object.
+    Local(Rc<RefCell<Process>>, Rc<ProgramFunction>),
+
     /// The function being called is an efun, and requires the name.
     Efun(String),
+}
+
+impl FunctionAddress {
+    /// Get the name of the function being called.
+    /// Will return the variable name in those cases.
+    pub fn function_name(&self) -> &str {
+        match self {
+            FunctionAddress::Local(_, x) => &x.name,
+            FunctionAddress::Efun(x) => x
+        }
+    }
 }
 
 // pub struct Closure {
@@ -76,6 +84,14 @@ pub struct FunctionPtr {
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
     pub args: Vec<Option<LpcRef>>,
+}
+
+impl FunctionPtr {
+    /// Get the name of the function being called.
+    /// Will return the variable name in those cases.
+    pub fn name(&self) -> &str {
+        self.address.function_name()
+    }
 }
 
 /// `function` type variations
