@@ -154,7 +154,7 @@ impl Preprocessor {
         let mut output = Vec::new();
 
         let lpc_path = path.into();
-        let file_id = FileCache::insert(&lpc_path);
+        let file_id = FileCache::insert(&lpc_path.as_server(self.context.config.lib_dir()).display());
 
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
