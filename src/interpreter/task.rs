@@ -27,6 +27,7 @@ use decorum::Total;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
 use std::fmt::Display;
 use crate::interpreter::function_type::{FunctionAddress, FunctionPtr, FunctionReceiver, FunctionTarget, LpcFunction};
+use if_chain::if_chain;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -202,64 +203,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call { .. } => {
                 self.handle_call(&instruction, task_context)?;
             }
+            Instruction::CallFp { .. } => {
+                self.handle_call_fp(&instruction, task_context)?;
+            }
             Instruction::CallOther { .. } => {
                 self.handle_call_other(&instruction, task_context)?;
             }
-            //     Instruction::CallFp {
-            //         location,
-            //         num_args: _,
-            //         initial_arg: _,
-            //     } => {
-            //         let _func_ref = &frame.registers[location.index()];
-            //
-            //         todo!();
-            //
-            //         // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-            //         //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
-            //         // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-            //         //     let sym = FunctionSymbol {
-            //         //         name: name.clone(),
-            //         //         num_args: prototype.num_args,
-            //         //         num_locals: 0,
-            //         //         address: 0,
-            //         //     };
-            //         //
-            //         //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
-            //         // } else {
-            //         //     println!("proc {:#?}", self.process);
-            //         //     println!("functions {:#?}", self.process.functions);
-            //         //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
-            //         // };
-            //         //
-            //         // // copy argument registers from old frame to new
-            //         // if *num_args > 0_usize {
-            //         //     let index = initial_arg.index();
-            //         //     let current_frame = self.stack.last().unwrap();
-            //         //     new_frame.registers[1..=*num_args]
-            //         //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
-            //         // }
-            //         //
-            //         // // println!("pushing frame in Call: {:?}", new_frame);
-            //         // try_push_frame!(new_frame, self);
-            //         //
-            //         // if let Some(x) = self.process.functions.get(name) {
-            //         //     self.process.set_pc(x.address);
-            //         // } else if let Some(efun) = EFUNS.get(name.as_str()) {
-            //         //     // the efun is responsible for populating the return value in its own frame
-            //         //     efun(self)?;
-            //         //
-            //         //     if let Some(frame) = self.pop_frame() {
-            //         //         self.copy_call_result(&frame)?;
-            //         //         self.popped_frame = Some(frame);
-            //         //     }
-            //         // } else {
-            //         //     return Err(self.runtime_error(format!(
-            //         //         "Call to unknown function (that had a valid prototype?) `{}`",
-            //         //         name
-            //         //     )));
-            //         // }
-            //     }
-
             Instruction::CatchEnd => {
                 self.catch_points.pop();
             }
@@ -759,6 +708,144 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
 
             _ => Err(self.runtime_error("non-Call instruction passed to `handle_call`")),
+        }
+    }
+
+    fn handle_call_fp(&mut self, instruction: &Instruction, task_context: &TaskContext) -> Result<()> {
+        match instruction {
+            Instruction::CallFp {
+                location,
+                num_args,
+                initial_arg,
+            } => {
+                let mut function_is_local = true;
+                let frame = self.stack.current_frame()?;
+                let registers = &frame.registers;
+                let func_ref = &registers[location.index()];
+                let new_frame = if_chain! {
+                    if let LpcRef::Function(func) = func_ref;
+                    let borrowed = func.borrow();
+                    let func = try_extract_value!(*borrowed, LpcValue::Function);
+                    then {
+                        let mut new_frame = match func {
+                            LpcFunction::FunctionPtr(ptr) => {
+                                match &ptr.address {
+                                    FunctionAddress::Local(proc, function) => {
+                                        StackFrame::new(proc.clone(), function.clone())
+                                    }
+                                    FunctionAddress::Efun(name) => {
+                                        // unwrap is safe because this should have been checked in an earlier step
+                                        let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                                        let pf = ProgramFunction::new(name.clone(), prototype.num_args, 0);
+
+                                        function_is_local = false;
+
+                                        StackFrame::new(frame.process.clone(), Rc::new(pf))
+                                    }
+                                }
+                            }
+                        };
+
+                        // copy argument registers from old frame to new
+                        // TODO: handle partial applications
+                        // TODO: handle ellipses
+
+                        if *num_args > 0_usize {
+                            let fill_index = 0;
+                            let new_frame_index = 0;
+                            // if partially applied arguments
+                            //   for each partial arg
+                            //     if some
+                            //       idx into new frame register
+                            //       new_frame_index += 1
+                            //     if none
+                            //       if arg passed
+                            //         take arg at fill_index from `registers` and copy to new frame register
+                            //         new_frame_index += 1
+                            //         fill_index += 1
+                            //       else
+                            //         error
+                            //
+
+                            let index = initial_arg.index();
+                            new_frame.registers[1..=*num_args]
+                                .clone_from_slice(&registers[index..(index + *num_args)]);
+                        }
+
+                        new_frame
+                    } else {
+                        return Err(self.runtime_error("`callfp` instruction on a non-function?"));
+                    }
+                };
+
+                // TODO: get rid of this clone
+                let name = &new_frame.function.name.clone();
+                self.stack.push(new_frame)?;
+
+                if !function_is_local {
+                    let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
+
+                    call_efun(&name, &mut ctx)?;
+
+                    #[cfg(test)]
+                        {
+                            if ctx.snapshot.is_some() {
+                                self.snapshot = ctx.snapshot;
+                            }
+                        }
+
+                    pop_frame!(self, task_context);
+                }
+
+                Ok(())
+
+                // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
+                //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
+                // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                //     let sym = FunctionSymbol {
+                //         name: name.clone(),
+                //         num_args: prototype.num_args,
+                //         num_locals: 0,
+                //         address: 0,
+                //     };
+                //
+                //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
+                // } else {
+                //     println!("proc {:#?}", self.process);
+                //     println!("functions {:#?}", self.process.functions);
+                //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
+                // };
+                //
+                // // copy argument registers from old frame to new
+                // if *num_args > 0_usize {
+                //     let index = initial_arg.index();
+                //     let current_frame = self.stack.last().unwrap();
+                //     new_frame.registers[1..=*num_args]
+                //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
+                // }
+                //
+                // // println!("pushing frame in Call: {:?}", new_frame);
+                // try_push_frame!(new_frame, self);
+                //
+                // if let Some(x) = self.process.functions.get(name) {
+                //     self.process.set_pc(x.address);
+                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
+                //     // the efun is responsible for populating the return value in its own frame
+                //     efun(self)?;
+                //
+                //     if let Some(frame) = self.pop_frame() {
+                //         self.copy_call_result(&frame)?;
+                //         self.popped_frame = Some(frame);
+                //     }
+                // } else {
+                //     return Err(self.runtime_error(format!(
+                //         "Call to unknown function (that had a valid prototype?) `{}`",
+                //         name
+                //     )));
+                // }
+
+            }
+            _ => Err(self.runtime_error("non-CallFp instruction passed to `handle_call_fp`")),
         }
     }
 
