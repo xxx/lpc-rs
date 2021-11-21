@@ -81,10 +81,7 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         self.println_indented("Block {");
 
         self.indent += 2;
@@ -186,10 +183,7 @@ impl TreeWalker for TreePrinter {
     }
 
     /// Visit a function pointer node
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         self.println_indented("Function Ptr");
         self.indent += 2;
 

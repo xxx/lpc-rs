@@ -1044,10 +1044,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     /// Visit a function pointer node
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         let mut applied_arguments = Vec::new();
         if let Some(args) = &mut node.arguments {
             for argument in args {
