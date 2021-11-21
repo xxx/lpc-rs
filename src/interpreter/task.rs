@@ -625,8 +625,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Xor(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x ^ y)?;
             }
-
-            x => todo!("{}", x),
         }
 
         Ok(false)

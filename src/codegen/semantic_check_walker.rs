@@ -959,7 +959,7 @@ mod tests {
     mod test_visit_call {
         use super::*;
         use crate::semantic::function_flags::FunctionFlags;
-        use crate::semantic::program_function::ProgramFunction;
+        
 
         #[test]
         fn allows_known_functions() {

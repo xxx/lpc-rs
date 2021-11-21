@@ -2067,7 +2067,7 @@ mod tests {
 
     mod test_break {
         use super::*;
-        use crate::asm::{instruction::Instruction::*, register::Register};
+        use crate::asm::{register::Register};
 
         #[test]
         fn breaks_out_of_while_loops() {
@@ -2648,7 +2648,7 @@ mod tests {
 
     mod test_continue {
         use super::*;
-        use crate::asm::{instruction::Instruction::*, register::Register};
+        use crate::asm::{register::Register};
 
         #[test]
         fn continues_while_loops() {
