@@ -40,3 +40,6 @@ toml = "0.5.8"
 
 [dev-dependencies]
 indoc = "1.0"
+
+[profile.release]
+lto = "thin"
