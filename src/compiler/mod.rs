@@ -5,8 +5,8 @@ use crate::{
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
     codegen::{
         codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-        scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
-        tree_walker::ContextHolder,
+        function_prototype_walker::FunctionPrototypeWalker, scope_walker::ScopeWalker,
+        semantic_check_walker::SemanticCheckWalker, tree_walker::ContextHolder,
     },
     compilation_context::CompilationContext,
     errors,
@@ -21,7 +21,6 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
-use crate::codegen::function_prototype_walker::FunctionPrototypeWalker;
 
 pub mod compiler_error;
 

@@ -8,10 +8,7 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     errors::LpcError,
-    semantic::{
-        lpc_type::LpcType,
-        semantic_checks::check_var_redefinition, symbol::Symbol,
-    },
+    semantic::{lpc_type::LpcType, semantic_checks::check_var_redefinition, symbol::Symbol},
     Result,
 };
 

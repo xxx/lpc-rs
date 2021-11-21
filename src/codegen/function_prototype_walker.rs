@@ -2,9 +2,9 @@ use crate::{
     ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
+    semantic::function_prototype::FunctionPrototype,
     Result,
 };
-use crate::semantic::function_prototype::FunctionPrototype;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]
@@ -61,10 +61,7 @@ impl TreeWalker for FunctionPrototypeWalker {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ast::{var_init_node::VarInitNode},
-        semantic::lpc_type::LpcType,
-    };
+    use crate::{ast::var_init_node::VarInitNode, semantic::lpc_type::LpcType};
 
     use super::*;
     use crate::semantic::function_flags::FunctionFlags;
@@ -86,7 +83,11 @@ mod tests {
 
         let _ = walker.visit_function_def(&mut node);
 
-        let proto = walker.context.function_prototypes.get("marf").expect("prototype not found!");
+        let proto = walker
+            .context
+            .function_prototypes
+            .get("marf")
+            .expect("prototype not found!");
 
         assert_eq!(
             *proto,

@@ -1620,13 +1620,14 @@ mod tests {
     use crate::{
         apply_walker,
         codegen::{
-            default_params_walker::DefaultParamsWalker, semantic_check_walker::SemanticCheckWalker,
+            default_params_walker::DefaultParamsWalker,
+            function_prototype_walker::FunctionPrototypeWalker,
+            semantic_check_walker::SemanticCheckWalker,
         },
         compiler::{compiler_error::CompilerError, Compiler},
         errors,
         util::path_maker::LpcPath,
     };
-    use crate::codegen::function_prototype_walker::FunctionPrototypeWalker;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
