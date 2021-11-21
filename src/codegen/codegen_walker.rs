@@ -1626,6 +1626,7 @@ mod tests {
         errors,
         util::path_maker::LpcPath,
     };
+    use crate::codegen::function_prototype_walker::FunctionPrototypeWalker;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
@@ -1646,6 +1647,7 @@ mod tests {
             )
             .expect("failed to parse");
 
+        let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);
         let context = apply_walker!(SemanticCheckWalker, program, context, false);
@@ -1660,7 +1662,6 @@ mod tests {
     where
         T: AsRef<str>,
     {
-        println!("walker {:?}", walker);
         let function = walker.functions.get_mut(name.as_ref()).unwrap();
         function.instructions.clone()
     }

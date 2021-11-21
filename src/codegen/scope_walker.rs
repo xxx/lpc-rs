@@ -73,8 +73,6 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
-        let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
-
         for parameter in &mut node.parameters {
             parameter.visit(self)?;
         }
@@ -95,32 +93,6 @@ impl TreeWalker for ScopeWalker {
         for expression in &mut node.body {
             expression.visit(self)?;
         }
-
-        // Store the prototype now, to allow for forward references.
-        let num_args = node.parameters.len();
-        let arg_types = node
-            .parameters
-            .iter()
-            .map(|parm| parm.type_)
-            .collect::<Vec<_>>();
-        self.context.function_prototypes.insert(
-            node.name.clone(),
-            FunctionPrototype {
-                name: node.name.clone().into(),
-                return_type: node.return_type,
-                num_args,
-                num_default_args,
-                arg_types,
-                span: node.span,
-                arg_spans: {
-                    node.parameters
-                        .iter()
-                        .flat_map(|n| n.span)
-                        .collect::<Vec<_>>()
-                },
-                flags: node.flags,
-            },
-        );
 
         self.context.scopes.pop();
         Ok(())
@@ -253,42 +225,6 @@ mod tests {
 
         use super::*;
         use crate::semantic::function_flags::FunctionFlags;
-
-        #[test]
-        fn stores_the_prototype() {
-            let mut walker = ScopeWalker::default();
-            let mut node = FunctionDefNode {
-                return_type: LpcType::Mixed(false),
-                name: "marf".to_string(),
-                flags: FunctionFlags::default(),
-                parameters: vec![
-                    VarInitNode::new("foo", LpcType::Int(false)),
-                    VarInitNode::new("bar", LpcType::Mapping(true)),
-                ],
-                body: vec![],
-                span: None,
-            };
-
-            let _ = walker.visit_function_def(&mut node);
-
-            if let Some(proto) = walker.context.function_prototypes.get("marf") {
-                assert_eq!(
-                    *proto,
-                    FunctionPrototype {
-                        name: "marf".into(),
-                        return_type: LpcType::Mixed(false),
-                        num_args: 2,
-                        num_default_args: 0,
-                        arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
-                        span: None,
-                        arg_spans: vec![],
-                        flags: FunctionFlags::default(),
-                    }
-                )
-            } else {
-                panic!("prototype not found!")
-            }
-        }
 
         #[test]
         fn sets_up_argv_for_ellipsis() {

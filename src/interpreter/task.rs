@@ -1532,6 +1532,32 @@ mod tests {
             }
         }
 
+        mod test_call_fp {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    function q = tacos;
+                    int a = q(666);
+                    int tacos(int j) { return j + 1; }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(667),
+                    Function("tacos".into(), vec![]),
+                    Function("tacos".into(), vec![]),
+                    Int(666),
+                    Int(667),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
         mod test_call_other {
             use super::*;
 

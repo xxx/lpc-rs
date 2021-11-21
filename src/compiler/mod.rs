@@ -21,6 +21,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use crate::codegen::function_prototype_walker::FunctionPrototypeWalker;
 
 pub mod compiler_error;
 
@@ -203,10 +204,10 @@ impl Compiler {
         // let mut printer = TreePrinter::new();
         // let _ = program.visit(&mut printer);
 
+        let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);
         let context = apply_walker!(SemanticCheckWalker, program, context, true);
-        // let scope_tree = ScopeTree::from(context);
         let mut asm_walker = CodegenWalker::new(context);
 
         if let Err(e) = program.visit(&mut asm_walker) {
