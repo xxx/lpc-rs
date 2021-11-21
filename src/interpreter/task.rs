@@ -245,7 +245,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::FunctionPtrConst { location, target, applied_arguments } => {
                 let address = match target {
-                    FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name.clone()),
+                    FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
                     FunctionTarget::Local(func_name, func_receiver) => {
                         let proc = match func_receiver {
                             FunctionReceiver::Var(receiver_reg) => {
@@ -289,12 +289,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 };
 
                 let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
-                    match arg {
-                        Some(register) => {
-                            Some(frame.resolve_lpc_ref(register))
-                        }
-                        None => None,
-                    }
+                    arg.map(|register| frame.resolve_lpc_ref(register))
                 }).collect();
 
                 let fp = FunctionPtr {
@@ -783,7 +778,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 if !function_is_local {
                     let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
 
-                    call_efun(&name, &mut ctx)?;
+                    call_efun(name, &mut ctx)?;
 
                     #[cfg(test)]
                         {
@@ -912,7 +907,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         .lookup_function(function_name)
                                         .unwrap()
                                         .clone();
-                                    let eval_context = task.eval(function, &args, new_context)?;
+                                    let eval_context = task.eval(function, args, new_context)?;
                                     task_context.increment_instruction_count(
                                         eval_context.instruction_count(),
                                     )?;
@@ -1181,7 +1176,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 };
 
                 match context.lookup_process(str) {
-                    Some(proc) => proc.clone(),
+                    Some(proc) => proc,
                     None => return None,
                 }
             }
@@ -1310,6 +1305,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
     /// Pop the top frame from the stack, and return it.
     #[inline]
+    #[allow(clippy::let_and_return)]
     fn pop_frame(&mut self) -> Option<StackFrame> {
         let frame = self.stack.pop();
 

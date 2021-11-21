@@ -138,10 +138,8 @@ impl TreeWalker for SemanticCheckWalker {
             &self.function_return_values(),
         )?;
 
-        if left_type.matches_type(right_type) {
-            Ok(())
-        } else if let ExpressionNode::Int(IntNode { value: 0, .. }) = *node.rhs {
-            // The integer 0 is always a valid assignment.
+        // The integer 0 is always a valid assignment.
+        if left_type.matches_type(right_type) || matches!(*node.rhs, ExpressionNode::Int(IntNode { value: 0, .. })) {
             Ok(())
         } else {
             let e = LpcError::new(format!(
@@ -541,10 +539,8 @@ impl TreeWalker for SemanticCheckWalker {
                 &self.function_return_values(),
             )?;
 
-            let ret = if node.type_.matches_type(expr_type) {
-                Ok(())
-            } else if let ExpressionNode::Int(IntNode { value: 0, .. }) = *expression {
-                // The integer 0 is always a valid assignment.
+            // The integer 0 is always a valid assignment.
+            let ret = if node.type_.matches_type(expr_type) || matches!(*expression, ExpressionNode::Int(IntNode { value: 0, .. })) {
                 Ok(())
             } else {
                 let e = LpcError::new(format!(

@@ -1,5 +1,5 @@
 use crate::{
-    asm::instruction::{Address, Instruction, Label},
+    asm::instruction::{Address, Instruction},
     errors::LpcError,
     interpreter::{lpc_ref::LpcRef, process::Process, lpc_value::LpcValue},
     parser::span::Span,
@@ -121,7 +121,7 @@ impl StackFrame {
     /// Set the pc to the address for the passed [`Label`].
     /// Returns an error if the label is not found.
     #[inline]
-    pub fn set_pc_from_label(&self, label: &Label) -> Result<()> {
+    pub fn set_pc_from_label(&self, label: &str) -> Result<()> {
         match self.lookup_label(label) {
             Some(a) => {
                 self.pc.replace(*a);
