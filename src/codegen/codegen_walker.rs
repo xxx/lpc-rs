@@ -3867,16 +3867,11 @@ mod tests {
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {
-        let node_id = walker
-            .context
-            .scopes
-            .current_id
-            .expect("No current scope to insert the symbol into.");
         walker
             .context
             .scopes
-            .get_mut(node_id)
-            .unwrap()
+            .current_mut()
+            .expect("No current scope to insert the symbol into.")
             .insert(symbol)
     }
 }
