@@ -751,8 +751,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         // TODO: handle ellipses
 
                         if *num_args > 0_usize {
-                            let fill_index = 0;
-                            let new_frame_index = 0;
+                            // let fill_index = 0;
+                            // let new_frame_index = 0;
                             // if partially applied arguments
                             //   for each partial arg
                             //     if some
