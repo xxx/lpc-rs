@@ -182,7 +182,6 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    /// Visit a function pointer node
     fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         self.println_indented("Function Ptr");
         self.indent += 2;
