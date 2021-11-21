@@ -1,6 +1,5 @@
-use std::cell::RefCell;
 use crate::interpreter::process::Process;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
 
@@ -57,10 +56,8 @@ pub enum FunctionTarget {
 pub enum FunctionAddress {
     /// The function being called is located in an object.
     Local(
-        #[educe(Debug(method = "borrowed_owner_name"))]
-        Rc<RefCell<Process>>,
-
-        Rc<ProgramFunction>
+        #[educe(Debug(method = "borrowed_owner_name"))] Rc<RefCell<Process>>,
+        Rc<ProgramFunction>,
     ),
 
     /// The function being called is an efun, and requires the name.
@@ -73,7 +70,7 @@ impl FunctionAddress {
     pub fn function_name(&self) -> &str {
         match self {
             FunctionAddress::Local(_, x) => &x.name,
-            FunctionAddress::Efun(x) => x
+            FunctionAddress::Efun(x) => x,
         }
     }
 }

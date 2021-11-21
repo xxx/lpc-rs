@@ -49,10 +49,10 @@ use crate::{
     ast::function_ptr_node::FunctionPtrNode,
     interpreter::function_type::{FunctionName, FunctionReceiver, FunctionTarget},
 };
+use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use if_chain::if_chain;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1084,7 +1084,7 @@ impl TreeWalker for CodegenWalker {
                                     "Symbol `{}` has no location set.",
                                     s.name
                                 ))
-                                    .with_span(node.span));
+                                .with_span(node.span));
                             }
                         };
 
@@ -2067,7 +2067,7 @@ mod tests {
 
     mod test_break {
         use super::*;
-        use crate::asm::{register::Register};
+        use crate::asm::register::Register;
 
         #[test]
         fn breaks_out_of_while_loops() {
@@ -2390,8 +2390,12 @@ mod tests {
 
             let expected = vec![
                 IConst(Register(1), 666),
-                CallFp { location: Register(1), num_args: 1, initial_arg: Register(1) },
-                RegCopy(Register(0), Register(2))
+                CallFp {
+                    location: Register(1),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
+                RegCopy(Register(0), Register(2)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -2648,7 +2652,7 @@ mod tests {
 
     mod test_continue {
         use super::*;
-        use crate::asm::{register::Register};
+        use crate::asm::register::Register;
 
         #[test]
         fn continues_while_loops() {
@@ -3811,7 +3815,11 @@ mod tests {
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {
-        let node_id = walker.context.scopes.current_id.expect("No current scope to insert the symbol into.");
+        let node_id = walker
+            .context
+            .scopes
+            .current_id
+            .expect("No current scope to insert the symbol into.");
         walker
             .context
             .scopes

@@ -14,8 +14,8 @@ use lpc_rs::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    compiler::Compiler,
     compilation_context::CompilationContext,
+    compiler::Compiler,
     lpc_parser,
     parser::{
         lexer::{LexWrapper, TokenVecWrapper},

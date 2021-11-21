@@ -142,11 +142,11 @@ mod tests {
 
     use crate::interpreter::program::Program;
 
-    use crate::compiler::Compiler;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::util::config::Config;
+    use crate::{
+        compiler::Compiler,
+        interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
+        util::config::Config,
+    };
 
     fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();

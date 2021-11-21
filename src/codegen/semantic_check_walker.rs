@@ -139,7 +139,9 @@ impl TreeWalker for SemanticCheckWalker {
         )?;
 
         // The integer 0 is always a valid assignment.
-        if left_type.matches_type(right_type) || matches!(*node.rhs, ExpressionNode::Int(IntNode { value: 0, .. })) {
+        if left_type.matches_type(right_type)
+            || matches!(*node.rhs, ExpressionNode::Int(IntNode { value: 0, .. }))
+        {
             Ok(())
         } else {
             let e = LpcError::new(format!(
@@ -540,7 +542,9 @@ impl TreeWalker for SemanticCheckWalker {
             )?;
 
             // The integer 0 is always a valid assignment.
-            let ret = if node.type_.matches_type(expr_type) || matches!(*expression, ExpressionNode::Int(IntNode { value: 0, .. })) {
+            let ret = if node.type_.matches_type(expr_type)
+                || matches!(*expression, ExpressionNode::Int(IntNode { value: 0, .. }))
+            {
                 Ok(())
             } else {
                 let e = LpcError::new(format!(
@@ -955,7 +959,6 @@ mod tests {
     mod test_visit_call {
         use super::*;
         use crate::semantic::function_flags::FunctionFlags;
-        
 
         #[test]
         fn allows_known_functions() {
@@ -1081,7 +1084,10 @@ mod tests {
             let _ = node.visit(&mut walker);
 
             assert!(!walker.context.errors.is_empty());
-            assert_eq!(walker.context.errors.first().unwrap().to_string(), "Call to unknown function `my_non_function_pointer`");
+            assert_eq!(
+                walker.context.errors.first().unwrap().to_string(),
+                "Call to unknown function `my_non_function_pointer`"
+            );
         }
 
         #[test]

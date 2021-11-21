@@ -8,6 +8,9 @@ use crate::{
     interpreter::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
+        function_type::{
+            FunctionAddress, FunctionPtr, FunctionReceiver, FunctionTarget, LpcFunction,
+        },
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
         memory::Memory,
@@ -24,10 +27,8 @@ use crate::{
     LpcInt, Result,
 };
 use decorum::Total;
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
-use std::fmt::Display;
-use crate::interpreter::function_type::{FunctionAddress, FunctionPtr, FunctionReceiver, FunctionTarget, LpcFunction};
 use if_chain::if_chain;
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -243,7 +244,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 registers[r.index()] = LpcRef::Float(f);
             }
-            Instruction::FunctionPtrConst { location, target, applied_arguments } => {
+            Instruction::FunctionPtrConst {
+                location,
+                target,
+                applied_arguments,
+            } => {
                 let address = match target {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
                     FunctionTarget::Local(func_name, func_receiver) => {
@@ -263,10 +268,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     | LpcRef::Float(_)
                                     | LpcRef::Int(_)
                                     | LpcRef::Function(_) => {
-                                        return Err(self.runtime_error("Receiver was not object or string"));
+                                        return Err(
+                                            self.runtime_error("Receiver was not object or string")
+                                        );
                                     }
                                 }
-                            },
+                            }
                             FunctionReceiver::Local => {
                                 let frame = self.stack.current_frame()?;
                                 let proc = &frame.process;
@@ -288,14 +295,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 };
 
-                let args: Vec<Option<LpcRef>> = applied_arguments.iter().map(|arg| {
-                    arg.map(|register| frame.resolve_lpc_ref(register))
-                }).collect();
+                let args: Vec<Option<LpcRef>> = applied_arguments
+                    .iter()
+                    .map(|arg| arg.map(|register| frame.resolve_lpc_ref(register)))
+                    .collect();
 
                 let fp = FunctionPtr {
                     owner: Rc::new(Default::default()),
                     address,
-                    args
+                    args,
                 };
 
                 let func = LpcFunction::FunctionPtr(fp);
@@ -413,9 +421,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let address = match frame.lookup_label(&label) {
                         Some(x) => *x,
                         None => {
-                            return Err(
-                                self.runtime_error(format!("Missing address for label `{}`", label))
-                            )
+                            return Err(self
+                                .runtime_error(format!("Missing address for label `{}`", label)))
                         }
                     };
                     frame.set_pc(address);
@@ -466,7 +473,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::Not(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
-                registers[r2.index()] = LpcRef::Int(matches!(registers[r1.index()], LpcRef::Int(0)) as LpcInt);
+                registers[r2.index()] =
+                    LpcRef::Int(matches!(registers[r1.index()], LpcRef::Int(0)) as LpcInt);
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x | y)?;
@@ -510,11 +518,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let vec = try_extract_value!(*value, LpcValue::Array);
 
                         if vec.is_empty() {
-                            return_value(
-                                LpcValue::from(vec![]),
-                                &self.memory,
-                                &mut frame
-                            )?;
+                            return_value(LpcValue::from(vec![]), &self.memory, &mut frame)?;
                         }
 
                         let index1 = frame.resolve_lpc_ref(r2);
@@ -527,17 +531,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 let slice = &vec[real_start..=real_end];
                                 let mut new_vec = vec![LpcRef::Int(0); slice.len()];
                                 new_vec.clone_from_slice(slice);
-                                return_value(
-                                    LpcValue::from(new_vec),
-                                    &self.memory,
-                                    &mut frame
-                                )?;
+                                return_value(LpcValue::from(new_vec), &self.memory, &mut frame)?;
                             } else {
-                                return_value(
-                                    LpcValue::from(vec![]),
-                                    &self.memory,
-                                    &mut frame
-                                )?;
+                                return_value(LpcValue::from(vec![]), &self.memory, &mut frame)?;
                             }
                         } else {
                             return Err(LpcError::new(
@@ -564,17 +560,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 let len = real_end - real_start + 1;
                                 let new_string: String =
                                     string.chars().skip(real_start).take(len).collect();
-                                return_value(
-                                    LpcValue::from(new_string),
-                                    &self.memory,
-                                    &mut frame
-                                )?;
+                                return_value(LpcValue::from(new_string), &self.memory, &mut frame)?;
                             } else {
-                                return_value(
-                                    LpcValue::from(""),
-                                    &self.memory,
-                                    &mut frame
-                                )?;
+                                return_value(LpcValue::from(""), &self.memory, &mut frame)?;
                             }
                         } else {
                             return Err(LpcError::new(
@@ -583,7 +571,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             .with_span(frame.current_debug_span()));
                         }
                     }
-                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Mapping(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
+                    LpcRef::Float(_)
+                    | LpcRef::Int(_)
+                    | LpcRef::Mapping(_)
+                    | LpcRef::Object(_)
+                    | LpcRef::Function(_) => {
                         return Err(LpcError::new(
                             "Range's receiver isn't actually an array or string?",
                         )
@@ -704,7 +696,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
-    fn handle_call_fp(&mut self, instruction: &Instruction, task_context: &TaskContext) -> Result<()> {
+    fn handle_call_fp(
+        &mut self,
+        instruction: &Instruction,
+        task_context: &TaskContext,
+    ) -> Result<()> {
         match instruction {
             Instruction::CallFp {
                 location,
@@ -781,11 +777,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     call_efun(name, &mut ctx)?;
 
                     #[cfg(test)]
-                        {
-                            if ctx.snapshot.is_some() {
-                                self.snapshot = ctx.snapshot;
-                            }
+                    {
+                        if ctx.snapshot.is_some() {
+                            self.snapshot = ctx.snapshot;
                         }
+                    }
 
                     pop_frame!(self, task_context);
                 }
@@ -836,7 +832,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 //         name
                 //     )));
                 // }
-
             }
             _ => Err(self.runtime_error("non-CallFp instruction passed to `handle_call_fp`")),
         }
@@ -1075,9 +1070,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         Ok(())
                     }
                     x => {
-                        Err(
-                            frame.runtime_error(format!("Invalid attempt to take index of `{}`", x))
-                        )
+                        Err(frame
+                            .runtime_error(format!("Invalid attempt to take index of `{}`", x)))
                     }
                 }
             }
@@ -1151,12 +1145,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         Ok(())
                     }
                     x => {
-                        Err(
-                            self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
-                        )
+                        Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x)))
                     }
                 }
-            },
+            }
             _ => Err(self.runtime_error("non-Store instruction passed to `handle_store`")),
         }
     }
@@ -1296,7 +1288,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[inline]
     fn array_index_error<T>(&self, index: T, length: usize) -> LpcError
     where
-        T: Display
+        T: Display,
     {
         self.runtime_error(format!(
             "Attempting to access index {} in an array of length {}",
@@ -1356,7 +1348,7 @@ mod tests {
         Float(LpcFloat),
         Array(Vec<BareVal>),
         Mapping(HashMap<BareVal, BareVal>),
-        Object(String), // Just the filename
+        Object(String),                         // Just the filename
         Function(String, Vec<Option<BareVal>>), // name and args
     }
 
@@ -1396,7 +1388,11 @@ mod tests {
                     let o = extract_value!(&*xb, LpcValue::Function);
                     match o {
                         LpcFunction::FunctionPtr(f) => {
-                            let args = f.args.iter().map(|item| item.as_ref().map(|r| r.into())).collect::<Vec<_>>();
+                            let args = f
+                                .args
+                                .iter()
+                                .map(|item| item.as_ref().map(|r| r.into()))
+                                .collect::<Vec<_>>();
 
                             BareVal::Function(f.name().into(), args)
                         }
@@ -1424,7 +1420,7 @@ mod tests {
                 BareVal::Function(x, y) => {
                     x.hash(state);
                     y.hash(state);
-                },
+                }
             }
         }
     }
@@ -1656,12 +1652,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(2),
-                    Int(2),
-                    Int(1),
-                ];
+                let expected = vec![Int(0), Int(2), Int(2), Int(1)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -1768,7 +1759,10 @@ mod tests {
                     Int(0),
                     Int(1),
                     Int(42),
-                    Function("tacco".to_string(), vec![Some(Int(1)), None, None, Some(Int(42)), None]),
+                    Function(
+                        "tacco".to_string(),
+                        vec![Some(Int(1)), None, None, Some(Int(42)), None],
+                    ),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2030,8 +2024,7 @@ mod tests {
 
                 let mut task: Task<10> = Task::new(Memory::default());
                 let program = compile_prog(code);
-                let r = task
-                    .initialize_program(program, Config::default(), ObjectSpace::default());
+                let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -2077,8 +2070,7 @@ mod tests {
 
                 let mut task: Task<10> = Task::new(Memory::default());
                 let program = compile_prog(code);
-                let r = task
-                    .initialize_program(program, Config::default(), ObjectSpace::default());
+                let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -2101,14 +2093,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(32),
-                    Int(-48),
-                    Int(32),
-                    Int(-48),
-                    Int(-1536),
-                ];
+                let expected = vec![Int(0), Int(32), Int(-48), Int(32), Int(-48), Int(-1536)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2128,14 +2113,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(14),
-                    Int(16),
-                    Int(14),
-                    Int(16),
-                    Int(-2),
-                ];
+                let expected = vec![Int(0), Int(14), Int(16), Int(14), Int(16), Int(-2)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2448,24 +2426,8 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(
-                        vec![
-                            Int(1),
-                            Int(1),
-                            Int(2),
-                            Int(3),
-                        ]
-                        .into(),
-                    ),
-                    Array(
-                        vec![
-                            Int(1),
-                            Int(1),
-                            Int(2),
-                            Int(3),
-                        ]
-                        .into(),
-                    ),
+                    Array(vec![Int(1), Int(1), Int(2), Int(3)].into()),
+                    Array(vec![Int(1), Int(1), Int(2), Int(3)].into()),
                     Int(1),
                     Array(vec![Int(1)].into()),
                     Array(vec![Int(2), Int(3)].into()),
@@ -2488,14 +2450,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(2),
-                    Int(0),
-                    Int(4),
-                    Int(0),
-                    Int(1),
-                ];
+                let expected = vec![Int(0), Int(2), Int(0), Int(4), Int(0), Int(1)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2589,12 +2544,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(4),
-                    Int(4),
-                    Int(4),
-                ];
+                let expected = vec![Int(0), Int(4), Int(4), Int(4)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2687,9 +2637,7 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(
-                        vec![Int(1), Int(2), Int(678)].into(),
-                    ),
+                    Array(vec![Int(1), Int(2), Int(678)].into()),
                     Int(678),
                     Int(2),
                     String("snapshot_stack".into()),
@@ -2753,8 +2701,7 @@ mod tests {
 
             let mut task: Task<5> = Task::new(Memory::default());
             let program = compile_prog(code);
-            let r = task
-                .initialize_program(program, Config::default(), ObjectSpace::default());
+            let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
         }
@@ -2770,8 +2717,7 @@ mod tests {
             let config = Config::default().with_max_task_instructions(Some(10));
             let program = compile_prog(code);
             let mut task: Task<5> = Task::new(Memory::default());
-            let r = task
-                .initialize_program(program, config, ObjectSpace::default());
+            let r = task.initialize_program(program, config, ObjectSpace::default());
 
             assert_eq!(
                 r.unwrap_err().to_string(),

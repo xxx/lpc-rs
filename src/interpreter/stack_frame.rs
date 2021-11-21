@@ -1,20 +1,20 @@
 use crate::{
     asm::instruction::{Address, Instruction},
     errors::LpcError,
-    interpreter::{lpc_ref::LpcRef, process::Process, lpc_value::LpcValue},
+    interpreter::{
+        function_type::FunctionName, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
+    },
     parser::span::Span,
     semantic::program_function::ProgramFunction,
-    Result,
+    try_extract_value, Result,
 };
 use std::{
+    borrow::Cow,
     cell::{Cell, RefCell},
     fmt,
     fmt::{Display, Formatter},
     rc::Rc,
 };
-use std::borrow::Cow;
-use crate::interpreter::function_type::FunctionName;
-use crate::try_extract_value;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
