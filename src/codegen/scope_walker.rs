@@ -9,7 +9,7 @@ use crate::{
     compilation_context::CompilationContext,
     errors::LpcError,
     semantic::{
-        function_prototype::FunctionPrototype, lpc_type::LpcType,
+        lpc_type::LpcType,
         semantic_checks::check_var_redefinition, symbol::Symbol,
     },
     Result,

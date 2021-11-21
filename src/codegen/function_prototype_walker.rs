@@ -62,7 +62,7 @@ impl TreeWalker for FunctionPrototypeWalker {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
+        ast::{var_init_node::VarInitNode},
         semantic::lpc_type::LpcType,
     };
 
