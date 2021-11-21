@@ -3814,15 +3814,12 @@ mod tests {
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {
-        if let Some(node_id) = walker.context.scopes.current_id {
-            walker
-                .context
-                .scopes
-                .get_mut(node_id)
-                .unwrap()
-                .insert(symbol)
-        } else {
-            panic!("No current scope to insert the symbol into.")
-        }
+        let node_id = walker.context.scopes.current_id.expect("No current scope to insert the symbol into.");
+        walker
+            .context
+            .scopes
+            .get_mut(node_id)
+            .unwrap()
+            .insert(symbol)
     }
 }

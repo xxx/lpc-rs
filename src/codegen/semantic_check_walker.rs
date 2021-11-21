@@ -205,11 +205,12 @@ impl TreeWalker for SemanticCheckWalker {
             argument.visit(self)?;
         }
 
+        let lookup = self.context.scopes.lookup(&node.name);
         // Check function existence.
         if !self.context.function_prototypes.contains_key(&node.name)
             && !EFUN_PROTOTYPES.contains_key(node.name.as_str())
-            && self.context.scopes.lookup(&node.name).is_none()
-        // check for fptrs & closures
+            // check for function pointers & closures
+            && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
             let e = LpcError::new(format!("Call to unknown function `{}`", node.name))
                 .with_span(node.span);
@@ -282,10 +283,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     /// Visit a `do {} while` loop
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
         self.allow_jumps();
         let _ = node.body.visit(self);
         let _ = node.condition.visit(self);
@@ -334,10 +332,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     /// Visit a case label
-    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
         if !self.can_use_labels() {
             let msg = if node.is_default() {
                 "Invalid `default`."
@@ -366,10 +361,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()>
-    where
-        Self: Sized,
-    {
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
         if let Some(expr) = &mut *node.l {
             expr.visit(self)?;
         }
@@ -967,6 +959,7 @@ mod tests {
     mod test_visit_call {
         use super::*;
         use crate::semantic::function_flags::FunctionFlags;
+        use crate::semantic::program_function::ProgramFunction;
 
         #[test]
         fn allows_known_functions() {
@@ -1020,6 +1013,79 @@ mod tests {
             let _ = node.visit(&mut walker);
 
             assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_function_pointers() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![ExpressionNode::from(IntNode::new(12))],
+                name: "my_function_pointer".to_string(),
+                span: None,
+            });
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let sym = Symbol::new("my_function_pointer", LpcType::Function(false));
+            scopes.current_mut().unwrap().insert(sym);
+
+            let context = CompilationContext {
+                scopes,
+                ..CompilationContext::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_mixed_function_pointers() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![ExpressionNode::from(IntNode::new(12))],
+                name: "my_mixed_function_pointer".to_string(),
+                span: None,
+            });
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let sym = Symbol::new("my_mixed_function_pointer", LpcType::Mixed(false));
+            scopes.current_mut().unwrap().insert(sym);
+
+            let context = CompilationContext {
+                scopes,
+                ..CompilationContext::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_pointers_to_non_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![ExpressionNode::from(IntNode::new(12))],
+                name: "my_non_function_pointer".to_string(),
+                span: None,
+            });
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let sym = Symbol::new("my_non_function_pointer", LpcType::Int(false));
+            scopes.current_mut().unwrap().insert(sym);
+
+            let context = CompilationContext {
+                scopes,
+                ..CompilationContext::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+
+            assert!(!walker.context.errors.is_empty());
+            assert_eq!(walker.context.errors.first().unwrap().to_string(), "Call to unknown function `my_non_function_pointer`");
         }
 
         #[test]
