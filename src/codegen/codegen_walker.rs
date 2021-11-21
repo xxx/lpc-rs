@@ -764,11 +764,21 @@ impl TreeWalker for CodegenWalker {
             } else {
                 if_chain! {
                     if let Some(x) = self.lookup_symbol(&node.name);
-                    if x.type_ == LpcType::Function(false);
+                    if x.type_.matches_type(LpcType::Function(false));
                     then {
                         // if there's a function pointer with this name in scope, call that.
+                        let location = if x.is_global() {
+                            let global_loc = x.location.unwrap();
+                            let result = self.register_counter.next().unwrap();
+                            self.current_result = result;
+                            let instruction = Instruction::GLoad(global_loc, result);
+                            push_instruction!(self, instruction, node.span);
+                            result
+                        } else {
+                            x.location.unwrap()
+                        };
                         Instruction::CallFp {
-                            location: x.location.unwrap(),
+                            location,
                             num_args: arg_results.len(),
                             initial_arg: arg_results[0],
                         }
@@ -828,11 +838,22 @@ impl TreeWalker for CodegenWalker {
             } else {
                 if_chain! {
                     if let Some(x) = self.lookup_symbol(&node.name);
-                    if x.type_ == LpcType::Function(false);
+                    if x.type_.matches_type(LpcType::Function(false));
                     then {
                         // if there's a function pointer with this name in scope, call that.
+                        let location = if x.is_global() {
+                            let global_loc = x.location.unwrap();
+                            let result = self.register_counter.next().unwrap();
+                            self.current_result = result;
+                            let instruction = Instruction::GLoad(global_loc, result);
+                            push_instruction!(self, instruction, node.span);
+                            result
+                        } else {
+                            x.location.unwrap()
+                        };
+
                         Instruction::CallFp {
-                            location: x.location.unwrap(),
+                            location,
                             num_args: arg_results.len(),
                             initial_arg: start_register,
                         }
@@ -1073,7 +1094,7 @@ impl TreeWalker for CodegenWalker {
             // Vars take precedence.
             let name = match self.lookup_symbol(&node.name) {
                 Some(s) => {
-                    if !matches!(s.type_, LpcType::Function(false)) {
+                    if !s.type_.matches_type(LpcType::Function(false)) {
                         // if there are no function-type vars of this name, assume the name is literal
                         FunctionName::Literal(node.name.clone())
                     } else {
@@ -2378,6 +2399,7 @@ mod tests {
                 .insert("marfin".into(), prototype);
 
             context.scopes.push_new(); // push a global scope
+            context.scopes.push_new(); // push a local scope
             let mut sym = Symbol::new("my_func", LpcType::Function(false));
             sym.location = Some(Register(1));
             context.scopes.current_mut().unwrap().insert(sym);
@@ -2398,6 +2420,51 @@ mod tests {
                     initial_arg: Register(1),
                 },
                 RegCopy(Register(0), Register(2)),
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_global_function_pointers() {
+            let mut context = CompilationContext::default();
+            let prototype = FunctionPrototype {
+                name: "marfin".into(),
+                return_type: LpcType::Int(false),
+                num_args: 1,
+                num_default_args: 0,
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default(),
+            };
+
+            context
+                .function_prototypes
+                .insert("marfin".into(), prototype);
+
+            context.scopes.push_new(); // push a global scope
+            let mut sym = Symbol::new("my_func", LpcType::Function(false));
+            sym.location = Some(Register(1));
+            context.scopes.current_mut().unwrap().insert(sym);
+
+            let call = "my_func(666)";
+            let mut tree = lpc_parser::ExpressionParser::new()
+                .parse(&context, LexWrapper::new(call))
+                .unwrap();
+
+            let mut walker = CodegenWalker::new(context);
+            let _ = tree.visit(&mut walker);
+
+            let expected = vec![
+                IConst(Register(1), 666),
+                GLoad(Register(1), Register(2)),
+                CallFp {
+                    location: Register(2),
+                    num_args: 1,
+                    initial_arg: Register(1),
+                },
+                RegCopy(Register(0), Register(3)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3215,23 +3282,6 @@ mod tests {
                     initial_arg: Register(2),
                 },
                 Ret, // end of initialization
-                     // IConst(Register(1), 3),
-                     // RegCopy(Register(1), Register(0)),
-                     // Ret, // end of marf()
-                     // Call {
-                     //     name: String::from("marf"),
-                     //     num_args: 0,
-                     //     initial_arg: Register(1),
-                     // },
-                     // RegCopy(Register(0), Register(1)),
-                     // SConst(Register(2), String::from(" times a winner!")),
-                     // MAdd(Register(1), Register(2), Register(3)),
-                     // Call {
-                     //     name: String::from("dump"),
-                     //     num_args: 1,
-                     //     initial_arg: Register(3),
-                     // },
-                     // Ret, // end of create()
             ];
 
             assert_eq!(instructions, expected);

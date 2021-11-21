@@ -1551,6 +1551,33 @@ mod tests {
                     Function("tacos".into(), vec![]),
                     Function("tacos".into(), vec![]),
                     Int(666),
+                    Function("tacos".into(), vec![]),
+                    Int(667),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_partial_applications() {
+                let code = indoc! { r##"
+                    function q = &tacos(, "adding one!");
+                    int a = q(666);
+                    int tacos(int j, string s) {
+                        dump(s);
+                        return j + 1;
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(667),
+                    String("adding one!".into()),
+                    Function("tacos".into(), vec![None, Some(String("adding one!".into()))]),
+                    Int(666),
+                    Function("tacos".into(), vec![None, Some(String("adding one!".into()))]),
                     Int(667),
                 ];
 

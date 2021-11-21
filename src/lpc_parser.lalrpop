@@ -941,9 +941,10 @@ FunctionPointer: ExpressionNode = {
 
 PartialArgumentExpressionList: Vec<Option<ExpressionNode>> = {
     <AssignmentExpression> => vec![Some(<>)],
-    <list:PartialArgumentExpressionList> "," <arg:AssignmentExpression?> => {
-        let mut v = list;
+    <list:PartialArgumentExpressionList?> "," <arg:AssignmentExpression?> => {
+        let mut v = list.unwrap_or_else(|| vec![None]);
+
         v.push(arg);
         v
-    }
+    },
 };

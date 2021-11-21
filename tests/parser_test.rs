@@ -8,6 +8,7 @@ use lpc_rs::{
         expression_node::ExpressionNode,
         float_node::FloatNode,
         function_def_node::FunctionDefNode,
+        function_ptr_node::FunctionPtrNode,
         int_node::IntNode,
         program_node::ProgramNode,
         string_node::StringNode,
@@ -24,6 +25,7 @@ use lpc_rs::{
     semantic::lpc_type::LpcType,
     LpcFloat, LpcInt, Result,
 };
+use if_chain::if_chain;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -402,6 +404,63 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
         .unwrap();
 
     assert!(node.flags.ellipsis());
+}
+
+#[test]
+fn partial_application_argument_lists<'a>() {
+    let prog = indoc! { r#"
+        function a = &foo();
+        function b = &foo(1);
+        function c = &foo(1, 2, 3);
+        function d = &foo(1, 2, 3, );
+        function e = &foo(, 2, 3, );
+        function f = &foo(,, 3, );
+        function g = &foo(,, 3);
+        function h = &foo(,,,);
+        function i = &foo(,);
+    "# };
+
+    let program = parse_prog(prog).expect("Failed to parse");
+
+    let get_args = |node: &AstNode| -> Option<Vec<Option<LpcInt>>> {
+        // println!("node {:?}", node);
+        // panic!()
+        if_chain! {
+            if let AstNode::Decl(
+                DeclNode {
+                    type_: LpcType::Function(false),
+                    initializations
+                }
+            ) = node;
+            if let VarInitNode { value, .. } = &initializations[0];
+            if let Some(ExpressionNode::FunctionPtr(FunctionPtrNode { arguments, .. } )) = value;
+            then {
+                arguments.as_ref().map(|array| {
+                    array.iter().map(|arg| {
+                        arg.as_ref().map(|expr| {
+                            if let ExpressionNode::Int(IntNode { value, .. }) = expr {
+                                *value
+                            } else {
+                                panic!("bad map?")
+                            }
+                        })
+                    }).collect()
+                })
+            } else {
+                panic!("panic? {:?}", node)
+            }
+        }
+    };
+
+    assert_eq!(get_args(&program.body[0]), None);
+    assert_eq!(get_args(&program.body[1]), Some(vec![Some(1)]));
+    assert_eq!(get_args(&program.body[2]), Some(vec![Some(1), Some(2), Some(3)]));
+    assert_eq!(get_args(&program.body[3]), Some(vec![Some(1), Some(2), Some(3), None]));
+    assert_eq!(get_args(&program.body[4]), Some(vec![None, Some(2), Some(3), None]));
+    assert_eq!(get_args(&program.body[5]), Some(vec![None, None, Some(3), None]));
+    assert_eq!(get_args(&program.body[6]), Some(vec![None, None, Some(3)]));
+    assert_eq!(get_args(&program.body[7]), Some(vec![None, None, None, None]));
+    assert_eq!(get_args(&program.body[8]), Some(vec![None, None]));
 }
 
 fn parse_prog(prog: &str) -> Result<ProgramNode> {
