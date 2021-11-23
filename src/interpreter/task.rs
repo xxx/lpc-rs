@@ -716,11 +716,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let borrowed = func.borrow();
                     let func = try_extract_value!(*borrowed, LpcValue::Function);
                     then {
-                        let mut new_frame = match func {
+                        let (mut new_frame, partial_args) = match func {
                             LpcFunction::FunctionPtr(ptr) => {
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
-                                        StackFrame::new(proc.clone(), function.clone())
+                                        (StackFrame::new(proc.clone(), function.clone()), &ptr.args)
                                     }
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
@@ -729,36 +729,43 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                         function_is_local = false;
 
-                                        StackFrame::new(frame.process.clone(), Rc::new(pf))
+                                        (StackFrame::new(frame.process.clone(), Rc::new(pf)), &ptr.args)
                                     }
                                 }
                             }
                         };
 
-                        // copy argument registers from old frame to new
-                        // TODO: handle partial applications
                         // TODO: handle ellipses
 
                         if *num_args > 0_usize {
-                            // let fill_index = 0;
-                            // let new_frame_index = 0;
-                            // if partially applied arguments
-                            //   for each partial arg
-                            //     if some
-                            //       idx into new frame register
-                            //       new_frame_index += 1
-                            //     if none
-                            //       if arg passed
-                            //         take arg at fill_index from `registers` and copy to new frame register
-                            //         new_frame_index += 1
-                            //         fill_index += 1
-                            //       else
-                            //         error
-                            //
-
                             let index = initial_arg.index();
-                            new_frame.registers[1..=*num_args]
-                                .clone_from_slice(&registers[index..(index + *num_args)]);
+
+                            if partial_args.len() > 0 {
+                                // `num_args` is how many were actually passed at the time of the call,
+                                // which may be fewer than what was specified in the partial args,
+                                // so correct that here
+                                let max = std::cmp::max(partial_args.len(), *num_args);
+
+                                let mut from_index = 0;
+                                let from_slice = &registers[index..(index + max)];
+                                let to_slice = &mut new_frame.registers[1..=max];
+
+                                for i in 0..max {
+                                    if let Some(Some(x)) = partial_args.get(i) {
+                                        // if a partially-appliable arg is present, use it
+                                        to_slice[i] = x.clone();
+                                    } else if let Some(x) = from_slice.get(from_index) {
+                                        // check if the user passed an argument to
+                                        // fill in a hole in the partial arguments
+                                        to_slice[i] = x.clone();
+                                        from_index += 1;
+                                    }
+                                }
+                            } else {
+                                // just copy argument registers from old frame to new
+                                new_frame.registers[1..=*num_args]
+                                    .clone_from_slice(&registers[index..(index + *num_args)]);
+                            }
                         }
 
                         new_frame
@@ -1563,9 +1570,8 @@ mod tests {
                 let code = indoc! { r##"
                     function q = &tacos(, "adding one!");
                     int a = q(666);
-                    int tacos(int j, string s) {
-                        dump(s);
-                        return j + 1;
+                    string tacos(int j, string s) {
+                        return s + " " +  (j + 1);
                     }
                 "##};
 
@@ -1573,12 +1579,12 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    Int(667),
+                    String("adding one! 667".into()),
                     String("adding one!".into()),
                     Function("tacos".into(), vec![None, Some(String("adding one!".into()))]),
                     Int(666),
                     Function("tacos".into(), vec![None, Some(String("adding one!".into()))]),
-                    Int(667),
+                    String("adding one! 667".into()),
                 ];
 
                 assert_eq!(&expected, &registers);
