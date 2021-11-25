@@ -649,7 +649,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let mut new_frame = if let Some(func) = function {
                     StackFrame::new(process.clone(), func.clone())
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = ProgramFunction::new(name.clone(), prototype.num_args, 0);
+                    let sym = ProgramFunction::new(name.clone(), prototype.arity, 0);
 
                     StackFrame::new(process.clone(), Rc::new(sym))
                 } else {
@@ -725,7 +725,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
                                         let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                                        let pf = ProgramFunction::new(name.clone(), prototype.num_args, 0);
+                                        let pf = ProgramFunction::new(name.clone(), prototype.arity, 0);
 
                                         function_is_local = false;
 

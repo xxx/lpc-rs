@@ -41,7 +41,7 @@ impl StackFrame {
         P: Into<Rc<RefCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
-        let reg_len = function.num_args + function.num_locals + 1;
+        let reg_len = function.arity.num_args + function.num_locals + 1;
 
         Self {
             process: process.into(),
@@ -68,7 +68,7 @@ impl StackFrame {
         P: Into<Rc<RefCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
-        let reg_len = function.num_args + function.num_locals + 1;
+        let reg_len = function.arity.num_args + function.num_locals + 1;
         let arg_len = arg_capacity + function.num_locals + 1;
         let reservation = std::cmp::max(reg_len, arg_len);
 
@@ -174,13 +174,14 @@ impl Display for StackFrame {
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::function_type::FunctionArity;
     use super::*;
 
     #[test]
     fn new_sets_up_registers() {
         let process = Process::default();
 
-        let fs = ProgramFunction::new("my_function", 4, 7);
+        let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
 
         let frame = StackFrame::new(process, Rc::new(fs));
 
@@ -195,7 +196,7 @@ mod tests {
         fn sets_up_registers_if_greater_max_is_passed() {
             let process = Process::default();
 
-            let fs = ProgramFunction::new("my_function", 4, 7);
+            let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 30);
 
@@ -207,7 +208,7 @@ mod tests {
         fn sets_up_registers_if_lesser_max_is_passed() {
             let process = Process::default();
 
-            let fs = ProgramFunction::new("my_function", 4, 7);
+            let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 2);
 

@@ -53,6 +53,7 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::interpreter::function_type::FunctionArity;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -159,7 +160,7 @@ impl CodegenWalker {
 
     pub fn setup_init(&mut self) {
         self.function_stack
-            .push(ProgramFunction::new(INIT_PROGRAM, 0, 0));
+            .push(ProgramFunction::new(INIT_PROGRAM, FunctionArity::default(), 0));
     }
 
     /// Get a listing of a translated AST, suitable for printing
@@ -1019,7 +1020,7 @@ impl TreeWalker for CodegenWalker {
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let num_args = node.parameters.len() + (node.flags.ellipsis() as usize);
 
-        let sym = ProgramFunction::new(&node.name, num_args, 0);
+        let sym = ProgramFunction::new(&node.name, FunctionArity::new(num_args), 0);
         self.function_stack.push(sym);
 
         let len = self.current_address();
@@ -2305,6 +2306,7 @@ mod tests {
 
     mod test_visit_call {
         use crate::asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
+        use crate::interpreter::function_type::FunctionArity;
 
         use super::*;
         use crate::semantic::{
@@ -2386,8 +2388,7 @@ mod tests {
             let prototype = FunctionPrototype {
                 name: "marfin".into(),
                 return_type: LpcType::Int(false),
-                num_args: 1,
-                num_default_args: 0,
+                arity: FunctionArity::new(1),
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
@@ -2431,8 +2432,7 @@ mod tests {
             let prototype = FunctionPrototype {
                 name: "marfin".into(),
                 return_type: LpcType::Int(false),
-                num_args: 1,
-                num_default_args: 0,
+                arity: FunctionArity::new(1),
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
@@ -2513,8 +2513,7 @@ mod tests {
             let prototype = FunctionPrototype {
                 name: "marfin".into(),
                 return_type: LpcType::Int(false),
-                num_args: 1,
-                num_default_args: 0,
+                arity: FunctionArity::new(1),
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
@@ -2551,8 +2550,7 @@ mod tests {
             let prototype = FunctionPrototype {
                 name: "void_thing".into(),
                 return_type: LpcType::Void,
-                num_args: 1,
-                num_default_args: 0,
+                arity: FunctionArity::new(1),
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
@@ -2633,8 +2631,7 @@ mod tests {
             let prototype = FunctionPrototype {
                 name: "my_func".into(),
                 return_type: LpcType::Void,
-                num_args: 1,
-                num_default_args: 0,
+                arity: FunctionArity::new(1),
                 arg_types: vec![LpcType::String(false)],
                 span: None,
                 arg_spans: vec![],

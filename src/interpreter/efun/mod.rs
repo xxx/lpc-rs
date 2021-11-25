@@ -24,6 +24,7 @@ use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
 use throw::throw;
+use crate::interpreter::function_type::FunctionArity;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
@@ -45,8 +46,12 @@ lazy_static! {
         m.insert(CALL_OTHER, FunctionPrototype {
             name: CALL_OTHER.into(),
             return_type: LpcType::Mixed(false),
-            num_args: 2,
-            num_default_args: 0,
+            arity: FunctionArity {
+                num_args: 2,
+                num_default_args: 0,
+                varargs: false,
+                ellipsis: true,
+            },
             arg_types: vec![
                 LpcType::Object(false)
                 | LpcType::Object(true)
@@ -66,8 +71,7 @@ lazy_static! {
         m.insert(CATCH, FunctionPrototype {
             name: CATCH.into(),
             return_type: LpcType::Mixed(false),
-            num_args: 1,
-            num_default_args: 0,
+            arity: FunctionArity::new(1),
             arg_types: vec![LpcType::Mixed(false) | LpcType::Void],
             span: None,
             arg_spans: vec![],
@@ -77,8 +81,7 @@ lazy_static! {
         m.insert(CLONE_OBJECT, FunctionPrototype {
             name: CLONE_OBJECT.into(),
             return_type: LpcType::Object(false),
-            num_args: 1,
-            num_default_args: 0,
+            arity: FunctionArity::new(1),
             arg_types: vec![LpcType::String(false)],
             span: None,
             arg_spans: vec![],
@@ -88,8 +91,12 @@ lazy_static! {
         m.insert(DEBUG, FunctionPrototype {
             name: DEBUG.into(),
             return_type: LpcType::Mixed(false),
-            num_args: 2,
-            num_default_args: 1,
+            arity: FunctionArity {
+                num_args: 2,
+                num_default_args: 1,
+                ellipsis: false,
+                varargs: false
+            },
             arg_types: vec![LpcType::String(false), LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![],
@@ -99,8 +106,7 @@ lazy_static! {
         m.insert(DUMP, FunctionPrototype {
             name: DUMP.into(),
             return_type: LpcType::Void,
-            num_args: 1,
-            num_default_args: 0,
+            arity: FunctionArity::new(1),
             arg_types: vec![LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![],
@@ -110,8 +116,7 @@ lazy_static! {
         m.insert(FILE_NAME, FunctionPrototype {
             name: FILE_NAME.into(),
             return_type: LpcType::String(false),
-            num_args: 1,
-            num_default_args: 0,
+            arity: FunctionArity::new(1),
             arg_types: vec![LpcType::Object(false)],
             span: None,
             arg_spans: vec![],
@@ -121,8 +126,7 @@ lazy_static! {
         m.insert(THIS_OBJECT, FunctionPrototype {
             name: THIS_OBJECT.into(),
             return_type: LpcType::Object(false),
-            num_args: 0,
-            num_default_args: 0,
+            arity: FunctionArity::default(),
             arg_types: vec![],
             span: None,
             arg_spans: vec![],
@@ -132,8 +136,7 @@ lazy_static! {
         m.insert(THROW, FunctionPrototype {
             name: THROW.into(),
             return_type: LpcType::Void,
-            num_args: 1,
-            num_default_args: 0,
+            arity: FunctionArity::new(1),
             arg_types: vec![LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![],

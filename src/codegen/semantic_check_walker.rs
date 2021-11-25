@@ -227,19 +227,20 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(prototype) = proto_opt {
             let arg_len = node.arguments.len();
+            let valid = prototype.arity.is_valid(arg_len);
 
-            // Check function arity.
-            let minimum = if prototype.flags.varargs() {
-                0
-            } else {
-                prototype.num_args - prototype.num_default_args
-            };
-            let valid = (minimum..=prototype.num_args).contains(&arg_len)
-                || (prototype.flags.ellipsis() && arg_len >= minimum);
+            // // Check function arity.
+            // let minimum = if prototype.flags.varargs() {
+            //     0
+            // } else {
+            //     prototype.num_args - prototype.num_default_args
+            // };
+            // let valid = (minimum..=prototype.num_args).contains(&arg_len)
+            //     || (prototype.flags.ellipsis() && arg_len >= minimum);
             if !valid {
                 let e = LpcError::new(format!(
                     "Incorrect argument count in call to `{}`: expected: {}, received: {}",
-                    node.name, prototype.num_args, arg_len
+                    node.name, prototype.arity.num_args, arg_len
                 ))
                 .with_span(node.span)
                 .with_label("Defined here", prototype.span);
@@ -597,6 +598,7 @@ mod tests {
         compiler::Compiler,
         util::path_maker::LpcPath,
     };
+    use std::default::Default;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
@@ -957,8 +959,10 @@ mod tests {
     }
 
     mod test_visit_call {
-        use super::*;
+        use crate::interpreter::function_type::FunctionArity;
+        use crate::parser::lexer::Token::Default;
         use crate::semantic::function_flags::FunctionFlags;
+        use super::*;
 
         #[test]
         fn allows_known_functions() {
@@ -975,8 +979,7 @@ mod tests {
                 FunctionPrototype {
                     name: "known".into(),
                     return_type: LpcType::Int(false),
-                    num_args: 0,
-                    num_default_args: 0,
+                    arity: FunctionArity::default(),
                     arg_types: vec![],
                     span: None,
                     arg_spans: vec![],
@@ -1156,8 +1159,11 @@ mod tests {
                 FunctionPrototype {
                     name: "my_function".into(),
                     return_type: LpcType::Int(false),
-                    num_args: 5,
-                    num_default_args: 0,
+                    arity: FunctionArity {
+                        num_args: 5,
+                        varargs: true,
+                        ..FunctionArity::default()
+                    },
                     arg_types: vec![
                         LpcType::Int(false),
                         LpcType::Float(false),
@@ -1200,8 +1206,11 @@ mod tests {
                 FunctionPrototype {
                     name: "my_func".into(),
                     return_type: LpcType::Int(false),
-                    num_args: 1,
-                    num_default_args: 1,
+                    arity: FunctionArity {
+                        num_args: 1,
+                        num_default_args: 1,
+                        ..FunctionArity::default()
+                    },
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
@@ -1237,8 +1246,10 @@ mod tests {
                 FunctionPrototype {
                     name: "my_func".into(),
                     return_type: LpcType::Int(false),
-                    num_args: 1,
-                    num_default_args: 0,
+                    arity: FunctionArity {
+                        num_args: 1,
+                        ..FunctionArity::default()
+                    },
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],
@@ -1274,8 +1285,10 @@ mod tests {
                 FunctionPrototype {
                     name: "my_func".into(),
                     return_type: LpcType::String(false),
-                    num_args: 1,
-                    num_default_args: 0,
+                    arity: FunctionArity {
+                        num_args: 1,
+                        ..FunctionArity::default()
+                    },
                     arg_types: vec![LpcType::String(false)],
                     span: None,
                     arg_spans: vec![],

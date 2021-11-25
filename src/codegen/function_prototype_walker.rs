@@ -5,6 +5,7 @@ use crate::{
     semantic::function_prototype::FunctionPrototype,
     Result,
 };
+use crate::interpreter::function_type::FunctionArity;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]
@@ -41,8 +42,12 @@ impl TreeWalker for FunctionPrototypeWalker {
             FunctionPrototype {
                 name: node.name.clone().into(),
                 return_type: node.return_type,
-                num_args,
-                num_default_args,
+                arity: FunctionArity {
+                    num_args,
+                    num_default_args,
+                    ellipsis: node.flags.ellipsis(),
+                    varargs: node.flags.varargs()
+                },
                 arg_types,
                 span: node.span,
                 arg_spans: {
@@ -94,8 +99,12 @@ mod tests {
             FunctionPrototype {
                 name: "marf".into(),
                 return_type: LpcType::Mixed(false),
-                num_args: 2,
-                num_default_args: 0,
+                arity: FunctionArity {
+                    num_args: 2,
+                    num_default_args: 0,
+                    ellipsis: false,
+                    varargs: false
+                },
                 arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
                 span: None,
                 arg_spans: vec![],

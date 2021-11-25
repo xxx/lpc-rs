@@ -4,6 +4,7 @@ use crate::{
 };
 use multimap::MultiMap;
 use std::collections::HashMap;
+use crate::interpreter::function_type::FunctionArity;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -12,9 +13,12 @@ pub struct ProgramFunction {
     /// Yep, the name of the function
     pub name: String,
 
+    /// The arity of this function
+    pub arity: FunctionArity,
+
     /// The number of arguments this function accepts.
     /// Varargs are handled elsewhere and are ignored in this count.
-    pub num_args: usize,
+    // pub num_args: usize,
 
     /// The number of non-argument, non-return-value locals. Used for register allocation.
     pub num_locals: usize,
@@ -30,13 +34,13 @@ pub struct ProgramFunction {
 }
 
 impl ProgramFunction {
-    pub fn new<T>(name: T, num_args: usize, num_locals: usize) -> Self
+    pub fn new<T>(name: T, arity: FunctionArity, num_locals: usize) -> Self
     where
         T: Into<String>,
     {
         Self {
             name: name.into(),
-            num_args,
+            arity,
             num_locals,
             instructions: Vec::new(),
             debug_spans: Vec::new(),
@@ -64,7 +68,7 @@ impl ProgramFunction {
 
         v.push(format!(
             "fn {} num_args={} num_locals={}:",
-            self.name, self.num_args, self.num_locals
+            self.name, self.arity.num_args, self.num_locals
         ));
 
         // use MultiMap as multiple labels can be at the same address

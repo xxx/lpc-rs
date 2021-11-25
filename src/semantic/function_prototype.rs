@@ -3,6 +3,7 @@ use crate::{
     semantic::{function_flags::FunctionFlags, lpc_type::LpcType},
 };
 use std::borrow::Cow;
+use crate::interpreter::function_type::FunctionArity;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -13,13 +14,16 @@ pub struct FunctionPrototype {
     /// The return type
     pub return_type: LpcType,
 
-    /// The number of arguments this function accepts.
-    /// Varargs are handled elsewhere and are ignored in this count.
-    pub num_args: usize,
+    /// The arity of the this function
+    pub arity: FunctionArity,
 
-    /// The number of this function's arguments that have default values set.
-    /// This number should always be <= `num_args`.
-    pub num_default_args: usize,
+    // /// The number of arguments this function accepts.
+    // /// Varargs are handled elsewhere and are ignored in this count.
+    // pub num_args: usize,
+    //
+    // /// The number of this function's arguments that have default values set.
+    // /// This number should always be <= `num_args`.
+    // pub num_default_args: usize,
 
     /// Vector of argument types, used for type checking calls.
     pub arg_types: Vec<LpcType>,
