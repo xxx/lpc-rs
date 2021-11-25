@@ -6,6 +6,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::interpreter::function_type::FunctionArity;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -63,6 +64,7 @@ pub enum Instruction {
     FunctionPtrConst {
         location: Register,
         target: FunctionTarget,
+        arity: FunctionArity,
         applied_arguments: Vec<Option<Register>>,
     },
 
@@ -233,6 +235,7 @@ impl Display for Instruction {
                 location,
                 target,
                 applied_arguments,
+                arity: _arity
             } => {
                 let args = applied_arguments
                     .iter()

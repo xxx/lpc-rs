@@ -248,6 +248,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 location,
                 target,
                 applied_arguments,
+                arity
             } => {
                 let address = match target {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
@@ -304,6 +305,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     owner: Rc::new(Default::default()),
                     address,
                     args,
+                    arity
                 };
 
                 let func = LpcFunction::FunctionPtr(fp);

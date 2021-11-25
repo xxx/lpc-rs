@@ -53,6 +53,7 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::interpreter::efun::EFUN_PROTOTYPES;
 use crate::interpreter::function_type::FunctionArity;
 
 macro_rules! push_instruction {
@@ -1079,7 +1080,10 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        let target = if let Some(rcvr) = &mut node.receiver {
+        let target;
+        let arity;
+
+        if let Some(rcvr) = &mut node.receiver {
             // remote receiver, i.e. `call_other`
             rcvr.visit(self)?;
             let receiver = FunctionReceiver::Var(self.current_result);
@@ -1087,8 +1091,16 @@ impl TreeWalker for CodegenWalker {
             // `call_other` always assumes a literal name
             let name = FunctionName::Literal(node.name.clone());
 
-            FunctionTarget::Local(name, receiver)
-        } else if self.context.lookup_function(node.name.as_str()).is_some() {
+            target = FunctionTarget::Local(name, receiver);
+
+            // just use a placeholder arity that allows anything
+            arity = FunctionArity {
+                num_args: 0,
+                num_default_args: 0,
+                varargs: true,
+                ellipsis: true
+            };
+        } else if let Some(prototype) = self.context.lookup_function(node.name.as_str()) {
             // A local / inherited function
 
             // Determine if the name is a var, or a literal function name.
@@ -1116,11 +1128,14 @@ impl TreeWalker for CodegenWalker {
                 None => FunctionName::Literal(node.name.clone()),
             };
 
-            FunctionTarget::Local(name, FunctionReceiver::Local)
+            target = FunctionTarget::Local(name, FunctionReceiver::Local);
+            arity = prototype.arity;
+        } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
+            target = FunctionTarget::Efun(node.name.clone());
+            arity = prototype.arity;
         } else {
-            // Default to assume Efun
-            FunctionTarget::Efun(node.name.clone())
-        };
+            return Err(LpcError::new(format!("Unknown call in function pointer: `{}`", node.name)).with_span(node.span));
+        }
 
         let location = self.register_counter.next().unwrap();
         self.current_result = location;
@@ -1128,6 +1143,7 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::FunctionPtrConst {
             location,
             target,
+            arity,
             applied_arguments,
         };
 
