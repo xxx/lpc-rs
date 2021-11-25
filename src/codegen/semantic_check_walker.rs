@@ -960,7 +960,6 @@ mod tests {
 
     mod test_visit_call {
         use crate::interpreter::function_type::FunctionArity;
-        use crate::parser::lexer::Token::Default;
         use crate::semantic::function_flags::FunctionFlags;
         use super::*;
 
