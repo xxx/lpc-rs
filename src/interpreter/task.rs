@@ -718,11 +718,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let borrowed = func.borrow();
                     let func = try_extract_value!(*borrowed, LpcValue::Function);
                     then {
-                        let (mut new_frame, partial_args) = match func {
+                        let mut new_frame;
+                        let partial_args;
+                        let arity;
+
+                        match func {
                             LpcFunction::FunctionPtr(ptr) => {
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
-                                        (StackFrame::new(proc.clone(), function.clone()), &ptr.args)
+                                        new_frame = StackFrame::new(proc.clone(), function.clone());
+                                        partial_args = &ptr.args;
+                                        arity = ptr.arity;
                                     }
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
@@ -731,13 +737,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                         function_is_local = false;
 
-                                        (StackFrame::new(frame.process.clone(), Rc::new(pf)), &ptr.args)
+                                        new_frame = StackFrame::new(frame.process.clone(), Rc::new(pf));
+                                        partial_args = &ptr.args;
+                                        arity = ptr.arity;
                                     }
                                 }
                             }
                         };
 
                         // TODO: handle ellipses
+                        // TODO: handle default args
 
                         if *num_args > 0_usize {
                             let index = initial_arg.index();
@@ -746,7 +755,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 // `num_args` is how many were actually passed at the time of the call,
                                 // which may be fewer than what was specified in the partial args,
                                 // so correct that here
-                                let max = std::cmp::max(partial_args.len(), *num_args);
+                                let max = arity.num_args;
 
                                 let mut from_index = 0;
                                 let from_slice = &registers[index..(index + max)];
@@ -1584,6 +1593,8 @@ mod tests {
                     String("adding some! 670".into()),
                     String("adding some!".into()),
                     Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Int(666),
+                    Int(4),
                     Int(666),
                     Int(4),
                     Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
