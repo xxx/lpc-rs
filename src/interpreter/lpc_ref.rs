@@ -95,7 +95,7 @@ impl LpcRef {
 
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
         LpcError::new(format!(
-            "Runtime Error: Mismatched types: {} ({}) {} {} ({})",
+            "runtime error: mismatched types: {} ({}) {} {} ({})",
             self,
             self.type_name(),
             op,
