@@ -16,10 +16,6 @@ pub struct ProgramFunction {
     /// The arity of this function
     pub arity: FunctionArity,
 
-    /// The number of arguments this function accepts.
-    /// Varargs are handled elsewhere and are ignored in this count.
-    // pub num_args: usize,
-
     /// The number of non-argument, non-return-value locals. Used for register allocation.
     pub num_locals: usize,
 
