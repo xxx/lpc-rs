@@ -673,6 +673,7 @@ impl TreeWalker for CodegenWalker {
 
         // All "normal" functions should have a set of default params to match the declared params,
         // even if the defaults are all `None`.
+        // TODO: Having to store a default param for each real param shouldn't be necessary.
         if let Some(function_args) = default_params {
             // TODO: get rid of this clone or make it cheaper
             let mut function_args = function_args.clone();
@@ -710,16 +711,12 @@ impl TreeWalker for CodegenWalker {
             }
 
             if ellipsis {
-                let mut argv = match self.context.scopes.function_scope_mut(&node.name) {
-                    Some(scope) => match scope.lookup_mut(ARGV) {
-                        Some(sym) => sym,
-                        None => {
-                            return Err(LpcError::new(
-                                    "Ellipsis args were passed, but cannot find `argv`'s location. This should not happen."
-                                ).with_span(node.span));
-                        }
-                    },
-                    None => {
+                let mut argv = if_chain! {
+                    if let Some(scope) = self.context.scopes.function_scope_mut(&node.name);
+                    if let Some(sym) = scope.lookup_mut(ARGV);
+                    then {
+                        sym
+                    } else {
                         return Err(LpcError::new(
                             "Ellipsis args were passed, but cannot find `argv`'s location. This should not happen."
                         ).with_span(node.span));
