@@ -304,7 +304,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let fp = FunctionPtr {
                     owner: Rc::new(Default::default()),
                     address,
-                    args,
+                    partial_args: args,
                     arity
                 };
 
@@ -655,8 +655,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                     StackFrame::new(process.clone(), Rc::new(sym))
                 } else {
-                    println!("proc {:#?}", process);
-                    println!("functions {:#?}", borrowed.functions);
+                    // println!("proc {:#?}", process);
+                    // println!("functions {:#?}", borrowed.functions);
                     let msg = format!("Call to unknown function `{}`", name);
                     return Err(self.runtime_error(msg));
                 };
@@ -727,7 +727,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
                                         new_frame = StackFrame::new(proc.clone(), function.clone());
-                                        partial_args = &ptr.args;
+                                        partial_args = &ptr.partial_args;
                                         arity = ptr.arity;
                                     }
                                     FunctionAddress::Efun(name) => {
@@ -738,7 +738,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         function_is_local = false;
 
                                         new_frame = StackFrame::new(frame.process.clone(), Rc::new(pf));
-                                        partial_args = &ptr.args;
+                                        partial_args = &ptr.partial_args;
                                         arity = ptr.arity;
                                     }
                                 }
@@ -1407,7 +1407,7 @@ mod tests {
                     match o {
                         LpcFunction::FunctionPtr(f) => {
                             let args = f
-                                .args
+                                .partial_args
                                 .iter()
                                 .map(|item| item.as_ref().map(|r| r.into()))
                                 .collect::<Vec<_>>();
@@ -1582,6 +1582,35 @@ mod tests {
                     function q = &tacos(, "adding some!");
                     int a = q(666, 4);
                     string tacos(int j, string s, int k) {
+                        return s + " " +  (j + k);
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    String("adding some! 670".into()),
+                    String("adding some!".into()),
+                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Int(666),
+                    Int(4),
+                    Int(666),
+                    Int(4),
+                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    String("adding some! 670".into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_partial_applications_with_default_arguments() {
+                let code = indoc! { r##"
+                    function q = &tacos(, "adding some!");
+                    int a = q(666, 4);
+                    int b = q(123);
+                    string tacos(int j, string s, int k = 100) {
                         return s + " " +  (j + k);
                     }
                 "##};

@@ -132,7 +132,6 @@ impl FunctionArity {
 #[derive(Educe, Clone, PartialEq, Eq)]
 #[educe(Debug)]
 pub struct FunctionPtr {
-    // TODO: owner and address can be replaced by Rc<FunctionSymbol>
     /// The object that this pointer was declared in.
     #[educe(Debug(method = "owner_name"))]
     pub owner: Rc<Process>,
@@ -146,7 +145,7 @@ pub struct FunctionPtr {
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
-    pub args: Vec<Option<LpcRef>>,
+    pub partial_args: Vec<Option<LpcRef>>,
 }
 
 impl FunctionPtr {
@@ -167,7 +166,7 @@ impl LpcFunction {
     /// How many arguments do we expect to be called with at runtime?
     pub fn arity(&self) -> usize {
         match self {
-            LpcFunction::FunctionPtr(x) => x.args.iter().filter(|x| x.is_none()).count(),
+            LpcFunction::FunctionPtr(x) => x.partial_args.iter().filter(|x| x.is_none()).count(),
         }
     }
 }
