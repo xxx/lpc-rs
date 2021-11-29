@@ -11,6 +11,7 @@ use crate::{
     semantic::{lpc_type::LpcType, semantic_checks::check_var_redefinition, symbol::Symbol},
     Result,
 };
+use crate::ast::function_def_node::ARGV;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -76,7 +77,7 @@ impl TreeWalker for ScopeWalker {
 
         if node.flags.ellipsis() {
             let sym = Symbol {
-                name: "argv".to_string(),
+                name: ARGV.to_string(),
                 type_: LpcType::Mixed(true),
                 static_: false,
                 location: None,
@@ -244,10 +245,10 @@ mod tests {
                 .scopes
                 .current()
                 .unwrap()
-                .lookup("argv")
+                .lookup(ARGV)
                 .unwrap();
 
-            assert_eq!(argv.name, "argv");
+            assert_eq!(argv.name, ARGV);
             assert_eq!(argv.type_, LpcType::Mixed(true));
         }
     }
