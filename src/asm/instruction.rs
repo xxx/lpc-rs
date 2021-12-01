@@ -148,6 +148,18 @@ pub enum Instruction {
     /// x.2 = x.0 | x.1
     Or(Register, Register, Register),
 
+    /// Special case instruction to dynamically populate the `argv` variable
+    ///   that is created for ellipsis functions.
+    /// `Register` is the location of `argv`.
+    /// The first `usize` is the number of formal parameters to the function
+    ///   (whether they have default values or not, basically just the count
+    ///   of non-ellipsis params).
+    /// The second `usize` is the number of local variables used by the function.
+    /// We know both of these numbers at compile time, and any other register
+    ///   present in the frame is an ellipsis argument, so those are the ones we
+    ///   populate.
+    PopulateArgv(Register, usize, usize),
+
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
     Range(Register, Register, Register, Register),
@@ -327,6 +339,9 @@ impl Display for Instruction {
             }
             Instruction::Or(r1, r2, r3) => {
                 write!(f, "or {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::PopulateArgv(r, num_args, num_locals) => {
+                write!(f, "populateargv {}, {}, {}", r, num_args, num_locals)
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {}, {}, {}, {}", r1, r2, r3, r4)

@@ -380,18 +380,20 @@ impl CodegenWalker {
     /// for default arguments - we just want to have it on hand to refer to
     /// when we generate code for calls.
     fn visit_parameter(&mut self, node: &VarInitNode) {
-        self.assign_sym_location(&node.name)
+        self.assign_sym_location(&node.name);
     }
 
     /// A helper to assign the next free [`Register`] to a [`Symbol`]
     /// of the given name, within the current scope.
-    fn assign_sym_location(&mut self, name: &str) {
+    fn assign_sym_location(&mut self, name: &str) -> Register {
         let current_register = self.register_counter.next().unwrap();
 
         let symbol = self.lookup_symbol_mut(name);
         if let Some(sym) = symbol {
             sym.location = Some(current_register);
         }
+
+        current_register
     }
 
     /// Emit the instruction(s) to take the range of an array or string
@@ -666,73 +668,27 @@ impl TreeWalker for CodegenWalker {
             return self.emit_catch(node);
         }
 
-        let mut arg_results = Vec::new();
-        let mut ellipsis_results = Vec::new();
-        let default_params = self.context.default_function_params.get(&node.name);
-        let mut ellipsis = false;
+        let argument_len = node.arguments.len();
+        let mut arg_results = Vec::with_capacity(argument_len);
+        let default_params = self.context.default_function_params.get_mut(&node.name);
 
         // All "normal" functions should have a set of default params to match the declared params,
         // even if the defaults are all `None`.
-        // TODO: Having to store a default param for each real param shouldn't be necessary.
         if let Some(function_args) = default_params {
             // TODO: get rid of this clone or make it cheaper
-            let mut function_args = function_args.clone();
+            let mut default_args = function_args.clone();
 
-            // generate code for the explicitly-specified arguments
-            for (idx, function_arg) in function_args.iter_mut().enumerate() {
-                // use passed parameters, or default parameters if applicable.
+            let max = std::cmp::max(default_args.len(), argument_len);
+
+            // generate code for the passed arguments
+            for idx in 0..max {
                 if let Some(arg) = node.arguments.get_mut(idx) {
                     arg.visit(self)?;
                     arg_results.push(self.current_result);
-                } else if let Some(arg) = function_arg {
+                } else if let Some(Some(arg)) = default_args.get_mut(idx) {
                     arg.visit(self)?;
                     arg_results.push(self.current_result);
                 }
-            }
-
-            // generate code for ellipsis arguments
-            if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
-                if prototype.flags.ellipsis() {
-                    ellipsis = true;
-                    let ellipsis_arg_count =
-                        node.arguments.len().saturating_sub(function_args.len());
-
-                    if ellipsis_arg_count > 0 {
-                        let ellipsis_args = &mut node.arguments[function_args.len()..];
-
-                        ellipsis_results.reserve_exact(ellipsis_arg_count);
-
-                        for arg in ellipsis_args {
-                            arg.visit(self)?;
-                            ellipsis_results.push(self.current_result);
-                        }
-                    }
-                }
-            }
-
-            if ellipsis {
-                let mut argv = if_chain! {
-                    if let Some(scope) = self.context.scopes.function_scope_mut(&node.name);
-                    if let Some(sym) = scope.lookup_mut(ARGV);
-                    then {
-                        sym
-                    } else {
-                        return Err(LpcError::new(
-                            "Ellipsis args were passed, but cannot find `argv`'s location. This should not happen."
-                        ).with_span(node.span));
-                    }
-                };
-
-                let current_register = self.register_counter.next().unwrap();
-                argv.location = Some(current_register);
-
-                self.current_result = current_register;
-                push_instruction!(
-                    self,
-                    Instruction::AConst(current_register, ellipsis_results),
-                    node.span
-                );
-                arg_results.push(current_register);
             }
         } else {
             // TODO: This is where efuns are handled
@@ -868,8 +824,6 @@ impl TreeWalker for CodegenWalker {
         };
 
         push_instruction!(self, instruction, node.span);
-        // self.instructions.push(instruction);
-        // self.debug_spans.push(node.span);
 
         let push_copy = |walker: &mut CodegenWalker| {
             let next_register = walker.register_counter.next().unwrap();
@@ -1016,9 +970,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
-        let num_args = node.parameters.len() + (node.flags.ellipsis() as usize);
+        let num_args = node.parameters.len(); //+ (node.flags.ellipsis() as usize);
 
         let sym = ProgramFunction::new(&node.name, FunctionArity::new(num_args), 0);
+        let populate_argv_index: Option<usize>;
+
         self.function_stack.push(sym);
 
         let len = self.current_address();
@@ -1032,7 +988,19 @@ impl TreeWalker for CodegenWalker {
         }
 
         if node.flags.ellipsis() {
-            self.assign_sym_location(ARGV);
+            let argv_location = self.assign_sym_location(ARGV);
+            // we don't set argv_location as current_result, because it wouldn't be
+            // assigned to anything implicitly at the time of initialization.
+
+            populate_argv_index = Some(self.function_stack.last().unwrap().instructions.len());
+
+            // The number of locals isn't known yet, so just set it to zero for now.
+            // This gets backpatched after the function body is generated.
+            let instruction = Instruction::PopulateArgv(argv_location, node.parameters.len(), 0);
+
+            push_instruction!(self, instruction, node.span);
+        } else {
+            populate_argv_index = None;
         }
 
         for expression in &mut node.body {
@@ -1053,7 +1021,17 @@ impl TreeWalker for CodegenWalker {
         {
             // TODO: This should emit a warning unless the return type is void
             sym.push_instruction(Instruction::Ret, node.span);
-            // push_instruction!(self, Instruction::Ret, node.span);
+        }
+
+        // backpatch the PopulateArgv instruction now that we have the correct number of locals.
+        if let Some(idx) = populate_argv_index {
+            let instruction = &sym.instructions[idx];
+            if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
+                let new_instruction = Instruction::PopulateArgv(*loc, *num_args, sym.num_locals);
+                sym.instructions[idx] = new_instruction;
+            } else {
+                return Err(LpcError::new("Invalid populate_argv_index").with_span(node.span));
+            }
         }
 
         self.functions.insert(node.name.clone(), sym.into());
@@ -3118,7 +3096,11 @@ mod tests {
         let mut walker = CodegenWalker::new(context);
         let _ = walker.visit_function_def(&mut node);
 
-        let expected = vec![RegCopy(Register(2), Register(0)), Ret];
+        let expected = vec![
+            PopulateArgv(Register(2), 1, 1),
+            RegCopy(Register(2), Register(0)),
+            Ret
+        ];
 
         assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
     }

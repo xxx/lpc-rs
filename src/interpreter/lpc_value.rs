@@ -108,6 +108,12 @@ impl From<Vec<LpcRef>> for LpcValue {
     }
 }
 
+impl From<&[LpcRef]> for LpcValue {
+    fn from(v: &[LpcRef]) -> Self {
+        Self::Array(v.to_vec())
+    }
+}
+
 impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
     fn from(m: HashMap<LpcRef, LpcRef>) -> Self {
         Self::Mapping(m)

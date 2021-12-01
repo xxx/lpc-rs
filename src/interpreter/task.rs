@@ -481,6 +481,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x | y)?;
             }
+            Instruction::PopulateArgv(r, num_args, num_locals) => {
+                let registers = &mut self.stack.current_frame_mut()?.registers;
+                let ellipsis_start_index = num_args + 1; // +1 is for the reserved r0
+                let ellipsis_end_index = registers.len() - num_locals;
+                let ellipsis_vars = &registers[ellipsis_start_index..ellipsis_end_index];
+                let new_ref = self.memory.value_to_ref(LpcValue::from(ellipsis_vars));
+
+                registers[r.index()] = new_ref;
+            }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
                 let mut frame = self.stack.current_frame_mut()?;
@@ -649,11 +658,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let borrowed = process.borrow();
                 let function = borrowed.functions.get(name);
                 let mut new_frame = if let Some(func) = function {
-                    StackFrame::new(process.clone(), func.clone())
+                    StackFrame::with_minimum_arg_capacity(process.clone(), func.clone(), *num_args)
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                     let sym = ProgramFunction::new(name.clone(), prototype.arity, 0);
 
-                    StackFrame::new(process.clone(), Rc::new(sym))
+                    StackFrame::with_minimum_arg_capacity(process.clone(), Rc::new(sym), *num_args)
                 } else {
                     // println!("proc {:#?}", process);
                     // println!("functions {:#?}", borrowed.functions);
@@ -1359,7 +1368,7 @@ mod tests {
     }
 
     /// A type to make it easier to set up test expectations for register contents
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, PartialEq, Eq, Clone)]
     enum BareVal {
         String(String),
         Int(LpcInt),
@@ -2603,6 +2612,62 @@ mod tests {
                 ];
 
                 assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_populate_argv {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    void create() {
+                        do_thing(1, 2, 3, "foo", ({ "bar", "baz", 3.14 }), ([ "a": 123 ]));
+                    }
+
+                    void do_thing(int a, int b, ...) {
+                        dump(argv);
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let stack = task.snapshot.unwrap();
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let mut mapping = HashMap::new();
+                mapping.insert(String("a".into()), Int(123));
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(2),
+                    Array(vec![
+                        Int(3),
+                        String("foo".into()),
+                        Array(vec![
+                            String("bar".into()),
+                            String("baz".into()),
+                            Float(3.14.into())
+                        ]),
+                        Mapping(mapping.clone())
+                    ].into()),
+                    String("snapshot_stack".into()),
+                    Array(vec![
+                        String("bar".into()),
+                        String("baz".into()),
+                        Float(3.14.into())
+                    ]),
+                    Mapping(mapping),
+                    Int(0),
+                    Int(0),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, registers);
             }
         }
 
