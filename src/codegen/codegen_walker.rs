@@ -970,7 +970,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
-        let num_args = node.parameters.len(); //+ (node.flags.ellipsis() as usize);
+        let num_args = node.parameters.len();
 
         let sym = ProgramFunction::new(&node.name, FunctionArity::new(num_args), 0);
         let populate_argv_index: Option<usize>;
@@ -980,8 +980,6 @@ impl TreeWalker for CodegenWalker {
         let len = self.current_address();
         self.context.scopes.goto_function(&node.name)?;
         self.register_counter.push(0);
-        // self.instruction_vecs.push(Vec::new());
-        // self.debug_span_vecs.push(Vec::new());
 
         for parameter in &node.parameters {
             self.visit_parameter(parameter);
@@ -989,8 +987,10 @@ impl TreeWalker for CodegenWalker {
 
         if node.flags.ellipsis() {
             let argv_location = self.assign_sym_location(ARGV);
-            // we don't set argv_location as current_result, because it wouldn't be
-            // assigned to anything implicitly at the time of initialization.
+            // We don't set `argv_location` as `self.current_result`, because it's
+            // being assigned implicitly, and doesn't need to be made available
+            // to more complex expressions. Expressions that use `argv` explicitly
+            // are handled elsewhere, as any other expr would be.
 
             populate_argv_index = Some(self.function_stack.last().unwrap().instructions.len());
 
@@ -1006,9 +1006,6 @@ impl TreeWalker for CodegenWalker {
         for expression in &mut node.body {
             expression.visit(self)?;
         }
-
-        // let mut instructions = self.instruction_vecs.pop().unwrap();
-        // let mut debug_spans = self.debug_span_vecs.pop().unwrap();
 
         self.context.scopes.pop();
         let mut sym = self.function_stack.pop().unwrap();
