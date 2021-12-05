@@ -790,7 +790,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         if *num_args > 0_usize {
                             let index = initial_arg.index();
 
-                            if partial_args.len() > 0 {
+                            if !partial_args.is_empty() {
                                 // `num_args` is how many were actually passed at the time of the call,
                                 // which may be fewer than what was specified in the partial args,
                                 // so correct that here
@@ -800,14 +800,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 let from_slice = &registers[index..(index + max)];
                                 let to_slice = &mut new_frame.registers[1..=max];
 
-                                for i in 0..max {
+                                for (i, item) in to_slice.iter_mut().enumerate().take(max) {
                                     if let Some(Some(x)) = partial_args.get(i) {
                                         // if a partially-appliable arg is present, use it
-                                        to_slice[i] = x.clone();
+                                        std::mem::replace(item, x.clone());
+                                        // to_slice[i] = x.clone();
                                     } else if let Some(x) = from_slice.get(from_index) {
                                         // check if the user passed an argument to
                                         // fill in a hole in the partial arguments
-                                        to_slice[i] = x.clone();
+                                        std::mem::replace(item, x.clone());
+                                        // to_slice[i] = x.clone();
                                         from_index += 1;
                                     }
                                 }
