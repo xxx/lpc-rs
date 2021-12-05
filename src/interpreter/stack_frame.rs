@@ -27,6 +27,8 @@ pub struct StackFrame {
     pub registers: Vec<LpcRef>,
     /// Track where the pc is pointing in this frame's function's instructions.
     pc: Cell<usize>,
+    /// How many explicit arguments were passed to the call that created this frame?
+    pub called_with_num_args: usize,
 }
 
 impl StackFrame {
@@ -36,7 +38,9 @@ impl StackFrame {
     ///
     /// * `process` - The process that owns the function being called
     /// * `function` - The function being called
-    pub fn new<P>(process: P, function: Rc<ProgramFunction>) -> Self
+    /// * `called_with_num_args` - how many arguments were explicitly passed in the
+    ///      call to this function?
+    pub fn new<P>(process: P, function: Rc<ProgramFunction>, called_with_num_args: usize) -> Self
     where
         P: Into<Rc<RefCell<Process>>>,
     {
@@ -48,6 +52,7 @@ impl StackFrame {
             function,
             registers: vec![LpcRef::Int(0); reg_len],
             pc: 0.into(),
+            called_with_num_args
         }
     }
 
@@ -57,11 +62,14 @@ impl StackFrame {
     ///
     /// * `process` - The process that owns the function being called
     /// * `function` - The function being called
+    /// * `called_with_num_args` - how many arguments were explicitly passed in the
+    ///      call to this function?
     /// * `arg_capacity` - Reserve space for at least this many registers
     ///     (this is used for ellipsis args and `call_other`)
     pub fn with_minimum_arg_capacity<P>(
         process: P,
         function: Rc<ProgramFunction>,
+        called_with_num_args: usize,
         arg_capacity: usize,
     ) -> Self
     where
@@ -74,7 +82,7 @@ impl StackFrame {
 
         Self {
             registers: vec![LpcRef::Int(0); reservation],
-            ..Self::new(process, function)
+            ..Self::new(process, function, called_with_num_args)
         }
     }
 
@@ -183,7 +191,7 @@ mod tests {
 
         let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
 
-        let frame = StackFrame::new(process, Rc::new(fs));
+        let frame = StackFrame::new(process, Rc::new(fs), 4);
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -198,7 +206,7 @@ mod tests {
 
             let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 30);
+            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -210,7 +218,7 @@ mod tests {
 
             let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 2);
+            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));

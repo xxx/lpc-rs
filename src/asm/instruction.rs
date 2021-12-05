@@ -6,6 +6,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use itertools::Itertools;
 use crate::interpreter::function_type::FunctionArity;
 
 /// Really just a `pc` index in the vm.
@@ -159,6 +160,14 @@ pub enum Instruction {
     ///   present in the frame is an ellipsis argument, so those are the ones we
     ///   populate.
     PopulateArgv(Register, usize, usize),
+
+    /// Special case instruction to handle calls to functions that have default
+    /// argument values.
+    /// The first `usize` is the number of formal parameters to the function
+    ///   (whether they have default values or not).
+    /// The vector is the list of addresses to jump to, to initialize the parameters
+    ///   that have default values.
+    PopulateDefaults(Vec<Address>),
 
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
@@ -342,6 +351,14 @@ impl Display for Instruction {
             }
             Instruction::PopulateArgv(r, num_args, num_locals) => {
                 write!(f, "populateargv {}, {}, {}", r, num_args, num_locals)
+            }
+            Instruction::PopulateDefaults(default_inits) => {
+                let s = default_inits
+                    .iter()
+                    .map(|i| format!("{}", i))
+                    .join(", ");
+
+                write!(f, "populatedefaults {}", s)
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {}, {}, {}, {}", r1, r2, r3, r4)

@@ -146,8 +146,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let function = f.into();
         let process = task_context.process();
 
-        let mut frame = StackFrame::new(process, function);
-        // TODO: handle partial applications
+        let mut frame = StackFrame::new(process, function, args.len());
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
@@ -490,6 +489,20 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 registers[r.index()] = new_ref;
             }
+            Instruction::PopulateDefaults(default_addresses) => {
+                let frame = self.stack.current_frame()?;
+                let func = &frame.function;
+                let declared_args = func.arity.num_args;
+                let called_args = frame.called_with_num_args;
+
+                if called_args < declared_args {
+                    let difference = declared_args - called_args;
+                    debug_assert!(difference <= default_addresses.len());
+                    let index = default_addresses.len() - difference;
+                    let address = default_addresses[index];
+                    frame.set_pc(address);
+                }
+            }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
                 let mut frame = self.stack.current_frame_mut()?;
@@ -658,11 +671,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let borrowed = process.borrow();
                 let function = borrowed.functions.get(name);
                 let mut new_frame = if let Some(func) = function {
-                    StackFrame::with_minimum_arg_capacity(process.clone(), func.clone(), *num_args)
+                    StackFrame::with_minimum_arg_capacity(process.clone(), func.clone(), *num_args, *num_args)
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                     let sym = ProgramFunction::new(name.clone(), prototype.arity, 0);
 
-                    StackFrame::with_minimum_arg_capacity(process.clone(), Rc::new(sym), *num_args)
+                    StackFrame::with_minimum_arg_capacity(process.clone(), Rc::new(sym), *num_args,*num_args)
                 } else {
                     // println!("proc {:#?}", process);
                     // println!("functions {:#?}", borrowed.functions);
@@ -735,9 +748,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             LpcFunction::FunctionPtr(ptr) => {
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
-                                        new_frame = StackFrame::new(proc.clone(), function.clone());
                                         partial_args = &ptr.partial_args;
                                         arity = ptr.arity;
+                                        let called_args = *num_args + partial_args
+                                            .iter()
+                                            .fold(0, |sum, arg| sum + arg.is_some() as usize);
+                                        let max = std::cmp::max(called_args, function.arity.num_args);
+                                        new_frame = StackFrame::with_minimum_arg_capacity(proc.clone(), function.clone(), called_args, max);
                                     }
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
@@ -746,16 +763,19 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                         function_is_local = false;
 
-                                        new_frame = StackFrame::new(frame.process.clone(), Rc::new(pf));
                                         partial_args = &ptr.partial_args;
                                         arity = ptr.arity;
+
+                                        let called_args = *num_args + partial_args
+                                            .iter()
+                                            .fold(0, |sum, arg| sum + arg.is_some() as usize);
+                                        let max = std::cmp::max(called_args, prototype.arity.num_args);
+
+                                        new_frame = StackFrame::with_minimum_arg_capacity(frame.process.clone(), Rc::new(pf), called_args, max);
                                     }
                                 }
                             }
                         };
-
-                        // TODO: handle ellipses
-                        // TODO: handle default args
 
                         if *num_args > 0_usize {
                             let index = initial_arg.index();
@@ -804,63 +824,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     call_efun(name, &mut ctx)?;
 
                     #[cfg(test)]
-                    {
-                        if ctx.snapshot.is_some() {
-                            self.snapshot = ctx.snapshot;
+                        {
+                            if ctx.snapshot.is_some() {
+                                self.snapshot = ctx.snapshot;
+                            }
                         }
-                    }
 
                     pop_frame!(self, task_context);
                 }
 
                 Ok(())
-
-                // let mut new_frame = if let Some(func) = self.process.functions.get(name) {
-                //     StackFrame::new(self.process.clone(), func.clone(), self.process.pc())
-                // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                //     let sym = FunctionSymbol {
-                //         name: name.clone(),
-                //         num_args: prototype.num_args,
-                //         num_locals: 0,
-                //         address: 0,
-                //     };
-                //
-                //     StackFrame::new(self.process.clone(), Rc::new(sym), self.process.pc())
-                // } else {
-                //     println!("proc {:#?}", self.process);
-                //     println!("functions {:#?}", self.process.functions);
-                //     return Err(self.runtime_error(format!("Call to unknown function `{}`", name)));
-                // };
-                //
-                // // copy argument registers from old frame to new
-                // if *num_args > 0_usize {
-                //     let index = initial_arg.index();
-                //     let current_frame = self.stack.last().unwrap();
-                //     new_frame.registers[1..=*num_args]
-                //         .clone_from_slice(&current_frame.registers[index..(index + num_args)]);
-                // }
-                //
-                // // println!("pushing frame in Call: {:?}", new_frame);
-                // try_push_frame!(new_frame, self);
-                //
-                // if let Some(x) = self.process.functions.get(name) {
-                //     self.process.set_pc(x.address);
-                // } else if let Some(efun) = EFUNS.get(name.as_str()) {
-                //     // the efun is responsible for populating the return value in its own frame
-                //     efun(self)?;
-                //
-                //     if let Some(frame) = self.pop_frame() {
-                //         self.copy_call_result(&frame)?;
-                //         self.popped_frame = Some(frame);
-                //     }
-                // } else {
-                //     return Err(self.runtime_error(format!(
-                //         "Call to unknown function (that had a valid prototype?) `{}`",
-                //         name
-                //     )));
-                // }
             }
-            _ => Err(self.runtime_error("non-CallFp instruction passed to `handle_call_fp`")),
+            _ => Err(self.runtime_error(format!("non-CallFp instruction passed to `handle_call_fp`: {}", instruction))),
         }
     }
 
@@ -1628,7 +1603,7 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    String("adding some! 670".into()),
+                    String("adding some! 223".into()),
                     String("adding some!".into()),
                     Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
                     Int(666),
@@ -1637,6 +1612,9 @@ mod tests {
                     Int(4),
                     Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
                     String("adding some! 670".into()),
+                    Int(123),
+                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    String("adding some! 223".into()),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -2665,6 +2643,60 @@ mod tests {
                     Int(0),
                     Int(0),
                     Int(0),
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+        }
+
+        mod test_populate_defaults {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    void create() {
+                        do_thing(45, 34, 7.77);
+                    }
+
+                    void do_thing(int a, int b, float d = 6.66, string s = "snuh", mixed *muh = ({ "a string", 3, 2.44 })) {
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let stack = task.snapshot.unwrap();
+
+                // The top of the stack in the snapshot is the object initialization frame,
+                // which is not what we care about here, so we get the second-to-top frame instead.
+                let registers = &stack[stack.len() - 2].registers;
+
+                let mut mapping = HashMap::new();
+                mapping.insert(String("a".into()), Int(123));
+
+                let expected = vec![
+                    Int(0),
+                    Int(45),
+                    Int(34),
+                    Float(7.77.into()),
+                    String("snuh".into()),
+                    Array(vec![
+                        String("a string".into()),
+                        Int(3),
+                        Float(2.44.into()),
+                    ].into()),
+                    String("snapshot_stack".into()),
+                    Int(0),
+                    Int(0),
+                    String("snuh".into()),
+                    String("a string".into()),
+                    Int(3),
+                    Float(2.44.into()),
+                    Array(vec![
+                        String("a string".into()),
+                        Int(3),
+                        Float(2.44.into()),
+                    ].into()),
                 ];
 
                 assert_eq!(&expected, registers);

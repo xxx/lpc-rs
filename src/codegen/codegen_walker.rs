@@ -53,6 +53,7 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::asm::instruction::Instruction::RegCopy;
 use crate::interpreter::efun::EFUN_PROTOTYPES;
 use crate::interpreter::function_type::FunctionArity;
 
@@ -379,8 +380,8 @@ impl CodegenWalker {
     /// A special case for function def parameters, where we don't want to generate code
     /// for default arguments - we just want to have it on hand to refer to
     /// when we generate code for calls.
-    fn visit_parameter(&mut self, node: &VarInitNode) {
-        self.assign_sym_location(&node.name);
+    fn visit_parameter(&mut self, node: &VarInitNode) -> Register {
+        self.assign_sym_location(&node.name)
     }
 
     /// A helper to assign the next free [`Register`] to a [`Symbol`]
@@ -670,33 +671,33 @@ impl TreeWalker for CodegenWalker {
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
-        let default_params = self.context.default_function_params.get_mut(&node.name);
+        // let default_params = self.context.default_function_params.get_mut(&node.name);
 
         // All "normal" functions should have a set of default params to match the declared params,
         // even if the defaults are all `None`.
-        if let Some(function_args) = default_params {
-            // TODO: get rid of this clone or make it cheaper
-            let mut default_args = function_args.clone();
-
-            let max = std::cmp::max(default_args.len(), argument_len);
-
-            // generate code for the passed arguments
-            for idx in 0..max {
-                if let Some(arg) = node.arguments.get_mut(idx) {
-                    arg.visit(self)?;
-                    arg_results.push(self.current_result);
-                } else if let Some(Some(arg)) = default_args.get_mut(idx) {
-                    arg.visit(self)?;
-                    arg_results.push(self.current_result);
-                }
-            }
-        } else {
-            // TODO: This is where efuns are handled
+        // if let Some(function_args) = default_params {
+        //     // TODO: get rid of this clone or make it cheaper
+        //     let mut default_args = function_args.clone();
+        //
+        //     let max = std::cmp::max(default_args.len(), argument_len);
+        //
+        //     // generate code for the passed arguments
+        //     for idx in 0..max {
+        //         if let Some(arg) = node.arguments.get_mut(idx) {
+        //             arg.visit(self)?;
+        //             arg_results.push(self.current_result);
+        //         } else if let Some(Some(arg)) = default_args.get_mut(idx) {
+        //             arg.visit(self)?;
+        //             arg_results.push(self.current_result);
+        //         }
+        //     }
+        // } else {
+        //     // TODO: This is where efuns are handled
             for argument in &mut node.arguments {
                 argument.visit(self)?;
                 arg_results.push(self.current_result);
             }
-        }
+        // }
 
         let instruction = if arg_results.len() == 1 {
             // no need to serialize args for the `Call` instruction if there's only one.
@@ -971,9 +972,18 @@ impl TreeWalker for CodegenWalker {
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let num_args = node.parameters.len();
+        let num_default_args = node.parameters.iter().fold(0, |s, a| s + a.value.is_some() as usize);
 
-        let sym = ProgramFunction::new(&node.name, FunctionArity::new(num_args), 0);
+        let arity = FunctionArity {
+            num_args,
+            num_default_args,
+            ellipsis: node.flags.ellipsis(),
+            varargs: node.flags.varargs(),
+        };
+
+        let sym = ProgramFunction::new(&node.name, arity, 0);
         let populate_argv_index: Option<usize>;
+        let populate_defaults_index: Option<usize>;
 
         self.function_stack.push(sym);
 
@@ -981,9 +991,9 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.goto_function(&node.name)?;
         self.register_counter.push(0);
 
-        for parameter in &node.parameters {
-            self.visit_parameter(parameter);
-        }
+        let parameter_locations = &node.parameters.iter().map(|parameter| {
+            self.visit_parameter(parameter)
+        }).collect::<Vec<_>>();
 
         if node.flags.ellipsis() {
             let argv_location = self.assign_sym_location(ARGV);
@@ -992,7 +1002,7 @@ impl TreeWalker for CodegenWalker {
             // to more complex expressions. Expressions that use `argv` explicitly
             // are handled elsewhere, as any other expr would be.
 
-            populate_argv_index = Some(self.function_stack.last().unwrap().instructions.len());
+            populate_argv_index = Some(self.current_address());
 
             // The number of locals isn't known yet, so just set it to zero for now.
             // This gets backpatched after the function body is generated.
@@ -1003,22 +1013,73 @@ impl TreeWalker for CodegenWalker {
             populate_argv_index = None;
         }
 
+        if num_default_args > 0 {
+            populate_defaults_index = Some(self.current_address());
+            // the addresses are backpatched below, once we have them.
+            let instruction = Instruction::PopulateDefaults(Vec::new());
+            push_instruction!(self, instruction, node.span);
+            // emit PopulateDefaults(number of formal args, default_args_count, list of jump locations);
+        } else {
+            populate_defaults_index = None;
+        }
+
+        let start_label = self.new_label("function-body-start");
+        self.insert_label(&start_label, self.current_address());
+
         for expression in &mut node.body {
             expression.visit(self)?;
+        }
+
+        // insert a final return if one isn't already there.
+        {
+            let sym = self.function_stack.last_mut().unwrap();
+            if sym.instructions.len() == len
+                || (!sym.instructions.is_empty()
+                && *sym.instructions.last().unwrap() != Instruction::Ret)
+            {
+                // TODO: This should emit a warning unless the return type is void
+                sym.push_instruction(Instruction::Ret, node.span);
+            }
+        }
+
+        // handle default arg initialization.
+        if num_default_args > 0 {
+            debug_assert_eq!(node.parameters.len(), parameter_locations.len());
+
+            let mut default_init_addresses = Vec::new();
+
+            for (idx, parameter) in &mut node.parameters.iter_mut().enumerate() {
+                if let Some(value) = &mut parameter.value {
+                    default_init_addresses.push(self.current_address());
+
+                    // generate code for only the value, then assign by hand, because we pre-generated
+                    // locations of the parameters above.
+                    value.visit(self)?;
+                    let instruction = RegCopy(self.current_result, parameter_locations[idx]);
+                    push_instruction!(self, instruction, node.span);
+                }
+            }
+
+            // backfill the the correct init addresses for the PopulateDefaults call.
+            if let Some(idx) = populate_defaults_index {
+                let sym = self.function_stack.last_mut().unwrap();
+                let instruction = &sym.instructions[idx];
+                if let Instruction::PopulateDefaults(_) = instruction {
+                    let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
+                    sym.instructions[idx] = new_instruction;
+                } else {
+                    return Err(LpcError::new("Invalid populate_defaults_index").with_span(node.span));
+                }
+            }
+
+            // jump back to the function now that defaults are populated.
+            let instruction = Instruction::Jmp(start_label);
+            push_instruction!(self, instruction, node.span);
         }
 
         self.context.scopes.pop();
         let mut sym = self.function_stack.pop().unwrap();
         sym.num_locals = self.register_counter.as_usize() - num_args;
-
-        // insert a final return if one isn't already there.
-        if sym.instructions.len() == len
-            || (!sym.instructions.is_empty()
-                && *sym.instructions.last().unwrap() != Instruction::Ret)
-        {
-            // TODO: This should emit a warning unless the return type is void
-            sym.push_instruction(Instruction::Ret, node.span);
-        }
 
         // backpatch the PopulateArgv instruction now that we have the correct number of locals.
         if let Some(idx) = populate_argv_index {
@@ -2101,7 +2162,7 @@ mod tests {
             let expected = vec![
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "while-end_1".into()),
+                Jz(Register(3), "while-end_2".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
@@ -2109,18 +2170,18 @@ mod tests {
                 },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
-                Jz(Register(5), "if-else_2".into()),
+                Jz(Register(5), "if-else_3".into()),
                 SConst(Register(6), "breaking".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(6),
                 },
-                Jmp("while-end_1".into()),
+                Jmp("while-end_2".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
                 RegCopy(Register(8), Register(1)),
-                Jmp("while-start_0".into()),
+                Jmp("while-start_1".into()),
                 Ret,
             ];
 
@@ -2150,7 +2211,7 @@ mod tests {
                 IConst0(Register(1)),
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "for-end_1".into()),
+                Jz(Register(3), "for-end_2".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
@@ -2158,21 +2219,21 @@ mod tests {
                 },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
-                Jz(Register(5), "if-else_3".into()),
+                Jz(Register(5), "if-else_4".into()),
                 SConst(Register(6), "breaking".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(6),
                 },
-                Jmp("for-end_1".into()),
+                Jmp("for-end_2".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
                 RegCopy(Register(8), Register(1)),
                 IConst1(Register(9)),
                 IAdd(Register(1), Register(9), Register(10)),
                 RegCopy(Register(10), Register(1)),
-                Jmp("for-start_0".into()),
+                Jmp("for-start_1".into()),
                 Ret,
             ];
 
@@ -2207,20 +2268,20 @@ mod tests {
                 },
                 IConst(Register(2), 5),
                 Gt(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "if-else_3".into()),
+                Jz(Register(3), "if-else_4".into()),
                 SConst(Register(4), "breaking".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(4),
                 },
-                Jmp("do-while-end_1".into()),
+                Jmp("do-while-end_2".into()),
                 IConst1(Register(5)),
                 IAdd(Register(1), Register(5), Register(6)),
                 RegCopy(Register(6), Register(1)),
                 IConst(Register(7), 10),
                 Lt(Register(1), Register(7), Register(8)),
-                Jnz(Register(8), "do-while-start_0".into()),
+                Jnz(Register(8), "do-while-start_1".into()),
                 Ret,
             ];
 
@@ -2251,14 +2312,14 @@ mod tests {
             let mut walker = walk_prog(code);
             let expected = vec![
                 IConst(Register(1), 666),
-                Jmp("switch-test_0".into()),
+                Jmp("switch-test_1".into()),
                 SConst(Register(2), "YEAH BABY".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(2),
                 },
-                Jmp("switch-end_1".into()),
+                Jmp("switch-end_2".into()),
                 SConst(Register(3), "very".into()),
                 Call {
                     name: "dump".into(),
@@ -2271,17 +2332,17 @@ mod tests {
                     num_args: 1,
                     initial_arg: Register(4),
                 },
-                Jmp("switch-end_1".into()),
+                Jmp("switch-end_2".into()),
                 IConst(Register(5), 666),
                 EqEq(Register(1), Register(5), Register(6)),
-                Jnz(Register(6), "switch-case_2".into()),
+                Jnz(Register(6), "switch-case_3".into()),
                 IConst(Register(7), 10),
                 IConst(Register(8), 200),
                 Gte(Register(8), Register(7), Register(10)),
                 Lte(Register(8), Register(8), Register(11)),
                 And(Register(10), Register(11), Register(9)),
-                Jnz(Register(9), "switch-case_3".into()),
-                Jmp("switch-default_4".into()),
+                Jnz(Register(9), "switch-case_4".into()),
+                Jmp("switch-default_5".into()),
                 Ret,
             ];
 
@@ -2453,43 +2514,6 @@ mod tests {
                     initial_arg: Register(1),
                 },
                 RegCopy(Register(0), Register(3)),
-            ];
-
-            assert_eq!(walker_init_instructions(&mut walker), expected);
-        }
-
-        #[test]
-        fn populates_the_instructions_with_defaults() {
-            let mut default_function_params = HashMap::new();
-
-            default_function_params.insert(
-                String::from("foo"),
-                vec![None, Some(ExpressionNode::from("muffuns"))],
-            );
-
-            let context = CompilationContext {
-                default_function_params,
-                ..CompilationContext::default()
-            };
-
-            let mut walker = CodegenWalker::new(context);
-            let call = "foo(666)";
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&walker.context, LexWrapper::new(call))
-                .unwrap();
-
-            let _ = walker.visit_call(&mut tree);
-
-            let expected = vec![
-                IConst(Register(1), 666),
-                SConst(Register(2), String::from("muffuns")),
-                RegCopy(Register(1), Register(3)),
-                RegCopy(Register(2), Register(4)),
-                Call {
-                    name: "foo".to_string(),
-                    num_args: 2,
-                    initial_arg: Register(3),
-                },
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -2728,7 +2752,7 @@ mod tests {
             let expected = vec![
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "while-end_1".into()),
+                Jz(Register(3), "while-end_2".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
@@ -2736,18 +2760,18 @@ mod tests {
                 },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
-                Jz(Register(5), "if-else_2".into()),
+                Jz(Register(5), "if-else_3".into()),
                 SConst(Register(6), "goin' infinite!".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(6),
                 },
-                Jmp("while-start_0".into()),
+                Jmp("while-start_1".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
                 RegCopy(Register(8), Register(1)),
-                Jmp("while-start_0".into()),
+                Jmp("while-start_1".into()),
                 Ret,
             ];
 
@@ -2777,7 +2801,7 @@ mod tests {
                 IConst0(Register(1)),
                 IConst(Register(2), 10),
                 Lt(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "for-end_1".into()),
+                Jz(Register(3), "for-end_2".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
@@ -2785,21 +2809,21 @@ mod tests {
                 },
                 IConst(Register(4), 5),
                 Gt(Register(1), Register(4), Register(5)),
-                Jz(Register(5), "if-else_3".into()),
+                Jz(Register(5), "if-else_4".into()),
                 SConst(Register(6), "goin' infinite!".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(6),
                 },
-                Jmp("for-continue_2".into()),
+                Jmp("for-continue_3".into()),
                 IConst1(Register(7)),
                 IAdd(Register(1), Register(7), Register(8)),
                 RegCopy(Register(8), Register(1)),
                 IConst1(Register(9)),
                 IAdd(Register(1), Register(9), Register(10)),
                 RegCopy(Register(10), Register(1)),
-                Jmp("for-start_0".into()),
+                Jmp("for-start_1".into()),
                 Ret,
             ];
 
@@ -2834,20 +2858,20 @@ mod tests {
                 },
                 IConst(Register(2), 5),
                 Gt(Register(1), Register(2), Register(3)),
-                Jz(Register(3), "if-else_3".into()),
+                Jz(Register(3), "if-else_4".into()),
                 SConst(Register(4), "goin' infinite!".into()),
                 Call {
                     name: "dump".into(),
                     num_args: 1,
                     initial_arg: Register(4),
                 },
-                Jmp("do-while-continue_2".into()),
+                Jmp("do-while-continue_3".into()),
                 IConst1(Register(5)),
                 IAdd(Register(1), Register(5), Register(6)),
                 RegCopy(Register(6), Register(1)),
                 IConst(Register(7), 10),
                 Lt(Register(1), Register(7), Register(8)),
-                Jnz(Register(8), "do-while-start_0".into()),
+                Jnz(Register(8), "do-while-start_1".into()),
                 Ret,
             ];
 
@@ -3037,69 +3061,75 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_visit_function_def_populates_the_data() {
-        let mut scope_walker = ScopeWalker::default();
-        let _walker = CodegenWalker::default();
-        let call = "int main(int i) { return i + 4; }";
-        let tree = lpc_parser::DefParser::new()
-            .parse(&CompilationContext::default(), LexWrapper::new(call))
-            .unwrap();
+    mod test_visit_function_def {
+        use super::*;
 
-        let mut node = if let AstNode::FunctionDef(node) = tree {
-            node
-        } else {
-            panic!("Didn't receive a function def?");
-        };
+        fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
+            let mut scope_walker = ScopeWalker::default();
+            let _walker = CodegenWalker::default();
+            let tree = lpc_parser::DefParser::new()
+                .parse(&CompilationContext::default(), LexWrapper::new(code))
+                .unwrap();
 
-        let _ = scope_walker.visit_function_def(&mut node);
+            let mut node = if let AstNode::FunctionDef(node) = tree {
+                node
+            } else {
+                panic!("Didn't receive a function def?");
+            };
 
-        let mut context = scope_walker.into_context();
-        context.scopes.goto_root();
+            let _ = scope_walker.visit_function_def(&mut node);
 
-        let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_function_def(&mut node);
+            let mut context = scope_walker.into_context();
+            context.scopes.goto_root();
 
-        let expected = vec![
-            IConst(Register(2), 4),
-            IAdd(Register(1), Register(2), Register(3)),
-            RegCopy(Register(3), Register(0)),
-            Ret,
-        ];
+            let mut walker = CodegenWalker::new(context);
+            let _ = walker.visit_function_def(&mut node);
 
-        assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
-    }
+            assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
+        }
 
-    #[test]
-    fn test_visit_function_def_handles_ellipses() {
-        let mut scope_walker = ScopeWalker::default();
-        let _walker = CodegenWalker::default();
-        let call = "int main(int i, ...) { return argv; }";
-        let tree = lpc_parser::DefParser::new()
-            .parse(&CompilationContext::default(), LexWrapper::new(call))
-            .unwrap();
+        #[test]
+        fn populates_the_data() {
+            assert_compiles_to(
+                "int main(int i) { return i + 4; }",
+                vec![
+                    IConst(Register(2), 4),
+                    IAdd(Register(1), Register(2), Register(3)),
+                    RegCopy(Register(3), Register(0)),
+                    Ret,
+                ]
+            );
+        }
 
-        let mut node = if let AstNode::FunctionDef(node) = tree {
-            node
-        } else {
-            panic!("Didn't receive a function def?");
-        };
+        #[test]
+        fn handles_ellipses() {
+            assert_compiles_to(
+                "int main(int i, ...) { return argv; }",
+                vec![
+                    PopulateArgv(Register(2), 1, 1),
+                    RegCopy(Register(2), Register(0)),
+                    Ret
+                ]
+            );
+        }
 
-        let _ = scope_walker.visit_function_def(&mut node);
-
-        let mut context = scope_walker.into_context();
-        context.scopes.goto_root();
-
-        let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_function_def(&mut node);
-
-        let expected = vec![
-            PopulateArgv(Register(2), 1, 1),
-            RegCopy(Register(2), Register(0)),
-            Ret
-        ];
-
-        assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
+        #[test]
+        fn populates_the_default_arguments() {
+            assert_compiles_to(
+                "int main(int i, int j = 666, float d = 3.14) { return i * j; }",
+                vec![
+                    PopulateDefaults(vec![4, 6]),
+                    IMul(Register(1), Register(2), Register(4)),
+                    RegCopy(Register(4), Register(0)),
+                    Ret,
+                    IConst(Register(5), 666),
+                    RegCopy(Register(5), Register(2)),
+                    FConst(Register(6), 3.14.into()),
+                    RegCopy(Register(6), Register(3)),
+                    Jmp("function-body-start_0".into())
+                ]
+            );
+        }
     }
 
     mod test_visit_if {

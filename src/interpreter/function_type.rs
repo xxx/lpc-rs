@@ -108,9 +108,12 @@ impl FunctionArity {
     pub fn is_valid(&self, len: usize) -> bool {
         match (self.varargs, self.ellipsis) {
             (true, true) => true,
-            (true, false) => len <= self.net_args(),
+            (true, false) => len <= self.num_args,
             (false, true) => len >= self.net_args(),
-            (false, false) => len == self.net_args(),
+            (false, false) => {
+                let range = (self.num_args - self.num_default_args)..=self.num_args;
+                range.contains(&len)
+            },
         }
     }
 
@@ -174,5 +177,77 @@ impl LpcFunction {
 impl Display for LpcFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod test_function_arity {
+        use super::*;
+
+        #[test]
+        fn test_is_valid() {
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: false,
+                ellipsis: false
+            };
+
+            assert!(!arity.is_valid(0));
+            assert!(!arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(!arity.is_valid(6));
+
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: true,
+                ellipsis: false
+            };
+
+            assert!(arity.is_valid(0));
+            assert!(arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(!arity.is_valid(6));
+
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: false,
+                ellipsis: true
+            };
+
+            assert!(!arity.is_valid(0));
+            assert!(!arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(arity.is_valid(6));
+
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: true,
+                ellipsis: true
+            };
+
+            assert!(arity.is_valid(0));
+            assert!(arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(arity.is_valid(6));
+        }
     }
 }
