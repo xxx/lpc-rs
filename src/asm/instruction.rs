@@ -1,13 +1,14 @@
 use crate::{
-    asm::register::Register, interpreter::function_type::FunctionTarget, LpcFloat, LpcInt,
+    asm::register::Register,
+    interpreter::function_type::{FunctionArity, FunctionTarget},
+    LpcFloat, LpcInt,
 };
+use itertools::Itertools;
 use std::{
     collections::HashMap,
     fmt,
     fmt::{Display, Formatter},
 };
-use itertools::Itertools;
-use crate::interpreter::function_type::FunctionArity;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -256,7 +257,7 @@ impl Display for Instruction {
                 location,
                 target,
                 applied_arguments,
-                arity: _arity
+                arity: _arity,
             } => {
                 let args = applied_arguments
                     .iter()
@@ -353,10 +354,7 @@ impl Display for Instruction {
                 write!(f, "populateargv {}, {}, {}", r, num_args, num_locals)
             }
             Instruction::PopulateDefaults(default_inits) => {
-                let s = default_inits
-                    .iter()
-                    .map(|i| format!("{}", i))
-                    .join(", ");
+                let s = default_inits.iter().map(|i| format!("{}", i)).join(", ");
 
                 write!(f, "populatedefaults {}", s)
             }

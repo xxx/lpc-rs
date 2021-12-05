@@ -1,9 +1,9 @@
 use crate::{
+    interpreter::function_type::FunctionArity,
     parser::span::Span,
     semantic::{function_flags::FunctionFlags, lpc_type::LpcType},
 };
 use std::borrow::Cow;
-use crate::interpreter::function_type::FunctionArity;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq)]

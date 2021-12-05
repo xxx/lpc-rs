@@ -113,7 +113,7 @@ impl FunctionArity {
             (false, false) => {
                 let range = (self.num_args - self.num_default_args)..=self.num_args;
                 range.contains(&len)
-            },
+            }
         }
     }
 
@@ -193,7 +193,7 @@ mod tests {
                 num_args: 5,
                 num_default_args: 3,
                 varargs: false,
-                ellipsis: false
+                ellipsis: false,
             };
 
             assert!(!arity.is_valid(0));
@@ -208,7 +208,7 @@ mod tests {
                 num_args: 5,
                 num_default_args: 3,
                 varargs: true,
-                ellipsis: false
+                ellipsis: false,
             };
 
             assert!(arity.is_valid(0));
@@ -223,7 +223,7 @@ mod tests {
                 num_args: 5,
                 num_default_args: 3,
                 varargs: false,
-                ellipsis: true
+                ellipsis: true,
             };
 
             assert!(!arity.is_valid(0));
@@ -238,7 +238,7 @@ mod tests {
                 num_args: 5,
                 num_default_args: 3,
                 varargs: true,
-                ellipsis: true
+                ellipsis: true,
             };
 
             assert!(arity.is_valid(0));

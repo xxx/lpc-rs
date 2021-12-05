@@ -46,16 +46,17 @@ use crate::{
 };
 
 use crate::{
+    asm::instruction::Instruction::RegCopy,
     ast::function_ptr_node::FunctionPtrNode,
-    interpreter::function_type::{FunctionName, FunctionReceiver, FunctionTarget},
+    interpreter::{
+        efun::EFUN_PROTOTYPES,
+        function_type::{FunctionArity, FunctionName, FunctionReceiver, FunctionTarget},
+    },
 };
 use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::asm::instruction::Instruction::RegCopy;
-use crate::interpreter::efun::EFUN_PROTOTYPES;
-use crate::interpreter::function_type::FunctionArity;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -161,8 +162,11 @@ impl CodegenWalker {
     }
 
     pub fn setup_init(&mut self) {
-        self.function_stack
-            .push(ProgramFunction::new(INIT_PROGRAM, FunctionArity::default(), 0));
+        self.function_stack.push(ProgramFunction::new(
+            INIT_PROGRAM,
+            FunctionArity::default(),
+            0,
+        ));
     }
 
     /// Get a listing of a translated AST, suitable for printing
@@ -693,10 +697,10 @@ impl TreeWalker for CodegenWalker {
         //     }
         // } else {
         //     // TODO: This is where efuns are handled
-            for argument in &mut node.arguments {
-                argument.visit(self)?;
-                arg_results.push(self.current_result);
-            }
+        for argument in &mut node.arguments {
+            argument.visit(self)?;
+            arg_results.push(self.current_result);
+        }
         // }
 
         let instruction = if arg_results.len() == 1 {
@@ -972,7 +976,10 @@ impl TreeWalker for CodegenWalker {
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let num_args = node.parameters.len();
-        let num_default_args = node.parameters.iter().fold(0, |s, a| s + a.value.is_some() as usize);
+        let num_default_args = node
+            .parameters
+            .iter()
+            .fold(0, |s, a| s + a.value.is_some() as usize);
 
         let arity = FunctionArity {
             num_args,
@@ -991,9 +998,11 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.goto_function(&node.name)?;
         self.register_counter.push(0);
 
-        let parameter_locations = &node.parameters.iter().map(|parameter| {
-            self.visit_parameter(parameter)
-        }).collect::<Vec<_>>();
+        let parameter_locations = &node
+            .parameters
+            .iter()
+            .map(|parameter| self.visit_parameter(parameter))
+            .collect::<Vec<_>>();
 
         if node.flags.ellipsis() {
             let argv_location = self.assign_sym_location(ARGV);
@@ -1035,7 +1044,7 @@ impl TreeWalker for CodegenWalker {
             let sym = self.function_stack.last_mut().unwrap();
             if sym.instructions.len() == len
                 || (!sym.instructions.is_empty()
-                && *sym.instructions.last().unwrap() != Instruction::Ret)
+                    && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
                 // TODO: This should emit a warning unless the return type is void
                 sym.push_instruction(Instruction::Ret, node.span);
@@ -1068,7 +1077,9 @@ impl TreeWalker for CodegenWalker {
                     let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
                     sym.instructions[idx] = new_instruction;
                 } else {
-                    return Err(LpcError::new("Invalid populate_defaults_index").with_span(node.span));
+                    return Err(
+                        LpcError::new("Invalid populate_defaults_index").with_span(node.span)
+                    );
                 }
             }
 
@@ -1131,7 +1142,7 @@ impl TreeWalker for CodegenWalker {
                 num_args: 0,
                 num_default_args: 0,
                 varargs: true,
-                ellipsis: true
+                ellipsis: true,
             };
         } else if let Some(prototype) = self.context.lookup_function(node.name.as_str()) {
             // A local / inherited function
@@ -1167,7 +1178,11 @@ impl TreeWalker for CodegenWalker {
             target = FunctionTarget::Efun(node.name.clone());
             arity = prototype.arity;
         } else {
-            return Err(LpcError::new(format!("Unknown call in function pointer: `{}`", node.name)).with_span(node.span));
+            return Err(LpcError::new(format!(
+                "Unknown call in function pointer: `{}`",
+                node.name
+            ))
+            .with_span(node.span));
         }
 
         let location = self.register_counter.next().unwrap();
@@ -2354,8 +2369,10 @@ mod tests {
     }
 
     mod test_visit_call {
-        use crate::asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
-        use crate::interpreter::function_type::FunctionArity;
+        use crate::{
+            asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv},
+            interpreter::function_type::FunctionArity,
+        };
 
         use super::*;
         use crate::semantic::{
@@ -3097,7 +3114,7 @@ mod tests {
                     IAdd(Register(1), Register(2), Register(3)),
                     RegCopy(Register(3), Register(0)),
                     Ret,
-                ]
+                ],
             );
         }
 
@@ -3108,8 +3125,8 @@ mod tests {
                 vec![
                     PopulateArgv(Register(2), 1, 1),
                     RegCopy(Register(2), Register(0)),
-                    Ret
-                ]
+                    Ret,
+                ],
             );
         }
 
@@ -3126,8 +3143,8 @@ mod tests {
                     RegCopy(Register(5), Register(2)),
                     FConst(Register(6), 3.14.into()),
                     RegCopy(Register(6), Register(3)),
-                    Jmp("function-body-start_0".into())
-                ]
+                    Jmp("function-body-start_0".into()),
+                ],
             );
         }
     }

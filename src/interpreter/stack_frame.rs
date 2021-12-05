@@ -52,7 +52,7 @@ impl StackFrame {
             function,
             registers: vec![LpcRef::Int(0); reg_len],
             pc: 0.into(),
-            called_with_num_args
+            called_with_num_args,
         }
     }
 
@@ -182,8 +182,8 @@ impl Display for StackFrame {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::function_type::FunctionArity;
     use super::*;
+    use crate::interpreter::function_type::FunctionArity;
 
     #[test]
     fn new_sets_up_registers() {

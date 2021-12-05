@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use crate::{
     errors::LpcError,
-    interpreter::efun::efun_context::EfunContext,
+    interpreter::{efun::efun_context::EfunContext, function_type::FunctionArity},
     semantic::{
         function_flags::FunctionFlags, function_prototype::FunctionPrototype, lpc_type::LpcType,
     },
@@ -24,7 +24,6 @@ use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
 use throw::throw;
-use crate::interpreter::function_type::FunctionArity;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;

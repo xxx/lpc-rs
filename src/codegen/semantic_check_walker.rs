@@ -959,9 +959,10 @@ mod tests {
     }
 
     mod test_visit_call {
-        use crate::interpreter::function_type::FunctionArity;
-        use crate::semantic::function_flags::FunctionFlags;
         use super::*;
+        use crate::{
+            interpreter::function_type::FunctionArity, semantic::function_flags::FunctionFlags,
+        };
 
         #[test]
         fn allows_known_functions() {

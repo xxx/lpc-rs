@@ -247,7 +247,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 location,
                 target,
                 applied_arguments,
-                arity
+                arity,
             } => {
                 let address = match target {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
@@ -304,7 +304,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     owner: Rc::new(Default::default()),
                     address,
                     partial_args: args,
-                    arity
+                    arity,
                 };
 
                 let func = LpcFunction::FunctionPtr(fp);
@@ -671,11 +671,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let borrowed = process.borrow();
                 let function = borrowed.functions.get(name);
                 let mut new_frame = if let Some(func) = function {
-                    StackFrame::with_minimum_arg_capacity(process.clone(), func.clone(), *num_args, *num_args)
+                    StackFrame::with_minimum_arg_capacity(
+                        process.clone(),
+                        func.clone(),
+                        *num_args,
+                        *num_args,
+                    )
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                     let sym = ProgramFunction::new(name.clone(), prototype.arity, 0);
 
-                    StackFrame::with_minimum_arg_capacity(process.clone(), Rc::new(sym), *num_args,*num_args)
+                    StackFrame::with_minimum_arg_capacity(
+                        process.clone(),
+                        Rc::new(sym),
+                        *num_args,
+                        *num_args,
+                    )
                 } else {
                     // println!("proc {:#?}", process);
                     // println!("functions {:#?}", borrowed.functions);
@@ -824,18 +834,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     call_efun(name, &mut ctx)?;
 
                     #[cfg(test)]
-                        {
-                            if ctx.snapshot.is_some() {
-                                self.snapshot = ctx.snapshot;
-                            }
+                    {
+                        if ctx.snapshot.is_some() {
+                            self.snapshot = ctx.snapshot;
                         }
+                    }
 
                     pop_frame!(self, task_context);
                 }
 
                 Ok(())
             }
-            _ => Err(self.runtime_error(format!("non-CallFp instruction passed to `handle_call_fp`: {}", instruction))),
+            _ => Err(self.runtime_error(format!(
+                "non-CallFp instruction passed to `handle_call_fp`: {}",
+                instruction
+            ))),
         }
     }
 
@@ -1576,12 +1589,18 @@ mod tests {
                 let expected = vec![
                     String("adding some! 670".into()),
                     String("adding some!".into()),
-                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
                     Int(666),
                     Int(4),
                     Int(666),
                     Int(4),
-                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
                     String("adding some! 670".into()),
                 ];
 
@@ -1605,15 +1624,24 @@ mod tests {
                 let expected = vec![
                     String("adding some! 223".into()),
                     String("adding some!".into()),
-                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
                     Int(666),
                     Int(4),
                     Int(666),
                     Int(4),
-                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
                     String("adding some! 670".into()),
                     Int(123),
-                    Function("tacos".into(), vec![None, Some(String("adding some!".into()))]),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
                     String("adding some! 223".into()),
                 ];
 
@@ -2623,21 +2651,24 @@ mod tests {
                     Int(0),
                     Int(1),
                     Int(2),
-                    Array(vec![
-                        Int(3),
-                        String("foo".into()),
-                        Array(vec![
-                            String("bar".into()),
-                            String("baz".into()),
-                            Float(3.14.into())
-                        ]),
-                        Mapping(mapping.clone())
-                    ].into()),
+                    Array(
+                        vec![
+                            Int(3),
+                            String("foo".into()),
+                            Array(vec![
+                                String("bar".into()),
+                                String("baz".into()),
+                                Float(3.14.into()),
+                            ]),
+                            Mapping(mapping.clone()),
+                        ]
+                        .into(),
+                    ),
                     String("snapshot_stack".into()),
                     Array(vec![
                         String("bar".into()),
                         String("baz".into()),
-                        Float(3.14.into())
+                        Float(3.14.into()),
                     ]),
                     Mapping(mapping),
                     Int(0),
@@ -2680,11 +2711,7 @@ mod tests {
                     Int(34),
                     Float(7.77.into()),
                     String("snuh".into()),
-                    Array(vec![
-                        String("a string".into()),
-                        Int(3),
-                        Float(2.44.into()),
-                    ].into()),
+                    Array(vec![String("a string".into()), Int(3), Float(2.44.into())].into()),
                     String("snapshot_stack".into()),
                     Int(0),
                     Int(0),
@@ -2692,11 +2719,7 @@ mod tests {
                     String("a string".into()),
                     Int(3),
                     Float(2.44.into()),
-                    Array(vec![
-                        String("a string".into()),
-                        Int(3),
-                        Float(2.44.into()),
-                    ].into()),
+                    Array(vec![String("a string".into()), Int(3), Float(2.44.into())].into()),
                 ];
 
                 assert_eq!(&expected, registers);

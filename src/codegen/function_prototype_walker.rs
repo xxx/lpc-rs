@@ -2,10 +2,10 @@ use crate::{
     ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
+    interpreter::function_type::FunctionArity,
     semantic::function_prototype::FunctionPrototype,
     Result,
 };
-use crate::interpreter::function_type::FunctionArity;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]
@@ -46,7 +46,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                     num_args,
                     num_default_args,
                     ellipsis: node.flags.ellipsis(),
-                    varargs: node.flags.varargs()
+                    varargs: node.flags.varargs(),
                 },
                 arg_types,
                 span: node.span,

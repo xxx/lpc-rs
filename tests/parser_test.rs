@@ -1,3 +1,4 @@
+use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
     ast::{
@@ -25,7 +26,6 @@ use lpc_rs::{
     semantic::lpc_type::LpcType,
     LpcFloat, LpcInt, Result,
 };
-use if_chain::if_chain;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -454,12 +454,27 @@ fn partial_application_argument_lists<'a>() {
 
     assert_eq!(get_args(&program.body[0]), None);
     assert_eq!(get_args(&program.body[1]), Some(vec![Some(1)]));
-    assert_eq!(get_args(&program.body[2]), Some(vec![Some(1), Some(2), Some(3)]));
-    assert_eq!(get_args(&program.body[3]), Some(vec![Some(1), Some(2), Some(3), None]));
-    assert_eq!(get_args(&program.body[4]), Some(vec![None, Some(2), Some(3), None]));
-    assert_eq!(get_args(&program.body[5]), Some(vec![None, None, Some(3), None]));
+    assert_eq!(
+        get_args(&program.body[2]),
+        Some(vec![Some(1), Some(2), Some(3)])
+    );
+    assert_eq!(
+        get_args(&program.body[3]),
+        Some(vec![Some(1), Some(2), Some(3), None])
+    );
+    assert_eq!(
+        get_args(&program.body[4]),
+        Some(vec![None, Some(2), Some(3), None])
+    );
+    assert_eq!(
+        get_args(&program.body[5]),
+        Some(vec![None, None, Some(3), None])
+    );
     assert_eq!(get_args(&program.body[6]), Some(vec![None, None, Some(3)]));
-    assert_eq!(get_args(&program.body[7]), Some(vec![None, None, None, None]));
+    assert_eq!(
+        get_args(&program.body[7]),
+        Some(vec![None, None, None, None])
+    );
     assert_eq!(get_args(&program.body[8]), Some(vec![None, None]));
 }
 
