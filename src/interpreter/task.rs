@@ -29,6 +29,7 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use crate::interpreter::function_type::FunctionArity;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -762,7 +763,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     .iter()
                                     .fold(0, |sum, arg| sum + arg.is_some() as usize);
 
-                                let max = *[*num_args, arity.num_args, partial_args.len()].iter().max().unwrap();
+                                let max = Self::calculate_max_arg_length(*num_args, &partial_args, arity);
 
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
@@ -795,10 +796,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let index = initial_arg.index();
 
                             if !partial_args.is_empty() {
-                                // `num_args` is how many were actually passed at the time of the call,
-                                // which may be fewer than what was specified in the partial args,
-                                // so correct that here
-                                let max = *[*num_args, arity.num_args, partial_args.len()].iter().max().unwrap();
+                                let max = Self::calculate_max_arg_length(*num_args, &partial_args, arity);
 
                                 let mut from_index = 0;
                                 let from_slice = &registers[index..(index + *num_args)];
@@ -1327,6 +1325,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         frame
     }
+
+    fn calculate_max_arg_length<T>(num_args: usize, partial_args: &Vec<Option<T>>, arity: FunctionArity) -> usize {
+        let none_args = partial_args
+            .iter()
+            .filter(|a| a.is_none())
+            .count();
+        let dynamic_len = partial_args.len() + num_args.saturating_sub(none_args);
+        std::cmp::max(dynamic_len, arity.num_args)
+    }
 }
 
 #[cfg(test)]
@@ -1656,7 +1663,7 @@ mod tests {
             fn stores_the_value_for_partial_applications_with_default_arguments_and_ellipsis() {
                 let code = indoc! { r##"
                     function q = &tacos(, "adding some!", , 666, 123);
-                    int a = q(42, 4);
+                    int a = q(42, 4, "should be in argv");
                     int b = q(69);
                     int tacos(int j, string s, int k = 100, ...) {
                         dump("argv!");
@@ -1676,8 +1683,10 @@ mod tests {
                     Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
                     Int(42),
                     Int(4),
+                    String("should be in argv".into()),
                     Int(42),
                     Int(4),
+                    String("should be in argv".into()),
                     Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
                     Int(46),
                     Int(69),
