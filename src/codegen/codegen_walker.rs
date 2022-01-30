@@ -1004,6 +1004,15 @@ impl TreeWalker for CodegenWalker {
             .map(|parameter| self.visit_parameter(parameter))
             .collect::<Vec<_>>();
 
+        if num_default_args > 0 {
+            populate_defaults_index = Some(self.current_address());
+            // the addresses are backpatched below, once we have them.
+            let instruction = Instruction::PopulateDefaults(Vec::new());
+            push_instruction!(self, instruction, node.span);
+        } else {
+            populate_defaults_index = None;
+        }
+
         if node.flags.ellipsis() {
             let argv_location = self.assign_sym_location(ARGV);
             // We don't set `argv_location` as `self.current_result`, because it's
@@ -1020,16 +1029,6 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, instruction, node.span);
         } else {
             populate_argv_index = None;
-        }
-
-        if num_default_args > 0 {
-            populate_defaults_index = Some(self.current_address());
-            // the addresses are backpatched below, once we have them.
-            let instruction = Instruction::PopulateDefaults(Vec::new());
-            push_instruction!(self, instruction, node.span);
-            // emit PopulateDefaults(number of formal args, default_args_count, list of jump locations);
-        } else {
-            populate_defaults_index = None;
         }
 
         let start_label = self.new_label("function-body-start");
