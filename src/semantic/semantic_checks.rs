@@ -248,7 +248,7 @@ pub fn check_unary_operation_types(
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => Ok(()),
-        UnaryOperation::Tilde => {
+        UnaryOperation::BitwiseNot => {
             match expr_type {
                 LpcType::Int(false) => Ok(()),
                 _ => Err(create_error("`int`"))
@@ -1664,16 +1664,16 @@ mod check_unary_operation_tests {
     fn test_bitwise_not() {
         let scope_tree = setup();
 
-        assert!(int_literal(UnaryOperation::Tilde, &scope_tree).is_ok());
-        assert!(int_var(UnaryOperation::Tilde, &scope_tree).is_ok());
-        assert!(float_literal(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(float_var(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(string_literal(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(string_var(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(array_literal(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(array_var(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(mapping_literal(UnaryOperation::Tilde, &scope_tree).is_err());
-        assert!(mapping_var(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(int_literal(UnaryOperation::BitwiseNot, &scope_tree).is_ok());
+        assert!(int_var(UnaryOperation::BitwiseNot, &scope_tree).is_ok());
+        assert!(float_literal(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(float_var(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(string_literal(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(string_var(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(array_literal(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(array_var(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(mapping_literal(UnaryOperation::BitwiseNot, &scope_tree).is_err());
+        assert!(mapping_var(UnaryOperation::BitwiseNot, &scope_tree).is_err());
     }
 }
 

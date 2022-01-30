@@ -20,7 +20,7 @@ pub enum UnaryOperation {
     Inc,
     Dec,
     Bang,
-    Tilde,
+    BitwiseNot,
 }
 
 impl Display for UnaryOperation {
@@ -30,7 +30,7 @@ impl Display for UnaryOperation {
             UnaryOperation::Inc => "++",
             UnaryOperation::Dec => "--",
             UnaryOperation::Bang => "!",
-            UnaryOperation::Tilde => "~",
+            UnaryOperation::BitwiseNot => "~",
         };
 
         write!(f, "{}", s)

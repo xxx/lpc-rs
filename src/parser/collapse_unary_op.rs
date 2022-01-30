@@ -26,7 +26,7 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => ExpressionNode::UnaryOp(node),
-        UnaryOperation::Tilde => match &*node.expr {
+        UnaryOperation::BitwiseNot => match &*node.expr {
             ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
                 value: !x.value,
                 span: node.span,
@@ -96,7 +96,7 @@ mod tests {
         let node = UnaryOpNode {
             expr: Box::new(ExpressionNode::from(123)),
             is_post: false,
-            op: UnaryOperation::Tilde,
+            op: UnaryOperation::BitwiseNot,
             span,
         };
 

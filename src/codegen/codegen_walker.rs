@@ -1541,7 +1541,7 @@ impl TreeWalker for CodegenWalker {
 
                 reg_result
             }
-            UnaryOperation::Tilde => {
+            UnaryOperation::BitwiseNot => {
                 let reg_result = self.register_counter.next().unwrap();
 
                 let instruction = Instruction::BitwiseNot(location, reg_result);

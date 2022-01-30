@@ -457,7 +457,7 @@ impl Not for &LpcRef {
     fn not(self) -> Self::Output {
         match &self {
             LpcRef::Int(x) => Ok(LpcValue::Int(!*x)),
-            _ => Err(self.to_unary_op_error(UnaryOperation::Tilde)),
+            _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
         }
     }
 }

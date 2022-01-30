@@ -856,7 +856,7 @@ UnaryOp: (UnaryOperation, Range<usize>) = {
 //    "++" => UnaryOperation::Inc,
 //    "--" => UnaryOperation::Dec,
     <l:@L> "!" <r:@R> => (UnaryOperation::Bang, l..r),
-    <l:@L> "~" <r:@R> => (UnaryOperation::Tilde, l..r),
+    <l:@L> "~" <r:@R> => (UnaryOperation::BitwiseNot, l..r),
 }
 
 Var: ExpressionNode = <name:"ID"> => {
