@@ -50,6 +50,6 @@ impl Display for CallNode {
             if let Some(e) = &self.receiver => ("{}->{}({})", e, self.name, args)
             else ("{}({})", self.name, args)
         );
-        write!(f, "{}", fmt.to_string())
+        write!(f, "{}", fmt)
     }
 }

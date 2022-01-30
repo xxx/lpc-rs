@@ -58,6 +58,6 @@ impl Display for FunctionPtrNode {
             if let Some(e) = &self.receiver => ("({})->{}{}", e, self.name, arg_fmt)
             else ("{}{}", self.name, arg_fmt)
         );
-        write!(f, "&{}", fmt.to_string())
+        write!(f, "&{}", fmt)
     }
 }

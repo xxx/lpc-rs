@@ -109,7 +109,7 @@ impl TaskContext {
 
                 Ok(buf)
             }
-            Err(e) => Err(LpcError::new(format!("{} in TaskContext", e.to_string()))),
+            Err(e) => Err(LpcError::new(format!("{} in TaskContext", e))),
         }
     }
 
