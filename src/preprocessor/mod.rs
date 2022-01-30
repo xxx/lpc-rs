@@ -58,7 +58,7 @@ lazy_static! {
 
 #[derive(Debug)]
 struct IfDef {
-    pub code: String,
+    // pub code: String,
     pub span: Span,
 
     /// This field on the top IfDef in the stack indicates if we're currently in a
@@ -589,7 +589,7 @@ impl Preprocessor {
                     let printing_lines = self.eval_expr_for_skipping(&expr, Some(token.0))?;
 
                     self.ifdefs.push(IfDef {
-                        code: String::from(&captures[1]),
+                        // code: String::from(&captures[1]),
                         skipping_lines: !printing_lines,
                         compiled_out: self.skipping_lines(),
                         span: token.0,
@@ -718,7 +718,7 @@ impl Preprocessor {
             || Err(LpcError::new("invalid `#ifdef`.").with_span(Some(token.0))),
             |captures| {
                 self.ifdefs.push(IfDef {
-                    code: String::from(&captures[1]),
+                    // code: String::from(&captures[1]),
                     skipping_lines: !self.defines.contains_key(&captures[1]),
                     compiled_out: self.skipping_lines(),
                     span: token.0,
@@ -736,7 +736,7 @@ impl Preprocessor {
             || Err(LpcError::new("invalid `#ifndef`.").with_span(Some(token.0))),
             |captures| {
                 self.ifdefs.push(IfDef {
-                    code: String::from(&captures[1]),
+                    // code: String::from(&captures[1]),
                     skipping_lines: self.defines.contains_key(&captures[1]),
                     compiled_out: self.skipping_lines(),
                     span: token.0,
