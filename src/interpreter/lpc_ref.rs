@@ -12,6 +12,8 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub},
     ptr,
 };
+use std::ops::Not;
+use crate::ast::unary_op_node::UnaryOperation;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -101,6 +103,15 @@ impl LpcRef {
             op,
             right,
             right.type_name()
+        ))
+    }
+
+    fn to_unary_op_error(&self, op: UnaryOperation) -> LpcError {
+        LpcError::new(format!(
+            "runtime error: mismatched types: {} {} ({})",
+            op,
+            self,
+            self.type_name()
         ))
     }
 }
@@ -371,7 +382,7 @@ impl BitAnd for &LpcRef {
     fn bitand(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x & *y)),
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+            _ => Err(self.to_error(BinaryOperation::And, rhs)),
         }
     }
 }
@@ -382,7 +393,7 @@ impl BitOr for &LpcRef {
     fn bitor(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x | *y)),
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Or, rhs)),
         }
     }
 }
@@ -393,7 +404,7 @@ impl BitXor for &LpcRef {
     fn bitxor(self, rhs: Self) -> Self::Output {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
         }
     }
 }
@@ -414,7 +425,7 @@ impl Shl for &LpcRef {
 
                 Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
             }
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
         }
     }
 }
@@ -435,7 +446,18 @@ impl Shr for &LpcRef {
 
                 Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
             }
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+            _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
+        }
+    }
+}
+
+impl Not for &LpcRef {
+    type Output = Result<LpcValue>;
+
+    fn not(self) -> Self::Output {
+        match &self {
+            LpcRef::Int(x) => Ok(LpcValue::Int(!*x)),
+            _ => Err(self.to_unary_op_error(UnaryOperation::Tilde)),
         }
     }
 }
@@ -1006,6 +1028,21 @@ mod tests {
             let result = &int >> &int2;
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 192)
+            } else {
+                panic!("no match")
+            }
+        }
+    }
+
+    mod test_bitwise_not {
+        use super::*;
+
+        #[test]
+        fn int_int() {
+            let int = LpcRef::Int(12345);
+            let result = !&int;
+            if let Ok(LpcValue::Int(x)) = result {
+                assert_eq!(x, -12346) // one's complement
             } else {
                 panic!("no match")
             }

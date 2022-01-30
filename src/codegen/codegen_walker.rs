@@ -1515,7 +1515,7 @@ impl TreeWalker for CodegenWalker {
 
     fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
         node.expr.visit(self)?;
-        let reg_expr = self.current_result;
+        let location = self.current_result;
 
         self.current_result = match node.op {
             UnaryOperation::Negate => {
@@ -1526,7 +1526,7 @@ impl TreeWalker for CodegenWalker {
 
                 let reg_result = self.register_counter.next().unwrap();
 
-                let instruction = Instruction::MMul(reg_expr, reg, reg_result);
+                let instruction = Instruction::MMul(location, reg, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 reg_result
@@ -1536,12 +1536,19 @@ impl TreeWalker for CodegenWalker {
             UnaryOperation::Bang => {
                 let reg_result = self.register_counter.next().unwrap();
 
-                let instruction = Instruction::Not(reg_expr, reg_result);
+                let instruction = Instruction::Not(location, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 reg_result
             }
-            UnaryOperation::Tilde => todo!(),
+            UnaryOperation::Tilde => {
+                let reg_result = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::BitwiseNot(location, reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                reg_result
+            }
         };
 
         Ok(())

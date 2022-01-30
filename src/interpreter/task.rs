@@ -201,6 +201,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x & y)?;
             }
+            Instruction::BitwiseNot(r1, r2) => {
+                let debug_span = frame.current_debug_span();
+                let registers = &mut self.stack.current_frame_mut()?.registers;
+                match !&registers[r1.index()] {
+                    Ok(result) => {
+                        let var = self.memory.value_to_ref(result);
+
+                        registers[r2.index()] = var;
+                    },
+                    Err(e) => {
+                        return Err(e.with_span(debug_span));
+                    }
+
+                }
+            }
             Instruction::Call { .. } => {
                 self.handle_call(&instruction, task_context)?;
             }
@@ -1535,6 +1550,26 @@ mod tests {
                     Int(0),
                     Int(0),
                 ];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_bitwise_not {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    int a = ~0;
+                    int b = 7;
+                    int c = ~b;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Int(0), Int(-1), Int(7), Int(7), Int(-8)];
 
                 assert_eq!(&expected, &registers);
             }

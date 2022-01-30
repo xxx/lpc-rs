@@ -26,6 +26,9 @@ pub enum Instruction {
     /// x.2 = x.0 & x.1
     And(Register, Register, Register),
 
+    /// x.1 = ~x.0
+    BitwiseNot(Register, Register),
+
     /// Call a function
     Call {
         name: String,
@@ -214,6 +217,9 @@ impl Display for Instruction {
             }
             Instruction::And(r1, r2, r3) => {
                 write!(f, "and {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::BitwiseNot(r1, r2) => {
+                write!(f, "bitwisenot {}, {}", r1, r2)
             }
             Instruction::CatchEnd => {
                 write!(f, "catchend")

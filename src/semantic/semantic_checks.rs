@@ -248,7 +248,12 @@ pub fn check_unary_operation_types(
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => Ok(()),
-        UnaryOperation::Tilde => todo!(),
+        UnaryOperation::Tilde => {
+            match expr_type {
+                LpcType::Int(false) => Ok(()),
+                _ => Err(create_error("`int`"))
+            }
+        },
     }
 }
 
@@ -1640,7 +1645,7 @@ mod check_unary_operation_tests {
     }
 
     #[test]
-    fn test_add() {
+    fn test_negate() {
         let scope_tree = setup();
 
         assert!(int_literal(UnaryOperation::Negate, &scope_tree).is_ok());
@@ -1653,6 +1658,22 @@ mod check_unary_operation_tests {
         assert!(array_var(UnaryOperation::Negate, &scope_tree).is_err());
         assert!(mapping_literal(UnaryOperation::Negate, &scope_tree).is_err());
         assert!(mapping_var(UnaryOperation::Negate, &scope_tree).is_err());
+    }
+
+    #[test]
+    fn test_bitwise_not() {
+        let scope_tree = setup();
+
+        assert!(int_literal(UnaryOperation::Tilde, &scope_tree).is_ok());
+        assert!(int_var(UnaryOperation::Tilde, &scope_tree).is_ok());
+        assert!(float_literal(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(float_var(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(string_literal(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(string_var(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(array_literal(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(array_var(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(mapping_literal(UnaryOperation::Tilde, &scope_tree).is_err());
+        assert!(mapping_var(UnaryOperation::Tilde, &scope_tree).is_err());
     }
 }
 

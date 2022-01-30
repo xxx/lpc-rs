@@ -26,7 +26,13 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => ExpressionNode::UnaryOp(node),
-        UnaryOperation::Tilde => todo!(),
+        UnaryOperation::Tilde => match &*node.expr {
+            ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
+                value: !x.value,
+                span: node.span,
+            }),
+            _ => ExpressionNode::UnaryOp(node),
+        },
     }
 }
 
@@ -82,5 +88,19 @@ mod tests {
 
         let result = collapse_unary_op(node.clone());
         assert_eq!(result, ExpressionNode::UnaryOp(node));
+    }
+
+    #[test]
+    fn collapses_bitwise_not_int() {
+        let span = Some(Span::new(0, 0..1));
+        let node = UnaryOpNode {
+            expr: Box::new(ExpressionNode::from(123)),
+            is_post: false,
+            op: UnaryOperation::Tilde,
+            span,
+        };
+
+        let result = collapse_unary_op(node);
+        assert_eq!(result, ExpressionNode::Int(IntNode { value: !123, span }));
     }
 }
