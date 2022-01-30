@@ -248,11 +248,9 @@ pub fn check_unary_operation_types(
         UnaryOperation::Inc => todo!(),
         UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => Ok(()),
-        UnaryOperation::BitwiseNot => {
-            match expr_type {
-                LpcType::Int(false) => Ok(()),
-                _ => Err(create_error("`int`"))
-            }
+        UnaryOperation::BitwiseNot => match expr_type {
+            LpcType::Int(false) => Ok(()),
+            _ => Err(create_error("`int`")),
         },
     }
 }

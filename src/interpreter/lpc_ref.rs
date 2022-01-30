@@ -1,5 +1,7 @@
 use crate::{
-    ast::binary_op_node::BinaryOperation, errors::LpcError, interpreter::lpc_value::LpcValue,
+    ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
+    errors::LpcError,
+    interpreter::lpc_value::LpcValue,
     try_extract_value, BaseFloat, LpcFloat, LpcInt, Result,
 };
 use refpool::PoolRef;
@@ -9,11 +11,9 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub},
+    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
-use std::ops::Not;
-use crate::ast::unary_op_node::UnaryOperation;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///

@@ -209,11 +209,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let var = self.memory.value_to_ref(result);
 
                         registers[r2.index()] = var;
-                    },
+                    }
                     Err(e) => {
                         return Err(e.with_span(debug_span));
                     }
-
                 }
             }
             Instruction::Call { .. } => {
