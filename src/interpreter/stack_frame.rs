@@ -28,6 +28,8 @@ pub struct StackFrame {
     /// Track where the pc is pointing in this frame's function's instructions.
     pc: Cell<usize>,
     /// How many explicit arguments were passed to the call that created this frame?
+    /// This will include partially-applied arguments in the case that
+    /// the StackFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
 }
 
