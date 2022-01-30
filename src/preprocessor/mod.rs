@@ -490,7 +490,7 @@ impl Preprocessor {
         &mut self,
         token: &StringToken,
         cwd: &U,
-        mut output: &mut Vec<Spanned<Token>>,
+        output: &mut Vec<Spanned<Token>>,
     ) -> Result<()>
     where
         U: AsRef<Path>,
@@ -510,7 +510,7 @@ impl Preprocessor {
                 return match self.include_local_file(&to_include, token.0) {
                     Ok(included) => {
                         for spanned in included {
-                            self.append_spanned(&mut output, spanned)
+                            self.append_spanned(output, spanned)
                         }
 
                         Ok(())
@@ -533,7 +533,7 @@ impl Preprocessor {
             let included = self.include_local_file(&to_include, token.0)?;
 
             for spanned in included {
-                self.append_spanned(&mut output, spanned)
+                self.append_spanned(output, spanned)
             }
 
             Ok(())
@@ -550,7 +550,7 @@ impl Preprocessor {
         &mut self,
         token: &StringToken,
         cwd: &U,
-        mut output: &mut Vec<Spanned<Token>>,
+        output: &mut Vec<Spanned<Token>>,
     ) -> Result<()>
     where
         U: AsRef<Path>,
@@ -569,7 +569,7 @@ impl Preprocessor {
             let included = self.include_local_file(&to_include, token.0)?;
 
             for spanned in included {
-                self.append_spanned(&mut output, spanned)
+                self.append_spanned(output, spanned)
             }
 
             Ok(())

@@ -506,7 +506,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
-                let mut frame = self.stack.current_frame_mut()?;
+                let frame = self.stack.current_frame_mut()?;
 
                 let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
                     let to_idx = |i: LpcInt| {
@@ -543,7 +543,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let vec = try_extract_value!(*value, LpcValue::Array);
 
                         if vec.is_empty() {
-                            return_value(LpcValue::from(vec![]), &self.memory, &mut frame)?;
+                            return_value(LpcValue::from(vec![]), &self.memory, frame)?;
                         }
 
                         let index1 = frame.resolve_lpc_ref(r2);
@@ -556,9 +556,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 let slice = &vec[real_start..=real_end];
                                 let mut new_vec = vec![LpcRef::Int(0); slice.len()];
                                 new_vec.clone_from_slice(slice);
-                                return_value(LpcValue::from(new_vec), &self.memory, &mut frame)?;
+                                return_value(LpcValue::from(new_vec), &self.memory, frame)?;
                             } else {
-                                return_value(LpcValue::from(vec![]), &self.memory, &mut frame)?;
+                                return_value(LpcValue::from(vec![]), &self.memory, frame)?;
                             }
                         } else {
                             return Err(LpcError::new(
@@ -572,7 +572,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let string = try_extract_value!(*value, LpcValue::String);
 
                         if string.is_empty() {
-                            return_value(LpcValue::from(""), &self.memory, &mut frame)?;
+                            return_value(LpcValue::from(""), &self.memory, frame)?;
                         }
 
                         let index1 = frame.resolve_lpc_ref(r2);
@@ -585,9 +585,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 let len = real_end - real_start + 1;
                                 let new_string: String =
                                     string.chars().skip(real_start).take(len).collect();
-                                return_value(LpcValue::from(new_string), &self.memory, &mut frame)?;
+                                return_value(LpcValue::from(new_string), &self.memory, frame)?;
                             } else {
-                                return_value(LpcValue::from(""), &self.memory, &mut frame)?;
+                                return_value(LpcValue::from(""), &self.memory, frame)?;
                             }
                         } else {
                             return Err(LpcError::new(
@@ -763,7 +763,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     .iter()
                                     .fold(0, |sum, arg| sum + arg.is_some() as usize);
 
-                                let max = Self::calculate_max_arg_length(*num_args, &partial_args, arity);
+                                let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
 
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
@@ -796,7 +796,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let index = initial_arg.index();
 
                             if !partial_args.is_empty() {
-                                let max = Self::calculate_max_arg_length(*num_args, &partial_args, arity);
+                                let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
 
                                 let mut from_index = 0;
                                 let from_slice = &registers[index..(index + *num_args)];
@@ -1326,7 +1326,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         frame
     }
 
-    fn calculate_max_arg_length<T>(num_args: usize, partial_args: &Vec<Option<T>>, arity: FunctionArity) -> usize {
+    fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>], arity: FunctionArity) -> usize {
         let none_args = partial_args
             .iter()
             .filter(|a| a.is_none())
