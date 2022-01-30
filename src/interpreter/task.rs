@@ -756,15 +756,22 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         match func {
                             LpcFunction::FunctionPtr(ptr) => {
+                                partial_args = &ptr.partial_args;
+                                arity = ptr.arity;
+                                let called_args = *num_args + partial_args
+                                    .iter()
+                                    .fold(0, |sum, arg| sum + arg.is_some() as usize);
+
+                                let max = *[*num_args, arity.num_args, partial_args.len()].iter().max().unwrap();
+
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
-                                        partial_args = &ptr.partial_args;
-                                        arity = ptr.arity;
-                                        let called_args = *num_args + partial_args
-                                            .iter()
-                                            .fold(0, |sum, arg| sum + arg.is_some() as usize);
-                                        let max = std::cmp::max(called_args, function.arity.num_args);
-                                        new_frame = StackFrame::with_minimum_arg_capacity(proc.clone(), function.clone(), called_args, max);
+                                        new_frame = StackFrame::with_minimum_arg_capacity(
+                                            proc.clone(),
+                                            function.clone(),
+                                            called_args,
+                                            max
+                                        );
                                     }
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
@@ -773,15 +780,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                         function_is_local = false;
 
-                                        partial_args = &ptr.partial_args;
-                                        arity = ptr.arity;
-
-                                        let called_args = *num_args + partial_args
-                                            .iter()
-                                            .fold(0, |sum, arg| sum + arg.is_some() as usize);
-                                        let max = std::cmp::max(called_args, prototype.arity.num_args);
-
-                                        new_frame = StackFrame::with_minimum_arg_capacity(frame.process.clone(), Rc::new(pf), called_args, max);
+                                        new_frame = StackFrame::with_minimum_arg_capacity(
+                                            frame.process.clone(),
+                                            Rc::new(pf),
+                                            called_args,
+                                            max
+                                        );
                                     }
                                 }
                             }
@@ -794,22 +798,20 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 // `num_args` is how many were actually passed at the time of the call,
                                 // which may be fewer than what was specified in the partial args,
                                 // so correct that here
-                                let max = arity.num_args;
+                                let max = *[*num_args, arity.num_args, partial_args.len()].iter().max().unwrap();
 
                                 let mut from_index = 0;
-                                let from_slice = &registers[index..(index + max)];
+                                let from_slice = &registers[index..(index + *num_args)];
                                 let to_slice = &mut new_frame.registers[1..=max];
 
                                 for (i, item) in to_slice.iter_mut().enumerate().take(max) {
                                     if let Some(Some(x)) = partial_args.get(i) {
                                         // if a partially-appliable arg is present, use it
-                                        std::mem::replace(item, x.clone());
-                                        // to_slice[i] = x.clone();
+                                        let _ = std::mem::replace(item, x.clone());
                                     } else if let Some(x) = from_slice.get(from_index) {
                                         // check if the user passed an argument to
                                         // fill in a hole in the partial arguments
-                                        std::mem::replace(item, x.clone());
-                                        // to_slice[i] = x.clone();
+                                        let _ = std::mem::replace(item, x.clone());
                                         from_index += 1;
                                     }
                                 }
@@ -1647,6 +1649,41 @@ mod tests {
                     String("adding some! 223".into()),
                 ];
 
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_partial_applications_with_default_arguments_and_ellipsis() {
+                let code = indoc! { r##"
+                    function q = &tacos(, "adding some!", , 666, 123);
+                    int a = q(42, 4);
+                    int b = q(69);
+                    int tacos(int j, string s, int k = 100, ...) {
+                        dump("argv!");
+                        dump(argv);
+                        return j + k;
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(69),
+                    String("adding some!".into()),
+                    Int(666),
+                    Int(123),
+                    Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
+                    Int(42),
+                    Int(4),
+                    Int(42),
+                    Int(4),
+                    Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
+                    Int(46),
+                    Int(69),
+                    Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
+                    Int(69)
+                ];
                 assert_eq!(&expected, &registers);
             }
         }
