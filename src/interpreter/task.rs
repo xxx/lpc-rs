@@ -9,7 +9,8 @@ use crate::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{
-            FunctionAddress, FunctionPtr, FunctionReceiver, FunctionTarget, LpcFunction,
+            FunctionAddress, FunctionArity, FunctionPtr, FunctionReceiver, FunctionTarget,
+            LpcFunction,
         },
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
@@ -29,7 +30,6 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
-use crate::interpreter::function_type::FunctionArity;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -1326,11 +1326,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         frame
     }
 
-    fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>], arity: FunctionArity) -> usize {
-        let none_args = partial_args
-            .iter()
-            .filter(|a| a.is_none())
-            .count();
+    fn calculate_max_arg_length<T>(
+        num_args: usize,
+        partial_args: &[Option<T>],
+        arity: FunctionArity,
+    ) -> usize {
+        let none_args = partial_args.iter().filter(|a| a.is_none()).count();
         let dynamic_len = partial_args.len() + num_args.saturating_sub(none_args);
         std::cmp::max(dynamic_len, arity.num_args)
     }
@@ -1680,18 +1681,45 @@ mod tests {
                     String("adding some!".into()),
                     Int(666),
                     Int(123),
-                    Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
+                    Function(
+                        "tacos".to_string(),
+                        vec![
+                            None,
+                            Some(String("adding some!".into())),
+                            None,
+                            Some(Int(666)),
+                            Some(Int(123)),
+                        ],
+                    ),
                     Int(42),
                     Int(4),
                     String("should be in argv".into()),
                     Int(42),
                     Int(4),
                     String("should be in argv".into()),
-                    Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
+                    Function(
+                        "tacos".to_string(),
+                        vec![
+                            None,
+                            Some(String("adding some!".into())),
+                            None,
+                            Some(Int(666)),
+                            Some(Int(123)),
+                        ],
+                    ),
                     Int(46),
                     Int(69),
-                    Function("tacos".to_string(), vec![None, Some(String("adding some!".into())), None, Some(Int(666)), Some(Int(123))]),
-                    Int(69)
+                    Function(
+                        "tacos".to_string(),
+                        vec![
+                            None,
+                            Some(String("adding some!".into())),
+                            None,
+                            Some(Int(666)),
+                            Some(Int(123)),
+                        ],
+                    ),
+                    Int(69),
                 ];
                 assert_eq!(&expected, &registers);
             }
