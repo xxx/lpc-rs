@@ -308,7 +308,7 @@ pub trait TreeWalker {
         Ok(())
     }
 
-    /// Visit a binary operation node
+    /// Visit a unary operation node
     fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()>
     where
         Self: Sized,
