@@ -56,6 +56,8 @@ impl Compiler {
     ///
     /// # Arguments
     /// `path` - The full, on-server path of the file to compile. Also used for error messaging.
+    ///          If the file in question ends in `.c`, the extension can be left off, per
+    ///          common LPC usage.
     ///
     /// # Examples
     /// ```
