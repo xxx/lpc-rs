@@ -8,7 +8,7 @@ This will eventually be an [LPC](https://mud.fandom.com/wiki/LPC) compiler and d
 4. `mkdir lib`
 5. `cd lib`
 6. open `hello.c`, with content:
-```
+```c
 #define MSG "hello, world!"
 
 void create() {
