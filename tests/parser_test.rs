@@ -253,6 +253,15 @@ fn string_literal_repeat() {
     });
 
     assert_eq!(node, expected);
+
+    // test overflow
+    let expr = r##""foo" * 9223372036854775807"##;
+    let lexer = LexWrapper::new(expr);
+    let error = lpc_parser::ExpressionParser::new()
+        .parse(&CompilationContext::default(), lexer)
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "capacity overflow in string repetition");
 }
 
 #[test]

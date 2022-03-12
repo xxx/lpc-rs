@@ -462,7 +462,7 @@ pub PrimaryExpression: ExpressionNode = {
 
 pub PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
-    <l:PostfixExpression> "[" <r:Expression> <right:"]"> => {
+    <l:PostfixExpression> "[" <r:Expression> <right:"]"> =>? {
         let file_id = first_span(&[&l, &r]).file_id;
         let left = if let Some(span) = l.span() {
             span.l
@@ -472,7 +472,7 @@ pub PostfixExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> => {
+    <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> =>? {
         let file_id = first_span(&[&l, &e1, &e2]).file_id;
         let left = if let Some(span) = l.span() {
             span.l
@@ -488,7 +488,7 @@ pub PostfixExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> => {
+    <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> =>? {
         let file_id = first_span(&[&l, &e]).file_id;
         let left = if let Some(span) = l.span() {
             span.l
@@ -504,7 +504,7 @@ pub PostfixExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
     },
-    <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> => {
+    <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> =>? {
         let file_id = first_span(&[&l, &e]).file_id;
         let left = if let Some(span) = l.span() {
             span.l
@@ -584,7 +584,7 @@ pub CastExpression: ExpressionNode = {
 
 pub MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
-    <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> => {
+    <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
@@ -593,7 +593,7 @@ pub MultiplicitiveExpression: ExpressionNode = {
 
 pub AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
-    <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> => {
+    <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
@@ -602,7 +602,7 @@ pub AdditiveExpression: ExpressionNode = {
 
 pub ShiftExpression: ExpressionNode = {
     <AdditiveExpression>,
-    <l:ShiftExpression> <op:ShiftOp> <r:AdditiveExpression> => {
+    <l:ShiftExpression> <op:ShiftOp> <r:AdditiveExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
@@ -611,7 +611,7 @@ pub ShiftExpression: ExpressionNode = {
 
 pub RelationalExpression: ExpressionNode = {
     <ShiftExpression>,
-    <l:RelationalExpression> <op:RelationalOp> <r:ShiftExpression> => {
+    <l:RelationalExpression> <op:RelationalOp> <r:ShiftExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
@@ -620,7 +620,7 @@ pub RelationalExpression: ExpressionNode = {
 
 pub EqualityExpression: ExpressionNode = {
     <RelationalExpression>,
-    <l:EqualityExpression> <op:EqualityOp> <r:RelationalExpression> => {
+    <l:EqualityExpression> <op:EqualityOp> <r:RelationalExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
@@ -629,7 +629,7 @@ pub EqualityExpression: ExpressionNode = {
 
 pub AndExpression: ExpressionNode = {
     <EqualityExpression>,
-    <l:AndExpression> "&" <r:EqualityExpression> => {
+    <l:AndExpression> "&" <r:EqualityExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::And, l, r, span)
@@ -638,7 +638,7 @@ pub AndExpression: ExpressionNode = {
 
 pub ExclusiveOrExpression: ExpressionNode = {
     <AndExpression>,
-    <l:ExclusiveOrExpression> "^" <r:AndExpression> => {
+    <l:ExclusiveOrExpression> "^" <r:AndExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::Xor, l, r, span)
@@ -647,7 +647,7 @@ pub ExclusiveOrExpression: ExpressionNode = {
 
 pub OrExpression: ExpressionNode = {
     <ExclusiveOrExpression>,
-    <l:OrExpression> "|" <r:ExclusiveOrExpression> => {
+    <l:OrExpression> "|" <r:ExclusiveOrExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::Or, l, r, span)
@@ -656,7 +656,7 @@ pub OrExpression: ExpressionNode = {
 
 pub LogicalAndExpression: ExpressionNode = {
     <OrExpression>,
-    <l:LogicalAndExpression> "&&" <r:OrExpression> => {
+    <l:LogicalAndExpression> "&&" <r:OrExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::AndAnd, l, r, span)
@@ -665,7 +665,7 @@ pub LogicalAndExpression: ExpressionNode = {
 
 pub LogicalOrExpression: ExpressionNode = {
     <LogicalAndExpression>,
-    <l:LogicalOrExpression> "||" <r:LogicalAndExpression> => {
+    <l:LogicalOrExpression> "||" <r:LogicalAndExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::OrOr, l, r, span)

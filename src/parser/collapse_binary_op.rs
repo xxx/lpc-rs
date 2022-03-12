@@ -1,13 +1,11 @@
-use crate::{
-    ast::{
-        binary_op_node::{BinaryOpNode, BinaryOperation},
-        expression_node::ExpressionNode,
-        int_node::IntNode,
-        string_node::StringNode,
-    },
-    parser::span::Span,
-    LpcInt,
-};
+use lalrpop_util::ParseError;
+use crate::{ast::{
+    binary_op_node::{BinaryOpNode, BinaryOperation},
+    expression_node::ExpressionNode,
+    int_node::IntNode,
+    string_node::StringNode,
+}, parser::span::Span, LpcInt, LpcError, util::repeat_string};
+use crate::parser::lexer;
 
 /// Combine literals in cases where we have enough information to do so.
 ///
@@ -21,7 +19,7 @@ pub fn collapse_binary_op(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
     match op {
         BinaryOperation::Add => collapse_add(op, l, r, span),
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
@@ -40,12 +38,12 @@ pub fn collapse_binary_op(
         | BinaryOperation::Gt
         | BinaryOperation::Gte
         | BinaryOperation::AndAnd
-        | BinaryOperation::OrOr => ExpressionNode::BinaryOp(BinaryOpNode {
+        | BinaryOperation::OrOr => Ok(ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(l),
             r: Box::new(r),
             op,
             span: Some(span),
-        }),
+        })),
     }
 }
 
@@ -54,8 +52,8 @@ fn collapse_add(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match &l {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
                 value: node.value + node2.value,
@@ -98,7 +96,9 @@ fn collapse_add(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_sub(
@@ -106,8 +106,8 @@ fn collapse_sub(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match &l {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
                 value: node.value - node2.value,
@@ -126,7 +126,9 @@ fn collapse_sub(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_mul(
@@ -134,15 +136,15 @@ fn collapse_mul(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match &l {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
                 value: node.value * node2.value,
                 span: Some(span),
             }),
             // 3 * "string" = "stringstringstring"
-            ExpressionNode::String(node2) => collapse_repeat_string(node2.value, node.value, span),
+            ExpressionNode::String(node2) => collapse_repeat_string(node2.value, node.value, span)?,
             _ => ExpressionNode::BinaryOp(BinaryOpNode {
                 l: Box::new(l),
                 r: Box::new(r),
@@ -154,7 +156,7 @@ fn collapse_mul(
             match r {
                 // "string" * 3 == "stringstringstring"
                 ExpressionNode::Int(node2) => {
-                    collapse_repeat_string(node.value.clone(), node2.value, span)
+                    collapse_repeat_string(node.value.clone(), node2.value, span)?
                 }
                 _ => ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(l),
@@ -170,7 +172,9 @@ fn collapse_mul(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_div(
@@ -178,8 +182,8 @@ fn collapse_div(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
             if node2.value != 0 {
                 ExpressionNode::Int(IntNode {
@@ -203,7 +207,9 @@ fn collapse_div(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_mod(
@@ -211,8 +217,8 @@ fn collapse_mod(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
             if node2.value != 0 {
                 ExpressionNode::Int(IntNode {
@@ -236,7 +242,9 @@ fn collapse_mod(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_and(
@@ -244,8 +252,8 @@ fn collapse_and(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value & node2.value,
             span: Some(span),
@@ -256,7 +264,9 @@ fn collapse_and(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_or(
@@ -264,8 +274,8 @@ fn collapse_or(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value | node2.value,
             span: Some(span),
@@ -276,7 +286,9 @@ fn collapse_or(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_xor(
@@ -284,8 +296,8 @@ fn collapse_xor(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value ^ node2.value,
             span: Some(span),
@@ -296,7 +308,9 @@ fn collapse_xor(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_shl(
@@ -304,8 +318,8 @@ fn collapse_shl(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value << node2.value,
             span: Some(span),
@@ -316,7 +330,9 @@ fn collapse_shl(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 fn collapse_shr(
@@ -324,8 +340,8 @@ fn collapse_shr(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> ExpressionNode {
-    match (&l, &r) {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value >> node2.value,
             span: Some(span),
@@ -336,28 +352,26 @@ fn collapse_shr(
             op,
             span: Some(span),
         }),
-    }
+    };
+
+    Ok(result)
 }
 
 /// handle string * int and int * string
-fn collapse_repeat_string(string: String, amount: LpcInt, span: Span) -> ExpressionNode {
-    if amount >= 0 {
-        let value = string.repeat(amount as usize);
-        ExpressionNode::String(StringNode {
-            value,
-            span: Some(span),
-        })
-    } else {
-        ExpressionNode::String(StringNode {
-            value: String::from(""),
-            span: Some(span),
-        })
-    }
+fn collapse_repeat_string(string: String, amount: LpcInt, span: Span) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+    let value = repeat_string::repeat_string(string.as_str(), amount)?;
+    let node = ExpressionNode::String(StringNode {
+        value,
+        span: Some(span),
+    });
+
+    Ok(node)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claim::*;
 
     #[test]
     fn test_collapses_add_int_and_int() {
@@ -367,8 +381,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 579,
                 span: Some(span)
@@ -384,8 +399,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: -333,
                 span: Some(span)
@@ -401,8 +417,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 369,
                 span: Some(span)
@@ -418,8 +435,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 40,
                 span: Some(span)
@@ -435,8 +453,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 12,
                 span: Some(span)
@@ -452,8 +471,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::String(StringNode {
                 value: "123hello".to_string(),
                 span: Some(span)
@@ -469,8 +489,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::String(StringNode {
                 value: "hello123".to_string(),
                 span: Some(span)
@@ -486,8 +507,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::String(StringNode {
                 value: "hellohellohellohello".to_string(),
                 span: Some(span)
@@ -503,12 +525,28 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::String(StringNode {
                 value: "hellohellohellohello".to_string(),
                 span: Some(span)
             })
+        );
+    }
+
+    #[test]
+    fn test_handles_mul_string_int_overflow() {
+        let node1 = ExpressionNode::from("hello");
+        let node2 = ExpressionNode::from(LpcInt::MAX);
+        let op = BinaryOperation::Mul;
+        let span = Span::new(0, 0..1);
+
+        let result = collapse_binary_op(op, node1, node2, span);
+        assert_err!(result.clone());
+        assert_eq!(
+            result.unwrap_err().to_string().as_str(),
+            "capacity overflow in string repetition"
         );
     }
 
@@ -520,8 +558,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 32,
                 span: Some(span)
@@ -537,8 +576,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 124,
                 span: Some(span)
@@ -554,8 +594,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 92,
                 span: Some(span)
@@ -571,8 +612,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 8246337208320,
                 span: Some(span)
@@ -588,8 +630,9 @@ mod tests {
         let span = Span::new(0, 0..1);
 
         let result = collapse_binary_op(op, node1, node2, span);
+        assert_ok!(result.clone());
         assert_eq!(
-            result,
+            result.unwrap(),
             ExpressionNode::Int(IntNode {
                 value: 468,
                 span: Some(span)

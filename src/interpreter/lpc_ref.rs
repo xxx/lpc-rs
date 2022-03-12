@@ -1,8 +1,8 @@
 use crate::{
     ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
+    BaseFloat,
     errors::LpcError,
-    interpreter::lpc_value::LpcValue,
-    try_extract_value, BaseFloat, LpcFloat, LpcInt, Result,
+    interpreter::lpc_value::LpcValue, LpcFloat, LpcInt, Result, try_extract_value,
 };
 use refpool::PoolRef;
 use std::{
@@ -14,6 +14,7 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
+use crate::util::repeat_string;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -290,21 +291,6 @@ impl Sub for &LpcRef {
     }
 }
 
-/// Repeat `s`, `i` times, and return a new String of it.
-///
-/// Return an error if there is an overflow.
-fn repeat_string(s: &str, i: LpcInt) -> Result<String> {
-    if i >= 0 {
-        let capacity = (i as usize).checked_mul(s.len());
-        match capacity {
-            Some(_) => Ok(s.repeat(i as usize)),
-            None => Err(LpcError::new("capacity overflow in string repetition"))
-        }
-    } else {
-        Ok(String::from(""))
-    }
-}
-
 impl Mul for &LpcRef {
     type Output = Result<LpcValue>;
 
@@ -319,12 +305,12 @@ impl Mul for &LpcRef {
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string(string, *y)?))
+                Ok(LpcValue::String(repeat_string::repeat_string(string, *y)?))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string(string, *x)?))
+                Ok(LpcValue::String(repeat_string::repeat_string(string, *x)?))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
