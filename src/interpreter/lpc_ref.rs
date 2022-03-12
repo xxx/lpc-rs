@@ -291,11 +291,17 @@ impl Sub for &LpcRef {
 }
 
 /// Repeat `s`, `i` times, and return a new String of it.
-fn repeat_string(s: &str, i: LpcInt) -> String {
+///
+/// Return an error if there is an overflow.
+fn repeat_string(s: &str, i: LpcInt) -> Result<String> {
     if i >= 0 {
-        s.repeat(i as usize)
+        let capacity = (i as usize).checked_mul(s.len());
+        match capacity {
+            Some(_) => Ok(s.repeat(i as usize)),
+            None => Err(LpcError::new("capacity overflow in string repetition"))
+        }
     } else {
-        String::from("")
+        Ok(String::from(""))
     }
 }
 
@@ -313,12 +319,12 @@ impl Mul for &LpcRef {
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string(string, *y)))
+                Ok(LpcValue::String(repeat_string(string, *y)?))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string(string, *x)))
+                Ok(LpcValue::String(repeat_string(string, *x)?))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
@@ -807,6 +813,16 @@ mod tests {
             } else {
                 panic!("no match")
             }
+        }
+
+        #[test]
+        fn string_int_overflow_does_not_panic() {
+            let pool = Pool::new(5);
+            let string = value_to_ref!(LpcValue::String("1234567890abcdef".to_string()), pool);
+            let int = LpcRef::Int(LpcInt::MAX);
+            let result = &string * &int;
+            assert_err!(result.clone());
+            assert_eq!(result.unwrap_err().to_string().as_str(), "capacity overflow in string repetition")
         }
 
         #[test]
