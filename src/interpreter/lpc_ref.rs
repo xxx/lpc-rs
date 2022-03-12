@@ -123,9 +123,7 @@ impl LpcRef {
                 Ok(())
             },
             _ => {
-                Err(LpcError::new(format!(
-                    "runtime error: invalid increment",
-                )))
+                Err(LpcError::new("runtime error: invalid increment".to_string()))
             }
         }
     }
@@ -137,9 +135,7 @@ impl LpcRef {
                 Ok(())
             },
             _ => {
-                Err(LpcError::new(format!(
-                    "runtime error: invalid decrement",
-                )))
+                Err(LpcError::new("runtime error: invalid decrement".to_string()))
             }
         }
     }

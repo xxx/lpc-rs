@@ -281,7 +281,7 @@ pub enum Token {
     #[regex(r"[1-9][0-9_]*|0", |lex| {
         track_slice(lex);
 
-        match LpcInt::from_str(&lex.slice().replace("_", "")) {
+        match LpcInt::from_str(&lex.slice().replace('_', "")) {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
             Err(e) => Err(e)
         }
@@ -290,7 +290,7 @@ pub enum Token {
         track_slice(lex);
 
         let r = LpcInt::from_str_radix(
-            lex.slice().replace("_", "")
+            lex.slice().replace('_', "")
                 .trim_start_matches("0x")
                 .trim_start_matches("0X"),
             16);
@@ -304,7 +304,7 @@ pub enum Token {
         track_slice(lex);
 
         let r = LpcInt::from_str_radix(
-            lex.slice().replace("_", "")
+            lex.slice().replace('_', "")
                 .trim_start_matches("0o")
                 .trim_start_matches("0O"),
             8);
@@ -318,7 +318,7 @@ pub enum Token {
         track_slice(lex);
 
         let r = LpcInt::from_str_radix(
-            lex.slice().replace("_", "")
+            lex.slice().replace('_', "")
                 .trim_start_matches("0b")
                 .trim_start_matches("0B"),
             2);
@@ -431,7 +431,7 @@ fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
 /// Track and convert float literals to [`FloatToken`]s
 fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
     track_slice(lex);
-    let f = BaseFloat::from_str(&lex.slice().replace("_", "")).unwrap();
+    let f = BaseFloat::from_str(&lex.slice().replace('_', "")).unwrap();
     FloatToken(Span::new(lex.extras.current_file_id, lex.span()), f)
 }
 

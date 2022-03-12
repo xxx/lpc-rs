@@ -1618,7 +1618,6 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
-        let current_register;
         let symbol = self.lookup_symbol(&node.name);
 
         let sym = match symbol {
@@ -1634,7 +1633,7 @@ impl TreeWalker for CodegenWalker {
 
         let global = sym.is_global();
 
-        current_register = if let Some(expression) = &mut node.value {
+        let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
             if matches!(expression, ExpressionNode::Var(_)) {

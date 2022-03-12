@@ -39,8 +39,7 @@ impl Config {
             Some(v) => match v.as_array() {
                 Some(arr) => arr
                     .iter()
-                    .map(|x| x.as_str())
-                    .flatten()
+                    .filter_map(|x| x.as_str())
                     .map(String::from)
                     .collect(),
                 None => {
