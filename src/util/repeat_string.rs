@@ -8,7 +8,7 @@ pub fn repeat_string(s: &str, i: LpcInt) -> crate::Result<String> {
         let capacity = (i as usize).checked_mul(s.len());
         match capacity {
             Some(_) => Ok(s.repeat(i as usize)),
-            None => Err(LpcError::new("capacity overflow in string repetition"))
+            None => Err(LpcError::new("capacity overflow in string repetition")),
         }
     } else {
         Ok(String::from(""))
@@ -31,7 +31,10 @@ mod tests {
     fn returns_err_on_overflow() {
         let result = repeat_string("foo", LpcInt::MAX);
         assert_err!(result.clone());
-        assert_eq!(result.unwrap_err().to_string().as_str(), "capacity overflow in string repetition");
+        assert_eq!(
+            result.unwrap_err().to_string().as_str(),
+            "capacity overflow in string repetition"
+        );
     }
 
     #[test]

@@ -1,11 +1,15 @@
+use crate::{
+    ast::{
+        binary_op_node::{BinaryOpNode, BinaryOperation},
+        expression_node::ExpressionNode,
+        int_node::IntNode,
+        string_node::StringNode,
+    },
+    parser::{lexer, span::Span},
+    util::repeat_string,
+    LpcError, LpcInt,
+};
 use lalrpop_util::ParseError;
-use crate::{ast::{
-    binary_op_node::{BinaryOpNode, BinaryOperation},
-    expression_node::ExpressionNode,
-    int_node::IntNode,
-    string_node::StringNode,
-}, parser::span::Span, LpcInt, LpcError, util::repeat_string};
-use crate::parser::lexer;
 
 /// Combine literals in cases where we have enough information to do so.
 ///
@@ -358,7 +362,11 @@ fn collapse_shr(
 }
 
 /// handle string * int and int * string
-fn collapse_repeat_string(string: String, amount: LpcInt, span: Span) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+fn collapse_repeat_string(
+    string: String,
+    amount: LpcInt,
+    span: Span,
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
     let value = repeat_string::repeat_string(string.as_str(), amount)?;
     let node = ExpressionNode::String(StringNode {
         value,

@@ -1,8 +1,10 @@
 use crate::{
     ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    BaseFloat,
     errors::LpcError,
-    interpreter::lpc_value::LpcValue, LpcFloat, LpcInt, Result, try_extract_value,
+    interpreter::lpc_value::LpcValue,
+    try_extract_value,
+    util::repeat_string,
+    BaseFloat, LpcFloat, LpcInt, Result,
 };
 use refpool::PoolRef;
 use std::{
@@ -14,7 +16,6 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
-use crate::util::repeat_string;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -808,7 +809,10 @@ mod tests {
             let int = LpcRef::Int(LpcInt::MAX);
             let result = &string * &int;
             assert_err!(result.clone());
-            assert_eq!(result.unwrap_err().to_string().as_str(), "capacity overflow in string repetition")
+            assert_eq!(
+                result.unwrap_err().to_string().as_str(),
+                "capacity overflow in string repetition"
+            )
         }
 
         #[test]
