@@ -141,6 +141,10 @@ pub enum Token {
     GreaterThan(Span),
     #[token(">=", track_slice)]
     GreaterThanEq(Span),
+    #[token("++", track_slice)]
+    Inc(Span),
+    #[token("--", track_slice)]
+    Dec(Span),
 
     #[token("=", track_slice)]
     Assign(Span),
@@ -156,8 +160,6 @@ pub enum Token {
     ModEq(Span),
     #[token("^=", track_slice)]
     CaretEq(Span),
-    #[token("~=", track_slice)]
-    TildeEq(Span),
     #[token("&=", track_slice)]
     AndEq(Span),
     #[token("&&=", track_slice)]
@@ -456,6 +458,8 @@ impl Token {
             | Token::LessThanEq(x)
             | Token::GreaterThan(x)
             | Token::GreaterThanEq(x)
+            | Token::Inc(x)
+            | Token::Dec(x)
             | Token::Assign(x)
             | Token::AddEq(x)
             | Token::SubEq(x)
@@ -463,7 +467,6 @@ impl Token {
             | Token::DivEq(x)
             | Token::ModEq(x)
             | Token::CaretEq(x)
-            | Token::TildeEq(x)
             | Token::AndEq(x)
             | Token::AndAndEq(x)
             | Token::OrEq(x)
@@ -557,6 +560,8 @@ impl Token {
             | Token::LessThanEq(x)
             | Token::GreaterThan(x)
             | Token::GreaterThanEq(x)
+            | Token::Inc(x)
+            | Token::Dec(x)
             | Token::Assign(x)
             | Token::AddEq(x)
             | Token::SubEq(x)
@@ -564,7 +569,6 @@ impl Token {
             | Token::DivEq(x)
             | Token::ModEq(x)
             | Token::CaretEq(x)
-            | Token::TildeEq(x)
             | Token::AndEq(x)
             | Token::AndAndEq(x)
             | Token::OrEq(x)
@@ -673,6 +677,8 @@ impl Display for Token {
             Token::LessThanEq(_) => "<=",
             Token::GreaterThan(_) => ">",
             Token::GreaterThanEq(_) => ">=",
+            Token::Inc(_) => "++",
+            Token::Dec(_) => "--",
 
             Token::Assign(_) => "=",
             Token::AddEq(_) => "+=",
@@ -681,7 +687,6 @@ impl Display for Token {
             Token::DivEq(_) => "/=",
             Token::ModEq(_) => "%=",
             Token::CaretEq(_) => "^=",
-            Token::TildeEq(_) => "~=",
             Token::AndEq(_) => "&=",
             Token::AndAndEq(_) => "&&=",
             Token::OrEq(_) => "|=",

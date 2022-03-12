@@ -41,7 +41,6 @@ extern {
         "/=" => Token::DivEq(<Span>),
         "%=" => Token::ModEq(<Span>),
         "^=" => Token::CaretEq(<Span>),
-        "~=" => Token::TildeEq(<Span>),
         "&=" => Token::AndEq(<Span>),
         "&&=" => Token::AndAndEq(<Span>),
         "|=" => Token::OrEq(<Span>),

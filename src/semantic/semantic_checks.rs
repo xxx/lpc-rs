@@ -242,13 +242,12 @@ pub fn check_unary_operation_types(
     match node.op {
         UnaryOperation::Negate => match expr_type {
             LpcType::Int(false) | LpcType::Float(false) => Ok(()),
-
             _ => Err(create_error("`int`, or `float`")),
         },
-        UnaryOperation::Inc => todo!(),
-        UnaryOperation::Dec => todo!(),
         UnaryOperation::Bang => Ok(()),
-        UnaryOperation::BitwiseNot => match expr_type {
+        UnaryOperation::Inc
+        | UnaryOperation::Dec
+        | UnaryOperation::BitwiseNot => match expr_type {
             LpcType::Int(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
@@ -1658,6 +1657,38 @@ mod check_unary_operation_tests {
         assert!(mapping_var(UnaryOperation::Negate, &scope_tree).is_err());
     }
 
+    #[test]
+    fn test_inc() {
+        let scope_tree = setup();
+
+        assert!(int_literal(UnaryOperation::Inc, &scope_tree).is_ok());
+        assert!(int_var(UnaryOperation::Inc, &scope_tree).is_ok());
+        assert!(float_literal(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(float_var(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(string_literal(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(string_var(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(array_literal(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(array_var(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(mapping_literal(UnaryOperation::Inc, &scope_tree).is_err());
+        assert!(mapping_var(UnaryOperation::Inc, &scope_tree).is_err());
+    }
+    
+    #[test]
+    fn test_dec() {
+        let scope_tree = setup();
+
+        assert!(int_literal(UnaryOperation::Dec, &scope_tree).is_ok());
+        assert!(int_var(UnaryOperation::Dec, &scope_tree).is_ok());
+        assert!(float_literal(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(float_var(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(string_literal(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(string_var(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(array_literal(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(array_var(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(mapping_literal(UnaryOperation::Dec, &scope_tree).is_err());
+        assert!(mapping_var(UnaryOperation::Dec, &scope_tree).is_err());
+    }
+    
     #[test]
     fn test_bitwise_not() {
         let scope_tree = setup();

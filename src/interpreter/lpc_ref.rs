@@ -114,6 +114,35 @@ impl LpcRef {
             self.type_name()
         ))
     }
+
+    pub fn inc(&mut self) -> Result<()> {
+        match self {
+            LpcRef::Int(ref mut x) => {
+                *x = x.wrapping_add(1);
+
+                Ok(())
+            },
+            _ => {
+                Err(LpcError::new(format!(
+                    "runtime error: invalid increment",
+                )))
+            }
+        }
+    }
+
+    pub fn dec(&mut self) -> Result<()> {
+        match self {
+            LpcRef::Int(ref mut x) => {
+                *x = x.wrapping_sub(1);
+                Ok(())
+            },
+            _ => {
+                Err(LpcError::new(format!(
+                    "runtime error: invalid decrement",
+                )))
+            }
+        }
+    }
 }
 
 impl From<BaseFloat> for LpcRef {
@@ -471,6 +500,7 @@ impl Default for LpcRef {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claim::assert_err;
     use refpool::{Pool, PoolRef};
     use std::{cell::RefCell, collections::HashMap};
 
@@ -1046,6 +1076,56 @@ mod tests {
             } else {
                 panic!("no match")
             }
+        }
+    }
+
+    mod test_inc {
+        use super::*;
+
+        #[test]
+        fn increments_ints() {
+            let mut int = LpcRef::Int(123);
+            let _ = int.inc();
+            assert_eq!(int, LpcRef::Int(124))
+        }
+
+        #[test]
+        fn wraps_on_max() {
+            let mut int = LpcRef::Int(LpcInt::MAX);
+            let _ = int.inc();
+            assert_eq!(int, LpcRef::Int(LpcInt::MIN))
+        }
+
+        #[test]
+        fn fails_other_types() {
+            let pool = Pool::new(5);
+            let mut string = value_to_ref!(LpcValue::String("foobar".to_string()), pool);
+            assert_err!(string.inc());
+        }
+    }
+
+    mod test_dec {
+        use super::*;
+
+        #[test]
+        fn decrements_ints() {
+            let mut int = LpcRef::Int(123);
+            let _ = int.dec();
+            assert_eq!(int, LpcRef::Int(122))
+        }
+
+        #[test]
+        fn wraps_on_min() {
+            let mut int = LpcRef::Int(LpcInt::MIN);
+            let _ = int.dec();
+            assert_eq!(int, LpcRef::Int(LpcInt::MAX))
+        }
+
+        #[test]
+        fn fails_other_types() {
+            let pool = Pool::new(5);
+            let mut string = value_to_ref!(LpcValue::String("foobar".to_string()), pool);
+            assert_err!(string.dec());
         }
     }
 }

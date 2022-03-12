@@ -23,9 +23,9 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
             }),
             _ => ExpressionNode::UnaryOp(node),
         },
-        UnaryOperation::Inc => todo!(),
-        UnaryOperation::Dec => todo!(),
-        UnaryOperation::Bang => ExpressionNode::UnaryOp(node),
+        UnaryOperation::Inc
+        | UnaryOperation::Dec
+        | UnaryOperation::Bang => ExpressionNode::UnaryOp(node),
         UnaryOperation::BitwiseNot => match &*node.expr {
             ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
                 value: !x.value,
@@ -83,6 +83,34 @@ mod tests {
             expr: Box::new(ExpressionNode::from(3.14)),
             is_post: false,
             op: UnaryOperation::Bang,
+            span,
+        };
+
+        let result = collapse_unary_op(node.clone());
+        assert_eq!(result, ExpressionNode::UnaryOp(node));
+    }
+
+    #[test]
+    fn collapses_inc() {
+        let span = Some(Span::new(0, 0..1));
+        let node = UnaryOpNode {
+            expr: Box::new(ExpressionNode::from(123)),
+            is_post: false,
+            op: UnaryOperation::Inc,
+            span,
+        };
+
+        let result = collapse_unary_op(node.clone());
+        assert_eq!(result, ExpressionNode::UnaryOp(node));
+    }
+
+    #[test]
+    fn collapses_dec() {
+        let span = Some(Span::new(0, 0..1));
+        let node = UnaryOpNode {
+            expr: Box::new(ExpressionNode::from(123)),
+            is_post: false,
+            op: UnaryOperation::Dec,
             span,
         };
 

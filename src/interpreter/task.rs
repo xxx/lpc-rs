@@ -246,6 +246,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 self.catch_points.push(catch_point);
             }
+            Instruction::Dec(r1) => {
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+
+                registers[r1.index()].dec()?;
+            }
             Instruction::EqEq(r1, r2, r3) => {
                 let frame = self.stack.current_frame_mut()?;
                 let registers = &mut frame.registers;
@@ -405,6 +411,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         return Err(e.with_span(frame.current_debug_span()));
                     }
                 }
+            }
+            Instruction::Inc(r1) => {
+                let frame = self.stack.current_frame_mut()?;
+                let registers = &mut frame.registers;
+
+                registers[r1.index()].inc()?;
             }
             Instruction::ISub(r1, r2, r3) => {
                 let frame = self.stack.current_frame_mut()?;
@@ -1470,6 +1482,17 @@ mod tests {
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 
+        fn snapshot_registers(code: &str) -> Vec<LpcRef> {
+            let (task, _) = run_prog(code);
+            let mut stack = task.snapshot.unwrap();
+
+            // The top of the stack in the snapshot is the object initialization frame,
+            // which is not what we care about here, so we get the second-to-top frame instead.
+            let index = stack.len() - 2;
+
+            std::mem::take(&mut stack[index].registers)
+        }
+
         mod test_aconst {
             use super::*;
 
@@ -1864,6 +1887,57 @@ mod tests {
                 let (task, _) = run_prog(code);
 
                 assert!(task.catch_points.is_empty());
+            }
+        }
+
+        mod test_dec {
+            use super::*;
+
+            #[test]
+            fn stores_the_value_for_pre() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 0;
+                        --j;
+
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let registers = snapshot_registers(code);
+
+                let expected = vec![
+                    Int(0),
+                    Int(-1),
+                    String("snapshot_stack".into()),
+                    Int(0)
+                ];
+
+                assert_eq!(expected, registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_post() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 0;
+                        j--;
+
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let registers = snapshot_registers(code);
+
+                let expected = vec![
+                    Int(0),
+                    Int(-1),
+                    Int(0),
+                    String("snapshot_stack".into()),
+                    Int(0)
+                ];
+
+                assert_eq!(expected, registers);
             }
         }
 
@@ -2323,6 +2397,57 @@ mod tests {
                 let expected = vec![Int(0), Int(32), Int(-48), Int(32), Int(-48), Int(-1536)];
 
                 assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_inc {
+            use super::*;
+
+            #[test]
+            fn stores_the_value_for_pre() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 0;
+                        ++j;
+
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let registers = snapshot_registers(code);
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    String("snapshot_stack".into()),
+                    Int(0)
+                ];
+
+                assert_eq!(expected, registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_post() {
+                let code = indoc! { r##"
+                    void create() {
+                        int j = 0;
+                        j++;
+
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+                let registers = snapshot_registers(code);
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(0),
+                    String("snapshot_stack".into()),
+                    Int(0)
+                ];
+
+                assert_eq!(expected, registers);
             }
         }
 

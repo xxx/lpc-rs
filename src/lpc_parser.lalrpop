@@ -71,6 +71,8 @@ extern {
         "<=" => Token::LessThanEq(<Span>),
         ">" => Token::GreaterThan(<Span>),
         ">=" => Token::GreaterThanEq(<Span>),
+        "++" => Token::Inc(<Span>),
+        "--" => Token::Dec(<Span>),
 
         "=" => Token::Assign(<Span>),
         "+=" => Token::AddEq(<Span>),
@@ -79,7 +81,6 @@ extern {
         "/=" => Token::DivEq(<Span>),
         "%=" => Token::ModEq(<Span>),
         "^=" => Token::CaretEq(<Span>),
-        "~=" => Token::TildeEq(<Span>),
         "&=" => Token::AndEq(<Span>),
         "&&=" => Token::AndAndEq(<Span>),
         "|=" => Token::OrEq(<Span>),
@@ -530,6 +531,28 @@ pub PostfixExpression: ExpressionNode = {
             ExpressionNode::from(c)
         }
     },
+    <PostfixExpression> "++" => {
+         let span = <>.span();
+         let n = UnaryOpNode {
+             expr: Box::new(<>),
+             op: UnaryOperation::Inc,
+             is_post: true,
+             span
+         };
+
+         collapse_unary_op(n)
+    },
+    <PostfixExpression> "--" => {
+         let span = <>.span();
+         let n = UnaryOpNode {
+             expr: Box::new(<>),
+             op: UnaryOperation::Dec,
+             is_post: true,
+             span
+         };
+
+         collapse_unary_op(n)
+    },
 };
 
 pub UnaryExpression: ExpressionNode = {
@@ -853,8 +876,8 @@ ShiftOp: BinaryOperation = {
 
 UnaryOp: (UnaryOperation, Range<usize>) = {
     <l:@L> "-" <r:@R> => (UnaryOperation::Negate, l..r),
-//    "++" => UnaryOperation::Inc,
-//    "--" => UnaryOperation::Dec,
+    <l:@L> "++" <r:@R> => (UnaryOperation::Inc, l..r),
+    <l:@L> "--" <r:@R> => (UnaryOperation::Dec, l..r),
     <l:@L> "!" <r:@R> => (UnaryOperation::Bang, l..r),
     <l:@L> "~" <r:@R> => (UnaryOperation::BitwiseNot, l..r),
 }

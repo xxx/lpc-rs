@@ -59,6 +59,9 @@ pub enum Instruction {
     /// Store the error in x.0, and jump to x.1 to continue execution
     CatchStart(Register, Label),
 
+    /// Decrement the value in x.0 by 1
+    Dec(Register),
+
     /// == comparison
     EqEq(Register, Register, Register),
 
@@ -106,6 +109,9 @@ pub enum Instruction {
 
     /// Integer modulo division - x.2 = x.0 % x.1
     IMod(Register, Register, Register),
+
+    /// Increment the value in x.0 by 1
+    Inc(Register),
 
     /// Integer division - x.2 = x.0 * x.1
     IMul(Register, Register, Register),
@@ -253,6 +259,9 @@ impl Display for Instruction {
                     receiver, name, num_args, initial_arg
                 )
             }
+            Instruction::Dec(r) => {
+                write!(f, "dec {}", r)
+            }
             Instruction::EqEq(r1, r2, r3) => {
                 write!(f, "eqeq {}, {}, {}", r1, r2, r3)
             }
@@ -308,6 +317,9 @@ impl Display for Instruction {
             }
             Instruction::IMod(r1, r2, r3) => {
                 write!(f, "imod {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Inc(r) => {
+                write!(f, "inc {}", r)
             }
             Instruction::IMul(r1, r2, r3) => {
                 write!(f, "imul {}, {}, {}", r1, r2, r3)

@@ -37,6 +37,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::unary_op_node::UnaryOperation;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -489,7 +490,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         if body_type != else_type {
             let e = LpcError::new(format!(
-                "differing types in ternary operation: `{}` and `{}`",
+                "differing types in ternary expression: `{}` and `{}`",
                 body_type, else_type
             ))
             .with_span(node.span);
@@ -507,7 +508,21 @@ impl TreeWalker for SemanticCheckWalker {
             &self.context.scopes,
             &self.function_return_values(),
         ) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                match node.op {
+                    UnaryOperation::Inc
+                    | UnaryOperation::Dec => {
+                        if matches!(*node.expr, ExpressionNode::Int(_)) {
+                            let err = LpcError::new("Invalid operation on `int` literal");
+                            self.context.errors.push(err.clone());
+                            Err(err)
+                        } else {
+                            Ok(())
+                        }
+                    },
+                    _ => Ok(())
+                }
+            },
             Err(err) => {
                 self.context.errors.push(err.clone());
                 Err(err)
@@ -578,6 +593,7 @@ impl TreeWalker for SemanticCheckWalker {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         apply_walker,
         ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
@@ -589,7 +605,6 @@ mod tests {
         },
     };
 
-    use super::*;
     use crate::{
         codegen::{
             default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
@@ -599,10 +614,22 @@ mod tests {
         util::path_maker::LpcPath,
     };
     use std::default::Default;
+    use claim::*;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
         scopes.push_new();
+        CompilationContext {
+            scopes,
+            ..CompilationContext::default()
+        }
+    }
+
+    fn context_with_var(name: &str, var_type: LpcType) -> CompilationContext {
+        let mut scopes = ScopeTree::default();
+        scopes.push_new();
+        let sym = Symbol::new(name, var_type);
+        scopes.current_mut().unwrap().insert(sym);
         CompilationContext {
             scopes,
             ..CompilationContext::default()
@@ -1723,48 +1750,110 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn works_allows_valid() {
-            let mut node = ExpressionNode::from(UnaryOpNode {
-                expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
-                op: UnaryOperation::Negate,
-                is_post: false,
-                span: None,
-            });
+        mod test_negate {
+            use super::*;
 
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let sym = Symbol::new("foo", LpcType::Int(false));
-            scopes.current_mut().unwrap().insert(sym);
-            let context = CompilationContext {
-                scopes,
-                ..CompilationContext::default()
-            };
+            #[test]
+            fn works_allows_valid() {
+                let mut node = ExpressionNode::from(UnaryOpNode {
+                    expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                    op: UnaryOperation::Negate,
+                    is_post: false,
+                    span: None,
+                });
 
-            let mut walker = SemanticCheckWalker::new(context);
-            assert!(node.visit(&mut walker).is_ok())
+                let context = context_with_var("foo", LpcType::Int(false));
+                let mut walker = SemanticCheckWalker::new(context);
+                assert!(node.visit(&mut walker).is_ok())
+            }
+
+            #[test]
+            fn disallows_invalid() {
+                let mut node = ExpressionNode::from(UnaryOpNode {
+                    expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                    op: UnaryOperation::Negate,
+                    is_post: false,
+                    span: None,
+                });
+
+                let context = context_with_var("foo", LpcType::String(false));
+                let mut walker = SemanticCheckWalker::new(context);
+                assert!(node.visit(&mut walker).is_err());
+            }
         }
 
-        #[test]
-        fn disallows_invalid() {
-            let mut node = ExpressionNode::from(UnaryOpNode {
-                expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
-                op: UnaryOperation::Negate,
-                is_post: false,
-                span: None,
-            });
+        mod test_inc {
+            use super::*;
 
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let sym = Symbol::new("foo", LpcType::String(false));
-            scopes.current_mut().unwrap().insert(sym);
-            let context = CompilationContext {
-                scopes,
-                ..CompilationContext::default()
-            };
+            #[test]
+            fn allows_vars() {
+                let mut node = ExpressionNode::from(UnaryOpNode {
+                    expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                    op: UnaryOperation::Inc,
+                    is_post: false,
+                    span: None,
+                });
 
-            let mut walker = SemanticCheckWalker::new(context);
-            assert!(node.visit(&mut walker).is_err());
+                let context = context_with_var("foo", LpcType::Int(false));
+                let mut walker = SemanticCheckWalker::new(context);
+                assert_ok!(node.visit(&mut walker));
+            }
+
+            #[test]
+            fn disallows_literals() {
+                let mut node = ExpressionNode::from(UnaryOpNode {
+                    expr: Box::new(ExpressionNode::from(1)),
+                    op: UnaryOperation::Inc,
+                    is_post: false,
+                    span: None,
+                });
+
+                let context = empty_context();
+                let mut walker = SemanticCheckWalker::new(context);
+                let result = node.visit(&mut walker);
+                assert_err!(result.clone());
+                assert_eq!(
+                    result.unwrap_err().to_string().as_str(),
+                    "Invalid operation on `int` literal"
+                );
+            }
+        }
+
+        mod test_dec {
+            use super::*;
+
+            #[test]
+            fn allows_vars() {
+                let mut node = ExpressionNode::from(UnaryOpNode {
+                    expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
+                    op: UnaryOperation::Dec,
+                    is_post: false,
+                    span: None,
+                });
+
+                let context = context_with_var("foo", LpcType::Int(false));
+                let mut walker = SemanticCheckWalker::new(context);
+                assert_ok!(node.visit(&mut walker));
+            }
+
+            #[test]
+            fn disallows_literals() {
+                let mut node = ExpressionNode::from(UnaryOpNode {
+                    expr: Box::new(ExpressionNode::from(1)),
+                    op: UnaryOperation::Dec,
+                    is_post: false,
+                    span: None,
+                });
+
+                let context = empty_context();
+                let mut walker = SemanticCheckWalker::new(context);
+                let result = node.visit(&mut walker);
+                assert_err!(result.clone());
+                assert_eq!(
+                    result.unwrap_err().to_string().as_str(),
+                    "Invalid operation on `int` literal"
+                );
+            }
         }
     }
 
@@ -1935,6 +2024,11 @@ mod tests {
             let _ = node.visit(&mut walker);
 
             assert!(!walker.context.errors.is_empty());
+
+            assert_eq!(
+                walker.context.errors.first().unwrap().to_string().as_str(),
+                "differing types in ternary expression: `int` and `string`"
+            );
         }
     }
 }

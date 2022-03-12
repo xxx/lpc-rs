@@ -5,7 +5,7 @@ use crate::{
 };
 use arrayvec::ArrayVec;
 use delegate::delegate;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
@@ -97,5 +97,11 @@ impl<const STACKSIZE: usize> Index<usize> for CallStack<STACKSIZE> {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.stack[index]
+    }
+}
+
+impl<const STACKSIZE: usize> IndexMut<usize> for CallStack<STACKSIZE> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.stack[index]
     }
 }
