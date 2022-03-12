@@ -1820,12 +1820,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -1837,7 +1832,7 @@ mod tests {
                     Int(0),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
 
             #[test]
@@ -1851,12 +1846,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -1868,7 +1858,7 @@ mod tests {
                     Int(0),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
         }
 
@@ -2492,12 +2482,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -2511,7 +2496,7 @@ mod tests {
                     Int(0),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
         }
 
@@ -2533,12 +2518,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -2551,7 +2531,7 @@ mod tests {
                     Int(0),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
         }
 
@@ -2872,12 +2852,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let mut mapping = HashMap::new();
                 mapping.insert(String("a".into()), Int(123));
@@ -2911,7 +2886,7 @@ mod tests {
                     Int(0),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
         }
 
@@ -2930,12 +2905,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let mut mapping = HashMap::new();
                 mapping.insert(String("a".into()), Int(123));
@@ -2957,7 +2927,7 @@ mod tests {
                     Array(vec![String("a string".into()), Int(3), Float(2.44.into())].into()),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
         }
 
@@ -3082,12 +3052,7 @@ mod tests {
                     }
                 "##};
 
-                let (task, _) = run_prog(code);
-                let stack = task.snapshot.unwrap();
-
-                // The top of the stack in the snapshot is the object initialization frame,
-                // which is not what we care about here, so we get the second-to-top frame instead.
-                let registers = &stack[stack.len() - 2].registers;
+                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -3101,7 +3066,7 @@ mod tests {
                     Int(0),
                 ];
 
-                assert_eq!(&expected, registers);
+                assert_eq!(expected, registers);
             }
         }
 
