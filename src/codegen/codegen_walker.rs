@@ -1531,8 +1531,7 @@ impl TreeWalker for CodegenWalker {
 
                 reg_result
             }
-            UnaryOperation::Inc
-            | UnaryOperation::Dec => {
+            UnaryOperation::Inc | UnaryOperation::Dec => {
                 let instruction = if node.op == UnaryOperation::Inc {
                     Instruction::Inc(location)
                 } else {
@@ -1550,7 +1549,7 @@ impl TreeWalker for CodegenWalker {
                     push_instruction!(self, instruction, node.span);
                     location
                 }
-            },
+            }
             UnaryOperation::Bang => {
                 let reg_result = self.register_counter.next().unwrap();
 
@@ -3466,7 +3465,7 @@ mod tests {
                 op,
                 expr: Box::new(ExpressionNode::from(666)),
                 span: None,
-                is_post
+                is_post,
             };
 
             let _ = walker.visit_unary_op(&mut node);
@@ -3497,10 +3496,7 @@ mod tests {
             fn populates_instructions_for_pre() {
                 let mut walker = setup(UnaryOperation::Inc, false);
 
-                let expected = vec![
-                    IConst(Register(1), 666),
-                    Inc(Register(1))
-                ];
+                let expected = vec![IConst(Register(1), 666), Inc(Register(1))];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             }
@@ -3512,7 +3508,7 @@ mod tests {
                 let expected = vec![
                     IConst(Register(1), 666),
                     RegCopy(Register(1), Register(2)),
-                    Inc(Register(1))
+                    Inc(Register(1)),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3526,10 +3522,7 @@ mod tests {
             fn populates_instructions_for_pre() {
                 let mut walker = setup(UnaryOperation::Dec, false);
 
-                let expected = vec![
-                    IConst(Register(1), 666),
-                    Dec(Register(1))
-                ];
+                let expected = vec![IConst(Register(1), 666), Dec(Register(1))];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             }
@@ -3541,7 +3534,7 @@ mod tests {
                 let expected = vec![
                     IConst(Register(1), 666),
                     RegCopy(Register(1), Register(2)),
-                    Dec(Register(1))
+                    Dec(Register(1)),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3555,10 +3548,7 @@ mod tests {
             fn populates_instructions() {
                 let mut walker = setup(UnaryOperation::Bang, false);
 
-                let expected = vec![
-                    IConst(Register(1), 666),
-                    Not(Register(1), Register(2))
-                ];
+                let expected = vec![IConst(Register(1), 666), Not(Register(1), Register(2))];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             }
@@ -3573,7 +3563,7 @@ mod tests {
 
                 let expected = vec![
                     IConst(Register(1), 666),
-                    BitwiseNot(Register(1), Register(2))
+                    BitwiseNot(Register(1), Register(2)),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);

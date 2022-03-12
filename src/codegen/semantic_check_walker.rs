@@ -21,7 +21,7 @@ use crate::{
         return_node::ReturnNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::UnaryOpNode,
+        unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         while_node::WhileNode,
     },
@@ -37,7 +37,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::unary_op_node::UnaryOperation;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -508,20 +507,17 @@ impl TreeWalker for SemanticCheckWalker {
             &self.context.scopes,
             &self.function_return_values(),
         ) {
-            Ok(_) => {
-                match node.op {
-                    UnaryOperation::Inc
-                    | UnaryOperation::Dec => {
-                        if matches!(*node.expr, ExpressionNode::Int(_)) {
-                            let err = LpcError::new("Invalid operation on `int` literal");
-                            self.context.errors.push(err.clone());
-                            Err(err)
-                        } else {
-                            Ok(())
-                        }
-                    },
-                    _ => Ok(())
+            Ok(_) => match node.op {
+                UnaryOperation::Inc | UnaryOperation::Dec => {
+                    if matches!(*node.expr, ExpressionNode::Int(_)) {
+                        let err = LpcError::new("Invalid operation on `int` literal");
+                        self.context.errors.push(err.clone());
+                        Err(err)
+                    } else {
+                        Ok(())
+                    }
                 }
+                _ => Ok(()),
             },
             Err(err) => {
                 self.context.errors.push(err.clone());
@@ -613,8 +609,8 @@ mod tests {
         compiler::Compiler,
         util::path_maker::LpcPath,
     };
-    use std::default::Default;
     use claim::*;
+    use std::default::Default;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();

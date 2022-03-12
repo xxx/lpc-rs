@@ -245,9 +245,7 @@ pub fn check_unary_operation_types(
             _ => Err(create_error("`int`, or `float`")),
         },
         UnaryOperation::Bang => Ok(()),
-        UnaryOperation::Inc
-        | UnaryOperation::Dec
-        | UnaryOperation::BitwiseNot => match expr_type {
+        UnaryOperation::Inc | UnaryOperation::Dec | UnaryOperation::BitwiseNot => match expr_type {
             LpcType::Int(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
@@ -1672,7 +1670,7 @@ mod check_unary_operation_tests {
         assert!(mapping_literal(UnaryOperation::Inc, &scope_tree).is_err());
         assert!(mapping_var(UnaryOperation::Inc, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_dec() {
         let scope_tree = setup();
@@ -1688,7 +1686,7 @@ mod check_unary_operation_tests {
         assert!(mapping_literal(UnaryOperation::Dec, &scope_tree).is_err());
         assert!(mapping_var(UnaryOperation::Dec, &scope_tree).is_err());
     }
-    
+
     #[test]
     fn test_bitwise_not() {
         let scope_tree = setup();

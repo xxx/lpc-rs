@@ -1896,12 +1896,7 @@ mod tests {
 
                 let registers = snapshot_registers(code);
 
-                let expected = vec![
-                    Int(0),
-                    Int(-1),
-                    String("snapshot_stack".into()),
-                    Int(0)
-                ];
+                let expected = vec![Int(0), Int(-1), String("snapshot_stack".into()), Int(0)];
 
                 assert_eq!(expected, registers);
             }
@@ -1924,7 +1919,7 @@ mod tests {
                     Int(-1),
                     Int(0),
                     String("snapshot_stack".into()),
-                    Int(0)
+                    Int(0),
                 ];
 
                 assert_eq!(expected, registers);
@@ -2406,12 +2401,7 @@ mod tests {
 
                 let registers = snapshot_registers(code);
 
-                let expected = vec![
-                    Int(0),
-                    Int(1),
-                    String("snapshot_stack".into()),
-                    Int(0)
-                ];
+                let expected = vec![Int(0), Int(1), String("snapshot_stack".into()), Int(0)];
 
                 assert_eq!(expected, registers);
             }
@@ -2434,7 +2424,7 @@ mod tests {
                     Int(1),
                     Int(0),
                     String("snapshot_stack".into()),
-                    Int(0)
+                    Int(0),
                 ];
 
                 assert_eq!(expected, registers);

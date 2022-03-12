@@ -121,10 +121,10 @@ impl LpcRef {
                 *x = x.wrapping_add(1);
 
                 Ok(())
-            },
-            _ => {
-                Err(LpcError::new("runtime error: invalid increment".to_string()))
             }
+            _ => Err(LpcError::new(
+                "runtime error: invalid increment".to_string(),
+            )),
         }
     }
 
@@ -133,10 +133,10 @@ impl LpcRef {
             LpcRef::Int(ref mut x) => {
                 *x = x.wrapping_sub(1);
                 Ok(())
-            },
-            _ => {
-                Err(LpcError::new("runtime error: invalid decrement".to_string()))
             }
+            _ => Err(LpcError::new(
+                "runtime error: invalid decrement".to_string(),
+            )),
         }
     }
 }
