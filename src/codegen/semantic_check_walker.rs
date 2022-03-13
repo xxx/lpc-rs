@@ -317,6 +317,18 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(&node.name)?;
+
+        let visibility_count = node.flags.public() as usize +
+            node.flags.private() as usize +
+            node.flags.protected() as usize;
+
+        if visibility_count > 1 {
+            let e = LpcError::new(
+                "multiple visibilities specified. use one of `public`, `private`, or `protected` (or its alias, `static`), or leave unspecified for `public` visibility".to_string()
+            ).with_span(node.span);
+            self.context.errors.push(e);
+        }
+
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
 
@@ -1446,6 +1458,18 @@ mod tests {
             } else {
                 panic!("didn't error?")
             }
+        }
+
+        #[test]
+        fn disallows_multiple_visibilities() {
+            let code = r#"public private void create() { dump("ok"); }"#;
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(!context.errors.is_empty());
+            assert_eq!(
+                context.errors[0].to_string(),
+                "multiple visibilities specified. use one of `public`, `private`, or `protected` (or its alias, `static`), or leave unspecified for `public` visibility".to_string()
+            );
         }
     }
 
