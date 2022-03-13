@@ -8,7 +8,6 @@ use std::fmt::{Display, Formatter};
 use delegate::delegate;
 use crate::interpreter::efun::EFUN_PROTOTYPES;
 use crate::semantic::function_flags::FunctionFlags;
-use crate::semantic::function_prototype::FunctionPrototype;
 
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
