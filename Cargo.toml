@@ -44,3 +44,12 @@ indoc = "1.0"
 
 [profile.release]
 lto = "thin"
+
+[profile.dev]
+incremental = true
+
+[profile.test]
+incremental = true
+
+[profile.bench]
+incremental = true
