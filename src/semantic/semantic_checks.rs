@@ -43,6 +43,7 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "nomask",
     "object",
     "private",
+    "protected",
     "public",
     "return",
     "static",
