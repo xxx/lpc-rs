@@ -227,6 +227,8 @@ pub enum Token {
     Private(Span),
     #[token("public", track_slice)]
     Public(Span),
+    #[token("protected", track_slice)]
+    Protected(Span),
 
     #[token("(", track_slice)]
     LParen(Span),
@@ -531,7 +533,8 @@ impl Token {
             | Token::Foreach(x)
             | Token::Function(x)
             | Token::Private(x)
-            | Token::Public(x) => *x,
+            | Token::Public(x)
+            | Token::Protected(x) => *x,
             Token::Error => Span::new(0, 0..0),
         }
     }
@@ -633,7 +636,8 @@ impl Token {
             | Token::Foreach(x)
             | Token::Function(x)
             | Token::Private(x)
-            | Token::Public(x) => x,
+            | Token::Public(x)
+            | Token::Protected(x) => x,
             Token::Error => return None,
         };
 
@@ -721,6 +725,7 @@ impl Display for Token {
             Token::Function(_) => "function",
             Token::Private(_) => "private",
             Token::Public(_) => "public",
+            Token::Protected(_) => "protected",
 
             Token::LParen(_) => "(",
             Token::RParen(_) => ")",

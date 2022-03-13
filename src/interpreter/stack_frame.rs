@@ -186,12 +186,13 @@ impl Display for StackFrame {
 mod tests {
     use super::*;
     use crate::interpreter::function_type::FunctionArity;
+    use crate::semantic::function_flags::FunctionFlags;
 
     #[test]
     fn new_sets_up_registers() {
         let process = Process::default();
 
-        let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
+        let fs = ProgramFunction::new("my_function", FunctionArity::new(4), FunctionFlags::default(), 7);
 
         let frame = StackFrame::new(process, Rc::new(fs), 4);
 
@@ -206,7 +207,7 @@ mod tests {
         fn sets_up_registers_if_greater_max_is_passed() {
             let process = Process::default();
 
-            let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
+            let fs = ProgramFunction::new("my_function", FunctionArity::new(4), FunctionFlags::default(), 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
 
@@ -218,7 +219,7 @@ mod tests {
         fn sets_up_registers_if_lesser_max_is_passed() {
             let process = Process::default();
 
-            let fs = ProgramFunction::new("my_function", FunctionArity::new(4), 7);
+            let fs = ProgramFunction::new("my_function", FunctionArity::new(4), FunctionFlags::default(),7);
 
             let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
 

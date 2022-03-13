@@ -5,6 +5,7 @@ use crate::{
 };
 use multimap::MultiMap;
 use std::collections::HashMap;
+use crate::semantic::function_flags::FunctionFlags;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -15,6 +16,9 @@ pub struct ProgramFunction {
 
     /// The arity of this function
     pub arity: FunctionArity,
+
+    /// All the flags for this function
+    pub flags: FunctionFlags,
 
     /// The number of non-argument, non-return-value locals. Used for register allocation.
     pub num_locals: usize,
@@ -30,13 +34,14 @@ pub struct ProgramFunction {
 }
 
 impl ProgramFunction {
-    pub fn new<T>(name: T, arity: FunctionArity, num_locals: usize) -> Self
+    pub fn new<T>(name: T, arity: FunctionArity, flags: FunctionFlags, num_locals: usize) -> Self
     where
         T: Into<String>,
     {
         Self {
             name: name.into(),
             arity,
+            flags,
             num_locals,
             instructions: Vec::new(),
             debug_spans: Vec::new(),

@@ -705,7 +705,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         *num_args,
                     )
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = ProgramFunction::new(name.clone(), prototype.arity, 0);
+                    let sym = ProgramFunction::new(name.clone(), prototype.arity, prototype.flags,0);
 
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
@@ -803,7 +803,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
                                         let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                                        let pf = ProgramFunction::new(name.clone(), prototype.arity, 0);
+                                        let pf = ProgramFunction::new(name.clone(), prototype.arity, prototype.flags, 0);
 
                                         function_is_local = false;
 

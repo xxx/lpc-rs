@@ -129,9 +129,9 @@ impl Display for LpcType {
     }
 }
 
-impl From<String> for LpcType {
-    fn from(str: String) -> Self {
-        match str.as_str() {
+impl From<&str> for LpcType {
+    fn from(str: &str) -> Self {
+        match str {
             "void" => LpcType::Void,
             "int" => LpcType::Int(false),
             "float" => LpcType::Float(false),

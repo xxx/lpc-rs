@@ -106,6 +106,9 @@ extern {
         "function" => Token::Function(<Span>),
         "void" => Token::Void(<Span>),
         "return" => Token::Return(<Span>),
+        "public" => Token::Public(<Span>),
+        "private" => Token::Private(<Span>),
+        "protected" => Token::Protected(<Span>),
         "static" => Token::Static(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
@@ -170,16 +173,7 @@ pub FunctionDef: FunctionDefNode = {
         let span = Span::new(file_id, l..r);
 
         let return_type = if let Some(this_type) = r_type {
-            match this_type.0.as_str() {
-                "void" => LpcType::Void,
-                "int" => LpcType::Int(array),
-                "string" => LpcType::String(array),
-                "float" => LpcType::Float(array),
-                "object" => LpcType::Object(array),
-                "mapping" => LpcType::Mapping(array),
-                "mixed" => LpcType::Mixed(array),
-                _ => unimplemented!()
-            }
+            LpcType::from(this_type.0).as_array(array)
         } else if context.pragmas.strict_types() {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
@@ -190,11 +184,15 @@ pub FunctionDef: FunctionDefNode = {
         };
 
         let flag_strs = flags.into_iter().map(|f| f.0).collect::<Vec<_>>();
+        let mut flags = FunctionFlags::from(flag_strs).with_ellipsis(ellipsis);
+        if !flags.public() && !flags.private() && !flags.protected() {
+            flags.set_public(true);
+        }
 
         Ok(FunctionDefNode {
             name: name.1,
             parameters,
-            flags: FunctionFlags::from(flag_strs).with_ellipsis(ellipsis),
+            flags,
             body,
             return_type,
             span: Some(span)
@@ -232,19 +230,23 @@ ArgName: VarInitNode = {
     }
 };
 
-Type: (String, Span) = {
-    "int" => (String::from("int"), <>),
-    "float" => (String::from("float"), <>),
-    "string" => (String::from("string"), <>),
-    "mixed" => (String::from("mixed"), <>),
-    "mapping" => (String::from("mapping"), <>),
-    "object" => (String::from("object"), <>),
-    "function" => (String::from("function"), <>),
-    "void" => (String::from("void"), <>),
+Type: (&'static str, Span) = {
+    "int" => ("int", <>),
+    "float" => ("float", <>),
+    "string" => ("string", <>),
+    "mixed" => ("mixed", <>),
+    "mapping" => ("mapping", <>),
+    "object" => ("object", <>),
+    "function" => ("function", <>),
+    "void" => ("void", <>),
 };
 
-FunctionFlag: (String, Span) = {
-    "varargs" => (String::from("varargs"), <>),
+FunctionFlag: (&'static str, Span) = {
+    "varargs" => ("varargs", <>),
+    "public" => ("public", <>),
+    "private" => ("private", <>),
+    "static" => ("static", <>),
+    "protected" => ("protected", <>),
 };
 
 pub Statement: AstNode = {
