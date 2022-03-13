@@ -768,6 +768,25 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 num_args,
                 initial_arg,
             } => {
+                {
+                    // TODO: Is there some way to avoid this redundant check, while still being able to update the register?
+                    let frame = self.stack.current_frame_mut()?;
+                    let registers = &mut frame.registers;
+                    let func_ref = &registers[location.index()];
+                    let public = if let LpcRef::Function(func) = func_ref {
+                        let borrowed = func.borrow();
+                        let func = try_extract_value!(*borrowed, LpcValue::Function);
+                        func.flags().public()
+                    } else {
+                        return Err(self.runtime_error("callfp instruction on non-function"));
+                    };
+
+                    if !public {
+                        registers[0] = LpcRef::Int(0);
+                        return Ok(());
+                    }
+                }
+
                 let mut function_is_local = true;
                 let frame = self.stack.current_frame()?;
                 let registers = &frame.registers;
@@ -945,12 +964,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         .lookup_function(function_name)
                                         .unwrap()
                                         .clone();
-                                    let eval_context = task.eval(function, args, new_context)?;
-                                    task_context.increment_instruction_count(
-                                        eval_context.instruction_count(),
-                                    )?;
 
-                                    eval_context.into_result()
+                                    if !function.public() {
+                                        LpcRef::Int(0)
+                                    } else {
+                                        let eval_context = task.eval(function, args, new_context)?;
+                                        task_context.increment_instruction_count(
+                                            eval_context.instruction_count(),
+                                        )?;
+
+                                        eval_context.into_result()
+                                    }
                                 }
                                 _ => LpcRef::Int(0),
                             };
@@ -1780,6 +1804,50 @@ mod tests {
                 ];
                 assert_eq!(&expected, &registers);
             }
+
+            #[test]
+            fn is_0_for_call_other_private_functions() {
+                let code = indoc! { r##"
+                    function q = &(this_object())->tacos(, "adding some!");
+                    int a = q(666, 4);
+                    int b = q(123);
+                    private string tacos(int j, string s, int k = 100) {
+                        return s + " " +  (j + k);
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                println!("{:?}", registers.iter().map(|x| BareVal::from(x)).collect::<Vec<_>>());
+
+                let expected = vec![
+                    Int(0),
+                    String("adding some!".into()),
+                    Object("/my_file".into()),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
+                    Int(666),
+                    Int(4),
+                    Int(666),
+                    Int(4),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
+                    Int(0),
+                    Int(123),
+                    Function(
+                        "tacos".into(),
+                        vec![None, Some(String("adding some!".into()))],
+                    ),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
         }
 
         mod test_call_other {
@@ -1800,6 +1868,46 @@ mod tests {
                     Object("/my_file".into()),
                     String("tacos".into()),
                     Int(666),
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+
+            #[test]
+            fn returns_0_for_private_functions() {
+                let code = indoc! { r##"
+                    mixed q = this_object()->tacos();
+                    private int tacos() { return 666; }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = &task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Object("/my_file".into()),
+                    String("tacos".into()),
+                    Int(0),
+                ];
+
+                assert_eq!(&expected, registers);
+            }
+
+            #[test]
+            fn returns_0_for_protected_functions() {
+                let code = indoc! { r##"
+                    mixed q = this_object()->tacos();
+                    protected int tacos() { return 666; }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = &task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Object("/my_file".into()),
+                    String("tacos".into()),
+                    Int(0),
                 ];
 
                 assert_eq!(&expected, registers);

@@ -5,6 +5,7 @@ use crate::{
 };
 use multimap::MultiMap;
 use std::collections::HashMap;
+use delegate::delegate;
 use crate::semantic::function_flags::FunctionFlags;
 
 /// A [`Program`] function, which stores its actual code, along with
@@ -34,6 +35,13 @@ pub struct ProgramFunction {
 }
 
 impl ProgramFunction {
+    delegate! {
+        to self.flags {
+            /// Is this function public?
+            pub fn public(&self) -> bool;
+        }
+    }
+
     pub fn new<T>(name: T, arity: FunctionArity, flags: FunctionFlags, num_locals: usize) -> Self
     where
         T: Into<String>,

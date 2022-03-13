@@ -5,6 +5,10 @@ use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
 
 use crate::semantic::program_function::ProgramFunction;
 use std::fmt::{Display, Formatter};
+use delegate::delegate;
+use crate::interpreter::efun::EFUN_PROTOTYPES;
+use crate::semantic::function_flags::FunctionFlags;
+use crate::semantic::function_prototype::FunctionPrototype;
 
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
@@ -71,6 +75,19 @@ impl FunctionAddress {
         match self {
             FunctionAddress::Local(_, x) => &x.name,
             FunctionAddress::Efun(x) => x,
+        }
+    }
+
+    /// Get the flags for the function this address represents
+    pub fn flags(&self) -> FunctionFlags {
+        match self {
+            FunctionAddress::Local(_, x) => x.flags,
+            FunctionAddress::Efun(x) => {
+                match EFUN_PROTOTYPES.get(x.as_str()) {
+                    Some(prototype) => prototype.flags,
+                    None => FunctionFlags::default()
+                }
+            }
         }
     }
 }
@@ -157,6 +174,13 @@ impl FunctionPtr {
     pub fn name(&self) -> &str {
         self.address.function_name()
     }
+
+    delegate! {
+        to self.address {
+            /// retrieve the flags for the function
+            pub fn flags(&self) -> FunctionFlags;
+        }
+    }
 }
 
 /// `function` type variations
@@ -170,6 +194,13 @@ impl LpcFunction {
     pub fn arity(&self) -> usize {
         match self {
             LpcFunction::FunctionPtr(x) => x.partial_args.iter().filter(|x| x.is_none()).count(),
+        }
+    }
+
+    /// Get the flags for the function
+    pub fn flags(&self) -> FunctionFlags {
+        match self {
+            LpcFunction::FunctionPtr(x) => x.flags(),
         }
     }
 }
