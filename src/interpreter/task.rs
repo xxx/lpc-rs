@@ -270,6 +270,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 applied_arguments,
                 arity,
             } => {
+                let call_other = if let FunctionTarget::Local(_, ref rcvr) = target {
+                    !matches!(rcvr, FunctionReceiver::Local)
+                } else {
+                    false
+                };
+
                 let address = match target {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
                     FunctionTarget::Local(func_name, func_receiver) => {
@@ -326,6 +332,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     address,
                     partial_args: args,
                     arity,
+                    call_other,
                 };
 
                 let func = LpcFunction::FunctionPtr(fp);
@@ -776,7 +783,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let public = if let LpcRef::Function(func) = func_ref {
                         let borrowed = func.borrow();
                         let func = try_extract_value!(*borrowed, LpcValue::Function);
-                        func.flags().public()
+                        match func {
+                            LpcFunction::FunctionPtr(ptr) => {
+                                match &ptr.address {
+                                    FunctionAddress::Local(receiver, pf) => {
+                                        // local functions are always "public" to the caller
+                                        if !ptr.call_other && Rc::ptr_eq(&task_context.process(), receiver) {
+                                            true
+                                        } else {
+                                            pf.public()
+                                        }
+                                    },
+                                    FunctionAddress::Efun(_) => true
+                                }
+                            }
+                        }
                     } else {
                         return Err(self.runtime_error("callfp instruction on non-function"));
                     };
@@ -1819,8 +1840,6 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                println!("{:?}", registers.iter().map(|x| BareVal::from(x)).collect::<Vec<_>>());
-
                 let expected = vec![
                     Int(0),
                     String("adding some!".into()),
@@ -1844,6 +1863,33 @@ mod tests {
                         vec![None, Some(String("adding some!".into()))],
                     ),
                     Int(0),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn is_normal_call_for_local_private_functions() {
+                let code = indoc! { r##"
+                    function q = tacos;
+                    int a = q(4);
+                    private int tacos(int j) {
+                        return j;
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                println!("{:?}", registers.iter().map(|x| BareVal::from(x)).collect::<Vec<_>>());
+
+                let expected = vec![
+                    Int(4),
+                    Function("tacos".into(), vec![]),
+                    Function("tacos".into(), vec![]),
+                    Int(4),
+                    Function("tacos".into(), vec![]),
+                    Int(4)
                 ];
 
                 assert_eq!(&expected, &registers);

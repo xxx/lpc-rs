@@ -165,6 +165,9 @@ pub struct FunctionPtr {
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
     pub partial_args: Vec<Option<LpcRef>>,
+
+    /// Does this pointer use `call_other`?
+    pub call_other: bool,
 }
 
 impl FunctionPtr {
