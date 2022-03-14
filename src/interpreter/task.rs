@@ -1881,8 +1881,6 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                println!("{:?}", registers.iter().map(|x| BareVal::from(x)).collect::<Vec<_>>());
-
                 let expected = vec![
                     Int(4),
                     Function("tacos".into(), vec![]),
