@@ -158,13 +158,13 @@ pub FunctionDef: FunctionDefNode = {
         let (parameters, ellipsis) = parameter_tuple;
 
         let l = if flags.len() > 0 {
-           flags.first().unwrap().1.l
+            flags.first().unwrap().1.l
         } else if let Some((_, span)) = &r_type {
-           span.l
+            span.l
         } else if let Some(span) = &star {
-           span.l
+            span.l
         } else {
-           name.0.l
+            name.0.l
         };
 
         let r = name.0.r;
@@ -249,6 +249,13 @@ FunctionFlag: (&'static str, Span) = {
     "protected" => ("protected", <>),
 };
 
+GlobalVarFlag: (&'static str, Span) = {
+    "public" => ("public", <>),
+    "private" => ("private", <>),
+    "static" => ("static", <>),
+    "protected" => ("protected", <>),
+};
+
 pub Statement: AstNode = {
     <OpenStatement>,
     <ClosedStatement>,
@@ -321,10 +328,10 @@ ClosedStatement: AstNode = {
         let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
         AstNode::from(node)
     },
-     <while_t:"while"> "(" <cond:Expression> ")" <body:ClosedStatement> => {
+    <while_t:"while"> "(" <cond:Expression> ")" <body:ClosedStatement> => {
         let node = WhileNode::new(cond, body, Some(while_t));
         AstNode::from(node)
-     },
+    },
     <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:ClosedStatement> => {
         let node = ForNode::new(init, cond, inc, body, Some(for_t));
         AstNode::from(node)
@@ -446,19 +453,19 @@ pub PrimaryExpression: ExpressionNode = {
         ExpressionNode::Array(ArrayNode::new(vec))
     },
     <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> => {
-         let vec = if let Some(v) = list {
-             // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
-             v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
-         } else {
-             Vec::new()
-         };
+        let vec = if let Some(v) = list {
+            // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
+            v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
+        } else {
+            Vec::new()
+        };
 
-         let span = Span {
+        let span = Span {
             r: r.r,
             ..l
-         };
+        };
 
-         ExpressionNode::Mapping(MappingNode::new(vec, Some(span)))
+        ExpressionNode::Mapping(MappingNode::new(vec, Some(span)))
     }
 };
 
@@ -534,26 +541,26 @@ pub PostfixExpression: ExpressionNode = {
         }
     },
     <PostfixExpression> "++" => {
-         let span = <>.span();
-         let n = UnaryOpNode {
-             expr: Box::new(<>),
-             op: UnaryOperation::Inc,
-             is_post: true,
-             span
-         };
+        let span = <>.span();
+        let n = UnaryOpNode {
+            expr: Box::new(<>),
+            op: UnaryOperation::Inc,
+            is_post: true,
+            span
+        };
 
-         collapse_unary_op(n)
+        collapse_unary_op(n)
     },
     <PostfixExpression> "--" => {
-         let span = <>.span();
-         let n = UnaryOpNode {
-             expr: Box::new(<>),
-             op: UnaryOperation::Dec,
-             is_post: true,
-             span
-         };
+        let span = <>.span();
+        let n = UnaryOpNode {
+            expr: Box::new(<>),
+            op: UnaryOperation::Dec,
+            is_post: true,
+            span
+        };
 
-         collapse_unary_op(n)
+        collapse_unary_op(n)
     },
 };
 
