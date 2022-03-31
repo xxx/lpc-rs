@@ -3051,6 +3051,7 @@ mod tests {
                     array: false,
                     global: false,
                     span: None,
+                    flags: None,
                 }))),
                 condition: Some(ExpressionNode::Var(var.clone())),
                 incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
@@ -3690,6 +3691,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             insert_symbol(walker, Symbol::from(&mut node.clone()));
@@ -3705,6 +3707,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             insert_symbol(walker, Symbol::from(&mut node));
@@ -3868,6 +3871,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
@@ -3910,6 +3914,7 @@ mod tests {
                 array: false,
                 global: true,
                 span: None,
+                flags: None,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
@@ -3921,6 +3926,7 @@ mod tests {
                 array: false,
                 global: true,
                 span: None,
+                flags: None,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));

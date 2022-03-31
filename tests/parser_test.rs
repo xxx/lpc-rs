@@ -26,6 +26,8 @@ use lpc_rs::{
     semantic::lpc_type::LpcType,
     LpcFloat, LpcInt, Result,
 };
+use lpc_rs::semantic::global_var_flags::GlobalVarFlags;
+use lpc_rs::semantic::visibility::Visibility;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -48,7 +50,7 @@ fn assert_int(value: LpcInt, expr: &str) {
 
 #[test]
 fn program_global_vars() {
-    let prog = "int i = 123; int j = i - 8; string *k;";
+    let prog = "int i = 123; private int j = i - 8; protected static string *k;";
     let lexer = LexWrapper::new(prog);
     let node = lpc_parser::ProgramParser::new()
         .parse(&CompilationContext::default(), lexer)
@@ -76,6 +78,7 @@ fn program_global_vars() {
                         l: 4,
                         r: 11,
                     }),
+                    flags: Some(GlobalVarFlags::new().with_visibility(Visibility::Public)),
                 }],
             }),
             AstNode::from(DeclNode {
@@ -88,8 +91,8 @@ fn program_global_vars() {
                             name: "i".to_string(),
                             span: Some(Span {
                                 file_id: 0,
-                                l: 21,
-                                r: 22,
+                                l: 29,
+                                r: 30,
                             }),
                             global: false,
                             function_name: false,
@@ -98,24 +101,28 @@ fn program_global_vars() {
                             value: 8,
                             span: Some(Span {
                                 file_id: 0,
-                                l: 25,
-                                r: 26,
+                                l: 33,
+                                r: 34,
                             }),
                         })),
                         op: BinaryOperation::Sub,
                         span: Some(Span {
                             file_id: 0,
-                            l: 21,
-                            r: 26,
+                            l: 29,
+                            r: 34,
                         }),
                     })),
                     array: false,
                     global: true,
                     span: Some(Span {
                         file_id: 0,
-                        l: 17,
-                        r: 26,
+                        l: 25,
+                        r: 34,
                     }),
+                    flags: Some(
+                        GlobalVarFlags::new()
+                            .with_visibility(Visibility::Private)
+                    ),
                 }],
             }),
             AstNode::from(DeclNode {
@@ -128,9 +135,14 @@ fn program_global_vars() {
                     global: true,
                     span: Some(Span {
                         file_id: 0,
-                        l: 35,
-                        r: 37,
+                        l: 60,
+                        r: 62,
                     }),
+                    flags: Some(
+                        GlobalVarFlags::new()
+                            .with_visibility(Visibility::Protected)
+                            .with_is_static(true)
+                    ),
                 }],
             }),
         ],

@@ -1,5 +1,6 @@
 pub mod function_flags;
 pub mod function_prototype;
+pub mod global_var_flags;
 pub mod local_scope;
 pub mod lpc_type;
 pub mod lpc_type_union;
@@ -7,3 +8,4 @@ pub mod program_function;
 pub mod scope_tree;
 pub mod semantic_checks;
 pub mod symbol;
+pub mod visibility;

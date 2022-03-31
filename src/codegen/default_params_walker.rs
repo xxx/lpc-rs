@@ -62,6 +62,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             },
             VarInitNode {
                 type_: LpcType::String(false),
@@ -70,6 +71,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             },
         ];
 

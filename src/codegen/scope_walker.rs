@@ -272,6 +272,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             walker.insert_symbol(Symbol {

@@ -741,6 +741,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let var_node = VarNode::new("foo");
@@ -779,6 +780,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let var_node = VarNode::new("foo");
@@ -822,6 +824,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let var_node = VarNode::new("foo");
@@ -1377,6 +1380,7 @@ mod tests {
                 array: false,
                 global: true,
                 span: None,
+                flags: None,
             };
 
             let param1 = VarInitNode {
@@ -1386,6 +1390,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let param2 = VarInitNode {
@@ -1395,6 +1400,7 @@ mod tests {
                 array: true,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let mut function_def1 = FunctionDefNode {
@@ -1525,6 +1531,7 @@ mod tests {
                     array: false,
                     global: false,
                     span: None,
+                    flags: None,
                 })],
             };
 
@@ -1890,6 +1897,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let context = empty_context();
@@ -1908,6 +1916,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let context = empty_context();
@@ -1926,6 +1935,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let mut scopes = ScopeTree::default();
@@ -1950,6 +1960,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let context = empty_context();
@@ -1972,6 +1983,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let context = empty_context();
@@ -2007,6 +2019,7 @@ mod tests {
                 array: false,
                 global: false,
                 span: None,
+                flags: None,
             };
 
             let context = empty_context();

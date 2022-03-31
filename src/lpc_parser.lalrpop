@@ -43,6 +43,7 @@ use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 use crate::LpcFloat;
 use crate::compilation_context::CompilationContext;
 use crate::semantic::function_flags::FunctionFlags;
+use crate::semantic::global_var_flags::GlobalVarFlags;
 
 grammar<'context>(context: &'context CompilationContext);
 
@@ -144,16 +145,21 @@ pub Program: ProgramNode = <body:Def*> => ProgramNode {
 
 pub Def: AstNode = {
     <FunctionDef> => AstNode::from(<>),
-    <decl:Decl> ";" => {
-        let mut node = decl.clone();
-        node.initializations.iter_mut().for_each(|i| i.global = true);
+    <flags:GlobalFlag*> <mut node:Decl> ";" => {
+        let flag_strs = flags.iter().map(|i| i.0).collect::<Vec<_>>();
+        let flags = GlobalVarFlags::from(flag_strs);
+
+        node.initializations.iter_mut().for_each(|i| {
+            i.global = true;
+            i.flags = Some(flags);
+        });
 
         AstNode::from(node)
     }
 };
 
 pub FunctionDef: FunctionDefNode = {
-    <flags:FunctionFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> "{" <body:Statements> "}" =>? {
+    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> "{" <body:Statements> "}" =>? {
         let array = star.is_some();
         let (parameters, ellipsis) = parameter_tuple;
 
@@ -241,15 +247,8 @@ Type: (&'static str, Span) = {
     "void" => ("void", <>),
 };
 
-FunctionFlag: (&'static str, Span) = {
+GlobalFlag: (&'static str, Span) = {
     "varargs" => ("varargs", <>),
-    "public" => ("public", <>),
-    "private" => ("private", <>),
-    "static" => ("static", <>),
-    "protected" => ("protected", <>),
-};
-
-GlobalVarFlag: (&'static str, Span) = {
     "public" => ("public", <>),
     "private" => ("private", <>),
     "static" => ("static", <>),
@@ -406,7 +405,8 @@ VarInit: VarInitNode = {
             value,
             array: array.is_some(),
             global: false,
-            span: Some(Span::new(file_id, l..r))
+            span: Some(Span::new(file_id, l..r)),
+            flags: None,
         }
     }
 }

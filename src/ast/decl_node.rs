@@ -20,15 +20,6 @@ pub struct DeclNode {
     pub initializations: Vec<VarInitNode>,
 }
 
-impl DeclNode {
-    pub fn new(type_: LpcType, initializations: Vec<VarInitNode>) -> Self {
-        Self {
-            type_,
-            initializations,
-        }
-    }
-}
-
 impl AstNodeTrait for DeclNode {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
