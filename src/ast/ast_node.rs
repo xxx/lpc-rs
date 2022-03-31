@@ -46,7 +46,7 @@ pub enum AstNode {
 }
 
 #[auto_impl(&mut)]
-pub trait AstNodeTrait: PartialEq + Display {
+pub trait AstNodeTrait {
     /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()>;
 }
