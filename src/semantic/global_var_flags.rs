@@ -50,9 +50,9 @@ where
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use crate::semantic::global_var_flags::GlobalVarFlags;
-    use crate::semantic::visibility::Visibility;
+    use super::*;
 
     #[test]
     fn test_from() {
