@@ -42,12 +42,7 @@ pub fn collapse_binary_op(
         | BinaryOperation::Gt
         | BinaryOperation::Gte
         | BinaryOperation::AndAnd
-        | BinaryOperation::OrOr => Ok(ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        })),
+        | BinaryOperation::OrOr => Ok(default_node(op, l, r, span)),
     }
 }
 
@@ -67,12 +62,7 @@ fn collapse_add(
                 value: node.value.to_string() + &node2.value,
                 span: Some(span),
             }),
-            _ => ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(l),
-                r: Box::new(r),
-                op,
-                span: Some(span),
-            }),
+            _ => default_node(op, l, r, span),
         },
         ExpressionNode::String(node) => {
             match r {
@@ -86,20 +76,10 @@ fn collapse_add(
                     value: node.value.clone() + &node2.value,
                     span: Some(span),
                 }),
-                _ => ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(l),
-                    r: Box::new(r),
-                    op,
-                    span: Some(span),
-                }),
+                _ => default_node(op, l, r, span),
             }
         }
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -117,19 +97,9 @@ fn collapse_sub(
                 value: node.value - node2.value,
                 span: Some(span),
             }),
-            _ => ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(l),
-                r: Box::new(r),
-                op,
-                span: Some(span),
-            }),
+            _ => default_node(op, l, r, span),
         },
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -149,12 +119,7 @@ fn collapse_mul(
             }),
             // 3 * "string" = "stringstringstring"
             ExpressionNode::String(node2) => collapse_repeat_string(node2.value, node.value, span)?,
-            _ => ExpressionNode::BinaryOp(BinaryOpNode {
-                l: Box::new(l),
-                r: Box::new(r),
-                op,
-                span: Some(span),
-            }),
+            _ => default_node(op, l, r, span),
         },
         ExpressionNode::String(node) => {
             match r {
@@ -162,20 +127,10 @@ fn collapse_mul(
                 ExpressionNode::Int(node2) => {
                     collapse_repeat_string(node.value.clone(), node2.value, span)?
                 }
-                _ => ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(l),
-                    r: Box::new(r),
-                    op,
-                    span: Some(span),
-                }),
+                _ => default_node(op, l, r, span),
             }
         }
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -197,20 +152,10 @@ fn collapse_div(
             } else {
                 // Push it off until runtime so errors are nicer
                 // This branch is only hit if you're dividing by a 0 int literal.
-                ExpressionNode::BinaryOp(BinaryOpNode {
-                    l: Box::new(l),
-                    r: Box::new(r),
-                    op,
-                    span: Some(span),
-                })
+                default_node(op, l, r, span)
             }
         }
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -240,12 +185,7 @@ fn collapse_mod(
                 })
             }
         }
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -262,12 +202,7 @@ fn collapse_and(
             value: node.value & node2.value,
             span: Some(span),
         }),
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -284,12 +219,7 @@ fn collapse_or(
             value: node.value | node2.value,
             span: Some(span),
         }),
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -306,12 +236,7 @@ fn collapse_xor(
             value: node.value ^ node2.value,
             span: Some(span),
         }),
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -328,12 +253,7 @@ fn collapse_shl(
             value: node.value << node2.value,
             span: Some(span),
         }),
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -350,12 +270,7 @@ fn collapse_shr(
             value: node.value >> node2.value,
             span: Some(span),
         }),
-        _ => ExpressionNode::BinaryOp(BinaryOpNode {
-            l: Box::new(l),
-            r: Box::new(r),
-            op,
-            span: Some(span),
-        }),
+        _ => default_node(op, l, r, span),
     };
 
     Ok(result)
@@ -374,6 +289,21 @@ fn collapse_repeat_string(
     });
 
     Ok(node)
+}
+
+#[inline]
+fn default_node(
+    op: BinaryOperation,
+    l: ExpressionNode,
+    r: ExpressionNode,
+    span: Span,
+) -> ExpressionNode {
+    ExpressionNode::BinaryOp(BinaryOpNode {
+        l: Box::new(l),
+        r: Box::new(r),
+        op,
+        span: Some(span),
+    })
 }
 
 #[cfg(test)]
