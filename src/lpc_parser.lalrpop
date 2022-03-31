@@ -140,7 +140,7 @@ extern {
 }
 
 pub Program: ProgramNode = <body:Def*> => ProgramNode {
-    body: body.iter().map(|i| AstNode::from(i.clone())).collect::<Vec<_>>()
+    body: body.into_iter().map(|i| AstNode::from(i)).collect::<Vec<_>>()
 };
 
 pub Def: AstNode = {
@@ -954,7 +954,7 @@ String: ExpressionNode = {
 };
 
 FunctionPointer: ExpressionNode = {
-    <l:"&"> <rcvr:("(" <PostfixExpression> ")" "->")?> <name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> => {
+    <l:"&"> <rcvr:("(" <PostfixExpression> ")" "->")?> <mut name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> => {
         let receiver = match rcvr {
             Some(n) => Some(Box::new(n)),
             None => None
@@ -963,7 +963,7 @@ FunctionPointer: ExpressionNode = {
         let ptr_node = FunctionPtrNode {
             receiver,
             arguments,
-            name: name.1.clone(),
+            name: std::mem::take(&mut name.1),
             span: Some(combine_spans(Some(l), Some(r)))
         };
 
