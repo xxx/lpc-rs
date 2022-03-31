@@ -712,7 +712,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         *num_args,
                     )
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = ProgramFunction::new(name.clone(), prototype.arity, prototype.flags,0);
+                    let sym =
+                        ProgramFunction::new(name.clone(), prototype.arity, prototype.flags, 0);
 
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
@@ -788,13 +789,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 match &ptr.address {
                                     FunctionAddress::Local(receiver, pf) => {
                                         // local functions are always "public" to the caller
-                                        if !ptr.call_other && Rc::ptr_eq(&task_context.process(), receiver) {
+                                        if !ptr.call_other
+                                            && Rc::ptr_eq(&task_context.process(), receiver)
+                                        {
                                             true
                                         } else {
                                             pf.public()
                                         }
-                                    },
-                                    FunctionAddress::Efun(_) => true
+                                    }
+                                    FunctionAddress::Efun(_) => true,
                                 }
                             }
                         }
@@ -989,7 +992,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     if !function.public() {
                                         LpcRef::Int(0)
                                     } else {
-                                        let eval_context = task.eval(function, args, new_context)?;
+                                        let eval_context =
+                                            task.eval(function, args, new_context)?;
                                         task_context.increment_instruction_count(
                                             eval_context.instruction_count(),
                                         )?;
@@ -1887,7 +1891,7 @@ mod tests {
                     Function("tacos".into(), vec![]),
                     Int(4),
                     Function("tacos".into(), vec![]),
-                    Int(4)
+                    Int(4),
                 ];
 
                 assert_eq!(&expected, &registers);

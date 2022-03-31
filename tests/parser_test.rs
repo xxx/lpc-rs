@@ -23,11 +23,9 @@ use lpc_rs::{
         lexer::{LexWrapper, TokenVecWrapper},
         span::Span,
     },
-    semantic::lpc_type::LpcType,
+    semantic::{global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility},
     LpcFloat, LpcInt, Result,
 };
-use lpc_rs::semantic::global_var_flags::GlobalVarFlags;
-use lpc_rs::semantic::visibility::Visibility;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -119,10 +117,7 @@ fn program_global_vars() {
                         l: 25,
                         r: 34,
                     }),
-                    flags: Some(
-                        GlobalVarFlags::new()
-                            .with_visibility(Visibility::Private)
-                    ),
+                    flags: Some(GlobalVarFlags::new().with_visibility(Visibility::Private)),
                 }],
             }),
             AstNode::from(DeclNode {
@@ -141,7 +136,7 @@ fn program_global_vars() {
                     flags: Some(
                         GlobalVarFlags::new()
                             .with_visibility(Visibility::Protected)
-                            .with_is_static(true)
+                            .with_is_static(true),
                     ),
                 }],
             }),

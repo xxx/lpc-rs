@@ -318,9 +318,9 @@ impl TreeWalker for SemanticCheckWalker {
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(&node.name)?;
 
-        let visibility_count = node.flags.public() as usize +
-            node.flags.private() as usize +
-            node.flags.protected() as usize;
+        let visibility_count = node.flags.public() as usize
+            + node.flags.private() as usize
+            + node.flags.protected() as usize;
 
         if visibility_count > 1 {
             let e = LpcError::new(

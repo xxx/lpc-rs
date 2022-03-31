@@ -3,11 +3,12 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
 
-use crate::semantic::program_function::ProgramFunction;
-use std::fmt::{Display, Formatter};
+use crate::{
+    interpreter::efun::EFUN_PROTOTYPES,
+    semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
+};
 use delegate::delegate;
-use crate::interpreter::efun::EFUN_PROTOTYPES;
-use crate::semantic::function_flags::FunctionFlags;
+use std::fmt::{Display, Formatter};
 
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
@@ -81,12 +82,10 @@ impl FunctionAddress {
     pub fn flags(&self) -> FunctionFlags {
         match self {
             FunctionAddress::Local(_, x) => x.flags,
-            FunctionAddress::Efun(x) => {
-                match EFUN_PROTOTYPES.get(x.as_str()) {
-                    Some(prototype) => prototype.flags,
-                    None => FunctionFlags::default()
-                }
-            }
+            FunctionAddress::Efun(x) => match EFUN_PROTOTYPES.get(x.as_str()) {
+                Some(prototype) => prototype.flags,
+                None => FunctionFlags::default(),
+            },
         }
     }
 }

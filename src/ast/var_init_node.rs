@@ -10,10 +10,9 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    semantic::lpc_type::LpcType,
+    semantic::{global_var_flags::GlobalVarFlags, lpc_type::LpcType},
     Result,
 };
-use crate::semantic::global_var_flags::GlobalVarFlags;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
@@ -37,7 +36,7 @@ pub struct VarInitNode {
     pub span: Option<Span>,
 
     /// The flags for this variable. Only applicable for globals.
-    pub flags: Option<GlobalVarFlags>
+    pub flags: Option<GlobalVarFlags>,
 }
 
 impl VarInitNode {
@@ -49,7 +48,7 @@ impl VarInitNode {
             array: false,
             global: false,
             span: None,
-            flags: None
+            flags: None,
         }
     }
 
@@ -109,7 +108,7 @@ mod tests {
             array: true,
             global: false,
             span: None,
-            flags: None
+            flags: None,
         };
 
         node.update_type(LpcType::Int(false));

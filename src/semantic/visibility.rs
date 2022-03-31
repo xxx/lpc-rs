@@ -1,7 +1,9 @@
-use std::fmt::{Display, Formatter};
 use modular_bitfield::prelude::*;
+use std::fmt::{Display, Formatter};
 
-#[derive(BitfieldSpecifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(
+    BitfieldSpecifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize,
+)]
 #[bits = 2]
 pub enum Visibility {
     Public,

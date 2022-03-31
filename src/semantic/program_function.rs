@@ -2,11 +2,11 @@ use crate::{
     asm::instruction::{Address, Instruction},
     interpreter::function_type::FunctionArity,
     parser::span::Span,
+    semantic::function_flags::FunctionFlags,
 };
+use delegate::delegate;
 use multimap::MultiMap;
 use std::collections::HashMap;
-use delegate::delegate;
-use crate::semantic::function_flags::FunctionFlags;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.

@@ -52,12 +52,12 @@ use crate::{
         efun::EFUN_PROTOTYPES,
         function_type::{FunctionArity, FunctionName, FunctionReceiver, FunctionTarget},
     },
+    semantic::function_flags::FunctionFlags,
 };
 use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::semantic::function_flags::FunctionFlags;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -167,7 +167,7 @@ impl CodegenWalker {
             INIT_PROGRAM,
             FunctionArity::default(),
             FunctionFlags::default(),
-            0
+            0,
         ));
     }
 
@@ -990,7 +990,7 @@ impl TreeWalker for CodegenWalker {
             varargs: node.flags.varargs(),
         };
 
-        let sym = ProgramFunction::new(&node.name, arity, node.flags,0);
+        let sym = ProgramFunction::new(&node.name, arity, node.flags, 0);
         let populate_argv_index: Option<usize>;
         let populate_defaults_index: Option<usize>;
 
