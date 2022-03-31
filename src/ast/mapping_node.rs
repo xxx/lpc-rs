@@ -40,7 +40,6 @@ impl SpannedNode for MappingNode {
 }
 
 impl AstNodeTrait for MappingNode {
-    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_mapping(self)
     }

@@ -59,7 +59,6 @@ impl SpannedNode for UnaryOpNode {
 }
 
 impl AstNodeTrait for UnaryOpNode {
-    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_unary_op(self)
     }

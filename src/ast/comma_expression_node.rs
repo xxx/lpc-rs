@@ -52,7 +52,6 @@ impl SpannedNode for CommaExpressionNode {
 }
 
 impl AstNodeTrait for CommaExpressionNode {
-    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_comma_expression(self)
     }

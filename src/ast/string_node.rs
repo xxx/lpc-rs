@@ -35,7 +35,6 @@ impl SpannedNode for StringNode {
 }
 
 impl AstNodeTrait for StringNode {
-    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_string(self)
     }

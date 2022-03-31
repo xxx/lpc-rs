@@ -36,7 +36,6 @@ impl SpannedNode for FunctionDefNode {
 }
 
 impl AstNodeTrait for FunctionDefNode {
-    /// This is the double-dispatch endpoint for tree-walking
     fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_function_def(self)
     }
