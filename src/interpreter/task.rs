@@ -188,6 +188,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         };
 
         let instruction = match frame.instruction() {
+            // TODO: Get rid of this clone (once Instruction is Copy, this will go away)
             Some(i) => i.clone(),
             None => return Ok(true),
         };
