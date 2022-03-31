@@ -211,18 +211,18 @@ impl CodegenWalker {
         functions.flat_map(|func| func.listing()).collect()
     }
 
-    /// Convert this walker's data into a [`Program`]
-    pub fn to_program(&self) -> Result<Program> {
+    /// Convert this walker into a [`Program`]
+    pub fn into_program(self) -> Result<Program> {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         self.ensure_sync()?;
 
         Ok(Program {
-            filename: self.context.filename.clone(),
-            functions: self.functions.clone(),
+            filename: self.context.filename,
+            functions: self.functions,
             // add +1 to num_globals for r0, for call return values
             num_globals: self.global_counter.as_usize() + 1,
             num_init_registers: self.register_counter.as_usize(),
-            pragmas: self.context.pragmas.clone(),
+            pragmas: self.context.pragmas,
         })
     }
 
@@ -4003,7 +4003,7 @@ mod tests {
         }
     }
 
-    mod test_to_program {
+    mod test_into_program {
         use super::*;
 
         #[test]
@@ -4015,7 +4015,7 @@ mod tests {
             string b;
         "##;
 
-            let program = walk_prog(code).to_program().expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_globals, 6)
         }
 
@@ -4028,7 +4028,7 @@ mod tests {
             string b;
         "##;
 
-            let program = walk_prog(code).to_program().expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 11)
         }
 
@@ -4042,7 +4042,7 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code).to_program().expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 1)
         }
     }

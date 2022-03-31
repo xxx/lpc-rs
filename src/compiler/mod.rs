@@ -220,7 +220,7 @@ impl Compiler {
             println!("{}", s);
         }
 
-        let program = match asm_walker.to_program() {
+        let program = match asm_walker.into_program() {
             Ok(p) => p,
             Err(e) => return Err(CompilerError::LpcError(e)),
         };
