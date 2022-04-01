@@ -23,6 +23,7 @@ use crate::{
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 
 pub mod compiler_error;
+pub mod inheritance_graph;
 
 #[macro_export]
 macro_rules! apply_walker {
