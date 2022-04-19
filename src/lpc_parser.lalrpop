@@ -19,6 +19,7 @@ use crate::ast::for_node::ForNode;
 use crate::ast::function_ptr_node::FunctionPtrNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::if_node::IfNode;
+use crate::ast::inherit_node::InheritNode;
 use crate::ast::int_node::IntNode;
 use crate::ast::labeled_statement_node::LabeledStatementNode;
 use crate::ast::label_node::LabelNode;
@@ -139,8 +140,45 @@ extern {
     }
 }
 
-pub Program: ProgramNode = <body:Def*> => ProgramNode {
+pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> => ProgramNode {
+    inherits,
     body: body.into_iter().map(|i| AstNode::from(i)).collect::<Vec<_>>()
+};
+
+pub Inherit: InheritNode = {
+    <l:"inherit"> <path_node:String> <namespace_node:Var?> <r:";"> =>? {
+        let span = combine_spans(Some(l), Some(r));
+
+        let path = if let ExpressionNode::String(StringNode { value, .. }) = path_node {
+            value
+        } else {
+            let error = LpcError::new("Inherit path isn't a string? This should not have even parsed.")
+            .with_span(Some(span));
+
+            return Err(ParseError::User { error });
+        };
+
+        let namespace = if namespace_node.is_some() {
+            if let Some(ExpressionNode::Var(VarNode { name, .. })) = namespace_node {
+                Some(name)
+            } else {
+                let error = LpcError::new("Inherit namespace isn't a string? This should not have even parsed.")
+                .with_span(Some(span));
+
+                return Err(ParseError::User { error });
+            }
+        } else {
+            None
+        };
+
+        Ok(
+            InheritNode {
+                path,
+                namespace,
+                span: Some(span),
+            }
+        )
+    }
 };
 
 pub Def: AstNode = {

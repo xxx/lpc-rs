@@ -1524,6 +1524,7 @@ mod tests {
         #[test]
         fn checks_its_body() {
             let mut node = ProgramNode {
+                inherits: Vec::new(),
                 body: vec![AstNode::from(VarInitNode {
                     type_: LpcType::String(false),
                     name: "mapping".to_string(),

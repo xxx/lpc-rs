@@ -15,6 +15,7 @@ pub mod for_node;
 pub mod function_def_node;
 pub mod function_ptr_node;
 pub mod if_node;
+pub mod inherit_node;
 pub mod int_node;
 pub mod label_node;
 pub mod mapping_node;

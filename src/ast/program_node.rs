@@ -9,11 +9,15 @@ use crate::{
     Result,
 };
 use itertools::Itertools;
+use crate::ast::inherit_node::InheritNode;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Default)]
 pub struct ProgramNode {
-    /// The list of function defs for this program
+    /// The list of inherits of this Program
+    pub inherits: Vec<InheritNode>,
+
+    /// The list of global variables and function defs for this program
     pub body: Vec<AstNode>,
 }
 
