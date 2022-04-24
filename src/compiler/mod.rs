@@ -21,6 +21,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use crate::codegen::inheritance_walker::InheritanceWalker;
 
 pub mod compiler_error;
 pub mod inheritance_graph;
@@ -206,6 +207,7 @@ impl Compiler {
         // let mut printer = TreePrinter::new();
         // let _ = program.visit(&mut printer);
 
+        let context = apply_walker!(InheritanceWalker, program, context, true);
         let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);

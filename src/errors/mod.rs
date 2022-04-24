@@ -14,6 +14,7 @@ use crate::{
     errors::lazy_files::FILE_CACHE,
     parser::{lexer::Token, span::Span},
 };
+use crate::compiler::compiler_error::CompilerError;
 
 pub mod lazy_files;
 
@@ -136,6 +137,18 @@ impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
 impl From<std::io::Error> for LpcError {
     fn from(e: std::io::Error) -> Self {
         Self::new(e.to_string())
+    }
+}
+
+impl From<CompilerError> for LpcError {
+    fn from(ce: CompilerError) -> Self {
+        match ce {
+            CompilerError::LpcError(e) => e,
+            CompilerError::Collection(mut errors) => {
+                let replacement = LpcError::new("");
+                std::mem::replace(&mut errors[0], replacement)
+            }
+        }
     }
 }
 

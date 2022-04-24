@@ -113,6 +113,22 @@ impl LpcPath {
             LpcPath::InGame(x) => !x.as_os_str().is_empty(),
         }
     }
+
+    /// Return the current working directory for this path
+    pub fn cwd(&self) -> Self {
+        match self {
+            LpcPath::Server(pb) => {
+                let mut buf = pb.clone();
+                buf.pop();
+                LpcPath::Server(buf)
+            }
+            LpcPath::InGame(pb) => {
+                let mut buf = pb.clone();
+                buf.pop();
+                LpcPath::InGame(buf)
+            }
+        }
+    }
 }
 
 pub trait ToLpcPath {
@@ -188,8 +204,8 @@ impl AsRef<OsStr> for LpcPath {
 impl AsRef<Path> for LpcPath {
     fn as_ref(&self) -> &Path {
         match self {
-            LpcPath::Server(x) => x,
-            LpcPath::InGame(x) => x,
+            LpcPath::Server(x)
+            | LpcPath::InGame(x) => x,
         }
     }
 }

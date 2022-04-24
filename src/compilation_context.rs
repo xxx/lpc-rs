@@ -12,6 +12,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
+use crate::interpreter::program::Program;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -38,6 +39,13 @@ pub struct CompilationContext {
 
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,
+
+    /// All of my Inherited parent objects
+    /// The ordering of this field can be assumed to be in file order
+    pub inherits: Vec<Program>,
+
+    /// The index of name -> inherited objects, for inherits with names
+    pub inherit_names: HashMap<String, usize>,
 }
 
 impl CompilationContext {
@@ -111,6 +119,8 @@ impl Default for CompilationContext {
             default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
+            inherits: Vec::new(),
+            inherit_names: HashMap::new(),
         }
     }
 }
