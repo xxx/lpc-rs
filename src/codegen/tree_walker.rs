@@ -14,6 +14,7 @@ use crate::{
     compilation_context::CompilationContext,
     Result,
 };
+use crate::ast::inherit_node::InheritNode;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -212,6 +213,11 @@ pub trait TreeWalker {
         Ok(())
     }
 
+    /// Visit an `inherit` statement
+    fn visit_inherit(&mut self, _node: &mut InheritNode) -> Result<()> {
+        Ok(())
+    }
+
     /// Visit an int (literal) node
     fn visit_int(&mut self, _node: &mut IntNode) -> Result<()> {
         Ok(())
@@ -247,6 +253,10 @@ pub trait TreeWalker {
     where
         Self: Sized,
     {
+        for expr in &mut node.inherits {
+            expr.visit(self)?;
+        }
+
         for expr in &mut node.body {
             expr.visit(self)?;
         }

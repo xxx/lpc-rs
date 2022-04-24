@@ -14,6 +14,7 @@ use crate::{
     codegen::tree_walker,
     Result,
 };
+use crate::ast::inherit_node::InheritNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -235,6 +236,22 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
+    fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
+        self.println_indented("Inherit:");
+
+        self.indent += 2;
+
+        self.println_indented(&format!("{}", node.path));
+
+        if let Some(namespace) = &node.namespace {
+            self.println_indented(&format!("{}", &namespace));
+        }
+
+        self.indent -= 2;
+
+        Ok(())
+    }
+
     fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
         self.println_indented(&format!("Int: {}", node.value));
 
@@ -255,10 +272,14 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         println!("Program");
         self.indent += 2;
-        for expr in &mut program.body {
+        for expr in &mut node.inherits {
+            expr.visit(self)?;
+        }
+
+        for expr in &mut node.body {
             expr.visit(self)?;
         }
         self.indent -= 2;
