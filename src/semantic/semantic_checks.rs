@@ -1,5 +1,5 @@
 use phf::phf_set;
-use std::collections::HashMap;
+
 
 use crate::{
     ast::{
@@ -16,7 +16,7 @@ use crate::{
     },
     errors::LpcError,
     interpreter::efun::EFUN_PROTOTYPES,
-    semantic::{local_scope::LocalScope, lpc_type::LpcType, scope_tree::ScopeTree},
+    semantic::{local_scope::LocalScope, lpc_type::LpcType},
     Result,
 };
 use crate::compilation_context::CompilationContext;
