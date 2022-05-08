@@ -330,7 +330,12 @@ pub fn node_type(
         ExpressionNode::Var(VarNode { name, span, .. }) => match scope_tree.lookup(name) {
             Some(sym) => Ok(sym.type_),
             None => {
-                return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span))
+                // TODO: also pass the normal function prototypes here
+                if EFUN_PROTOTYPES.contains_key(name.as_str()) {
+                    Ok(LpcType::Function(false))
+                } else {
+                    return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span))
+                }
             }
         },
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(

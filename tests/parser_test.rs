@@ -55,6 +55,7 @@ fn program_global_vars() {
         .unwrap();
 
     let expected = ProgramNode {
+        inherits: Vec::new(),
         body: vec![
             AstNode::from(DeclNode {
                 type_: LpcType::Int(false),

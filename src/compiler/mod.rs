@@ -24,13 +24,12 @@ use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use crate::codegen::inheritance_walker::InheritanceWalker;
 
 pub mod compiler_error;
-pub mod inheritance_graph;
 
 #[macro_export]
 macro_rules! apply_walker {
     ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {{
         let mut walker = <$walker>::new($context);
-        let _ = $program.visit(&mut walker);
+        let result = $program.visit(&mut walker);
 
         let context = walker.into_context();
 
@@ -39,19 +38,34 @@ macro_rules! apply_walker {
             return Err(CompilerError::Collection(context.errors));
         }
 
+        if let Err(e) = result {
+            errors::emit_diagnostics(&[e.clone()]);
+            return Err(CompilerError::LpcError(e))
+        }
+
         context
     }};
 }
 
 #[derive(Debug, Default)]
 pub struct Compiler {
+    /// The configuration to be used for this instance of the compiler
     config: Rc<Config>,
+
+    /// The current depth in the inheritance chain of this compiler
+    inherit_depth: usize
 }
 
 impl Compiler {
     /// Create a new `Compiler` with the passed [`Config`]
     pub fn new(config: Rc<Config>) -> Self {
-        Self { config }
+        Self { config, inherit_depth: 0 }
+    }
+
+    /// Set the inherit_depth of a compiler
+    pub fn with_inherit_depth(mut self, depth: usize) -> Self {
+        self.inherit_depth = depth;
+        self
     }
 
     /// Fully compile a file into a Program struct
@@ -157,7 +171,8 @@ impl Compiler {
         U: AsRef<str>,
     {
         let lpc_path = path.into();
-        let context = CompilationContext::new(&lpc_path, self.config.clone());
+        let context = CompilationContext::new(&lpc_path, self.config.clone())
+            .with_inherit_depth(self.inherit_depth);
 
         let mut preprocessor = Preprocessor::new(context);
         let code = match preprocessor.scan(&lpc_path, &code) {

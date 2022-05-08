@@ -17,6 +17,7 @@ use crate::interpreter::program::Program;
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
 /// that file will share this state object when they are compiled, as well.)
+/// Inherited files will have their own.
 #[derive(Debug)]
 pub struct CompilationContext {
     /// The name of the main file being compiled.
@@ -46,6 +47,9 @@ pub struct CompilationContext {
 
     /// The index of name -> inherited objects, for inherits with names
     pub inherit_names: HashMap<String, usize>,
+
+    /// How deep into an inheritance chain is this context?
+    pub inherit_depth: usize,
 }
 
 impl CompilationContext {
@@ -73,6 +77,12 @@ impl CompilationContext {
             config,
             ..Self::default()
         }
+    }
+
+    /// Set the inherit_depth of the context
+    pub fn with_inherit_depth(mut self, depth: usize) -> Self {
+        self.inherit_depth = depth;
+        self
     }
 
     #[inline]
@@ -121,6 +131,7 @@ impl Default for CompilationContext {
             pragmas: PragmaFlags::new(),
             inherits: Vec::new(),
             inherit_names: HashMap::new(),
+            inherit_depth: 0,
         }
     }
 }

@@ -4,8 +4,10 @@ use std::path::Path;
 use toml::{value::Index, Value};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
+const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
 
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
+const MAX_INHERIT_DEPTH: &[&str] = &["lpc-rs", "max_inherit_depth"];
 const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
@@ -18,6 +20,7 @@ pub struct Config {
     system_include_dirs: Vec<String>,
     master_object: String,
     max_task_instructions: Option<usize>,
+    max_inherit_depth: usize,
 }
 
 impl Config {
@@ -79,6 +82,21 @@ impl Config {
             }
         };
 
+        let dug = dig(&config, MAX_INHERIT_DEPTH);
+        let max_inherit_depth = match dug {
+            Some(x) => match x.as_integer() {
+                Some(y) => {
+                    if y < 1 {
+                        return Err(LpcError::new("max_inherit_depth must be greater than 0"));
+                    } else {
+                        y as usize
+                    }
+                }
+                None => return Err(LpcError::new("max_inherit_depth must be a positive integer")),
+            },
+            None => DEFAULT_MAX_INHERIT_DEPTH,
+        };
+
         let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
         let max_task_instructions = match dug {
             Some(x) => match x.as_integer() {
@@ -98,6 +116,7 @@ impl Config {
             lib_dir,
             system_include_dirs,
             master_object,
+            max_inherit_depth,
             max_task_instructions,
         })
     }
@@ -144,6 +163,11 @@ impl Config {
     #[inline]
     pub fn master_object(&self) -> &str {
         &self.master_object
+    }
+
+    #[inline]
+    pub fn max_inherit_depth(&self) -> usize {
+        self.max_inherit_depth
     }
 
     #[inline]

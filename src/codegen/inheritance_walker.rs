@@ -23,6 +23,14 @@ impl ContextHolder for InheritanceWalker {
 
 impl TreeWalker for InheritanceWalker {
     fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
+        let depth = self.context.inherit_depth;
+
+        if depth >= self.context.config.max_inherit_depth() {
+            let err = LpcError::new("maximum inheritance depth reached").with_span(node.span);
+
+            return Err(err);
+        }
+
         if let Some(namespace) = &node.namespace {
             if self.context.inherit_names.contains_key(namespace) {
                 return Err(
@@ -49,7 +57,8 @@ impl TreeWalker for InheritanceWalker {
             self.context.config.lib_dir()
         );
 
-        let compiler = Compiler::new(self.context.config.clone());
+        let compiler = Compiler::new(self.context.config.clone())
+            .with_inherit_depth(depth + 1);
 
         match compiler.compile_in_game_file(&full_path, node.span) {
             Ok(program) => {
@@ -62,8 +71,6 @@ impl TreeWalker for InheritanceWalker {
 
                     return Err(err);
                 }
-
-                // TODO: move CompilationContext's `inherits` into a DAG, and check for cycles
 
                 if let Some(namespace) = &node.namespace {
                     self.context.inherit_names.insert(
