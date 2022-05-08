@@ -30,6 +30,7 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use crate::interpreter::register_bank::RegisterBank;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -960,7 +961,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     fn resolve_result(
                         receiver_ref: &LpcRef,
                         function_name: &str,
-                        registers: &[LpcRef],
+                        registers: &RegisterBank,
                         initial_index: usize,
                         num_args: usize,
                         task_context: &TaskContext,
@@ -1511,6 +1512,12 @@ mod tests {
         }
     }
 
+    impl PartialEq<RegisterBank> for Vec<BareVal> {
+        fn eq(&self, other: &RegisterBank) -> bool {
+            self == &other.registers
+        }
+    }
+
     impl Hash for BareVal {
         fn hash<H: Hasher>(&self, state: &mut H) {
             match self {
@@ -1532,7 +1539,7 @@ mod tests {
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 
-        fn snapshot_registers(code: &str) -> Vec<LpcRef> {
+        fn snapshot_registers(code: &str) -> RegisterBank {
             let (task, _) = run_prog(code);
             let mut stack = task.snapshot.unwrap();
 

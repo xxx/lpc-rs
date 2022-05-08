@@ -15,6 +15,7 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use crate::interpreter::register_bank::RegisterBank;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -24,7 +25,7 @@ pub struct StackFrame {
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,
     /// Our registers. By convention, `registers[0]` is for the return value of the call.
-    pub registers: Vec<LpcRef>,
+    pub registers: RegisterBank,
     /// Track where the pc is pointing in this frame's function's instructions.
     pc: Cell<usize>,
     /// How many explicit arguments were passed to the call that created this frame?
@@ -52,7 +53,7 @@ impl StackFrame {
         Self {
             process: process.into(),
             function,
-            registers: vec![LpcRef::Int(0); reg_len],
+            registers: RegisterBank::new(vec![LpcRef::Int(0); reg_len]),
             pc: 0.into(),
             called_with_num_args,
         }
@@ -83,7 +84,7 @@ impl StackFrame {
         let reservation = std::cmp::max(reg_len, arg_len);
 
         Self {
-            registers: vec![LpcRef::Int(0); reservation],
+            registers: RegisterBank::new(vec![LpcRef::Int(0); reservation]),
             ..Self::new(process, function, called_with_num_args)
         }
     }

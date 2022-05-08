@@ -9,6 +9,7 @@ pub mod object_space;
 pub mod pragma_flags;
 pub mod process;
 pub mod program;
+pub mod register_bank;
 pub mod stack_frame;
 pub mod task;
 pub mod task_context;
