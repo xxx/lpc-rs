@@ -204,8 +204,7 @@ impl AsRef<OsStr> for LpcPath {
 impl AsRef<Path> for LpcPath {
     fn as_ref(&self) -> &Path {
         match self {
-            LpcPath::Server(x)
-            | LpcPath::InGame(x) => x,
+            LpcPath::Server(x) | LpcPath::InGame(x) => x,
         }
     }
 }

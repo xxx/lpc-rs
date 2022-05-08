@@ -92,7 +92,11 @@ impl Config {
                         y as usize
                     }
                 }
-                None => return Err(LpcError::new("max_inherit_depth must be a positive integer")),
+                None => {
+                    return Err(LpcError::new(
+                        "max_inherit_depth must be a positive integer",
+                    ))
+                }
             },
             None => DEFAULT_MAX_INHERIT_DEPTH,
         };

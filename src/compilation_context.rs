@@ -8,12 +8,11 @@ use crate::{
 
 use crate::{
     errors::LpcError,
-    interpreter::pragma_flags::PragmaFlags,
+    interpreter::{pragma_flags::PragmaFlags, program::Program},
+    semantic::lpc_type::LpcType,
     util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
-use crate::interpreter::program::Program;
-use crate::semantic::lpc_type::LpcType;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -124,11 +123,7 @@ impl CompilationContext {
         self.function_prototypes
             .keys()
             .map(|k| k.as_str())
-            .zip(
-                self.function_prototypes
-                    .values()
-                    .map(|v| v.return_type),
-            )
+            .zip(self.function_prototypes.values().map(|v| v.return_type))
             .collect::<HashMap<_, _>>()
     }
 }

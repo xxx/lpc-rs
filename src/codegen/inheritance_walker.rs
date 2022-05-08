@@ -1,6 +1,11 @@
-use crate::{ast::inherit_node::InheritNode, codegen::tree_walker::{ContextHolder, TreeWalker}, compilation_context::CompilationContext, LpcError, Result};
-use crate::compiler::Compiler;
-use crate::util::path_maker::LpcPath;
+use crate::{
+    ast::inherit_node::InheritNode,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    compilation_context::CompilationContext,
+    compiler::Compiler,
+    util::path_maker::LpcPath,
+    LpcError, Result,
+};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -33,39 +38,40 @@ impl TreeWalker for InheritanceWalker {
 
         if let Some(namespace) = &node.namespace {
             if self.context.inherit_names.contains_key(namespace) {
-                return Err(
-                    LpcError::new(format!("inheritance namespace `{}` is already defined", namespace))
-                        .with_span(node.span)
-                )
+                return Err(LpcError::new(format!(
+                    "inheritance namespace `{}` is already defined",
+                    namespace
+                ))
+                .with_span(node.span));
             }
         }
 
         let cwd = match self.context.filename.cwd() {
-            LpcPath::Server(_) => {
-                self
-                    .context
-                    .filename
-                    .as_in_game(self.context.config.lib_dir())
-                    .into_owned()
-            }
-            LpcPath::InGame(x) => x
+            LpcPath::Server(_) => self
+                .context
+                .filename
+                .as_in_game(self.context.config.lib_dir())
+                .into_owned(),
+            LpcPath::InGame(x) => x,
         };
 
-        let full_path = LpcPath::new_in_game(
-            &node.path,
-            cwd,
-            self.context.config.lib_dir()
-        );
+        let full_path = LpcPath::new_in_game(&node.path, cwd, self.context.config.lib_dir());
 
-        let compiler = Compiler::new(self.context.config.clone())
-            .with_inherit_depth(depth + 1);
+        let compiler = Compiler::new(self.context.config.clone()).with_inherit_depth(depth + 1);
 
         match compiler.compile_in_game_file(&full_path, node.span) {
             Ok(program) => {
-                if self.context.inherits.iter().any(|x| x.filename == program.filename) {
-                    let err = LpcError::new(
-                        format!("`{}` is already being inherited from", program.filename)
-                    ).with_span(node.span);
+                if self
+                    .context
+                    .inherits
+                    .iter()
+                    .any(|x| x.filename == program.filename)
+                {
+                    let err = LpcError::new(format!(
+                        "`{}` is already being inherited from",
+                        program.filename
+                    ))
+                    .with_span(node.span);
 
                     self.context.errors.push(err.clone());
 
@@ -73,10 +79,9 @@ impl TreeWalker for InheritanceWalker {
                 }
 
                 if let Some(namespace) = &node.namespace {
-                    self.context.inherit_names.insert(
-                        namespace.clone(),
-                        self.context.inherits.len()
-                    );
+                    self.context
+                        .inherit_names
+                        .insert(namespace.clone(), self.context.inherits.len());
                 }
 
                 self.context.inherits.push(program);

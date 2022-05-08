@@ -1,6 +1,5 @@
 use phf::phf_set;
 
-
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
@@ -14,12 +13,12 @@ use crate::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
+    compilation_context::CompilationContext,
     errors::LpcError,
     interpreter::efun::EFUN_PROTOTYPES,
     semantic::{local_scope::LocalScope, lpc_type::LpcType},
     Result,
 };
-use crate::compilation_context::CompilationContext;
 
 /// Utility functions for doing various semantic checks.
 
@@ -223,10 +222,7 @@ pub fn check_binary_operation_types(
 ///
 /// * `node` - The node we're checking to see if it's being used incorrectly
 /// * `context` - The current [`CompilationContext`]
-pub fn check_unary_operation_types(
-    node: &UnaryOpNode,
-    context: &CompilationContext,
-) -> Result<()> {
+pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationContext) -> Result<()> {
     let expr_type = node_type(&node.expr, context)?;
 
     let create_error = |expected| {
@@ -289,15 +285,9 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 ///
 /// # Returns
 /// The `LpcType` of the passed node.
-pub fn node_type(
-    node: &ExpressionNode,
-    context: &CompilationContext,
-) -> Result<LpcType> {
-    
+pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<LpcType> {
     match node {
-        ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => {
-            node_type(lhs, context)
-        }
+        ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
         ExpressionNode::Call(CallNode { name, .. }) => {
             let function_return_types = context.function_return_types();
             function_return_types.get(name.as_str()).map_or_else(
@@ -328,33 +318,30 @@ pub fn node_type(
             match scope_tree.lookup(name) {
                 Some(sym) => Ok(sym.type_),
                 None => {
-                    if context.function_prototypes.contains_key(name.as_str()) ||
-                      EFUN_PROTOTYPES.contains_key(name.as_str()) {
+                    if context.function_prototypes.contains_key(name.as_str())
+                        || EFUN_PROTOTYPES.contains_key(name.as_str())
+                    {
                         Ok(LpcType::Function(false))
                     } else {
-                        return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span));
+                        return Err(
+                            LpcError::new(format!("undefined symbol {}", name)).with_span(*span)
+                        );
                     }
                 }
             }
-        },
+        }
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(
             node_type(l, context)?,
             node_type(r, context)?,
             *op,
         )),
-        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => {
-            Ok(node_type(expr, context)?)
-        }
+        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => Ok(node_type(expr, context)?),
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
                 return Ok(LpcType::Mixed(true));
             }
 
-            let res: Result<Vec<_>> = node
-                .value
-                .iter()
-                .map(|i| node_type(i, context))
-                .collect();
+            let res: Result<Vec<_>> = node.value.iter().map(|i| node_type(i, context)).collect();
 
             let value_types = match res {
                 Ok(x) => x,
@@ -369,9 +356,7 @@ pub fn node_type(
                 Ok(LpcType::Mixed(true))
             }
         }
-        ExpressionNode::Ternary(TernaryNode { body, .. }) => {
-            Ok(node_type(body, context)?)
-        }
+        ExpressionNode::Ternary(TernaryNode { body, .. }) => Ok(node_type(body, context)?),
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
     }
@@ -1608,19 +1593,11 @@ mod check_unary_operation_tests {
     }
 
     fn string_var(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
-        to_result(
-            op,
-            ExpressionNode::from(VarNode::new("string2")),
-            context,
-        )
+        to_result(op, ExpressionNode::from(VarNode::new("string2")), context)
     }
 
     fn array_literal(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
-        to_result(
-            op,
-            ExpressionNode::from(vec!["asdf", "bar", "hi"]),
-            context,
-        )
+        to_result(op, ExpressionNode::from(vec!["asdf", "bar", "hi"]), context)
     }
 
     fn array_var(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
@@ -1640,11 +1617,7 @@ mod check_unary_operation_tests {
     }
 
     fn mapping_var(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
-        to_result(
-            op,
-            ExpressionNode::from(VarNode::new("mapping1")),
-            context,
-        )
+        to_result(op, ExpressionNode::from(VarNode::new("mapping1")), context)
     }
 
     #[test]
@@ -1804,10 +1777,7 @@ mod test_node_type {
             });
             let context = CompilationContext::default();
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::Mixed(true)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(true));
         }
 
         #[test]
@@ -1821,10 +1791,7 @@ mod test_node_type {
                 ExpressionNode::from(8238),
             ]);
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::Int(true)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::Int(true));
         }
 
         #[test]
@@ -1837,10 +1804,7 @@ mod test_node_type {
                 ExpressionNode::from(vec![ExpressionNode::from(-123)]),
             ]);
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::Mixed(true)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(true));
         }
 
         #[test]
@@ -1854,10 +1818,7 @@ mod test_node_type {
                 span: None,
             });
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::String(false)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
         }
 
         #[test]
@@ -1871,10 +1832,7 @@ mod test_node_type {
                 span: None,
             });
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::String(false)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
         }
 
         #[test]
@@ -1886,10 +1844,7 @@ mod test_node_type {
                 span: None,
             });
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::String(false)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
         }
 
         #[test]
@@ -1903,10 +1858,7 @@ mod test_node_type {
                 span: None,
             });
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::Object(false)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
         }
     }
 
@@ -1948,10 +1900,7 @@ mod test_node_type {
                 ..Default::default()
             };
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::Int(false)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::Int(false));
         }
 
         #[test]
@@ -1988,10 +1937,7 @@ mod test_node_type {
                 ..Default::default()
             };
 
-            assert_eq!(
-                node_type(&node, &context).unwrap(),
-                LpcType::Mixed(false)
-            );
+            assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
         }
     }
 }

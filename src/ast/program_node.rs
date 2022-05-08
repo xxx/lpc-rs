@@ -4,12 +4,14 @@ use std::{
 };
 
 use crate::{
-    ast::ast_node::{AstNode, AstNodeTrait},
+    ast::{
+        ast_node::{AstNode, AstNodeTrait},
+        inherit_node::InheritNode,
+    },
     codegen::tree_walker::TreeWalker,
     Result,
 };
 use itertools::Itertools;
-use crate::ast::inherit_node::InheritNode;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Default)]

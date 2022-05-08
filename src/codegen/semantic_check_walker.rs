@@ -1,6 +1,5 @@
 use if_chain::if_chain;
 
-
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
@@ -112,14 +111,8 @@ impl TreeWalker for SemanticCheckWalker {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
-        let left_type = node_type(
-            &node.lhs,
-            &self.context
-        )?;
-        let right_type = node_type(
-            &node.rhs,
-            &self.context
-        )?;
+        let left_type = node_type(&node.lhs, &self.context)?;
+        let right_type = node_type(&node.rhs, &self.context)?;
 
         // The integer 0 is always a valid assignment.
         if left_type.matches_type(right_type)
@@ -143,10 +136,7 @@ impl TreeWalker for SemanticCheckWalker {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
-        match check_binary_operation_types(
-            node,
-            &self.context,
-        ) {
+        match check_binary_operation_types(node, &self.context) {
             Ok(_) => Ok(()),
             Err(err) => {
                 self.context.errors.push(err.clone());
@@ -417,10 +407,7 @@ impl TreeWalker for SemanticCheckWalker {
                 if let ExpressionNode::Int(IntNode { value: 0, .. }) = expression {
                     // returning a literal 0 is allowable for any type, including void.
                 } else {
-                    let return_type = node_type(
-                        expression,
-                        &self.context
-                    )?;
+                    let return_type = node_type(expression, &self.context)?;
 
                     if function_def.return_type == LpcType::Void
                         || !function_def.return_type.matches_type(return_type)
@@ -469,14 +456,8 @@ impl TreeWalker for SemanticCheckWalker {
         let _ = node.body.visit(self);
         let _ = node.else_clause.visit(self);
 
-        let body_type = node_type(
-            &*node.body,
-            &self.context
-        )?;
-        let else_type = node_type(
-            &*node.else_clause,
-            &self.context
-        )?;
+        let body_type = node_type(&*node.body, &self.context)?;
+        let else_type = node_type(&*node.else_clause, &self.context)?;
 
         if body_type != else_type {
             let e = LpcError::new(format!(
@@ -493,10 +474,7 @@ impl TreeWalker for SemanticCheckWalker {
     fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
         node.expr.visit(self)?;
 
-        match check_unary_operation_types(
-            node,
-            &self.context
-        ) {
+        match check_unary_operation_types(node, &self.context) {
             Ok(_) => match node.op {
                 UnaryOperation::Inc | UnaryOperation::Dec => {
                     if matches!(*node.expr, ExpressionNode::Int(_)) {
@@ -537,10 +515,7 @@ impl TreeWalker for SemanticCheckWalker {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            let expr_type = node_type(
-                expression,
-                &self.context
-            )?;
+            let expr_type = node_type(expression, &self.context)?;
 
             // The integer 0 is always a valid assignment.
             let ret = if node.type_.matches_type(expr_type)

@@ -1,7 +1,6 @@
-use std::rc::Rc;
 use claim::assert_err;
-use lpc_rs::compiler::Compiler;
-use lpc_rs::util::config::Config;
+use lpc_rs::{compiler::Compiler, util::config::Config};
+use std::rc::Rc;
 
 #[test]
 fn errors_on_max_inherit_depth() {

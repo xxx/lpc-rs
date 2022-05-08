@@ -11,10 +11,10 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
 use crate::{
+    compiler::compiler_error::CompilerError,
     errors::lazy_files::FILE_CACHE,
     parser::{lexer::Token, span::Span},
 };
-use crate::compiler::compiler_error::CompilerError;
 
 pub mod lazy_files;
 

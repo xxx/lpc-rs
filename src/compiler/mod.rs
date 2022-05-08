@@ -5,8 +5,9 @@ use crate::{
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
     codegen::{
         codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-        function_prototype_walker::FunctionPrototypeWalker, scope_walker::ScopeWalker,
-        semantic_check_walker::SemanticCheckWalker, tree_walker::ContextHolder,
+        function_prototype_walker::FunctionPrototypeWalker, inheritance_walker::InheritanceWalker,
+        scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
+        tree_walker::ContextHolder,
     },
     compilation_context::CompilationContext,
     errors,
@@ -21,7 +22,6 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
-use crate::codegen::inheritance_walker::InheritanceWalker;
 
 pub mod compiler_error;
 
@@ -40,7 +40,7 @@ macro_rules! apply_walker {
 
         if let Err(e) = result {
             errors::emit_diagnostics(&[e.clone()]);
-            return Err(CompilerError::LpcError(e))
+            return Err(CompilerError::LpcError(e));
         }
 
         context
@@ -53,13 +53,16 @@ pub struct Compiler {
     config: Rc<Config>,
 
     /// The current depth in the inheritance chain of this compiler
-    inherit_depth: usize
+    inherit_depth: usize,
 }
 
 impl Compiler {
     /// Create a new `Compiler` with the passed [`Config`]
     pub fn new(config: Rc<Config>) -> Self {
-        Self { config, inherit_depth: 0 }
+        Self {
+            config,
+            inherit_depth: 0,
+        }
     }
 
     /// Set the inherit_depth of a compiler
