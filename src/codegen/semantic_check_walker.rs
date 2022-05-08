@@ -66,21 +66,6 @@ impl SemanticCheckWalker {
         }
     }
 
-    /// A transformation helper to get a map of function names to their return values.
-    fn function_return_values(&self) -> HashMap<&str, LpcType> {
-        self.context
-            .function_prototypes
-            .keys()
-            .map(|k| k.as_str())
-            .zip(
-                self.context
-                    .function_prototypes
-                    .values()
-                    .map(|v| v.return_type),
-            )
-            .collect::<HashMap<_, _>>()
-    }
-
     fn allow_jumps(&mut self) {
         self.valid_jumps
             .push((BreakAllowed(true), ContinueAllowed(true)));
@@ -129,13 +114,11 @@ impl TreeWalker for SemanticCheckWalker {
 
         let left_type = node_type(
             &node.lhs,
-            &self.context.scopes,
-            &self.function_return_values(),
+            &self.context
         )?;
         let right_type = node_type(
             &node.rhs,
-            &self.context.scopes,
-            &self.function_return_values(),
+            &self.context
         )?;
 
         // The integer 0 is always a valid assignment.
@@ -162,8 +145,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         match check_binary_operation_types(
             node,
-            &self.context.scopes,
-            &self.function_return_values(),
+            &self.context,
         ) {
             Ok(_) => Ok(()),
             Err(err) => {
@@ -253,7 +235,7 @@ impl TreeWalker for SemanticCheckWalker {
                     if let Some(arg) = node.arguments.get(index);
                     // Literal zero is always allowed
                     if !matches!(arg, ExpressionNode::Int(IntNode { value: 0, .. }));
-                    let arg_type = node_type(arg, &self.context.scopes, &self.function_return_values())?;
+                    let arg_type = node_type(arg, &self.context)?;
                     if !ty.matches_type(arg_type);
                     then {
                         let e = LpcError::new(format!(
@@ -384,13 +366,13 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         let left_type = if let Some(left) = &*node.l {
-            node_type(left, &self.context.scopes, &self.function_return_values())?
+            node_type(left, &self.context)?
         } else {
             LpcType::Int(false)
         };
 
         let right_type = if let Some(right) = &*node.r {
-            node_type(right, &self.context.scopes, &self.function_return_values())?
+            node_type(right, &self.context)?
         } else {
             LpcType::Int(false)
         };
@@ -437,8 +419,7 @@ impl TreeWalker for SemanticCheckWalker {
                 } else {
                     let return_type = node_type(
                         expression,
-                        &self.context.scopes,
-                        &self.function_return_values(),
+                        &self.context
                     )?;
 
                     if function_def.return_type == LpcType::Void
@@ -490,13 +471,11 @@ impl TreeWalker for SemanticCheckWalker {
 
         let body_type = node_type(
             &*node.body,
-            &self.context.scopes,
-            &self.function_return_values(),
+            &self.context
         )?;
         let else_type = node_type(
             &*node.else_clause,
-            &self.context.scopes,
-            &self.function_return_values(),
+            &self.context
         )?;
 
         if body_type != else_type {
@@ -516,8 +495,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         match check_unary_operation_types(
             node,
-            &self.context.scopes,
-            &self.function_return_values(),
+            &self.context
         ) {
             Ok(_) => match node.op {
                 UnaryOperation::Inc | UnaryOperation::Dec => {
@@ -561,8 +539,7 @@ impl TreeWalker for SemanticCheckWalker {
 
             let expr_type = node_type(
                 expression,
-                &self.context.scopes,
-                &self.function_return_values(),
+                &self.context
             )?;
 
             // The integer 0 is always a valid assignment.

@@ -13,6 +13,7 @@ use crate::{
 };
 use std::rc::Rc;
 use crate::interpreter::program::Program;
+use crate::semantic::lpc_type::LpcType;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -116,6 +117,19 @@ impl CompilationContext {
         } else {
             EFUN_PROTOTYPES.get(r)
         }
+    }
+
+    /// A transformation helper to get a map of function names to their return types.
+    pub fn function_return_types(&self) -> HashMap<&str, LpcType> {
+        self.function_prototypes
+            .keys()
+            .map(|k| k.as_str())
+            .zip(
+                self.function_prototypes
+                    .values()
+                    .map(|v| v.return_type),
+            )
+            .collect::<HashMap<_, _>>()
     }
 }
 
