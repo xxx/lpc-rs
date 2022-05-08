@@ -557,24 +557,20 @@ mod tests {
     use crate::{
         apply_walker,
         ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
-        compiler::compiler_error::CompilerError,
+        codegen::{
+            default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
+            semantic_check_walker::SemanticCheckWalker,
+        },
+        compiler::{compiler_error::CompilerError, Compiler},
         errors,
         semantic::{
             function_prototype::FunctionPrototype, lpc_type::LpcType, scope_tree::ScopeTree,
             symbol::Symbol,
         },
-    };
-
-    use crate::{
-        codegen::{
-            default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
-            semantic_check_walker::SemanticCheckWalker,
-        },
-        compiler::Compiler,
         util::path_maker::LpcPath,
     };
     use claim::*;
-    use std::default::Default;
+    use std::{collections::HashMap, default::Default};
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();

@@ -380,7 +380,11 @@ where
 #[cfg(test)]
 mod check_binary_operation_tests {
     use super::*;
-    use crate::{ast::range_node::RangeNode, semantic::symbol::Symbol};
+    use crate::{
+        ast::range_node::RangeNode,
+        semantic::{scope_tree::ScopeTree, symbol::Symbol},
+    };
+    use std::collections::HashMap;
 
     fn setup() -> CompilationContext {
         let int1 = Symbol {
@@ -1507,7 +1511,8 @@ mod check_binary_operation_tests {
 #[cfg(test)]
 mod check_unary_operation_tests {
     use super::*;
-    use crate::semantic::symbol::Symbol;
+    use crate::semantic::{scope_tree::ScopeTree, symbol::Symbol};
+    use std::collections::HashMap;
 
     fn setup() -> CompilationContext {
         let int1 = Symbol {
@@ -1864,7 +1869,7 @@ mod test_node_type {
 
     mod binary_ops {
         use super::*;
-        use crate::semantic::symbol::Symbol;
+        use crate::semantic::{scope_tree::ScopeTree, symbol::Symbol};
 
         #[test]
         fn test_index_array_returns_singular_of_left_type() {
