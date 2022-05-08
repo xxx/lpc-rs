@@ -80,7 +80,7 @@ pub fn check_var_redefinition(node: &'_ VarInitNode, scope: &'_ LocalScope) -> R
 /// # Arguments
 ///
 /// * `node` - The node we're checking to see if it's being used incorrectly
-/// * `function_return_types` - A reference to a mapping of function names to their return types
+/// * `context` - The current [`CompilationContext`]
 pub fn check_binary_operation_types(
     node: &BinaryOpNode,
     context: &CompilationContext,
@@ -284,7 +284,7 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 /// Handles type promotion when necessary.
 ///
 /// # Arguments
-/// `node` - The `ExpressionNode` whose type we would like to resolve.
+/// * `node` - The `ExpressionNode` whose type we would like to resolve.
 /// * `context` - The current [`CompilationContext`]
 ///
 /// # Returns
@@ -328,8 +328,8 @@ pub fn node_type(
             match scope_tree.lookup(name) {
                 Some(sym) => Ok(sym.type_),
                 None => {
-                    // TODO: also pass the normal function prototypes here
-                    if EFUN_PROTOTYPES.contains_key(name.as_str()) {
+                    if context.function_prototypes.contains_key(name.as_str()) ||
+                      EFUN_PROTOTYPES.contains_key(name.as_str()) {
                         Ok(LpcType::Function(false))
                     } else {
                         return Err(LpcError::new(format!("undefined symbol {}", name)).with_span(*span));
