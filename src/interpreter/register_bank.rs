@@ -1,5 +1,5 @@
 use std::ops::{Index, IndexMut, Range, RangeInclusive};
-use std::slice::{Iter, SliceIndex};
+use std::slice::Iter;
 use delegate::delegate;
 use crate::asm::register::Register;
 use crate::interpreter::lpc_ref::LpcRef;
@@ -18,6 +18,10 @@ impl RegisterBank {
             /// Get the length of the register bank.
             pub fn len(&self) -> usize;
 
+            /// Get whether the register bank is empty.
+            pub fn is_empty(&self) -> bool;
+
+            /// Get an iterator over the registers
             pub fn iter(&self) -> Iter<LpcRef>;
         }
     }

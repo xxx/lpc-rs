@@ -240,10 +240,10 @@ impl TreeWalker for TreePrinter {
 
         self.indent += 2;
 
-        self.println_indented(&format!("{}", node.path));
+        self.println_indented(&node.path);
 
         if let Some(namespace) = &node.namespace {
-            self.println_indented(&format!("{}", &namespace));
+            self.println_indented(namespace);
         }
 
         self.indent -= 2;
