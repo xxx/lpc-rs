@@ -29,6 +29,13 @@ pub struct Program {
 
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
+
+    /// All of my Inherited parent objects
+    /// The ordering of this field can be assumed to be in file order
+    pub inherits: Vec<Program>,
+
+    /// The index of name -> inherited objects, for inherits with names
+    pub inherit_names: HashMap<String, usize>,
 }
 
 impl<'a> Program {
@@ -39,12 +46,19 @@ impl<'a> Program {
         buf
     }
 
-    /// Look up a function by its name
+    /// Look up a function by its name, starting from this program,
+    /// and searching all of its inherited programs, last-declared-inherit first.
     pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
-        self.functions.get(name.as_ref())
+        let local = self.functions.get(name.as_ref());
+        if local.is_some() {
+            return local;
+        }
+
+        // note we look up in reverse here, so the last inherit takes precedence
+        self.inherits.iter().rev().find_map(|inherit| inherit.lookup_function(name.as_ref()))
     }
 
     /// Get the directory of this program. Used for clone_object, etc.

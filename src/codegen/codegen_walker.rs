@@ -223,6 +223,8 @@ impl CodegenWalker {
             num_globals: self.global_counter.as_usize() + 1,
             num_init_registers: self.register_counter.as_usize(),
             pragmas: self.context.pragmas,
+            inherits: self.context.inherits,
+            inherit_names: self.context.inherit_names,
         })
     }
 
