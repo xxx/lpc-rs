@@ -28,6 +28,7 @@ impl ContextHolder for InheritanceWalker {
 
 impl TreeWalker for InheritanceWalker {
     fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
+        println!("InheritanceWalker::visit_inherit");
         let depth = self.context.inherit_depth;
 
         if depth >= self.context.config.max_inherit_depth() {
@@ -89,9 +90,7 @@ impl TreeWalker for InheritanceWalker {
                 Ok(())
             }
             Err(e) => {
-                let err = LpcError::from(e);
-                self.context.errors.push(err.clone());
-                Err(err)
+                Err(LpcError::from(e))
             }
         }
     }
