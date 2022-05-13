@@ -6,8 +6,8 @@ use crate::{
         register_bank::RegisterBank,
     },
     parser::span::Span,
-    semantic::program_function::ProgramFunction,
-    try_extract_value, Result,
+    Result,
+    semantic::program_function::ProgramFunction, try_extract_value,
 };
 use std::{
     borrow::Cow,
@@ -188,9 +188,9 @@ mod tests {
     use super::*;
     use crate::{
         core::lpc_type::LpcType,
-        interpreter::function_type::FunctionArity,
         semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
     };
+    use crate::core::function_arity::FunctionArity;
 
     #[test]
     fn new_sets_up_registers() {

@@ -169,9 +169,9 @@ impl Default for CompilationContext {
 mod tests {
     use super::*;
     use crate::{
-        interpreter::function_type::FunctionArity,
         semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
     };
+    use crate::core::function_arity::FunctionArity;
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototype::new(

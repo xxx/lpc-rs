@@ -12,7 +12,7 @@ use crate::{
         do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
         for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
+        function_def_node::{ARGV, FunctionDefNode},
         int_node::IntNode,
         label_node::LabelNode,
         program_node::ProgramNode,
@@ -20,7 +20,7 @@ use crate::{
         return_node::ReturnNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOpNode, UnaryOperation},
+        unary_op_node::{UnaryOperation, UnaryOpNode},
         var_init_node::VarInitNode,
         while_node::WhileNode,
     },
@@ -28,10 +28,10 @@ use crate::{
     compilation_context::CompilationContext,
     core::lpc_type::LpcType,
     errors::LpcError,
+    Result,
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },
-    Result,
 };
 
 struct BreakAllowed(bool);
@@ -549,7 +549,7 @@ mod tests {
             default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
             semantic_check_walker::SemanticCheckWalker,
         },
-        compiler::{compiler_error::CompilerError, Compiler},
+        compiler::{Compiler, compiler_error::CompilerError},
         core::lpc_type::LpcType,
         errors,
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
@@ -933,9 +933,10 @@ mod tests {
     mod test_visit_call {
         use super::*;
         use crate::{
-            interpreter::{function_type::FunctionArity, program::Program},
+            interpreter::program::Program,
             semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
         };
+        use crate::core::function_arity::FunctionArity;
 
         #[test]
         fn allows_known_functions() {
