@@ -180,7 +180,7 @@ impl TreeWalker for SemanticCheckWalker {
             // check for function pointers & closures
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
-            let e = LpcError::new(format!("Call to unknown function `{}`", node.name))
+            let e = LpcError::new(format!("call to unknown function `{}`", node.name))
                 .with_span(node.span);
             self.context.errors.push(e);
             // Non-fatal. Continue.
@@ -197,7 +197,7 @@ impl TreeWalker for SemanticCheckWalker {
 
             if !arity.is_valid(arg_len) {
                 let e = LpcError::new(format!(
-                    "Incorrect argument count in call to `{}`: expected: {}, received: {}",
+                    "incorrect argument count in call to `{}`: expected: {}, received: {}",
                     node.name, arity.num_args, arg_len
                 ))
                 .with_span(node.span)
@@ -215,11 +215,11 @@ impl TreeWalker for SemanticCheckWalker {
                     if !ty.matches_type(arg_type);
                     then {
                         let e = LpcError::new(format!(
-                            "Unexpected argument type to `{}`: {}. Expected {}.",
+                            "unexpected argument type to `{}`: {}. Expected {}.",
                             node.name, arg_type, ty
                         ))
                         .with_span(arg.span())
-                        .with_label("Declared here", prototype.arg_spans.get(index).cloned());
+                        .with_label("declared here", prototype.arg_spans.get(index).cloned());
 
                         errors.push(e);
                     }
@@ -234,7 +234,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if !self.can_continue() {
-            let e = LpcError::new("Invalid `continue`.".to_string()).with_span(node.span);
+            let e = LpcError::new("invalid `continue`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
 
             // non-fatal
@@ -308,9 +308,9 @@ impl TreeWalker for SemanticCheckWalker {
     fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
         if !self.can_use_labels() {
             let msg = if node.is_default() {
-                "Invalid `default`."
+                "invalid `default`."
             } else {
-                "Invalid `case` statement."
+                "invalid `case` statement."
             };
 
             let err = LpcError::new(msg).with_span(node.span);
@@ -374,7 +374,7 @@ impl TreeWalker for SemanticCheckWalker {
             };
 
             let e = LpcError::new(format!(
-                "Invalid range types: `{}` ({}) .. `{}` ({})",
+                "invalid range types: `{}` ({}) .. `{}` ({})",
                 left_val, left_type, right_val, right_type
             ))
             .with_span(node.span);
@@ -401,23 +401,23 @@ impl TreeWalker for SemanticCheckWalker {
                         || !function_def.return_type.matches_type(return_type)
                     {
                         let error = LpcError::new(format!(
-                            "Invalid return type {}. Expected {}.",
+                            "invalid return type {}. Expected {}.",
                             return_type, function_def.return_type
                         ))
                         .with_span(node.span)
-                        .with_label("Defined here", function_def.span);
+                        .with_label("defined here", function_def.span);
 
                         self.context.errors.push(error);
                     }
                 }
             } else if function_def.return_type != LpcType::Void {
                 let error = LpcError::new(format!(
-                    "Invalid return type {}. Expected {}.",
+                    "invalid return type {} - expected {}.",
                     LpcType::Void,
                     function_def.return_type
                 ))
                 .with_span(node.span)
-                .with_label("Defined here", function_def.span);
+                .with_label("defined here", function_def.span);
 
                 self.context.errors.push(error);
             }
@@ -491,7 +491,7 @@ impl TreeWalker for SemanticCheckWalker {
             if flags.ellipsis();
             then {
                 let e = LpcError::new(
-                    "Redeclaration of `argv` in a function with ellipsis arguments",
+                    "redeclaration of `argv` in a function with ellipsis arguments",
                 )
                 .with_span(node.span)
                 .with_label("Declared here", span);
@@ -512,7 +512,7 @@ impl TreeWalker for SemanticCheckWalker {
                 Ok(())
             } else {
                 let e = LpcError::new(format!(
-                    "Mismatched types: `{}` ({}) = `{}` ({})",
+                    "mismatched types: `{}` ({}) = `{}` ({})",
                     node.name, node.type_, expression, expr_type
                 ))
                 .with_span(node.span);
@@ -1028,7 +1028,6 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker);
 
-            println!("{:?}", walker.context.errors);
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
         }
@@ -1121,7 +1120,7 @@ mod tests {
             assert!(!walker.context.errors.is_empty());
             assert_eq!(
                 walker.context.errors.first().unwrap().to_string(),
-                "Call to unknown function `my_non_function_pointer`"
+                "call to unknown function `my_non_function_pointer`"
             );
         }
 
@@ -1482,7 +1481,7 @@ mod tests {
             let context = walk_code(code).expect("failed to parse?");
 
             assert!(!context.errors.is_empty());
-            assert_eq!(context.errors[0].to_string(), "Invalid `case` statement.");
+            assert_eq!(context.errors[0].to_string(), "invalid `case` statement.");
         }
 
         #[test]
@@ -1491,7 +1490,7 @@ mod tests {
             let context = walk_code(code).expect("failed to parse?");
 
             assert!(!context.errors.is_empty());
-            assert_eq!(context.errors[0].to_string(), "Invalid `default`.");
+            assert_eq!(context.errors[0].to_string(), "invalid `default`.");
         }
 
         #[test]
@@ -1585,7 +1584,6 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
-            println!("{:?}", walker.context.errors);
             assert!(!walker.context.errors.is_empty());
         }
 
@@ -1999,7 +1997,7 @@ mod tests {
             if let Err(e) = result {
                 assert!(e
                     .to_string()
-                    .contains("Redeclaration of `argv` in a function with ellipsis arguments"));
+                    .contains("redeclaration of `argv` in a function with ellipsis arguments"));
             } else {
                 panic!("didn't error?")
             }
