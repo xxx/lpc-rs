@@ -16,7 +16,6 @@ codespan-reporting = "0.11.0"
 decorum = "0.3.1"
 delegate = "0.6.1"
 educe = "0.4.18"
-enum_dispatch = "0.3.4"
 fs-err = "2.6.0"
 if_chain = "1.0.1"
 indextree = "4.3.1"
@@ -33,7 +32,6 @@ phf = { version = "0.10.0", features = ["macros"] }
 refpool = "0.4.3"
 regex = "1"
 rmp-serde = "1.0.0"
-rustyline = "9.1.2" # lpcdb only
 serde = { version = "1.0.123", features = ["derive", "rc"] }
 serde_derive = "1.0.123"
 toml = "0.5.8"
