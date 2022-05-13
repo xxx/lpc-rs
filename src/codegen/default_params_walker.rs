@@ -43,8 +43,8 @@ impl TreeWalker for DefaultParamsWalker {
 mod tests {
     use crate::{
         ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
+        core::lpc_type::LpcType,
     };
-    use crate::core::lpc_type::LpcType;
 
     use super::*;
     use crate::semantic::function_flags::FunctionFlags;

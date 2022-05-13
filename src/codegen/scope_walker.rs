@@ -13,11 +13,11 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
+    core::lpc_type::LpcType,
     errors::LpcError,
     semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
     Result,
 };
-use crate::core::lpc_type::LpcType;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.

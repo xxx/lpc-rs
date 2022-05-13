@@ -26,15 +26,13 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
+    core::lpc_type::LpcType,
     errors::LpcError,
-    semantic::{
-        semantic_checks::{
-            check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
-        },
+    semantic::semantic_checks::{
+        check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },
     Result,
 };
-use crate::core::lpc_type::LpcType;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -552,16 +550,13 @@ mod tests {
             semantic_check_walker::SemanticCheckWalker,
         },
         compiler::{compiler_error::CompilerError, Compiler},
+        core::lpc_type::LpcType,
         errors,
-        semantic::{
-            function_prototype::FunctionPrototype, scope_tree::ScopeTree,
-            symbol::Symbol,
-        },
+        semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
         util::path_maker::LpcPath,
     };
     use claim::*;
     use std::{collections::HashMap, default::Default};
-    use crate::core::lpc_type::LpcType;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();

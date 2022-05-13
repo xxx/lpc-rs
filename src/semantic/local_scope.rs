@@ -56,8 +56,8 @@ impl Default for LocalScope {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::lpc_type::LpcType;
     use super::*;
+    use crate::core::lpc_type::LpcType;
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {

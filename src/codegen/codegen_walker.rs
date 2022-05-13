@@ -48,6 +48,7 @@ use crate::{
 use crate::{
     asm::instruction::Instruction::RegCopy,
     ast::function_ptr_node::FunctionPtrNode,
+    core::lpc_type::LpcType,
     interpreter::{
         efun::EFUN_PROTOTYPES,
         function_type::{FunctionArity, FunctionName, FunctionReceiver, FunctionTarget},
@@ -58,7 +59,6 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::core::lpc_type::LpcType;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1742,10 +1742,10 @@ mod tests {
             semantic_check_walker::SemanticCheckWalker,
         },
         compiler::{compiler_error::CompilerError, Compiler},
+        core::lpc_type::LpcType,
         errors,
         util::path_maker::LpcPath,
     };
-    use crate::core::lpc_type::LpcType;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();

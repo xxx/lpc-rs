@@ -7,12 +7,12 @@ use crate::{
 };
 
 use crate::{
+    core::lpc_type::LpcType,
     errors::LpcError,
     interpreter::{pragma_flags::PragmaFlags, program::Program},
     util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
-use crate::core::lpc_type::LpcType;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in

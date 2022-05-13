@@ -66,8 +66,7 @@ impl TreeWalker for FunctionPrototypeWalker {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ast::var_init_node::VarInitNode};
-    use crate::core::lpc_type::LpcType;
+    use crate::{ast::var_init_node::VarInitNode, core::lpc_type::LpcType};
 
     use super::*;
     use crate::semantic::function_flags::FunctionFlags;

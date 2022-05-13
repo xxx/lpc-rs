@@ -14,12 +14,12 @@ use crate::{
         var_node::VarNode,
     },
     compilation_context::CompilationContext,
+    core::lpc_type::LpcType,
     errors::LpcError,
     interpreter::efun::EFUN_PROTOTYPES,
-    semantic::{local_scope::LocalScope},
+    semantic::local_scope::LocalScope,
     Result,
 };
-use crate::core::lpc_type::LpcType;
 
 /// Utility functions for doing various semantic checks.
 

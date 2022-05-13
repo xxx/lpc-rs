@@ -18,6 +18,7 @@ use lpc_rs::{
     },
     compilation_context::CompilationContext,
     compiler::Compiler,
+    core::lpc_type::LpcType,
     lpc_parser,
     parser::{
         lexer::{LexWrapper, TokenVecWrapper},
@@ -26,7 +27,6 @@ use lpc_rs::{
     semantic::{global_var_flags::GlobalVarFlags, visibility::Visibility},
     LpcFloat, LpcInt, Result,
 };
-use lpc_rs::core::lpc_type::LpcType;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
