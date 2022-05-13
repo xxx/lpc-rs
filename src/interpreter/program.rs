@@ -52,9 +52,15 @@ impl<'a> Program {
     where
         T: AsRef<str>,
     {
-        self.functions.get(name.as_ref())
+        self.functions
+            .get(name.as_ref())
             // note we look up in reverse here, so the last inherit takes precedence
-            .or_else(|| self.inherits.iter().rev().find_map(|p| p.lookup_function(name.as_ref())))
+            .or_else(|| {
+                self.inherits
+                    .iter()
+                    .rev()
+                    .find_map(|p| p.lookup_function(name.as_ref()))
+            })
     }
 
     /// Return whether or not we have a function with this name either locally,

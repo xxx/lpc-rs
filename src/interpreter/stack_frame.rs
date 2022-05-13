@@ -3,6 +3,7 @@ use crate::{
     errors::LpcError,
     interpreter::{
         function_type::FunctionName, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
+        register_bank::RegisterBank,
     },
     parser::span::Span,
     semantic::program_function::ProgramFunction,
@@ -15,7 +16,6 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
-use crate::interpreter::register_bank::RegisterBank;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -187,10 +187,11 @@ impl Display for StackFrame {
 mod tests {
     use super::*;
     use crate::{
-        interpreter::function_type::FunctionArity, semantic::function_flags::FunctionFlags,
+        interpreter::function_type::FunctionArity,
+        semantic::{
+            function_flags::FunctionFlags, function_prototype::FunctionPrototype, lpc_type::LpcType,
+        },
     };
-    use crate::semantic::function_prototype::FunctionPrototype;
-    use crate::semantic::lpc_type::LpcType;
 
     #[test]
     fn new_sets_up_registers() {
@@ -203,7 +204,7 @@ mod tests {
             FunctionFlags::default(),
             None,
             Vec::new(),
-            Vec::new()
+            Vec::new(),
         );
 
         let fs = ProgramFunction::new(prototype, 7);
@@ -228,7 +229,7 @@ mod tests {
                 FunctionFlags::default(),
                 None,
                 Vec::new(),
-                Vec::new()
+                Vec::new(),
             );
 
             let fs = ProgramFunction::new(prototype, 7);
@@ -250,7 +251,7 @@ mod tests {
                 FunctionFlags::default(),
                 None,
                 Vec::new(),
-                Vec::new()
+                Vec::new(),
             );
 
             let fs = ProgramFunction::new(prototype, 7);

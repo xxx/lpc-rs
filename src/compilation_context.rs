@@ -102,15 +102,13 @@ impl CompilationContext {
     {
         let r = name.as_ref();
 
-        self.function_prototypes.get(r)
-            .or_else(|| {
-                self
-                    .inherits
-                    .iter()
-                    .rev()
-                    .find_map(|p| p.lookup_function(r))
-                    .map(|f| &f.prototype)
-            })
+        self.function_prototypes.get(r).or_else(|| {
+            self.inherits
+                .iter()
+                .rev()
+                .find_map(|p| p.lookup_function(r))
+                .map(|f| &f.prototype)
+        })
     }
 
     /// Look-up a function locally, and fall back to checking the efuns if a
@@ -121,16 +119,13 @@ impl CompilationContext {
         T: AsRef<str>,
     {
         let r = name.as_ref();
-        self.lookup_function(r)
-            .or_else(|| {
-                EFUN_PROTOTYPES.get(r)
-            })
+        self.lookup_function(r).or_else(|| EFUN_PROTOTYPES.get(r))
     }
 
     /// Do I, or one of my parents, contain a function with this name?
     pub fn contains_function(&self, name: &str) -> bool {
-        self.function_prototypes.contains_key(name)||
-            self
+        self.function_prototypes.contains_key(name)
+            || self
                 .inherits
                 .iter()
                 .rev()
@@ -172,10 +167,11 @@ impl Default for CompilationContext {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::function_type::FunctionArity;
-    use crate::semantic::function_flags::FunctionFlags;
-    use crate::semantic::program_function::ProgramFunction;
     use super::*;
+    use crate::{
+        interpreter::function_type::FunctionArity,
+        semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
+    };
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototype::new(
@@ -201,16 +197,22 @@ mod tests {
         let mut inherited = Program::default();
 
         let proto = make_function_prototype("foo");
-        context.function_prototypes.insert("foo".into(), proto.clone());
+        context
+            .function_prototypes
+            .insert("foo".into(), proto.clone());
 
         let efun_override = make_function_prototype("this_object");
-        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+        context
+            .function_prototypes
+            .insert("this_object".into(), efun_override.clone());
 
         let overridden = make_program_function("foo");
         inherited.functions.insert("foo".into(), overridden.into());
 
         let inherited_proto = make_program_function("hello_friends");
-        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+        inherited
+            .functions
+            .insert("hello_friends".into(), inherited_proto.clone().into());
 
         context.inherits.push(inherited);
 
@@ -251,16 +253,22 @@ mod tests {
         let mut inherited = Program::default();
 
         let proto = make_function_prototype("foo");
-        context.function_prototypes.insert("foo".into(), proto.clone());
+        context
+            .function_prototypes
+            .insert("foo".into(), proto.clone());
 
         let efun_override = make_function_prototype("this_object");
-        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+        context
+            .function_prototypes
+            .insert("this_object".into(), efun_override.clone());
 
         let overridden = make_program_function("foo");
         inherited.functions.insert("foo".into(), overridden.into());
 
         let inherited_proto = make_program_function("hello_friends");
-        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+        inherited
+            .functions
+            .insert("hello_friends".into(), inherited_proto.clone().into());
 
         context.inherits.push(inherited);
 
@@ -294,23 +302,29 @@ mod tests {
             Some(EFUN_PROTOTYPES.get("dump").unwrap())
         );
     }
-    
+
     #[test]
     fn test_contains_function() {
         let mut context = CompilationContext::default();
         let mut inherited = Program::default();
 
         let proto = make_function_prototype("foo");
-        context.function_prototypes.insert("foo".into(), proto.clone());
+        context
+            .function_prototypes
+            .insert("foo".into(), proto.clone());
 
         let efun_override = make_function_prototype("this_object");
-        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+        context
+            .function_prototypes
+            .insert("this_object".into(), efun_override.clone());
 
         let overridden = make_program_function("foo");
         inherited.functions.insert("foo".into(), overridden.into());
 
         let inherited_proto = make_program_function("hello_friends");
-        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+        inherited
+            .functions
+            .insert("hello_friends".into(), inherited_proto.clone().into());
 
         context.inherits.push(inherited);
 
@@ -351,16 +365,22 @@ mod tests {
         let mut inherited = Program::default();
 
         let proto = make_function_prototype("foo");
-        context.function_prototypes.insert("foo".into(), proto.clone());
+        context
+            .function_prototypes
+            .insert("foo".into(), proto.clone());
 
         let efun_override = make_function_prototype("this_object");
-        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+        context
+            .function_prototypes
+            .insert("this_object".into(), efun_override.clone());
 
         let overridden = make_program_function("foo");
         inherited.functions.insert("foo".into(), overridden.into());
 
         let inherited_proto = make_program_function("hello_friends");
-        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+        inherited
+            .functions
+            .insert("hello_friends".into(), inherited_proto.clone().into());
 
         context.inherits.push(inherited);
 

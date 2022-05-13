@@ -937,10 +937,9 @@ mod tests {
     mod test_visit_call {
         use super::*;
         use crate::{
-            interpreter::function_type::FunctionArity, semantic::function_flags::FunctionFlags,
+            interpreter::{function_type::FunctionArity, program::Program},
+            semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
         };
-        use crate::interpreter::program::Program;
-        use crate::semantic::program_function::ProgramFunction;
 
         #[test]
         fn allows_known_functions() {
@@ -1001,7 +1000,9 @@ mod tests {
             let program_function = ProgramFunction::new(prototype, 0);
 
             let mut program = Program::default();
-            program.functions.insert(String::from("known"), program_function.into());
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
 
             // let mut function_prototypes = HashMap::new();
             // function_prototypes.insert(

@@ -89,9 +89,7 @@ impl TreeWalker for InheritanceWalker {
 
                 Ok(())
             }
-            Err(e) => {
-                Err(LpcError::from(e))
-            }
+            Err(e) => Err(LpcError::from(e)),
         }
     }
 }

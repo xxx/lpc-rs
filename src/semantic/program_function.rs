@@ -1,13 +1,11 @@
-use std::borrow::Cow;
 use crate::{
     asm::instruction::{Address, Instruction},
     interpreter::function_type::FunctionArity,
     parser::span::Span,
+    semantic::{function_prototype::FunctionPrototype, lpc_type::LpcType},
 };
 use multimap::MultiMap;
-use std::collections::HashMap;
-use crate::semantic::function_prototype::FunctionPrototype;
-use crate::semantic::lpc_type::LpcType;
+use std::{borrow::Cow, collections::HashMap};
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -51,10 +49,7 @@ impl ProgramFunction {
         self.prototype.arity
     }
 
-    pub fn new(
-        prototype: FunctionPrototype,
-        num_locals: usize
-    ) -> Self {
+    pub fn new(prototype: FunctionPrototype, num_locals: usize) -> Self {
         Self {
             prototype,
             num_locals,

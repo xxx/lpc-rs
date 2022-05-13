@@ -1,15 +1,15 @@
-use std::ops::{Index, IndexMut, Range, RangeInclusive};
-use std::slice::Iter;
+use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
 use delegate::delegate;
-use crate::asm::register::Register;
-use crate::interpreter::lpc_ref::LpcRef;
-
+use std::{
+    ops::{Index, IndexMut, Range, RangeInclusive},
+    slice::Iter,
+};
 
 /// A type to handle data movement (the arena itself stores the actual data)
 #[derive(Debug, Clone, Default)]
 pub struct RegisterBank {
     /// Our storage. By convention, `registers[0]` is for the return value function calls.
-    pub registers: Vec<LpcRef>
+    pub registers: Vec<LpcRef>,
 }
 
 impl RegisterBank {

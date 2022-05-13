@@ -18,6 +18,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
+        register_bank::RegisterBank,
         stack_frame::StackFrame,
         task_context::TaskContext,
         MAX_CALL_STACK_SIZE,
@@ -30,7 +31,6 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
-use crate::interpreter::register_bank::RegisterBank;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -714,8 +714,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         *num_args,
                     )
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym =
-                        ProgramFunction::new(prototype.clone(), 0);
+                    let sym = ProgramFunction::new(prototype.clone(), 0);
 
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),

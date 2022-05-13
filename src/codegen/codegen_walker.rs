@@ -52,13 +52,12 @@ use crate::{
         efun::EFUN_PROTOTYPES,
         function_type::{FunctionArity, FunctionName, FunctionReceiver, FunctionTarget},
     },
-    semantic::function_flags::FunctionFlags,
+    semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
 };
 use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::semantic::function_prototype::FunctionPrototype;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -171,7 +170,7 @@ impl CodegenWalker {
             FunctionFlags::default(),
             None,
             Vec::new(),
-            Vec::new()
+            Vec::new(),
         );
 
         self.function_stack.push(ProgramFunction::new(prototype, 0));
@@ -990,9 +989,11 @@ impl TreeWalker for CodegenWalker {
         let prototype = match self.context.function_prototypes.get(&node.name) {
             Some(p) => p,
             None => {
-                return Err(LpcError::new(
-                    format!("function prototype for {} not found", node.name),
-                ).with_span(node.span));
+                return Err(LpcError::new(format!(
+                    "function prototype for {} not found",
+                    node.name
+                ))
+                .with_span(node.span));
             }
         };
 
@@ -1000,10 +1001,7 @@ impl TreeWalker for CodegenWalker {
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
 
-        let sym = ProgramFunction::new(
-            prototype.clone(),
-            0
-        );
+        let sym = ProgramFunction::new(prototype.clone(), 0);
         let populate_argv_index: Option<usize>;
         let populate_defaults_index: Option<usize>;
 
@@ -1311,11 +1309,7 @@ impl TreeWalker for CodegenWalker {
             node.visit(self).unwrap();
         }
 
-        if self
-            .context
-            .lookup_function(CREATE_FUNCTION)
-            .is_some()
-        {
+        if self.context.lookup_function(CREATE_FUNCTION).is_some() {
             let mut call = CallNode {
                 receiver: None,
                 arguments: vec![],
