@@ -189,9 +189,10 @@ mod tests {
     use crate::{
         interpreter::function_type::FunctionArity,
         semantic::{
-            function_flags::FunctionFlags, function_prototype::FunctionPrototype, lpc_type::LpcType,
+            function_flags::FunctionFlags, function_prototype::FunctionPrototype,
         },
     };
+    use crate::core::lpc_type::LpcType;
 
     #[test]
     fn new_sets_up_registers() {

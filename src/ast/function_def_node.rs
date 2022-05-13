@@ -10,10 +10,11 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    semantic::{function_flags::FunctionFlags, lpc_type::LpcType},
+    semantic::{function_flags::FunctionFlags},
     Result,
 };
 use itertools::Itertools;
+use crate::core::lpc_type::LpcType;
 
 /// A constant for the `argv` variable that's automatically created in functions with ellipsis args
 pub const ARGV: &str = "argv";

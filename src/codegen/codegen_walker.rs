@@ -41,7 +41,7 @@ use crate::{
         efun::{CALL_OTHER, CATCH},
         program::Program,
     },
-    semantic::{lpc_type::LpcType, program_function::ProgramFunction, symbol::Symbol},
+    semantic::{program_function::ProgramFunction, symbol::Symbol},
     Result,
 };
 
@@ -58,6 +58,7 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::core::lpc_type::LpcType;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1729,7 +1730,6 @@ mod tests {
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
         parser::{lexer::LexWrapper, span::Span},
-        semantic::lpc_type::LpcType,
         LpcFloat,
     };
 
@@ -1745,6 +1745,7 @@ mod tests {
         errors,
         util::path_maker::LpcPath,
     };
+    use crate::core::lpc_type::LpcType;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();

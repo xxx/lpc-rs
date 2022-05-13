@@ -2,8 +2,9 @@ use crate::{
     asm::register::Register,
     ast::var_init_node::VarInitNode,
     parser::span::Span,
-    semantic::{function_prototype::FunctionPrototype, lpc_type::LpcType},
+    semantic::{function_prototype::FunctionPrototype},
 };
+use crate::core::lpc_type::LpcType;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -12,7 +13,6 @@ pub struct Symbol {
     pub name: String,
     /// The type of this var
     pub type_: LpcType,
-    // pub privacy: LPCPrivacy,
     /// Is this var static?
     pub static_: bool,
     /// Which register is tracking this variable?

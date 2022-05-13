@@ -6,10 +6,10 @@ use std::{
 use crate::{
     ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
     codegen::tree_walker::TreeWalker,
-    semantic::lpc_type::LpcType,
     Result,
 };
 use itertools::Itertools;
+use crate::core::lpc_type::LpcType;
 
 /// A container for a set of variable declarations.
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

@@ -14,9 +14,10 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     errors::LpcError,
-    semantic::{lpc_type::LpcType, semantic_checks::check_var_redefinition, symbol::Symbol},
+    semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
     Result,
 };
+use crate::core::lpc_type::LpcType;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -224,7 +225,7 @@ mod tests {
     use super::*;
 
     mod test_visit_function_def {
-        use crate::semantic::lpc_type::LpcType;
+        use crate::core::lpc_type::LpcType;
 
         use super::*;
         use crate::semantic::function_flags::FunctionFlags;
@@ -259,7 +260,7 @@ mod tests {
     }
 
     mod test_visit_var_init {
-        use crate::semantic::lpc_type::LpcType;
+        use crate::core::lpc_type::LpcType;
 
         use super::*;
 
@@ -326,7 +327,7 @@ mod tests {
     }
 
     mod test_visit_var {
-        use crate::semantic::lpc_type::LpcType;
+        use crate::core::lpc_type::LpcType;
 
         use super::*;
 

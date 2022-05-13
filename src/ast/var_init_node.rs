@@ -10,9 +10,10 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    semantic::{global_var_flags::GlobalVarFlags, lpc_type::LpcType},
+    semantic::{global_var_flags::GlobalVarFlags},
     Result,
 };
+use crate::core::lpc_type::LpcType;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

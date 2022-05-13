@@ -1,4 +1,3 @@
-use crate::semantic::lpc_type::LpcType;
 use modular_bitfield::prelude::*;
 use std::{
     convert::TryInto,
@@ -6,6 +5,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::BitOr,
 };
+use crate::core::lpc_type::LpcType;
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
@@ -278,7 +278,7 @@ impl BitOr for LpcTypeUnion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::lpc_type::LpcType;
+    use crate::core::lpc_type::LpcType;
 
     #[test]
     fn test_bitor() {

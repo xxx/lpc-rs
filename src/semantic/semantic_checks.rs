@@ -16,9 +16,10 @@ use crate::{
     compilation_context::CompilationContext,
     errors::LpcError,
     interpreter::efun::EFUN_PROTOTYPES,
-    semantic::{local_scope::LocalScope, lpc_type::LpcType},
+    semantic::{local_scope::LocalScope},
     Result,
 };
+use crate::core::lpc_type::LpcType;
 
 /// Utility functions for doing various semantic checks.
 

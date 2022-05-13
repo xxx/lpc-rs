@@ -1,4 +1,4 @@
-use crate::semantic::lpc_type_union::LpcTypeUnion;
+use crate::core::lpc_type_union::LpcTypeUnion;
 use fmt::{Display, Formatter};
 use std::{fmt, ops::BitOr};
 

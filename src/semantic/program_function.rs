@@ -2,10 +2,11 @@ use crate::{
     asm::instruction::{Address, Instruction},
     interpreter::function_type::FunctionArity,
     parser::span::Span,
-    semantic::{function_prototype::FunctionPrototype, lpc_type::LpcType},
+    semantic::{function_prototype::FunctionPrototype},
 };
 use multimap::MultiMap;
 use std::{borrow::Cow, collections::HashMap};
+use crate::core::lpc_type::LpcType;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.

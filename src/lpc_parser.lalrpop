@@ -34,7 +34,7 @@ use crate::ast::unary_op_node::{UnaryOpNode, UnaryOperation};
 use crate::ast::var_node::VarNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::while_node::WhileNode;
-use crate::semantic::lpc_type::LpcType;
+use crate::core::lpc_type::LpcType;
 use crate::parser::collapse_binary_op::collapse_binary_op;
 use crate::parser::collapse_unary_op::collapse_unary_op;
 use crate::parser::span::{Span, combine_spans};

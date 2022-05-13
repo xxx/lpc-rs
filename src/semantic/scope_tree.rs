@@ -225,7 +225,7 @@ impl From<CompilationContext> for ScopeTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::lpc_type::LpcType;
+    use crate::core::lpc_type::LpcType;
 
     #[test]
     fn push_new() {

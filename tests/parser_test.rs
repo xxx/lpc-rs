@@ -23,9 +23,10 @@ use lpc_rs::{
         lexer::{LexWrapper, TokenVecWrapper},
         span::Span,
     },
-    semantic::{global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility},
+    semantic::{global_var_flags::GlobalVarFlags, visibility::Visibility},
     LpcFloat, LpcInt, Result,
 };
+use lpc_rs::core::lpc_type::LpcType;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {

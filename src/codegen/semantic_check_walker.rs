@@ -28,13 +28,13 @@ use crate::{
     compilation_context::CompilationContext,
     errors::LpcError,
     semantic::{
-        lpc_type::LpcType,
         semantic_checks::{
             check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
         },
     },
     Result,
 };
+use crate::core::lpc_type::LpcType;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -554,13 +554,14 @@ mod tests {
         compiler::{compiler_error::CompilerError, Compiler},
         errors,
         semantic::{
-            function_prototype::FunctionPrototype, lpc_type::LpcType, scope_tree::ScopeTree,
+            function_prototype::FunctionPrototype, scope_tree::ScopeTree,
             symbol::Symbol,
         },
         util::path_maker::LpcPath,
     };
     use claim::*;
     use std::{collections::HashMap, default::Default};
+    use crate::core::lpc_type::LpcType;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
