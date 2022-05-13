@@ -2,7 +2,6 @@ use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT
 use define::{Define, ObjectMacro};
 use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
-use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, path::Path};
 
@@ -24,41 +23,38 @@ use crate::{
     LpcInt, Result,
 };
 use std::iter::Peekable;
+use once_cell::sync::{OnceCell, Lazy};
 
 pub mod define;
 pub mod preprocessor_node;
 
-lazy_static! {
-    static ref SYS_INCLUDE: Regex = Regex::new(r"\A\s*#\s*include\s+<([^>]+)>\s*\z").unwrap();
-    static ref LOCAL_INCLUDE: Regex =
-        Regex::new("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z").unwrap();
-    static ref DEFINE: Regex = Regex::new(
-        "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z"
-    )
-    .unwrap();
-    static ref DEFINEMACRO: Regex = Regex::new(
-        "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)\\(([^)]*)\\)\\s*((?:\\\\.|[^\n])*)\n?\\z"
-    )
-    .unwrap();
-    static ref UNDEF: Regex =
-        Regex::new(r#"\A\s*#\s*undef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
-    static ref IF: Regex = Regex::new("\\A\\s*#\\s*if\\s+([^\n]*)\\s*\\z").unwrap();
-    static ref IFDEF: Regex =
-        Regex::new(r#"\A\s*#\s*ifdef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
-    static ref IFNDEF: Regex =
-        Regex::new(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#).unwrap();
-    static ref ENDIF: Regex = Regex::new(r#"\A\s*#\s*endif\s*\z"#).unwrap();
-    static ref ELSE: Regex = Regex::new(r#"\A\s*#\s*else\s*\z"#).unwrap();
-    static ref PRAGMA: Regex = Regex::new(
-        r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#
-    )
-    .unwrap();
-    static ref COMMA_SEPARATOR: Regex = Regex::new(r"\s*,\s*").unwrap();
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        Lazy::new(|| Regex::new($re).unwrap())
+    }};
 }
+
+static SYS_INCLUDE: Lazy<Regex> = regex!(r"\A\s*#\s*include\s+<([^>]+)>\s*\z");
+static LOCAL_INCLUDE: Lazy<Regex> = regex!("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z");
+static DEFINE: Lazy<Regex> = regex!(
+    "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z"
+);
+static DEFINEMACRO: Lazy<Regex> = regex!(
+    "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)\\(([^)]*)\\)\\s*((?:\\\\.|[^\n])*)\n?\\z"
+);
+static UNDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*undef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
+static IF: Lazy<Regex> = regex!("\\A\\s*#\\s*if\\s+([^\n]*)\\s*\\z");
+static IFDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*ifdef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
+static IFNDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
+// static ENDIF: Lazy<Regex> = regex!(r#"\A\s*#\s*endif\s*\z"#);
+static ELSE: Lazy<Regex> = regex!(r#"\A\s*#\s*else\s*\z"#);
+static PRAGMA: Lazy<Regex> = regex!(
+    r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#
+);
+static COMMA_SEPARATOR: Lazy<Regex> = regex!(r"\s*,\s*");
 
 #[derive(Debug)]
 struct IfDef {
-    // pub code: String,
     pub span: Span,
 
     /// This field on the top IfDef in the stack indicates if we're currently in a

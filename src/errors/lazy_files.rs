@@ -2,7 +2,6 @@ use crate::parser::span::Span;
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error, Files, SimpleFile};
 use fs_err as fs;
-use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::{
     ffi::{OsStr, OsString},
@@ -10,6 +9,7 @@ use std::{
     ops::Range,
     path::Path,
 };
+use once_cell::sync::Lazy;
 
 #[derive(Debug)]
 enum LazyFile<Name, Source> {
@@ -20,10 +20,10 @@ enum LazyFile<Name, Source> {
     Eager(Name, Source),
 }
 
-lazy_static! {
-    /// A global file cache for use in error reporting.
-    pub static ref FILE_CACHE: RwLock<LazyFiles<String, String>> = RwLock::new(LazyFiles::new());
-}
+/// A global file cache for use in error reporting.
+pub static FILE_CACHE: Lazy<RwLock<LazyFiles<String, String>>> = Lazy::new(|| {
+    RwLock::new(LazyFiles::new())
+});
 
 /// A wrapper type for the global [`FILE_CACHE`](struct@crate::errors::lazy_files::FILE_CACHE)
 pub struct FileCache;
