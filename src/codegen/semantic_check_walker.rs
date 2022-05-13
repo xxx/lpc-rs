@@ -27,7 +27,6 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     errors::LpcError,
-    interpreter::efun::EFUN_PROTOTYPES,
     semantic::{
         lpc_type::LpcType,
         semantic_checks::{
@@ -179,8 +178,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         let lookup = self.context.scopes.lookup(&node.name);
         // Check function existence.
-        if !self.context.function_prototypes.contains_key(&node.name)
-            && !EFUN_PROTOTYPES.contains_key(node.name.as_str())
+        if !self.context.contains_function_complete(node.name.as_str())
             // check for function pointers & closures
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
@@ -190,33 +188,23 @@ impl TreeWalker for SemanticCheckWalker {
             // Non-fatal. Continue.
         }
 
-        // Further checks require access to the function prototype for error messaging.
-        let proto_opt = if let Some(prototype) = self.context.function_prototypes.get(&node.name) {
-            Some(prototype)
-        } else {
-            EFUN_PROTOTYPES.get(node.name.as_str())
-        };
+        // Further checks require access to the function prototype for error messaging
+        let proto_opt = self.context.lookup_function_complete(&node.name);
+
+        let mut errors = Vec::new();
 
         if let Some(prototype) = proto_opt {
             let arg_len = node.arguments.len();
-            let valid = prototype.arity.is_valid(arg_len);
+            let arity = prototype.arity;
 
-            // // Check function arity.
-            // let minimum = if prototype.flags.varargs() {
-            //     0
-            // } else {
-            //     prototype.num_args - prototype.num_default_args
-            // };
-            // let valid = (minimum..=prototype.num_args).contains(&arg_len)
-            //     || (prototype.flags.ellipsis() && arg_len >= minimum);
-            if !valid {
+            if !arity.is_valid(arg_len) {
                 let e = LpcError::new(format!(
                     "Incorrect argument count in call to `{}`: expected: {}, received: {}",
-                    node.name, prototype.arity.num_args, arg_len
+                    node.name, arity.num_args, arg_len
                 ))
                 .with_span(node.span)
                 .with_label("Defined here", prototype.span);
-                self.context.errors.push(e);
+                errors.push(e);
             }
 
             // Check argument types.
@@ -235,11 +223,13 @@ impl TreeWalker for SemanticCheckWalker {
                         .with_span(arg.span())
                         .with_label("Declared here", prototype.arg_spans.get(index).cloned());
 
-                        self.context.errors.push(e);
+                        errors.push(e);
                     }
                 }
             }
         }
+
+        self.context.errors.append(&mut errors);
 
         Ok(())
     }
@@ -949,6 +939,8 @@ mod tests {
         use crate::{
             interpreter::function_type::FunctionArity, semantic::function_flags::FunctionFlags,
         };
+        use crate::interpreter::program::Program;
+        use crate::semantic::program_function::ProgramFunction;
 
         #[test]
         fn allows_known_functions() {
@@ -984,6 +976,62 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
 
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_known_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default(),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program.functions.insert(String::from("known"), program_function.into());
+
+            // let mut function_prototypes = HashMap::new();
+            // function_prototypes.insert(
+            //     String::from("known"),
+            //     FunctionPrototype {
+            //         name: "known".into(),
+            //         return_type: LpcType::Int(false),
+            //         arity: FunctionArity::default(),
+            //         arg_types: vec![],
+            //         span: None,
+            //         arg_spans: vec![],
+            //         flags: FunctionFlags::default().with_ellipsis(false),
+            //     },
+            // );
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            // let context = CompilationContext {
+            //     scopes,
+            //     function_prototypes,
+            //     ..CompilationContext::default()
+            // };
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            println!("{:?}", walker.context.errors);
+            assert_ok!(result);
             assert!(walker.context.errors.is_empty());
         }
 

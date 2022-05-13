@@ -58,6 +58,7 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::semantic::function_prototype::FunctionPrototype;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -163,12 +164,17 @@ impl CodegenWalker {
     }
 
     pub fn setup_init(&mut self) {
-        self.function_stack.push(ProgramFunction::new(
+        let prototype = FunctionPrototype::new(
             INIT_PROGRAM,
+            LpcType::Void,
             FunctionArity::default(),
             FunctionFlags::default(),
-            0,
-        ));
+            None,
+            Vec::new(),
+            Vec::new()
+        );
+
+        self.function_stack.push(ProgramFunction::new(prototype, 0));
     }
 
     /// Get a listing of a translated AST, suitable for printing
@@ -198,14 +204,14 @@ impl CodegenWalker {
     /// ```
     pub fn listing(&self) -> Vec<String> {
         let functions = self.functions.values().sorted_unstable_by(|a, b| {
-            if a.name == INIT_PROGRAM {
+            if a.name() == INIT_PROGRAM {
                 return Ordering::Less;
             }
-            if b.name == INIT_PROGRAM {
+            if b.name() == INIT_PROGRAM {
                 return Ordering::Greater;
             }
 
-            Ord::cmp(&a.name, &b.name)
+            Ord::cmp(&a.name(), &b.name())
         });
 
         functions.flat_map(|func| func.listing()).collect()
@@ -235,7 +241,7 @@ impl CodegenWalker {
             if a != b {
                 return Err(LpcError::new(format!(
                         "Instructions (length {}) and `debug_spans` (length {}) for function `{}` are out of sync. This would be catastrophic at runtime, and indicates a major bug in the code generator.",
-                        a, b, &func.name
+                        a, b, &func.name()
                     )));
             }
         }
@@ -979,20 +985,25 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
-        let num_args = node.parameters.len();
-        let num_default_args = node
-            .parameters
-            .iter()
-            .fold(0, |s, a| s + a.value.is_some() as usize);
-
-        let arity = FunctionArity {
-            num_args,
-            num_default_args,
-            ellipsis: node.flags.ellipsis(),
-            varargs: node.flags.varargs(),
+        // Note we don't look to inherited files at all for this -
+        // We're generating code for a function defined _in this object_
+        let prototype = match self.context.function_prototypes.get(&node.name) {
+            Some(p) => p,
+            None => {
+                return Err(LpcError::new(
+                    format!("function prototype for {} not found", node.name),
+                ).with_span(node.span));
+            }
         };
 
-        let sym = ProgramFunction::new(&node.name, arity, node.flags, 0);
+        let arity = prototype.arity;
+        let num_args = arity.num_args;
+        let num_default_args = arity.num_default_args;
+
+        let sym = ProgramFunction::new(
+            prototype.clone(),
+            0
+        );
         let populate_argv_index: Option<usize>;
         let populate_defaults_index: Option<usize>;
 
@@ -1072,7 +1083,7 @@ impl TreeWalker for CodegenWalker {
                 }
             }
 
-            // backfill the the correct init addresses for the PopulateDefaults call.
+            // backpatch the the correct init addresses for the PopulateDefaults call.
             if let Some(idx) = populate_defaults_index {
                 let sym = self.function_stack.last_mut().unwrap();
                 let instruction = &sym.instructions[idx];
@@ -1302,8 +1313,8 @@ impl TreeWalker for CodegenWalker {
 
         if self
             .context
-            .function_prototypes
-            .contains_key(CREATE_FUNCTION)
+            .lookup_function(CREATE_FUNCTION)
+            .is_some()
         {
             let mut call = CallNode {
                 receiver: None,
@@ -1328,7 +1339,7 @@ impl TreeWalker for CodegenWalker {
         sym.num_locals = self.register_counter.as_usize(); // TODO: is this correct?
                                                            //     num_locals: self.process.num_init_registers,
 
-        self.functions.insert(sym.name.clone(), sym.into());
+        self.functions.insert(sym.name().to_string(), sym.into());
 
         self.context.scopes.pop();
 
@@ -3109,7 +3120,8 @@ mod tests {
         use super::*;
 
         fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
-            let mut scope_walker = ScopeWalker::default();
+            let mut prototype_walker = FunctionPrototypeWalker::default();
+
             let _walker = CodegenWalker::default();
             let tree = lpc_parser::DefParser::new()
                 .parse(&CompilationContext::default(), LexWrapper::new(code))
@@ -3121,6 +3133,12 @@ mod tests {
                 panic!("Didn't receive a function def?");
             };
 
+            let _ = prototype_walker.visit_function_def(&mut node);
+            let mut context = prototype_walker.into_context();
+
+            context.scopes.push_new(); // global scope
+
+            let mut scope_walker = ScopeWalker::new(context);
             let _ = scope_walker.visit_function_def(&mut node);
 
             let mut context = scope_walker.into_context();

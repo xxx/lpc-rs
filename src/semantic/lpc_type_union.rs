@@ -10,7 +10,7 @@ use std::{
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
 #[bitfield(filled = false)]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct LpcTypeUnion {
     pub void: bool,
     pub int: bool,

@@ -73,7 +73,7 @@ impl FunctionAddress {
     /// Will return the variable name in those cases.
     pub fn function_name(&self) -> &str {
         match self {
-            FunctionAddress::Local(_, x) => &x.name,
+            FunctionAddress::Local(_, x) => &x.name(),
             FunctionAddress::Efun(x) => x,
         }
     }
@@ -81,7 +81,7 @@ impl FunctionAddress {
     /// Get the flags for the function this address represents
     pub fn flags(&self) -> FunctionFlags {
         match self {
-            FunctionAddress::Local(_, x) => x.flags,
+            FunctionAddress::Local(_, x) => x.prototype.flags,
             FunctionAddress::Efun(x) => match EFUN_PROTOTYPES.get(x.as_str()) {
                 Some(prototype) => prototype.flags,
                 None => FunctionFlags::default(),

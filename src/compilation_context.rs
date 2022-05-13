@@ -95,27 +95,52 @@ impl CompilationContext {
         self.config.system_include_dirs()
     }
 
-    /// Look-up a function by name
+    /// Look-up a function by name, then check inherited parents if not found
     pub fn lookup_function<T>(&self, name: T) -> Option<&FunctionPrototype>
     where
         T: AsRef<str>,
     {
         let r = name.as_ref();
+
         self.function_prototypes.get(r)
+            .or_else(|| {
+                self
+                    .inherits
+                    .iter()
+                    .rev()
+                    .find_map(|p| p.lookup_function(r))
+                    .map(|f| &f.prototype)
+            })
     }
 
-    /// Look-up a function locally, and fall back to checking the efuns if a local function with
-    /// the passed name isn't found locally.
+    /// Look-up a function locally, and fall back to checking the efuns if a
+    /// function with the passed name isn't found either locally or in
+    /// inherited-from parents.
     pub fn lookup_function_complete<T>(&self, name: T) -> Option<&FunctionPrototype>
     where
         T: AsRef<str>,
     {
         let r = name.as_ref();
-        if let Some(prototype) = self.function_prototypes.get(r) {
-            Some(prototype)
-        } else {
-            EFUN_PROTOTYPES.get(r)
-        }
+        self.lookup_function(r)
+            .or_else(|| {
+                EFUN_PROTOTYPES.get(r)
+            })
+    }
+
+    /// Do I, or one of my parents, contain a function with this name?
+    pub fn contains_function(&self, name: &str) -> bool {
+        self.function_prototypes.contains_key(name)||
+            self
+                .inherits
+                .iter()
+                .rev()
+                .any(|p| p.contains_function(name))
+    }
+
+    /// Convenience function to check if a function is available anywhere that
+    /// I am allowed access.
+    pub fn contains_function_complete(&self, name: &str) -> bool {
+        self.contains_function(name) || EFUN_PROTOTYPES.contains_key(name)
     }
 
     /// A transformation helper to get a map of function names to their return types.
@@ -142,5 +167,231 @@ impl Default for CompilationContext {
             inherit_names: HashMap::new(),
             inherit_depth: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::interpreter::function_type::FunctionArity;
+    use crate::semantic::function_flags::FunctionFlags;
+    use crate::semantic::program_function::ProgramFunction;
+    use super::*;
+
+    fn make_function_prototype(name: &'static str) -> FunctionPrototype {
+        FunctionPrototype::new(
+            name,
+            LpcType::Int(false),
+            FunctionArity::new(0),
+            FunctionFlags::default(),
+            None,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    fn make_program_function(name: &'static str) -> ProgramFunction {
+        let prototype = make_function_prototype(name);
+
+        ProgramFunction::new(prototype, 0)
+    }
+
+    #[test]
+    fn test_lookup_function() {
+        let mut context = CompilationContext::default();
+        let mut inherited = Program::default();
+
+        let proto = make_function_prototype("foo");
+        context.function_prototypes.insert("foo".into(), proto.clone());
+
+        let efun_override = make_function_prototype("this_object");
+        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+
+        let overridden = make_program_function("foo");
+        inherited.functions.insert("foo".into(), overridden.into());
+
+        let inherited_proto = make_program_function("hello_friends");
+        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+
+        context.inherits.push(inherited);
+
+        assert_eq!(
+            // gets from the inherited parent
+            context.lookup_function("hello_friends"),
+            Some(&inherited_proto.prototype)
+        );
+
+        assert_eq!(
+            // gets the local version
+            context.lookup_function("foo"),
+            Some(&proto)
+        );
+
+        assert_eq!(
+            // gets the more local overridden version
+            context.lookup_function("this_object"),
+            Some(&efun_override)
+        );
+
+        assert_eq!(
+            // not defined
+            context.lookup_function("bar"),
+            None
+        );
+
+        assert_eq!(
+            // efun
+            context.lookup_function("dump"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_lookup_function_complete() {
+        let mut context = CompilationContext::default();
+        let mut inherited = Program::default();
+
+        let proto = make_function_prototype("foo");
+        context.function_prototypes.insert("foo".into(), proto.clone());
+
+        let efun_override = make_function_prototype("this_object");
+        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+
+        let overridden = make_program_function("foo");
+        inherited.functions.insert("foo".into(), overridden.into());
+
+        let inherited_proto = make_program_function("hello_friends");
+        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+
+        context.inherits.push(inherited);
+
+        assert_eq!(
+            // gets from the inherited parent
+            context.lookup_function_complete("hello_friends"),
+            Some(&inherited_proto.prototype)
+        );
+
+        assert_eq!(
+            // gets the local version
+            context.lookup_function_complete("foo"),
+            Some(&proto)
+        );
+
+        assert_eq!(
+            // gets the more local overridden version
+            context.lookup_function_complete("this_object"),
+            Some(&efun_override)
+        );
+
+        assert_eq!(
+            // not defined
+            context.lookup_function_complete("bar"),
+            None
+        );
+
+        assert_eq!(
+            // efun
+            context.lookup_function_complete("dump"),
+            Some(EFUN_PROTOTYPES.get("dump").unwrap())
+        );
+    }
+    
+    #[test]
+    fn test_contains_function() {
+        let mut context = CompilationContext::default();
+        let mut inherited = Program::default();
+
+        let proto = make_function_prototype("foo");
+        context.function_prototypes.insert("foo".into(), proto.clone());
+
+        let efun_override = make_function_prototype("this_object");
+        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+
+        let overridden = make_program_function("foo");
+        inherited.functions.insert("foo".into(), overridden.into());
+
+        let inherited_proto = make_program_function("hello_friends");
+        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+
+        context.inherits.push(inherited);
+
+        assert_eq!(
+            // gets from the inherited parent
+            context.contains_function("hello_friends"),
+            true
+        );
+
+        assert_eq!(
+            // gets the local version
+            context.contains_function("foo"),
+            true
+        );
+
+        assert_eq!(
+            // gets the more local overridden version
+            context.contains_function("this_object"),
+            true
+        );
+
+        assert_eq!(
+            // not defined
+            context.contains_function("bar"),
+            false
+        );
+
+        assert_eq!(
+            // efun
+            context.contains_function("dump"),
+            false
+        );
+    }
+
+    #[test]
+    fn test_contains_function_complete() {
+        let mut context = CompilationContext::default();
+        let mut inherited = Program::default();
+
+        let proto = make_function_prototype("foo");
+        context.function_prototypes.insert("foo".into(), proto.clone());
+
+        let efun_override = make_function_prototype("this_object");
+        context.function_prototypes.insert("this_object".into(), efun_override.clone());
+
+        let overridden = make_program_function("foo");
+        inherited.functions.insert("foo".into(), overridden.into());
+
+        let inherited_proto = make_program_function("hello_friends");
+        inherited.functions.insert("hello_friends".into(), inherited_proto.clone().into());
+
+        context.inherits.push(inherited);
+
+        assert_eq!(
+            // gets from the inherited parent
+            context.contains_function_complete("hello_friends"),
+            true
+        );
+
+        assert_eq!(
+            // gets the local version
+            context.contains_function_complete("foo"),
+            true
+        );
+
+        assert_eq!(
+            // gets the more local overridden version
+            context.contains_function_complete("this_object"),
+            true
+        );
+
+        assert_eq!(
+            // not defined
+            context.contains_function_complete("bar"),
+            false
+        );
+
+        assert_eq!(
+            // efun
+            context.contains_function_complete("dump"),
+            true
+        );
     }
 }

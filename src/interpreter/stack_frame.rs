@@ -48,7 +48,7 @@ impl StackFrame {
         P: Into<Rc<RefCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
-        let reg_len = function.arity.num_args + function.num_locals + 1;
+        let reg_len = function.arity().num_args + function.num_locals + 1;
 
         Self {
             process: process.into(),
@@ -79,7 +79,7 @@ impl StackFrame {
         P: Into<Rc<RefCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
-        let reg_len = function.arity.num_args + function.num_locals + 1;
+        let reg_len = function.arity().num_args + function.num_locals + 1;
         let arg_len = arg_capacity + function.num_locals + 1;
         let reservation = std::cmp::max(reg_len, arg_len);
 
@@ -177,7 +177,7 @@ impl Display for StackFrame {
         write!(
             f,
             "Calling {}; Process {}\n\n",
-            self.function.name,
+            self.function.name(),
             self.process.borrow().filename
         )
     }
@@ -189,17 +189,24 @@ mod tests {
     use crate::{
         interpreter::function_type::FunctionArity, semantic::function_flags::FunctionFlags,
     };
+    use crate::semantic::function_prototype::FunctionPrototype;
+    use crate::semantic::lpc_type::LpcType;
 
     #[test]
     fn new_sets_up_registers() {
         let process = Process::default();
 
-        let fs = ProgramFunction::new(
+        let prototype = FunctionPrototype::new(
             "my_function",
+            LpcType::Void,
             FunctionArity::new(4),
             FunctionFlags::default(),
-            7,
+            None,
+            Vec::new(),
+            Vec::new()
         );
+
+        let fs = ProgramFunction::new(prototype, 7);
 
         let frame = StackFrame::new(process, Rc::new(fs), 4);
 
@@ -214,12 +221,17 @@ mod tests {
         fn sets_up_registers_if_greater_max_is_passed() {
             let process = Process::default();
 
-            let fs = ProgramFunction::new(
+            let prototype = FunctionPrototype::new(
                 "my_function",
+                LpcType::Void,
                 FunctionArity::new(4),
                 FunctionFlags::default(),
-                7,
+                None,
+                Vec::new(),
+                Vec::new()
             );
+
+            let fs = ProgramFunction::new(prototype, 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
 
@@ -231,12 +243,17 @@ mod tests {
         fn sets_up_registers_if_lesser_max_is_passed() {
             let process = Process::default();
 
-            let fs = ProgramFunction::new(
+            let prototype = FunctionPrototype::new(
                 "my_function",
+                LpcType::Void,
                 FunctionArity::new(4),
                 FunctionFlags::default(),
-                7,
+                None,
+                Vec::new(),
+                Vec::new()
             );
+
+            let fs = ProgramFunction::new(prototype, 7);
 
             let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
 

@@ -47,18 +47,6 @@ impl ContextHolder for ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
-        // Push the global scope
-        self.context.scopes.push_new();
-
-        for expr in &mut node.body {
-            expr.visit(self)?;
-        }
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
     fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
 
@@ -66,6 +54,38 @@ impl TreeWalker for ScopeWalker {
 
         for stmt in &mut node.body {
             stmt.visit(self)?;
+        }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        let _ = node.body.visit(self);
+        let _ = node.condition.visit(self);
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        if let Some(n) = &mut *node.initializer {
+            let _ = n.visit(self);
+        }
+        if let Some(n) = &mut node.condition {
+            let _ = n.visit(self);
+        }
+
+        let _ = node.body.visit(self);
+
+        if let Some(n) = &mut node.incrementer {
+            let _ = n.visit(self);
         }
 
         self.context.scopes.pop();
@@ -101,25 +121,29 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
-        let scope = self.context.scopes.current();
+    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
 
-        if scope.is_none() {
-            return Err(LpcError::new(
-                "There's no current scope for some reason? This is a pretty bad compiler bug.",
-            ));
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
+        if let Some(n) = &mut *node.else_clause {
+            let _ = n.visit(self);
         }
 
-        if let Err(e) = check_var_redefinition(node, scope.unwrap()) {
-            self.context.errors.push(e);
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
+        // Push the global scope
+        self.context.scopes.push_new();
+
+        for expr in &mut node.body {
+            expr.visit(self)?;
         }
 
-        if let Some(expr_node) = &mut node.value {
-            expr_node.visit(self)?;
-        }
-
-        self.insert_symbol(Symbol::from(node));
-
+        self.context.scopes.pop();
         Ok(())
     }
 
@@ -151,17 +175,25 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+        let scope = self.context.scopes.current();
 
-        let _ = node.condition.visit(self);
-        let _ = node.body.visit(self);
-        if let Some(n) = &mut *node.else_clause {
-            let _ = n.visit(self);
+        if scope.is_none() {
+            return Err(LpcError::new(
+                "There's no current scope for some reason? This is a pretty bad compiler bug.",
+            ));
         }
 
-        self.context.scopes.pop();
+        if let Err(e) = check_var_redefinition(node, scope.unwrap()) {
+            self.context.errors.push(e);
+        }
+
+        if let Some(expr_node) = &mut node.value {
+            expr_node.visit(self)?;
+        }
+
+        self.insert_symbol(Symbol::from(node));
+
         Ok(())
     }
 
@@ -171,38 +203,6 @@ impl TreeWalker for ScopeWalker {
 
         let _ = node.condition.visit(self);
         let _ = node.body.visit(self);
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
-
-        let _ = node.body.visit(self);
-        let _ = node.condition.visit(self);
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
-
-        if let Some(n) = &mut *node.initializer {
-            let _ = n.visit(self);
-        }
-        if let Some(n) = &mut node.condition {
-            let _ = n.visit(self);
-        }
-
-        let _ = node.body.visit(self);
-
-        if let Some(n) = &mut node.incrementer {
-            let _ = n.visit(self);
-        }
 
         self.context.scopes.pop();
         Ok(())

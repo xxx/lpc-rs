@@ -528,7 +528,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::PopulateDefaults(default_addresses) => {
                 let frame = self.stack.current_frame()?;
                 let func = &frame.function;
-                let declared_args = func.arity.num_args;
+                let declared_args = func.arity().num_args;
                 let called_args = frame.called_with_num_args;
 
                 if called_args < declared_args {
@@ -705,7 +705,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
                 let borrowed = process.borrow();
-                let function = borrowed.functions.get(name);
+                let function = borrowed.lookup_function(name);
                 let mut new_frame = if let Some(func) = function {
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
@@ -715,7 +715,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     )
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                     let sym =
-                        ProgramFunction::new(name.clone(), prototype.arity, prototype.flags, 0);
+                        ProgramFunction::new(prototype.clone(), 0);
 
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
@@ -740,7 +740,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         .clone_from_slice(&registers[index..(index + num_args)]);
                 }
 
-                let function_is_local = frame.process.borrow().functions.contains_key(name);
+                let function_is_local = frame.process.borrow().contains_function(name);
 
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
@@ -848,7 +848,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step
                                         let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                                        let pf = ProgramFunction::new(name.clone(), prototype.arity, prototype.flags, 0);
+                                        let pf = ProgramFunction::new(prototype.clone(), 0);
 
                                         function_is_local = false;
 
@@ -898,7 +898,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 };
 
                 // TODO: get rid of this clone
-                let name = &new_frame.function.name.clone();
+                let name = &new_frame.function.name().clone();
                 self.stack.push(new_frame)?;
 
                 if !function_is_local {
@@ -1279,7 +1279,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process.borrow().functions.contains_key(name) {
+        if process.borrow().contains_function(name) {
             Some(process)
         } else {
             None

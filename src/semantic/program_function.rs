@@ -1,25 +1,20 @@
+use std::borrow::Cow;
 use crate::{
     asm::instruction::{Address, Instruction},
     interpreter::function_type::FunctionArity,
     parser::span::Span,
-    semantic::function_flags::FunctionFlags,
 };
-use delegate::delegate;
 use multimap::MultiMap;
 use std::collections::HashMap;
+use crate::semantic::function_prototype::FunctionPrototype;
+use crate::semantic::lpc_type::LpcType;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProgramFunction {
-    /// Yep, the name of the function
-    pub name: String,
-
-    /// The arity of this function
-    pub arity: FunctionArity,
-
-    /// All the flags for this function
-    pub flags: FunctionFlags,
+    /// My prototype from compilation
+    pub prototype: FunctionPrototype,
 
     /// The number of non-argument, non-return-value locals. Used for register allocation.
     pub num_locals: usize,
@@ -35,21 +30,33 @@ pub struct ProgramFunction {
 }
 
 impl ProgramFunction {
-    delegate! {
-        to self.flags {
-            /// Is this function public?
-            pub fn public(&self) -> bool;
-        }
+    /// Is this function public?
+    #[inline]
+    pub fn public(&self) -> bool {
+        self.prototype.flags.public()
     }
 
-    pub fn new<T>(name: T, arity: FunctionArity, flags: FunctionFlags, num_locals: usize) -> Self
-    where
-        T: Into<String>,
-    {
+    #[inline]
+    pub fn name(&self) -> &Cow<'static, str> {
+        &self.prototype.name
+    }
+
+    #[inline]
+    pub fn return_type(&self) -> LpcType {
+        self.prototype.return_type
+    }
+
+    #[inline]
+    pub fn arity(&self) -> FunctionArity {
+        self.prototype.arity
+    }
+
+    pub fn new(
+        prototype: FunctionPrototype,
+        num_locals: usize
+    ) -> Self {
         Self {
-            name: name.into(),
-            arity,
-            flags,
+            prototype,
             num_locals,
             instructions: Vec::new(),
             debug_spans: Vec::new(),
@@ -77,7 +84,7 @@ impl ProgramFunction {
 
         v.push(format!(
             "fn {} num_args={} num_locals={}:",
-            self.name, self.arity.num_args, self.num_locals
+            self.prototype.name, self.prototype.arity.num_args, self.num_locals
         ));
 
         // use MultiMap as multiple labels can be at the same address
@@ -98,5 +105,11 @@ impl ProgramFunction {
         }
 
         v
+    }
+}
+
+impl AsRef<FunctionPrototype> for ProgramFunction {
+    fn as_ref(&self) -> &FunctionPrototype {
+        &self.prototype
     }
 }
