@@ -73,7 +73,7 @@ impl FunctionAddress {
     /// Will return the variable name in those cases.
     pub fn function_name(&self) -> &str {
         match self {
-            FunctionAddress::Local(_, x) => &x.name(),
+            FunctionAddress::Local(_, x) => x.name(),
             FunctionAddress::Efun(x) => x,
         }
     }
