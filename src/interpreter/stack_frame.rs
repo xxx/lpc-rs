@@ -6,8 +6,8 @@ use crate::{
         register_bank::RegisterBank,
     },
     parser::span::Span,
-    Result,
-    semantic::program_function::ProgramFunction, try_extract_value,
+    semantic::program_function::ProgramFunction,
+    try_extract_value, Result,
 };
 use std::{
     borrow::Cow,
@@ -187,10 +187,9 @@ impl Display for StackFrame {
 mod tests {
     use super::*;
     use crate::{
-        core::lpc_type::LpcType,
+        core::{function_arity::FunctionArity, lpc_type::LpcType},
         semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
     };
-    use crate::core::function_arity::FunctionArity;
 
     #[test]
     fn new_sets_up_registers() {

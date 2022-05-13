@@ -22,8 +22,8 @@ use crate::{
     util::path_maker::LpcPath,
     LpcInt, Result,
 };
+use once_cell::sync::Lazy;
 use std::iter::Peekable;
-use once_cell::sync::{OnceCell, Lazy};
 
 pub mod define;
 pub mod preprocessor_node;
@@ -36,9 +36,8 @@ macro_rules! regex {
 
 static SYS_INCLUDE: Lazy<Regex> = regex!(r"\A\s*#\s*include\s+<([^>]+)>\s*\z");
 static LOCAL_INCLUDE: Lazy<Regex> = regex!("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z");
-static DEFINE: Lazy<Regex> = regex!(
-    "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z"
-);
+static DEFINE: Lazy<Regex> =
+    regex!("\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z");
 static DEFINEMACRO: Lazy<Regex> = regex!(
     "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)\\(([^)]*)\\)\\s*((?:\\\\.|[^\n])*)\n?\\z"
 );
@@ -48,9 +47,8 @@ static IFDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*ifdef\s+([\p{Alphabetic}_]\w*)\s*
 static IFNDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
 // static ENDIF: Lazy<Regex> = regex!(r#"\A\s*#\s*endif\s*\z"#);
 static ELSE: Lazy<Regex> = regex!(r#"\A\s*#\s*else\s*\z"#);
-static PRAGMA: Lazy<Regex> = regex!(
-    r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#
-);
+static PRAGMA: Lazy<Regex> =
+    regex!(r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#);
 static COMMA_SEPARATOR: Lazy<Regex> = regex!(r"\s*,\s*");
 
 #[derive(Debug)]

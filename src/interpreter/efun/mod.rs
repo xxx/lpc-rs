@@ -7,15 +7,15 @@ mod file_name;
 mod this_object;
 mod throw;
 
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
 use crate::{
-    core::lpc_type::LpcType,
+    core::{function_arity::FunctionArity, lpc_type::LpcType},
     errors::LpcError,
     interpreter::efun::efun_context::EfunContext,
-    Result,
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
+    Result,
 };
 use clone_object::clone_object;
 use debug::debug;
@@ -23,7 +23,6 @@ use dump::dump;
 use file_name::file_name;
 use this_object::this_object;
 use throw::throw;
-use crate::core::function_arity::FunctionArity;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
@@ -39,109 +38,133 @@ pub const THROW: &str = "throw";
 
 /// Global static mapping of all efun names to their prototype
 pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
-let mut m = HashMap::new();
+    let mut m = HashMap::new();
 
-m.insert(CALL_OTHER, FunctionPrototype {
-name: CALL_OTHER.into(),
-return_type: LpcType::Mixed(false),
-arity: FunctionArity {
-num_args: 2,
-num_default_args: 0,
-varargs: false,
-ellipsis: true,
-},
-arg_types: vec![
-LpcType::Object(false)
-| LpcType::Object(true)
-| LpcType::String(false)
-| LpcType::String(true)
-| LpcType::Mapping(false),
-LpcType::String(false)
-],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(true),
-});
+    m.insert(
+        CALL_OTHER,
+        FunctionPrototype {
+            name: CALL_OTHER.into(),
+            return_type: LpcType::Mixed(false),
+            arity: FunctionArity {
+                num_args: 2,
+                num_default_args: 0,
+                varargs: false,
+                ellipsis: true,
+            },
+            arg_types: vec![
+                LpcType::Object(false)
+                    | LpcType::Object(true)
+                    | LpcType::String(false)
+                    | LpcType::String(true)
+                    | LpcType::Mapping(false),
+                LpcType::String(false),
+            ],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(true),
+        },
+    );
 
-// "catch" is a special form of the language, implemented with custom [`Instruction`]s.
-//   A prototype is defined here to enforce type checks,
-//   as `catch` looks and acts like a function call.
-m.insert(CATCH, FunctionPrototype {
-name: CATCH.into(),
-return_type: LpcType::Mixed(false),
-arity: FunctionArity::new(1),
-arg_types: vec![LpcType::Mixed(false) | LpcType::Void],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    // "catch" is a special form of the language, implemented with custom [`Instruction`]s.
+    //   A prototype is defined here to enforce type checks,
+    //   as `catch` looks and acts like a function call.
+    m.insert(
+        CATCH,
+        FunctionPrototype {
+            name: CATCH.into(),
+            return_type: LpcType::Mixed(false),
+            arity: FunctionArity::new(1),
+            arg_types: vec![LpcType::Mixed(false) | LpcType::Void],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m.insert(CLONE_OBJECT, FunctionPrototype {
-name: CLONE_OBJECT.into(),
-return_type: LpcType::Object(false),
-arity: FunctionArity::new(1),
-arg_types: vec![LpcType::String(false)],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    m.insert(
+        CLONE_OBJECT,
+        FunctionPrototype {
+            name: CLONE_OBJECT.into(),
+            return_type: LpcType::Object(false),
+            arity: FunctionArity::new(1),
+            arg_types: vec![LpcType::String(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m.insert(DEBUG, FunctionPrototype {
-name: DEBUG.into(),
-return_type: LpcType::Mixed(false),
-arity: FunctionArity {
-num_args: 2,
-num_default_args: 1,
-ellipsis: false,
-varargs: false
-},
-arg_types: vec![LpcType::String(false), LpcType::Mixed(false)],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    m.insert(
+        DEBUG,
+        FunctionPrototype {
+            name: DEBUG.into(),
+            return_type: LpcType::Mixed(false),
+            arity: FunctionArity {
+                num_args: 2,
+                num_default_args: 1,
+                ellipsis: false,
+                varargs: false,
+            },
+            arg_types: vec![LpcType::String(false), LpcType::Mixed(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m.insert(DUMP, FunctionPrototype {
-name: DUMP.into(),
-return_type: LpcType::Void,
-arity: FunctionArity::new(1),
-arg_types: vec![LpcType::Mixed(false)],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    m.insert(
+        DUMP,
+        FunctionPrototype {
+            name: DUMP.into(),
+            return_type: LpcType::Void,
+            arity: FunctionArity::new(1),
+            arg_types: vec![LpcType::Mixed(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m.insert(FILE_NAME, FunctionPrototype {
-name: FILE_NAME.into(),
-return_type: LpcType::String(false),
-arity: FunctionArity::new(1),
-arg_types: vec![LpcType::Object(false)],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    m.insert(
+        FILE_NAME,
+        FunctionPrototype {
+            name: FILE_NAME.into(),
+            return_type: LpcType::String(false),
+            arity: FunctionArity::new(1),
+            arg_types: vec![LpcType::Object(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m.insert(THIS_OBJECT, FunctionPrototype {
-name: THIS_OBJECT.into(),
-return_type: LpcType::Object(false),
-arity: FunctionArity::default(),
-arg_types: vec![],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    m.insert(
+        THIS_OBJECT,
+        FunctionPrototype {
+            name: THIS_OBJECT.into(),
+            return_type: LpcType::Object(false),
+            arity: FunctionArity::default(),
+            arg_types: vec![],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m.insert(THROW, FunctionPrototype {
-name: THROW.into(),
-return_type: LpcType::Void,
-arity: FunctionArity::new(1),
-arg_types: vec![LpcType::Mixed(false)],
-span: None,
-arg_spans: vec![],
-flags: FunctionFlags::default().with_ellipsis(false),
-});
+    m.insert(
+        THROW,
+        FunctionPrototype {
+            name: THROW.into(),
+            return_type: LpcType::Void,
+            arity: FunctionArity::new(1),
+            arg_types: vec![LpcType::Mixed(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
 
-m
+    m
 });
 
 /// call the actual function, from the given name, with the passed context.
