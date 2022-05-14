@@ -13,6 +13,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
+use delegate::delegate;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -23,6 +24,7 @@ pub struct CompilationContext {
     /// The name of the main file being compiled.
     pub filename: LpcPath,
 
+    /// The configuration being used for this compilation.
     pub config: Rc<Config>,
 
     /// Our collection of scopes
@@ -42,7 +44,7 @@ pub struct CompilationContext {
     pub pragmas: PragmaFlags,
 
     /// All of my Inherited parent objects
-    /// The ordering of this field can be assumed to be in file order
+    /// The ordering of this field can be assumed to be in the order of declaration
     pub inherits: Vec<Program>,
 
     /// The index of name -> inherited objects, for inherits with names
@@ -53,6 +55,16 @@ pub struct CompilationContext {
 }
 
 impl CompilationContext {
+    delegate! {
+        to self.config {
+            /// config's lib_dir (a.k.a. LIB_DIR)
+            pub fn lib_dir(&self) -> &str;
+
+            /// config's system include directories
+            pub fn system_include_dirs(&self) -> &Vec<String>;
+        }
+    }
+
     /// Create a new `Context`
     ///
     /// # Arguments
@@ -83,16 +95,6 @@ impl CompilationContext {
     pub fn with_inherit_depth(mut self, depth: usize) -> Self {
         self.inherit_depth = depth;
         self
-    }
-
-    #[inline]
-    pub fn lib_dir(&self) -> &str {
-        self.config.lib_dir()
-    }
-
-    #[inline]
-    pub fn system_include_dirs(&self) -> &Vec<String> {
-        self.config.system_include_dirs()
     }
 
     /// Look-up a function by name, then check inherited parents if not found
