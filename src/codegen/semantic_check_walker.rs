@@ -192,6 +192,13 @@ impl TreeWalker for SemanticCheckWalker {
         let mut errors = Vec::new();
 
         if let Some(prototype) = proto_opt {
+            if prototype.flags.private() && !self.context.function_prototypes.values().any(|val| val == prototype) {
+                let e = LpcError::new(format!("call to private function `{}`", node.name))
+                    .with_span(node.span)
+                    .with_label("defined here", prototype.span);
+                errors.push(e);
+            }
+
             let arg_len = node.arguments.len();
             let arity = prototype.arity;
 
@@ -201,7 +208,7 @@ impl TreeWalker for SemanticCheckWalker {
                     node.name, arity.num_args, arg_len
                 ))
                 .with_span(node.span)
-                .with_label("Defined here", prototype.span);
+                .with_label("defined here", prototype.span);
                 errors.push(e);
             }
 
@@ -926,6 +933,7 @@ mod tests {
             interpreter::program::Program,
             semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
         };
+        use crate::semantic::visibility::Visibility;
 
         #[test]
         fn allows_known_functions() {
@@ -964,7 +972,42 @@ mod tests {
             assert!(walker.context.errors.is_empty());
         }
 
-        // TODO: local private functions ok, inherited private functions not ok
+        #[test]
+        fn allows_local_private_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+            });
+
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
+                String::from("known"),
+                FunctionPrototype {
+                    name: "known".into(),
+                    return_type: LpcType::Int(false),
+                    arity: FunctionArity::default(),
+                    arg_types: vec![],
+                    span: None,
+                    arg_spans: vec![],
+                    flags: FunctionFlags::default().with_ellipsis(false).with_visibility(Visibility::Private),
+                },
+            );
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let context = CompilationContext {
+                scopes,
+                function_prototypes,
+                ..CompilationContext::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
+        }
 
         #[test]
         fn allows_known_inherited_functions() {
@@ -992,28 +1035,9 @@ mod tests {
                 .functions
                 .insert(String::from("known"), program_function.into());
 
-            // let mut function_prototypes = HashMap::new();
-            // function_prototypes.insert(
-            //     String::from("known"),
-            //     FunctionPrototype {
-            //         name: "known".into(),
-            //         return_type: LpcType::Int(false),
-            //         arity: FunctionArity::default(),
-            //         arg_types: vec![],
-            //         span: None,
-            //         arg_spans: vec![],
-            //         flags: FunctionFlags::default().with_ellipsis(false),
-            //     },
-            // );
-
             let mut scopes = ScopeTree::default();
             scopes.push_new();
 
-            // let context = CompilationContext {
-            //     scopes,
-            //     function_prototypes,
-            //     ..CompilationContext::default()
-            // };
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
@@ -1021,6 +1045,44 @@ mod tests {
 
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_private_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default().with_visibility(Visibility::Private),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(!walker.context.errors.is_empty());
         }
 
         #[test]
