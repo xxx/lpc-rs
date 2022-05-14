@@ -1,7 +1,8 @@
 use crate::{
-    asm::register::Register, ast::var_init_node::VarInitNode, core::lpc_type::LpcType,
+    ast::var_init_node::VarInitNode, core::lpc_type::LpcType,
     parser::span::Span, semantic::function_prototype::FunctionPrototype,
 };
+use crate::core::register::Register;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq)]

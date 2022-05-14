@@ -1,5 +1,5 @@
 use crate::{
-    asm::register::Register, core::function_arity::FunctionArity,
+    core::function_arity::FunctionArity,
     interpreter::function_type::FunctionTarget, LpcFloat, LpcInt,
 };
 use itertools::Itertools;
@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::core::register::Register;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;

@@ -1,4 +1,4 @@
-use crate::asm::register::Register;
+use crate::core::register::Register;
 
 /// A [`Register`]-aware counter, used during code generation.
 #[derive(Debug, Clone, Default)]

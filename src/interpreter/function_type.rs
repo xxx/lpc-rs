@@ -1,7 +1,7 @@
 use crate::interpreter::process::Process;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{asm::register::Register, interpreter::lpc_ref::LpcRef};
+use crate::interpreter::lpc_ref::LpcRef;
 
 use crate::{
     core::function_arity::FunctionArity,
@@ -10,6 +10,7 @@ use crate::{
 };
 use delegate::delegate;
 use std::fmt::{Display, Formatter};
+use crate::core::register::Register;
 
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
