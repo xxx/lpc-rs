@@ -228,10 +228,17 @@ pub FunctionDef: FunctionDefNode = {
         };
 
         let flag_strs = flags.into_iter().map(|f| f.0).collect::<Vec<_>>();
-        let mut flags = FunctionFlags::from(flag_strs).with_ellipsis(ellipsis);
-        if !flags.public() && !flags.private() && !flags.protected() {
-            flags.set_public(true);
+        if flag_strs.iter().filter(|f| ["public", "private", "protected", "static"].contains(f)).count() > 1 {
+            let err = LpcError::new(
+                "multiple visibilities specified. use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility".to_string()
+            ).with_span(Some(span));
+
+            return Err(ParseError::User { error: err });
         }
+        let flags = FunctionFlags::from(flag_strs).with_ellipsis(ellipsis);
+        // if !flags.public() && !flags.private() && !flags.protected() {
+        //     flags.set_public(true);
+        // }
 
         Ok(FunctionDefNode {
             name: name.1,

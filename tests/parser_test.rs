@@ -496,6 +496,23 @@ fn partial_application_argument_lists<'a>() {
     assert_eq!(get_args(&program.body[8]), Some(vec![None, None]));
 }
 
+#[test]
+fn error_when_multiple_visibilities_given() {
+    let prog = indoc! { r#"
+        public private void foo() {
+            dump("sup?");
+        }
+    "# };
+
+    let program = parse_prog(prog);
+
+    assert_eq!(
+        &program.unwrap_err().to_string(),
+        "multiple visibilities specified. use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility"
+    );
+}
+
+
 fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();

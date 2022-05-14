@@ -1,4 +1,5 @@
 use modular_bitfield::prelude::*;
+use crate::semantic::visibility::Visibility;
 
 /// A struct to keep track of the various boolean flags that can be set
 /// on functions, like `varargs` and `static`, as well as whether the function
@@ -8,9 +9,28 @@ use modular_bitfield::prelude::*;
 pub struct FunctionFlags {
     pub ellipsis: bool,
     pub varargs: bool,
-    pub public: bool,
-    pub private: bool,
-    pub protected: bool,
+    #[bits = 2]
+    pub visibility: Visibility,
+}
+
+impl FunctionFlags {
+    /// Is the function public?
+    #[inline]
+    pub fn public(&self) -> bool {
+        self.visibility() == Visibility::Public
+    }
+
+    /// Is the function private?
+    #[inline]
+    pub fn private(&self) -> bool {
+        self.visibility() == Visibility::Private
+    }
+
+    /// Is the function protected?
+    #[inline]
+    pub fn protected(&self) -> bool {
+        self.visibility() == Visibility::Protected
+    }
 }
 
 impl<T> From<Vec<T>> for FunctionFlags
@@ -25,16 +45,16 @@ where
                     flags.set_varargs(true);
                 }
                 "public" => {
-                    flags.set_public(true);
+                    flags.set_visibility(Visibility::Public);
                 }
                 "private" => {
-                    flags.set_private(true);
+                    flags.set_visibility(Visibility::Private);
                 }
                 "protected" => {
-                    flags.set_protected(true);
+                    flags.set_visibility(Visibility::Protected);
                 }
                 "static" => {
-                    flags.set_protected(true);
+                    flags.set_visibility(Visibility::Protected);
                 }
                 _ => {}
             }
