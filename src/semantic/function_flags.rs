@@ -1,5 +1,5 @@
-use modular_bitfield::prelude::*;
 use crate::semantic::visibility::Visibility;
+use modular_bitfield::prelude::*;
 
 /// A struct to keep track of the various boolean flags that can be set
 /// on functions, like `varargs` and `static`, as well as whether the function

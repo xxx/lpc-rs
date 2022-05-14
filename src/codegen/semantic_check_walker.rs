@@ -192,7 +192,13 @@ impl TreeWalker for SemanticCheckWalker {
         let mut errors = Vec::new();
 
         if let Some(prototype) = proto_opt {
-            if prototype.flags.private() && !self.context.function_prototypes.values().any(|val| val == prototype) {
+            if prototype.flags.private()
+                && !self
+                    .context
+                    .function_prototypes
+                    .values()
+                    .any(|val| val == prototype)
+            {
                 let e = LpcError::new(format!("call to private function `{}`", node.name))
                     .with_span(node.span)
                     .with_label("defined here", prototype.span);
@@ -931,9 +937,11 @@ mod tests {
         use crate::{
             core::function_arity::FunctionArity,
             interpreter::program::Program,
-            semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
+            semantic::{
+                function_flags::FunctionFlags, program_function::ProgramFunction,
+                visibility::Visibility,
+            },
         };
-        use crate::semantic::visibility::Visibility;
 
         #[test]
         fn allows_known_functions() {
@@ -991,7 +999,9 @@ mod tests {
                     arg_types: vec![],
                     span: None,
                     arg_spans: vec![],
-                    flags: FunctionFlags::default().with_ellipsis(false).with_visibility(Visibility::Private),
+                    flags: FunctionFlags::default()
+                        .with_ellipsis(false)
+                        .with_visibility(Visibility::Private),
                 },
             );
 

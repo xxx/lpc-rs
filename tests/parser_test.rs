@@ -512,7 +512,6 @@ fn error_when_multiple_visibilities_given() {
     );
 }
 
-
 fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
