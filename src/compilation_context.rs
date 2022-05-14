@@ -12,8 +12,8 @@ use crate::{
     interpreter::{pragma_flags::PragmaFlags, program::Program},
     util::{config::Config, path_maker::LpcPath},
 };
-use std::rc::Rc;
 use delegate::delegate;
+use std::rc::Rc;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in

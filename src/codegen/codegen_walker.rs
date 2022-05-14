@@ -7,7 +7,7 @@ use crate::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOperation, BinaryOpNode},
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::CallNode,
@@ -17,7 +17,7 @@ use crate::{
         expression_node::ExpressionNode,
         float_node::FloatNode,
         for_node::ForNode,
-        function_def_node::{ARGV, FunctionDefNode},
+        function_def_node::{FunctionDefNode, ARGV},
         if_node::IfNode,
         int_node::IntNode,
         label_node::LabelNode,
@@ -28,7 +28,7 @@ use crate::{
         string_node::StringNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOperation, UnaryOpNode},
+        unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
         while_node::WhileNode,
@@ -40,14 +40,14 @@ use crate::{
         efun::{CALL_OTHER, CATCH},
         program::Program,
     },
-    Result,
     semantic::{program_function::ProgramFunction, symbol::Symbol},
+    Result,
 };
 
 use crate::{
     asm::instruction::Instruction::RegCopy,
     ast::function_ptr_node::FunctionPtrNode,
-    core::{function_arity::FunctionArity, lpc_type::LpcType},
+    core::{function_arity::FunctionArity, lpc_type::LpcType, register::Register},
     interpreter::{
         efun::EFUN_PROTOTYPES,
         function_type::{FunctionName, FunctionReceiver, FunctionTarget},
@@ -58,7 +58,6 @@ use if_chain::if_chain;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::core::register::Register;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1729,8 +1728,8 @@ mod tests {
         },
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
-        LpcFloat,
         parser::{lexer::LexWrapper, span::Span},
+        LpcFloat,
     };
 
     use super::*;
@@ -1741,7 +1740,7 @@ mod tests {
             function_prototype_walker::FunctionPrototypeWalker,
             semantic_check_walker::SemanticCheckWalker,
         },
-        compiler::{Compiler, compiler_error::CompilerError},
+        compiler::{compiler_error::CompilerError, Compiler},
         core::lpc_type::LpcType,
         errors,
         util::path_maker::LpcPath,

@@ -1,6 +1,7 @@
 use crate::{
-    core::function_arity::FunctionArity,
-    interpreter::function_type::FunctionTarget, LpcFloat, LpcInt,
+    core::{function_arity::FunctionArity, register::Register},
+    interpreter::function_type::FunctionTarget,
+    LpcFloat, LpcInt,
 };
 use itertools::Itertools;
 use std::{
@@ -8,7 +9,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::core::register::Register;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;

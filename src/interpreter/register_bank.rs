@@ -1,10 +1,9 @@
-use crate::interpreter::lpc_ref::LpcRef;
+use crate::{core::register::Register, interpreter::lpc_ref::LpcRef};
 use delegate::delegate;
 use std::{
     ops::{Index, IndexMut, Range, RangeInclusive},
     slice::Iter,
 };
-use crate::core::register::Register;
 
 /// A type to handle data movement (the arena itself stores the actual data)
 #[derive(Debug, Clone, Default)]
