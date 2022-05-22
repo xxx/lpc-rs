@@ -868,7 +868,7 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 }
 
 pub Call: CallNode = {
-    <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
+    <namespace:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
         let arguments = match list {
             Some(args) => args,
             None => vec![]
@@ -886,6 +886,10 @@ pub Call: CallNode = {
         }
     }
 };
+
+CallNamespace: () = {
+    <namespace:"ID"?> "::" => ()
+}
 
 AssignmentOp: AssignmentOperation = {
     "=" => AssignmentOperation::Simple,
