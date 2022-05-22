@@ -5,6 +5,7 @@ use crate::{
     semantic::function_prototype::FunctionPrototype,
 };
 use crate::semantic::global_var_flags::GlobalVarFlags;
+use crate::semantic::visibility::Visibility;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -37,9 +38,14 @@ impl Symbol {
     }
 
     /// We're global if we're in the top-level scope.
+    #[inline]
     pub fn is_global(&self) -> bool {
         self.scope_id == 0
     }
+
+    /// This variable public Only matters for globals.
+    #[inline]
+    pub fn public(&self) -> bool { self.flags.visibility() == Visibility::Public }
 }
 
 impl From<&mut VarInitNode> for Symbol {

@@ -160,19 +160,36 @@ impl TreeWalker for ScopeWalker {
             }
         };
 
+        let mut errors = Vec::new();
+
         if let Some(symbol) = sym {
+            if !symbol.public() && self.context.scopes.lookup(&node.name).is_none() {
+                let e = LpcError::new(
+                    format!(
+                        "private variable `{}` accessed outside of its file",
+                        node.name
+                    ),
+                )
+                    .with_span(node.span)
+                    .with_label("defined here", symbol.span);
+
+                errors.push(e);
+            }
+
             if symbol.is_global() {
                 // Set the node to global, so we know whether to look at the program registers,
                 // or the global registers, during codegen.
                 node.set_global(true);
             }
         } else {
-            let e =
-                LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
+            let e = LpcError::new(format!("undefined variable `{}`", node.name))
+                    .with_span(node.span);
 
             // We check for undefined vars here in case a symbol is subsequently defined.
-            self.context.errors.push(e);
+            errors.push(e);
         }
+
+        self.context.errors.extend(errors.into_iter());
 
         Ok(())
     }
@@ -224,6 +241,7 @@ impl Default for ScopeWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_regex;
 
     mod test_visit_function_def {
         use crate::core::lpc_type::LpcType;
@@ -329,6 +347,7 @@ mod tests {
 
     mod test_visit_var {
         use crate::core::lpc_type::LpcType;
+        use crate::interpreter::program::Program;
 
         use super::*;
 
@@ -368,7 +387,57 @@ mod tests {
 
             let _ = walker.visit_var(&mut node);
 
-            assert!(!walker.context.errors.is_empty());
+            assert_regex!(
+                walker.context.errors[0].as_ref(),
+                "undefined variable `foo`"
+            );
+        }
+
+        #[test]
+        fn errors_if_accessing_private_variable_defined_elsewhere() {
+            let (mut walker, mut node) = setup();
+
+            let mut inherited = Program::default();
+
+            let sym = Symbol {
+                name: "foo".to_string(),
+                type_: LpcType::Int(false),
+                location: None,
+                scope_id: 0,
+                span: None,
+                flags: GlobalVarFlags::from(vec!["private"]),
+            };
+
+            inherited.global_variables.insert("foo".to_string(), sym);
+
+            walker.context.inherits.push(inherited);
+
+            let _ = walker.visit_var(&mut node);
+
+            assert_regex!(
+                walker.context.errors[0].as_ref(),
+                "private variable `foo` accessed outside of its file"
+            );
+        }
+
+        #[test]
+        fn allows_accessing_in_file_private_variable() {
+            let (mut walker, mut node) = setup();
+
+            let sym = Symbol {
+                name: "foo".to_string(),
+                type_: LpcType::Int(false),
+                location: None,
+                scope_id: 0,
+                span: None,
+                flags: GlobalVarFlags::from(vec!["private"]),
+            };
+
+            walker.insert_symbol(sym);
+
+            let _ = walker.visit_var(&mut node);
+
+            assert!(walker.context.errors.is_empty());
         }
     }
 }
