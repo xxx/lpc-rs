@@ -384,10 +384,9 @@ mod tests {
         use super::*;
         use crate::{
             ast::range_node::RangeNode,
-            semantic::{scope_tree::ScopeTree, symbol::Symbol},
+            semantic::{global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol},
         };
         use std::collections::HashMap;
-        use crate::semantic::global_var_flags::GlobalVarFlags;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -722,7 +721,10 @@ mod tests {
             )
         }
 
-        fn mapping_mapping_literals(op: BinaryOperation, context: &CompilationContext) -> Result<()> {
+        fn mapping_mapping_literals(
+            op: BinaryOperation,
+            context: &CompilationContext,
+        ) -> Result<()> {
             get_result(
                 op,
                 ExpressionNode::from(HashMap::new()),
@@ -799,7 +801,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_ok());
+            .is_ok());
 
             // invalid complex tree
             assert!(get_result(
@@ -823,7 +825,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_err());
+            .is_err());
         }
 
         #[test]
@@ -876,7 +878,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_ok());
+            .is_ok());
 
             // invalid complex tree
             assert!(get_result(
@@ -900,7 +902,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_err());
+            .is_err());
         }
 
         #[test]
@@ -953,7 +955,7 @@ mod tests {
                 }),
                 &scope_tree,
             )
-                .is_ok());
+            .is_ok());
 
             // invalid complex tree
             assert!(get_result(
@@ -977,7 +979,7 @@ mod tests {
                 }),
                 &scope_tree,
             )
-                .is_err());
+            .is_err());
         }
 
         #[test]
@@ -1030,7 +1032,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_ok());
+            .is_ok());
 
             // invalid complex tree
             assert!(get_result(
@@ -1054,7 +1056,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_err());
+            .is_err());
         }
 
         #[test]
@@ -1107,7 +1109,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_ok());
+            .is_ok());
 
             // invalid complex tree
             assert!(get_result(
@@ -1131,7 +1133,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_err());
+            .is_err());
         }
 
         #[test]
@@ -1183,7 +1185,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_ok());
+            .is_ok());
 
             // invalid complex tree
             assert!(get_result(
@@ -1207,7 +1209,7 @@ mod tests {
                 }),
                 &context,
             )
-                .is_err());
+            .is_err());
         }
 
         #[test]
@@ -1513,9 +1515,10 @@ mod tests {
 
     mod check_unary_operation_tests {
         use super::*;
-        use crate::semantic::{scope_tree::ScopeTree, symbol::Symbol};
+        use crate::semantic::{
+            global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol,
+        };
         use std::collections::HashMap;
-        use crate::semantic::global_var_flags::GlobalVarFlags;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1870,8 +1873,9 @@ mod tests {
 
         mod binary_ops {
             use super::*;
-            use crate::semantic::{scope_tree::ScopeTree, symbol::Symbol};
-            use crate::semantic::global_var_flags::GlobalVarFlags;
+            use crate::semantic::{
+                global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol,
+            };
 
             #[test]
             fn test_index_array_returns_singular_of_left_type() {

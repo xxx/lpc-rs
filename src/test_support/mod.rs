@@ -1,11 +1,11 @@
-use crate::compiler::Compiler;
-use crate::interpreter::memory::Memory;
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::program::Program;
-use crate::interpreter::task::Task;
-use crate::interpreter::task_context::TaskContext;
-use crate::util::config::Config;
-use crate::interpreter::MAX_CALL_STACK_SIZE;
+use crate::{
+    compiler::Compiler,
+    interpreter::{
+        memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
+        task_context::TaskContext, MAX_CALL_STACK_SIZE,
+    },
+    util::config::Config,
+};
 
 /// Module for various test utilities that are shared among unit tests.
 

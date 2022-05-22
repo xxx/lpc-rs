@@ -1796,9 +1796,9 @@ mod tests {
         compiler::{compiler_error::CompilerError, Compiler},
         core::lpc_type::LpcType,
         errors,
+        semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
     };
-    use crate::semantic::global_var_flags::GlobalVarFlags;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
@@ -1878,8 +1878,8 @@ mod tests {
     }
 
     mod test_visit_assignment {
-        use crate::semantic::global_var_flags::GlobalVarFlags;
         use super::*;
+        use crate::semantic::global_var_flags::GlobalVarFlags;
 
         #[test]
         fn test_populates_the_instructions_for_globals() {

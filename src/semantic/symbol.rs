@@ -2,10 +2,11 @@ use crate::{
     ast::var_init_node::VarInitNode,
     core::{lpc_type::LpcType, register::Register},
     parser::span::Span,
-    semantic::function_prototype::FunctionPrototype,
+    semantic::{
+        function_prototype::FunctionPrototype, global_var_flags::GlobalVarFlags,
+        visibility::Visibility,
+    },
 };
-use crate::semantic::global_var_flags::GlobalVarFlags;
-use crate::semantic::visibility::Visibility;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -45,7 +46,9 @@ impl Symbol {
 
     /// This variable public Only matters for globals.
     #[inline]
-    pub fn public(&self) -> bool { self.flags.visibility() == Visibility::Public }
+    pub fn public(&self) -> bool {
+        self.flags.visibility() == Visibility::Public
+    }
 }
 
 impl From<&mut VarInitNode> for Symbol {

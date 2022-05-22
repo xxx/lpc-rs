@@ -15,10 +15,11 @@ use crate::{
     compilation_context::CompilationContext,
     core::lpc_type::LpcType,
     errors::LpcError,
-    semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
+    semantic::{
+        global_var_flags::GlobalVarFlags, semantic_checks::check_var_redefinition, symbol::Symbol,
+    },
     Result,
 };
-use crate::semantic::global_var_flags::GlobalVarFlags;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -164,14 +165,12 @@ impl TreeWalker for ScopeWalker {
 
         if let Some(symbol) = sym {
             if !symbol.public() && self.context.scopes.lookup(&node.name).is_none() {
-                let e = LpcError::new(
-                    format!(
-                        "private variable `{}` accessed outside of its file",
-                        node.name
-                    ),
-                )
-                    .with_span(node.span)
-                    .with_label("defined here", symbol.span);
+                let e = LpcError::new(format!(
+                    "private variable `{}` accessed outside of its file",
+                    node.name
+                ))
+                .with_span(node.span)
+                .with_label("defined here", symbol.span);
 
                 errors.push(e);
             }
@@ -182,8 +181,8 @@ impl TreeWalker for ScopeWalker {
                 node.set_global(true);
             }
         } else {
-            let e = LpcError::new(format!("undefined variable `{}`", node.name))
-                    .with_span(node.span);
+            let e =
+                LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
 
             // We check for undefined vars here in case a symbol is subsequently defined.
             errors.push(e);
@@ -346,8 +345,7 @@ mod tests {
     }
 
     mod test_visit_var {
-        use crate::core::lpc_type::LpcType;
-        use crate::interpreter::program::Program;
+        use crate::{core::lpc_type::LpcType, interpreter::program::Program};
 
         use super::*;
 
