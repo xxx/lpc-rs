@@ -1,11 +1,11 @@
-use lpc_rs::compiler::Compiler;
-use lpc_rs::interpreter::memory::Memory;
-use lpc_rs::interpreter::object_space::ObjectSpace;
-use lpc_rs::interpreter::program::Program;
-use lpc_rs::interpreter::task::Task;
-use lpc_rs::interpreter::task_context::TaskContext;
-use lpc_rs::util::config::Config;
-use lpc_rs::interpreter::MAX_CALL_STACK_SIZE;
+use lpc_rs::{
+    compiler::Compiler,
+    interpreter::{
+        memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
+        task_context::TaskContext, MAX_CALL_STACK_SIZE,
+    },
+    util::config::Config,
+};
 
 pub fn test_config() -> Config {
     Config::default().with_lib_dir("./tests/fixtures/code")

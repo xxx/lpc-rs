@@ -6,17 +6,16 @@ use rmp_serde::Serializer;
 use serde::Serialize;
 use std::{
     borrow::Cow,
+    cmp::Ordering,
     collections::HashMap,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
     rc::Rc,
 };
-use std::cmp::Ordering;
-
 
 use itertools::Itertools;
 
-use crate::core::{INIT_PROGRAM};
+use crate::core::INIT_PROGRAM;
 
 use crate::semantic::symbol::Symbol;
 
@@ -153,12 +152,9 @@ impl Display for Program {
 
 #[cfg(test)]
 mod tests {
-    
+
     use super::*;
     use crate::compiler::Compiler;
-    
-    
-    
 
     #[test]
     fn test_serialization_and_deserialization() {

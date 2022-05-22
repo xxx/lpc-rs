@@ -7,7 +7,7 @@ use crate::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOperation, BinaryOpNode},
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::CallNode,
@@ -17,7 +17,7 @@ use crate::{
         expression_node::ExpressionNode,
         float_node::FloatNode,
         for_node::ForNode,
-        function_def_node::{ARGV, FunctionDefNode},
+        function_def_node::{FunctionDefNode, ARGV},
         if_node::IfNode,
         int_node::IntNode,
         label_node::LabelNode,
@@ -28,7 +28,7 @@ use crate::{
         string_node::StringNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOperation, UnaryOpNode},
+        unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
         while_node::WhileNode,
@@ -40,26 +40,27 @@ use crate::{
         efun::{CALL_OTHER, CATCH},
         program::Program,
     },
-    Result,
     semantic::{program_function::ProgramFunction, symbol::Symbol},
+    Result,
 };
 
 use crate::{
     asm::instruction::Instruction::RegCopy,
     ast::function_ptr_node::FunctionPtrNode,
-    core::{function_arity::FunctionArity, lpc_type::LpcType, register::Register},
+    core::{
+        function_arity::FunctionArity, lpc_type::LpcType, register::Register, CREATE_FUNCTION,
+        INIT_PROGRAM,
+    },
     interpreter::{
         efun::EFUN_PROTOTYPES,
         function_type::{FunctionName, FunctionReceiver, FunctionTarget},
     },
+    parser::span::Span,
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
 };
 use if_chain::if_chain;
-use std::{collections::HashMap, rc::Rc};
-use std::ops::Range;
+use std::{collections::HashMap, ops::Range, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::core::{CREATE_FUNCTION, INIT_PROGRAM};
-use crate::parser::span::Span;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -160,7 +161,9 @@ impl CodegenWalker {
 
         result.global_init_registers = num_init_registers;
         // subtract 1, so the next() call gives us the correct next register.
-        result.register_counter.set(num_init_registers.saturating_sub(1));
+        result
+            .register_counter
+            .set(num_init_registers.saturating_sub(1));
 
         result.setup_init();
 
@@ -198,7 +201,8 @@ impl CodegenWalker {
         self.ensure_sync()?;
 
         self.context.scopes.goto_root();
-        let global_variables = std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
+        let global_variables =
+            std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
 
         Ok(Program {
             filename: self.context.filename,
@@ -220,11 +224,15 @@ impl CodegenWalker {
             let b = func.debug_spans.len();
             if a != b {
                 return Err(LpcError::new(format!(
-                        concat!("Instructions (length {}) and `debug_spans` (length {}) for ",
-                                "function `{}` are out of sync. This would be catastrophic at ",
-                                "runtime, and indicates a major bug in the code generator."),
-                        a, b, &func.name()
-                    )));
+                    concat!(
+                        "Instructions (length {}) and `debug_spans` (length {}) for ",
+                        "function `{}` are out of sync. This would be catastrophic at ",
+                        "runtime, and indicates a major bug in the code generator."
+                    ),
+                    a,
+                    b,
+                    &func.name()
+                )));
             }
         }
 
@@ -479,7 +487,7 @@ impl CodegenWalker {
     fn combine_inits(
         &mut self,
         instructions: &mut Vec<Instruction>,
-        debug_spans: &mut Vec<Option<Span>>
+        debug_spans: &mut Vec<Option<Span>>,
     ) {
         let calls_create = |instructions: &[Instruction]| -> bool {
             let len = instructions.len();
@@ -509,15 +517,18 @@ impl CodegenWalker {
             }
         };
 
-        let extend_instructions = |func: &Rc<ProgramFunction>, instructions: &mut Vec<Instruction>, debug_spans: &mut Vec<Option<Span>>| {
-            let range = get_range(&func.instructions);
-            if calls_create(instructions) {
-                instructions.truncate(instructions.len() - 2);
-                debug_spans.truncate(debug_spans.len() - 2);
-            }
-            instructions.extend(func.instructions[range.clone()].iter().cloned());
-            debug_spans.extend(func.debug_spans[range].iter());
-        };
+        let extend_instructions =
+            |func: &Rc<ProgramFunction>,
+             instructions: &mut Vec<Instruction>,
+             debug_spans: &mut Vec<Option<Span>>| {
+                let range = get_range(&func.instructions);
+                if calls_create(instructions) {
+                    instructions.truncate(instructions.len() - 2);
+                    debug_spans.truncate(debug_spans.len() - 2);
+                }
+                instructions.extend(func.instructions[range.clone()].iter().cloned());
+                debug_spans.extend(func.debug_spans[range].iter());
+            };
         for inherit in &self.context.inherits {
             if let Some(func) = inherit.functions.get(INIT_PROGRAM) {
                 extend_instructions(func, instructions, debug_spans);
@@ -1755,7 +1766,7 @@ impl Default for CodegenWalker {
             context: Default::default(),
             jump_targets: vec![],
             case_addresses: vec![],
-            visit_range_results: None
+            visit_range_results: None,
         }
     }
 }
@@ -1770,8 +1781,8 @@ mod tests {
         },
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
-        LpcFloat,
         parser::{lexer::LexWrapper, span::Span},
+        LpcFloat,
     };
 
     use super::*;
@@ -1780,15 +1791,13 @@ mod tests {
         codegen::{
             default_params_walker::DefaultParamsWalker,
             function_prototype_walker::FunctionPrototypeWalker,
-            semantic_check_walker::SemanticCheckWalker,
+            inheritance_walker::InheritanceWalker, semantic_check_walker::SemanticCheckWalker,
         },
-        compiler::{Compiler, compiler_error::CompilerError},
+        compiler::{compiler_error::CompilerError, Compiler},
         core::lpc_type::LpcType,
         errors,
-        util::path_maker::LpcPath,
+        util::{config::Config, path_maker::LpcPath},
     };
-    use crate::codegen::inheritance_walker::InheritanceWalker;
-    use crate::util::config::Config;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
@@ -4107,7 +4116,7 @@ mod tests {
             Default::default(),
             None,
             vec![],
-            vec![]
+            vec![],
         );
         let create_prototype = FunctionPrototype::new(
             CREATE_FUNCTION,
@@ -4116,7 +4125,7 @@ mod tests {
             Default::default(),
             None,
             vec![],
-            vec![]
+            vec![],
         );
 
         let mut grandparent_init = ProgramFunction::new(prototype.clone(), 0);
@@ -4126,19 +4135,33 @@ mod tests {
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 num_args: 0,
-                initial_arg: Default::default()
+                initial_arg: Default::default(),
             },
-            Ret
+            Ret,
         ];
-        let grandparent_spans = vec![Some(Span { l: 0, r: 1, file_id: 1 }); grandparent_init_instructions.len()];
-        let _ = std::mem::replace(&mut grandparent_init.instructions, grandparent_init_instructions);
+        let grandparent_spans = vec![
+            Some(Span {
+                l: 0,
+                r: 1,
+                file_id: 1
+            });
+            grandparent_init_instructions.len()
+        ];
+        let _ = std::mem::replace(
+            &mut grandparent_init.instructions,
+            grandparent_init_instructions,
+        );
         let _ = std::mem::replace(&mut grandparent_init.debug_spans, grandparent_spans);
 
         let grandparent_create = ProgramFunction::new(create_prototype, 0);
 
         let mut grandparent = Program::default();
-        grandparent.functions.insert(INIT_PROGRAM.to_string(), grandparent_init.into());
-        grandparent.functions.insert(CREATE_FUNCTION.to_string(), grandparent_create.into());
+        grandparent
+            .functions
+            .insert(INIT_PROGRAM.to_string(), grandparent_init.into());
+        grandparent
+            .functions
+            .insert(CREATE_FUNCTION.to_string(), grandparent_create.into());
 
         let mut parent_init = ProgramFunction::new(prototype.clone(), 0);
         let parent_init_instructions = vec![
@@ -4149,16 +4172,25 @@ mod tests {
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 num_args: 0,
-                initial_arg: Default::default()
+                initial_arg: Default::default(),
             },
-            Instruction::Ret
+            Instruction::Ret,
         ];
-        let parent_spans = vec![Some(Span { l: 0, r: 1, file_id: 1 }); parent_init_instructions.len()];
+        let parent_spans = vec![
+            Some(Span {
+                l: 0,
+                r: 1,
+                file_id: 1
+            });
+            parent_init_instructions.len()
+        ];
         let _ = std::mem::replace(&mut parent_init.instructions, parent_init_instructions);
         let _ = std::mem::replace(&mut parent_init.debug_spans, parent_spans);
 
         let mut parent = Program::default();
-        parent.functions.insert(INIT_PROGRAM.to_string(), parent_init.into());
+        parent
+            .functions
+            .insert(INIT_PROGRAM.to_string(), parent_init.into());
         parent.inherits.push(grandparent);
 
         let mut walker = default_walker();

@@ -10,11 +10,11 @@ use crate::{
     core::lpc_type::LpcType,
     errors::LpcError,
     interpreter::{pragma_flags::PragmaFlags, program::Program},
+    semantic::symbol::Symbol,
     util::{config::Config, path_maker::LpcPath},
 };
 use delegate::delegate;
 use std::rc::Rc;
-use crate::semantic::symbol::Symbol;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -61,7 +61,7 @@ pub struct CompilationContext {
 
     /// How many [`Register`]s were required for initializing global variables,
     /// in inherited-from parents?
-    /// This is how we determine how much space the final [`Process`] needs to 
+    /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for the global `init-program` call, when an object is cloned.
     pub num_init_registers: usize,
 }
@@ -132,9 +132,7 @@ impl CompilationContext {
             self.inherits
                 .iter()
                 .rev()
-                .find_map(|p| {
-                    p.lookup_function(r).map(|f| &f.prototype)
-                })
+                .find_map(|p| p.lookup_function(r).map(|f| &f.prototype))
         })
     }
 
@@ -167,8 +165,8 @@ impl CompilationContext {
 
     /// Look-up a variable by name, then check inherited parents if not found
     pub fn lookup_var<T>(&self, name: T) -> Option<&Symbol>
-        where
-            T: AsRef<str>,
+    where
+        T: AsRef<str>,
     {
         let r = name.as_ref();
 
@@ -182,8 +180,8 @@ impl CompilationContext {
 
     /// Get a mutable reference to a variable by name, checking inherited parents if not found
     pub fn lookup_var_mut<T>(&mut self, name: T) -> Option<&mut Symbol>
-        where
-            T: AsRef<str>,
+    where
+        T: AsRef<str>,
     {
         let r = name.as_ref();
 
@@ -495,10 +493,9 @@ mod tests {
         );
 
         let overridden_global = Symbol::new("overridden", LpcType::Int(false));
-        inherited.global_variables.insert(
-            "overridden".into(),
-            overridden_global.clone().into(),
-        );
+        inherited
+            .global_variables
+            .insert("overridden".into(), overridden_global.clone().into());
 
         context.inherits.push(earlier_inherit);
         context.inherits.push(inherited);
@@ -507,7 +504,11 @@ mod tests {
         context.scopes.current_mut().unwrap().insert(global.clone());
 
         let mut overriding_local = Symbol::new("overridden", LpcType::String(false));
-        context.scopes.current_mut().unwrap().insert(overriding_local.clone());
+        context
+            .scopes
+            .current_mut()
+            .unwrap()
+            .insert(overriding_local.clone());
 
         assert_eq!(
             // gets from the inherited parent
@@ -521,10 +522,7 @@ mod tests {
             Some(&overriding_local)
         );
 
-        assert_eq!(
-            context.lookup_var("my_global"),
-            Some(&global)
-        );
+        assert_eq!(context.lookup_var("my_global"), Some(&global));
 
         assert_eq!(
             // gets from the inherited parent
@@ -538,9 +536,6 @@ mod tests {
             Some(&mut overriding_local)
         );
 
-        assert_eq!(
-            context.lookup_var_mut("my_global"),
-            Some(&mut global)
-        );
+        assert_eq!(context.lookup_var_mut("my_global"), Some(&mut global));
     }
 }

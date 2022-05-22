@@ -1,10 +1,10 @@
 mod support;
 
+use crate::support::run_prog;
 use claim::assert_err;
+use indoc::indoc;
 use lpc_rs::{compiler::Compiler, util::config::Config};
 use std::rc::Rc;
-use indoc::indoc;
-use crate::support::run_prog;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)
@@ -41,5 +41,8 @@ fn test_inheritance() {
     let (_task, ctx) = run_prog(code);
     let proc = ctx.process();
     let prog = &proc.borrow().program;
-    println!("task: {}, {}, {:?}", prog.num_globals, prog.num_init_registers, prog.global_variables);
+    println!(
+        "task: {}, {}, {:?}",
+        prog.num_globals, prog.num_init_registers, prog.global_variables
+    );
 }

@@ -3,10 +3,10 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     compiler::Compiler,
+    core::EFUN,
     util::path_maker::LpcPath,
     LpcError, Result,
 };
-use crate::core::EFUN;
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -31,15 +31,17 @@ impl InheritanceWalker {
 
         if let Some(namespace) = &node.namespace {
             if namespace == EFUN {
-                return Err(LpcError::new("inheritance namespace `efun` is reserved")
-                    .with_span(node.span));
+                return Err(
+                    LpcError::new("inheritance namespace `efun` is reserved").with_span(node.span)
+                );
             }
 
             if self.context.inherit_names.contains_key(namespace) {
                 return Err(LpcError::new(format!(
                     "inheritance namespace `{}` is already defined",
                     namespace
-                )).with_span(node.span));
+                ))
+                .with_span(node.span));
             }
         }
 
@@ -110,12 +112,11 @@ impl TreeWalker for InheritanceWalker {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::config::Config;
     use super::*;
+    use crate::util::config::Config;
 
     fn walker() -> InheritanceWalker {
-        let config = Config::default()
-            .with_lib_dir("./tests/fixtures/code/");
+        let config = Config::default().with_lib_dir("./tests/fixtures/code/");
 
         let context = CompilationContext::new("test.c", config.into());
 
@@ -123,8 +124,8 @@ mod tests {
     }
 
     mod test_visit_inherit {
-        use claim::{assert_err, assert_ok};
         use super::*;
+        use claim::{assert_err, assert_ok};
 
         #[test]
         fn test_sets_up_the_data() {
@@ -133,7 +134,7 @@ mod tests {
             let mut node = InheritNode {
                 path: "/grandparent.c".to_string(),
                 namespace: None,
-                span: None
+                span: None,
             };
 
             let result = walker.visit_inherit(&mut node);
@@ -146,17 +147,23 @@ mod tests {
         fn test_disallows_duplicate_namespace() {
             let mut walker = walker();
 
-            walker.context.inherit_names.insert("grandparent".to_string(), 0);
+            walker
+                .context
+                .inherit_names
+                .insert("grandparent".to_string(), 0);
 
             let mut node = InheritNode {
                 path: "/grandparent.c".to_string(),
                 namespace: Some("grandparent".to_string()),
-                span: None
+                span: None,
             };
 
             let result = walker.visit_inherit(&mut node);
 
-            assert_err!(result,"inheritance namespace `grandparent` is already defined");
+            assert_err!(
+                result,
+                "inheritance namespace `grandparent` is already defined"
+            );
         }
 
         #[test]
@@ -166,12 +173,12 @@ mod tests {
             let mut node = InheritNode {
                 path: "/grandparent.c".to_string(),
                 namespace: Some("efun".to_string()),
-                span: None
+                span: None,
             };
 
             let result = walker.visit_inherit(&mut node);
 
-            assert_err!(result,"inheritance namespace `efun` is reserved");
+            assert_err!(result, "inheritance namespace `efun` is reserved");
         }
     }
 }

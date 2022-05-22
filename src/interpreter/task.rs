@@ -1,6 +1,6 @@
 use crate::{
     asm::instruction::{Address, Instruction},
-    core::{function_arity::FunctionArity, register::Register},
+    core::{function_arity::FunctionArity, register::Register, INIT_PROGRAM},
     errors::LpcError,
     interpreter::{
         call_stack::CallStack,
@@ -10,7 +10,6 @@ use crate::{
         },
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
-        MAX_CALL_STACK_SIZE,
         memory::Memory,
         object_space::ObjectSpace,
         process::Process,
@@ -18,16 +17,16 @@ use crate::{
         register_bank::RegisterBank,
         stack_frame::StackFrame,
         task_context::TaskContext,
+        MAX_CALL_STACK_SIZE,
     },
-    LpcInt,
-    Result,
     semantic::program_function::ProgramFunction,
-    try_extract_value, util::config::Config,
+    try_extract_value,
+    util::config::Config,
+    LpcInt, Result,
 };
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
-use crate::core::INIT_PROGRAM;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -2246,10 +2245,7 @@ mod tests {
                     .map(|global| (*global.borrow()).clone())
                     .collect::<Vec<_>>();
 
-                let global_expected = vec![
-                    Float(3.14.into()),
-                    Float(4.24.into()),
-                ];
+                let global_expected = vec![Float(3.14.into()), Float(4.24.into())];
 
                 assert_eq!(&global_expected, &global_registers);
             }
@@ -2279,9 +2275,7 @@ mod tests {
                     .map(|global| (*global.borrow()).clone())
                     .collect::<Vec<_>>();
 
-                let global_expected = vec![
-                    Float(3.14.into()),
-                ];
+                let global_expected = vec![Float(3.14.into())];
 
                 assert_eq!(&global_expected, &global_registers);
             }
