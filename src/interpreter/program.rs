@@ -12,12 +12,12 @@ use std::{
     rc::Rc,
 };
 use std::cmp::Ordering;
-use std::ops::Range;
-use if_chain::if_chain;
+
+
 use itertools::Itertools;
-use crate::asm::instruction::Instruction;
-use crate::core::{CREATE_FUNCTION, INIT_PROGRAM};
-use crate::parser::span::Span;
+
+use crate::core::{INIT_PROGRAM};
+
 use crate::semantic::symbol::Symbol;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -153,12 +153,12 @@ impl Display for Program {
 
 #[cfg(test)]
 mod tests {
-    use crate::asm::instruction::Instruction::Call;
+    
     use super::*;
     use crate::compiler::Compiler;
-    use crate::core::lpc_type::LpcType;
-    use crate::core::register::Register;
-    use crate::semantic::function_prototype::FunctionPrototype;
+    
+    
+    
 
     #[test]
     fn test_serialization_and_deserialization() {

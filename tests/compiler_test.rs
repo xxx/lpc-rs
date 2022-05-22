@@ -38,7 +38,7 @@ fn test_inheritance() {
         }
     "## };
 
-    let (task, ctx) = run_prog(code);
+    let (_task, ctx) = run_prog(code);
     let proc = ctx.process();
     let prog = &proc.borrow().program;
     println!("task: {}, {}, {:?}", prog.num_globals, prog.num_init_registers, prog.global_variables);
