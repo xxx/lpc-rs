@@ -105,7 +105,7 @@ impl SwitchCase {
 }
 
 /// A tree walker that generates assembly language instructions based on an AST.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CodegenWalker {
     /// Keep track of the current function being generated (including global initialization)
     function_stack: Vec<ProgramFunction>,
@@ -218,10 +218,9 @@ impl CodegenWalker {
             filename: self.context.filename,
             functions: self.functions,
             global_variables,
-            // TODO: adding +1 is only because we skip r0 on the global counter,
-            //       which shouldn't be necessary.
+            // add +1 because globals are stored in r0
             num_globals: self.global_counter.as_usize() + 1,
-            // add +1 for r0
+            // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
             inherits: self.context.inherits,
@@ -1754,6 +1753,27 @@ impl TreeWalker for CodegenWalker {
     }
 }
 
+impl Default for CodegenWalker {
+    fn default() -> Self {
+        let mut global_counter = RegisterCounter::new();
+        global_counter.start_at_zero(true); // do not skip r0 for global registers
+
+        Self {
+            function_stack: vec![],
+            label_count: 0,
+            functions: Default::default(),
+            current_result: Default::default(),
+            register_counter: Default::default(),
+            global_counter,
+            global_init_registers: 0,
+            context: Default::default(),
+            jump_targets: vec![],
+            case_addresses: vec![],
+            visit_range_results: None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -2974,10 +2994,10 @@ mod tests {
 
         let expected = vec![
             IConst1(Register(1)),
-            GStore(Register(1), Register(1)),
+            GStore(Register(1), Register(0)),
             IConst(Register(2), 56),
             AConst(Register(3), vec![Register(2)]),
-            GStore(Register(3), Register(2)),
+            GStore(Register(3), Register(1)),
         ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -2989,7 +3009,7 @@ mod tests {
                 name: String::from("foo"),
                 type_: LpcType::Int(false),
                 static_: false,
-                location: Some(Register(1)),
+                location: Some(Register(0)),
                 scope_id: 0,
                 span: Some(Span {
                     file_id: 0,
@@ -3004,7 +3024,7 @@ mod tests {
                 name: String::from("bar"),
                 type_: LpcType::Int(true),
                 static_: false,
-                location: Some(Register(2)),
+                location: Some(Register(1)),
                 scope_id: 0,
                 span: Some(Span {
                     file_id: 0,
@@ -3353,9 +3373,9 @@ mod tests {
 
             let expected = [
                 IConst(Register(1), 123),
-                GStore(Register(1), Register(1)),
+                GStore(Register(1), Register(0)),
                 SConst(Register(2), String::from("cool")),
-                GStore(Register(2), Register(2)),
+                GStore(Register(2), Register(1)),
                 Ret,
             ];
 
@@ -3378,7 +3398,7 @@ mod tests {
 
             let expected = [
                 IConst(Register(1), 666),
-                GStore(Register(1), Register(1)),
+                GStore(Register(1), Register(0)),
                 Call {
                     name: String::from("create"),
                     num_args: 0,
@@ -3404,9 +3424,9 @@ mod tests {
 
             let expected = [
                 IConst(Register(1), 666),
-                GStore(Register(1), Register(1)),
+                GStore(Register(1), Register(0)),
                 IConst(Register(2), 777),
-                GStore(Register(2), Register(2)),
+                GStore(Register(2), Register(1)),
                 Ret,
             ];
 
@@ -3976,13 +3996,13 @@ mod tests {
                     Register(8),
                     vec![Register(1), Register(2), Register(3), Register(7)],
                 ),
-                GStore(Register(8), Register(1)),
+                GStore(Register(8), Register(0)),
                 SConst(Register(9), "sup".into()),
-                GStore(Register(9), Register(2)),
+                GStore(Register(9), Register(1)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
-            assert_eq!(walker.global_counter.as_usize(), 2);
+            assert_eq!(walker.global_counter.as_usize(), 1);
             assert_eq!(walker.global_init_registers, 9);
         }
     }
@@ -4045,7 +4065,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_globals, 6)
+            assert_eq!(program.num_globals, 5)
         }
 
         #[test]
@@ -4092,8 +4112,8 @@ mod tests {
         for s in &program.listing() {
             println!("{}", s);
         }
-        assert_eq!(init.num_locals, 9);
         assert_eq!(program.num_globals, 9);
+        assert_eq!(init.num_locals, 9);
         // println!("{:#?}", program);
         // assert_eq!(program.inherited_globals, vec!["foo"]);
     }

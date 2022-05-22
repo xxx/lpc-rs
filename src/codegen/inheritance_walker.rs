@@ -96,9 +96,7 @@ impl TreeWalker for InheritanceWalker {
                         .insert(namespace.clone(), self.context.inherits.len());
                 }
 
-                // We subtract 1 from the number of global vars, because Programs
-                // always have it added in for r0. See CodegenWalker::into_program.
-                self.context.num_globals += program.num_globals - 1;
+                self.context.num_globals += program.num_globals;
                 self.context.num_init_registers += program.num_init_registers;
 
                 self.context.inherits.push(program);

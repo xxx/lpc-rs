@@ -2247,7 +2247,6 @@ mod tests {
                     .collect::<Vec<_>>();
 
                 let global_expected = vec![
-                    Int(0), // "wasted" global r0
                     Float(3.14.into()),
                     Float(4.24.into()),
                 ];
@@ -2281,7 +2280,6 @@ mod tests {
                     .collect::<Vec<_>>();
 
                 let global_expected = vec![
-                    Int(0), // "wasted" global r0
                     Float(3.14.into()),
                 ];
 

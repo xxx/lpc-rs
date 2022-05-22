@@ -5,12 +5,24 @@ use crate::core::register::Register;
 pub struct RegisterCounter {
     count: usize,
     stack: Vec<usize>,
+    // hacky, but beats allowing isize, enums, etc.
+    start_at_zero: bool,
+    emitted_zero: bool,
 }
 
 impl RegisterCounter {
+    // create a new counter
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Reset the counter to 0.
     pub fn reset(&mut self) {
         self.count = 0;
+    }
+
+    pub fn start_at_zero(&mut self, value: bool) {
+        self.start_at_zero = value;
     }
 
     /// Return the current register.
@@ -62,6 +74,11 @@ impl Iterator for RegisterCounter {
     type Item = Register;
 
     fn next(&mut self) -> Option<Register> {
+        if self.start_at_zero && !self.emitted_zero {
+            self.emitted_zero = true;
+            return Some(Register(0));
+        }
+
         self.count += 1;
         Some(Register(self.count))
     }
