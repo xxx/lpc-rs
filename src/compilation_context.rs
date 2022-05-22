@@ -14,6 +14,7 @@ use crate::{
 };
 use delegate::delegate;
 use std::rc::Rc;
+use crate::semantic::symbol::Symbol;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -52,6 +53,17 @@ pub struct CompilationContext {
 
     /// How deep into an inheritance chain is this context?
     pub inherit_depth: usize,
+
+    /// How many global variables have been declared in inherited-from parents?
+    /// This is how we determine how much space the final [`Process`] needs to
+    /// allocate for global variables.
+    pub num_globals: usize,
+
+    /// How many [`Register`]s were required for initializing global variables,
+    /// in inherited-from parents?
+    /// This is how we determine how much space the final [`Process`] needs to 
+    /// allocate for the global `init-program` call, when an object is cloned.
+    pub num_init_registers: usize,
 }
 
 impl CompilationContext {
@@ -91,9 +103,21 @@ impl CompilationContext {
         }
     }
 
-    /// Set the inherit_depth of the context
+    /// Set the `inherit_depth` of the context
     pub fn with_inherit_depth(mut self, depth: usize) -> Self {
         self.inherit_depth = depth;
+        self
+    }
+
+    /// Set the `global_variable_count` of the context
+    pub fn with_global_variable_count(mut self, count: usize) -> Self {
+        self.num_globals = count;
+        self
+    }
+
+    /// Set the `global_register_count` of the context
+    pub fn with_global_register_count(mut self, count: usize) -> Self {
+        self.num_init_registers = count;
         self
     }
 
@@ -108,8 +132,9 @@ impl CompilationContext {
             self.inherits
                 .iter()
                 .rev()
-                .find_map(|p| p.lookup_function(r))
-                .map(|f| &f.prototype)
+                .find_map(|p| {
+                    p.lookup_function(r).map(|f| &f.prototype)
+                })
         })
     }
 
@@ -140,6 +165,36 @@ impl CompilationContext {
         self.contains_function(name) || EFUN_PROTOTYPES.contains_key(name)
     }
 
+    /// Look-up a variable by name, then check inherited parents if not found
+    pub fn lookup_var<T>(&self, name: T) -> Option<&Symbol>
+        where
+            T: AsRef<str>,
+    {
+        let r = name.as_ref();
+
+        self.scopes.lookup(r).or_else(|| {
+            self.inherits
+                .iter()
+                .rev()
+                .find_map(|p| p.global_variables.get(r))
+        })
+    }
+
+    /// Get a mutable reference to a variable by name, checking inherited parents if not found
+    pub fn lookup_var_mut<T>(&mut self, name: T) -> Option<&mut Symbol>
+        where
+            T: AsRef<str>,
+    {
+        let r = name.as_ref();
+
+        self.scopes.lookup_mut(r).or_else(|| {
+            self.inherits
+                .iter_mut()
+                .rev()
+                .find_map(|p| p.global_variables.get_mut(r))
+        })
+    }
+
     /// A transformation helper to get a map of function names to their return types.
     pub fn function_return_types(&self) -> HashMap<&str, LpcType> {
         self.function_prototypes
@@ -163,6 +218,8 @@ impl Default for CompilationContext {
             inherits: Vec::new(),
             inherit_names: HashMap::new(),
             inherit_depth: 0,
+            num_globals: 0,
+            num_init_registers: 0,
         }
     }
 }
@@ -414,6 +471,76 @@ mod tests {
             // efun
             context.contains_function_complete("dump"),
             true
+        );
+    }
+
+    #[test]
+    fn test_lookup_var_and_lookup_var_mut() {
+        let mut context = CompilationContext::default();
+        context.scopes.push_new();
+        let mut earlier_inherit = Program::default();
+        let mut inherited = Program::default();
+
+        // this one should not be found
+        let early_inherited_global = Symbol::new("my_inherited_global", LpcType::Float(false));
+        earlier_inherit.global_variables.insert(
+            "my_inherited_global".into(),
+            early_inherited_global.clone().into(),
+        );
+
+        let mut inherited_global = Symbol::new("my_inherited_global", LpcType::Int(false));
+        inherited.global_variables.insert(
+            "my_inherited_global".into(),
+            inherited_global.clone().into(),
+        );
+
+        let overridden_global = Symbol::new("overridden", LpcType::Int(false));
+        inherited.global_variables.insert(
+            "overridden".into(),
+            overridden_global.clone().into(),
+        );
+
+        context.inherits.push(earlier_inherit);
+        context.inherits.push(inherited);
+
+        let mut global = Symbol::new("my_global", LpcType::Int(false));
+        context.scopes.current_mut().unwrap().insert(global.clone());
+
+        let mut overriding_local = Symbol::new("overridden", LpcType::String(false));
+        context.scopes.current_mut().unwrap().insert(overriding_local.clone());
+
+        assert_eq!(
+            // gets from the inherited parent
+            context.lookup_var("my_inherited_global"),
+            Some(&inherited_global)
+        );
+
+        assert_eq!(
+            // gets the more local overridden version
+            context.lookup_var("overridden"),
+            Some(&overriding_local)
+        );
+
+        assert_eq!(
+            context.lookup_var("my_global"),
+            Some(&global)
+        );
+
+        assert_eq!(
+            // gets from the inherited parent
+            context.lookup_var_mut("my_inherited_global"),
+            Some(&mut inherited_global)
+        );
+
+        assert_eq!(
+            // gets the more local overridden version
+            context.lookup_var_mut("overridden"),
+            Some(&mut overriding_local)
+        );
+
+        assert_eq!(
+            context.lookup_var_mut("my_global"),
+            Some(&mut global)
         );
     }
 }

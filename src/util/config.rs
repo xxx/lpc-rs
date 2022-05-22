@@ -14,7 +14,7 @@ const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
 
 /// The main struct that handles runtime use configurations.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Config {
     lib_dir: String,
     system_include_dirs: Vec<String>,
@@ -85,6 +85,7 @@ impl Config {
         let dug = dig(&config, MAX_INHERIT_DEPTH);
         let max_inherit_depth = match dug {
             Some(x) => match x.as_integer() {
+                Some(0) => DEFAULT_MAX_INHERIT_DEPTH,
                 Some(y) => {
                     if y < 1 {
                         return Err(LpcError::new("max_inherit_depth must be greater than 0"));
@@ -182,6 +183,18 @@ impl Config {
     #[inline]
     pub fn system_include_dirs(&self) -> &Vec<String> {
         &self.system_include_dirs
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            lib_dir: "".to_string(),
+            system_include_dirs: vec!["/sys".into()],
+            master_object: "/secure/master.c".to_string(),
+            max_task_instructions: Some(100000),
+            max_inherit_depth: DEFAULT_MAX_INHERIT_DEPTH,
+        }
     }
 }
 

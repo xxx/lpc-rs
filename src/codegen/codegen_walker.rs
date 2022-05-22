@@ -7,7 +7,7 @@ use crate::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOpNode, BinaryOperation},
+        binary_op_node::{BinaryOperation, BinaryOpNode},
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::CallNode,
@@ -17,7 +17,7 @@ use crate::{
         expression_node::ExpressionNode,
         float_node::FloatNode,
         for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
+        function_def_node::{ARGV, FunctionDefNode},
         if_node::IfNode,
         int_node::IntNode,
         label_node::LabelNode,
@@ -28,7 +28,7 @@ use crate::{
         string_node::StringNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOpNode, UnaryOperation},
+        unary_op_node::{UnaryOperation, UnaryOpNode},
         var_init_node::VarInitNode,
         var_node::VarNode,
         while_node::WhileNode,
@@ -40,8 +40,8 @@ use crate::{
         efun::{CALL_OTHER, CATCH},
         program::Program,
     },
-    semantic::{program_function::ProgramFunction, symbol::Symbol},
     Result,
+    semantic::{program_function::ProgramFunction, symbol::Symbol},
 };
 
 use crate::{
@@ -55,9 +55,11 @@ use crate::{
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
 };
 use if_chain::if_chain;
-use itertools::Itertools;
-use std::{cmp::Ordering, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
+use std::ops::Range;
 use tree_walker::TreeWalker;
+use crate::core::{CREATE_FUNCTION, INIT_PROGRAM};
+use crate::parser::span::Span;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -67,13 +69,6 @@ macro_rules! push_instruction {
             .push_instruction($inst, $span);
     };
 }
-
-/// Name of the user-overridable initializer function for objects
-const CREATE_FUNCTION: &str = "create";
-
-/// Name of the function for initialization of a program's global variables.
-// Note, it needs to be unparsable (i.e. cannot be overridden by the user)
-pub const INIT_PROGRAM: &str = "init-program";
 
 /// Partition on whether the value is stored in registers or memory, to help select instructions.
 /// tl;dr - Value types use `Register`, while reference types use `Memory`.
@@ -152,16 +147,25 @@ impl CodegenWalker {
     /// # Arguments
     /// `context` - The [`Context`] state that this tree walker will use for its internal workings.
     pub fn new(context: CompilationContext) -> Self {
+        let num_globals = context.num_globals;
+        let num_init_registers = context.num_init_registers;
+
         let mut result = Self {
             context,
             ..Self::default()
         };
+
+        result.global_counter.set(num_globals);
+        result.global_init_registers = num_init_registers;
+        result.register_counter.set(num_init_registers);
 
         result.setup_init();
 
         result
     }
 
+    /// Create the combined initialization function, with code taken from all
+    /// of our inherited-from parents.
     pub fn setup_init(&mut self) {
         let prototype = FunctionPrototype::new(
             INIT_PROGRAM,
@@ -173,60 +177,52 @@ impl CodegenWalker {
             Vec::new(),
         );
 
-        self.function_stack.push(ProgramFunction::new(prototype, 0));
-    }
+        let mut func = ProgramFunction::new(prototype, 0);
 
-    /// Get a listing of a translated AST, suitable for printing
-    ///
-    /// # Examples
-    /// ```
-    /// use lpc_rs::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
-    /// use lpc_rs::ast::int_node::IntNode;
-    /// use lpc_rs::ast::expression_node::ExpressionNode;
-    /// use lpc_rs::codegen::codegen_walker::CodegenWalker;
-    /// use lpc_rs::codegen::tree_walker::TreeWalker;
-    /// use lpc_rs::compilation_context::CompilationContext;
-    ///
-    /// let mut node = BinaryOpNode {
-    ///     l: Box::new(ExpressionNode::Int(IntNode::new(123))),
-    ///     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
-    ///     op: BinaryOperation::Sub,
-    ///     span: None
-    /// };
-    /// let mut walker = CodegenWalker::new(CompilationContext::default());
-    ///
-    /// walker.visit_binary_op(&mut node);
-    ///
-    /// for instruction in walker.listing() {
-    ///     println!("{}", instruction);
-    /// }
-    /// ```
-    pub fn listing(&self) -> Vec<String> {
-        let functions = self.functions.values().sorted_unstable_by(|a, b| {
-            if a.name() == INIT_PROGRAM {
-                return Ordering::Less;
-            }
-            if b.name() == INIT_PROGRAM {
-                return Ordering::Greater;
-            }
+        let mut new_init_instructions = Vec::new();
+        let mut new_init_debug_spans = Vec::new();
+        self.combine_inits(&mut new_init_instructions, &mut new_init_debug_spans);
 
-            Ord::cmp(&a.name(), &b.name())
-        });
+        // self.context.inherits.iter().for_each(|inherit| {
+        //     if let Some(func) = inherit.functions.get(INIT_PROGRAM) {
+        //         new_init_instructions.extend(func.instructions.iter().cloned());
+        //         new_init_debug_spans.extend(func.debug_spans.iter());
+        //     }
+        // });
+        //
+        // let mut remove_idxs = Vec::new();
+        //
+        // for (idx, inst) in new_init_instructions.iter().enumerate() {
+        //     if matches!(inst, Instruction::Ret) {
+        //         remove_idxs.push(idx);
+        //     } else if let Some(Instruction::Call { name: INIT_PROGRAM, .. }) = inst {
+        //         remove_idxs.push(idx);
+        //     }
+        // }
 
-        functions.flat_map(|func| func.listing()).collect()
+        func.instructions = new_init_instructions;
+        func.debug_spans = new_init_debug_spans;
+
+        self.function_stack.push(func);
     }
 
     /// Convert this walker into a [`Program`]
-    pub fn into_program(self) -> Result<Program> {
+    pub fn into_program(mut self) -> Result<Program> {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         self.ensure_sync()?;
+
+        self.context.scopes.goto_root();
+        let global_variables = std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
 
         Ok(Program {
             filename: self.context.filename,
             functions: self.functions,
-            // add +1 to num_globals for r0, for call return values
+            global_variables,
+            // TODO: adding +1 is only because we skip r0 on the global counter,
+            //       which shouldn't be necessary.
             num_globals: self.global_counter.as_usize() + 1,
-            num_init_registers: self.register_counter.as_usize(),
+            // add +1 for r0
+            num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
             inherits: self.context.inherits,
             inherit_names: self.context.inherit_names,
@@ -239,7 +235,9 @@ impl CodegenWalker {
             let b = func.debug_spans.len();
             if a != b {
                 return Err(LpcError::new(format!(
-                        "Instructions (length {}) and `debug_spans` (length {}) for function `{}` are out of sync. This would be catastrophic at runtime, and indicates a major bug in the code generator.",
+                        concat!("Instructions (length {}) and `debug_spans` (length {}) for ",
+                                "function `{}` are out of sync. This would be catastrophic at ",
+                                "runtime, and indicates a major bug in the code generator."),
                         a, b, &func.name()
                     )));
             }
@@ -248,28 +246,9 @@ impl CodegenWalker {
         Ok(())
     }
 
-    /// Get a reference to a symbol in the current scope
-    fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
-        self.context.scopes.lookup(name)
-    }
-
-    /// Get a mutable reference to a symbol in the current scope
-    fn lookup_symbol_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        self.context.scopes.lookup_mut(name)
-    }
-
     /// Check for a symbol in the global scope
     fn lookup_global(&self, name: &str) -> Option<&Symbol> {
         self.context.scopes.lookup_global(name)
-    }
-
-    /// encapsulate vars that can find themselves if they're global
-    fn lookup_var_symbol(&self, node: &VarNode) -> Option<&Symbol> {
-        if node.global {
-            self.lookup_global(&node.name)
-        } else {
-            self.lookup_symbol(&node.name)
-        }
     }
 
     /// helper to choose operation instructions
@@ -313,7 +292,7 @@ impl CodegenWalker {
                 }
             }
             ExpressionNode::Var(v) => {
-                match self.lookup_var_symbol(v) {
+                match self.context.lookup_var(&v.name) {
                     Some(Symbol { type_: ty, .. }) => {
                         match ty {
                             LpcType::Int(false) => OperationType::Register,
@@ -402,7 +381,7 @@ impl CodegenWalker {
     fn assign_sym_location(&mut self, name: &str) -> Register {
         let current_register = self.register_counter.next().unwrap();
 
-        let symbol = self.lookup_symbol_mut(name);
+        let symbol = self.context.lookup_var_mut(name);
         if let Some(sym) = symbol {
             sym.location = Some(current_register);
         }
@@ -501,6 +480,64 @@ impl CodegenWalker {
             .unwrap()
             .labels
             .insert(label.into(), address);
+    }
+
+    /// Create the combined initializer from all of my inherited-from parents.
+    /// This method assumes that my immediate parents already have their own init
+    /// functions correctly combined from *their* parents, etc.
+    ///
+    /// # Arguments
+    /// * instructions: A mutable reference to a vector, where the combined instructions will be stored.
+    ///                 Done this way to avoid a lot of vector creations in the recursion.
+    /// * debug_spans: A mutable reference to a vector, where the debug spans of the
+    ///                combined instructions will be stored.
+    fn combine_inits(
+        &mut self,
+        instructions: &mut Vec<Instruction>,
+        debug_spans: &mut Vec<Option<Span>>
+    ) {
+        let calls_create = |instructions: &[Instruction]| -> bool {
+            let len = instructions.len();
+
+            if_chain! {
+                if len > 1;
+                if let Instruction::Call { name, .. } = &instructions[len - 2];
+                if name == CREATE_FUNCTION && matches!(&instructions[len - 1], Instruction::Ret);
+                then {
+                    true
+                } else {
+                    false
+                }
+            }
+        };
+
+        let get_range = |instructions: &[Instruction]| -> Range<usize> {
+            let len = instructions.len();
+            // remove any calls to `create` from the inherited initializers -
+            // we'll call it once at the end, if necessary.
+            if calls_create(instructions) {
+                0..len - 2
+            } else if len > 0 && matches!(&instructions[len - 1], Instruction::Ret) {
+                0..len - 1
+            } else {
+                0..len
+            }
+        };
+
+        let extend_instructions = |func: &Rc<ProgramFunction>, instructions: &mut Vec<Instruction>, debug_spans: &mut Vec<Option<Span>>| {
+            let range = get_range(&func.instructions);
+            if calls_create(instructions) {
+                instructions.truncate(instructions.len() - 2);
+                debug_spans.truncate(debug_spans.len() - 2);
+            }
+            instructions.extend(func.instructions[range.clone()].iter().cloned());
+            debug_spans.extend(func.debug_spans[range].iter());
+        };
+        for inherit in &self.context.inherits {
+            if let Some(func) = inherit.functions.get(INIT_PROGRAM) {
+                extend_instructions(func, instructions, debug_spans);
+            }
+        }
     }
 }
 
@@ -732,7 +769,7 @@ impl TreeWalker for CodegenWalker {
                 }
             } else {
                 if_chain! {
-                    if let Some(x) = self.lookup_symbol(&node.name);
+                    if let Some(x) = self.context.lookup_var(&node.name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
                         // if there's a function pointer with this name in scope, call that.
@@ -806,7 +843,7 @@ impl TreeWalker for CodegenWalker {
                 }
             } else {
                 if_chain! {
-                    if let Some(x) = self.lookup_symbol(&node.name);
+                    if let Some(x) = self.context.lookup_var(&node.name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
                         // if there's a function pointer with this name in scope, call that.
@@ -1161,7 +1198,7 @@ impl TreeWalker for CodegenWalker {
 
             // Determine if the name is a var, or a literal function name.
             // Vars take precedence.
-            let name = match self.lookup_symbol(&node.name) {
+            let name = match self.context.lookup_var(&node.name) {
                 Some(s) => {
                     if !s.type_.matches_type(LpcType::Function(false)) {
                         // if there are no function-type vars of this name, assume the name is literal
@@ -1304,16 +1341,17 @@ impl TreeWalker for CodegenWalker {
             .iter_mut()
             .partition(|x| matches!(**x, AstNode::Decl(_)));
 
-        // Hoist all global variables, and initialize them at the very start of the program
+        // Hoist all global variables, and initialize them at the very start
+        // of the program (i.e. at the time it's cloned)
         for node in global_init {
-            node.visit(self).unwrap();
+            node.visit(self)?;
         }
 
         if self.context.lookup_function(CREATE_FUNCTION).is_some() {
             let mut call = CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "create".to_string(),
+                name: CREATE_FUNCTION.to_string(),
                 span: None,
             };
             call.visit(self)?;
@@ -1330,8 +1368,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         let mut sym = self.function_stack.pop().unwrap();
-        sym.num_locals = self.register_counter.as_usize(); // TODO: is this correct?
-                                                           //     num_locals: self.process.num_init_registers,
+        sym.num_locals = self.register_counter.as_usize();
 
         self.functions.insert(sym.name().to_string(), sym.into());
 
@@ -1592,7 +1629,7 @@ impl TreeWalker for CodegenWalker {
             return self.visit_function_ptr(&mut fptr_node);
         }
 
-        let sym = match self.lookup_var_symbol(node) {
+        let sym = match self.context.lookup_var(&node.name) {
             Some(s) => s,
             None => {
                 return Err(
@@ -1626,7 +1663,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
-        let symbol = self.lookup_symbol(&node.name);
+        let symbol = self.context.lookup_var(&node.name);
 
         let sym = match symbol {
             Some(s) => s,
@@ -1664,8 +1701,7 @@ impl TreeWalker for CodegenWalker {
 
         if global {
             // Store the reference in the globals register.
-            // Using next() means global r0 is never used,
-            // but makes it possible to skip a bunch of conditionals.
+            // Using next() skips r0, just like functions.
             let dest_register = self.global_counter.next().unwrap();
             let instruction = Instruction::GStore(current_register, dest_register);
             self.global_init_registers = current_register.index();
@@ -1673,7 +1709,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         let current_global_register = self.global_counter.current();
-        let symbol = self.lookup_symbol_mut(&node.name);
+        let symbol = self.context.lookup_var_mut(&node.name);
 
         if let Some(sym) = symbol {
             if global {
@@ -1728,8 +1764,8 @@ mod tests {
         },
         codegen::scope_walker::ScopeWalker,
         lpc_parser,
-        parser::{lexer::LexWrapper, span::Span},
         LpcFloat,
+        parser::{lexer::LexWrapper, span::Span},
     };
 
     use super::*;
@@ -1740,11 +1776,13 @@ mod tests {
             function_prototype_walker::FunctionPrototypeWalker,
             semantic_check_walker::SemanticCheckWalker,
         },
-        compiler::{compiler_error::CompilerError, Compiler},
+        compiler::{Compiler, compiler_error::CompilerError},
         core::lpc_type::LpcType,
         errors,
         util::path_maker::LpcPath,
     };
+    use crate::codegen::inheritance_walker::InheritanceWalker;
+    use crate::util::config::Config;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
@@ -1757,7 +1795,8 @@ mod tests {
     }
 
     fn walk_code(code: &str) -> std::result::Result<CodegenWalker, CompilerError> {
-        let compiler = Compiler::default();
+        let config = Config::default().with_lib_dir("./tests/fixtures/code");
+        let compiler = Compiler::new(config.into());
         let (mut program, context) = compiler
             .parse_string(
                 &LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"),
@@ -1765,6 +1804,7 @@ mod tests {
             )
             .expect("failed to parse");
 
+        let context = apply_walker!(InheritanceWalker, program, context, false);
         let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);
@@ -1836,18 +1876,6 @@ mod tests {
                 static_: false,
                 location: Some(Register(666)),
                 scope_id: 0,
-                span: None,
-            };
-            insert_symbol(&mut walker, sym);
-
-            // push a different, local `marf`, to ensure that we don't find it for this assignment.
-            walker.context.scopes.push_new();
-            let sym = Symbol {
-                name: "marf".to_string(),
-                type_: LpcType::Int(false),
-                static_: false,
-                location: Some(Register(123)),
-                scope_id: 1,
                 span: None,
             };
             insert_symbol(&mut walker, sym);
@@ -3609,19 +3637,6 @@ mod tests {
                     span: None,
                 },
             );
-            // push a local scope with a matching variable in a different location
-            walker.context.scopes.push_new();
-            insert_symbol(
-                &mut walker,
-                Symbol {
-                    name: "marf".to_string(),
-                    type_: LpcType::Int(false),
-                    static_: false,
-                    location: Some(Register(222)),
-                    scope_id: 1,
-                    span: None,
-                },
-            );
 
             let mut node = VarNode {
                 name: "marf".to_string(),
@@ -4043,7 +4058,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 11)
+            assert_eq!(program.num_init_registers, 12)
         }
 
         #[test]
@@ -4059,6 +4074,110 @@ mod tests {
             let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 1)
         }
+    }
+
+    #[test]
+    fn tracks_inherited_globals_for_init() {
+        let code = r##"
+            inherit "/parent";
+            int i = 123, j;
+            string asdf = "asdf";
+            string b;
+        "##;
+
+        let program = walk_prog(code).into_program().expect("failed to compile");
+        let init = program.functions.get(INIT_PROGRAM).unwrap();
+
+        // println!("instructions {:#?}", init.instructions);
+        for s in &program.listing() {
+            println!("{}", s);
+        }
+        assert_eq!(init.num_locals, 9);
+        assert_eq!(program.num_globals, 9);
+        // println!("{:#?}", program);
+        // assert_eq!(program.inherited_globals, vec!["foo"]);
+    }
+
+
+    #[test]
+    fn test_combine_inits() {
+        let prototype = FunctionPrototype::new(
+            INIT_PROGRAM,
+            LpcType::Void,
+            Default::default(),
+            Default::default(),
+            None,
+            vec![],
+            vec![]
+        );
+        let create_prototype = FunctionPrototype::new(
+            CREATE_FUNCTION,
+            LpcType::Void,
+            Default::default(),
+            Default::default(),
+            None,
+            vec![],
+            vec![]
+        );
+
+        let mut grandparent_init = ProgramFunction::new(prototype.clone(), 0);
+        let grandparent_init_instructions = vec![
+            IConst1(Register(0)),
+            IConst(Register(0), 666),
+            Call {
+                name: CREATE_FUNCTION.to_string(),
+                num_args: 0,
+                initial_arg: Default::default()
+            },
+            Ret
+        ];
+        let grandparent_spans = vec![Some(Span { l: 0, r: 1, file_id: 1 }); grandparent_init_instructions.len()];
+        let _ = std::mem::replace(&mut grandparent_init.instructions, grandparent_init_instructions);
+        let _ = std::mem::replace(&mut grandparent_init.debug_spans, grandparent_spans);
+
+        let grandparent_create = ProgramFunction::new(create_prototype, 0);
+
+        let mut grandparent = Program::default();
+        grandparent.functions.insert(INIT_PROGRAM.to_string(), grandparent_init.into());
+        grandparent.functions.insert(CREATE_FUNCTION.to_string(), grandparent_create.into());
+
+        let mut parent_init = ProgramFunction::new(prototype.clone(), 0);
+        let parent_init_instructions = vec![
+            Instruction::IConst1(Register(0)),
+            Instruction::IConst(Register(0), 666),
+            Instruction::SConst(Register(1), "moop".to_string()),
+            Instruction::IConst(Register(5), 4321),
+            Call {
+                name: CREATE_FUNCTION.to_string(),
+                num_args: 0,
+                initial_arg: Default::default()
+            },
+            Instruction::Ret
+        ];
+        let parent_spans = vec![Some(Span { l: 0, r: 1, file_id: 1 }); parent_init_instructions.len()];
+        let _ = std::mem::replace(&mut parent_init.instructions, parent_init_instructions);
+        let _ = std::mem::replace(&mut parent_init.debug_spans, parent_spans);
+
+        let mut parent = Program::default();
+        parent.functions.insert(INIT_PROGRAM.to_string(), parent_init.into());
+        parent.inherits.push(grandparent);
+
+        let mut walker = default_walker();
+        walker.context.inherits.push(parent);
+
+        let expected = vec![
+            IConst1(Register(0)),
+            IConst(Register(0), 666),
+            SConst(Register(1), "moop".to_string()),
+            IConst(Register(5), 4321),
+            // Note call to create is added later in the process, at the end of visit_program()
+        ];
+
+        let mut new_instructions = vec![];
+        let mut new_spans = vec![];
+        walker.combine_inits(&mut new_instructions, &mut new_spans);
+
+        assert_eq!(new_instructions, expected);
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {

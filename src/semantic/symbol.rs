@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Representation of a Symbol, to be stored in the Scopes
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     /// The name of this symbol
     pub name: String,

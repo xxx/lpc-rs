@@ -149,11 +149,11 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
-        let sym = self.context.scopes.lookup(&node.name);
+        let sym = self.context.lookup_var(&node.name);
 
         if sym.is_none() {
             // check for functions e.g. declaring function pointers with no arguments
-            if self.context.lookup_function_complete(&node.name).is_some() {
+            if self.context.contains_function_complete(&node.name) {
                 node.set_function_name(true);
                 return Ok(());
             }
@@ -167,7 +167,7 @@ impl TreeWalker for ScopeWalker {
             }
         } else {
             let e =
-                LpcError::new(format!("Undefined variable `{}`", node.name)).with_span(node.span);
+                LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
 
             // We check for undefined vars here in case a symbol is subsequently defined.
             self.context.errors.push(e);

@@ -11,6 +11,14 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+use std::cmp::Ordering;
+use std::ops::Range;
+use if_chain::if_chain;
+use itertools::Itertools;
+use crate::asm::instruction::Instruction;
+use crate::core::{CREATE_FUNCTION, INIT_PROGRAM};
+use crate::parser::span::Span;
+use crate::semantic::symbol::Symbol;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -20,6 +28,10 @@ pub struct Program {
 
     /// function mapping of name to Symbol
     pub functions: HashMap<String, Rc<ProgramFunction>>,
+
+    /// The map of global variables in this program.
+    /// Note this only includes vars defined within this program's file.
+    pub global_variables: HashMap<String, Symbol>,
 
     /// How many globals does this program need storage for?
     pub num_globals: usize,
@@ -81,6 +93,49 @@ impl<'a> Program {
             Some(path) => Cow::Borrowed(path),
         }
     }
+
+    /// Get a listing of this Program's assembly language, suitable for printing
+    ///
+    /// # Examples
+    /// ```
+    /// use lpc_rs::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
+    /// use lpc_rs::ast::int_node::IntNode;
+    /// use lpc_rs::ast::expression_node::ExpressionNode;
+    /// use lpc_rs::codegen::codegen_walker::CodegenWalker;
+    /// use lpc_rs::codegen::tree_walker::TreeWalker;
+    /// use lpc_rs::compilation_context::CompilationContext;
+    /// use lpc_rs::compiler::Compiler;
+    ///
+    /// let code = r#"
+    ///     void foo() {
+    ///         dump("sup?");
+    ///     }
+    /// "#;
+    ///
+    /// let compiler = Compiler::default();
+    /// let program = compiler
+    ///     .compile_string("~/my_file.c", code)
+    ///     .expect("Failed to compile.");
+    ///
+    /// for instruction in program.listing() {
+    ///     println!("{}", instruction);
+    /// }
+    /// ```
+
+    pub fn listing(&self) -> Vec<String> {
+        let functions = self.functions.values().sorted_unstable_by(|a, b| {
+            if a.name() == INIT_PROGRAM {
+                return Ordering::Less;
+            }
+            if b.name() == INIT_PROGRAM {
+                return Ordering::Greater;
+            }
+
+            Ord::cmp(&a.name(), &b.name())
+        });
+
+        functions.flat_map(|func| func.listing()).collect()
+    }
 }
 
 impl From<Vec<u8>> for Program {
@@ -98,8 +153,12 @@ impl Display for Program {
 
 #[cfg(test)]
 mod tests {
+    use crate::asm::instruction::Instruction::Call;
     use super::*;
     use crate::compiler::Compiler;
+    use crate::core::lpc_type::LpcType;
+    use crate::core::register::Register;
+    use crate::semantic::function_prototype::FunctionPrototype;
 
     #[test]
     fn test_serialization_and_deserialization() {

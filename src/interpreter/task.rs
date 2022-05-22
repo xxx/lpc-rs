@@ -1,6 +1,5 @@
 use crate::{
     asm::instruction::{Address, Instruction},
-    codegen::codegen_walker::INIT_PROGRAM,
     core::{function_arity::FunctionArity, register::Register},
     errors::LpcError,
     interpreter::{
@@ -11,6 +10,7 @@ use crate::{
         },
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
+        MAX_CALL_STACK_SIZE,
         memory::Memory,
         object_space::ObjectSpace,
         process::Process,
@@ -18,16 +18,16 @@ use crate::{
         register_bank::RegisterBank,
         stack_frame::StackFrame,
         task_context::TaskContext,
-        MAX_CALL_STACK_SIZE,
     },
+    LpcInt,
+    Result,
     semantic::program_function::ProgramFunction,
-    try_extract_value,
-    util::config::Config,
-    LpcInt, Result,
+    try_extract_value, util::config::Config,
 };
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use crate::core::INIT_PROGRAM;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

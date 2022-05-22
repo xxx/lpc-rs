@@ -1,16 +1,16 @@
 use crate::{
-    codegen::codegen_walker::INIT_PROGRAM,
-    compiler::{compiler_error::CompilerError, Compiler},
+    compiler::{Compiler, compiler_error::CompilerError},
     errors::LpcError,
     interpreter::{
-        efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
-        task::Task, MAX_CALL_STACK_SIZE,
+        efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, MAX_CALL_STACK_SIZE,
+        process::Process, task::Task,
     },
+    Result,
     try_extract_value,
     util::path_maker::LpcPath,
-    Result,
 };
 use std::{cell::RefCell, rc::Rc};
+use crate::core::INIT_PROGRAM;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,

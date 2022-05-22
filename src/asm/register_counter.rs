@@ -51,6 +51,11 @@ impl RegisterCounter {
 
         self.count
     }
+
+    /// Set a new value on the counter
+    pub fn set(&mut self, new_val: usize) {
+        self.count = new_val;
+    }
 }
 
 impl Iterator for RegisterCounter {
@@ -112,5 +117,16 @@ mod tests {
         counter.go_back();
 
         assert_eq!(counter.current(), Register(2));
+    }
+
+    #[test]
+    fn test_set_updates_the_count() {
+        let mut counter = RegisterCounter::default();
+
+        assert_eq!(counter.current(), Register(0));
+
+        counter.set(5);
+
+        assert_eq!(counter.current(), Register(5));
     }
 }

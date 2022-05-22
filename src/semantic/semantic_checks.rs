@@ -315,13 +315,11 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
         ExpressionNode::Var(VarNode { name, span, .. }) => {
-            let scope_tree = &context.scopes;
-            match scope_tree.lookup(name) {
+            match context.lookup_var(name) {
                 Some(sym) => Ok(sym.type_),
                 None => {
-                    if context.function_prototypes.contains_key(name.as_str())
-                        || EFUN_PROTOTYPES.contains_key(name.as_str())
-                    {
+                    if context.contains_function_complete(name.as_str()) {
+                        // TODO: check for private / protected
                         Ok(LpcType::Function(false))
                     } else {
                         return Err(

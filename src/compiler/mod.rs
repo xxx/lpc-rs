@@ -237,14 +237,20 @@ impl Compiler {
             return Err(CompilerError::LpcError(e));
         }
 
-        for s in asm_walker.listing() {
-            println!("{}", s);
-        }
+        // for s in asm_walker.listing() {
+        //     println!("{}", s);
+        // }
 
         let program = match asm_walker.into_program() {
             Ok(p) => p,
             Err(e) => return Err(CompilerError::LpcError(e)),
         };
+
+        println!("{}", program.filename);
+        for s in program.listing() {
+            println!("{}", s);
+        }
+        println!();
 
         // let msgpack = program.to_msgpack();
         // println!("{:?}", msgpack.len());
