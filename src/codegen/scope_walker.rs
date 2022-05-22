@@ -18,6 +18,7 @@ use crate::{
     semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
     Result,
 };
+use crate::semantic::global_var_flags::GlobalVarFlags;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -105,10 +106,10 @@ impl TreeWalker for ScopeWalker {
             let sym = Symbol {
                 name: ARGV.to_string(),
                 type_: LpcType::Mixed(true),
-                static_: false,
                 location: None,
                 scope_id: scope_id.into(),
                 span: node.span,
+                flags: GlobalVarFlags::default(),
             };
 
             self.insert_symbol(sym);
@@ -279,10 +280,10 @@ mod tests {
             walker.insert_symbol(Symbol {
                 name: "foo".to_string(),
                 type_: LpcType::String(false),
-                static_: false,
                 location: None,
                 scope_id: 0,
                 span: None,
+                flags: GlobalVarFlags::default(),
             });
 
             (walker, node)
@@ -350,10 +351,10 @@ mod tests {
             walker.insert_symbol(Symbol {
                 name: "foo".to_string(),
                 type_: LpcType::Int(false),
-                static_: false,
                 location: None,
                 scope_id: 0, // denotes a global symbol
                 span: None,
+                flags: GlobalVarFlags::default(),
             });
 
             let _ = walker.visit_var(&mut node);

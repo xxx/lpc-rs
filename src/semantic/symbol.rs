@@ -4,6 +4,7 @@ use crate::{
     parser::span::Span,
     semantic::function_prototype::FunctionPrototype,
 };
+use crate::semantic::global_var_flags::GlobalVarFlags;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -12,14 +13,14 @@ pub struct Symbol {
     pub name: String,
     /// The type of this var
     pub type_: LpcType,
-    /// Is this var static?
-    pub static_: bool,
     /// Which register is tracking this variable?
     pub location: Option<Register>,
     /// to which scope do i belong?
     pub scope_id: usize,
     /// The text span that first defined this symbol.
     pub span: Option<Span>,
+    /// The flags, used for global variables
+    pub flags: GlobalVarFlags,
 }
 
 impl Symbol {
@@ -28,10 +29,10 @@ impl Symbol {
         Self {
             name: String::from(name),
             type_,
-            static_: false,
             location: None,
             scope_id: 0,
             span: None,
+            flags: GlobalVarFlags::default(),
         }
     }
 
@@ -47,6 +48,7 @@ impl From<&mut VarInitNode> for Symbol {
 
         Self {
             span: node.span,
+            flags: node.flags.unwrap_or_default(),
             ..s
         }
     }
@@ -57,10 +59,10 @@ impl From<&FunctionPrototype> for Symbol {
         Self {
             name: proto.name.clone().into_owned(),
             type_: LpcType::Function(false),
-            static_: false, // proto.flags.static_()
             location: None,
             scope_id: 0,
             span: proto.span,
+            flags: GlobalVarFlags::default(),
         }
     }
 }

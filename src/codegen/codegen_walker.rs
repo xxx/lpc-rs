@@ -1798,6 +1798,7 @@ mod tests {
         errors,
         util::{config::Config, path_maker::LpcPath},
     };
+    use crate::semantic::global_var_flags::GlobalVarFlags;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
@@ -1877,6 +1878,7 @@ mod tests {
     }
 
     mod test_visit_assignment {
+        use crate::semantic::global_var_flags::GlobalVarFlags;
         use super::*;
 
         #[test]
@@ -1888,10 +1890,10 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
-                static_: false,
                 location: Some(Register(666)),
                 scope_id: 0,
                 span: None,
+                flags: GlobalVarFlags::default(),
             };
             insert_symbol(&mut walker, sym);
 
@@ -1928,10 +1930,10 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
-                static_: false,
                 location: Some(Register(666)),
                 scope_id: 1,
                 span: None,
+                flags: GlobalVarFlags::default(),
             };
 
             insert_symbol(&mut walker, sym);
@@ -1962,10 +1964,10 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(true),
-                static_: false,
                 location: Some(Register(666)),
                 scope_id: 1,
                 span: None,
+                flags: GlobalVarFlags::default(),
             };
 
             insert_symbol(&mut walker, sym);
@@ -3003,14 +3005,14 @@ mod tests {
             Symbol {
                 name: String::from("foo"),
                 type_: LpcType::Int(false),
-                static_: false,
                 location: Some(Register(0)),
                 scope_id: 0,
                 span: Some(Span {
                     file_id: 0,
                     l: 4,
                     r: 11
-                })
+                }),
+                flags: GlobalVarFlags::default(),
             }
         );
         assert_eq!(
@@ -3018,14 +3020,14 @@ mod tests {
             Symbol {
                 name: String::from("bar"),
                 type_: LpcType::Int(true),
-                static_: false,
                 location: Some(Register(1)),
                 scope_id: 0,
                 span: Some(Span {
                     file_id: 0,
                     l: 13,
                     r: 25
-                })
+                }),
+                flags: GlobalVarFlags::default(),
             }
         );
     }
@@ -3646,10 +3648,10 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    static_: false,
                     location: Some(Register(666)),
                     scope_id: 0,
                     span: None,
+                    flags: GlobalVarFlags::default(),
                 },
             );
 
@@ -3679,10 +3681,10 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    static_: false,
                     location: Some(Register(444)),
                     scope_id: 0,
                     span: None,
+                    flags: GlobalVarFlags::default(),
                 },
             );
             walker.context.scopes.push_new(); // push a local scope
@@ -3691,10 +3693,10 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    static_: false,
                     location: Some(Register(666)),
                     scope_id: 1,
                     span: None,
+                    flags: GlobalVarFlags::default(),
                 },
             );
 

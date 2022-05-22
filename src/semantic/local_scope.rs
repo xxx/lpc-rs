@@ -58,6 +58,7 @@ impl Default for LocalScope {
 mod tests {
     use super::*;
     use crate::core::lpc_type::LpcType;
+    use crate::semantic::global_var_flags::GlobalVarFlags;
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {
@@ -70,9 +71,9 @@ mod tests {
             name: "foo".to_string(),
             type_: LpcType::Int(false),
             scope_id: 0,
-            static_: false,
             location: None,
             span: None,
+            flags: GlobalVarFlags::default(),
         };
 
         scope.insert(sym);
