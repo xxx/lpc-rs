@@ -155,9 +155,12 @@ impl CodegenWalker {
             ..Self::default()
         };
 
-        result.global_counter.set(num_globals);
+        // subtract 1 because globals are stored in global r0 as well.
+        result.global_counter.set(num_globals.saturating_sub(1));
+
         result.global_init_registers = num_init_registers;
-        result.register_counter.set(num_init_registers);
+        // subtract 1, so the next() call gives us the correct next register.
+        result.register_counter.set(num_init_registers.saturating_sub(1));
 
         result.setup_init();
 
@@ -182,23 +185,6 @@ impl CodegenWalker {
         let mut new_init_instructions = Vec::new();
         let mut new_init_debug_spans = Vec::new();
         self.combine_inits(&mut new_init_instructions, &mut new_init_debug_spans);
-
-        // self.context.inherits.iter().for_each(|inherit| {
-        //     if let Some(func) = inherit.functions.get(INIT_PROGRAM) {
-        //         new_init_instructions.extend(func.instructions.iter().cloned());
-        //         new_init_debug_spans.extend(func.debug_spans.iter());
-        //     }
-        // });
-        //
-        // let mut remove_idxs = Vec::new();
-        //
-        // for (idx, inst) in new_init_instructions.iter().enumerate() {
-        //     if matches!(inst, Instruction::Ret) {
-        //         remove_idxs.push(idx);
-        //     } else if let Some(Instruction::Call { name: INIT_PROGRAM, .. }) = inst {
-        //         remove_idxs.push(idx);
-        //     }
-        // }
 
         func.instructions = new_init_instructions;
         func.debug_spans = new_init_debug_spans;
@@ -4108,16 +4094,9 @@ mod tests {
         let program = walk_prog(code).into_program().expect("failed to compile");
         let init = program.functions.get(INIT_PROGRAM).unwrap();
 
-        // println!("instructions {:#?}", init.instructions);
-        for s in &program.listing() {
-            println!("{}", s);
-        }
         assert_eq!(program.num_globals, 9);
         assert_eq!(init.num_locals, 9);
-        // println!("{:#?}", program);
-        // assert_eq!(program.inherited_globals, vec!["foo"]);
     }
-
 
     #[test]
     fn test_combine_inits() {

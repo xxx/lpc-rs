@@ -66,6 +66,9 @@ impl RegisterCounter {
 
     /// Set a new value on the counter
     pub fn set(&mut self, new_val: usize) {
+        if self.start_at_zero {
+            self.emitted_zero = new_val != 0;
+        }
         self.count = new_val;
     }
 }
@@ -95,6 +98,13 @@ mod tests {
         assert_eq!(counter.next(), Some(Register(1)));
         assert_eq!(counter.next(), Some(Register(2)));
         assert_eq!(counter.next(), Some(Register(3)));
+
+        let mut counter = RegisterCounter::default();
+        counter.start_at_zero(true);
+
+        assert_eq!(counter.next(), Some(Register(0)));
+        assert_eq!(counter.next(), Some(Register(1)));
+        assert_eq!(counter.next(), Some(Register(2)));
     }
 
     #[test]
@@ -141,9 +151,29 @@ mod tests {
         let mut counter = RegisterCounter::default();
 
         assert_eq!(counter.current(), Register(0));
+        assert_eq!(counter.next(), Some(Register(1)));
 
         counter.set(5);
 
         assert_eq!(counter.current(), Register(5));
+    }
+
+    #[test]
+    fn test_set_with_start_at_zero() {
+        let mut counter = RegisterCounter::default();
+        counter.start_at_zero(true);
+
+        assert_eq!(counter.current(), Register(0));
+
+        assert_eq!(counter.next(), Some(Register(0)));
+        assert_eq!(counter.next(), Some(Register(1)));
+        assert_eq!(counter.next(), Some(Register(2)));
+
+        counter.set(5);
+        assert_eq!(counter.next(), Some(Register(6)));
+
+        counter.set(0);
+
+        assert_eq!(counter.next(), Some(Register(0)));
     }
 }
