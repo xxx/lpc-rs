@@ -236,6 +236,7 @@ impl From<HashMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 #[cfg(test)]
 mod tests {
     use crate::{ast::binary_op_node::BinaryOperation, LpcFloat};
+    use crate::core::call_namespace::CallNamespace;
 
     use super::*;
 
@@ -285,6 +286,7 @@ mod tests {
             arguments: vec![],
             name: "foo".to_string(),
             span: None,
+            namespace: CallNamespace::default(),
         };
 
         let clone = node.clone();

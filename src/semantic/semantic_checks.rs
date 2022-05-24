@@ -379,6 +379,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::call_namespace::CallNamespace;
 
     mod check_binary_operation_tests {
         use super::*;
@@ -1865,6 +1866,7 @@ mod tests {
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
                     name: "clone_object".to_string(),
                     span: None,
+                    namespace: CallNamespace::default(),
                 });
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));

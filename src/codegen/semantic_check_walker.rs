@@ -559,6 +559,7 @@ mod tests {
     };
     use claim::*;
     use std::{collections::HashMap, default::Default};
+    use crate::core::call_namespace::CallNamespace;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
@@ -950,6 +951,7 @@ mod tests {
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut function_prototypes = HashMap::new();
@@ -987,6 +989,7 @@ mod tests {
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut function_prototypes = HashMap::new();
@@ -1026,6 +1029,7 @@ mod tests {
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let prototype = FunctionPrototype {
@@ -1064,6 +1068,7 @@ mod tests {
                 arguments: vec![],
                 name: "known".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let prototype = FunctionPrototype {
@@ -1102,6 +1107,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "dump".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let context = empty_context();
@@ -1118,6 +1124,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "my_function_pointer".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut scopes = ScopeTree::default();
@@ -1142,6 +1149,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "my_mixed_function_pointer".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut scopes = ScopeTree::default();
@@ -1166,6 +1174,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
                 name: "my_non_function_pointer".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut scopes = ScopeTree::default();
@@ -1194,6 +1203,7 @@ mod tests {
                 arguments: vec![],
                 name: "unknown".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let context = empty_context();
@@ -1209,6 +1219,7 @@ mod tests {
                 arguments: vec![],
                 name: "dump".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let context = empty_context();
@@ -1230,6 +1241,7 @@ mod tests {
                 ], // `call_other` is specified as having 2 arguments, but we're passing more
                 name: "call_other".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let context = empty_context();
@@ -1245,6 +1257,7 @@ mod tests {
                 arguments: vec![],
                 name: "my_function".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut function_prototypes = HashMap::new();
@@ -1292,6 +1305,7 @@ mod tests {
                 arguments: vec![],
                 name: "my_func".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut function_prototypes = HashMap::new();
@@ -1332,6 +1346,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(123)],
                 name: "my_func".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut function_prototypes = HashMap::new();
@@ -1371,6 +1386,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(0)],
                 name: "my_func".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let mut function_prototypes = HashMap::new();
@@ -1410,6 +1426,7 @@ mod tests {
                 arguments: vec![],
                 name: "dump".to_string(),
                 span: None,
+                namespace: CallNamespace::default(),
             });
 
             let context = empty_context();

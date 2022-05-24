@@ -35,6 +35,7 @@ use crate::ast::var_node::VarNode;
 use crate::ast::var_init_node::VarInitNode;
 use crate::ast::while_node::WhileNode;
 use crate::core::lpc_type::LpcType;
+use crate::core::call_namespace::CallNamespace;
 use crate::parser::collapse_binary_op::collapse_binary_op;
 use crate::parser::collapse_unary_op::collapse_unary_op;
 use crate::parser::span::{Span, combine_spans};
@@ -825,28 +826,30 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 }
 
 pub Call: CallNode = {
-    <namespace:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
-        let arguments = match list {
-            Some(args) => args,
-            None => vec![]
-        };
+    <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
+        let arguments = list.unwrap_or_else(|| Vec::new());
 
-        let file_id = name.0.file_id;
-        let l = name.0.l;
+        let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
+        let file_id = left.file_id;
+        let l = left.l;
         let r = right.r;
 
         CallNode {
             receiver: None,
             arguments,
             name: name.1,
-            span: Some(Span { file_id, l, r })
+            span: Some(Span { file_id, l, r }),
+            namespace
         }
     }
 };
 
-CallNamespace: () = {
-    <namespace:"ID"?> "::" => ()
-}
+CallNamespace: (Span, CallNamespace) = {
+    <name:"ID"?> <colons:"::"> => {
+        name.map(|nm| (nm.0, CallNamespace::Named(nm.1)))
+            .unwrap_or_else(|| (colons, CallNamespace::Parent))
+    }
+};
 
 AssignmentOp: AssignmentOperation = {
     "=" => AssignmentOperation::Simple,

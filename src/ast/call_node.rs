@@ -14,6 +14,7 @@ use crate::{
     Result,
 };
 use itertools::Itertools;
+use crate::core::call_namespace::CallNamespace;
 
 /// Representation of a function call.
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
@@ -29,6 +30,9 @@ pub struct CallNode {
 
     /// The text span in the original file that this node represents. Used for error messages.
     pub span: Option<Span>,
+
+    /// When searching for this function, where do we start?
+    pub namespace: CallNamespace,
 }
 
 impl SpannedNode for CallNode {
@@ -47,7 +51,7 @@ impl Display for CallNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let args = self.arguments.iter().map(|a| a.to_string()).join(" ,");
         let fmt = lazy_format!(
-            if let Some(e) = &self.receiver => ("{}->{}({})", e, self.name, args)
+            if let Some(e) = &self.receiver => ("{}->{}{}({})", e, self.namespace, self.name, args)
             else ("{}({})", self.name, args)
         );
         write!(f, "{}", fmt)

@@ -61,6 +61,7 @@ use crate::{
 use if_chain::if_chain;
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::core::call_namespace::CallNamespace;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1349,6 +1350,7 @@ impl TreeWalker for CodegenWalker {
                 arguments: vec![],
                 name: CREATE_FUNCTION.to_string(),
                 span: None,
+                namespace: CallNamespace::default()
             };
             call.visit(self)?;
         }
@@ -3055,6 +3057,7 @@ mod tests {
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
                     span: None,
+                    namespace: CallNamespace::default(),
                 })),
                 scope_id: None,
                 span: None,
@@ -3122,6 +3125,7 @@ mod tests {
                         arguments: vec![ExpressionNode::Var(var)],
                         name: "dump".to_string(),
                         span: None,
+                        namespace: CallNamespace::default(),
                     })],
                     scope_id: None,
                 })),
@@ -3253,12 +3257,14 @@ mod tests {
                     arguments: vec![ExpressionNode::from("true")],
                     name: "dump".to_string(),
                     span: None,
+                    namespace: CallNamespace::default(),
                 })),
                 else_clause: Box::new(Some(AstNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("false")],
                     name: "dump".to_string(),
                     span: None,
+                    namespace: CallNamespace::default(),
                 }))),
                 scope_id: None,
                 span: None,
@@ -3913,6 +3919,7 @@ mod tests {
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
                     name: "clone_object".to_string(),
                     span: None,
+                    namespace: CallNamespace::default(),
                 })),
                 array: false,
                 global: false,
@@ -4024,6 +4031,7 @@ mod tests {
                     arguments: vec![ExpressionNode::from("body")],
                     name: "dump".to_string(),
                     span: None,
+                    namespace: CallNamespace::default(),
                 })),
                 scope_id: None,
                 span: None,
