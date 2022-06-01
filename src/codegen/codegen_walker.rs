@@ -886,7 +886,7 @@ impl TreeWalker for CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) = self.context.lookup_function_complete(&node.name) {
+        if let Some(func) = self.context.lookup_function_complete(&node.name, &node.namespace) {
             if func.return_type == LpcType::Void {
                 self.current_result = Register(0);
             } else {
@@ -1190,7 +1190,8 @@ impl TreeWalker for CodegenWalker {
                 varargs: true,
                 ellipsis: true,
             };
-        } else if let Some(prototype) = self.context.lookup_function(node.name.as_str()) {
+        } else if let Some(prototype) = self.context.lookup_function(node.name.as_str(), &CallNamespace::Local) {
+            // TODO: function pointers need to namespace their calls as well
             // A local / inherited function
 
             // Determine if the name is a var, or a literal function name.
@@ -1344,7 +1345,7 @@ impl TreeWalker for CodegenWalker {
             node.visit(self)?;
         }
 
-        if self.context.lookup_function(CREATE_FUNCTION).is_some() {
+        if self.context.lookup_function(CREATE_FUNCTION, &CallNamespace::Local).is_some() {
             let mut call = CallNode {
                 receiver: None,
                 arguments: vec![],

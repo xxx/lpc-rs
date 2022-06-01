@@ -56,3 +56,9 @@ impl FunctionPrototype {
         }
     }
 }
+
+impl AsRef<FunctionPrototype> for FunctionPrototype {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}

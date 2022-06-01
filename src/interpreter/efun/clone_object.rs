@@ -11,6 +11,7 @@ use crate::{
     Result,
 };
 use std::{cell::RefCell, rc::Rc};
+use crate::core::call_namespace::CallNamespace;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
@@ -31,7 +32,7 @@ fn load_master<const N: usize>(
                     let process: Rc<RefCell<Process>> = Process::new(prog).into();
                     context.insert_process(process.clone());
                     let borrowed = process.borrow();
-                    let function = borrowed.lookup_function(INIT_PROGRAM);
+                    let function = borrowed.lookup_function(INIT_PROGRAM,&CallNamespace::Local);
                     match function {
                         Some(prog_function) => {
                             let new_context =
@@ -91,7 +92,7 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
         {
             let borrowed = new_clone.borrow();
-            let function = borrowed.lookup_function(INIT_PROGRAM);
+            let function = borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
 
             match function {
                 Some(prog_function) => {

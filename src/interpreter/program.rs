@@ -1,6 +1,7 @@
 use crate::{
     interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction,
     util::path_maker::LpcPath,
+    core::EFUN,
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
@@ -14,8 +15,10 @@ use std::{
 };
 
 use itertools::Itertools;
+use crate::core::call_namespace::CallNamespace;
 
 use crate::core::INIT_PROGRAM;
+use crate::interpreter::efun::EFUN_PROTOTYPES;
 
 use crate::semantic::symbol::Symbol;
 
@@ -59,30 +62,65 @@ impl<'a> Program {
 
     /// Look up a function by its name, starting from this program,
     /// and searching all of its inherited-from programs, last-declared-inherit first.
-    pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<ProgramFunction>>
+    pub fn lookup_function<T>(&self, name: T, namespace: &CallNamespace) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
-        self.functions
-            .get(name.as_ref())
-            // note we look up in reverse here, so the last inherit takes precedence
-            .or_else(|| {
-                self.inherits
-                    .iter()
-                    .rev()
-                    .find_map(|p| p.lookup_function(name.as_ref()))
-            })
+        let r = name.as_ref();
+
+        let find_in_inherit = || {
+            self
+                .inherits
+                .iter()
+                .rev()
+                .find_map(|p| p.lookup_function(r, &CallNamespace::Local))
+        };
+
+        match namespace {
+            CallNamespace::Local => self.functions.get(r).or_else(|| find_in_inherit()),
+            CallNamespace::Parent => find_in_inherit(),
+            CallNamespace::Named(ns) => {
+                self.inherit_names.get(ns).map(|i| {
+                    self.inherits
+                        .get(*i)
+                        .map(|p| p.lookup_function(name, &CallNamespace::Local))
+                        .flatten()
+                }).flatten()
+            }
+        }
     }
 
     /// Return whether or not we have a function with this name either locally,
     /// or in any of our inherited-from parents.
-    pub fn contains_function<T>(&self, name: T) -> bool
+    pub fn contains_function<T>(&self, name: T, namespace: &CallNamespace) -> bool
     where
         T: AsRef<str>,
     {
-        self.functions.contains_key(name.as_ref()) ||
-            // note we look up in reverse here, so the last inherit takes precedence
-            self.inherits.iter().rev().any(|p| p.contains_function(name.as_ref()))
+        let r = name.as_ref();
+
+        let find_in_inherit = || {
+            self.inherits
+                .iter()
+                .rev()
+                .any(|p| p.contains_function(r, &CallNamespace::Local))
+        };
+
+        match namespace {
+            CallNamespace::Local => self.functions.contains_key(r) || find_in_inherit(),
+            CallNamespace::Parent => find_in_inherit(),
+            CallNamespace::Named(ns) => {
+                match ns.as_str() {
+                    EFUN => EFUN_PROTOTYPES.contains_key(r),
+                    ns => {
+                        self.inherit_names.get(ns).map(|i| {
+                            self.inherits
+                                .get(*i)
+                                .map(|p| p.contains_function(name, &CallNamespace::Local))
+                        }).flatten().unwrap_or(false)
+                    }
+                }
+            }
+        }
     }
 
     /// Get the directory of this program. Used for clone_object, etc.

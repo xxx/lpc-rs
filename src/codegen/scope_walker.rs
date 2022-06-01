@@ -20,6 +20,7 @@ use crate::{
     },
     Result,
 };
+use crate::core::call_namespace::CallNamespace;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -155,7 +156,7 @@ impl TreeWalker for ScopeWalker {
 
         if sym.is_none() {
             // check for functions e.g. declaring function pointers with no arguments
-            if self.context.contains_function_complete(&node.name) {
+            if self.context.contains_function_complete(&node.name, &CallNamespace::default()) {
                 node.set_function_name(true);
                 return Ok(());
             }

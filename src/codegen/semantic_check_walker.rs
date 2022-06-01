@@ -33,6 +33,7 @@ use crate::{
     },
     Result,
 };
+use crate::core::call_namespace::CallNamespace;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -170,13 +171,21 @@ impl TreeWalker for SemanticCheckWalker {
             return Ok(());
         }
 
+        if let CallNamespace::Named(namespace) = &node.namespace {
+            if !self.context.inherit_names.contains_key(namespace) {
+                let e = LpcError::new(format!("unknown namespace `{}`", namespace))
+                    .with_span(node.span);
+                self.context.errors.push(e);
+            }
+        }
+
         for argument in &mut node.arguments {
             argument.visit(self)?;
         }
 
         let lookup = self.context.scopes.lookup(&node.name);
         // Check function existence.
-        if !self.context.contains_function_complete(node.name.as_str())
+        if !self.context.contains_function_complete(node.name.as_str(), &CallNamespace::default())
             // check for function pointers & closures
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
@@ -187,7 +196,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         // Further checks require access to the function prototype for error messaging
-        let proto_opt = self.context.lookup_function_complete(&node.name);
+        let proto_opt = self.context.lookup_function_complete(&node.name, &node.namespace);
 
         let mut errors = Vec::new();
 
@@ -935,14 +944,10 @@ mod tests {
 
     mod test_visit_call {
         use super::*;
-        use crate::{
-            core::function_arity::FunctionArity,
-            interpreter::program::Program,
-            semantic::{
-                function_flags::FunctionFlags, program_function::ProgramFunction,
-                visibility::Visibility,
-            },
-        };
+        use crate::{assert_regex, core::function_arity::FunctionArity, interpreter::program::Program, semantic::{
+            function_flags::FunctionFlags, program_function::ProgramFunction,
+            visibility::Visibility,
+        }};
 
         #[test]
         fn allows_known_functions() {
@@ -1062,6 +1067,206 @@ mod tests {
         }
 
         #[test]
+        fn allows_parent_namespaced_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+                namespace: CallNamespace::Parent,
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default(),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_private_parent_namespaced_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+                namespace: CallNamespace::Parent,
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::from(vec!["private"]),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(!walker.context.errors.is_empty());
+            assert_regex!(&walker.context.errors[0].to_string(), "call to private function `known`");
+        }
+
+        #[test]
+        fn allows_named_namespaced_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+                namespace: CallNamespace::Named("parent".to_string()),
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default(),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            context.inherit_names.insert("parent".into(), context.inherits.len() - 1);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_private_named_namespaced_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+                namespace: CallNamespace::Named("parent".to_string()),
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::from(vec!["private"]),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            context.inherit_names.insert("parent".into(), context.inherits.len() - 1);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(!walker.context.errors.is_empty());
+            assert_regex!(&walker.context.errors[0].to_string(), "call to private function `known`");
+        }
+
+        #[test]
+        fn disallows_unknown_named_namespaced_inherited_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "known".to_string(),
+                span: None,
+                namespace: CallNamespace::Named("unknown_namespace".to_string()),
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default(),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(!walker.context.errors.is_empty());
+            assert_regex!(&walker.context.errors[0].to_string(), "unknown namespace `unknown_namespace`");
+        }
+
+        #[test]
         fn disallows_private_inherited_functions() {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
@@ -1098,6 +1303,7 @@ mod tests {
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
+            assert_regex!(&walker.context.errors[0].to_string(), "call to private function `known`");
         }
 
         #[test]

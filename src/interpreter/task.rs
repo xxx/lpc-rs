@@ -27,6 +27,7 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use crate::core::call_namespace::CallNamespace;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -108,7 +109,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         O: Into<Rc<RefCell<ObjectSpace>>>,
     {
         let init_function = {
-            let function = program.lookup_function(INIT_PROGRAM);
+            let function = program.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
             if function.is_none() {
                 return Err(LpcError::new("Init function not found?"));
             }
@@ -311,7 +312,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let s = frame.resolve_function_name(&func_name)?;
                         let proc_ref = &frame.process;
                         let borrowed_proc = proc_ref.borrow();
-                        let sym = borrowed_proc.lookup_function(&*s);
+                        // TODO: namespace needs to be available in this instruction
+                        let sym = borrowed_proc.lookup_function(&*s, &CallNamespace::Local);
                         if sym.is_none() {
                             return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
                         }
@@ -701,7 +703,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
                 let borrowed = process.borrow();
-                let function = borrowed.lookup_function(name);
+                // TODO: namespace needs to be made available to this instruction
+                let function = borrowed.lookup_function(name, &CallNamespace::Local);
                 let mut new_frame = if let Some(func) = function {
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
@@ -735,7 +738,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         .clone_from_slice(&registers[index..(index + num_args)]);
                 }
 
-                let function_is_local = frame.process.borrow().contains_function(name);
+                let function_is_local = frame.process.borrow().contains_function(name, &CallNamespace::Local);
 
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
@@ -966,6 +969,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             receiver_ref,
                             function_name,
                             task_context,
+                            &CallNamespace::Local
                         );
 
                         if let Some(pr) = resolved {
@@ -979,10 +983,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                     let new_context =
                                         task_context.clone().with_process(receiver.clone());
-                                    // unwrap() is safe because resolve_call_other_receiver() checks for the function's presence.
+                                    // unwrap() is ok because resolve_call_other_receiver() checks for the function's presence.
                                     let function = receiver
                                         .borrow()
-                                        .lookup_function(function_name)
+                                        // TODO: namespace needs to be made available to this instruction
+                                        .lookup_function(function_name, &CallNamespace::Local)
                                         .unwrap()
                                         .clone();
 
@@ -1246,6 +1251,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         receiver_ref: &LpcRef,
         name: &str,
         context: &TaskContext,
+        namespace: &CallNamespace,
     ) -> Option<Rc<RefCell<Process>>> {
         let process = match receiver_ref {
             LpcRef::String(s) => {
@@ -1274,7 +1280,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process.borrow().contains_function(name) {
+        if process.borrow().contains_function(name, namespace) {
             Some(process)
         } else {
             None

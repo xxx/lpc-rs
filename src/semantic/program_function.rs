@@ -6,6 +6,7 @@ use crate::{
 };
 use multimap::MultiMap;
 use std::{borrow::Cow, collections::HashMap};
+use std::rc::Rc;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -106,5 +107,11 @@ impl ProgramFunction {
 impl AsRef<FunctionPrototype> for ProgramFunction {
     fn as_ref(&self) -> &FunctionPrototype {
         &self.prototype
+    }
+}
+
+impl AsRef<FunctionPrototype> for Rc<ProgramFunction> {
+    fn as_ref(&self) -> &FunctionPrototype {
+        &(*self).prototype
     }
 }

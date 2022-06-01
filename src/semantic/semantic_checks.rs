@@ -20,6 +20,7 @@ use crate::{
     semantic::local_scope::LocalScope,
     Result,
 };
+use crate::core::call_namespace::CallNamespace;
 
 /// Utility functions for doing various semantic checks.
 
@@ -318,7 +319,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             match context.lookup_var(name) {
                 Some(sym) => Ok(sym.type_),
                 None => {
-                    if context.contains_function_complete(name.as_str()) {
+                    if context.contains_function_complete(name.as_str(), &CallNamespace::default()) {
                         // TODO: check for private / protected
                         Ok(LpcType::Function(false))
                     } else {
