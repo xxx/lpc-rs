@@ -166,8 +166,15 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        // call_other is not type checked
         if node.receiver.is_some() {
+            if &node.namespace != &CallNamespace::Local {
+                let e = LpcError::new(format!("namespaced `call_other` is not allowed"))
+                    .with_span(node.span)
+                    .with_note("You can only call local functions via `call_other`.");
+                self.context.errors.push(e);
+            }
+
+            // call_other is not type checked
             return Ok(());
         }
 
@@ -1639,6 +1646,23 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
             assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_non_local_namespace_with_call_other() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: Some(Box::new(ExpressionNode::from(23))),
+                arguments: vec![],
+                name: "dump".to_string(),
+                span: None,
+                namespace: CallNamespace::Parent,
+            });
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+            assert!(!walker.context.errors.is_empty());
+            assert_regex!(&walker.context.errors[0].to_string(), "namespaced `call_other` is not allowed");
         }
     }
 
