@@ -142,24 +142,16 @@ impl CompilationContext {
         };
 
         match namespace {
-            CallNamespace::Local => self
-                .function_prototypes
-                .get(r)
-                .or_else(find_in_inherit),
+            CallNamespace::Local => self.function_prototypes.get(r).or_else(find_in_inherit),
             CallNamespace::Parent => find_in_inherit(),
             CallNamespace::Named(ns) => match ns.as_str() {
                 EFUN => EFUN_PROTOTYPES.get(r),
-                ns => self
-                    .inherit_names
-                    .get(ns)
-                    .and_then(|i| {
-                        self.inherits
-                            .get(*i)
-                            .and_then(|p| {
-                                p.lookup_function(name, &CallNamespace::Local)
-                                    .map(|f| &f.prototype)
-                            })
-                    }),
+                ns => self.inherit_names.get(ns).and_then(|i| {
+                    self.inherits.get(*i).and_then(|p| {
+                        p.lookup_function(name, &CallNamespace::Local)
+                            .map(|f| &f.prototype)
+                    })
+                }),
             },
         }
     }

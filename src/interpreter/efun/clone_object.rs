@@ -121,11 +121,15 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_regex, interpreter::{
-        memory::Memory, object_space::ObjectSpace, program::Program, task_context::TaskContext,
-    }, util::config::Config};
+    use crate::{
+        assert_regex,
+        interpreter::{
+            memory::Memory, object_space::ObjectSpace, program::Program, task_context::TaskContext,
+        },
+        test_support::compile_prog,
+        util::config::Config,
+    };
     use indoc::indoc;
-    use crate::test_support::compile_prog;
 
     fn task_context_fixture(program: Program, config: Rc<Config>) -> TaskContext {
         let process = Process::new(program);

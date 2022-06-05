@@ -168,8 +168,8 @@ impl TreeWalker for SemanticCheckWalker {
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         if node.receiver.is_some() {
             if node.namespace != CallNamespace::Local {
-                let e = LpcError::new("namespaced `call_other` is not allowed")
-                    .with_span(node.span);
+                let e =
+                    LpcError::new("namespaced `call_other` is not allowed").with_span(node.span);
                 self.context.errors.push(e);
             }
 

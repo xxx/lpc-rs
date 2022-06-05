@@ -80,14 +80,11 @@ impl<'a> Program {
         match namespace {
             CallNamespace::Local => self.functions.get(r).or_else(find_in_inherit),
             CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => self
-                .inherit_names
-                .get(ns)
-                .and_then(|i| {
-                    self.inherits
-                        .get(*i)
-                        .and_then(|p| p.lookup_function(name, &CallNamespace::Local))
-                }),
+            CallNamespace::Named(ns) => self.inherit_names.get(ns).and_then(|i| {
+                self.inherits
+                    .get(*i)
+                    .and_then(|p| p.lookup_function(name, &CallNamespace::Local))
+            }),
         }
     }
 
