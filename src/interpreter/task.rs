@@ -697,14 +697,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         match instruction {
             Instruction::Call {
                 name,
+                namespace,
                 num_args,
                 initial_arg,
             } => {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
                 let borrowed = process.borrow();
-                // TODO: namespace needs to be made available to this instruction
-                let function = borrowed.lookup_function(name, &CallNamespace::Local);
+                let function = borrowed.lookup_function(name, namespace);
                 let mut new_frame = if let Some(func) = function {
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
@@ -1419,31 +1419,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 mod tests {
     use super::*;
     use crate::{
-        compiler::Compiler, extract_value, interpreter::MAX_CALL_STACK_SIZE, LpcFloat, LpcInt,
+        extract_value, LpcFloat, LpcInt,
     };
     use indoc::indoc;
     use std::{
         collections::HashMap,
         hash::{Hash, Hasher},
     };
-
-    /// TODO: share this
-    fn compile_prog(code: &str) -> Program {
-        let compiler = Compiler::default();
-        compiler
-            .compile_string("/my_file.c", code)
-            .expect("Failed to compile.")
-    }
-
-    fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
-        let mut task = Task::new(Memory::default());
-        let program = compile_prog(code);
-        let ctx = task
-            .initialize_program(program, Config::default(), ObjectSpace::default())
-            .expect("failed to initialize");
-
-        (task, ctx)
-    }
+    use crate::test_support::{run_prog, compile_prog};
 
     /// A type to make it easier to set up test expectations for register contents
     #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1671,6 +1654,27 @@ mod tests {
                 let expected = vec![Int(666), Int(666)];
 
                 assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn calls_correct_function() {
+                let code = indoc! { r##"
+                    inherit "/std/object";
+                    mixed mine = public_function();
+                    mixed parents = ::public_function();
+
+                    string public_function() {
+                        return "my public_function";
+                    }
+                "##};
+
+                let (_task, ctx) = run_prog(code);
+
+                let proc = ctx.process();
+                let borrowed = proc.borrow();
+                let values = borrowed.global_variable_values();
+                assert_eq!(String("my public_function".into()), *values.get("mine").unwrap().borrow());
+                assert_eq!(String("/std/object public".into()), *values.get("parents").unwrap().borrow());
             }
         }
 

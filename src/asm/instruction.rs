@@ -9,6 +9,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use crate::core::call_namespace::CallNamespace;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -32,6 +33,7 @@ pub enum Instruction {
     /// Call a function
     Call {
         name: String,
+        namespace: CallNamespace,
         num_args: usize,
         initial_arg: Register,
     },
@@ -235,10 +237,11 @@ impl Display for Instruction {
             }
             Instruction::Call {
                 name,
+                namespace,
                 num_args,
                 initial_arg,
             } => {
-                write!(f, "call {}, {}, {}", name, num_args, initial_arg)
+                write!(f, "call {}, {}, {}, {}", name, namespace, num_args, initial_arg)
             }
             Instruction::CallFp {
                 location,

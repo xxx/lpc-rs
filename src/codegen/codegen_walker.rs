@@ -788,6 +788,7 @@ impl TreeWalker for CodegenWalker {
                     } else {
                         Instruction::Call {
                             name: node.name.clone(),
+                            namespace: node.namespace.clone(),
                             num_args: arg_results.len(),
                             initial_arg: arg_results[0],
                         }
@@ -863,6 +864,7 @@ impl TreeWalker for CodegenWalker {
                     } else {
                         Instruction::Call {
                             name: node.name.clone(),
+                            namespace: node.namespace.clone(),
                             num_args: arg_results.len(),
                             initial_arg: start_register,
                         }
@@ -2258,6 +2260,7 @@ mod tests {
                 Jz(Register(3), "while-end_2".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2267,6 +2270,7 @@ mod tests {
                 SConst(Register(6), "breaking".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(6),
                 },
@@ -2307,6 +2311,7 @@ mod tests {
                 Jz(Register(3), "for-end_2".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2316,6 +2321,7 @@ mod tests {
                 SConst(Register(6), "breaking".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(6),
                 },
@@ -2356,6 +2362,7 @@ mod tests {
             let expected = vec![
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2365,6 +2372,7 @@ mod tests {
                 SConst(Register(4), "breaking".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(4),
                 },
@@ -2409,6 +2417,7 @@ mod tests {
                 SConst(Register(2), "YEAH BABY".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(2),
                 },
@@ -2416,12 +2425,14 @@ mod tests {
                 SConst(Register(3), "very".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(3),
                 },
                 SConst(Register(4), "weak".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(4),
                 },
@@ -2471,6 +2482,7 @@ mod tests {
                 IConst(Register(1), -1),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2642,6 +2654,7 @@ mod tests {
                 IConst(Register(1), 666),
                 Call {
                     name: String::from("marfin"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2679,6 +2692,7 @@ mod tests {
                 IConst(Register(1), 666),
                 Call {
                     name: String::from("void_thing"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2701,6 +2715,7 @@ mod tests {
                 SConst(Register(1), String::from("/foo.c")),
                 Call {
                     name: String::from("clone_object"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2724,6 +2739,7 @@ mod tests {
                 SConst(Register(1), String::from("lkajsdflkajsdf")),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2765,6 +2781,7 @@ mod tests {
                 RegCopy(Register(3), Register(6)),
                 Call {
                     name: "my_func".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 3,
                     initial_arg: Register(4),
                 },
@@ -2792,6 +2809,7 @@ mod tests {
             IConst(Register(1), 127983),
             Call {
                 name: String::from("dump"),
+                namespace: CallNamespace::Local,
                 num_args: 1,
                 initial_arg: Register(1),
             },
@@ -2850,6 +2868,7 @@ mod tests {
                 Jz(Register(3), "while-end_2".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2859,6 +2878,7 @@ mod tests {
                 SConst(Register(6), "goin' infinite!".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(6),
                 },
@@ -2899,6 +2919,7 @@ mod tests {
                 Jz(Register(3), "for-end_2".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2908,6 +2929,7 @@ mod tests {
                 SConst(Register(6), "goin' infinite!".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(6),
                 },
@@ -2948,6 +2970,7 @@ mod tests {
             let expected = vec![
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -2957,6 +2980,7 @@ mod tests {
                 SConst(Register(4), "goin' infinite!".into()),
                 Call {
                     name: "dump".into(),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(4),
                 },
@@ -3069,6 +3093,7 @@ mod tests {
                 SConst(Register(1), String::from("body")),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -3146,6 +3171,7 @@ mod tests {
                 Jz(Register(1), "for-end_1".into()),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(1),
                 },
@@ -3280,6 +3306,7 @@ mod tests {
                 SConst(Register(4), String::from("true")),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(4),
                 },
@@ -3287,6 +3314,7 @@ mod tests {
                 SConst(Register(5), String::from("false")),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(5),
                 },
@@ -3334,6 +3362,7 @@ mod tests {
             let expected = vec![
                 Call {
                     name: String::from("create"),
+                    namespace: CallNamespace::Local,
                     num_args: 0,
                     initial_arg: Register(1),
                 },
@@ -3350,6 +3379,7 @@ mod tests {
                 IConst(Register(2), 9),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(2),
                 },
@@ -3404,6 +3434,7 @@ mod tests {
                 GStore(Register(1), Register(0)),
                 Call {
                     name: String::from("create"),
+                    namespace: CallNamespace::Local,
                     num_args: 0,
                     initial_arg: Register(2),
                 },
@@ -3937,6 +3968,7 @@ mod tests {
                     SConst(Register(1), String::from("/foo/bar.c")),
                     Call {
                         name: String::from("clone_object"),
+                        namespace: CallNamespace::Local,
                         num_args: 1,
                         initial_arg: Register(1)
                     },
@@ -4047,6 +4079,7 @@ mod tests {
                 SConst(Register(4), String::from("body")),
                 Call {
                     name: String::from("dump"),
+                    namespace: CallNamespace::Local,
                     num_args: 1,
                     initial_arg: Register(4),
                 },
@@ -4144,6 +4177,7 @@ mod tests {
             IConst(Register(0), 666),
             Call {
                 name: CREATE_FUNCTION.to_string(),
+                namespace: CallNamespace::Local,
                 num_args: 0,
                 initial_arg: Default::default(),
             },
@@ -4181,6 +4215,7 @@ mod tests {
             Instruction::IConst(Register(5), 4321),
             Call {
                 name: CREATE_FUNCTION.to_string(),
+                namespace: CallNamespace::Local,
                 num_args: 0,
                 initial_arg: Default::default(),
             },
