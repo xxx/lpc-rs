@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 pub enum CallNamespace {
     Local,
     Parent,
-    Named(String)
+    Named(String),
 }
 
 impl Default for CallNamespace {
@@ -18,7 +18,7 @@ impl Display for CallNamespace {
         match self {
             CallNamespace::Local => write!(f, ""),
             CallNamespace::Parent => write!(f, "::"),
-            CallNamespace::Named(name) => write!(f, "{}::", name)
+            CallNamespace::Named(name) => write!(f, "{}::", name),
         }
     }
 }

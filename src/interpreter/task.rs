@@ -1,6 +1,9 @@
 use crate::{
     asm::instruction::{Address, Instruction},
-    core::{function_arity::FunctionArity, register::Register, INIT_PROGRAM},
+    core::{
+        call_namespace::CallNamespace, function_arity::FunctionArity, register::Register,
+        INIT_PROGRAM,
+    },
     errors::LpcError,
     interpreter::{
         call_stack::CallStack,
@@ -27,7 +30,6 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
-use crate::core::call_namespace::CallNamespace;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -738,7 +740,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         .clone_from_slice(&registers[index..(index + num_args)]);
                 }
 
-                let function_is_local = frame.process.borrow().contains_function(name, &CallNamespace::Local);
+                let function_is_local = frame
+                    .process
+                    .borrow()
+                    .contains_function(name, &CallNamespace::Local);
 
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
@@ -969,7 +974,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             receiver_ref,
                             function_name,
                             task_context,
-                            &CallNamespace::Local
+                            &CallNamespace::Local,
                         );
 
                         if let Some(pr) = resolved {
@@ -1419,14 +1424,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 mod tests {
     use super::*;
     use crate::{
-        extract_value, LpcFloat, LpcInt,
+        extract_value,
+        test_support::{compile_prog, run_prog},
+        LpcFloat, LpcInt,
     };
     use indoc::indoc;
     use std::{
         collections::HashMap,
         hash::{Hash, Hasher},
     };
-    use crate::test_support::{run_prog, compile_prog};
 
     /// A type to make it easier to set up test expectations for register contents
     #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1673,8 +1679,14 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.borrow();
                 let values = borrowed.global_variable_values();
-                assert_eq!(String("my public_function".into()), *values.get("mine").unwrap().borrow());
-                assert_eq!(String("/std/object public".into()), *values.get("parents").unwrap().borrow());
+                assert_eq!(
+                    String("my public_function".into()),
+                    *values.get("mine").unwrap().borrow()
+                );
+                assert_eq!(
+                    String("/std/object public".into()),
+                    *values.get("parents").unwrap().borrow()
+                );
             }
         }
 

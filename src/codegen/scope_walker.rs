@@ -13,14 +13,13 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    core::lpc_type::LpcType,
+    core::{call_namespace::CallNamespace, lpc_type::LpcType},
     errors::LpcError,
     semantic::{
         global_var_flags::GlobalVarFlags, semantic_checks::check_var_redefinition, symbol::Symbol,
     },
     Result,
 };
-use crate::core::call_namespace::CallNamespace;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -156,7 +155,10 @@ impl TreeWalker for ScopeWalker {
 
         if sym.is_none() {
             // check for functions e.g. declaring function pointers with no arguments
-            if self.context.contains_function_complete(&node.name, &CallNamespace::default()) {
+            if self
+                .context
+                .contains_function_complete(&node.name, &CallNamespace::default())
+            {
                 node.set_function_name(true);
                 return Ok(());
             }

@@ -3,12 +3,12 @@ use delegate::delegate;
 use std::{
     borrow::Cow,
     cell::RefCell,
+    collections::HashMap,
     fmt::{Display, Formatter},
     ops::Deref,
     path::Path,
     rc::Rc,
 };
-use std::collections::HashMap;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -58,15 +58,19 @@ impl Process {
 
     /// Get a HashMap of global variable names to their current values
     pub fn global_variable_values(&self) -> HashMap<&str, &RefCell<LpcRef>> {
-        self.program.global_variables.iter().filter_map(|(k, v)| {
-            if v.location.is_none() {
-                return None;
-            }
+        self.program
+            .global_variables
+            .iter()
+            .filter_map(|(k, v)| {
+                if v.location.is_none() {
+                    return None;
+                }
 
-            let idx = v.location.unwrap().index();
-            let value = &self.globals[idx];
-            Some((k.as_str(), value))
-        }).collect()
+                let idx = v.location.unwrap().index();
+                let value = &self.globals[idx];
+                Some((k.as_str(), value))
+            })
+            .collect()
     }
 
     /// Get the filename of this process, including the clone ID suffix if present.

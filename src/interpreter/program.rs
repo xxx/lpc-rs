@@ -1,7 +1,6 @@
 use crate::{
-    interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction,
-    util::path_maker::LpcPath,
-    core::EFUN,
+    core::EFUN, interpreter::pragma_flags::PragmaFlags,
+    semantic::program_function::ProgramFunction, util::path_maker::LpcPath,
 };
 use rmp_serde::Serializer;
 use serde::Serialize;
@@ -14,11 +13,10 @@ use std::{
     rc::Rc,
 };
 
-use itertools::Itertools;
 use crate::core::call_namespace::CallNamespace;
+use itertools::Itertools;
 
-use crate::core::INIT_PROGRAM;
-use crate::interpreter::efun::EFUN_PROTOTYPES;
+use crate::{core::INIT_PROGRAM, interpreter::efun::EFUN_PROTOTYPES};
 
 use crate::semantic::symbol::Symbol;
 
@@ -62,15 +60,18 @@ impl<'a> Program {
 
     /// Look up a function by its name, starting from this program,
     /// and searching all of its inherited-from programs, last-declared-inherit first.
-    pub fn lookup_function<T>(&self, name: T, namespace: &CallNamespace) -> Option<&Rc<ProgramFunction>>
+    pub fn lookup_function<T>(
+        &self,
+        name: T,
+        namespace: &CallNamespace,
+    ) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
         let r = name.as_ref();
 
         let find_in_inherit = || {
-            self
-                .inherits
+            self.inherits
                 .iter()
                 .rev()
                 .find_map(|p| p.lookup_function(r, &CallNamespace::Local))
@@ -79,14 +80,16 @@ impl<'a> Program {
         match namespace {
             CallNamespace::Local => self.functions.get(r).or_else(|| find_in_inherit()),
             CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => {
-                self.inherit_names.get(ns).map(|i| {
+            CallNamespace::Named(ns) => self
+                .inherit_names
+                .get(ns)
+                .map(|i| {
                     self.inherits
                         .get(*i)
                         .map(|p| p.lookup_function(name, &CallNamespace::Local))
                         .flatten()
-                }).flatten()
-            }
+                })
+                .flatten(),
         }
     }
 
@@ -108,18 +111,19 @@ impl<'a> Program {
         match namespace {
             CallNamespace::Local => self.functions.contains_key(r) || find_in_inherit(),
             CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => {
-                match ns.as_str() {
-                    EFUN => EFUN_PROTOTYPES.contains_key(r),
-                    ns => {
-                        self.inherit_names.get(ns).map(|i| {
-                            self.inherits
-                                .get(*i)
-                                .map(|p| p.contains_function(name, &CallNamespace::Local))
-                        }).flatten().unwrap_or(false)
-                    }
-                }
-            }
+            CallNamespace::Named(ns) => match ns.as_str() {
+                EFUN => EFUN_PROTOTYPES.contains_key(r),
+                ns => self
+                    .inherit_names
+                    .get(ns)
+                    .map(|i| {
+                        self.inherits
+                            .get(*i)
+                            .map(|p| p.contains_function(name, &CallNamespace::Local))
+                    })
+                    .flatten()
+                    .unwrap_or(false),
+            },
         }
     }
 

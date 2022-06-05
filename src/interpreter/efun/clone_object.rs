@@ -1,6 +1,6 @@
 use crate::{
     compiler::{compiler_error::CompilerError, Compiler},
-    core::INIT_PROGRAM,
+    core::{call_namespace::CallNamespace, INIT_PROGRAM},
     errors::LpcError,
     interpreter::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
@@ -11,7 +11,6 @@ use crate::{
     Result,
 };
 use std::{cell::RefCell, rc::Rc};
-use crate::core::call_namespace::CallNamespace;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
@@ -32,7 +31,7 @@ fn load_master<const N: usize>(
                     let process: Rc<RefCell<Process>> = Process::new(prog).into();
                     context.insert_process(process.clone());
                     let borrowed = process.borrow();
-                    let function = borrowed.lookup_function(INIT_PROGRAM,&CallNamespace::Local);
+                    let function = borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
                     match function {
                         Some(prog_function) => {
                             let new_context =

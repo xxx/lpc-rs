@@ -1,5 +1,5 @@
 use crate::{
-    core::{function_arity::FunctionArity, register::Register},
+    core::{call_namespace::CallNamespace, function_arity::FunctionArity, register::Register},
     interpreter::function_type::FunctionTarget,
     LpcFloat, LpcInt,
 };
@@ -9,7 +9,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use crate::core::call_namespace::CallNamespace;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -241,7 +240,11 @@ impl Display for Instruction {
                 num_args,
                 initial_arg,
             } => {
-                write!(f, "call {}, {}, {}, {}", name, namespace, num_args, initial_arg)
+                write!(
+                    f,
+                    "call {}, {}, {}, {}",
+                    name, namespace, num_args, initial_arg
+                )
             }
             Instruction::CallFp {
                 location,

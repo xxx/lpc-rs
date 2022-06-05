@@ -48,8 +48,8 @@ use crate::{
     asm::instruction::Instruction::RegCopy,
     ast::function_ptr_node::FunctionPtrNode,
     core::{
-        function_arity::FunctionArity, lpc_type::LpcType, register::Register, CREATE_FUNCTION,
-        INIT_PROGRAM,
+        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
+        register::Register, CREATE_FUNCTION, INIT_PROGRAM,
     },
     interpreter::{
         efun::EFUN_PROTOTYPES,
@@ -61,7 +61,6 @@ use crate::{
 use if_chain::if_chain;
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::core::call_namespace::CallNamespace;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -888,7 +887,10 @@ impl TreeWalker for CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) = self.context.lookup_function_complete(&node.name, &node.namespace) {
+        if let Some(func) = self
+            .context
+            .lookup_function_complete(&node.name, &node.namespace)
+        {
             if func.return_type == LpcType::Void {
                 self.current_result = Register(0);
             } else {
@@ -1192,7 +1194,10 @@ impl TreeWalker for CodegenWalker {
                 varargs: true,
                 ellipsis: true,
             };
-        } else if let Some(prototype) = self.context.lookup_function(node.name.as_str(), &CallNamespace::Local) {
+        } else if let Some(prototype) = self
+            .context
+            .lookup_function(node.name.as_str(), &CallNamespace::Local)
+        {
             // A local / inherited function
 
             // Determine if the name is a var, or a literal function name.
@@ -1346,13 +1351,17 @@ impl TreeWalker for CodegenWalker {
             node.visit(self)?;
         }
 
-        if self.context.lookup_function(CREATE_FUNCTION, &CallNamespace::Local).is_some() {
+        if self
+            .context
+            .lookup_function(CREATE_FUNCTION, &CallNamespace::Local)
+            .is_some()
+        {
             let mut call = CallNode {
                 receiver: None,
                 arguments: vec![],
                 name: CREATE_FUNCTION.to_string(),
                 span: None,
-                namespace: CallNamespace::default()
+                namespace: CallNamespace::default(),
             };
             call.visit(self)?;
         }

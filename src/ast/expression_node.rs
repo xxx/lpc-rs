@@ -235,8 +235,9 @@ impl From<HashMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ast::binary_op_node::BinaryOperation, LpcFloat};
-    use crate::core::call_namespace::CallNamespace;
+    use crate::{
+        ast::binary_op_node::BinaryOperation, core::call_namespace::CallNamespace, LpcFloat,
+    };
 
     use super::*;
 

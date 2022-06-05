@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use crate::{
     ast::expression_node::ExpressionNode,
+    core::EFUN,
     interpreter::efun::EFUN_PROTOTYPES,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
-    core::EFUN,
 };
 
 use crate::{
-    core::lpc_type::LpcType,
+    core::{call_namespace::CallNamespace, lpc_type::LpcType},
     errors::LpcError,
     interpreter::{pragma_flags::PragmaFlags, program::Program},
     semantic::symbol::Symbol,
@@ -16,7 +16,6 @@ use crate::{
 };
 use delegate::delegate;
 use std::rc::Rc;
-use crate::core::call_namespace::CallNamespace;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -124,44 +123,57 @@ impl CompilationContext {
     }
 
     /// Look-up a function by name, then check inherited parents if not found
-    pub fn lookup_function<T>(&self, name: T, namespace: &CallNamespace) -> Option<&FunctionPrototype>
+    pub fn lookup_function<T>(
+        &self,
+        name: T,
+        namespace: &CallNamespace,
+    ) -> Option<&FunctionPrototype>
     where
         T: AsRef<str>,
     {
         let r = name.as_ref();
 
         let find_in_inherit = || {
-            self
-                .inherits
-                .iter()
-                .rev()
-                .find_map(|inherit| {
-                    inherit.lookup_function(r, &CallNamespace::Local).map(|f| &f.prototype)
-                })
+            self.inherits.iter().rev().find_map(|inherit| {
+                inherit
+                    .lookup_function(r, &CallNamespace::Local)
+                    .map(|f| &f.prototype)
+            })
         };
 
         match namespace {
-            CallNamespace::Local => self.function_prototypes.get(r).or_else(|| find_in_inherit()),
+            CallNamespace::Local => self
+                .function_prototypes
+                .get(r)
+                .or_else(|| find_in_inherit()),
             CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => {
-                match ns.as_str() {
-                    EFUN => EFUN_PROTOTYPES.get(r),
-                    ns => self.inherit_names.get(ns).map(|i| {
+            CallNamespace::Named(ns) => match ns.as_str() {
+                EFUN => EFUN_PROTOTYPES.get(r),
+                ns => self
+                    .inherit_names
+                    .get(ns)
+                    .map(|i| {
                         self.inherits
                             .get(*i)
                             .map(|p| {
-                                p.lookup_function(name, &CallNamespace::Local).map(|f| &f.prototype)
-                            }).flatten()
-                    }).flatten()
-                }
-            }
+                                p.lookup_function(name, &CallNamespace::Local)
+                                    .map(|f| &f.prototype)
+                            })
+                            .flatten()
+                    })
+                    .flatten(),
+            },
         }
     }
 
     /// Look-up a function locally, and fall back to checking the efuns if a
     /// function with the passed name isn't found either locally or in
     /// inherited-from parents.
-    pub fn lookup_function_complete<T>(&self, name: T, namespace: &CallNamespace) -> Option<&FunctionPrototype>
+    pub fn lookup_function_complete<T>(
+        &self,
+        name: T,
+        namespace: &CallNamespace,
+    ) -> Option<&FunctionPrototype>
     where
         T: AsRef<str>,
     {
@@ -181,17 +193,13 @@ impl CompilationContext {
 
     fn valid_namespace(&self, ns: &CallNamespace) -> bool {
         match ns {
-            CallNamespace::Local
-            | CallNamespace::Parent => true,
-            CallNamespace::Named(ns) => {
-                match ns.as_str() {
-                    EFUN => true,
-                    ns => self.inherit_names.contains_key(ns)
-                }
-            }
+            CallNamespace::Local | CallNamespace::Parent => true,
+            CallNamespace::Named(ns) => match ns.as_str() {
+                EFUN => true,
+                ns => self.inherit_names.contains_key(ns),
+            },
         }
     }
-
 
     /// Do I, or one of my parents, contain a function with this name?
     pub fn contains_function(&self, name: &str, namespace: &CallNamespace) -> bool {
@@ -203,20 +211,23 @@ impl CompilationContext {
         };
 
         match namespace {
-            CallNamespace::Local => self.function_prototypes.contains_key(name) || find_in_inherit(),
-            CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => {
-                match ns.as_str() {
-                    EFUN => EFUN_PROTOTYPES.contains_key(name),
-                    ns => {
-                        self.inherit_names.get(ns).map(|i| {
-                            self.inherits
-                                .get(*i)
-                                .map(|p| p.contains_function(name, &CallNamespace::Local))
-                        }).flatten().unwrap_or(false)
-                    }
-                }
+            CallNamespace::Local => {
+                self.function_prototypes.contains_key(name) || find_in_inherit()
             }
+            CallNamespace::Parent => find_in_inherit(),
+            CallNamespace::Named(ns) => match ns.as_str() {
+                EFUN => EFUN_PROTOTYPES.contains_key(name),
+                ns => self
+                    .inherit_names
+                    .get(ns)
+                    .map(|i| {
+                        self.inherits
+                            .get(*i)
+                            .map(|p| p.contains_function(name, &CallNamespace::Local))
+                    })
+                    .flatten()
+                    .unwrap_or(false),
+            },
         }
     }
 
@@ -340,10 +351,14 @@ mod tests {
             .insert("this_object".into(), efun_override.clone());
 
         let overridden = make_program_function("foo");
-        inherited.functions.insert("foo".into(), overridden.clone().into());
+        inherited
+            .functions
+            .insert("foo".into(), overridden.clone().into());
 
         let named_overridden = make_program_function("foo");
-        named_inherit.functions.insert("foo".into(), named_overridden.clone().into());
+        named_inherit
+            .functions
+            .insert("foo".into(), named_overridden.clone().into());
 
         let inherited_proto = make_program_function("hello_friends");
         inherited
@@ -457,13 +472,15 @@ mod tests {
 
         assert_eq!(
             // specifically-named namespace
-            context.lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into())),
+            context
+                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into())),
             Some(&named_overridden.prototype)
         );
 
         assert_eq!(
             // cannot get to efuns through non `efun` namespaces
-            context.lookup_function_complete("dump", &CallNamespace::Named("my_named_inherit".into())),
+            context
+                .lookup_function_complete("dump", &CallNamespace::Named("my_named_inherit".into())),
             None
         );
 
@@ -593,19 +610,26 @@ mod tests {
 
         assert_eq!(
             // specifically-named namespace
-            context.contains_function_complete("foo", &CallNamespace::Named("my_named_inherit".into())),
+            context.contains_function_complete(
+                "foo",
+                &CallNamespace::Named("my_named_inherit".into())
+            ),
             true
         );
 
         assert_eq!(
             // cannot get to efuns through non `efun` namespaces
-            context.contains_function_complete("dump", &CallNamespace::Named("my_named_inherit".into())),
+            context.contains_function_complete(
+                "dump",
+                &CallNamespace::Named("my_named_inherit".into())
+            ),
             false
         );
 
         assert_eq!(
             // unknown namespace
-            context.contains_function_complete("this_object", &CallNamespace::Named("blargh".into())),
+            context
+                .contains_function_complete("this_object", &CallNamespace::Named("blargh".into())),
             false
         );
 

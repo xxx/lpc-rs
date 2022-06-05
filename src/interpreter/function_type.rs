@@ -67,13 +67,11 @@ impl Display for FunctionTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FunctionTarget::Efun(name) => write!(f, "{}", name),
-            FunctionTarget::Local(name, receiver) => {
-                match receiver {
-                    FunctionReceiver::Local => write!(f, "{}", name),
-                    FunctionReceiver::Var(reg) => write!(f, "var({})->{}", reg, name),
-                    FunctionReceiver::Argument => write!(f, "&->{}", name),
-                }
-            }
+            FunctionTarget::Local(name, receiver) => match receiver {
+                FunctionReceiver::Local => write!(f, "{}", name),
+                FunctionReceiver::Var(reg) => write!(f, "var({})->{}", reg, name),
+                FunctionReceiver::Argument => write!(f, "&->{}", name),
+            },
         }
     }
 }

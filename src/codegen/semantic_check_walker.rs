@@ -13,6 +13,7 @@ use crate::{
         expression_node::ExpressionNode,
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
+        function_ptr_node::FunctionPtrNode,
         int_node::IntNode,
         label_node::LabelNode,
         program_node::ProgramNode,
@@ -26,15 +27,13 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    core::lpc_type::LpcType,
+    core::{call_namespace::CallNamespace, lpc_type::LpcType},
     errors::LpcError,
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },
     Result,
 };
-use crate::ast::function_ptr_node::FunctionPtrNode;
-use crate::core::call_namespace::CallNamespace;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -203,7 +202,9 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         // Further checks require access to the function prototype for error messaging
-        let proto_opt = self.context.lookup_function_complete(&node.name, &node.namespace);
+        let proto_opt = self
+            .context
+            .lookup_function_complete(&node.name, &node.namespace);
 
         let mut errors = Vec::new();
 
@@ -322,23 +323,28 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let proto_opt = self.context.lookup_function_complete(&node.name, &CallNamespace::default());
+        let proto_opt = self
+            .context
+            .lookup_function_complete(&node.name, &CallNamespace::default());
 
         if let Some(prototype) = proto_opt {
-            if prototype.flags.private() &&
-                !self
-                .context
-                .function_prototypes
-                .values()
-                .any(|val| val == prototype)
+            if prototype.flags.private()
+                && !self
+                    .context
+                    .function_prototypes
+                    .values()
+                    .any(|val| val == prototype)
             {
-                let e = LpcError::new(format!("attempt to point to private function `{}`", node.name))
-                    .with_span(node.span)
-                    .with_label("defined here", prototype.span)
-                    .with_note(
-                        concat!("A function pointer can only point to a private function if ",
-                                     "it is declared in the same file.")
-                    );
+                let e = LpcError::new(format!(
+                    "attempt to point to private function `{}`",
+                    node.name
+                ))
+                .with_span(node.span)
+                .with_label("defined here", prototype.span)
+                .with_note(concat!(
+                    "A function pointer can only point to a private function if ",
+                    "it is declared in the same file."
+                ));
                 self.context.errors.push(e.clone());
             }
         }
@@ -601,14 +607,13 @@ mod tests {
             semantic_check_walker::SemanticCheckWalker,
         },
         compiler::{compiler_error::CompilerError, Compiler},
-        core::lpc_type::LpcType,
+        core::{call_namespace::CallNamespace, lpc_type::LpcType},
         errors,
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
         util::path_maker::LpcPath,
     };
     use claim::*;
     use std::{collections::HashMap, default::Default};
-    use crate::core::call_namespace::CallNamespace;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
@@ -984,10 +989,15 @@ mod tests {
 
     mod test_visit_call {
         use super::*;
-        use crate::{assert_regex, core::function_arity::FunctionArity, interpreter::program::Program, semantic::{
-            function_flags::FunctionFlags, program_function::ProgramFunction,
-            visibility::Visibility,
-        }};
+        use crate::{
+            assert_regex,
+            core::function_arity::FunctionArity,
+            interpreter::program::Program,
+            semantic::{
+                function_flags::FunctionFlags, program_function::ProgramFunction,
+                visibility::Visibility,
+            },
+        };
 
         #[test]
         fn allows_known_functions() {
@@ -1182,7 +1192,10 @@ mod tests {
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
-            assert_regex!(&walker.context.errors[0].to_string(), "call to private function `known`");
+            assert_regex!(
+                &walker.context.errors[0].to_string(),
+                "call to private function `known`"
+            );
         }
 
         #[test]
@@ -1217,7 +1230,9 @@ mod tests {
 
             let mut context = CompilationContext::default();
             context.inherits.push(program);
-            context.inherit_names.insert("parent".into(), context.inherits.len() - 1);
+            context
+                .inherit_names
+                .insert("parent".into(), context.inherits.len() - 1);
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker);
 
@@ -1257,13 +1272,18 @@ mod tests {
 
             let mut context = CompilationContext::default();
             context.inherits.push(program);
-            context.inherit_names.insert("parent".into(), context.inherits.len() - 1);
+            context
+                .inherit_names
+                .insert("parent".into(), context.inherits.len() - 1);
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker);
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
-            assert_regex!(&walker.context.errors[0].to_string(), "call to private function `known`");
+            assert_regex!(
+                &walker.context.errors[0].to_string(),
+                "call to private function `known`"
+            );
         }
 
         #[test]
@@ -1303,7 +1323,10 @@ mod tests {
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
-            assert_regex!(&walker.context.errors[0].to_string(), "unknown namespace `unknown_namespace`");
+            assert_regex!(
+                &walker.context.errors[0].to_string(),
+                "unknown namespace `unknown_namespace`"
+            );
         }
 
         #[test]
@@ -1343,7 +1366,10 @@ mod tests {
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
-            assert_regex!(&walker.context.errors[0].to_string(), "call to private function `known`");
+            assert_regex!(
+                &walker.context.errors[0].to_string(),
+                "call to private function `known`"
+            );
         }
 
         #[test]
@@ -1695,7 +1721,10 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker);
             assert!(!walker.context.errors.is_empty());
-            assert_regex!(&walker.context.errors[0].to_string(), "namespaced `call_other` is not allowed");
+            assert_regex!(
+                &walker.context.errors[0].to_string(),
+                "namespaced `call_other` is not allowed"
+            );
         }
     }
 
@@ -1805,10 +1834,15 @@ mod tests {
 
     mod test_visit_function_ptr {
         use super::*;
-        use crate::{assert_regex, core::function_arity::FunctionArity, interpreter::program::Program, semantic::{
-            function_flags::FunctionFlags, program_function::ProgramFunction,
-            visibility::Visibility,
-        }};
+        use crate::{
+            assert_regex,
+            core::function_arity::FunctionArity,
+            interpreter::program::Program,
+            semantic::{
+                function_flags::FunctionFlags, program_function::ProgramFunction,
+                visibility::Visibility,
+            },
+        };
 
         #[test]
         fn allows_local_private_functions() {
@@ -1885,7 +1919,10 @@ mod tests {
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
-            assert_regex!(&walker.context.errors[0].to_string(), "attempt to point to private function `known`");
+            assert_regex!(
+                &walker.context.errors[0].to_string(),
+                "attempt to point to private function `known`"
+            );
         }
 
         #[test]

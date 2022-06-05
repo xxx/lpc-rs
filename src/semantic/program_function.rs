@@ -5,8 +5,7 @@ use crate::{
     semantic::function_prototype::FunctionPrototype,
 };
 use multimap::MultiMap;
-use std::{borrow::Cow, collections::HashMap};
-use std::rc::Rc;
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
