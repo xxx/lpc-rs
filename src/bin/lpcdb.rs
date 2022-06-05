@@ -6,20 +6,20 @@ use std::rc::Rc;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 
-const HELP: &str = r"
-           lpcdb Help
-? | .help - This help text
-q | ctrl-C | ctrl-D - Exit the program
-load <path>: Load the program at <path>
-             as the current program
-i: Print the current instruction
-r: Print the current stack frame's registers
-s: Print the call stack
-pc: Print the current pc value
-l: Show a listing of instructions around
-   the current instruction
-n: Execute the next instruction
-";
+// const HELP: &str = r"
+//            lpcdb Help
+// ? | .help - This help text
+// q | ctrl-C | ctrl-D - Exit the program
+// load <path>: Load the program at <path>
+//              as the current program
+// i: Print the current instruction
+// r: Print the current stack frame's registers
+// s: Print the call stack
+// pc: Print the current pc value
+// l: Show a listing of instructions around
+//    the current instruction
+// n: Execute the next instruction
+// ";
 
 fn main() {
     let args: Vec<String> = env::args().collect();

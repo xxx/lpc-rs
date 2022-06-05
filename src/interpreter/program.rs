@@ -78,18 +78,16 @@ impl<'a> Program {
         };
 
         match namespace {
-            CallNamespace::Local => self.functions.get(r).or_else(|| find_in_inherit()),
+            CallNamespace::Local => self.functions.get(r).or_else(find_in_inherit),
             CallNamespace::Parent => find_in_inherit(),
             CallNamespace::Named(ns) => self
                 .inherit_names
                 .get(ns)
-                .map(|i| {
+                .and_then(|i| {
                     self.inherits
                         .get(*i)
-                        .map(|p| p.lookup_function(name, &CallNamespace::Local))
-                        .flatten()
-                })
-                .flatten(),
+                        .and_then(|p| p.lookup_function(name, &CallNamespace::Local))
+                }),
         }
     }
 
@@ -116,12 +114,11 @@ impl<'a> Program {
                 ns => self
                     .inherit_names
                     .get(ns)
-                    .map(|i| {
+                    .and_then(|i| {
                         self.inherits
                             .get(*i)
                             .map(|p| p.contains_function(name, &CallNamespace::Local))
                     })
-                    .flatten()
                     .unwrap_or(false),
             },
         }

@@ -167,8 +167,8 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         if node.receiver.is_some() {
-            if &node.namespace != &CallNamespace::Local {
-                let e = LpcError::new(format!("namespaced `call_other` is not allowed"))
+            if node.namespace != CallNamespace::Local {
+                let e = LpcError::new("namespaced `call_other` is not allowed")
                     .with_span(node.span);
                 self.context.errors.push(e);
             }
@@ -345,7 +345,7 @@ impl TreeWalker for SemanticCheckWalker {
                     "A function pointer can only point to a private function if ",
                     "it is declared in the same file."
                 ));
-                self.context.errors.push(e.clone());
+                self.context.errors.push(e);
             }
         }
 

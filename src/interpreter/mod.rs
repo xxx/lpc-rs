@@ -6,6 +6,7 @@ pub mod lpc_ref;
 pub mod lpc_value;
 pub mod memory;
 pub mod object_space;
+#[allow(clippy::identity_op)]
 pub mod pragma_flags;
 pub mod process;
 pub mod program;

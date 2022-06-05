@@ -62,9 +62,7 @@ impl Process {
             .global_variables
             .iter()
             .filter_map(|(k, v)| {
-                if v.location.is_none() {
-                    return None;
-                }
+                v.location?;
 
                 let idx = v.location.unwrap().index();
                 let value = &self.globals[idx];
