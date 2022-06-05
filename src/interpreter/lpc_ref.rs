@@ -469,6 +469,7 @@ impl Shr for &LpcRef {
     }
 }
 
+/// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
 impl Not for &LpcRef {
     type Output = Result<LpcValue>;
 

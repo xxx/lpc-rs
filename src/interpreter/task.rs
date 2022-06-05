@@ -510,8 +510,20 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::Not(r1, r2) => {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
-                registers[r2.index()] =
-                    LpcRef::Int(matches!(registers[r1.index()], LpcRef::Int(0)) as LpcInt);
+                let matched = match registers[r1.index()] {
+                    LpcRef::Int(x) => LpcRef::Int((x == 0) as LpcInt),
+                    LpcRef::Float(x) => LpcRef::Int((x == Total::from(0.0)) as LpcInt),
+
+                    // These rest always have a value at runtime.
+                    // Any null / undefined values would be LpcRef::Ints, handled above.
+                    LpcRef::String(_)
+                    | LpcRef::Array(_)
+                    | LpcRef::Mapping(_)
+                    | LpcRef::Object(_)
+                    | LpcRef::Function(_) => LpcRef::Int(0)
+                };
+
+                registers[r2.index()] = matched;
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x | y)?;
@@ -2972,12 +2984,31 @@ mod tests {
                 let code = indoc! { r##"
                     mixed a = !2;
                     mixed b = !!4;
+                    float c = !0.00;
+                    float d = !0.01;
+                    string e = !"";
+                    string f = !"asdf";
                 "##};
 
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![Int(0), Int(2), Int(0), Int(4), Int(0), Int(1)];
+                let expected = vec![
+                    Int(0),
+                    Int(2),
+                    Int(0),
+                    Int(4),
+                    Int(0),
+                    Int(1),
+                    Float(Total::from(0.0)),
+                    Int(1),
+                    Float(Total::from(0.01)),
+                    Int(0),
+                    String("".into()),
+                    Int(0),
+                    String("asdf".into()),
+                    Int(0),
+                ];
 
                 assert_eq!(&expected, &registers);
             }
