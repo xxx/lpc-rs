@@ -1191,7 +1191,6 @@ impl TreeWalker for CodegenWalker {
                 ellipsis: true,
             };
         } else if let Some(prototype) = self.context.lookup_function(node.name.as_str(), &CallNamespace::Local) {
-            // TODO: function pointers need to namespace their calls as well
             // A local / inherited function
 
             // Determine if the name is a var, or a literal function name.

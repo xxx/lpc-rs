@@ -320,7 +320,6 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 Some(sym) => Ok(sym.type_),
                 None => {
                     if context.contains_function_complete(name.as_str(), &CallNamespace::default()) {
-                        // TODO: check for private / protected
                         Ok(LpcType::Function(false))
                     } else {
                         return Err(

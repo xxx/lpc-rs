@@ -33,6 +33,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::function_ptr_node::FunctionPtrNode;
 use crate::core::call_namespace::CallNamespace;
 
 struct BreakAllowed(bool);
@@ -169,8 +170,7 @@ impl TreeWalker for SemanticCheckWalker {
         if node.receiver.is_some() {
             if &node.namespace != &CallNamespace::Local {
                 let e = LpcError::new(format!("namespaced `call_other` is not allowed"))
-                    .with_span(node.span)
-                    .with_note("You can only call local functions via `call_other`.");
+                    .with_span(node.span);
                 self.context.errors.push(e);
             }
 
@@ -272,7 +272,6 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    /// Visit a `do {} while` loop
     fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
         self.allow_jumps();
         let _ = node.body.visit(self);
@@ -322,7 +321,41 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    /// Visit a case label
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
+        let proto_opt = self.context.lookup_function_complete(&node.name, &CallNamespace::default());
+
+        if let Some(prototype) = proto_opt {
+            if prototype.flags.private() &&
+                !self
+                .context
+                .function_prototypes
+                .values()
+                .any(|val| val == prototype)
+            {
+                let e = LpcError::new(format!("attempt to point to private function `{}`", node.name))
+                    .with_span(node.span)
+                    .with_label("defined here", prototype.span)
+                    .with_note(
+                        concat!("A function pointer can only point to a private function if ",
+                                     "it is declared in the same file.")
+                    );
+                self.context.errors.push(e.clone());
+            }
+        }
+
+        if let Some(rcvr) = &mut node.receiver {
+            rcvr.visit(self)?;
+        }
+
+        if let Some(args) = &mut node.arguments {
+            for argument in args.iter_mut().flatten() {
+                argument.visit(self)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
         if !self.can_use_labels() {
             let msg = if node.is_default() {
@@ -1767,6 +1800,108 @@ mod tests {
             } else {
                 panic!("didn't error?")
             }
+        }
+    }
+
+    mod test_visit_function_ptr {
+        use super::*;
+        use crate::{assert_regex, core::function_arity::FunctionArity, interpreter::program::Program, semantic::{
+            function_flags::FunctionFlags, program_function::ProgramFunction,
+            visibility::Visibility,
+        }};
+
+        #[test]
+        fn allows_local_private_functions() {
+            let mut node = ExpressionNode::from(FunctionPtrNode {
+                receiver: None,
+                arguments: None,
+                name: "known".to_string(),
+                span: None,
+            });
+
+            let mut function_prototypes = HashMap::new();
+            function_prototypes.insert(
+                String::from("known"),
+                FunctionPrototype {
+                    name: "known".into(),
+                    return_type: LpcType::Int(false),
+                    arity: FunctionArity::default(),
+                    arg_types: vec![],
+                    span: None,
+                    arg_spans: vec![],
+                    flags: FunctionFlags::default()
+                        .with_ellipsis(false)
+                        .with_visibility(Visibility::Private),
+                },
+            );
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let context = CompilationContext {
+                scopes,
+                function_prototypes,
+                ..CompilationContext::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_private_inherited_functions() {
+            let mut node = ExpressionNode::from(FunctionPtrNode {
+                receiver: None,
+                arguments: None,
+                name: "known".to_string(),
+                span: None,
+            });
+
+            let prototype = FunctionPrototype {
+                name: "known".into(),
+                return_type: LpcType::Int(false),
+                arity: FunctionArity::default(),
+                arg_types: vec![],
+                span: None,
+                arg_spans: vec![],
+                flags: FunctionFlags::default().with_visibility(Visibility::Private),
+            };
+
+            let program_function = ProgramFunction::new(prototype, 0);
+
+            let mut program = Program::default();
+            program
+                .functions
+                .insert(String::from("known"), program_function.into());
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+
+            let mut context = CompilationContext::default();
+            context.inherits.push(program);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(!walker.context.errors.is_empty());
+            assert_regex!(&walker.context.errors[0].to_string(), "attempt to point to private function `known`");
+        }
+
+        #[test]
+        fn allows_known_efuns() {
+            let mut node = ExpressionNode::from(FunctionPtrNode {
+                receiver: None,
+                arguments: Some(vec![Some(ExpressionNode::from(IntNode::new(12)))]),
+                name: "dump".to_string(),
+                span: None,
+            });
+
+            let context = empty_context();
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker);
+
+            assert!(walker.context.errors.is_empty());
         }
     }
 
