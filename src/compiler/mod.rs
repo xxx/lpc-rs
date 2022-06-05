@@ -218,21 +218,21 @@ impl Compiler {
         T: Into<LpcPath>,
         U: AsRef<str>,
     {
-        let (mut program, context) = self.parse_string(&path.into(), code)?;
+        let (mut program_node, context) = self.parse_string(&path.into(), code)?;
 
         // println!("{:?}", program);
 
         // let mut printer = TreePrinter::new();
         // let _ = program.visit(&mut printer);
 
-        let context = apply_walker!(InheritanceWalker, program, context, true);
-        let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
-        let context = apply_walker!(ScopeWalker, program, context, false);
-        let context = apply_walker!(DefaultParamsWalker, program, context, false);
-        let context = apply_walker!(SemanticCheckWalker, program, context, true);
+        let context = apply_walker!(InheritanceWalker, program_node, context, true);
+        let context = apply_walker!(FunctionPrototypeWalker, program_node, context, false);
+        let context = apply_walker!(ScopeWalker, program_node, context, false);
+        let context = apply_walker!(DefaultParamsWalker, program_node, context, false);
+        let context = apply_walker!(SemanticCheckWalker, program_node, context, true);
         let mut asm_walker = CodegenWalker::new(context);
 
-        if let Err(e) = program.visit(&mut asm_walker) {
+        if let Err(e) = program_node.visit(&mut asm_walker) {
             errors::emit_diagnostics(&[e.clone()]);
             return Err(CompilerError::LpcError(e));
         }

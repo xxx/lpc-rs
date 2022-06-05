@@ -288,7 +288,7 @@ where
 {
     let canon = canonicalize_server_path(path, cwd, lib_dir.as_ref());
 
-    // Strip off the root_dir prefix, then clean up the rest.
+    // Strip off the lib_dir prefix, then clean up the rest.
     let stripped = canon
         .strip_prefix(lib_dir.as_ref())
         .unwrap_or_else(|_| AsRef::<Path>::as_ref(""));

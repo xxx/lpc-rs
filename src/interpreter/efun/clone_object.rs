@@ -18,7 +18,7 @@ fn load_master<const N: usize>(
 ) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
 
-    let full_path = LpcPath::new_in_game(path, context.in_game_cwd()?, context.config().lib_dir());
+    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), context.config().lib_dir());
     // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 
@@ -121,21 +121,11 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        interpreter::{
-            memory::Memory, object_space::ObjectSpace, program::Program, task_context::TaskContext,
-        },
-        util::config::Config,
-    };
+    use crate::{assert_regex, interpreter::{
+        memory::Memory, object_space::ObjectSpace, program::Program, task_context::TaskContext,
+    }, util::config::Config};
     use indoc::indoc;
-    use regex::Regex;
-
-    fn compile_prog(code: &str, config: Rc<Config>) -> Program {
-        let compiler = Compiler::new(config);
-        compiler
-            .compile_string("./tests/fixtures/code/my_file.c", code)
-            .expect("Failed to compile.")
-    }
+    use crate::test_support::compile_prog;
 
     fn task_context_fixture(program: Program, config: Rc<Config>) -> TaskContext {
         let process = Process::new(program);
@@ -153,18 +143,13 @@ mod tests {
             object foo = clone_object("./example");
         "# };
 
-        let config: Rc<Config> = Config::new(None::<&str>)
-            .unwrap()
-            .with_lib_dir("./tests/fixtures/code")
-            .into();
-
-        let program = compile_prog(prog, config.clone());
+        let (program, config) = compile_prog(prog);
         let func = program
             .functions
             .get(INIT_PROGRAM)
             .expect("no init found?")
             .clone();
-        let context = task_context_fixture(program, config);
+        let context = task_context_fixture(program, config.clone());
         let mut task = fixture();
 
         let _result1 = task.eval(func.clone(), &[], context.clone());
@@ -180,12 +165,7 @@ mod tests {
             object foo = clone_object("./no_clone.c");
         "# };
 
-        let config: Rc<Config> = Config::new(None::<&str>)
-            .unwrap()
-            .with_lib_dir("./tests/fixtures/code")
-            .into();
-
-        let program = compile_prog(prog, config.clone());
+        let (program, config) = compile_prog(prog);
         let func = program
             .functions
             .get(INIT_PROGRAM)
@@ -196,10 +176,9 @@ mod tests {
 
         let result = task.eval(func.clone(), &[], context.clone());
 
-        let re =
-            Regex::new(r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\.")
-                .unwrap();
-
-        assert!(re.is_match(&result.unwrap_err().to_string()));
+        assert_regex!(
+            &result.as_ref().unwrap_err().to_string(),
+            r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\."
+        );
     }
 }

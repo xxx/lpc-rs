@@ -2483,7 +2483,7 @@ mod tests {
                 "##};
 
                 let mut task: Task<10> = Task::new(Memory::default());
-                let program = compile_prog(code);
+                let (program, _) = compile_prog(code);
                 let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
                 assert_eq!(
@@ -2529,7 +2529,7 @@ mod tests {
                 "##};
 
                 let mut task: Task<10> = Task::new(Memory::default());
-                let program = compile_prog(code);
+                let (program, _) = compile_prog(code);
                 let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
                 assert_eq!(
@@ -3286,7 +3286,7 @@ mod tests {
             "##};
 
             let mut task: Task<5> = Task::new(Memory::default());
-            let program = compile_prog(code);
+            let (program, _) = compile_prog(code);
             let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
@@ -3301,7 +3301,7 @@ mod tests {
             "##};
 
             let config = Config::default().with_max_task_instructions(Some(10));
-            let program = compile_prog(code);
+            let (program, _) = compile_prog(code);
             let mut task: Task<5> = Task::new(Memory::default());
             let r = task.initialize_program(program, config, ObjectSpace::default());
 

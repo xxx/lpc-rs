@@ -1,5 +1,4 @@
 use crate::{
-    errors::LpcError,
     interpreter::{
         instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
         process::Process, program::Program,
@@ -90,14 +89,15 @@ impl TaskContext {
         self.object_space.borrow_mut().insert_clone(program)
     }
 
-    /// Get the in-game directory of the current process
-    pub fn in_game_cwd(&self) -> Result<PathBuf> {
-        match self
-            .process
-            .borrow()
-            .cwd()
-            .strip_prefix(self.config.lib_dir())
-        {
+    /// Get the in-game directory of the current process.
+    /// This assumes an already-dedotted path
+    pub fn in_game_cwd(&self) -> PathBuf {
+        let process = self.process.borrow();
+        let current_cwd = process.cwd();
+
+        // TODO: If process / program cwd is intended to be the absolute in-game path,
+        //       then why are we stripping the prefix here?
+        match current_cwd.strip_prefix(self.config.lib_dir()) {
             Ok(x) => {
                 let buf = if x.as_os_str().is_empty() {
                     PathBuf::from("/")
@@ -107,9 +107,9 @@ impl TaskContext {
                     PathBuf::from(format!("/{}", x.display()))
                 };
 
-                Ok(buf)
+                buf
             }
-            Err(e) => Err(LpcError::new(format!("{} in TaskContext", e))),
+            Err(_e) => current_cwd.into_owned(),
         }
     }
 
@@ -156,6 +156,6 @@ mod tests {
         let process = Process::new(program);
         let context = TaskContext::new(config, process, space);
 
-        assert_eq!(context.in_game_cwd().unwrap().to_str().unwrap(), "/foo/bar");
+        assert_eq!(context.in_game_cwd().to_str().unwrap(), "/foo/bar");
     }
 }

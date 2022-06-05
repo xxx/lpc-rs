@@ -42,7 +42,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     delegate! {
         to self.task_context {
             /// Get the in-game directory of the current process
-            pub fn in_game_cwd(&self) -> Result<PathBuf>;
+            pub fn in_game_cwd(&self) -> PathBuf;
 
             /// Get pointer to the current [`Config`] that's in-use
             pub fn config(&self) -> Rc<Config>;
