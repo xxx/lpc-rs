@@ -35,8 +35,6 @@ pub fn compile_prog(code: &str) -> (Program, Rc<Config>) {
         .compile_string(path, code)
         .expect("Failed to compile.");
 
-    println!("filename: {:?}", program.filename);
-
     (program, config)
 }
 
