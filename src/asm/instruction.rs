@@ -285,8 +285,7 @@ impl Display for Instruction {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                // TODO: implement Display on FunctionTarget and use it here.
-                write!(f, "functionptrconst {}, {:?}, {}", location, target, args)
+                write!(f, "functionptrconst {}, {}, {}", location, target, args)
             }
             Instruction::GLoad(r1, r2) => {
                 write!(f, "gload {}, {}", r1, r2)

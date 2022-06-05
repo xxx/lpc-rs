@@ -30,6 +30,15 @@ pub enum FunctionName {
     Literal(String),
 }
 
+impl Display for FunctionName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionName::Var(reg) => write!(f, "var({})", reg),
+            FunctionName::Literal(name) => write!(f, "{}", name),
+        }
+    }
+}
+
 /// The possible receivers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionReceiver {
@@ -52,6 +61,21 @@ pub enum FunctionTarget {
 
     /// The call will be to an lfun defined in some object
     Local(FunctionName, FunctionReceiver),
+}
+
+impl Display for FunctionTarget {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionTarget::Efun(name) => write!(f, "{}", name),
+            FunctionTarget::Local(name, receiver) => {
+                match receiver {
+                    FunctionReceiver::Local => write!(f, "{}", name),
+                    FunctionReceiver::Var(reg) => write!(f, "var({})->{}", reg, name),
+                    FunctionReceiver::Argument => write!(f, "&->{}", name),
+                }
+            }
+        }
+    }
 }
 
 /// Different ways to store a function address, for handling at runtime.
