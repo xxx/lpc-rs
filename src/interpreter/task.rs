@@ -837,6 +837,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     .iter()
                                     .fold(0, |sum, arg| sum + arg.is_some() as usize);
 
+                                println!("called_args: {}", called_args);
                                 let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
 
                                 match &ptr.address {
@@ -866,7 +867,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             }
                         };
 
-                        if *num_args > 0_usize {
+                        if arity.num_args > 0_usize {
                             let index = initial_arg.index();
 
                             if !partial_args.is_empty() {
@@ -1745,6 +1746,36 @@ mod tests {
                         vec![None, Some(String("adding some!".into()))],
                     ),
                     String("adding some! 670".into()),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_partial_applications_with_no_added_args() {
+                let code = indoc! { r##"
+                    function q = &tacos("my_string!");
+                    int a = q();
+                    string tacos(string s) {
+                        return s + " awesome!" ;
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    String("my_string! awesome!".into()),
+                    String("my_string!".into()),
+                    Function(
+                        "tacos".into(),
+                        vec![Some(String("my_string!".into()))],
+                    ),
+                    Function(
+                        "tacos".into(),
+                        vec![Some(String("my_string!".into()))],
+                    ),
+                    String("my_string! awesome!".into()),
                 ];
 
                 assert_eq!(&expected, &registers);
