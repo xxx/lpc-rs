@@ -52,7 +52,7 @@ impl Config {
                     )))
                 }
             },
-            None => Vec::new(), // TODO: add warning about missing config
+            None => Vec::new(),
         };
 
         let dug = dig(&config, LIB_DIR);
