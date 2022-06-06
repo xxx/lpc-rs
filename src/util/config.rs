@@ -36,12 +36,16 @@ impl Config {
     {
         let config_str = match config_override {
             Some(path) => fs::read_to_string(path)?,
-            None => fs::read_to_string(DEFAULT_CONFIG_FILE)?,
+            None => fs::read_to_string(DEFAULT_CONFIG_FILE).unwrap_or("".into()),
         };
 
-        let config = match config_str.parse::<Value>() {
-            Ok(x) => x,
-            Err(e) => return Err(LpcError::new(e.to_string())),
+        let config = if config_str == "" {
+            return Ok(Self::default())
+        } else {
+            match config_str.parse::<Value>() {
+                Ok(x) => x,
+                Err(e) => return Err(LpcError::new(e.to_string())),
+            }
         };
 
         let system_include_dirs = match dig(&config, SYSTEM_INCLUDE_DIRS) {
