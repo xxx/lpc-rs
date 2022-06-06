@@ -19,6 +19,8 @@ jobs:
         with:
           rust-version: stable
           components: clippy
+      - name: Put a config into place
+        run: cp config.toml.default config.toml
       - name: Run Clippy
         run: cargo clippy
       - name: Run Tests
