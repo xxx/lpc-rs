@@ -29,8 +29,13 @@ use crate::{
 };
 use decorum::Total;
 use if_chain::if_chain;
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
-use std::fmt::Debug;
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    collections::HashMap,
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 use tracing::{instrument, trace};
 
 macro_rules! pop_frame {
@@ -198,11 +203,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Some(i) => {
                 trace!("about to evaluate: {}", i);
                 i.clone()
-            },
+            }
             None => {
                 trace!("No more instructions");
                 return Ok(true);
-            },
+            }
         };
 
         frame.inc_pc();
@@ -532,7 +537,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     | LpcRef::Array(_)
                     | LpcRef::Mapping(_)
                     | LpcRef::Object(_)
-                    | LpcRef::Function(_) => LpcRef::Int(0)
+                    | LpcRef::Function(_) => LpcRef::Int(0),
                 };
 
                 registers[r2.index()] = matched;
@@ -1803,14 +1808,8 @@ mod tests {
                 let expected = vec![
                     String("my_string! awesome!".into()),
                     String("my_string!".into()),
-                    Function(
-                        "tacos".into(),
-                        vec![Some(String("my_string!".into()))],
-                    ),
-                    Function(
-                        "tacos".into(),
-                        vec![Some(String("my_string!".into()))],
-                    ),
+                    Function("tacos".into(), vec![Some(String("my_string!".into()))]),
+                    Function("tacos".into(), vec![Some(String("my_string!".into()))]),
                     String("my_string! awesome!".into()),
                 ];
 

@@ -13,10 +13,9 @@ use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
     fmt,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
-use std::fmt::Debug;
 use tracing::instrument;
 
 /// A representation of a function call's context.

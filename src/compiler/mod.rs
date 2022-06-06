@@ -22,7 +22,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
-use tracing::{instrument};
+use tracing::instrument;
 
 pub mod compiler_error;
 

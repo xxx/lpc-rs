@@ -1,9 +1,8 @@
 use std::{
     fmt,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
     str::FromStr,
 };
-use std::fmt::Debug;
 
 use logos::{Lexer, Logos};
 

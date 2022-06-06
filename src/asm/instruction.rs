@@ -10,7 +10,6 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
 

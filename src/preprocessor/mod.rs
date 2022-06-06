@@ -3,8 +3,7 @@ use define::{Define, ObjectMacro};
 use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
 use regex::Regex;
-use std::{collections::HashMap, path::Path};
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug, path::Path};
 
 use crate::{
     ast::binary_op_node::BinaryOperation,

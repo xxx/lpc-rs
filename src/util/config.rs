@@ -1,8 +1,7 @@
 use crate::{errors::LpcError, Result};
 use fs_err as fs;
-use std::path::Path;
-use std::str::FromStr;
 use if_chain::if_chain;
+use std::{path::Path, str::FromStr};
 use toml::{value::Index, Value};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
@@ -40,7 +39,7 @@ impl Config {
         };
 
         let config = if config_str.is_empty() {
-            return Ok(Self::default())
+            return Ok(Self::default());
         } else {
             match config_str.parse::<Value>() {
                 Ok(x) => x,
@@ -126,9 +125,9 @@ impl Config {
         };
 
         let dug = dig(&config, DRIVER_LOG_LEVEL);
-        let driver_log_level = dug.and_then(|x| x.as_str()).and_then(|x| {
-            tracing::Level::from_str(x).ok()
-        });
+        let driver_log_level = dug
+            .and_then(|x| x.as_str())
+            .and_then(|x| tracing::Level::from_str(x).ok());
 
         let dug = dig(&config, DRIVER_LOG_FILE);
         let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
@@ -140,7 +139,7 @@ impl Config {
             max_inherit_depth,
             max_task_instructions,
             driver_log_level,
-            driver_log_file
+            driver_log_file,
         })
     }
 
