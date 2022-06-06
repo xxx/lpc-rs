@@ -54,3 +54,21 @@ port = 2020
 # This can be overridden on the command line with the `--tlsport` option
 #tls_port = 4040
 
+# The log level to use for internal logging. It's most useful for debugging the
+# driver itself, and is very helpful if leaving a bug report.
+# This is *not* related to the user-facing compile-time and runtime error logs.
+# Valid values are: "trace", "debug", "info", "warn", "error"
+# Comment this line and / or `log_file` out to disable internal logging.
+log_level = "info"
+
+# The location to write the internal log file to.
+# This can be an absolute path, or a relative path based on the current working directory,
+# or set to "STDOUT" to write to standard output.
+#
+# This log can potentially include sensitive information, and should _not_
+# be located somewhere that's available in-game.
+#
+# Comment this line out to disable internal logging.
+# Either this, or `log_level`, or both can be commented out to disable logging.
+log_file = "STDOUT"
+

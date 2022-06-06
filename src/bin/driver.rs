@@ -8,19 +8,11 @@ use lpc_rs::interpreter::{
     memory::Memory, object_space::ObjectSpace, task::Task, MAX_CALL_STACK_SIZE,
 };
 use std::rc::Rc;
+use if_chain::if_chain;
 use tracing::Level;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
-
-    let subscriber = tracing_subscriber::fmt()
-        // filter spans/events with level TRACE or higher.
-        .with_max_level(Level::TRACE)
-        // build but do not install the subscriber.
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting tracing default failed");
 
     let config = match Config::new(None::<&str>) {
         Ok(c) => c,
@@ -29,6 +21,33 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    if_chain! {
+        if let Some(level) = config.driver_log_level();
+        if let Some(file) = config.driver_log_file();
+        then {
+            match file {
+                "STDOUT" => {
+                    tracing::subscriber::set_global_default(
+                        tracing_subscriber::fmt()
+                            .with_max_level(level)
+                            .with_writer(std::io::stdout)
+                            .finish(),
+                    )
+                    .expect("setting tracing default failed");
+                }
+                _ => {
+                    tracing::subscriber::set_global_default(
+                        tracing_subscriber::fmt()
+                            .with_max_level(level)
+                            .with_writer(std::fs::File::create(file).unwrap())
+                            .finish(),
+                    )
+                    .expect("setting tracing default failed");
+                }
+            }
+        }
+    }
 
     let config = Rc::new(config);
     let compiler = Compiler::new(config.clone());
@@ -42,37 +61,6 @@ fn main() {
             if let Err(e) = task.initialize_program(program, config, object_space) {
                 errors::emit_diagnostics(&[e]);
             }
-
-            // println!("procs {:?}", interpreter.processes);
-            // let master = interpreter
-            //     .processes
-            //     .get("/secure/master.c")
-            //     .unwrap()
-            //     .clone();
-            // let mut mapping = HashMap::new();
-            // mapping.insert(
-            //     value_to_ref!(LpcValue::from("foo"), interpreter.memory),
-            //     value_to_ref!(LpcValue::from("bar"), interpreter.memory),
-            // );
-            // mapping.insert(
-            //     value_to_ref!(LpcValue::from("baz"), interpreter.memory),
-            //     value_to_ref!(
-            //         LpcValue::from(vec![
-            //             LpcRef::Int(12938),
-            //             value_to_ref!(LpcValue::from("a str"), interpreter.memory)
-            //         ]),
-            //         interpreter.memory
-            //     ),
-            // );
-            //
-            // let args = vec![
-            //     value_to_ref!(LpcValue::Int(69), interpreter.memory),
-            //     value_to_ref!(LpcValue::from("marfin"), interpreter.memory),
-            //     value_to_ref!(LpcValue::Object(master.clone()), interpreter.memory),
-            //     value_to_ref!(LpcValue::Mapping(mapping), interpreter.memory),
-            // ];
-            // let ob = interpreter.apply(master, "thing", &args);
-            // println!("ob??? {:?}", ob);
         }
         Err(e) => eprintln!(
             "unable to compile {}: {:?}",

@@ -1,6 +1,8 @@
 use crate::{errors::LpcError, Result};
 use fs_err as fs;
 use std::path::Path;
+use std::str::FromStr;
+use if_chain::if_chain;
 use toml::{value::Index, Value};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
@@ -12,6 +14,8 @@ const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
 const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
+const DRIVER_LOG_LEVEL: &[&str] = &["driver", "log_level"];
+const DRIVER_LOG_FILE: &[&str] = &["driver", "log_file"];
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug)]
@@ -21,6 +25,8 @@ pub struct Config {
     master_object: String,
     max_task_instructions: Option<usize>,
     max_inherit_depth: usize,
+    driver_log_level: Option<tracing::Level>,
+    driver_log_file: Option<String>,
 }
 
 impl Config {
@@ -103,19 +109,25 @@ impl Config {
         };
 
         let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
-        let max_task_instructions = match dug {
-            Some(x) => match x.as_integer() {
-                Some(y) => {
-                    if y < 1 {
-                        None
-                    } else {
-                        Some(y as usize)
-                    }
-                }
-                None => None,
-            },
-            None => None,
+
+        let max_task_instructions = if_chain! {
+            if let Some(x) = dug;
+            if let Some(y) = x.as_integer();
+            if y >= 0;
+            then {
+                Some(y as usize)
+            } else {
+                None
+            }
         };
+
+        let dug = dig(&config, DRIVER_LOG_LEVEL);
+        let driver_log_level = dug.and_then(|x| x.as_str()).and_then(|x| {
+            tracing::Level::from_str(x).ok()
+        });
+
+        let dug = dig(&config, DRIVER_LOG_FILE);
+        let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
 
         Ok(Self {
             lib_dir,
@@ -123,6 +135,8 @@ impl Config {
             master_object,
             max_inherit_depth,
             max_task_instructions,
+            driver_log_level,
+            driver_log_file
         })
     }
 
@@ -184,6 +198,16 @@ impl Config {
     pub fn system_include_dirs(&self) -> &Vec<String> {
         &self.system_include_dirs
     }
+
+    #[inline]
+    pub fn driver_log_level(&self) -> Option<tracing::Level> {
+        self.driver_log_level
+    }
+
+    #[inline]
+    pub fn driver_log_file(&self) -> Option<&str> {
+        self.driver_log_file.as_deref()
+    }
 }
 
 impl Default for Config {
@@ -194,6 +218,8 @@ impl Default for Config {
             master_object: "/secure/master.c".to_string(),
             max_task_instructions: Some(100000),
             max_inherit_depth: DEFAULT_MAX_INHERIT_DEPTH,
+            driver_log_level: None,
+            driver_log_file: None,
         }
     }
 }
