@@ -9,7 +9,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use tracing::instrument;
+
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;

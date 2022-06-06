@@ -9,7 +9,6 @@ use lpc_rs::interpreter::{
 };
 use std::rc::Rc;
 use if_chain::if_chain;
-use tracing::Level;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
