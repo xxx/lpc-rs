@@ -524,7 +524,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let registers = &mut self.stack.current_frame_mut()?.registers;
                 let matched = match registers[r1.index()] {
                     LpcRef::Int(x) => LpcRef::Int((x == 0) as LpcInt),
-                    LpcRef::Float(x) => LpcRef::Int((x == Total::from(0.0)) as LpcInt),
+                    LpcRef::Float(x) => LpcRef::Int((x == 0.0) as LpcInt),
 
                     // These rest always have a value at runtime.
                     // Any null / undefined values would be LpcRef::Ints, handled above.

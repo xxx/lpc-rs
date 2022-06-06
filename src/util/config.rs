@@ -36,10 +36,10 @@ impl Config {
     {
         let config_str = match config_override {
             Some(path) => fs::read_to_string(path)?,
-            None => fs::read_to_string(DEFAULT_CONFIG_FILE).unwrap_or("".into()),
+            None => fs::read_to_string(DEFAULT_CONFIG_FILE).unwrap_or_else(|_| "".into()),
         };
 
-        let config = if config_str == "" {
+        let config = if config_str.is_empty() {
             return Ok(Self::default())
         } else {
             match config_str.parse::<Value>() {
