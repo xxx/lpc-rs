@@ -16,6 +16,8 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use std::fmt::Debug;
+use tracing::instrument;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -99,6 +101,7 @@ impl StackFrame {
     }
 
     /// Get the true name of the function to call.
+    #[instrument(skip(self))]
     pub fn resolve_function_name<'a>(&'a self, name: &'a FunctionName) -> Result<Cow<'a, str>> {
         match name {
             FunctionName::Var(reg) => {
@@ -153,14 +156,16 @@ impl StackFrame {
     }
 
     #[inline]
+    #[instrument(skip(self))]
     pub fn instruction(&self) -> Option<&Instruction> {
         self.function.instructions.get(self.pc.get())
     }
 
     #[inline]
+    #[instrument(skip(self))]
     pub fn lookup_label<T>(&self, label: T) -> Option<&Address>
     where
-        T: AsRef<str>,
+        T: AsRef<str> + Debug,
     {
         self.function.labels.get(label.as_ref())
     }

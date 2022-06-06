@@ -4,6 +4,7 @@ use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
 use regex::Regex;
 use std::{collections::HashMap, path::Path};
+use std::fmt::Debug;
 
 use crate::{
     ast::binary_op_node::BinaryOperation,
@@ -24,6 +25,7 @@ use crate::{
 };
 use once_cell::sync::Lazy;
 use std::iter::Peekable;
+use tracing::instrument;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -98,6 +100,7 @@ impl Preprocessor {
     /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let preprocessor = Preprocessor::new(context);
     /// ```
+    #[instrument]
     pub fn new(context: CompilationContext) -> Self {
         Self {
             context,
@@ -109,6 +112,7 @@ impl Preprocessor {
     ///
     /// This is intended for use after preprocessing has completed, and
     /// you're ready to re-take ownership of the context for the next step.
+    #[instrument]
     pub fn into_context(self) -> CompilationContext {
         self.context
     }
@@ -140,10 +144,11 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("foo.c", code);
     /// ```
+    #[instrument]
     pub fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
     where
-        P: Into<LpcPath>,
-        C: AsRef<str>,
+        P: Into<LpcPath> + Debug,
+        C: AsRef<str> + Debug,
     {
         let mut output = Vec::new();
 
@@ -228,13 +233,14 @@ impl Preprocessor {
     }
 
     /// Expand a `#define`d token, if necessary
+    #[instrument(skip(self))]
     fn expand_token<T>(
         &self,
         token: &StringToken,
         iter: &mut Peekable<T>,
     ) -> Result<Option<Vec<Spanned<Token>>>>
     where
-        T: Iterator<Item = Result<Spanned<Token>>>,
+        T: Iterator<Item = Result<Spanned<Token>>> + Debug,
     {
         let span = token.0;
         let name = &token.1;
@@ -312,12 +318,13 @@ impl Preprocessor {
     /// a vector-per-argument.
     /// Assumes the next token in the iterator is the opening left parenthesis, and has already
     /// been checked for its presence.
+    #[instrument]
     fn consume_macro_arguments<T>(
         iter: &mut Peekable<T>,
         span: Span,
     ) -> Result<Vec<Vec<Spanned<Token>>>>
     where
-        T: Iterator<Item = Result<Spanned<Token>>>,
+        T: Iterator<Item = Result<Spanned<Token>>> + Debug,
     {
         iter.next(); // consume the opening paren
 
@@ -376,6 +383,7 @@ impl Preprocessor {
         Ok(args)
     }
 
+    #[instrument(skip(self))]
     fn handle_define(&mut self, token: &StringToken) -> Result<()> {
         if self.skipping_lines() {
             return Ok(());
@@ -466,6 +474,7 @@ impl Preprocessor {
         }
     }
 
+    #[instrument(skip(self))]
     fn handle_undef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -480,6 +489,7 @@ impl Preprocessor {
     /// `token` - The matched lexer token
     /// `cwd` - an in-game directory, to use as the reference for relative paths.
     /// `output` - The vector to append included tokens to
+    #[instrument(skip(self, output))]
     fn handle_sys_include<U>(
         &mut self,
         token: &StringToken,
@@ -487,7 +497,7 @@ impl Preprocessor {
         output: &mut Vec<Spanned<Token>>,
     ) -> Result<()>
     where
-        U: AsRef<Path>,
+        U: AsRef<Path> + Debug,
     {
         if self.skipping_lines() {
             return Ok(());
@@ -540,6 +550,7 @@ impl Preprocessor {
     /// `token` - The matched lexer token
     /// `cwd` - an in-game directory, to use as the reference for relative paths.
     /// `output` - The vector to append included tokens to
+    #[instrument(skip(self, output))]
     fn handle_local_include<U>(
         &mut self,
         token: &StringToken,
@@ -547,7 +558,7 @@ impl Preprocessor {
         output: &mut Vec<Spanned<Token>>,
     ) -> Result<()>
     where
-        U: AsRef<Path>,
+        U: AsRef<Path> + Debug,
     {
         if self.skipping_lines() {
             return Ok(());
@@ -572,6 +583,7 @@ impl Preprocessor {
         }
     }
 
+    #[instrument(skip(self))]
     fn handle_if(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -627,6 +639,7 @@ impl Preprocessor {
 
     /// Determine if a particular node will enable line skipping or not.
     /// Returns `true` if we should print lines, and `false` if they should be skipped.
+    #[instrument(skip(self, expr))]
     fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
         match expr {
             PreprocessorNode::Var(x) => {
@@ -664,6 +677,7 @@ impl Preprocessor {
     }
 
     /// Resolve a [`PreprocessorNode`] to an Int if possible.
+    #[instrument(skip(self, expr))]
     fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<LpcInt> {
         match expr {
             PreprocessorNode::Var(x) => {
@@ -705,6 +719,7 @@ impl Preprocessor {
         }
     }
 
+    #[instrument(skip(self))]
     fn handle_ifdef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -723,6 +738,7 @@ impl Preprocessor {
         )
     }
 
+    #[instrument(skip(self))]
     fn handle_ifndef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -741,6 +757,7 @@ impl Preprocessor {
         )
     }
 
+    #[instrument(skip(self))]
     fn handle_else(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -773,6 +790,7 @@ impl Preprocessor {
         }
     }
 
+    #[instrument(skip(self))]
     fn handle_endif(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -789,6 +807,7 @@ impl Preprocessor {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn handle_pragma(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
@@ -818,6 +837,7 @@ impl Preprocessor {
     ///     the `#include` directive.
     /// `cwd` - The current working directory. Used for resolving relative pathnames.
     /// `span` - The [`Span`] of the `#include` token.
+    #[instrument(skip(self))]
     fn include_local_file(&mut self, path: &LpcPath, span: Span) -> Result<Vec<Spanned<Token>>> {
         let canon_include_path = path.as_server(self.context.lib_dir());
 
@@ -863,6 +883,7 @@ impl Preprocessor {
 
     /// Are we skipping lines right now due to `#if`s?
     #[inline]
+    #[instrument(skip(self))]
     fn skipping_lines(&self) -> bool {
         match self.ifdefs.last() {
             Some(ifdef) => ifdef.skipping_lines || ifdef.compiled_out,
@@ -872,6 +893,7 @@ impl Preprocessor {
 
     /// Is the current `#if` / `#ifdef` entirely compiled out?
     #[inline]
+    #[instrument(skip(self))]
     fn current_if_is_compiled_out(&self) -> bool {
         match self.ifdefs.last() {
             Some(ifdef) => ifdef.compiled_out,
@@ -881,6 +903,7 @@ impl Preprocessor {
 
     /// skip-aware way to append to the output
     #[inline]
+    #[instrument(skip(self, output, to_append))]
     fn append_spanned(&self, output: &mut Vec<Spanned<Token>>, to_append: Spanned<Token>) {
         if !self.skipping_lines() {
             output.push(to_append);
@@ -888,6 +911,7 @@ impl Preprocessor {
     }
 
     /// A convenience function for checking if preprocessor directives follow a newline.
+    #[instrument(skip(self))]
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
         if !self.last_slice.ends_with('\n') {
             return Err(LpcError::new(
@@ -901,6 +925,7 @@ impl Preprocessor {
 }
 
 impl Default for Preprocessor {
+    #[instrument]
     fn default() -> Self {
         Self {
             context: CompilationContext::default(),

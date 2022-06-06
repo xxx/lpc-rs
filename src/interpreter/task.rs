@@ -30,6 +30,8 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use std::fmt::Debug;
+use tracing::{instrument, trace};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -82,9 +84,10 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 }
 
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
+    #[instrument(skip_all)]
     pub fn new<T>(memory: T) -> Self
     where
-        T: Into<Cow<'pool, Memory>>,
+        T: Into<Cow<'pool, Memory>> + Debug,
     {
         Self {
             memory: memory.into(),
@@ -100,6 +103,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     /// Convenience helper to get a Program initialized.
+    #[instrument(skip_all)]
     pub fn initialize_program<C, O>(
         &mut self,
         program: Program,
@@ -107,8 +111,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         object_space: O,
     ) -> Result<TaskContext>
     where
-        C: Into<Rc<Config>>,
-        O: Into<Rc<RefCell<ObjectSpace>>>,
+        C: Into<Rc<Config>> + Debug,
+        O: Into<Rc<RefCell<ObjectSpace>>> + Debug,
     {
         let init_function = {
             let function = program.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
@@ -135,6 +139,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     /// # Returns
     ///
     /// A [`Result`]
+    #[instrument(skip_all)]
     pub fn eval<F>(
         &mut self,
         f: F,
@@ -142,7 +147,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         task_context: TaskContext,
     ) -> Result<TaskContext>
     where
-        F: Into<Rc<ProgramFunction>>,
+        F: Into<Rc<ProgramFunction>> + Debug,
     {
         let function = f.into();
         let process = task_context.process();
@@ -175,6 +180,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     /// Evaluate the instruction at the current value of the PC
     /// The boolean represents whether we are at the end of input (i.e. we should halt the machine)
+    #[instrument(skip_all)]
     fn eval_one_instruction(&mut self, task_context: &TaskContext) -> Result<bool> {
         if self.stack.is_empty() {
             return Ok(true);
@@ -189,8 +195,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let instruction = match frame.instruction() {
             // TODO: Get rid of this clone (once Instruction is Copy, this will go away)
-            Some(i) => i.clone(),
-            None => return Ok(true),
+            Some(i) => {
+                trace!("about to evaluate: {}", i);
+                i.clone()
+            },
+            None => {
+                trace!("No more instructions");
+                return Ok(true);
+            },
         };
 
         frame.inc_pc();
@@ -689,6 +701,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Ok(false)
     }
 
+    #[instrument(skip_all)]
     fn handle_aconst(&mut self, instruction: &Instruction) -> Result<()> {
         match instruction {
             Instruction::AConst(r, vec) => {
@@ -707,6 +720,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn handle_call(&mut self, instruction: &Instruction, task_context: &TaskContext) -> Result<()> {
         match instruction {
             Instruction::Call {
@@ -782,6 +796,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn handle_call_fp(
         &mut self,
         instruction: &Instruction,
@@ -941,6 +956,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn handle_call_other(
         &mut self,
         instruction: &Instruction,
@@ -1106,6 +1122,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn handle_load(&mut self, instruction: &Instruction) -> Result<()> {
         match instruction {
             Instruction::Load(r1, r2, r3) => {
@@ -1191,6 +1208,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn handle_sconst(&mut self, instruction: &Instruction) -> Result<()> {
         match instruction {
             Instruction::SConst(r, s) => {
@@ -1204,6 +1222,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn handle_store(&mut self, instruction: &Instruction) -> Result<()> {
         match instruction {
             Instruction::Store(r1, r2, r3) => {
@@ -1265,6 +1284,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
     }
 
+    #[instrument(skip_all)]
     fn resolve_call_other_receiver(
         receiver_ref: &LpcRef,
         name: &str,
@@ -1307,6 +1327,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     /// Set the state to handle a caught error.
     /// Panics if there aren't actually any catch points.
+    #[instrument(skip_all)]
     fn catch_error(&mut self, error: LpcError) -> Result<()> {
         let catch_point = self.catch_points.last().unwrap();
         let result_index = catch_point.register.index();
@@ -1341,6 +1362,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn binary_operation<F>(
         &mut self,
         r1: Register,
@@ -1371,6 +1393,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     /// Binary operations that return a boolean value (e.g. comparisons)
+    #[instrument(skip_all)]
     fn binary_boolean_operation<F>(
         &mut self,
         r1: Register,
@@ -1422,6 +1445,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         frame
     }
 
+    #[instrument(skip_all)]
     fn calculate_max_arg_length<T>(
         num_args: usize,
         partial_args: &[Option<T>],

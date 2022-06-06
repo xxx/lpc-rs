@@ -8,9 +8,19 @@ use lpc_rs::interpreter::{
     memory::Memory, object_space::ObjectSpace, task::Task, MAX_CALL_STACK_SIZE,
 };
 use std::rc::Rc;
+use tracing::Level;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
+
+    let subscriber = tracing_subscriber::fmt()
+        // filter spans/events with level TRACE or higher.
+        .with_max_level(Level::TRACE)
+        // build but do not install the subscriber.
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting tracing default failed");
 
     let config = match Config::new(None::<&str>) {
         Ok(c) => c,

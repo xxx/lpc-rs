@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
+use std::fmt::Debug;
 
 use logos::{Lexer, Logos};
 
@@ -27,6 +28,7 @@ pub type Spanned<T> = (usize, T, usize);
 /// A wrapper for the Lexer to attach our `Iterator` implementation to,
 /// which allows us to output items that match the shape of the tuples
 /// expected by lalrpop.
+
 pub struct LexWrapper<'input> {
     lexer: Lexer<'input, Token>,
 }
@@ -39,6 +41,12 @@ impl<'input> LexWrapper<'input> {
 
     pub fn set_file_id(&mut self, id: FileId) {
         self.lexer.extras.current_file_id = id;
+    }
+}
+
+impl Debug for LexWrapper<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "LexWrapper {{ <lexer> }}")
     }
 }
 
@@ -61,6 +69,7 @@ impl Iterator for LexWrapper<'_> {
 }
 
 /// A wrapper for vectors of tokens, for lalrpop compatibility
+#[derive(Debug)]
 pub struct TokenVecWrapper<'a> {
     vec: &'a Vec<Spanned<Token>>,
     count: usize,

@@ -22,6 +22,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use tracing::{info, instrument, trace, trace_span};
 
 pub mod compiler_error;
 
@@ -58,6 +59,7 @@ pub struct Compiler {
 
 impl Compiler {
     /// Create a new `Compiler` with the passed [`Config`]
+    #[instrument]
     pub fn new(config: Rc<Config>) -> Self {
         Self {
             config,
@@ -66,6 +68,7 @@ impl Compiler {
     }
 
     /// Set the inherit_depth of a compiler
+    #[instrument(skip(self))]
     pub fn with_inherit_depth(mut self, depth: usize) -> Self {
         self.inherit_depth = depth;
         self
@@ -85,9 +88,10 @@ impl Compiler {
     /// let compiler = Compiler::default();
     /// let prog = compiler.compile_file("tests/fixtures/code/example.c").expect("Unable to compile.");
     /// ```
+    #[instrument(skip(self))]
     pub fn compile_file<T>(&self, path: T) -> Result<Program, CompilerError>
     where
-        T: Into<LpcPath>,
+        T: Into<LpcPath> + Debug,
     {
         let lpc_path = path.into();
         let absolute = lpc_path.as_server(self.config.lib_dir());
@@ -121,6 +125,7 @@ impl Compiler {
     }
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
+    #[instrument(skip(self))]
     pub fn compile_in_game_file(
         &self,
         path: &LpcPath,
@@ -164,14 +169,15 @@ impl Compiler {
     /// let (tokens, preprocessor) = compiler.preprocess_string("~/my_file.c", code)
     ///     .expect("Failed to preprocess.");
     /// ```
+    #[instrument(skip(self, code))]
     pub fn preprocess_string<T, U>(
         &self,
         path: T,
         code: U,
     ) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
     where
-        T: Into<LpcPath>,
-        U: AsRef<str>,
+        T: Into<LpcPath> + Debug,
+        U: AsRef<str> + Debug,
     {
         let lpc_path = path.into();
         let context = CompilationContext::new(&lpc_path, self.config.clone())
@@ -213,10 +219,11 @@ impl Compiler {
     /// let compiler = Compiler::default();
     /// let prog = compiler.compile_string("~/my_file.c", code).expect("Failed to compile.");
     /// ```
+    #[instrument(skip(self, code))]
     pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program, CompilerError>
     where
-        T: Into<LpcPath>,
-        U: AsRef<str>,
+        T: Into<LpcPath> + Debug,
+        U: AsRef<str> + Debug,
     {
         let (mut program_node, context) = self.parse_string(&path.into(), code)?;
 
@@ -263,13 +270,14 @@ impl Compiler {
     /// # Returns
     /// A [`Result`] with a tuple containing the parsed [`ProgramNode`],
     /// as well as the [`Preprocessor`]'s [`Context`]
+    #[instrument(skip(self, code))]
     pub fn parse_string<T>(
         &self,
         path: &LpcPath,
         code: T,
     ) -> Result<(ProgramNode, CompilationContext), CompilerError>
     where
-        T: AsRef<str>,
+        T: AsRef<str> + Debug,
     {
         let (tokens, preprocessor) = self.preprocess_string(path, code)?;
 
