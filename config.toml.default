@@ -55,7 +55,7 @@ port = 2020
 #tls_port = 4040
 
 # The log level to use for internal logging. It's most useful for debugging the
-# driver itself, and is very helpful if leaving a bug report.
+# driver itself, and is very helpful if included with a bug report.
 # This is *not* related to the user-facing compile-time and runtime error logs.
 # Valid values are: "trace", "debug", "info", "warn", "error"
 # Comment this line and / or `log_file` out to disable internal logging.
@@ -69,6 +69,5 @@ log_level = "info"
 # be located somewhere that's available in-game.
 #
 # Comment this line out to disable internal logging.
-# Either this, or `log_level`, or both can be commented out to disable logging.
+# Comment this line and / or `log_level` out to disable internal logging.
 log_file = "STDOUT"
-
