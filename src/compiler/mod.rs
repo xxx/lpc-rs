@@ -33,8 +33,9 @@ macro_rules! apply_walker {
         let context = walker.into_context();
 
         if let Err(e) = result {
+            let e = e.with_additional_errors(context.errors);
             // e.emit_diagnostics();
-            return Err(e.with_additional_errors(context.errors));
+            return Err(e);
         } else if $fatal && !context.errors.is_empty() {
             // TODO: get rid of this clone
             let mut e = context.errors[0].clone();
@@ -189,7 +190,7 @@ impl Compiler {
             Err(e) => {
                 let err = e;
 
-                errors::emit_diagnostics(&[err.clone()]);
+                // err.emit_diagnostics();
 
                 // Preprocessor errors are fatal.
                 return Err(err);
@@ -240,7 +241,7 @@ impl Compiler {
         let mut asm_walker = CodegenWalker::new(context);
 
         if let Err(e) = program_node.visit(&mut asm_walker) {
-            errors::emit_diagnostics(&[e.clone()]);
+            // e.emit_diagnostics();
             return Err(e);
         }
 
@@ -290,7 +291,7 @@ impl Compiler {
             Ok(prog) => Ok((prog, context)),
             Err(e) => {
                 let err = LpcError::from(e);
-                errors::emit_diagnostics(&[err.clone()]);
+                // err.emit_diagnostics();
 
                 // Parse errors are fatal, so we're done here.
                 Err(err)

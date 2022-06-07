@@ -84,26 +84,18 @@ impl LpcError {
     }
 
     pub fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
-        let mut diagnostic = Diagnostic::error().with_message(format!("{}", self));
-        let mut labels = vec![];
+        let mut v = vec![Diagnostic::from(self)];
 
-        if let Some(span) = self.span {
-            labels.push(Label::primary(span.file_id, span.l..span.r));
+        if let Some(ref additional_errors) = self.additional_errors {
+            v.extend(additional_errors.iter().flat_map(|e| e.to_diagnostics()));
         }
 
-        for label in &self.labels {
-            labels.push(label.clone());
-        }
+        v
+    }
 
-        if !labels.is_empty() {
-            diagnostic = diagnostic.with_labels(labels);
-        }
-
-        if !self.notes.is_empty() {
-            diagnostic = diagnostic.with_notes(self.notes.clone())
-        }
-
-        vec![diagnostic]
+    /// Emit this error's collected diagnostics
+    pub fn emit_diagnostics(&self) {
+        output_diagnostics(&self.to_diagnostics());
     }
 }
 
@@ -149,19 +141,38 @@ impl From<std::io::Error> for LpcError {
     }
 }
 
-/// Emit nice error messages to the console.
-///
-/// # Arguments
-/// * `errors` - A slice of [`LpcError`]s to display diagnostics for.
-pub fn emit_diagnostics(errors: &[LpcError]) {
+impl From<&LpcError> for Diagnostic<usize> {
+    fn from(error: &LpcError) -> Self {
+        let mut diagnostic = Diagnostic::error().with_message(format!("{}", error));
+        let mut labels = vec![];
+
+        if let Some(span) = error.span {
+            labels.push(Label::primary(span.file_id, span.l..span.r));
+        }
+
+        for label in &error.labels {
+            labels.push(label.clone());
+        }
+
+        if !labels.is_empty() {
+            diagnostic = diagnostic.with_labels(labels);
+        }
+
+        if !error.notes.is_empty() {
+            diagnostic = diagnostic.with_notes(error.notes.clone())
+        }
+
+        diagnostic
+    }
+}
+
+fn output_diagnostics(diagnostics: &[Diagnostic<usize>]) {
     let files = FILE_CACHE.read();
 
-    let diagnostics: Vec<Diagnostic<usize>> =
-        errors.iter().flat_map(LpcError::to_diagnostics).collect();
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = codespan_reporting::term::Config::default();
 
-    for diagnostic in &diagnostics {
+    for diagnostic in diagnostics {
         if let Err(e) =
             codespan_reporting::term::emit(&mut writer.lock(), &config, &*files, diagnostic)
         {
@@ -172,7 +183,6 @@ pub fn emit_diagnostics(errors: &[LpcError]) {
         };
     }
 }
-
 /// An extracted function that covers the most common use case for generating diagnostics.
 ///
 /// # Arguments

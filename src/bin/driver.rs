@@ -16,7 +16,7 @@ fn main() {
     let config = match Config::new(None::<&str>) {
         Ok(c) => c,
         Err(e) => {
-            errors::emit_diagnostics(&[e]);
+            e.emit_diagnostics();
             std::process::exit(1);
         }
     };
@@ -58,13 +58,15 @@ fn main() {
             let object_space = ObjectSpace::default();
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory);
             if let Err(e) = task.initialize_program(program, config, object_space) {
-                errors::emit_diagnostics(&[e]);
+                e.emit_diagnostics();
             }
         }
-        Err(e) => eprintln!(
-            "unable to compile {}: {:?}",
-            lpc_path.as_server(config.lib_dir()).display(),
-            e
-        ),
+        Err(e) => {
+            eprintln!(
+                "unable to compile {}",
+                lpc_path.as_server(config.lib_dir()).display(),
+            );
+            e.emit_diagnostics();
+        },
     }
 }

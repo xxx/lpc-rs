@@ -27,7 +27,7 @@ fn main() {
             let object_space = ObjectSpace::default();
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory);
             if let Err(e) = task.initialize_program(program, config, object_space) {
-                errors::emit_diagnostics(&[e]);
+                e.emit_diagnostics();
             }
         }
         Err(e) => eprintln!("unable to compile {}: {:?}", filename, e),
