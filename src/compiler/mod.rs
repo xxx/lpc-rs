@@ -1,7 +1,6 @@
 use fs_err as fs;
 
 use crate::{
-    Result,
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
     codegen::{
         codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
@@ -19,6 +18,7 @@ use crate::{
     },
     preprocessor::Preprocessor,
     util::{config::Config, path_maker::LpcPath},
+    Result,
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
@@ -126,11 +126,7 @@ impl Compiler {
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
     #[instrument(skip(self))]
-    pub fn compile_in_game_file(
-        &self,
-        path: &LpcPath,
-        span: Option<Span>,
-    ) -> Result<Program> {
+    pub fn compile_in_game_file(&self, path: &LpcPath, span: Option<Span>) -> Result<Program> {
         let true_path = path.as_server(self.config.lib_dir());
 
         if path.as_os_str().is_empty() || !true_path.starts_with(self.config.lib_dir()) {

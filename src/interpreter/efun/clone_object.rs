@@ -24,36 +24,32 @@ fn load_master<const N: usize>(
 
     match context.lookup_process(path_str) {
         Some(proc) => Ok(proc),
-        None => {
-            match compiler.compile_in_game_file(&full_path, context.current_debug_span()) {
-                Ok(prog) => {
-                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
-                    let process: Rc<RefCell<Process>> = Process::new(prog).into();
-                    context.insert_process(process.clone());
-                    let borrowed = process.borrow();
-                    let function = borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
-                    match function {
-                        Some(prog_function) => {
-                            let new_context =
-                                context.clone_task_context().with_process(process.clone());
-                            let eval_context =
-                                task.eval(prog_function.clone(), &[], new_context)?;
+        None => match compiler.compile_in_game_file(&full_path, context.current_debug_span()) {
+            Ok(prog) => {
+                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
+                let process: Rc<RefCell<Process>> = Process::new(prog).into();
+                context.insert_process(process.clone());
+                let borrowed = process.borrow();
+                let function = borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
+                match function {
+                    Some(prog_function) => {
+                        let new_context =
+                            context.clone_task_context().with_process(process.clone());
+                        let eval_context = task.eval(prog_function.clone(), &[], new_context)?;
 
-                            context
-                                .increment_instruction_count(eval_context.instruction_count())?;
+                        context.increment_instruction_count(eval_context.instruction_count())?;
 
-                            Ok(process.clone())
-                        }
-                        None => Err(LpcError::new("Init function not found on master?")),
+                        Ok(process.clone())
                     }
-                }
-                Err(e) => {
-                    let debug_span = context.current_debug_span();
-
-                    Err(e.with_span(debug_span))
+                    None => Err(LpcError::new("Init function not found on master?")),
                 }
             }
-        }
+            Err(e) => {
+                let debug_span = context.current_debug_span();
+
+                Err(e.with_span(debug_span))
+            }
+        },
     }
 }
 

@@ -29,7 +29,7 @@ pub struct LpcError {
     notes: Vec<String>,
     /// Additional errors that were collected before this one. This is only
     /// used during compilation, when non-fatal errors can occur.
-    additional_errors: Option<Vec<LpcError>>
+    additional_errors: Option<Vec<LpcError>>,
 }
 
 impl LpcError {

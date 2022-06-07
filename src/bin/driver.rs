@@ -66,6 +66,6 @@ fn main() {
                 lpc_path.as_server(config.lib_dir()).display(),
             );
             e.emit_diagnostics();
-        },
+        }
     }
 }

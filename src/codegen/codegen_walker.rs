@@ -1789,28 +1789,26 @@ mod tests {
     use super::*;
 
     use crate::{
+        apply_walker,
         asm::instruction::Instruction::*,
         ast::{
             ast_node::AstNode, comma_expression_node::CommaExpressionNode,
             expression_node::ExpressionNode,
         },
-        codegen::scope_walker::ScopeWalker,
-        lpc_parser,
-        parser::{lexer::LexWrapper, span::Span},
-        LpcFloat,
-        Result,
-        apply_walker,
         codegen::{
-            default_params_walker::DefaultParamsWalker,
+            codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
             function_prototype_walker::FunctionPrototypeWalker,
-            inheritance_walker::InheritanceWalker, semantic_check_walker::SemanticCheckWalker,
+            inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
+            semantic_check_walker::SemanticCheckWalker,
         },
         compiler::Compiler,
         core::lpc_type::LpcType,
+        lpc_parser,
+        parser::{lexer::LexWrapper, span::Span},
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
+        LpcFloat, Result,
     };
-    use crate::codegen::codegen_walker::CodegenWalker;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
