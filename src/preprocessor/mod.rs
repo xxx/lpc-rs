@@ -1,9 +1,10 @@
 use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
 use define::{Define, ObjectMacro};
-use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, path::Path};
+use std::fs::File;
+use std::io::{BufReader, Read};
 
 use crate::{
     ast::binary_op_node::BinaryOperation,
@@ -865,8 +866,8 @@ impl Preprocessor {
             .with_span(Some(span)));
         }
 
-        let file_content = match fs::read_to_string(&canon_include_path) {
-            Ok(content) => content,
+        let file = match File::open(&canon_include_path) {
+            Ok(f) => f,
             Err(e) => {
                 return Err(LpcError::new(&format!(
                     "unable to read include file `{}`: {:?}",
@@ -875,6 +876,10 @@ impl Preprocessor {
                 .with_span(Some(span)));
             }
         };
+
+        let mut buf_reader = BufReader::new(file);
+        let mut file_content = String::new();
+        buf_reader.read_to_string(&mut file_content)?;
 
         let path = LpcPath::new_server(canon_include_path);
         self.scan(path, &file_content)
