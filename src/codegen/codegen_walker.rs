@@ -1786,6 +1786,8 @@ impl Default for CodegenWalker {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use crate::{
         asm::instruction::Instruction::*,
         ast::{
@@ -1796,22 +1798,20 @@ mod tests {
         lpc_parser,
         parser::{lexer::LexWrapper, span::Span},
         LpcFloat,
-    };
-
-    use super::*;
-    use crate::{
+        Result,
         apply_walker,
         codegen::{
             default_params_walker::DefaultParamsWalker,
             function_prototype_walker::FunctionPrototypeWalker,
             inheritance_walker::InheritanceWalker, semantic_check_walker::SemanticCheckWalker,
         },
-        compiler::{compiler_error::CompilerError, Compiler},
+        compiler::Compiler,
         core::lpc_type::LpcType,
         errors,
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
     };
+    use crate::codegen::codegen_walker::CodegenWalker;
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
@@ -1823,7 +1823,7 @@ mod tests {
         walk_code(prog).expect("failed to walk.")
     }
 
-    fn walk_code(code: &str) -> std::result::Result<CodegenWalker, CompilerError> {
+    fn walk_code(code: &str) -> Result<CodegenWalker> {
         let config = Config::default().with_lib_dir("./tests/fixtures/code");
         let compiler = Compiler::new(config.into());
         let (mut program, context) = compiler

@@ -1,5 +1,5 @@
 use crate::{
-    compiler::{compiler_error::CompilerError, Compiler},
+    compiler::Compiler,
     core::{call_namespace::CallNamespace, INIT_PROGRAM},
     errors::LpcError,
     interpreter::{
@@ -50,14 +50,7 @@ fn load_master<const N: usize>(
                 Err(e) => {
                     let debug_span = context.current_debug_span();
 
-                    let err = match e {
-                        CompilerError::LpcError(x) => x,
-                        // TODO: make this handle all of these errors
-                        CompilerError::Collection(mut x) => x.swap_remove(0),
-                    }
-                    .with_span(debug_span);
-
-                    Err(err)
+                    Err(e.with_span(debug_span))
                 }
             }
         }

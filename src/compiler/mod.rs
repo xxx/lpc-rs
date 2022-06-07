@@ -1,7 +1,7 @@
-use compiler_error::CompilerError;
 use fs_err as fs;
 
 use crate::{
+    Result,
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
     codegen::{
         codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
@@ -24,8 +24,6 @@ use crate::{
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
 
-pub mod compiler_error;
-
 #[macro_export]
 macro_rules! apply_walker {
     ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {{
@@ -34,14 +32,16 @@ macro_rules! apply_walker {
 
         let context = walker.into_context();
 
-        if $fatal && !context.errors.is_empty() {
-            errors::emit_diagnostics(&context.errors);
-            return Err(CompilerError::Collection(context.errors));
-        }
-
         if let Err(e) = result {
-            errors::emit_diagnostics(&[e.clone()]);
-            return Err(CompilerError::LpcError(e));
+            // e.emit_diagnostics();
+            return Err(e.with_additional_errors(context.errors));
+        } else if $fatal && !context.errors.is_empty() {
+            // TODO: get rid of this clone
+            let mut e = context.errors[0].clone();
+
+            e = e.with_additional_errors(context.errors[1..].to_vec());
+            // e.emit_diagnostics();
+            return Err(e);
         }
 
         context
@@ -89,7 +89,7 @@ impl Compiler {
     /// let prog = compiler.compile_file("tests/fixtures/code/example.c").expect("Unable to compile.");
     /// ```
     #[instrument(skip(self))]
-    pub fn compile_file<T>(&self, path: T) -> Result<Program, CompilerError>
+    pub fn compile_file<T>(&self, path: T) -> Result<Program>
     where
         T: Into<LpcPath> + Debug,
     {
@@ -102,21 +102,21 @@ impl Compiler {
                 return match e.kind() {
                     ErrorKind::NotFound => {
                         if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
-                            return Err(CompilerError::LpcError(LpcError::new(format!(
+                            return Err(LpcError::new(format!(
                                 "Cannot read file `{}`: {}",
                                 absolute.display(),
                                 e
-                            ))));
+                            )));
                         }
 
                         let dot_c = lpc_path.with_extension("c");
                         self.compile_file(dot_c)
                     }
-                    _ => Err(CompilerError::LpcError(LpcError::new(format!(
+                    _ => Err(LpcError::new(format!(
                         "Cannot read file `{}`: {}",
                         absolute.display(),
                         e
-                    )))),
+                    ))),
                 };
             }
         };
@@ -130,16 +130,16 @@ impl Compiler {
         &self,
         path: &LpcPath,
         span: Option<Span>,
-    ) -> Result<Program, CompilerError> {
+    ) -> Result<Program> {
         let true_path = path.as_server(self.config.lib_dir());
 
         if path.as_os_str().is_empty() || !true_path.starts_with(self.config.lib_dir()) {
-            return Err(CompilerError::LpcError(LpcError::new(&format!(
+            return Err(LpcError::new(&format!(
                 "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 true_path.display(),
                 self.config.lib_dir()
-            )).with_span(span)));
+            )).with_span(span));
         }
 
         self.compile_file(path)
@@ -174,7 +174,7 @@ impl Compiler {
         &self,
         path: T,
         code: U,
-    ) -> Result<(Vec<Spanned<Token>>, Preprocessor), CompilerError>
+    ) -> Result<(Vec<Spanned<Token>>, Preprocessor)>
     where
         T: Into<LpcPath> + Debug,
         U: AsRef<str> + Debug,
@@ -192,7 +192,7 @@ impl Compiler {
                 errors::emit_diagnostics(&[err.clone()]);
 
                 // Preprocessor errors are fatal.
-                return Err(CompilerError::LpcError(err));
+                return Err(err);
             }
         };
 
@@ -220,7 +220,7 @@ impl Compiler {
     /// let prog = compiler.compile_string("~/my_file.c", code).expect("Failed to compile.");
     /// ```
     #[instrument(skip(self, code))]
-    pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program, CompilerError>
+    pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>
     where
         T: Into<LpcPath> + Debug,
         U: AsRef<str> + Debug,
@@ -241,7 +241,7 @@ impl Compiler {
 
         if let Err(e) = program_node.visit(&mut asm_walker) {
             errors::emit_diagnostics(&[e.clone()]);
-            return Err(CompilerError::LpcError(e));
+            return Err(e);
         }
 
         // for s in asm_walker.listing() {
@@ -250,7 +250,7 @@ impl Compiler {
 
         let program = match asm_walker.into_program() {
             Ok(p) => p,
-            Err(e) => return Err(CompilerError::LpcError(e)),
+            Err(e) => return Err(e),
         };
 
         println!("{}", program.filename);
@@ -275,7 +275,7 @@ impl Compiler {
         &self,
         path: &LpcPath,
         code: T,
-    ) -> Result<(ProgramNode, CompilationContext), CompilerError>
+    ) -> Result<(ProgramNode, CompilationContext)>
     where
         T: AsRef<str> + Debug,
     {
@@ -293,7 +293,7 @@ impl Compiler {
                 errors::emit_diagnostics(&[err.clone()]);
 
                 // Parse errors are fatal, so we're done here.
-                Err(CompilerError::LpcError(err))
+                Err(err)
             }
         }
     }

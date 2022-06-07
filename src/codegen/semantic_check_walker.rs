@@ -606,7 +606,7 @@ mod tests {
             default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
             semantic_check_walker::SemanticCheckWalker,
         },
-        compiler::{compiler_error::CompilerError, Compiler},
+        compiler::Compiler,
         core::{call_namespace::CallNamespace, lpc_type::LpcType},
         errors,
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
@@ -635,7 +635,7 @@ mod tests {
         }
     }
 
-    fn walk_code(code: &str) -> std::result::Result<CompilationContext, CompilerError> {
+    fn walk_code(code: &str) -> Result<CompilationContext> {
         let compiler = Compiler::default();
         let (mut program, context) = compiler
             .parse_string(

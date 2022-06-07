@@ -11,7 +11,6 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
 use crate::{
-    compiler::compiler_error::CompilerError,
     errors::lazy_files::FILE_CACHE,
     parser::{lexer::Token, span::Span},
 };
@@ -28,6 +27,9 @@ pub struct LpcError {
     labels: Vec<Label<usize>>,
     /// Additional text notes, suggestions, etc. to be printed to the user.
     notes: Vec<String>,
+    /// Additional errors that were collected before this one. This is only
+    /// used during compilation, when non-fatal errors can occur.
+    additional_errors: Option<Vec<LpcError>>
 }
 
 impl LpcError {
@@ -41,6 +43,7 @@ impl LpcError {
             span: None,
             labels: Vec::new(),
             notes: Vec::new(),
+            additional_errors: None,
         }
     }
 
@@ -70,6 +73,12 @@ impl LpcError {
         T: Into<String>,
     {
         self.notes.push(note.into());
+
+        self
+    }
+
+    pub fn with_additional_errors(mut self, additional_errors: Vec<LpcError>) -> Self {
+        self.additional_errors = Some(additional_errors);
 
         self
     }
@@ -137,18 +146,6 @@ impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
 impl From<std::io::Error> for LpcError {
     fn from(e: std::io::Error) -> Self {
         Self::new(e.to_string())
-    }
-}
-
-impl From<CompilerError> for LpcError {
-    fn from(ce: CompilerError) -> Self {
-        match ce {
-            CompilerError::LpcError(e) => e,
-            CompilerError::Collection(mut errors) => {
-                let replacement = LpcError::new("");
-                std::mem::replace(&mut errors[0], replacement)
-            }
-        }
     }
 }
 
