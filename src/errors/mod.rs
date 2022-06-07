@@ -2,11 +2,13 @@ use std::{
     error::Error,
     fmt::{Debug, Display},
 };
+use std::fs::OpenOptions;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream},
 };
+use codespan_reporting::term::termcolor::WriteColor;
 use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
@@ -14,7 +16,9 @@ use crate::{
     errors::lazy_files::FILE_CACHE,
     parser::{lexer::Token, span::Span},
 };
+use crate::errors::file_stream::FileStream;
 
+pub mod file_stream;
 pub mod lazy_files;
 
 #[derive(Debug, Clone)]
@@ -95,7 +99,31 @@ impl LpcError {
 
     /// Emit this error's collected diagnostics
     pub fn emit_diagnostics(&self) {
-        output_diagnostics(&self.to_diagnostics());
+        {
+            output_diagnostics(
+                &self.to_diagnostics(),
+                &mut StandardStream::stderr(ColorChoice::Auto).lock()
+            );
+        }
+    }
+
+    /// Emit this error's collected diagnostics
+    pub fn _emit_diagnostics_to_file(&self, path: &str) {
+        let file = OpenOptions::new().write(true).create(true).open(path);
+
+        match file {
+            Ok(file) => {
+                let mut file_stream = FileStream::new(file);
+
+                output_diagnostics(
+                    &self.to_diagnostics(),
+                    &mut file_stream
+                );
+            },
+            Err(e) => {
+                eprintln!("Error opening file `{}`: {}", path, e);
+            }
+        }
     }
 }
 
@@ -166,15 +194,14 @@ impl From<&LpcError> for Diagnostic<usize> {
     }
 }
 
-fn output_diagnostics(diagnostics: &[Diagnostic<usize>]) {
+fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteColor) {
     let files = FILE_CACHE.read();
 
-    let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = codespan_reporting::term::Config::default();
 
     for diagnostic in diagnostics {
         if let Err(e) =
-            codespan_reporting::term::emit(&mut writer.lock(), &config, &*files, diagnostic)
+            codespan_reporting::term::emit(writer, &config, &*files, diagnostic)
         {
             eprintln!(
                 "error attempting to emit diagnostic: {:?} ::: {:?} ::: {:?}",
