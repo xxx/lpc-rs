@@ -1,3 +1,5 @@
+use fs_err as fs;
+
 use crate::{
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
     codegen::{
@@ -19,8 +21,6 @@ use crate::{
     Result,
 };
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
-use std::fs::File;
-use std::io::{BufReader, Read};
 use tracing::instrument;
 
 #[macro_export]
@@ -96,8 +96,8 @@ impl Compiler {
         let lpc_path = path.into();
         let absolute = lpc_path.as_server(self.config.lib_dir());
 
-        let file = match File::open(&*absolute) {
-            Ok(f) => f,
+        let file_content = match fs::read_to_string(&*absolute) {
+            Ok(s) => s,
             Err(e) => {
                 return match e.kind() {
                     ErrorKind::NotFound => {
@@ -120,10 +120,6 @@ impl Compiler {
                 };
             }
         };
-
-        let mut buf_reader = BufReader::new(file);
-        let mut file_content = String::new();
-        buf_reader.read_to_string(&mut file_content)?;
 
         self.compile_string(lpc_path, file_content)
     }
