@@ -250,9 +250,9 @@ dependencies = [
 
 [[package]]
 name = "delegate"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35c47a31748d9cfa641f6cccb3608385fafe261ba36054f3d40d5a3ca11eb1af"
+checksum = "d70a2d4995466955a415223acf3c9c934b9ff2339631cdf4ffc893da4bacd717"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1178,9 +1178,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.19.1"
+version = "1.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95eec79ea28c00a365f539f1961e9278fbcaf81c0ff6aaf0e93c181352446948"
+checksum = "c51a52ed6686dd62c320f9b89299e9dfb46f730c7a48e635c19f21d116cb1439"
 dependencies = [
  "num_cpus",
  "once_cell",
