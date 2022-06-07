@@ -608,7 +608,6 @@ mod tests {
         },
         compiler::Compiler,
         core::{call_namespace::CallNamespace, lpc_type::LpcType},
-        errors,
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
         util::path_maker::LpcPath,
     };

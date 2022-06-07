@@ -1,6 +1,5 @@
 use lpc_rs::{
     compiler::Compiler,
-    errors,
     util::{config::Config, path_maker::LpcPath},
 };
 

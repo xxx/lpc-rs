@@ -1807,7 +1807,6 @@ mod tests {
         },
         compiler::Compiler,
         core::lpc_type::LpcType,
-        errors,
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
     };

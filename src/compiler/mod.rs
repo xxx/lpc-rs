@@ -10,7 +10,6 @@ use crate::{
         tree_walker::ContextHolder,
     },
     compilation_context::CompilationContext,
-    errors,
     errors::LpcError,
     interpreter::program::Program,
     lpc_parser,
