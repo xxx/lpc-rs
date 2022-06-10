@@ -25,7 +25,7 @@ impl Display for GlobalVarFlags {
 impl GlobalVarFlags {
     pub fn validate<'a>(strs: &'_ [&'a str]) -> Vec<&'a str> {
         let mut invalid = vec![];
-        for s in strs.into_iter() {
+        for s in strs.iter() {
             match *s {
                 "public"
                 | "private"
