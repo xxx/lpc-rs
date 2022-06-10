@@ -171,8 +171,17 @@ pub Inherit: InheritNode = {
 
 pub Def: AstNode = {
     <FunctionDef> => AstNode::from(<>),
-    <flags:GlobalFlag*> <mut node:Decl> ";" => {
+    <flags:GlobalFlag*> <mut node:Decl> ";" =>? {
         let flag_strs = flags.iter().map(|i| i.0).collect::<Vec<_>>();
+        let invalid = GlobalVarFlags::validate(&flag_strs);
+        if let Some(field) = invalid.first() {
+            let span = combine_spans(Some(flags[0].1), Some(flags.last().unwrap().1));
+
+            let err = LpcError::new(format!("`{}` is intended for functions only", field))
+                                      .with_span(Some(span));
+            return Err(ParseError::User { error: err });
+        }
+
         let flags = GlobalVarFlags::from(flag_strs);
 
         node.initializations.iter_mut().for_each(|i| {
@@ -180,7 +189,7 @@ pub Def: AstNode = {
             i.flags = Some(flags);
         });
 
-        AstNode::from(node)
+        Ok(AstNode::from(node))
     }
 };
 
@@ -286,6 +295,7 @@ GlobalFlag: (&'static str, Span) = {
     "private" => ("private", <>),
     "static" => ("static", <>),
     "protected" => ("protected", <>),
+    "nomask" => ("nomask", <>),
 };
 
 pub Statement: AstNode = {

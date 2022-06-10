@@ -307,6 +307,22 @@ impl TreeWalker for SemanticCheckWalker {
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(&node.name)?;
 
+        let proto_opt = self
+            .context
+            .lookup_function_complete(&node.name, &CallNamespace::default());
+        if let Some(prototype) = proto_opt {
+            if prototype.flags.nomask() {
+                let e = LpcError::new(format!(
+                    "attempt to redefine nomask function `{}`",
+                    node.name
+                ))
+                    .with_span(node.span)
+                    .with_label("defined here", prototype.span);
+
+                return Err(e);
+            }
+        }
+
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
 
@@ -1729,11 +1745,10 @@ mod tests {
 
     mod test_visit_function_def {
         use super::*;
-        use crate::{
-            ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
-            codegen::scope_walker::ScopeWalker,
-            semantic::function_flags::FunctionFlags,
-        };
+        use crate::{assert_regex, ast::{ast_node::AstNode, binary_op_node::BinaryOperation}, codegen::scope_walker::ScopeWalker, semantic::function_flags::FunctionFlags};
+        use crate::core::function_arity::FunctionArity;
+        use crate::interpreter::program::Program;
+        use crate::semantic::program_function::ProgramFunction;
 
         #[test]
         fn handles_scopes() {
@@ -1828,6 +1843,49 @@ mod tests {
             } else {
                 panic!("didn't error?")
             }
+        }
+
+        #[test]
+        fn disallows_redefining_nomask_function() {
+            let mut node = FunctionDefNode {
+                return_type: LpcType::Void,
+                name: "duplicate".to_string(),
+                parameters: vec![],
+                flags: FunctionFlags::default(),
+                body: vec![],
+                span: None,
+            };
+
+            let mut context = empty_context();
+            let mut program = Program::default();
+
+            let prototype = FunctionPrototype::new(
+                "duplicate",
+                LpcType::Void,
+                FunctionArity::new(4),
+                FunctionFlags::default().with_nomask(true),
+                None,
+                Vec::new(),
+                Vec::new(),
+            );
+
+            let func = ProgramFunction::new(prototype, 7);
+
+            program
+                .functions
+                .insert(String::from("duplicate"), func.into());
+
+            context.inherits.push(program);
+
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = walker.visit_function_def(&mut node);
+
+            if let Err(e) = result {
+                assert_regex!(&e.to_string(), "attempt to redefine nomask function `duplicate`");
+            } else {
+                panic!("didn't error?")
+            }
+
         }
     }
 

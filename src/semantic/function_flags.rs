@@ -9,6 +9,7 @@ use modular_bitfield::prelude::*;
 pub struct FunctionFlags {
     pub ellipsis: bool,
     pub varargs: bool,
+    pub nomask: bool,
     #[bits = 2]
     pub visibility: Visibility,
 }
@@ -43,6 +44,9 @@ where
             match s.as_ref() {
                 "varargs" => {
                     flags.set_varargs(true);
+                }
+                "nomask" => {
+                    flags.set_nomask(true);
                 }
                 "public" => {
                     flags.set_visibility(Visibility::Public);

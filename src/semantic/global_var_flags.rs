@@ -22,6 +22,25 @@ impl Display for GlobalVarFlags {
     }
 }
 
+impl GlobalVarFlags {
+    pub fn validate<'a>(strs: &'_ [&'a str]) -> Vec<&'a str> {
+        let mut invalid = vec![];
+        for s in strs.into_iter() {
+            match *s {
+                "public"
+                | "private"
+                | "protected"
+                | "static" => {}
+                _ => {
+                    invalid.push(*s);
+                }
+            }
+        }
+
+        invalid
+    }
+}
+
 impl<T> From<Vec<T>> for GlobalVarFlags
 where
     T: AsRef<str>,
@@ -37,7 +56,9 @@ where
                     flags.set_visibility(Visibility::Private);
                 }
                 "protected" => {
-                    flags.set_visibility(Visibility::Protected);
+                    // Protected variables are the same as public,
+                    // unless and until we support classes.
+                    flags.set_visibility(Visibility::Public);
                 }
                 "static" => {
                     flags.set_is_static(true);
@@ -62,7 +83,7 @@ mod tests {
 
         let vec = vec!["protected", "static"];
         let flags = GlobalVarFlags::from(vec);
-        assert_eq!(flags.visibility(), Visibility::Protected);
+        assert_eq!(flags.visibility(), Visibility::Public);
         assert!(flags.is_static());
 
         let vec: Vec<&'static str> = vec![];

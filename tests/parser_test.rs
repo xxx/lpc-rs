@@ -49,7 +49,7 @@ fn assert_int(value: LpcInt, expr: &str) {
 
 #[test]
 fn program_global_vars() {
-    let prog = "int i = 123; private int j = i - 8; protected static string *k;";
+    let prog = "int i = 123; private int j = i - 8; private static string *k;";
     let lexer = LexWrapper::new(prog);
     let node = lpc_parser::ProgramParser::new()
         .parse(&CompilationContext::default(), lexer)
@@ -132,12 +132,12 @@ fn program_global_vars() {
                     global: true,
                     span: Some(Span {
                         file_id: 0,
-                        l: 60,
-                        r: 62,
+                        l: 58,
+                        r: 60,
                     }),
                     flags: Some(
                         GlobalVarFlags::new()
-                            .with_visibility(Visibility::Protected)
+                            .with_visibility(Visibility::Private)
                             .with_is_static(true),
                     ),
                 }],
@@ -509,6 +509,34 @@ fn error_when_multiple_visibilities_given() {
     assert_eq!(
         &program.unwrap_err().to_string(),
         "multiple visibilities specified. use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility"
+    );
+}
+
+#[test]
+fn error_on_varargs_var() {
+    let prog = indoc! { r#"
+        varargs string a;
+    "# };
+
+    let program = parse_prog(prog);
+
+    assert_eq!(
+        &program.unwrap_err().to_string(),
+        "`varargs` is intended for functions only"
+    );
+}
+
+#[test]
+fn error_on_nomask_var() {
+    let prog = indoc! { r#"
+        nomask string a;
+    "# };
+
+    let program = parse_prog(prog);
+
+    assert_eq!(
+        &program.unwrap_err().to_string(),
+        "`nomask` is intended for functions only"
     );
 }
 
