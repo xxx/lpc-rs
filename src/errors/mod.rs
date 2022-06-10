@@ -1,22 +1,20 @@
 use std::{
     error::Error,
     fmt::{Debug, Display},
+    fs::OpenOptions,
 };
-use std::fs::OpenOptions;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
-    term::termcolor::{ColorChoice, StandardStream},
+    term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
-use codespan_reporting::term::termcolor::WriteColor;
 use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
 use crate::{
-    errors::lazy_files::FILE_CACHE,
+    errors::{file_stream::FileStream, lazy_files::FILE_CACHE},
     parser::{lexer::Token, span::Span},
 };
-use crate::errors::file_stream::FileStream;
 
 pub mod file_stream;
 pub mod lazy_files;
@@ -102,7 +100,7 @@ impl LpcError {
         {
             output_diagnostics(
                 &self.to_diagnostics(),
-                &mut StandardStream::stderr(ColorChoice::Auto).lock()
+                &mut StandardStream::stderr(ColorChoice::Auto).lock(),
             );
         }
     }
@@ -115,11 +113,8 @@ impl LpcError {
             Ok(file) => {
                 let mut file_stream = FileStream::new(file);
 
-                output_diagnostics(
-                    &self.to_diagnostics(),
-                    &mut file_stream
-                );
-            },
+                output_diagnostics(&self.to_diagnostics(), &mut file_stream);
+            }
             Err(e) => {
                 eprintln!("Error opening file `{}`: {}", path, e);
             }
@@ -200,9 +195,7 @@ fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteC
     let config = codespan_reporting::term::Config::default();
 
     for diagnostic in diagnostics {
-        if let Err(e) =
-            codespan_reporting::term::emit(writer, &config, &*files, diagnostic)
-        {
+        if let Err(e) = codespan_reporting::term::emit(writer, &config, &*files, diagnostic) {
             eprintln!(
                 "error attempting to emit diagnostic: {:?} ::: {:?} ::: {:?}",
                 e, diagnostic, files

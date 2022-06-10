@@ -316,8 +316,8 @@ impl TreeWalker for SemanticCheckWalker {
                     "attempt to redefine nomask function `{}`",
                     node.name
                 ))
-                    .with_span(node.span)
-                    .with_label("defined here", prototype.span);
+                .with_span(node.span)
+                .with_label("defined here", prototype.span);
 
                 return Err(e);
             }
@@ -1745,10 +1745,14 @@ mod tests {
 
     mod test_visit_function_def {
         use super::*;
-        use crate::{assert_regex, ast::{ast_node::AstNode, binary_op_node::BinaryOperation}, codegen::scope_walker::ScopeWalker, semantic::function_flags::FunctionFlags};
-        use crate::core::function_arity::FunctionArity;
-        use crate::interpreter::program::Program;
-        use crate::semantic::program_function::ProgramFunction;
+        use crate::{
+            assert_regex,
+            ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
+            codegen::scope_walker::ScopeWalker,
+            core::function_arity::FunctionArity,
+            interpreter::program::Program,
+            semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
+        };
 
         #[test]
         fn handles_scopes() {
@@ -1881,11 +1885,13 @@ mod tests {
             let result = walker.visit_function_def(&mut node);
 
             if let Err(e) = result {
-                assert_regex!(&e.to_string(), "attempt to redefine nomask function `duplicate`");
+                assert_regex!(
+                    &e.to_string(),
+                    "attempt to redefine nomask function `duplicate`"
+                );
             } else {
                 panic!("didn't error?")
             }
-
         }
     }
 

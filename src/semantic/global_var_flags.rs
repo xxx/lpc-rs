@@ -27,10 +27,7 @@ impl GlobalVarFlags {
         let mut invalid = vec![];
         for s in strs.iter() {
             match *s {
-                "public"
-                | "private"
-                | "protected"
-                | "static" => {}
+                "public" | "private" | "protected" | "static" => {}
                 _ => {
                     invalid.push(*s);
                 }

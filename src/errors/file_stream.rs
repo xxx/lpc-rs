@@ -1,6 +1,5 @@
-use std::fs::File;
-use std::io::Write;
 use codespan_reporting::term::termcolor::{ColorSpec, WriteColor};
+use std::{fs::File, io::Write};
 
 /// A newtype so we can implement WriteColor and emit codespan diagnostics to files.
 pub struct FileStream {
