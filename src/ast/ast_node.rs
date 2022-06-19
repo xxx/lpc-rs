@@ -36,7 +36,7 @@ pub enum AstNode {
     DoWhile(DoWhileNode),
     Expression(ExpressionNode),
     For(ForNode),
-    ForEach(ForEachNode),
+    ForEach(Box<ForEachNode>),
     FunctionDef(FunctionDefNode),
     If(IfNode),
     LabeledStatement(LabeledStatementNode),
@@ -148,7 +148,7 @@ impl From<ForNode> for AstNode {
 
 impl From<ForEachNode> for AstNode {
     fn from(node: ForEachNode) -> Self {
-        AstNode::ForEach(node)
+        AstNode::ForEach(node.into())
     }
 }
 
