@@ -46,24 +46,25 @@ use crate::{
 
 use crate::{
     asm::instruction::Instruction::RegCopy,
-    ast::function_ptr_node::FunctionPtrNode,
+    ast::{
+        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+        function_ptr_node::FunctionPtrNode,
+    },
     core::{
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
         register::Register, CREATE_FUNCTION, INIT_PROGRAM,
     },
     interpreter::{
-        efun::EFUN_PROTOTYPES,
+        efun::{EFUN_PROTOTYPES, SIZEOF},
         function_type::{FunctionName, FunctionReceiver, FunctionTarget},
     },
     parser::span::Span,
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
 };
 use if_chain::if_chain;
-use std::{collections::HashMap, ops::Range, rc::Rc};
 use indexmap::IndexMap;
+use std::{collections::HashMap, ops::Range, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::ast::for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode};
-use crate::interpreter::efun::SIZEOF;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1027,7 +1028,10 @@ impl TreeWalker for CodegenWalker {
 
                 vec![self.current_result]
             }
-            ForEachInit::Mapping { ref mut key, ref mut value } => {
+            ForEachInit::Mapping {
+                ref mut key,
+                ref mut value,
+            } => {
                 key.visit(self)?;
                 let key_result = self.current_result;
                 value.visit(self)?;
@@ -1055,16 +1059,19 @@ impl TreeWalker for CodegenWalker {
             ForEachInit::Array(node) => {
                 debug_assert!(locations.len() == 1);
 
-                let instruction = Instruction::Load(collection_location, index_location, locations[0]);
+                let instruction =
+                    Instruction::Load(collection_location, index_location, locations[0]);
                 push_instruction!(self, instruction, node.span);
             }
             ForEachInit::Mapping { key, value } => {
                 debug_assert!(locations.len() == 2);
 
-                let instruction = Instruction::LoadMappingKey(collection_location, index_location, locations[0]);
+                let instruction =
+                    Instruction::LoadMappingKey(collection_location, index_location, locations[0]);
                 push_instruction!(self, instruction, key.span());
 
-                let instruction = Instruction::Load(collection_location, locations[0], locations[1]);
+                let instruction =
+                    Instruction::Load(collection_location, locations[0], locations[1]);
                 push_instruction!(self, instruction, value.span());
             }
         }

@@ -29,13 +29,13 @@ use crate::{
 };
 use decorum::Total;
 use if_chain::if_chain;
+use indexmap::IndexMap;
 use std::{
     borrow::Cow,
     cell::RefCell,
     fmt::{Debug, Display},
     rc::Rc,
 };
-use indexmap::IndexMap;
 use tracing::{instrument, trace};
 
 macro_rules! pop_frame {
@@ -710,7 +710,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     | LpcRef::Int(_)
                     | LpcRef::Object(_)
                     | LpcRef::Function(_)
-                    | LpcRef::String(_) => LpcValue::from(0)
+                    | LpcRef::String(_) => LpcValue::from(0),
                 };
 
                 let lpc_ref = self.memory.value_to_ref(value);
@@ -1261,7 +1261,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         let index = match lpc_ref {
                             LpcRef::Int(i) => i,
-                            _ => return Err(frame.runtime_error(format!("Invalid index type: {}", lpc_ref))),
+                            _ => {
+                                return Err(
+                                    frame.runtime_error(format!("Invalid index type: {}", lpc_ref))
+                                )
+                            }
                         };
 
                         let var = if let Some((key, _)) = map.get_index(index as usize) {

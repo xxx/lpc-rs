@@ -3,12 +3,12 @@ use crate::{
     interpreter::function_type::FunctionTarget,
     LpcFloat, LpcInt,
 };
+use indexmap::IndexMap;
 use itertools::Itertools;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use indexmap::IndexMap;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;

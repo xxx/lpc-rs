@@ -495,8 +495,8 @@ mod tests {
     use std::cell::RefCell;
 
     mod test_add {
-        use indexmap::IndexMap;
         use super::*;
+        use indexmap::IndexMap;
 
         #[test]
         fn int_int() {

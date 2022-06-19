@@ -3,6 +3,7 @@ use crate::{
         ast_node::AstNodeTrait,
         block_node::BlockNode,
         do_while_node::DoWhileNode,
+        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
         if_node::IfNode,
@@ -20,7 +21,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -123,8 +123,11 @@ impl TreeWalker for ScopeWalker {
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) => {
                 let _ = init.visit(self);
-            },
-            ForEachInit::Mapping { ref mut key, ref mut value } => {
+            }
+            ForEachInit::Mapping {
+                ref mut key,
+                ref mut value,
+            } => {
                 let _ = key.visit(self);
                 let _ = value.visit(self);
             }

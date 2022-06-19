@@ -14,7 +14,7 @@ use crate::{
     ast::{
         binary_op_node::BinaryOpNode, block_node::BlockNode, break_node::BreakNode,
         call_node::CallNode, continue_node::ContinueNode, decl_node::DeclNode,
-        do_while_node::DoWhileNode, expression_node, for_node::ForNode,
+        do_while_node::DoWhileNode, expression_node, for_each_node::ForEachNode, for_node::ForNode,
         function_def_node::FunctionDefNode, if_node::IfNode, int_node,
         labeled_statement_node::LabeledStatementNode, program_node, return_node::ReturnNode,
         switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
@@ -23,7 +23,6 @@ use crate::{
     parser::span::Span,
     Result,
 };
-use crate::ast::for_each_node::ForEachNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

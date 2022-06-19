@@ -1,21 +1,40 @@
 use crate::{
     ast::{
-        array_node::ArrayNode, assignment_node::AssignmentNode, ast_node::AstNodeTrait,
-        binary_op_node::BinaryOpNode, block_node::BlockNode, break_node::BreakNode,
-        call_node::CallNode, comma_expression_node::CommaExpressionNode,
-        continue_node::ContinueNode, decl_node::DeclNode, do_while_node::DoWhileNode,
-        float_node::FloatNode, for_node::ForNode, function_def_node::FunctionDefNode,
-        function_ptr_node::FunctionPtrNode, if_node::IfNode, inherit_node::InheritNode,
-        int_node::IntNode, label_node::LabelNode, mapping_node::MappingNode,
-        program_node::ProgramNode, range_node::RangeNode, return_node::ReturnNode,
-        string_node::StringNode, switch_node::SwitchNode, ternary_node::TernaryNode,
-        unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
+        array_node::ArrayNode,
+        assignment_node::AssignmentNode,
+        ast_node::AstNodeTrait,
+        binary_op_node::BinaryOpNode,
+        block_node::BlockNode,
+        break_node::BreakNode,
+        call_node::CallNode,
+        comma_expression_node::CommaExpressionNode,
+        continue_node::ContinueNode,
+        decl_node::DeclNode,
+        do_while_node::DoWhileNode,
+        float_node::FloatNode,
+        for_each_node::{ForEachInit, ForEachNode},
+        for_node::ForNode,
+        function_def_node::FunctionDefNode,
+        function_ptr_node::FunctionPtrNode,
+        if_node::IfNode,
+        inherit_node::InheritNode,
+        int_node::IntNode,
+        label_node::LabelNode,
+        mapping_node::MappingNode,
+        program_node::ProgramNode,
+        range_node::RangeNode,
+        return_node::ReturnNode,
+        string_node::StringNode,
+        switch_node::SwitchNode,
+        ternary_node::TernaryNode,
+        unary_op_node::UnaryOpNode,
+        var_init_node::VarInitNode,
+        var_node::VarNode,
         while_node::WhileNode,
     },
     compilation_context::CompilationContext,
     Result,
 };
-use crate::ast::for_each_node::{ForEachInit, ForEachNode};
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -174,8 +193,11 @@ pub trait TreeWalker {
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) => {
                 let _ = init.visit(self);
-            },
-            ForEachInit::Mapping { ref mut key, ref mut value } => {
+            }
+            ForEachInit::Mapping {
+                ref mut key,
+                ref mut value,
+            } => {
                 let _ = key.visit(self);
                 let _ = value.visit(self);
             }

@@ -11,6 +11,7 @@ use crate::{
         continue_node::ContinueNode,
         do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
+        for_each_node::{ForEachInit, ForEachNode},
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
         function_ptr_node::FunctionPtrNode,
@@ -34,7 +35,6 @@ use crate::{
     },
     Result,
 };
-use crate::ast::for_each_node::{ForEachInit, ForEachNode};
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -310,8 +310,7 @@ impl TreeWalker for SemanticCheckWalker {
         self.context.scopes.goto(node.scope_id);
 
         let collection_type = node_type(&node.collection, &self.context)?;
-        if !collection_type.is_array() &&
-            !collection_type.matches_type(LpcType::Mapping(false)) {
+        if !collection_type.is_array() && !collection_type.matches_type(LpcType::Mapping(false)) {
             let e = LpcError::new(format!(
                 "`foreach` must iterate over an array or mapping, found {}",
                 collection_type
@@ -326,16 +325,18 @@ impl TreeWalker for SemanticCheckWalker {
                 if !init.type_.matches_type(collection_singular) {
                     let e = LpcError::new(format!(
                         "unexpected element type {}. expected {}",
-                        init.type_,
-                        collection_singular
+                        init.type_, collection_singular
                     ))
                     .with_span(node.span);
                     self.context.errors.push(e);
                 }
 
                 let _ = init.visit(self);
-            },
-            ForEachInit::Mapping { ref mut key, ref mut value } => {
+            }
+            ForEachInit::Mapping {
+                ref mut key,
+                ref mut value,
+            } => {
                 if key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false) {
                     let e = LpcError::new(
                     "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
@@ -666,7 +667,6 @@ impl TreeWalker for SemanticCheckWalker {
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
     use super::*;
     use crate::{
         apply_walker,
@@ -681,6 +681,7 @@ mod tests {
         util::path_maker::LpcPath,
     };
     use claim::*;
+    use indoc::indoc;
     use std::{collections::HashMap, default::Default};
 
     fn empty_context() -> CompilationContext {
@@ -1859,7 +1860,10 @@ mod tests {
             "# };
             let context = walk_code(code).expect("failed to parse?");
 
-            assert_eq!(context.errors[0].to_string(), "unexpected element type string. expected int");
+            assert_eq!(
+                context.errors[0].to_string(),
+                "unexpected element type string. expected int"
+            );
         }
 
         #[test]

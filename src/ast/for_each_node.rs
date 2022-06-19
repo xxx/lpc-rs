@@ -9,9 +9,11 @@ use crate::{
     Result,
 };
 
-use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
+use crate::{
+    ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
+    parser::span::Span,
+};
 use indextree::NodeId;
-use crate::ast::var_init_node::VarInitNode;
 
 /// A constant to track the implicit variable we reserve space for,
 /// for `foreach` loops.
@@ -27,22 +29,14 @@ pub enum ForEachInit {
     Mapping {
         key: VarInitNode,
         value: VarInitNode,
-    }
+    },
 }
 
 impl Display for ForEachInit {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ForEachInit::Array(node) => write!(f, "{}", node),
-            ForEachInit::Mapping {
-                key,
-                value,
-            } => write!(
-                f,
-                "{} {}",
-                key,
-                value
-            ),
+            ForEachInit::Mapping { key, value } => write!(f, "{} {}", key, value),
         }
     }
 }
@@ -85,9 +79,7 @@ impl Display for ForEachNode {
         write!(
             f,
             "foreach ({}: {}) {{ {} }}",
-            self.initializer,
-            &self.collection,
-            self.body
+            self.initializer, &self.collection, self.body
         )
     }
 }
