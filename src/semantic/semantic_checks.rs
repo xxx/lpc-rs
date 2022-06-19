@@ -384,7 +384,7 @@ mod tests {
             ast::range_node::RangeNode,
             semantic::{global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol},
         };
-        use std::collections::HashMap;
+        use indexmap::IndexMap;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -725,8 +725,8 @@ mod tests {
         ) -> Result<()> {
             get_result(
                 op,
-                ExpressionNode::from(HashMap::new()),
-                ExpressionNode::from(HashMap::new()),
+                ExpressionNode::from(IndexMap::new()),
+                ExpressionNode::from(IndexMap::new()),
                 context,
             )
         }
@@ -1516,7 +1516,7 @@ mod tests {
         use crate::semantic::{
             global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol,
         };
-        use std::collections::HashMap;
+        use indexmap::IndexMap;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1622,7 +1622,7 @@ mod tests {
         }
 
         fn mapping_literal(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
-            to_result(op, ExpressionNode::from(HashMap::new()), context)
+            to_result(op, ExpressionNode::from(IndexMap::new()), context)
         }
 
         fn mapping_var(op: UnaryOperation, context: &CompilationContext) -> Result<()> {

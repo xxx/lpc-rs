@@ -4,7 +4,8 @@ use crate::{
 };
 use itertools::Itertools;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
-use std::{cell::RefCell, collections::HashMap, fmt, fmt::Display, rc::Rc};
+use std::{cell::RefCell, fmt, fmt::Display, rc::Rc};
+use indexmap::IndexMap;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -14,7 +15,7 @@ pub enum LpcValue {
     Int(LpcInt),
     String(String),
     Array(Vec<LpcRef>),
-    Mapping(HashMap<LpcRef, LpcRef>),
+    Mapping(IndexMap<LpcRef, LpcRef>),
     Object(Rc<RefCell<Process>>),
     Function(LpcFunction),
 }
@@ -114,9 +115,9 @@ impl From<&[LpcRef]> for LpcValue {
     }
 }
 
-impl From<HashMap<LpcRef, LpcRef>> for LpcValue {
-    fn from(m: HashMap<LpcRef, LpcRef>) -> Self {
-        Self::Mapping(m)
+impl From<IndexMap<LpcRef, LpcRef>> for LpcValue {
+    fn from(m: IndexMap<LpcRef, LpcRef>) -> Self {
+        Self::Mapping(m.into_iter().collect())
     }
 }
 

@@ -34,6 +34,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::for_each_node::{ForEachInit, ForEachNode};
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -298,6 +299,57 @@ impl TreeWalker for SemanticCheckWalker {
         if let Some(n) = &mut node.incrementer {
             let _ = n.visit(self);
         }
+
+        self.context.scopes.pop();
+        self.prevent_jumps();
+        Ok(())
+    }
+
+    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+        self.allow_jumps();
+        self.context.scopes.goto(node.scope_id);
+
+        let collection_type = node_type(&node.collection, &self.context)?;
+        if !collection_type.is_array() &&
+            !collection_type.matches_type(LpcType::Mapping(false)) {
+            let e = LpcError::new(format!(
+                "`foreach` must iterate over an array or mapping, found {}",
+                collection_type
+            ))
+            .with_span(node.collection.span());
+            self.context.errors.push(e);
+        }
+
+        match &mut node.initializer {
+            ForEachInit::Array(ref mut init) => {
+                let collection_singular = collection_type.as_array(false);
+                if !init.type_.matches_type(collection_singular) {
+                    let e = LpcError::new(format!(
+                        "unexpected element type {}. expected {}",
+                        init.type_,
+                        collection_singular
+                    ))
+                    .with_span(node.span);
+                    self.context.errors.push(e);
+                }
+
+                let _ = init.visit(self);
+            },
+            ForEachInit::Mapping { ref mut key, ref mut value } => {
+                if key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false) {
+                    let e = LpcError::new(
+                    "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
+                    )
+                    .with_span(node.span);
+                    self.context.errors.push(e);
+                }
+
+                let _ = key.visit(self);
+                let _ = value.visit(self);
+            }
+        }
+        let _ = node.collection.visit(self);
+        let _ = node.body.visit(self);
 
         self.context.scopes.pop();
         self.prevent_jumps();
@@ -614,6 +666,7 @@ impl TreeWalker for SemanticCheckWalker {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
     use super::*;
     use crate::{
         apply_walker,
@@ -1739,6 +1792,108 @@ mod tests {
             assert_regex!(
                 &walker.context.errors[0].to_string(),
                 "namespaced `call_other` is not allowed"
+            );
+        }
+    }
+
+    mod test_visit_foreach {
+        use super::*;
+
+        #[test]
+        fn allows_array_collections() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach(int i: a) {
+                        dump(i);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_mapping_collections() {
+            let code = indoc! { r#"
+                void create() {
+                    mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
+                    foreach(mixed key, mixed value: a) {
+                        dump(key);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(context.errors.is_empty());
+        }
+
+        #[test]
+        fn disallows_invalid_collections() {
+            let code = indoc! { r#"
+                void create() {
+                    int a = 0;
+                    foreach(mixed key: a) {
+                        dump(key);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert_eq!(
+                context.errors[0].to_string(),
+                "`foreach` must iterate over an array or mapping, found int"
+            );
+        }
+
+        #[test]
+        fn disallows_incorrect_type_for_arrays() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach(string i: a) {
+                        dump(i);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert_eq!(context.errors[0].to_string(), "unexpected element type string. expected int");
+        }
+
+        #[test]
+        fn disallows_non_mixed_type_for_mappings() {
+            let code = indoc! { r#"
+                void create() {
+                    mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
+                    foreach(string i, mixed j: a) {
+                        dump(i);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert_eq!(
+                context.errors[0].to_string(),
+                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
+            );
+
+            //
+
+            let code = indoc! { r#"
+                void create() {
+                    mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
+                    foreach(mixed i, int j: a) {
+                        dump(i);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert_eq!(
+                context.errors[0].to_string(),
+                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
             );
         }
     }

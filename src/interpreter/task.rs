@@ -32,10 +32,10 @@ use if_chain::if_chain;
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
     fmt::{Debug, Display},
     rc::Rc,
 };
+use indexmap::IndexMap;
 use tracing::{instrument, trace};
 
 macro_rules! pop_frame {
@@ -495,6 +495,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Load(..) => {
                 self.handle_load(&instruction)?;
             }
+            Instruction::LoadMappingKey(..) => {
+                self.handle_load_mapping_key(&instruction)?;
+            }
             Instruction::Lt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x < y)?;
             }
@@ -506,18 +509,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::MapConst(r, map) => {
                 let frame = self.stack.current_frame_mut()?;
-                let mut register_map = HashMap::new();
+                let mut register_map = IndexMap::new();
                 let registers = &mut frame.registers;
 
                 for (key, value) in map {
-                    let r = registers[key.index()].clone();
+                    let r = registers[key].clone();
 
-                    register_map.insert(r, registers[value.index()].clone());
+                    register_map.insert(r, registers[value].clone());
                 }
 
                 let new_ref = self.memory.value_to_ref(LpcValue::from(register_map));
 
-                registers[r.index()] = new_ref;
+                registers[r] = new_ref;
             }
             Instruction::MMul(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x * y)?;
@@ -684,6 +687,35 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 if self.stack.is_empty() {
                     return Ok(true);
                 }
+            }
+            Instruction::Sizeof(r1, r2) => {
+                let registers = &mut self.stack.current_frame_mut()?.registers;
+
+                let lpc_ref = &registers[r1];
+
+                let value = match lpc_ref {
+                    LpcRef::Array(x) => {
+                        let borrowed = x.borrow();
+                        let vec = try_extract_value!(*borrowed, LpcValue::Array);
+
+                        LpcValue::from(vec.len() as LpcInt)
+                    }
+                    LpcRef::Mapping(x) => {
+                        let borrowed = x.borrow();
+                        let map = try_extract_value!(*borrowed, LpcValue::Mapping);
+
+                        LpcValue::from(map.len() as LpcInt)
+                    }
+                    LpcRef::Float(_)
+                    | LpcRef::Int(_)
+                    | LpcRef::Object(_)
+                    | LpcRef::Function(_)
+                    | LpcRef::String(_) => LpcValue::from(0)
+                };
+
+                let lpc_ref = self.memory.value_to_ref(value);
+
+                registers[r2.index()] = lpc_ref;
             }
             Instruction::Store(..) => {
                 // r2[r3] = r1;
@@ -1085,9 +1117,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         }
                         LpcRef::Mapping(m) => {
                             let b = m.borrow();
-                            let hashmap = try_extract_value!(*b, LpcValue::Mapping);
+                            let map = try_extract_value!(*b, LpcValue::Mapping);
 
-                            let with_results: LpcValue = hashmap
+                            let with_results: LpcValue = map
                                 .iter()
                                 .map(|(key_ref, value_ref)| {
                                     (
@@ -1104,7 +1136,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         .unwrap_or(LpcRef::Int(0)),
                                     )
                                 })
-                                .collect::<HashMap<_, _>>()
+                                .collect::<IndexMap<_, _>>()
                                 .into();
 
                             self.memory.value_to_ref(with_results)
@@ -1200,6 +1232,45 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         };
 
                         registers[r3.index()] = var;
+
+                        Ok(())
+                    }
+                    x => {
+                        Err(frame
+                            .runtime_error(format!("Invalid attempt to take index of `{}`", x)))
+                    }
+                }
+            }
+            _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
+        }
+    }
+
+    #[instrument(skip_all)]
+    fn handle_load_mapping_key(&mut self, instruction: &Instruction) -> Result<()> {
+        match instruction {
+            Instruction::LoadMappingKey(r1, r2, r3) => {
+                let frame = self.stack.current_frame_mut()?;
+                let container_ref = frame.resolve_lpc_ref(r1);
+                let lpc_ref = frame.resolve_lpc_ref(r2);
+                let registers = &mut frame.registers;
+
+                match container_ref {
+                    LpcRef::Mapping(map_ref) => {
+                        let value = map_ref.borrow();
+                        let map = try_extract_value!(*value, LpcValue::Mapping);
+
+                        let index = match lpc_ref {
+                            LpcRef::Int(i) => i,
+                            _ => return Err(frame.runtime_error(format!("Invalid index type: {}", lpc_ref))),
+                        };
+
+                        let var = if let Some((key, _)) = map.get_index(index as usize) {
+                            key.clone()
+                        } else {
+                            LpcRef::Int(0)
+                        };
+
+                        registers[r3] = var;
 
                         Ok(())
                     }
@@ -2904,10 +2975,10 @@ mod tests {
 
                 let expected = vec![
                     Int(0),
-                    Int(456),
-                    Float(3.14.into()),
                     String("asdf".into()),
                     Int(123),
+                    Int(456),
+                    Float(3.14.into()),
                     Mapping(hashmap),
                 ];
 
@@ -3280,6 +3351,66 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(192), Int(0), Int(192), Int(0)];
+
+                assert_eq!(&expected, &registers);
+            }
+        }
+
+        mod test_sizeof {
+            use super::*;
+
+            #[test]
+            fn stores_the_value_for_arrays() {
+                let code = indoc! { r##"
+                    int a = sizeof(({ 1, 2, 3 }));
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Int(1),
+                    Int(2),
+                    Int(3),
+                    Array(vec![Int(1), Int(2), Int(3)]),
+                    Int(3),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_mappings() {
+                let code = indoc! { r##"
+                    int a = sizeof(([ "a": 1, 'b': 2, 3: ({ 4, 5, 6 }), 0: 0 ]));
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let mut mapping = HashMap::new();
+                mapping.insert(String("a".into()), Int(1));
+                mapping.insert(Int(98), Int(2));
+                mapping.insert(Int(3), Array(vec![Int(4), Int(5), Int(6)]));
+                mapping.insert(Int(0), Int(0));
+
+                let expected = vec![
+                    Int(0),
+                    String("a".into()),
+                    Int(1),
+                    Int(98),
+                    Int(2),
+                    Int(3),
+                    Int(4),
+                    Int(5),
+                    Int(6),
+                    Array(vec![Int(4), Int(5), Int(6)]),
+                    Int(0),
+                    Int(0),
+                    Mapping(mapping),
+                    Int(4),
+                ];
 
                 assert_eq!(&expected, &registers);
             }

@@ -60,7 +60,10 @@ use crate::{
 };
 use if_chain::if_chain;
 use std::{collections::HashMap, ops::Range, rc::Rc};
+use indexmap::IndexMap;
 use tree_walker::TreeWalker;
+use crate::ast::for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode};
+use crate::interpreter::efun::SIZEOF;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -717,33 +720,11 @@ impl TreeWalker for CodegenWalker {
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
-        // let default_params = self.context.default_function_params.get_mut(&node.name);
 
-        // All "normal" functions should have a set of default params to match the declared params,
-        // even if the defaults are all `None`.
-        // if let Some(function_args) = default_params {
-        //     // TODO: get rid of this clone or make it cheaper
-        //     let mut default_args = function_args.clone();
-        //
-        //     let max = std::cmp::max(default_args.len(), argument_len);
-        //
-        //     // generate code for the passed arguments
-        //     for idx in 0..max {
-        //         if let Some(arg) = node.arguments.get_mut(idx) {
-        //             arg.visit(self)?;
-        //             arg_results.push(self.current_result);
-        //         } else if let Some(Some(arg)) = default_args.get_mut(idx) {
-        //             arg.visit(self)?;
-        //             arg_results.push(self.current_result);
-        //         }
-        //     }
-        // } else {
-        //     // TODO: This is where efuns are handled
         for argument in &mut node.arguments {
             argument.visit(self)?;
             arg_results.push(self.current_result);
         }
-        // }
 
         let instruction = if arg_results.len() == 1 {
             // no need to serialize args for the `Call` instruction if there's only one.
@@ -763,6 +744,13 @@ impl TreeWalker for CodegenWalker {
                     num_args: arg_results.len(),
                     initial_arg: arg_results[0],
                 }
+            } else if node.name == SIZEOF {
+                let result = self.register_counter.next().unwrap();
+
+                let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
+                push_instruction!(self, instruction, node.span);
+
+                return Ok(());
             } else {
                 if_chain! {
                     if let Some(x) = self.context.lookup_var(&node.name);
@@ -1008,6 +996,86 @@ impl TreeWalker for CodegenWalker {
         if let Some(i) = &mut node.incrementer {
             i.visit(self)?;
         }
+
+        // go back to the start of the loop
+        let instruction = Instruction::Jmp(start_label);
+        push_instruction!(self, instruction, node.span);
+
+        let addr = self.current_address();
+        self.insert_label(end_label, addr);
+
+        self.context.scopes.pop();
+        self.jump_targets.pop();
+        Ok(())
+    }
+
+    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        node.collection.visit(self)?;
+        let collection_location = self.current_result;
+
+        let index_location = self.assign_sym_location(FOREACH_INDEX);
+        let length_location = self.assign_sym_location(FOREACH_LENGTH);
+
+        let instruction = Instruction::Sizeof(collection_location, length_location);
+        push_instruction!(self, instruction, node.span);
+
+        let locations = match &mut node.initializer {
+            ForEachInit::Array(ref mut node) => {
+                node.visit(self)?;
+
+                vec![self.current_result]
+            }
+            ForEachInit::Mapping { ref mut key, ref mut value } => {
+                key.visit(self)?;
+                let key_result = self.current_result;
+                value.visit(self)?;
+                vec![key_result, self.current_result]
+            }
+        };
+
+        let start_label = self.new_label("foreach-start");
+        let end_label = self.new_label("foreach-end");
+        let continue_label = self.new_label("foreach-continue");
+        let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
+        self.jump_targets.push(jump_target);
+        let start_addr = self.current_address();
+        self.insert_label(start_label.clone(), start_addr);
+
+        let eqeq_result = self.register_counter.next().unwrap();
+        let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
+        push_instruction!(self, instruction, node.span);
+
+        let instruction = Instruction::Jnz(eqeq_result, end_label.clone());
+        push_instruction!(self, instruction, node.span);
+
+        // assign next element(s) to the locations
+        match &node.initializer {
+            ForEachInit::Array(node) => {
+                debug_assert!(locations.len() == 1);
+
+                let instruction = Instruction::Load(collection_location, index_location, locations[0]);
+                push_instruction!(self, instruction, node.span);
+            }
+            ForEachInit::Mapping { key, value } => {
+                debug_assert!(locations.len() == 2);
+
+                let instruction = Instruction::LoadMappingKey(collection_location, index_location, locations[0]);
+                push_instruction!(self, instruction, key.span());
+
+                let instruction = Instruction::Load(collection_location, locations[0], locations[1]);
+                push_instruction!(self, instruction, value.span());
+            }
+        }
+
+        node.body.visit(self)?;
+
+        let continue_addr = self.current_address();
+        self.insert_label(continue_label, continue_addr);
+
+        let instruction = Instruction::Inc(index_location);
+        push_instruction!(self, instruction, node.span);
 
         // go back to the start of the loop
         let instruction = Instruction::Jmp(start_label);
@@ -1319,7 +1387,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
-        let mut map = HashMap::new();
+        let mut map = IndexMap::new();
         for (key, value) in &mut node.value {
             key.visit(self)?;
             let key_result = self.current_result;
@@ -1707,6 +1775,8 @@ impl TreeWalker for CodegenWalker {
             // Default value to 0 when uninitialized.
             self.register_counter.next().unwrap()
         };
+
+        self.current_result = current_register;
 
         if global {
             // Store the reference in the globals register.
@@ -2499,13 +2569,16 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_call_other() {
-            let mut walker = default_walker();
-            let call = "\"foo\"->print(4 - 5)";
-            let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&CompilationContext::default(), LexWrapper::new(call))
-                .unwrap();
+            let check = |code: &str, expected: &[Instruction]| {
+                let mut walker = default_walker();
+                let mut tree = lpc_parser::ExpressionParser::new()
+                    .parse(&CompilationContext::default(), LexWrapper::new(code))
+                    .unwrap();
 
-            let _ = tree.visit(&mut walker);
+                let _ = tree.visit(&mut walker);
+
+                assert_eq!(walker_init_instructions(&mut walker), expected);
+            };
 
             let expected = vec![
                 IConst(Register(1), -1),
@@ -2519,8 +2592,47 @@ mod tests {
                 },
                 RegCopy(Register(0), Register(4)),
             ];
+            check(r#""foo"->print(4 - 5)"#, &expected);
 
-            assert_eq!(walker_init_instructions(&mut walker), expected);
+            let expected = vec![
+                SConst(Register(1), String::from("foo")),
+                SConst(Register(2), String::from("print")),
+                IConst(Register(3), -1),
+                RegCopy(Register(1), Register(4)),
+                RegCopy(Register(2), Register(5)),
+                RegCopy(Register(3), Register(6)),
+                CallOther {
+                    receiver: Register(1),
+                    name: Register(2),
+                    num_args: 1,
+                    initial_arg: Register(3),
+                },
+                RegCopy(Register(0), Register(7)),
+            ];
+            check(r#"call_other("foo", "print", 4 - 5)"#, &expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_sizeof() {
+            let check = |code: &str, expected: &[Instruction]| {
+                let mut walker = default_walker();
+                let mut tree = lpc_parser::ExpressionParser::new()
+                    .parse(&CompilationContext::default(), LexWrapper::new(code))
+                    .unwrap();
+
+                let _ = tree.visit(&mut walker);
+
+                assert_eq!(walker_init_instructions(&mut walker), expected);
+            };
+
+            let expected = vec![
+                IConst1(Register(1)),
+                IConst(Register(2), 2),
+                SConst(Register(3), String::from("c")),
+                AConst(Register(4), vec![Register(1), Register(2), Register(3)]),
+                Sizeof(Register(4), Register(5)),
+            ];
+            check(r#"sizeof(({ 1, 2, "c" }))"#, &expected);
         }
 
         #[test]
@@ -3814,7 +3926,7 @@ mod tests {
                 &mut walker,
             );
 
-            let mut map = HashMap::new();
+            let mut map = IndexMap::new();
             map.insert(Register(1), Register(2));
             assert_eq!(
                 walker_init_instructions(&mut walker),

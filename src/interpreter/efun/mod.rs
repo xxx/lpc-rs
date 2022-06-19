@@ -33,6 +33,7 @@ pub const CLONE_OBJECT: &str = "clone_object";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
+pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THROW: &str = "throw";
 
@@ -132,6 +133,20 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             return_type: LpcType::String(false),
             arity: FunctionArity::new(1),
             arg_types: vec![LpcType::Object(false)],
+            span: None,
+            arg_spans: vec![],
+            flags: FunctionFlags::default().with_ellipsis(false),
+        },
+    );
+
+    // sizeof is handled with its own instruction, but is typechecked as normal
+    m.insert(
+        SIZEOF,
+        FunctionPrototype {
+            name: SIZEOF.into(),
+            return_type: LpcType::Int(false),
+            arity: FunctionArity::new(1),
+            arg_types: vec![LpcType::Mixed(true) | LpcType::Mapping(false)],
             span: None,
             arg_spans: vec![],
             flags: FunctionFlags::default().with_ellipsis(false),

@@ -15,6 +15,7 @@ use crate::{
     compilation_context::CompilationContext,
     Result,
 };
+use crate::ast::for_each_node::{ForEachInit, ForEachNode};
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -161,6 +162,26 @@ pub trait TreeWalker {
         if let Some(n) = &mut node.incrementer {
             let _ = n.visit(self);
         }
+
+        Ok(())
+    }
+
+    /// Visit a `foreach` loop
+    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        match &mut node.initializer {
+            ForEachInit::Array(ref mut init) => {
+                let _ = init.visit(self);
+            },
+            ForEachInit::Mapping { ref mut key, ref mut value } => {
+                let _ = key.visit(self);
+                let _ = value.visit(self);
+            }
+        }
+        let _ = node.collection.visit(self);
+        let _ = node.body.visit(self);
 
         Ok(())
     }

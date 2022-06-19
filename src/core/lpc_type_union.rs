@@ -108,8 +108,8 @@ impl LpcTypeUnion {
             return true;
         }
 
-        if self.mixed_array() {
-            return other.is_array();
+        if self.mixed_array() && other.is_array() {
+            return true;
         }
 
         match other {
@@ -334,5 +334,10 @@ mod tests {
         assert!(union.matches_type(LpcType::Mixed(true)));
         assert!(union.matches_type(LpcType::Function(false)));
         assert!(union.matches_type(LpcType::Function(true)));
+
+        let mut union = LpcTypeUnion::new();
+        union.set_mixed_array(true);
+        union.set_mapping(true);
+        assert!(union.matches_type(LpcType::Mapping(false)));
     }
 }

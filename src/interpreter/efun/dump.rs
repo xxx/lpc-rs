@@ -3,7 +3,7 @@ use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value, Result,
 };
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 const MAX_RECURSION: usize = 20;
 
@@ -88,7 +88,7 @@ fn format_array<const N: usize>(
 }
 
 fn format_mapping<const N: usize>(
-    map: &HashMap<LpcRef, LpcRef>,
+    map: &IndexMap<LpcRef, LpcRef>,
     context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,

@@ -39,8 +39,22 @@ impl Index<Register> for RegisterBank {
     }
 }
 
+impl Index<&Register> for RegisterBank {
+    type Output = LpcRef;
+
+    fn index(&self, register: &Register) -> &LpcRef {
+        &self.registers[register.index()]
+    }
+}
+
 impl IndexMut<Register> for RegisterBank {
     fn index_mut(&mut self, register: Register) -> &mut LpcRef {
+        &mut self.registers[register.index()]
+    }
+}
+
+impl IndexMut<&Register> for RegisterBank {
+    fn index_mut(&mut self, register: &Register) -> &mut LpcRef {
         &mut self.registers[register.index()]
     }
 }

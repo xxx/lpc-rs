@@ -492,9 +492,10 @@ mod tests {
     use super::*;
     use claim::assert_err;
     use refpool::{Pool, PoolRef};
-    use std::{cell::RefCell, collections::HashMap};
+    use std::cell::RefCell;
 
     mod test_add {
+        use indexmap::IndexMap;
         use super::*;
 
         #[test]
@@ -630,10 +631,10 @@ mod tests {
             let key2 = value_to_ref!(LpcValue::from("key2"), pool);
             let value2 = value_to_ref!(LpcValue::from(666), pool);
 
-            let mut hash1 = HashMap::new();
+            let mut hash1 = IndexMap::new();
             hash1.insert(key1.clone(), value1.clone());
 
-            let mut hash2 = HashMap::new();
+            let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone(), value2.clone());
 
             let map = value_to_ref!(LpcValue::from(hash1), pool);
@@ -641,7 +642,7 @@ mod tests {
 
             let result = &map + &map2;
 
-            let mut expected = HashMap::new();
+            let mut expected = IndexMap::new();
             expected.insert(key1, value1);
             expected.insert(key2, value2);
 
@@ -660,10 +661,10 @@ mod tests {
             let key2 = value_to_ref!(LpcValue::from("key"), pool);
             let value2 = value_to_ref!(LpcValue::from(666), pool);
 
-            let mut hash1 = HashMap::new();
+            let mut hash1 = IndexMap::new();
             hash1.insert(key1, value1);
 
-            let mut hash2 = HashMap::new();
+            let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone(), value2.clone());
 
             let map = value_to_ref!(LpcValue::from(hash1), pool);
@@ -671,7 +672,7 @@ mod tests {
 
             let result = &map + &map2;
 
-            let mut expected = HashMap::new();
+            let mut expected = IndexMap::new();
             expected.insert(key2, value2);
 
             if let Ok(LpcValue::Mapping(m)) = result {

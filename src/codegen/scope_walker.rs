@@ -20,6 +20,7 @@ use crate::{
     },
     Result,
 };
+use crate::ast::for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -90,6 +91,46 @@ impl TreeWalker for ScopeWalker {
         if let Some(n) = &mut node.incrementer {
             let _ = n.visit(self);
         }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        let sym = Symbol {
+            name: FOREACH_INDEX.to_string(),
+            type_: LpcType::Int(false),
+            location: None,
+            scope_id: scope_id.into(),
+            span: node.span,
+            flags: GlobalVarFlags::default(),
+        };
+        self.insert_symbol(sym);
+
+        let sym = Symbol {
+            name: FOREACH_LENGTH.to_string(),
+            type_: LpcType::Int(false),
+            location: None,
+            scope_id: scope_id.into(),
+            span: node.span,
+            flags: GlobalVarFlags::default(),
+        };
+        self.insert_symbol(sym);
+
+        match &mut node.initializer {
+            ForEachInit::Array(ref mut init) => {
+                let _ = init.visit(self);
+            },
+            ForEachInit::Mapping { ref mut key, ref mut value } => {
+                let _ = key.visit(self);
+                let _ = value.visit(self);
+            }
+        }
+        let _ = node.collection.visit(self);
+        let _ = node.body.visit(self);
 
         self.context.scopes.pop();
         Ok(())

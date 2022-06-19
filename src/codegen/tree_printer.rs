@@ -14,6 +14,8 @@ use crate::{
     codegen::tree_walker,
     Result,
 };
+use crate::ast::for_each_node::ForEachNode;
+use crate::ast::for_node::ForNode;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -157,6 +159,61 @@ impl TreeWalker for TreePrinter {
 
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
         self.println_indented(&format!("Float: {}", node.value));
+
+        Ok(())
+    }
+
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()>
+        where
+            Self: Sized,
+    {
+        self.println_indented("For:");
+        self.indent += 2;
+        self.println_indented("init:");
+        self.indent += 2;
+        if let Some(init) = &mut *node.initializer {
+            init.visit(self)?;
+        }
+        self.indent -= 2;
+        self.println_indented("condition:");
+        self.indent += 2;
+        if let Some(cond) = &mut node.condition {
+            cond.visit(self)?;
+        }
+        self.indent -= 2;
+        self.println_indented("incrementer:");
+        self.indent += 2;
+        if let Some(incr) = &mut node.incrementer {
+            incr.visit(self)?;
+        }
+
+        self.indent -= 2;
+
+        self.println_indented("body:");
+
+        self.indent += 2;
+
+        node.body.visit(self)?;
+
+        self.indent -= 4;
+
+        Ok(())
+    }
+
+    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()>
+        where
+            Self: Sized,
+    {
+        self.println_indented("Foreach:");
+        self.indent += 2;
+        self.println_indented(&format!("init: {}", node.initializer));
+        self.println_indented("collection:");
+        node.collection.visit(self)?;
+
+        self.indent += 2;
+        node.body.visit(self)?;
+
+        self.indent -= 4;
 
         Ok(())
     }

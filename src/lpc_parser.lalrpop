@@ -16,6 +16,7 @@ use crate::ast::do_while_node::DoWhileNode;
 use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::float_node::FloatNode;
 use crate::ast::for_node::ForNode;
+use crate::ast::for_each_node::{ForEachInit, ForEachNode};
 use crate::ast::function_ptr_node::FunctionPtrNode;
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::if_node::IfNode;
@@ -95,6 +96,7 @@ extern {
         "else" => Token::Else(<Span>),
         "while" => Token::While(<Span>),
         "for" => Token::For(<Span>),
+        "foreach" => Token::ForEach(<Span>),
         "inherit" => Token::Inherit(<Span>),
         "break" => Token::Break(<Span>),
         "continue" => Token::Continue(<Span>),
@@ -278,6 +280,7 @@ ArgName: VarInitNode = {
     }
 };
 
+// TODO: flip the order of these so they match tokens
 Type: (&'static str, Span) = {
     "int" => ("int", <>),
     "float" => ("float", <>),
@@ -289,6 +292,7 @@ Type: (&'static str, Span) = {
     "void" => ("void", <>),
 };
 
+// TODO: flip the order of these so they match tokens
 GlobalFlag: (&'static str, Span) = {
     "varargs" => ("varargs", <>),
     "public" => ("public", <>),
@@ -349,6 +353,10 @@ OpenStatement: AstNode = {
         let node = ForNode::new(init, cond, inc, body, Some(for_t));
         AstNode::from(node)
     },
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:OpenStatement> => {
+        let node = ForEachNode::new(init, collection, body, Some(foreach_t));
+        AstNode::from(node)
+    },
     <l:"switch"> "(" <expression:Expression> <r:")"> <body:OpenStatement> => {
         let span = combine_spans(Some(l), Some(r));
         let node = SwitchNode {
@@ -378,6 +386,10 @@ ClosedStatement: AstNode = {
         let node = ForNode::new(init, cond, inc, body, Some(for_t));
         AstNode::from(node)
     },
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:ClosedStatement> => {
+        let node = ForEachNode::new(init, collection, body, Some(foreach_t));
+        AstNode::from(node)
+    },
     <l:"switch"> "(" <expression:Expression> <r:")"> <body:ClosedStatement> => {
         let span = combine_spans(Some(l), Some(r));
         let node = SwitchNode {
@@ -396,6 +408,27 @@ ClosedStatement: AstNode = {
 ForInit: AstNode = {
     <Decl> => AstNode::from(<>),
     <Expression> => AstNode::from(<>)
+};
+
+ForEachInit: ForEachInit = {
+    <ty:Type> <name:"ID"> => {
+        let span = combine_spans(Some(ty.1), Some(name.0));
+        let mut node = VarInitNode::new(&name.1, LpcType::from(ty.0));
+        node.span = Some(span);
+        
+        ForEachInit::Array(node)
+    },
+    <key_type:Type> <key_name:"ID"> "," <value_type:Type> <value_name:"ID"> => {
+        let key_span = combine_spans(Some(key_type.1), Some(key_name.0));
+        let mut key = VarInitNode::new(&key_name.1, LpcType::from(key_type.0));
+        key.span = Some(key_span);
+
+        let value_span = combine_spans(Some(value_type.1), Some(value_name.0));
+        let mut value = VarInitNode::new(&value_name.1, LpcType::from(value_type.0));
+        value.span = Some(value_span);
+        
+        ForEachInit::Mapping { key, value }
+    },
 };
 
 DoWhile: DoWhileNode = {
@@ -494,7 +527,12 @@ pub PrimaryExpression: ExpressionNode = {
     <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> => {
         let vec = if let Some(v) = list {
             // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
-            v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec()
+            let reversed = v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec();
+
+            // We have to `collect` twice because `unique_by` keeps the first duplicate, but we want
+            // to keep the last, and doing a second `rev()` in a single iterator chain applies it
+            // before the `unique_by` runs
+            reversed.into_iter().rev().collect_vec()
         } else {
             Vec::new()
         };

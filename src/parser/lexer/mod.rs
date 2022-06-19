@@ -228,7 +228,7 @@ pub enum Token {
     #[token("default", track_slice)]
     Default(Span),
     #[token("foreach", track_slice)]
-    Foreach(Span),
+    ForEach(Span),
     #[token("function", track_slice)]
     Function(Span),
     #[token("private", track_slice)]
@@ -538,7 +538,7 @@ impl Token {
             | Token::Pragma(StringToken(x, _))
             | Token::Switch(x)
             | Token::Default(x)
-            | Token::Foreach(x)
+            | Token::ForEach(x)
             | Token::Function(x)
             | Token::Private(x)
             | Token::Public(x)
@@ -641,7 +641,7 @@ impl Token {
             | Token::Pragma(StringToken(x, _))
             | Token::Switch(x)
             | Token::Default(x)
-            | Token::Foreach(x)
+            | Token::ForEach(x)
             | Token::Function(x)
             | Token::Private(x)
             | Token::Public(x)
@@ -729,7 +729,7 @@ impl Display for Token {
             Token::Efun(_) => "efun",
             Token::Switch(_) => "switch",
             Token::Default(_) => "default",
-            Token::Foreach(_) => "foreach",
+            Token::ForEach(_) => "foreach",
             Token::Function(_) => "function",
             Token::Private(_) => "private",
             Token::Public(_) => "public",

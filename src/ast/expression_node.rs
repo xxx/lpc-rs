@@ -25,7 +25,7 @@ use crate::{
     parser::span::Span,
     BaseFloat, LpcInt, Result,
 };
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -225,8 +225,8 @@ impl From<Vec<LpcInt>> for ExpressionNode {
     }
 }
 
-impl From<HashMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
-    fn from(map: HashMap<ExpressionNode, ExpressionNode>) -> Self {
+impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
+    fn from(map: IndexMap<ExpressionNode, ExpressionNode>) -> Self {
         let value = map.into_iter().collect::<Vec<_>>();
 
         Self::Mapping(MappingNode { value, span: None })

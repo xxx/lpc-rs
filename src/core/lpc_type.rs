@@ -238,17 +238,6 @@ mod tests {
         assert!(LpcType::Object(true).matches_type(LpcType::Mixed(true)));
         assert!(LpcType::Mapping(true).matches_type(LpcType::Mixed(true)));
 
-        // mixed vs. mixed
-        assert!(LpcType::Mixed(true).matches_type(LpcType::Mapping(true)));
-        assert!(!LpcType::Mixed(true).matches_type(LpcType::Mixed(false)));
-        assert!(LpcType::Mixed(false).matches_type(LpcType::Mixed(true)));
-        assert!(LpcType::Mixed(false).matches_type(LpcType::Mixed(false)));
-
-        // unions
-        assert!(LpcType::Mixed(false).matches_type(LpcType::Int(false) | LpcType::String(true)));
-        assert!(!LpcType::Mixed(false).matches_type(LpcType::Int(true) | LpcType::String(true)));
-
-        assert!(LpcType::Mixed(true).matches_type(LpcType::Int(false) | LpcType::String(true)));
-        assert!(!LpcType::Mixed(true).matches_type(LpcType::Int(false) | LpcType::String(false)));
+        assert!(LpcType::Mapping(false).matches_type(LpcType::Mapping(false) | LpcType::Mixed(true)))
     }
 }

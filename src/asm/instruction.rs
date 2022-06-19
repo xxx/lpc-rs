@@ -5,10 +5,10 @@ use crate::{
 };
 use itertools::Itertools;
 use std::{
-    collections::HashMap,
     fmt,
     fmt::{Display, Formatter},
 };
+use indexmap::IndexMap;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -64,6 +64,7 @@ pub enum Instruction {
     Dec(Register),
 
     /// == comparison
+    /// x.2 = x.0 == x.1
     EqEq(Register, Register, Register),
 
     /// Float Constant
@@ -133,6 +134,10 @@ pub enum Instruction {
     /// x.2 = x.0[x.1]
     Load(Register, Register, Register),
 
+    /// Load the value of a key from a mapping into a register
+    /// x.2 = x.0[x.1]
+    LoadMappingKey(Register, Register, Register),
+
     /// Less than
     /// x.2 = x.0 < x.1
     Lt(Register, Register, Register),
@@ -142,7 +147,7 @@ pub enum Instruction {
     Lte(Register, Register, Register),
 
     /// Create a mapping from the keys and values in the hashmap
-    MapConst(Register, HashMap<Register, Register>),
+    MapConst(Register, IndexMap<Register, Register>),
 
     /// Addition where at least one side is a reference type, so check at runtime.
     MAdd(Register, Register, Register),
@@ -197,6 +202,10 @@ pub enum Instruction {
     /// right shift
     /// x.1 = x.1 >> x.1
     Shr(Register, Register, Register),
+
+    /// Get the size of arrays or mappings
+    /// x.1 = sizeof(x.0)
+    Sizeof(Register, Register),
 
     /// Store a single item into an array or mapping
     /// x.1[x.2] = x.0
@@ -344,6 +353,9 @@ impl Display for Instruction {
             Instruction::Load(r1, r2, r3) => {
                 write!(f, "load {}, {}, {}", r1, r2, r3)
             }
+            Instruction::LoadMappingKey(r1, r2, r3) => {
+                write!(f, "loadmappingkey {}, {}, {}", r1, r2, r3)
+            }
             Instruction::Lt(r1, r2, r3) => {
                 write!(f, "lt {}, {}, {}", r1, r2, r3)
             }
@@ -395,6 +407,9 @@ impl Display for Instruction {
             }
             Instruction::Shr(r1, r2, r3) => {
                 write!(f, "shr {}, {}, {}", r1, r2, r3)
+            }
+            Instruction::Sizeof(r1, r2) => {
+                write!(f, "sizeof {}, {}", r1, r2)
             }
             Instruction::Store(r1, r2, r3) => {
                 write!(f, "store {}, {}, {}", r1, r2, r3)

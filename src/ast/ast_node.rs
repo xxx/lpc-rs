@@ -23,6 +23,7 @@ use crate::{
     parser::span::Span,
     Result,
 };
+use crate::ast::for_each_node::ForEachNode;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -35,6 +36,7 @@ pub enum AstNode {
     DoWhile(DoWhileNode),
     Expression(ExpressionNode),
     For(ForNode),
+    ForEach(ForEachNode),
     FunctionDef(FunctionDefNode),
     If(IfNode),
     LabeledStatement(LabeledStatementNode),
@@ -79,6 +81,7 @@ node_defs!(
     DoWhile,
     Expression,
     For,
+    ForEach,
     FunctionDef,
     If,
     LabeledStatement,
@@ -140,6 +143,12 @@ impl From<ExpressionNode> for AstNode {
 impl From<ForNode> for AstNode {
     fn from(node: ForNode) -> Self {
         AstNode::For(node)
+    }
+}
+
+impl From<ForEachNode> for AstNode {
+    fn from(node: ForEachNode) -> Self {
+        AstNode::ForEach(node)
     }
 }
 
