@@ -8,7 +8,7 @@ use crate::{
 };
 
 use crate::{
-    core::{call_namespace::CallNamespace, lpc_type::LpcType},
+    core::call_namespace::CallNamespace,
     errors::LpcError,
     interpreter::{pragma_flags::PragmaFlags, program::Program},
     semantic::symbol::Symbol,
@@ -292,7 +292,7 @@ impl Default for CompilationContext {
 mod tests {
     use super::*;
     use crate::{
-        core::function_arity::FunctionArity,
+        core::{function_arity::FunctionArity, lpc_type::LpcType},
         semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
     };
 

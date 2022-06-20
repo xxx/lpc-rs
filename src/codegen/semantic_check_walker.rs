@@ -28,14 +28,13 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    core::{call_namespace::CallNamespace, lpc_type::LpcType},
+    core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN},
     errors::LpcError,
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },
     Result,
 };
-use crate::core::EFUN;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);

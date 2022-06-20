@@ -288,11 +288,12 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<LpcType> {
     match node {
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
-        ExpressionNode::Call(CallNode { name, namespace, .. }) => {
-            let return_type = context.lookup_function_complete(name.as_str(), namespace).map_or_else(
-                || LpcType::Int(false),
-                |prototype| prototype.return_type
-            );
+        ExpressionNode::Call(CallNode {
+            name, namespace, ..
+        }) => {
+            let return_type = context
+                .lookup_function_complete(name.as_str(), namespace)
+                .map_or_else(|| LpcType::Int(false), |prototype| prototype.return_type);
 
             Ok(return_type)
         }
@@ -1771,11 +1772,11 @@ mod tests {
 
         mod arrays {
             use super::*;
-            use crate::ast::array_node::ArrayNode;
-            use crate::core::EFUN;
-            use crate::core::function_arity::FunctionArity;
-            use crate::semantic::function_flags::FunctionFlags;
-            use crate::semantic::function_prototype::FunctionPrototype;
+            use crate::{
+                ast::array_node::ArrayNode,
+                core::{function_arity::FunctionArity, EFUN},
+                semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
+            };
 
             #[test]
             fn empty_array_is_mixed() {
@@ -1881,9 +1882,11 @@ mod tests {
                     FunctionFlags::default(),
                     None,
                     Vec::new(),
-                    Vec::new()
+                    Vec::new(),
                 );
-                context.function_prototypes.insert("clone_object".into(), proto);
+                context
+                    .function_prototypes
+                    .insert("clone_object".into(), proto);
 
                 let node = ExpressionNode::Call(CallNode {
                     receiver: None,

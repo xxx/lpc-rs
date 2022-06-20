@@ -1,7 +1,7 @@
 use crate::{
     asm::instruction::{Address, Instruction},
     core::{
-        call_namespace::CallNamespace, function_arity::FunctionArity, register::Register,
+        call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, EFUN,
         INIT_PROGRAM,
     },
     errors::LpcError,
@@ -37,7 +37,6 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
-use crate::core::EFUN;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -804,9 +803,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         .clone_from_slice(&registers[index..(index + num_args)]);
                 }
 
-                let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str()) && (
-                    !frame.process.borrow().contains_function(name, namespace) || namespace.as_str() == EFUN
-                );
+                let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
+                    && (!frame.process.borrow().contains_function(name, namespace)
+                        || namespace.as_str() == EFUN);
 
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
