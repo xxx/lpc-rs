@@ -35,6 +35,7 @@ use crate::{
     },
     Result,
 };
+use crate::core::EFUN;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -179,7 +180,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         if let CallNamespace::Named(namespace) = &node.namespace {
-            if !self.context.inherit_names.contains_key(namespace) {
+            if !self.context.inherit_names.contains_key(namespace) && namespace != EFUN {
                 let e = LpcError::new(format!("unknown namespace `{}`", namespace))
                     .with_span(node.span);
                 self.context.errors.push(e);
@@ -1302,6 +1303,24 @@ mod tests {
             context
                 .inherit_names
                 .insert("parent".into(), context.inherits.len() - 1);
+            let mut walker = SemanticCheckWalker::new(context);
+            let result = node.visit(&mut walker);
+
+            assert_ok!(result);
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_efun_namespaced_functions() {
+            let mut node = ExpressionNode::from(CallNode {
+                receiver: None,
+                arguments: vec![],
+                name: "this_object".to_string(),
+                span: None,
+                namespace: CallNamespace::Named("efun".to_string()),
+            });
+
+            let context = CompilationContext::default();
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker);
 

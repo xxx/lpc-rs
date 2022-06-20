@@ -37,6 +37,7 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
+use crate::core::EFUN;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -778,11 +779,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         *num_args,
                     )
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let sym = ProgramFunction::new(prototype.clone(), 0);
+                    let func = ProgramFunction::new(prototype.clone(), 0);
 
                     StackFrame::with_minimum_arg_capacity(
                         process.clone(),
-                        Rc::new(sym),
+                        Rc::new(func),
                         *num_args,
                         *num_args,
                     )
@@ -803,15 +804,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         .clone_from_slice(&registers[index..(index + num_args)]);
                 }
 
-                let function_is_local = frame
-                    .process
-                    .borrow()
-                    .contains_function(name, &CallNamespace::Local);
+                let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str()) && (
+                    !frame.process.borrow().contains_function(name, namespace) || namespace.as_str() == EFUN
+                );
 
                 // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
 
-                if !function_is_local {
+                if function_is_efun {
                     let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
 
                     call_efun(name.as_str(), &mut ctx)?;
@@ -901,7 +901,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     .iter()
                                     .fold(0, |sum, arg| sum + arg.is_some() as usize);
 
-                                println!("called_args: {}", called_args);
                                 let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
 
                                 match &ptr.address {
@@ -1803,6 +1802,33 @@ mod tests {
                 assert_eq!(
                     String("/std/object public".into()),
                     *values.get("parents").unwrap().borrow()
+                );
+            }
+
+            #[test]
+            fn calls_correct_function_with_efuns() {
+                let code = indoc! { r##"
+                    object ob = clone_object("/std/object");
+                    mixed this_one = file_name(ob);
+                    mixed efun_one = efun::file_name(ob);
+
+                    string file_name(object ob) {
+                        return "file_name_override";
+                    }
+                "##};
+
+                let (_task, ctx) = run_prog(code);
+
+                let proc = ctx.process();
+                let borrowed = proc.borrow();
+                let values = borrowed.global_variable_values();
+                assert_eq!(
+                    String("file_name_override".into()),
+                    *values.get("this_one").unwrap().borrow()
+                );
+                assert_eq!(
+                    String("/std/object#0".into()),
+                    *values.get("efun_one").unwrap().borrow()
                 );
             }
         }

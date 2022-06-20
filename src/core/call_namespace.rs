@@ -7,6 +7,16 @@ pub enum CallNamespace {
     Named(String),
 }
 
+impl CallNamespace {
+    pub fn as_str(&self) -> &str {
+        match self {
+            CallNamespace::Local => "",
+            CallNamespace::Parent => "::",
+            CallNamespace::Named(name) => name,
+        }
+    }
+}
+
 impl Default for CallNamespace {
     fn default() -> Self {
         CallNamespace::Local

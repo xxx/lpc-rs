@@ -267,15 +267,6 @@ impl CompilationContext {
                 .find_map(|p| p.global_variables.get_mut(r))
         })
     }
-
-    /// A transformation helper to get a map of function names to their return types.
-    pub fn function_return_types(&self) -> HashMap<&str, LpcType> {
-        self.function_prototypes
-            .keys()
-            .map(|k| k.as_str())
-            .zip(self.function_prototypes.values().map(|v| v.return_type))
-            .collect::<HashMap<_, _>>()
-    }
 }
 
 impl Default for CompilationContext {

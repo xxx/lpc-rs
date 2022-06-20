@@ -16,7 +16,6 @@ use crate::{
     compilation_context::CompilationContext,
     core::{call_namespace::CallNamespace, lpc_type::LpcType},
     errors::LpcError,
-    interpreter::efun::EFUN_PROTOTYPES,
     semantic::local_scope::LocalScope,
     Result,
 };
@@ -289,15 +288,13 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<LpcType> {
     match node {
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
-        ExpressionNode::Call(CallNode { name, .. }) => {
-            let function_return_types = context.function_return_types();
-            function_return_types.get(name.as_str()).map_or_else(
-                || match EFUN_PROTOTYPES.get(name.as_str()) {
-                    Some(x) => Ok(x.return_type),
-                    None => Ok(LpcType::Int(false)),
-                },
-                |return_type| Ok(*return_type),
-            )
+        ExpressionNode::Call(CallNode { name, namespace, .. }) => {
+            let return_type = context.lookup_function_complete(name.as_str(), namespace).map_or_else(
+                || LpcType::Int(false),
+                |prototype| prototype.return_type
+            );
+
+            Ok(return_type)
         }
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
@@ -1775,6 +1772,10 @@ mod tests {
         mod arrays {
             use super::*;
             use crate::ast::array_node::ArrayNode;
+            use crate::core::EFUN;
+            use crate::core::function_arity::FunctionArity;
+            use crate::semantic::function_flags::FunctionFlags;
+            use crate::semantic::function_prototype::FunctionPrototype;
 
             #[test]
             fn empty_array_is_mixed() {
@@ -1864,6 +1865,32 @@ mod tests {
                     name: "clone_object".to_string(),
                     span: None,
                     namespace: CallNamespace::default(),
+                });
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
+            }
+
+            #[test]
+            fn call_uses_namespace_to_get_correct_function() {
+                let mut context = CompilationContext::default();
+
+                let proto = FunctionPrototype::new(
+                    "clone_object",
+                    LpcType::Int(true),
+                    FunctionArity::default(),
+                    FunctionFlags::default(),
+                    None,
+                    Vec::new(),
+                    Vec::new()
+                );
+                context.function_prototypes.insert("clone_object".into(), proto);
+
+                let node = ExpressionNode::Call(CallNode {
+                    receiver: None,
+                    arguments: vec![ExpressionNode::from("foo/bar.c")],
+                    name: "clone_object".to_string(),
+                    span: None,
+                    namespace: CallNamespace::Named(EFUN.into()),
                 });
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));

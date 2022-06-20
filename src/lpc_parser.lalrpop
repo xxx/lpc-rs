@@ -37,6 +37,7 @@ use crate::ast::var_init_node::VarInitNode;
 use crate::ast::while_node::WhileNode;
 use crate::core::lpc_type::LpcType;
 use crate::core::call_namespace::CallNamespace;
+use crate::core::EFUN;
 use crate::parser::collapse_binary_op::collapse_binary_op;
 use crate::parser::collapse_unary_op::collapse_unary_op;
 use crate::parser::span::{Span, combine_spans};
@@ -896,7 +897,8 @@ CallNamespace: (Span, CallNamespace) = {
     <name:"ID"?> <colons:"::"> => {
         name.map(|nm| (nm.0, CallNamespace::Named(nm.1)))
             .unwrap_or_else(|| (colons, CallNamespace::Parent))
-    }
+    },
+    <name:"efun"> <colons:"::"> => (name, CallNamespace::Named(EFUN.to_string()))
 };
 
 AssignmentOp: AssignmentOperation = {
