@@ -18,7 +18,7 @@ delegate = "0.7"
 educe = "0.4.18"
 fs-err = "2.6.0"
 if_chain = "1.0.1"
-indexmap = { version = "1.8.2", features = ["serde"] }
+indexmap = { version = "1.9.1", features = ["serde"] }
 indextree = "4.3.1"
 itertools = "0.10.0"
 lalrpop-util = "0.19.4"
