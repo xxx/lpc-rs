@@ -5,8 +5,6 @@ use claim::assert_err;
 use indoc::indoc;
 use lpc_rs::{compiler::Compiler, util::config::Config};
 use std::rc::Rc;
-use lpc_rs::interpreter::lpc_ref::LpcRef;
-use lpc_rs::interpreter::program::Program;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)

@@ -418,12 +418,8 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
-        if_chain! {
-            if let Some(rcvr_node) = &mut node.receiver;
-            if let FunctionPtrReceiver::Static(rcvr) = rcvr_node;
-            then {
-                rcvr.visit(self)?;
-            }
+        if let Some(FunctionPtrReceiver::Static(rcvr)) = &mut node.receiver{
+            rcvr.visit(self)?;
         }
 
         if let Some(args) = &mut node.arguments {

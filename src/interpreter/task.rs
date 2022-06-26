@@ -310,9 +310,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     )
                                 );
                             }
-                            FunctionName::Literal(name) => {
-                                FunctionAddress::Dynamic(name.clone())
-                            }
+                            FunctionName::Literal(name) => FunctionAddress::Dynamic(name)
                         }
                     }
                     FunctionTarget::Local(func_name, func_receiver) => {
@@ -987,14 +985,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
                             let mut index = initial_arg.index();
-                            let arg_count;
+                            let mut arg_count = *num_args;
 
                             if dynamic_receiver {
                                 // skip the first arg register, which contains the receiver
                                 index += 1;
-                                arg_count = num_args - 1;
-                            } else {
-                                arg_count = *num_args;
+                                arg_count -= 1;
                             }
 
                             if !partial_args.is_empty() {
