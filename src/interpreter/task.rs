@@ -299,7 +299,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
                     FunctionTarget::Local(func_name, FunctionReceiver::Argument) => {
                         match func_name {
-                            FunctionName::Var(v) => {
+                            FunctionName::Var(_) => {
                                 return Err(
                                     self.runtime_error(
                                         concat!(
@@ -346,11 +346,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             }
                             FunctionReceiver::Argument => {
                                 unreachable!("This is specified in an earlier arm of the parent `match`");
-                                // todo!();
-                                // let frame = self.stack.current_frame()?;
-                                // let proc = &frame.process;
-                                //
-                                // proc.clone()
                             }
                         };
 
@@ -869,29 +864,41 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 num_args,
                 initial_arg,
             } => {
+                let dynamic_receiver;
+
                 {
                     // TODO: Is there some way to avoid this redundant check, while still being able to update the register?
                     let frame = self.stack.current_frame_mut()?;
                     let registers = &mut frame.registers;
                     let func_ref = &registers[location];
-                    let public = if let LpcRef::Function(func) = func_ref {
+                    let public;
+
+                    if let LpcRef::Function(func) = func_ref {
                         let borrowed = func.borrow();
                         let func = try_extract_value!(*borrowed, LpcValue::Function);
                         match func {
                             LpcFunction::FunctionPtr(ptr) => {
                                 match &ptr.address {
                                     FunctionAddress::Local(receiver, pf) => {
-                                        // local functions are always "public" to the caller
                                         if !ptr.call_other
                                             && Rc::ptr_eq(&task_context.process(), receiver)
                                         {
-                                            true
+                                            // local functions are always "public" to the caller
+                                            public = true;
                                         } else {
-                                            pf.public()
+                                            public = pf.public();
                                         }
+
+                                        dynamic_receiver = false;
                                     }
-                                    FunctionAddress::Dynamic(_)
-                                    | FunctionAddress::Efun(_) => true,
+                                    FunctionAddress::Dynamic(_) => {
+                                        public = true;
+                                        dynamic_receiver = true;
+                                    }
+                                    FunctionAddress::Efun(_) => {
+                                        public = true;
+                                        dynamic_receiver = false;
+                                    },
                                 }
                             }
                         }
@@ -978,14 +985,23 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             }
                         };
 
-                        if arity.num_args > 0_usize {
-                            let index = initial_arg.index();
+                        if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
+                            let mut index = initial_arg.index();
+                            let arg_count;
+
+                            if dynamic_receiver {
+                                // skip the first arg register, which contains the receiver
+                                index += 1;
+                                arg_count = num_args - 1;
+                            } else {
+                                arg_count = *num_args;
+                            }
 
                             if !partial_args.is_empty() {
-                                let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
+                                let max = Self::calculate_max_arg_length(arg_count, partial_args, arity);
 
                                 let mut from_index = 0;
-                                let from_slice = &registers[index..(index + *num_args)];
+                                let from_slice = &registers[index..(index + arg_count)];
                                 let to_slice = &mut new_frame.registers[1..=max];
 
                                 for (i, item) in to_slice.iter_mut().enumerate().take(max) {
@@ -1001,8 +1017,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 }
                             } else {
                                 // just copy argument registers from old frame to new
-                                new_frame.registers[1..=*num_args]
-                                    .clone_from_slice(&registers[index..(index + *num_args)]);
+                                new_frame.registers[1..=arg_count]
+                                    .clone_from_slice(&registers[index..(index + arg_count)]);
                             }
                         }
 
@@ -1882,6 +1898,7 @@ mod tests {
         }
 
         mod test_call_fp {
+            use itertools::Itertools;
             use super::*;
 
             #[test]
@@ -2067,6 +2084,76 @@ mod tests {
                     ),
                     Int(69),
                 ];
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_dynamic_receivers() {
+                let code = indoc! { r##"
+                    function q = &->name(, "awesome!");
+
+                    int a = q(this_object(), 666);
+                    int b = q(clone_object("/std/widget"), 42);
+
+                    string name(int rank, string reaction) {
+                        return "me: " + rank + ". " + reaction;
+                    }
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                println!("{:#?}", registers.iter().map(|a| BareVal::from(a)).collect_vec());
+
+                let expected = vec![
+                    String("widget: 42. awesome!".into()),
+                    String("awesome!".into()),
+                    Function(
+                        "name".into(),
+                        vec![
+                            None,
+                            Some(
+                                String(
+                                    "awesome!".into(),
+                                ),
+                            ),
+                        ],
+                    ),
+                    Object("/my_file".into()),
+                    Int(666),
+                    Object("/my_file".into()),
+                    Int(666),
+                    Function(
+                        "name".into(),
+                        vec![
+                            None,
+                            Some(
+                                String(
+                                    "awesome!".into(),
+                                ),
+                            ),
+                        ],
+                    ),
+                    String("me: 666. awesome!".into()),
+                    String("/std/widget".into()),
+                    Object("/std/widget#0".into()),
+                    Int(42),
+                    Object("/std/widget#0".into()),
+                    Int(42),
+                    Function(
+                        "name".into(),
+                        vec![
+                            None,
+                            Some(
+                                String(
+                                    "awesome!".into(),
+                                ),
+                            ),
+                        ],
+                    ),
+                    String("widget: 42. awesome!".into()),
+                ];
+
                 assert_eq!(&expected, &registers);
             }
 
