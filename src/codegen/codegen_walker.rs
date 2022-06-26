@@ -48,7 +48,7 @@ use crate::{
     asm::instruction::Instruction::RegCopy,
     ast::{
         for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
-        function_ptr_node::FunctionPtrNode,
+        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
     },
     core::{
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
@@ -65,7 +65,6 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tree_walker::TreeWalker;
-use crate::ast::function_ptr_node::FunctionPtrReceiver;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1262,7 +1261,7 @@ impl TreeWalker for CodegenWalker {
                 }
 
                 // `&` used as the receiver
-                FunctionPtrReceiver::Dynamic => FunctionReceiver::Argument
+                FunctionPtrReceiver::Dynamic => FunctionReceiver::Argument,
             };
 
             // `call_other` always assumes a literal name

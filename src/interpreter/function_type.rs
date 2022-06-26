@@ -100,8 +100,7 @@ impl FunctionAddress {
     pub fn function_name(&self) -> &str {
         match self {
             FunctionAddress::Local(_, x) => x.name(),
-            FunctionAddress::Dynamic(x)
-            | FunctionAddress::Efun(x) => x,
+            FunctionAddress::Dynamic(x) | FunctionAddress::Efun(x) => x,
         }
     }
 
@@ -110,9 +109,10 @@ impl FunctionAddress {
         match self {
             FunctionAddress::Local(_, x) => x.prototype.flags,
             FunctionAddress::Dynamic(_) => FunctionFlags::default(),
-            FunctionAddress::Efun(x) => {
-                EFUN_PROTOTYPES.get(x.as_str()).map(|x| x.flags).unwrap_or_default()
-            }
+            FunctionAddress::Efun(x) => EFUN_PROTOTYPES
+                .get(x.as_str())
+                .map(|x| x.flags)
+                .unwrap_or_default(),
         }
     }
 }

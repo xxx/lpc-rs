@@ -9,7 +9,8 @@ use crate::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{
-            FunctionAddress, FunctionPtr, FunctionReceiver, FunctionTarget, LpcFunction,
+            FunctionAddress, FunctionName, FunctionPtr, FunctionReceiver, FunctionTarget,
+            LpcFunction,
         },
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
@@ -37,7 +38,6 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
-use crate::interpreter::function_type::FunctionName;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -297,10 +297,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 let address = match target {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
-                    FunctionTarget::Local(func_name, FunctionReceiver::Argument) => {
-                        match func_name {
-                            FunctionName::Var(_) => {
-                                return Err(
+                    FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name
+                    {
+                        FunctionName::Var(_) => {
+                            return Err(
                                     self.runtime_error(
                                         concat!(
                                             "A function pointer with `&` as the receiver receiver somehow has a ",
@@ -309,10 +309,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         )
                                     )
                                 );
-                            }
-                            FunctionName::Literal(name) => FunctionAddress::Dynamic(name)
                         }
-                    }
+                        FunctionName::Literal(name) => FunctionAddress::Dynamic(name),
+                    },
                     FunctionTarget::Local(func_name, func_receiver) => {
                         let proc = match func_receiver {
                             FunctionReceiver::Var(receiver_reg) => {
@@ -343,7 +342,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 proc.clone()
                             }
                             FunctionReceiver::Argument => {
-                                unreachable!("This is specified in an earlier arm of the parent `match`");
+                                unreachable!(
+                                    "This is specified in an earlier arm of the parent `match`"
+                                );
                             }
                         };
 
@@ -896,7 +897,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     FunctionAddress::Efun(_) => {
                                         public = true;
                                         dynamic_receiver = false;
-                                    },
+                                    }
                                 }
                             }
                         }
@@ -1894,8 +1895,8 @@ mod tests {
         }
 
         mod test_call_fp {
-            use itertools::Itertools;
             use super::*;
+            use itertools::Itertools;
 
             #[test]
             fn stores_the_value() {
@@ -2099,54 +2100,27 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                println!("{:#?}", registers.iter().map(|a| BareVal::from(a)).collect_vec());
+                println!(
+                    "{:#?}",
+                    registers.iter().map(|a| BareVal::from(a)).collect_vec()
+                );
 
                 let expected = vec![
                     String("widget: 42. awesome!".into()),
                     String("awesome!".into()),
-                    Function(
-                        "name".into(),
-                        vec![
-                            None,
-                            Some(
-                                String(
-                                    "awesome!".into(),
-                                ),
-                            ),
-                        ],
-                    ),
+                    Function("name".into(), vec![None, Some(String("awesome!".into()))]),
                     Object("/my_file".into()),
                     Int(666),
                     Object("/my_file".into()),
                     Int(666),
-                    Function(
-                        "name".into(),
-                        vec![
-                            None,
-                            Some(
-                                String(
-                                    "awesome!".into(),
-                                ),
-                            ),
-                        ],
-                    ),
+                    Function("name".into(), vec![None, Some(String("awesome!".into()))]),
                     String("me: 666. awesome!".into()),
                     String("/std/widget".into()),
                     Object("/std/widget#0".into()),
                     Int(42),
                     Object("/std/widget#0".into()),
                     Int(42),
-                    Function(
-                        "name".into(),
-                        vec![
-                            None,
-                            Some(
-                                String(
-                                    "awesome!".into(),
-                                ),
-                            ),
-                        ],
-                    ),
+                    Function("name".into(), vec![None, Some(String("awesome!".into()))]),
                     String("widget: 42. awesome!".into()),
                 ];
 

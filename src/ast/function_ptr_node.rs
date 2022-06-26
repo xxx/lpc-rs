@@ -19,7 +19,7 @@ use lazy_format::lazy_format;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum FunctionPtrReceiver {
     Static(Box<ExpressionNode>),
-    Dynamic
+    Dynamic,
 }
 
 impl Display for FunctionPtrReceiver {

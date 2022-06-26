@@ -418,7 +418,7 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
-        if let Some(FunctionPtrReceiver::Static(rcvr)) = &mut node.receiver{
+        if let Some(FunctionPtrReceiver::Static(rcvr)) = &mut node.receiver {
             rcvr.visit(self)?;
         }
 
