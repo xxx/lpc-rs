@@ -37,6 +37,7 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
+use crate::interpreter::function_type::FunctionName;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -296,6 +297,24 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 let address = match target {
                     FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
+                    FunctionTarget::Local(func_name, FunctionReceiver::Argument) => {
+                        match func_name {
+                            FunctionName::Var(v) => {
+                                return Err(
+                                    self.runtime_error(
+                                        concat!(
+                                            "A function pointer with `&` as the receiver receiver somehow has a ",
+                                            "var function name. This should not be reachable if ",
+                                            "semantic checks have passed."
+                                        )
+                                    )
+                                );
+                            }
+                            FunctionName::Literal(name) => {
+                                FunctionAddress::Dynamic(name.clone())
+                            }
+                        }
+                    }
                     FunctionTarget::Local(func_name, func_receiver) => {
                         let proc = match func_receiver {
                             FunctionReceiver::Var(receiver_reg) => {
@@ -325,19 +344,25 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                 proc.clone()
                             }
-                            FunctionReceiver::Argument => todo!(),
+                            FunctionReceiver::Argument => {
+                                unreachable!("This is specified in an earlier arm of the parent `match`");
+                                // todo!();
+                                // let frame = self.stack.current_frame()?;
+                                // let proc = &frame.process;
+                                //
+                                // proc.clone()
+                            }
                         };
 
                         let s = frame.resolve_function_name(&func_name)?;
                         let proc_ref = &frame.process;
                         let borrowed_proc = proc_ref.borrow();
-                        // TODO: namespace needs to be available in this instruction
-                        let sym = borrowed_proc.lookup_function(&*s, &CallNamespace::Local);
-                        if sym.is_none() {
+                        let func = borrowed_proc.lookup_function(&*s, &CallNamespace::Local);
+                        if func.is_none() {
                             return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
                         }
 
-                        FunctionAddress::Local(proc, sym.unwrap().clone())
+                        FunctionAddress::Local(proc, func.unwrap().clone())
                     }
                 };
 
@@ -848,7 +873,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     // TODO: Is there some way to avoid this redundant check, while still being able to update the register?
                     let frame = self.stack.current_frame_mut()?;
                     let registers = &mut frame.registers;
-                    let func_ref = &registers[location.index()];
+                    let func_ref = &registers[location];
                     let public = if let LpcRef::Function(func) = func_ref {
                         let borrowed = func.borrow();
                         let func = try_extract_value!(*borrowed, LpcValue::Function);
@@ -865,7 +890,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             pf.public()
                                         }
                                     }
-                                    FunctionAddress::Efun(_) => true,
+                                    FunctionAddress::Dynamic(_)
+                                    | FunctionAddress::Efun(_) => true,
                                 }
                             }
                         }
@@ -882,7 +908,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let mut function_is_local = true;
                 let frame = self.stack.current_frame()?;
                 let registers = &frame.registers;
-                let func_ref = &registers[location.index()];
+                let func_ref = &registers[location];
                 let new_frame = if_chain! {
                     if let LpcRef::Function(func) = func_ref;
                     let borrowed = func.borrow();
@@ -910,6 +936,29 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             called_args,
                                             max
                                         );
+                                    }
+                                    FunctionAddress::Dynamic(name) => {
+                                        let lpc_ref = frame.resolve_lpc_ref(initial_arg);
+
+                                        if let LpcRef::Object(lpc_ref) = lpc_ref {
+                                            let b = lpc_ref.borrow();
+                                            let cell = try_extract_value!(*b, LpcValue::Object);
+                                            let proc = cell.borrow();
+                                            let func = proc.lookup_function(name, &CallNamespace::Local);
+
+                                            if let Some(func) = func {
+                                                new_frame = StackFrame::with_minimum_arg_capacity(
+                                                    cell.clone(),
+                                                    func.clone(),
+                                                    called_args,
+                                                    max + 1
+                                                );
+                                            } else {
+                                                return Err(self.runtime_error(format!("call to unknown function `{}", name)));
+                                            }
+                                        } else {
+                                            return Err(self.runtime_error("non-object receiver to function pointer call"));
+                                        }
                                     }
                                     FunctionAddress::Efun(name) => {
                                         // unwrap is safe because this should have been checked in an earlier step

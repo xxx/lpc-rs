@@ -1,3 +1,4 @@
+use if_chain::if_chain;
 use crate::{
     ast::{
         array_node::ArrayNode,
@@ -15,7 +16,7 @@ use crate::{
         for_each_node::{ForEachInit, ForEachNode},
         for_node::ForNode,
         function_def_node::FunctionDefNode,
-        function_ptr_node::FunctionPtrNode,
+        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
         if_node::IfNode,
         inherit_node::InheritNode,
         int_node::IntNode,
@@ -229,8 +230,12 @@ pub trait TreeWalker {
     where
         Self: Sized,
     {
-        if let Some(rcvr) = &mut node.receiver {
-            rcvr.visit(self)?;
+        if_chain! {
+            if let Some(rcvr_node) = &mut node.receiver;
+            if let FunctionPtrReceiver::Static(rcvr) = rcvr_node;
+            then {
+                rcvr.visit(self)?;
+            }
         }
 
         if let Some(args) = &mut node.arguments {

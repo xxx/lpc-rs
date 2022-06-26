@@ -17,7 +17,7 @@ use crate::ast::expression_node::{ExpressionNode, first_span};
 use crate::ast::float_node::FloatNode;
 use crate::ast::for_node::ForNode;
 use crate::ast::for_each_node::{ForEachInit, ForEachNode};
-use crate::ast::function_ptr_node::FunctionPtrNode;
+use crate::ast::function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver};
 use crate::ast::function_def_node::FunctionDefNode;
 use crate::ast::if_node::IfNode;
 use crate::ast::inherit_node::InheritNode;
@@ -1009,12 +1009,7 @@ String: ExpressionNode = {
 };
 
 FunctionPointer: ExpressionNode = {
-    <l:"&"> <rcvr:("(" <PostfixExpression> ")" "->")?> <mut name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> => {
-        let receiver = match rcvr {
-            Some(n) => Some(Box::new(n)),
-            None => None
-        };
-
+    <l:"&"> <receiver:FunctionPointerReceiver?> <mut name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> => {
         let ptr_node = FunctionPtrNode {
             receiver,
             arguments,
@@ -1024,6 +1019,11 @@ FunctionPointer: ExpressionNode = {
 
         ExpressionNode::from(ptr_node)
     }
+};
+
+FunctionPointerReceiver: FunctionPtrReceiver = {
+    "(" <expr:PostfixExpression> ")" "->" => FunctionPtrReceiver::Static(Box::new(expr)),
+    "->" => FunctionPtrReceiver::Dynamic,
 };
 
 PartialArgumentExpressionList: Vec<Option<ExpressionNode>> = {

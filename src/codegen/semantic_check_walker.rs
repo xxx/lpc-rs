@@ -14,7 +14,7 @@ use crate::{
         for_each_node::{ForEachInit, ForEachNode},
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
-        function_ptr_node::FunctionPtrNode,
+        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
         int_node::IntNode,
         label_node::LabelNode,
         program_node::ProgramNode,
@@ -418,8 +418,12 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
-        if let Some(rcvr) = &mut node.receiver {
-            rcvr.visit(self)?;
+        if_chain! {
+            if let Some(rcvr_node) = &mut node.receiver;
+            if let FunctionPtrReceiver::Static(rcvr) = rcvr_node;
+            then {
+                rcvr.visit(self)?;
+            }
         }
 
         if let Some(args) = &mut node.arguments {

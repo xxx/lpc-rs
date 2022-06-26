@@ -15,10 +15,26 @@ use crate::{
 use itertools::Itertools;
 use lazy_format::lazy_format;
 
+/// Receiver types. Function pointers can be declared with a dynamic receiver
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
+pub enum FunctionPtrReceiver {
+    Static(Box<ExpressionNode>),
+    Dynamic
+}
+
+impl Display for FunctionPtrReceiver {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionPtrReceiver::Static(x) => write!(f, "({})", x),
+            FunctionPtrReceiver::Dynamic => write!(f, "&"),
+        }
+    }
+}
+
 /// A node representing a pointer to a function
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct FunctionPtrNode {
-    pub receiver: Option<Box<ExpressionNode>>,
+    pub receiver: Option<FunctionPtrReceiver>,
     pub arguments: Option<Vec<Option<ExpressionNode>>>,
     pub name: String,
 
@@ -55,7 +71,7 @@ impl Display for FunctionPtrNode {
             else ("({})", args)
         );
         let fmt = lazy_format!(
-            if let Some(e) = &self.receiver => ("({})->{}{}", e, self.name, arg_fmt)
+            if let Some(e) = &self.receiver => ("{}->{}{}", e, self.name, arg_fmt)
             else ("{}{}", self.name, arg_fmt)
         );
         write!(f, "&{}", fmt)

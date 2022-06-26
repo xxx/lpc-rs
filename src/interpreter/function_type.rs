@@ -87,6 +87,9 @@ pub enum FunctionAddress {
         Rc<ProgramFunction>,
     ),
 
+    /// The receiver isn't known until runtime (i.e. the `&->foo()` syntax)
+    Dynamic(String),
+
     /// The function being called is an efun, and requires the name.
     Efun(String),
 }
@@ -97,7 +100,8 @@ impl FunctionAddress {
     pub fn function_name(&self) -> &str {
         match self {
             FunctionAddress::Local(_, x) => x.name(),
-            FunctionAddress::Efun(x) => x,
+            FunctionAddress::Dynamic(x)
+            | FunctionAddress::Efun(x) => x,
         }
     }
 
@@ -105,10 +109,10 @@ impl FunctionAddress {
     pub fn flags(&self) -> FunctionFlags {
         match self {
             FunctionAddress::Local(_, x) => x.prototype.flags,
-            FunctionAddress::Efun(x) => match EFUN_PROTOTYPES.get(x.as_str()) {
-                Some(prototype) => prototype.flags,
-                None => FunctionFlags::default(),
-            },
+            FunctionAddress::Dynamic(_) => FunctionFlags::default(),
+            FunctionAddress::Efun(x) => {
+                EFUN_PROTOTYPES.get(x.as_str()).map(|x| x.flags).unwrap_or_default()
+            }
         }
     }
 }

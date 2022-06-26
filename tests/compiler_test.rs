@@ -5,6 +5,8 @@ use claim::assert_err;
 use indoc::indoc;
 use lpc_rs::{compiler::Compiler, util::config::Config};
 use std::rc::Rc;
+use lpc_rs::interpreter::lpc_ref::LpcRef;
+use lpc_rs::interpreter::program::Program;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)
@@ -13,6 +15,10 @@ fn default_compiler() -> Compiler {
         .into();
     Compiler::new(config.clone())
 }
+
+// fn lookup_global_variable(prog: &Program, name: &str) -> LpcRef {
+//     prog.globals.iter().find(|(n, _)| n == name).unwrap().1.clone()
+// }
 
 #[test]
 fn errors_on_max_inherit_depth() {
@@ -35,6 +41,32 @@ fn test_inheritance() {
             grandparent_method();
             parent_method();
             overridden_method();
+        }
+    "## };
+
+    let (_task, ctx) = run_prog(code);
+    let proc = ctx.process();
+    let prog = &proc.borrow().program;
+    println!(
+        "task: {}, {}, {:?}",
+        prog.num_globals, prog.num_init_registers, prog.global_variables
+    );
+
+    assert_eq!(prog.num_globals, 5);
+    assert_eq!(prog.num_init_registers, 7);
+}
+
+#[test]
+fn test_dynamic_receiver() {
+    let code = indoc! { r##"
+        void create() {
+            function f = &->tacos();
+            dump(f(this_object(), "assmar"));
+        }
+
+        string tacos(string s) {
+            dump(s);
+            return "tacos";
         }
     "## };
 

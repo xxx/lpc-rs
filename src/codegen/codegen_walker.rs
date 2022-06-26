@@ -65,6 +65,7 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tree_walker::TreeWalker;
+use crate::ast::function_ptr_node::FunctionPtrReceiver;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1254,8 +1255,15 @@ impl TreeWalker for CodegenWalker {
 
         if let Some(rcvr) = &mut node.receiver {
             // remote receiver, i.e. `call_other`
-            rcvr.visit(self)?;
-            let receiver = FunctionReceiver::Var(self.current_result);
+            let receiver = match rcvr {
+                FunctionPtrReceiver::Static(rcvr_node) => {
+                    rcvr_node.visit(self)?;
+                    FunctionReceiver::Var(self.current_result)
+                }
+
+                // `&` used as the receiver
+                FunctionPtrReceiver::Dynamic => FunctionReceiver::Argument
+            };
 
             // `call_other` always assumes a literal name
             let name = FunctionName::Literal(node.name.clone());
