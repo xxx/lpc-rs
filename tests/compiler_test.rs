@@ -2,8 +2,13 @@ mod support;
 
 use crate::support::run_prog;
 use claim::assert_err;
+use if_chain::if_chain;
 use indoc::indoc;
-use lpc_rs::{compiler::Compiler, util::config::Config};
+use lpc_rs::{
+    compiler::Compiler,
+    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
+    util::config::Config,
+};
 use std::rc::Rc;
 
 fn default_compiler() -> Compiler {
@@ -75,4 +80,59 @@ fn test_dynamic_receiver() {
         "task: {}, {}, {:?}",
         prog.num_globals, prog.num_init_registers, prog.global_variables
     );
+}
+
+#[test]
+fn test_duffs_device() {
+    let code = indoc! { r##"
+        int *copy(int *array, int count) {
+            int n = (count + 7) / 8, idx = 0;
+            int *result = ({ 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            switch (count % 8) {
+            case 0: do { result[0] = array[0];
+            case 7:      result[7] = array[7];
+            case 6:      result[6] = array[6];
+            case 5:      result[5] = array[5];
+            case 4:      result[4] = array[4];
+            case 3:      result[3] = array[3];
+            case 2:      result[2] = array[2];
+            case 1:      result[1] = array[1];
+                    } while (--n > 0);
+            }
+
+            return result;
+        }
+
+        mixed a = ({ 1, 2, 3, 4, 5, 6, 7, 8 });
+        mixed b = copy(a, 6);
+    "## };
+
+    let (_task, ctx) = run_prog(code);
+    let proc = ctx.process();
+    let borrowed = proc.borrow();
+    let b = borrowed.globals[1].borrow();
+
+    if_chain! {
+        if let LpcRef::Array(pool_ref) = &*b;
+        let b = pool_ref.borrow();
+        if let LpcValue::Array(arr) = &*b;
+        then {
+            assert_eq!(
+                arr,
+                &[
+                    LpcRef::Int(0),
+                    LpcRef::Int(2),
+                    LpcRef::Int(3),
+                    LpcRef::Int(4),
+                    LpcRef::Int(5),
+                    LpcRef::Int(6),
+                    LpcRef::Int(7),
+                    LpcRef::Int(0),
+                ]
+            );
+        } else {
+            panic!("expected array");
+        }
+    }
 }
