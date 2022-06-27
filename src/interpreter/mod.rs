@@ -11,7 +11,7 @@ pub mod pragma_flags;
 pub mod process;
 pub mod program;
 pub mod register_bank;
-pub mod stack_frame;
+pub mod call_frame;
 pub mod task;
 pub mod task_context;
 pub mod vm;

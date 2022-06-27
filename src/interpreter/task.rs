@@ -19,7 +19,7 @@ use crate::{
         process::Process,
         program::Program,
         register_bank::RegisterBank,
-        stack_frame::StackFrame,
+        call_frame::CallFrame,
         task_context::TaskContext,
         MAX_CALL_STACK_SIZE,
     },
@@ -82,7 +82,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
-    pub popped_frame: Option<StackFrame>,
+    pub popped_frame: Option<CallFrame>,
 
     /// Store a snapshot of a specific state, for testing
     #[cfg(test)]
@@ -158,7 +158,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let function = f.into();
         let process = task_context.process();
 
-        let mut frame = StackFrame::new(process, function, args.len());
+        let mut frame = CallFrame::new(process, function, args.len());
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
@@ -613,7 +613,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     (real_start, real_end)
                 };
 
-                let return_value = |value, memory: &Memory, frame: &mut StackFrame| -> Result<()> {
+                let return_value = |value, memory: &Memory, frame: &mut CallFrame| -> Result<()> {
                     let new_ref = memory.value_to_ref(value);
                     let registers = &mut frame.registers;
                     registers[r4.index()] = new_ref;
@@ -790,7 +790,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let borrowed = process.borrow();
                 let function = borrowed.lookup_function(name, namespace);
                 let mut new_frame = if let Some(func) = function {
-                    StackFrame::with_minimum_arg_capacity(
+                    CallFrame::with_minimum_arg_capacity(
                         process.clone(),
                         func.clone(),
                         *num_args,
@@ -799,7 +799,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                     let func = ProgramFunction::new(prototype.clone(), 0);
 
-                    StackFrame::with_minimum_arg_capacity(
+                    CallFrame::with_minimum_arg_capacity(
                         process.clone(),
                         Rc::new(func),
                         *num_args,
@@ -936,7 +936,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                 match &ptr.address {
                                     FunctionAddress::Local(proc, function) => {
-                                        new_frame = StackFrame::with_minimum_arg_capacity(
+                                        new_frame = CallFrame::with_minimum_arg_capacity(
                                             proc.clone(),
                                             function.clone(),
                                             called_args,
@@ -953,7 +953,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             let func = proc.lookup_function(name, &CallNamespace::Local);
 
                                             if let Some(func) = func {
-                                                new_frame = StackFrame::with_minimum_arg_capacity(
+                                                new_frame = CallFrame::with_minimum_arg_capacity(
                                                     cell.clone(),
                                                     func.clone(),
                                                     called_args,
@@ -973,7 +973,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                         function_is_local = false;
 
-                                        new_frame = StackFrame::with_minimum_arg_capacity(
+                                        new_frame = CallFrame::with_minimum_arg_capacity(
                                             frame.process.clone(),
                                             Rc::new(pf),
                                             called_args,
@@ -1574,7 +1574,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     /// Pop the top frame from the stack, and return it.
     #[inline]
     #[allow(clippy::let_and_return)]
-    fn pop_frame(&mut self) -> Option<StackFrame> {
+    fn pop_frame(&mut self) -> Option<CallFrame> {
         let frame = self.stack.pop();
 
         #[cfg(test)]

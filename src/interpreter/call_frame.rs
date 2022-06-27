@@ -20,7 +20,7 @@ use tracing::instrument;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
-pub struct StackFrame {
+pub struct CallFrame {
     /// A pointer to the process that owns the function being called
     pub process: Rc<RefCell<Process>>,
     /// The function that this frame is a call to
@@ -35,7 +35,7 @@ pub struct StackFrame {
     pub called_with_num_args: usize,
 }
 
-impl StackFrame {
+impl CallFrame {
     /// Create a new [`StackFrame`] instance
     ///
     /// # Arguments
@@ -176,7 +176,7 @@ impl StackFrame {
     }
 }
 
-impl Display for StackFrame {
+impl Display for CallFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -211,7 +211,7 @@ mod tests {
 
         let fs = ProgramFunction::new(prototype, 7);
 
-        let frame = StackFrame::new(process, Rc::new(fs), 4);
+        let frame = CallFrame::new(process, Rc::new(fs), 4);
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -236,7 +236,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
+            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
@@ -258,7 +258,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = StackFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
+            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));

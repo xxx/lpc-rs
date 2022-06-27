@@ -2,7 +2,7 @@ use crate::{
     errors::LpcError,
     interpreter::{
         call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory,
-        process::Process, program::Program, stack_frame::StackFrame, task_context::TaskContext,
+        process::Process, program::Program, call_frame::CallFrame, task_context::TaskContext,
     },
     parser::span::Span,
     util::config::Config,
@@ -63,7 +63,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get a reference to the current [`StackFrame`]
     #[inline]
-    pub fn frame(&self) -> &StackFrame {
+    pub fn frame(&self) -> &CallFrame {
         self.stack.last().unwrap()
     }
 

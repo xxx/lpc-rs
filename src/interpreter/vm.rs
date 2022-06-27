@@ -1,8 +1,8 @@
-use crate::interpreter::{memory::Memory, object_space::ObjectSpace, stack_frame::StackFrame};
+use crate::interpreter::{memory::Memory, object_space::ObjectSpace, call_frame::CallFrame};
 
 pub struct Vm {
     /// The call stack
-    pub stack: Vec<StackFrame>,
+    pub stack: Vec<CallFrame>,
 
     /// Our object space, which stores all of the system objects (masters and clones)
     pub object_space: ObjectSpace,
