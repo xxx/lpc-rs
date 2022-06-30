@@ -175,7 +175,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         self.catch_error(e)?;
                         false
                     } else {
-                        return Err(e);
+                        let stack_trace = self.stack.stack_trace();
+                        return Err(e.with_stack_trace(stack_trace));
                     }
                 }
             };

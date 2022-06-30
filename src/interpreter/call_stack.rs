@@ -75,12 +75,21 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         self.set_result(from.registers[0].clone())
     }
 
+    /// Create a runtime error, with stack trace, based on the current state.
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        let span = match self.current_frame() {
-            Ok(frame) => frame.current_debug_span(),
-            Err(_) => None,
-        };
+        let span = self.current_frame()
+            .map(|f| f.current_debug_span())
+            .unwrap_or(None);
+
         LpcError::new(format!("runtime error: {}", msg.as_ref())).with_span(span)
+    }
+
+    /// Get the stack trace information for the stack
+    pub fn stack_trace(&self) -> Vec<String> {
+        self.stack
+            .iter()
+            .map(|f| f.to_stack_trace_format())
+            .collect::<Vec<_>>()
     }
 }
 

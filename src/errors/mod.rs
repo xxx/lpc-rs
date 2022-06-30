@@ -8,6 +8,7 @@ use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
+use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
 use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
@@ -32,6 +33,8 @@ pub struct LpcError {
     /// Additional errors that were collected before this one. This is only
     /// used during compilation, when non-fatal errors can occur.
     additional_errors: Option<Vec<LpcError>>,
+    /// Optional stack trace for printing
+    stack_trace: Option<Vec<String>>,
 }
 
 impl LpcError {
@@ -46,6 +49,7 @@ impl LpcError {
             labels: Vec::new(),
             notes: Vec::new(),
             additional_errors: None,
+            stack_trace: None,
         }
     }
 
@@ -81,6 +85,12 @@ impl LpcError {
 
     pub fn with_additional_errors(mut self, additional_errors: Vec<LpcError>) -> Self {
         self.additional_errors = Some(additional_errors);
+
+        self
+    }
+
+    pub fn with_stack_trace(mut self, stack_trace: Vec<String>) -> Self {
+        self.stack_trace = Some(stack_trace);
 
         self
     }
@@ -185,6 +195,12 @@ impl From<&LpcError> for Diagnostic<usize> {
             diagnostic = diagnostic.with_notes(error.notes.clone())
         }
 
+        if let Some(stack_trace) = &error.stack_trace {
+            diagnostic.notes.push(
+                format!("Stack trace:\n\n{}", stack_trace.iter().rev().join("\n"))
+            );
+        }
+
         diagnostic
     }
 }
@@ -203,6 +219,7 @@ fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteC
         };
     }
 }
+
 /// An extracted function that covers the most common use case for generating diagnostics.
 ///
 /// # Arguments

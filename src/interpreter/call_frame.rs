@@ -118,14 +118,13 @@ impl CallFrame {
         }
     }
 
+    /// get the debug span for the current instruction
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
-        match self.function.debug_spans.get(self.pc.get()) {
-            Some(o) => *o,
-            None => None,
-        }
+        self.function.debug_spans.get(self.pc.get()).and_then(|s| *s)
     }
 
+    /// set the pc to a specific value
     #[inline]
     pub fn set_pc(&self, new_val: usize) {
         self.pc.replace(new_val);
@@ -144,22 +143,26 @@ impl CallFrame {
         }
     }
 
+    /// increment the pc
     #[inline]
     pub fn inc_pc(&self) {
         self.pc.replace(self.pc.get() + 1);
     }
 
+    /// get the pc value
     #[inline]
     pub fn pc(&self) -> usize {
         self.pc.get()
     }
 
+    /// get the current instruction
     #[inline]
     #[instrument(skip(self))]
     pub fn instruction(&self) -> Option<&Instruction> {
         self.function.instructions.get(self.pc.get())
     }
 
+    /// lookup a label's address by name
     #[inline]
     #[instrument(skip(self))]
     pub fn lookup_label<T>(&self, label: T) -> Option<&Address>
@@ -169,10 +172,19 @@ impl CallFrame {
         self.function.labels.get(label.as_ref())
     }
 
+    /// a convenience method to generate a runtime error
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         LpcError::new(format!("runtime error: {}", msg.as_ref()))
             .with_span(self.current_debug_span())
+    }
+
+    /// get a string representation of the frame's current current location
+    // TODO: make this the Display implementation
+    pub fn to_stack_trace_format(&self) -> String {
+        self.current_debug_span()
+            .map(|span| format!("{} in {}()", span, self.function.name()))
+            .unwrap_or_else(|| format!("(unknown) in {}()", self.function.name()))
     }
 }
 

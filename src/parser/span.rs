@@ -1,5 +1,8 @@
-use crate::errors::lazy_files::FileId;
+use std::fmt::{Display, Formatter};
+use crate::errors::lazy_files::{FILE_CACHE, FileId};
 use std::ops::Range;
+use codespan_reporting::files::Files;
+use if_chain::if_chain;
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
@@ -11,6 +14,24 @@ pub struct Span {
     pub r: usize,
     /// The ID of the file in the global [`FILE_CACHE`](struct@crate::errors::lazy_files::FILE_CACHE)
     pub file_id: FileId,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let files = FILE_CACHE.read();
+
+        if_chain! {
+            if let Ok(name) = files.name(self.file_id);
+            if let Ok(idx) = files.line_index(self.file_id, self.l);
+            if let Ok(line_num) = files.line_number(self.file_id, idx);
+            if let Ok(column_num) = files.column_number(self.file_id, idx, line_num);
+            then {
+                write!(f, "{}:{}:{}", name, line_num, column_num)
+            } else {
+                write!(f, "{:?}", self)
+            }
+        }
+    }
 }
 
 /// combine two [`Span`]s together, handling `None` cases.
