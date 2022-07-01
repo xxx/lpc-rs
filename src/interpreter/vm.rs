@@ -1,4 +1,4 @@
-use crate::interpreter::{memory::Memory, object_space::ObjectSpace, call_frame::CallFrame};
+use crate::interpreter::{call_frame::CallFrame, memory::Memory, object_space::ObjectSpace};
 
 pub struct Vm {
     /// The call stack

@@ -1,6 +1,6 @@
 use crate::{
     asm::{
-        instruction::{Address, Instruction, Label},
+        instruction::{Address, Instruction, Instruction::RegCopy, Label},
         register_counter::RegisterCounter,
     },
     ast::{
@@ -16,8 +16,10 @@ use crate::{
         do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
         float_node::FloatNode,
+        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
         for_node::ForNode,
         function_def_node::{FunctionDefNode, ARGV},
+        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
         if_node::IfNode,
         int_node::IntNode,
         label_node::LabelNode,
@@ -35,35 +37,27 @@ use crate::{
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
     compilation_context::CompilationContext,
-    errors::LpcError,
-    interpreter::{
-        efun::{CALL_OTHER, CATCH},
-        program::Program,
-    },
-    semantic::{program_function::ProgramFunction, symbol::Symbol},
-    Result,
-};
-
-use crate::{
-    asm::instruction::Instruction::RegCopy,
-    ast::{
-        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
-        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
-    },
     core::{
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
         register::Register, CREATE_FUNCTION, INIT_PROGRAM,
     },
+    errors::LpcError,
     interpreter::{
-        efun::{EFUN_PROTOTYPES, SIZEOF},
+        efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         function_type::{FunctionName, FunctionReceiver, FunctionTarget},
+        program::Program,
     },
     parser::span::Span,
-    semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
+    semantic::{
+        function_flags::FunctionFlags, function_prototype::FunctionPrototype,
+        program_function::ProgramFunction, symbol::Symbol,
+    },
+    Result,
 };
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use std::{collections::HashMap, ops::Range, rc::Rc};
+use tracing::instrument;
 use tree_walker::TreeWalker;
 
 macro_rules! push_instruction {
@@ -176,6 +170,7 @@ impl CodegenWalker {
 
     /// Create the combined initialization function, with code taken from all
     /// of our inherited-from parents.
+    #[instrument(skip_all)]
     pub fn setup_init(&mut self) {
         let prototype = FunctionPrototype::new(
             INIT_PROGRAM,
@@ -548,6 +543,7 @@ impl ContextHolder for CodegenWalker {
 }
 
 impl TreeWalker for CodegenWalker {
+    #[instrument(skip_all)]
     fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len());
         for member in &mut node.value {
@@ -562,6 +558,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         node.rhs.visit(self)?;
         let rhs_result = self.current_result;
@@ -623,6 +620,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
         node.l.visit(self)?;
         let reg_left = self.current_result;
@@ -693,6 +691,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
@@ -704,6 +703,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
         if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
             let instruction = Instruction::Jmp(break_target.into());
@@ -714,6 +714,7 @@ impl TreeWalker for CodegenWalker {
         Err(LpcError::new("`break` statement without a jump target?").with_span(node.span))
     }
 
+    #[instrument(skip_all)]
     fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         if node.name == CATCH {
             return self.emit_catch(node);
@@ -907,6 +908,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if let Some(JumpTarget {
             continue_target, ..
@@ -920,6 +922,7 @@ impl TreeWalker for CodegenWalker {
         Err(LpcError::new("`continue` statement without a jump target?").with_span(node.span))
     }
 
+    #[instrument(skip_all)]
     fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
         for init in &mut node.initializations {
             self.visit_var_init(init)?;
@@ -928,6 +931,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
@@ -958,6 +962,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
@@ -967,6 +972,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
@@ -1010,6 +1016,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
@@ -1096,6 +1103,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Note we don't look to inherited files at all for this -
         // We're generating code for a function defined _in this object_
@@ -1235,7 +1243,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
-    /// Visit a function pointer node
+    #[instrument(skip_all)]
     fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         let mut applied_arguments = Vec::new();
         if let Some(args) = &mut node.arguments {
@@ -1335,6 +1343,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
         let else_label = self.new_label("if-else");
@@ -1371,6 +1380,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
@@ -1384,6 +1394,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
         let address = self.current_address();
         match self.case_addresses.last_mut() {
@@ -1400,6 +1411,7 @@ impl TreeWalker for CodegenWalker {
         }
     }
 
+    #[instrument(skip_all)]
     fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
         let mut map = IndexMap::new();
         for (key, value) in &mut node.value {
@@ -1417,6 +1429,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
         self.setup_init();
@@ -1468,7 +1481,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
-    /// Visit a range literal
+    #[instrument(skip_all)]
     fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
         let mut result_left: Option<Register> = None;
         let mut result_right: Option<Register> = None;
@@ -1487,6 +1500,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
@@ -1499,6 +1513,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
         let register = self.register_counter.next().unwrap();
         self.current_result = register;
@@ -1512,6 +1527,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
         node.expression.visit(self)?;
         let expr_result = self.current_result;
@@ -1613,6 +1629,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
         let result_reg = self.register_counter.next().unwrap();
         let else_label = self.new_label("ternary-else");
@@ -1650,6 +1667,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
         node.expr.visit(self)?;
         let location = self.current_result;
@@ -1708,6 +1726,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.function_name {
             let mut fptr_node = FunctionPtrNode {
@@ -1753,6 +1772,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let symbol = self.context.lookup_var(&node.name);
 
@@ -1815,6 +1835,7 @@ impl TreeWalker for CodegenWalker {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 

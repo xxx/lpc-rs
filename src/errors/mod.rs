@@ -196,9 +196,10 @@ impl From<&LpcError> for Diagnostic<usize> {
         }
 
         if let Some(stack_trace) = &error.stack_trace {
-            diagnostic.notes.push(
-                format!("Stack trace:\n\n{}", stack_trace.iter().rev().join("\n"))
-            );
+            diagnostic.notes.push(format!(
+                "Stack trace:\n\n{}",
+                stack_trace.iter().rev().join("\n")
+            ));
         }
 
         diagnostic

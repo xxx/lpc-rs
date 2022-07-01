@@ -6,6 +6,7 @@ use crate::{
 };
 use multimap::MultiMap;
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
+use tracing::trace;
 
 /// A [`Program`] function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -61,6 +62,7 @@ impl ProgramFunction {
 
     /// Push and [`Instruction`] and corresponding [`Span`] into this function's code.
     pub fn push_instruction(&mut self, instruction: Instruction, debug_span: Option<Span>) {
+        trace!(instruction = %instruction, span = ?debug_span, "pushing instruction");
         self.instructions.push(instruction);
         self.debug_spans.push(debug_span);
     }

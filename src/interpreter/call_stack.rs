@@ -1,6 +1,6 @@
 use crate::{
     errors::LpcError,
-    interpreter::{lpc_ref::LpcRef, call_frame::CallFrame},
+    interpreter::{call_frame::CallFrame, lpc_ref::LpcRef},
     Result,
 };
 use arrayvec::ArrayVec;
@@ -77,7 +77,8 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
     /// Create a runtime error, with stack trace, based on the current state.
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        let span = self.current_frame()
+        let span = self
+            .current_frame()
             .map(|f| f.current_debug_span())
             .unwrap_or(None);
 

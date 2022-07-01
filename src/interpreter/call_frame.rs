@@ -121,7 +121,10 @@ impl CallFrame {
     /// get the debug span for the current instruction
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
-        self.function.debug_spans.get(self.pc.get()).and_then(|s| *s)
+        // subtract 1, because we increment the pc after fetching an instruction,
+        // but before evaluating it.
+        let idx = self.pc.get().saturating_sub(1);
+        self.function.debug_spans.get(idx).and_then(|s| *s)
     }
 
     /// set the pc to a specific value

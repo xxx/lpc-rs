@@ -6,6 +6,7 @@ use crate::{
     },
     errors::LpcError,
     interpreter::{
+        call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{
@@ -19,7 +20,6 @@ use crate::{
         process::Process,
         program::Program,
         register_bank::RegisterBank,
-        call_frame::CallFrame,
         task_context::TaskContext,
         MAX_CALL_STACK_SIZE,
     },
