@@ -24,7 +24,7 @@ use crate::{
 };
 use once_cell::sync::Lazy;
 use std::iter::Peekable;
-use tracing::instrument;
+use tracing::{instrument, trace};
 
 pub mod define;
 pub mod preprocessor_node;
@@ -149,6 +149,8 @@ impl Preprocessor {
         P: Into<LpcPath> + Debug,
         C: AsRef<str> + Debug,
     {
+        trace!("scanning {:?}", path);
+
         let mut output = Vec::new();
 
         let lpc_path = path.into();
