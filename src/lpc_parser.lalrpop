@@ -412,21 +412,18 @@ ForInit: AstNode = {
 };
 
 ForEachInit: ForEachInit = {
-    <ty:Type> <name:"ID"> => {
-        let span = combine_spans(Some(ty.1), Some(name.0));
-        let mut node = VarInitNode::new(&name.1, LpcType::from(ty.0));
-        node.span = Some(span);
+    <name:"ID"> => {
+        let mut node = VarInitNode::new(&name.1, LpcType::Mixed(false));
+        node.span = Some(name.0);
         
         ForEachInit::Array(node)
     },
-    <key_type:Type> <key_name:"ID"> "," <value_type:Type> <value_name:"ID"> => {
-        let key_span = combine_spans(Some(key_type.1), Some(key_name.0));
-        let mut key = VarInitNode::new(&key_name.1, LpcType::from(key_type.0));
-        key.span = Some(key_span);
+    <key_name:"ID"> "," <value_name:"ID"> => {
+        let mut key = VarInitNode::new(&key_name.1, LpcType::Mixed(false));
+        key.span = Some(key_name.0);
 
-        let value_span = combine_spans(Some(value_type.1), Some(value_name.0));
-        let mut value = VarInitNode::new(&value_name.1, LpcType::from(value_type.0));
-        value.span = Some(value_span);
+        let mut value = VarInitNode::new(&value_name.1, LpcType::Mixed(false));
+        value.span = Some(value_name.0);
         
         ForEachInit::Mapping { key, value }
     },

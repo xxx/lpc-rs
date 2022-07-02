@@ -321,16 +321,6 @@ impl TreeWalker for SemanticCheckWalker {
 
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) => {
-                let collection_singular = collection_type.as_array(false);
-                if !init.type_.matches_type(collection_singular) {
-                    let e = LpcError::new(format!(
-                        "unexpected element type {}. expected {}",
-                        init.type_, collection_singular
-                    ))
-                    .with_span(node.span);
-                    self.context.errors.push(e);
-                }
-
                 let _ = init.visit(self);
             }
             ForEachInit::Mapping {
@@ -1823,7 +1813,7 @@ mod tests {
             let code = indoc! { r#"
                 void create() {
                     int *a = ({ 1, 2, 3 });
-                    foreach(int i: a) {
+                    foreach(i: a) {
                         dump(i);
                     }
                 }
@@ -1838,7 +1828,7 @@ mod tests {
             let code = indoc! { r#"
                 void create() {
                     mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
-                    foreach(mixed key, mixed value: a) {
+                    foreach(key, value: a) {
                         dump(key);
                     }
                 }
@@ -1853,7 +1843,7 @@ mod tests {
             let code = indoc! { r#"
                 void create() {
                     int a = 0;
-                    foreach(mixed key: a) {
+                    foreach(key: a) {
                         dump(key);
                     }
                 }
@@ -1863,59 +1853,6 @@ mod tests {
             assert_eq!(
                 context.errors[0].to_string(),
                 "`foreach` must iterate over an array or mapping, found int"
-            );
-        }
-
-        #[test]
-        fn disallows_incorrect_type_for_arrays() {
-            let code = indoc! { r#"
-                void create() {
-                    int *a = ({ 1, 2, 3 });
-                    foreach(string i: a) {
-                        dump(i);
-                    }
-                }
-            "# };
-            let context = walk_code(code).expect("failed to parse?");
-
-            assert_eq!(
-                context.errors[0].to_string(),
-                "unexpected element type string. expected int"
-            );
-        }
-
-        #[test]
-        fn disallows_non_mixed_type_for_mappings() {
-            let code = indoc! { r#"
-                void create() {
-                    mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
-                    foreach(string i, mixed j: a) {
-                        dump(i);
-                    }
-                }
-            "# };
-            let context = walk_code(code).expect("failed to parse?");
-
-            assert_eq!(
-                context.errors[0].to_string(),
-                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
-            );
-
-            //
-
-            let code = indoc! { r#"
-                void create() {
-                    mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
-                    foreach(mixed i, int j: a) {
-                        dump(i);
-                    }
-                }
-            "# };
-            let context = walk_code(code).expect("failed to parse?");
-
-            assert_eq!(
-                context.errors[0].to_string(),
-                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
             );
         }
     }
