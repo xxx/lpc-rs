@@ -75,6 +75,12 @@ impl TreeWalker for InheritanceWalker {
 
         match compiler.compile_in_game_file(&full_path, node.span) {
             Ok(program) => {
+                if program.pragmas.no_inherit() {
+                    return Err(LpcError::new(format!("`pragma #no_inherit` is set on {}", program.filename)).with_span(
+                        node.span,
+                    ));
+                }
+
                 if self
                     .context
                     .inherits
@@ -125,7 +131,7 @@ mod tests {
 
     mod test_visit_inherit {
         use super::*;
-        use claim::{assert_err, assert_ok};
+        use claim::assert_ok;
 
         #[test]
         fn test_sets_up_the_data() {
@@ -160,9 +166,27 @@ mod tests {
 
             let result = walker.visit_inherit(&mut node);
 
-            assert_err!(
-                result,
+            assert_eq!(
+                result.unwrap_err().to_string(),
                 "inheritance namespace `grandparent` is already defined"
+            );
+        }
+
+        #[test]
+        fn test_disallows_no_inherit_pragma() {
+            let mut walker = walker();
+
+            let mut node = InheritNode {
+                path: "/no_inherit.c".to_string(),
+                namespace: None,
+                span: None,
+            };
+
+            let result = walker.visit_inherit(&mut node);
+
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "`pragma #no_inherit` is set on /no_inherit.c"
             );
         }
 
@@ -178,7 +202,10 @@ mod tests {
 
             let result = walker.visit_inherit(&mut node);
 
-            assert_err!(result, "inheritance namespace `efun` is reserved");
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "inheritance namespace `efun` is reserved"
+            );
         }
     }
 }
