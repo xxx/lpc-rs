@@ -15,5 +15,3 @@ pub mod register_bank;
 pub mod task;
 pub mod task_context;
 pub mod vm;
-
-pub const MAX_CALL_STACK_SIZE: usize = 64;

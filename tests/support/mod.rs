@@ -2,10 +2,11 @@ use lpc_rs::{
     compiler::Compiler,
     interpreter::{
         memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
-        task_context::TaskContext, MAX_CALL_STACK_SIZE,
+        task_context::TaskContext,
     },
     util::config::Config,
 };
+use lpc_rs::compile_time_config::MAX_CALL_STACK_SIZE;
 
 #[macro_export]
 macro_rules! assert_regex {

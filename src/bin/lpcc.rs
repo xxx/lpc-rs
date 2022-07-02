@@ -2,10 +2,11 @@ use std::env;
 
 use lpc_rs::{
     compiler::Compiler,
-    interpreter::{memory::Memory, object_space::ObjectSpace, task::Task, MAX_CALL_STACK_SIZE},
+    interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
     util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
+use lpc_rs::compile_time_config::MAX_CALL_STACK_SIZE;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 

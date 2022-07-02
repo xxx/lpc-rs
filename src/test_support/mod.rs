@@ -2,11 +2,12 @@ use crate::{
     compiler::Compiler,
     interpreter::{
         memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
-        task_context::TaskContext, MAX_CALL_STACK_SIZE,
+        task_context::TaskContext,
     },
     util::{config::Config, path_maker::LpcPath},
 };
 use std::rc::Rc;
+use crate::compile_time_config::MAX_CALL_STACK_SIZE;
 
 /// Module for various test utilities that are shared among unit tests.
 
