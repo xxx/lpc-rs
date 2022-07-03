@@ -118,11 +118,16 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
         FunctionPrototype {
             name: DUMP.into(),
             return_type: LpcType::Void,
-            arity: FunctionArity::new(1),
+            arity: FunctionArity {
+                num_args: 1,
+                ellipsis: true,
+                num_default_args: 0,
+                varargs: false,
+            },
             arg_types: vec![LpcType::Mixed(false)],
             span: None,
             arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
+            flags: FunctionFlags::default().with_ellipsis(true),
         },
     );
 

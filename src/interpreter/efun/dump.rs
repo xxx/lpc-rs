@@ -129,10 +129,15 @@ fn format_mapping<const N: usize>(
 
 /// The dump() Efun
 pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
-    // function arguments start in register 1, and we know this function has only 1 arg.
-    let lpc_ref = context.resolve_lpc_ref(1_usize);
+    let arg_count = context.frame().called_with_num_args;
 
-    println!("{}", format_ref(&lpc_ref, context, 0, 0)?);
+    let s = (1..=arg_count).into_iter().map(|i| {
+        let lpc_ref = context.resolve_lpc_ref(i);
+
+        format_ref(&lpc_ref, context, 0, 0)
+    }).collect::<Result<Vec<_>>>()?.join(" ");
+
+    println!("{}", s);
 
     Ok(())
 }
