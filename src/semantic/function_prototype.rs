@@ -4,6 +4,9 @@ use crate::{
     semantic::function_flags::FunctionFlags,
 };
 use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
+use itertools::Itertools;
+use lazy_format::lazy_format;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -54,6 +57,44 @@ impl FunctionPrototype {
             arg_spans,
             flags,
         }
+    }
+}
+
+impl Display for FunctionPrototype {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let flags = self.flags;
+
+        let nomask = lazy_format!(
+            if flags.nomask() => ("{}", "nomask ")
+            else ("")
+        );
+
+        let varargs = lazy_format!(
+            if flags.varargs() => ("{}", "varargs ")
+            else ("")
+        );
+
+        let visibility = lazy_format!("{} ", self.flags.visibility());
+
+        let mut args = self.arg_types
+            .iter()
+            .map(|t| t.to_string())
+            .join(", ");
+
+        if self.flags.ellipsis() {
+            args.push_str(", ...");
+        }
+
+        write!(
+            f,
+            "{}{}{}{} {}({})",
+            nomask,
+            varargs,
+            visibility,
+            self.return_type,
+            self.name,
+            args
+        )
     }
 }
 
