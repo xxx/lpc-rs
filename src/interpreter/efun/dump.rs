@@ -131,11 +131,15 @@ fn format_mapping<const N: usize>(
 pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     let arg_count = context.frame().called_with_num_args;
 
-    let s = (1..=arg_count).into_iter().map(|i| {
-        let lpc_ref = context.resolve_lpc_ref(i);
+    let s = (1..=arg_count)
+        .into_iter()
+        .map(|i| {
+            let lpc_ref = context.resolve_lpc_ref(i);
 
-        format_ref(&lpc_ref, context, 0, 0)
-    }).collect::<Result<Vec<_>>>()?.join(" ");
+            format_ref(&lpc_ref, context, 0, 0)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(" ");
 
     println!("{}", s);
 

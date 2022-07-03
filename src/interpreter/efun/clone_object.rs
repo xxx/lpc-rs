@@ -1,4 +1,5 @@
 use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     core::{call_namespace::CallNamespace, INIT_PROGRAM},
     errors::LpcError,
@@ -6,12 +7,11 @@ use crate::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         task::Task,
     },
-    Result,
     try_extract_value,
     util::path_maker::LpcPath,
+    Result,
 };
 use std::{cell::RefCell, rc::Rc};
-use crate::compile_time_config::MAX_CALL_STACK_SIZE;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,

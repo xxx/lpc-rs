@@ -1,8 +1,9 @@
 use crate::{
     asm::instruction::{Address, Instruction},
+    compile_time_config::MAX_CALL_STACK_SIZE,
     core::{
-        call_namespace::CallNamespace, EFUN, function_arity::FunctionArity, INIT_PROGRAM,
-        register::Register,
+        call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, EFUN,
+        INIT_PROGRAM,
     },
     errors::LpcError,
     interpreter::{
@@ -22,10 +23,10 @@ use crate::{
         register_bank::RegisterBank,
         task_context::TaskContext,
     },
-    LpcInt,
-    Result,
     semantic::program_function::ProgramFunction,
-    try_extract_value, util::config::Config,
+    try_extract_value,
+    util::config::Config,
+    LpcInt, Result,
 };
 use decorum::Total;
 use if_chain::if_chain;
@@ -37,7 +38,6 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
-use crate::compile_time_config::MAX_CALL_STACK_SIZE;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -1603,8 +1603,8 @@ mod tests {
     use super::*;
     use crate::{
         extract_value,
-        LpcFloat,
-        LpcInt, test_support::{compile_prog, run_prog},
+        test_support::{compile_prog, run_prog},
+        LpcFloat, LpcInt,
     };
     use indoc::indoc;
     use std::{

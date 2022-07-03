@@ -3,10 +3,12 @@ use crate::{
     parser::span::Span,
     semantic::function_flags::FunctionFlags,
 };
-use std::borrow::Cow;
-use std::fmt::{Display, Formatter};
 use itertools::Itertools;
 use lazy_format::lazy_format;
+use std::{
+    borrow::Cow,
+    fmt::{Display, Formatter},
+};
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -76,10 +78,7 @@ impl Display for FunctionPrototype {
 
         let visibility = lazy_format!("{} ", self.flags.visibility());
 
-        let mut args = self.arg_types
-            .iter()
-            .map(|t| t.to_string())
-            .join(", ");
+        let mut args = self.arg_types.iter().map(|t| t.to_string()).join(", ");
 
         if self.flags.ellipsis() {
             args.push_str(", ...");
@@ -88,12 +87,7 @@ impl Display for FunctionPrototype {
         write!(
             f,
             "{}{}{}{} {}({})",
-            nomask,
-            varargs,
-            visibility,
-            self.return_type,
-            self.name,
-            args
+            nomask, varargs, visibility, self.return_type, self.name, args
         )
     }
 }

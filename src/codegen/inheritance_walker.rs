@@ -76,9 +76,11 @@ impl TreeWalker for InheritanceWalker {
         match compiler.compile_in_game_file(&full_path, node.span) {
             Ok(program) => {
                 if program.pragmas.no_inherit() {
-                    return Err(LpcError::new(format!("`pragma #no_inherit` is set on {}", program.filename)).with_span(
-                        node.span,
-                    ));
+                    return Err(LpcError::new(format!(
+                        "`pragma #no_inherit` is set on {}",
+                        program.filename
+                    ))
+                    .with_span(node.span));
                 }
 
                 if self

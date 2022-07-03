@@ -4,11 +4,11 @@ use lpc_rs::{
 };
 
 use if_chain::if_chain;
-use lpc_rs::interpreter::{
-    memory::Memory, object_space::ObjectSpace, task::Task,
+use lpc_rs::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
 use std::rc::Rc;
-use lpc_rs::compile_time_config::MAX_CALL_STACK_SIZE;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();

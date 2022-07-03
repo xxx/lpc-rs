@@ -10,7 +10,6 @@ use lpc_rs::{
     util::config::Config,
 };
 use std::rc::Rc;
-use lpc_rs::interpreter::efun::EFUN_PROTOTYPES;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)
@@ -136,11 +135,4 @@ fn test_duffs_device() {
             panic!("expected array");
         }
     }
-}
-
-#[test]
-fn nonsense() {
-    EFUN_PROTOTYPES.iter().for_each(|(name, f)| {
-        println!("{}", f);
-    });
 }
