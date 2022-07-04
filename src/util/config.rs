@@ -10,6 +10,7 @@ const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
 const MAX_INHERIT_DEPTH: &[&str] = &["lpc-rs", "max_inherit_depth"];
 const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
+const SIMUL_EFUN_FILE: &[&str] = &["lpc-rs", "simul_efun_file"];
 const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
 
 const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
@@ -26,6 +27,7 @@ pub struct Config {
     max_inherit_depth: usize,
     driver_log_level: Option<tracing::Level>,
     driver_log_file: Option<String>,
+    simul_efun_file: Option<String>,
 }
 
 impl Config {
@@ -112,7 +114,6 @@ impl Config {
         };
 
         let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
-
         let max_task_instructions = if_chain! {
             if let Some(x) = dug;
             if let Some(y) = x.as_integer();
@@ -132,6 +133,9 @@ impl Config {
         let dug = dig(&config, DRIVER_LOG_FILE);
         let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
 
+        let dug = dig(&config, SIMUL_EFUN_FILE);
+        let simul_efun_file = dug.and_then(|x| x.as_str()).map(|x| String::from(x));
+
         Ok(Self {
             lib_dir,
             system_include_dirs,
@@ -140,6 +144,7 @@ impl Config {
             max_task_instructions,
             driver_log_level,
             driver_log_file,
+            simul_efun_file
         })
     }
 
@@ -211,6 +216,11 @@ impl Config {
     pub fn driver_log_file(&self) -> Option<&str> {
         self.driver_log_file.as_deref()
     }
+
+    #[inline]
+    pub fn simul_efun_file(&self) -> Option<&str> {
+        self.simul_efun_file.as_deref()
+    }
 }
 
 impl Default for Config {
@@ -222,7 +232,8 @@ impl Default for Config {
             max_task_instructions: Some(100000),
             max_inherit_depth: DEFAULT_MAX_INHERIT_DEPTH,
             driver_log_level: None,
-            driver_log_file: None,
+            driver_log_file: Some("STDOUT".into()),
+            simul_efun_file: None
         }
     }
 }

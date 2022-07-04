@@ -25,11 +25,20 @@ lib_dir = "./lib"
 # Where applicable, the mudlib itself can also override this setting directly.
 system_include_dirs = ["/sys"]
 
+# Location of a file where simulated efuns live (a.k.a "simul efuns").
+# These are functions that can be called from anywhere, like an efun, but are written in LPC.
+# This file is relative to `lib_dir`.
+# Remove this line, or comment it out, to disable the use of simul efuns.
+simul_efun_file = "/secure/simul_efun.c"
+
 # How many instructions / efun loop iterations can execute in a given
 # Task before the driver breaks-in.
 # Useful for preventing infinite loops from taking down a server.
 # Set to 0 (or comment the line out) to disable this check.
 max_task_instructions = 14000
+
+# How deep can inheritance chains go?
+max_inherit_depth = 10
 
 #
 # Configuration that's specific to the game driver.

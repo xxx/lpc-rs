@@ -1,14 +1,9 @@
+use if_chain::if_chain;
+use std::rc::Rc;
 use lpc_rs::{
-    compiler::Compiler,
     util::{config::Config, path_maker::LpcPath},
 };
-
-use if_chain::if_chain;
-use lpc_rs::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
-    interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
-};
-use std::rc::Rc;
+use lpc_rs::interpreter::vm::Vm;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -49,24 +44,10 @@ fn main() {
     }
 
     let config = Rc::new(config);
-    let compiler = Compiler::new(config.clone());
-    let lpc_path = LpcPath::new_in_game(config.master_object(), "/", config.lib_dir());
+    let mut vm = Vm::new(config);
 
-    match compiler.compile_in_game_file(&lpc_path, None) {
-        Ok(program) => {
-            let memory = Memory::default();
-            let object_space = ObjectSpace::default();
-            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory);
-            if let Err(e) = task.initialize_program(program, config, object_space) {
-                e.emit_diagnostics();
-            }
-        }
-        Err(e) => {
-            eprintln!(
-                "unable to compile {}",
-                lpc_path.as_server(config.lib_dir()).display(),
-            );
-            e.emit_diagnostics();
-        }
-    }
+    vm.initialize().unwrap_or_else(|e| {
+        eprintln!("unable to initialize VM: {:?}", e);
+        std::process::exit(1);
+    });
 }
