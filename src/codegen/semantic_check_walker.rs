@@ -209,7 +209,8 @@ impl TreeWalker for SemanticCheckWalker {
 
         let mut errors = Vec::new();
 
-        if let Some(prototype) = proto_opt {
+        if let Some(function_like) = proto_opt {
+            let prototype = function_like.as_ref();
             if prototype.flags.private()
                 && !self
                     .context
@@ -353,7 +354,8 @@ impl TreeWalker for SemanticCheckWalker {
         let proto_opt = self
             .context
             .lookup_function_complete(&node.name, &CallNamespace::default());
-        if let Some(prototype) = proto_opt {
+        if let Some(function_like) = proto_opt {
+            let prototype = function_like.as_ref();
             if prototype.flags.nomask() {
                 let e = LpcError::new(format!(
                     "attempt to redefine nomask function `{}`",
@@ -386,7 +388,8 @@ impl TreeWalker for SemanticCheckWalker {
             .context
             .lookup_function_complete(&node.name, &CallNamespace::default());
 
-        if let Some(prototype) = proto_opt {
+        if let Some(function_like) = proto_opt {
+            let prototype = function_like.as_ref();
             if prototype.flags.private()
                 && !self
                     .context

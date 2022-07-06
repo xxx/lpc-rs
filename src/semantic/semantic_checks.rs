@@ -293,7 +293,10 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         }) => {
             let return_type = context
                 .lookup_function_complete(name.as_str(), namespace)
-                .map_or_else(|| LpcType::Int(false), |prototype| prototype.return_type);
+                .map_or(
+                    LpcType::Int(false),
+                    |function_like| function_like.as_ref().return_type,
+                );
 
             Ok(return_type)
         }

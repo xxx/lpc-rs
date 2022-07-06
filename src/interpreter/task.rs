@@ -114,7 +114,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         program: Program,
         config: C,
-        object_space: O,
+        object_space: O
     ) -> Result<TaskContext>
     where
         C: Into<Rc<Config>> + Debug,
@@ -789,32 +789,73 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
                 let borrowed = process.borrow();
+                let num_args = *num_args;
+
                 let function = borrowed.lookup_function(name, namespace);
                 let mut new_frame = if let Some(func) = function {
                     CallFrame::with_minimum_arg_capacity(
                         process.clone(),
                         func.clone(),
-                        *num_args,
-                        *num_args,
-                    )
-                } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                    let func = ProgramFunction::new(prototype.clone(), 0);
-
-                    CallFrame::with_minimum_arg_capacity(
-                        process.clone(),
-                        Rc::new(func),
-                        *num_args,
-                        *num_args,
+                        num_args,
+                        num_args,
                     )
                 } else {
-                    // println!("proc {:#?}", process);
-                    // println!("functions {:#?}", borrowed.functions);
-                    let msg = format!("Call to unknown function `{}`", name);
-                    return Err(self.runtime_error(msg));
+                    if_chain! {
+                        if let Some(func) = task_context.simul_efuns();
+                        let b = func.borrow();
+                        if let Some(func) = b.lookup_function(name, &CallNamespace::Local);
+                        then {
+                            CallFrame::with_minimum_arg_capacity(
+                                process.clone(),
+                                func.clone(),
+                                num_args,
+                                num_args,
+                            )
+                        } else {
+                            if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                                let func = ProgramFunction::new(prototype.clone(), 0);
+
+                                CallFrame::with_minimum_arg_capacity(
+                                    process.clone(),
+                                    Rc::new(func),
+                                    num_args,
+                                    num_args,
+                                )
+                            } else {
+                                // println!("proc {:#?}", process);
+                                // println!("functions {:#?}", borrowed.functions);
+                                let msg = format!("Call to unknown function `{}`", name);
+                                return Err(self.runtime_error(msg));
+                            }
+                        }
+                    }
                 };
 
-                let num_args = *num_args;
-
+                // let mut new_frame = if let Some(func) = function {
+                //     CallFrame::with_minimum_arg_capacity(
+                //         process.clone(),
+                //         func.clone(),
+                //         num_args,
+                //         num_args,
+                //     )
+                // } else if let Some(func) = task_context.simul_efuns() {
+                //     task_context.simul_efuns()
+                // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                //     let func = ProgramFunction::new(prototype.clone(), 0);
+                //
+                //     CallFrame::with_minimum_arg_capacity(
+                //         process.clone(),
+                //         Rc::new(func),
+                //         num_args,
+                //         num_args,
+                //     )
+                // } else {
+                //     // println!("proc {:#?}", process);
+                //     // println!("functions {:#?}", borrowed.functions);
+                //     let msg = format!("Call to unknown function `{}`", name);
+                //     return Err(self.runtime_error(msg));
+                // };
+                //
                 // copy argument registers from old frame to new
                 if num_args > 0_usize {
                     let index = initial_arg.index();
@@ -1893,6 +1934,23 @@ mod tests {
                     *values.get("efun_one").unwrap().borrow()
                 );
             }
+
+            #[test]
+            fn calls_correct_function_with_simul_efuns() {
+                let code = indoc! { r##"
+                    string this_one = simul_efun("marf");
+                "##};
+
+                let (_task, ctx) = run_prog(code);
+
+                let proc = ctx.process();
+                let borrowed = proc.borrow();
+                let values = borrowed.global_variable_values();
+                assert_eq!(
+                    String("this is a simul_efun: marf".into()),
+                    *values.get("this_one").unwrap().borrow()
+                );
+            }
         }
 
         mod test_call_fp {
@@ -2756,7 +2814,7 @@ mod tests {
                 "##};
 
                 let mut task: Task<10> = Task::new(Memory::default());
-                let (program, _) = compile_prog(code);
+                let (program, _, _) = compile_prog(code);
                 let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
                 assert_eq!(
@@ -2802,7 +2860,7 @@ mod tests {
                 "##};
 
                 let mut task: Task<10> = Task::new(Memory::default());
-                let (program, _) = compile_prog(code);
+                let (program, _, _) = compile_prog(code);
                 let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
                 assert_eq!(
@@ -3638,7 +3696,7 @@ mod tests {
             "##};
 
             let mut task: Task<5> = Task::new(Memory::default());
-            let (program, _) = compile_prog(code);
+            let (program, _, _) = compile_prog(code);
             let r = task.initialize_program(program, Config::default(), ObjectSpace::default());
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
@@ -3653,7 +3711,7 @@ mod tests {
             "##};
 
             let config = Config::default().with_max_task_instructions(Some(10));
-            let (program, _) = compile_prog(code);
+            let (program, _, _) = compile_prog(code);
             let mut task: Task<5> = Task::new(Memory::default());
             let r = task.initialize_program(program, config, ObjectSpace::default());
 

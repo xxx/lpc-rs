@@ -144,7 +144,7 @@ impl Config {
             max_task_instructions,
             driver_log_level,
             driver_log_file,
-            simul_efun_file
+            simul_efun_file,
         })
     }
 
@@ -178,6 +178,15 @@ impl Config {
 
     pub fn with_max_task_instructions(mut self, max_task_instructions: Option<usize>) -> Self {
         self.max_task_instructions = max_task_instructions;
+
+        self
+    }
+
+    pub fn with_simul_efun_file<T>(mut self, file: Option<T>) -> Self
+    where
+        T: Into<String>,
+    {
+        self.simul_efun_file = file.map(|t| t.into());
 
         self
     }
@@ -233,7 +242,7 @@ impl Default for Config {
             max_inherit_depth: DEFAULT_MAX_INHERIT_DEPTH,
             driver_log_level: None,
             driver_log_file: Some("STDOUT".into()),
-            simul_efun_file: None
+            simul_efun_file: None,
         }
     }
 }

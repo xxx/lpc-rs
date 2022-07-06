@@ -10,7 +10,7 @@ use crate::{
     },
     compilation_context::CompilationContext,
     errors::LpcError,
-    interpreter::program::Program,
+    interpreter::{process::Process, program::Program},
     lpc_parser,
     parser::{
         lexer::{Spanned, Token, TokenVecWrapper},
@@ -20,7 +20,7 @@ use crate::{
     util::{config::Config, path_maker::LpcPath},
     Result,
 };
-use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
 
 #[macro_export]
@@ -55,6 +55,8 @@ pub struct Compiler {
 
     /// The current depth in the inheritance chain of this compiler
     inherit_depth: usize,
+
+    simul_efuns: Option<Rc<RefCell<Process>>>,
 }
 
 impl Compiler {
@@ -64,13 +66,18 @@ impl Compiler {
         Self {
             config,
             inherit_depth: 0,
+            simul_efuns: None,
         }
     }
 
     /// Set the inherit_depth of a compiler
-    #[instrument(skip(self))]
     pub fn with_inherit_depth(mut self, depth: usize) -> Self {
         self.inherit_depth = depth;
+        self
+    }
+
+    pub fn with_simul_efuns(mut self, simul_efuns: Option<Rc<RefCell<Process>>>) -> Self {
+        self.simul_efuns = simul_efuns;
         self
     }
 
@@ -177,7 +184,8 @@ impl Compiler {
     {
         let lpc_path = path.into();
         let context = CompilationContext::new(&lpc_path, self.config.clone())
-            .with_inherit_depth(self.inherit_depth);
+            .with_inherit_depth(self.inherit_depth)
+            .with_simul_efuns(self.simul_efuns.clone());
 
         let mut preprocessor = Preprocessor::new(context);
         let code = match preprocessor.scan(&lpc_path, &code) {

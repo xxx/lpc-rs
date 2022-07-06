@@ -137,7 +137,7 @@ mod tests {
             object foo = clone_object("./example");
         "# };
 
-        let (program, config) = compile_prog(prog);
+        let (program, config, _) = compile_prog(prog);
         let func = program
             .functions
             .get(INIT_PROGRAM)
@@ -159,7 +159,7 @@ mod tests {
             object foo = clone_object("./no_clone.c");
         "# };
 
-        let (program, config) = compile_prog(prog);
+        let (program, config, _) = compile_prog(prog);
         let func = program
             .functions
             .get(INIT_PROGRAM)

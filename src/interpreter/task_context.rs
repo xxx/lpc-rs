@@ -8,6 +8,7 @@ use crate::{
 };
 use delegate::delegate;
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use crate::util::get_simul_efuns;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]
@@ -22,6 +23,8 @@ pub struct TaskContext {
     instruction_counter: InstructionCounter,
     /// The final result of the original function that was called
     result: RefCell<LpcRef>,
+    /// Direct pointer to the simul efuns
+    simul_efuns: Option<Rc<RefCell<Process>>>,
 }
 
 impl TaskContext {
@@ -45,13 +48,20 @@ impl TaskContext {
         O: Into<Rc<RefCell<ObjectSpace>>>,
     {
         let config = config.into();
+        let object_space = object_space.into();
         let instruction_counter = InstructionCounter::new_from_config(&*config);
+        let simul_efuns = {
+            let space = object_space.borrow();
+            get_simul_efuns(&*config, &*space)
+        };
+
         Self {
             config,
             process: process.into(),
-            object_space: object_space.into(),
+            object_space,
             instruction_counter,
             result: RefCell::new(LpcRef::default()),
+            simul_efuns,
         }
     }
 
@@ -114,27 +124,38 @@ impl TaskContext {
     }
 
     /// Update the context's `result` with the passed [`LpcRef`]
+    #[inline]
     pub fn set_result(&self, new_result: LpcRef) {
         self.result.replace(new_result);
     }
 
     /// Consume this context, and return its `result` field.
+    #[inline]
     pub fn into_result(self) -> LpcRef {
         self.result.into_inner()
     }
 
     /// Return the [`Config`] used for the task
+    #[inline]
     pub fn config(&self) -> Rc<Config> {
         self.config.clone()
     }
 
+    /// Return the current pointer to the simul_efuns, if any
+    #[inline]
+    pub fn simul_efuns(&self) -> Option<Rc<RefCell<Process>>> {
+        self.simul_efuns.clone()
+    }
+
     /// Return the [`Process`] that the task roots from.
     /// This *does not* change over the life of the task.
+    #[inline]
     pub fn process(&self) -> Rc<RefCell<Process>> {
         self.process.clone()
     }
 
     /// Return the [`ObjectSpace`]
+    #[inline]
     pub fn object_space(&self) -> &Rc<RefCell<ObjectSpace>> {
         &self.object_space
     }

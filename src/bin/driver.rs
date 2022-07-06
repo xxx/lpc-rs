@@ -1,9 +1,9 @@
 use if_chain::if_chain;
-use std::rc::Rc;
 use lpc_rs::{
+    interpreter::vm::Vm,
     util::{config::Config, path_maker::LpcPath},
 };
-use lpc_rs::interpreter::vm::Vm;
+use std::rc::Rc;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -43,7 +43,6 @@ fn main() {
         }
     }
 
-    let config = Rc::new(config);
     let mut vm = Vm::new(config);
 
     vm.initialize().unwrap_or_else(|e| {

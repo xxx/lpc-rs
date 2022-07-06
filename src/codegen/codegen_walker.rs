@@ -881,7 +881,7 @@ impl TreeWalker for CodegenWalker {
             .context
             .lookup_function_complete(&node.name, &node.namespace)
         {
-            if func.return_type == LpcType::Void {
+            if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0);
             } else {
                 push_copy(self);
