@@ -2,14 +2,12 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     interpreter::{
-        memory::Memory, object_space::ObjectSpace, process::Process, task::Task,
-        task_context::TaskContext,
+        memory::Memory, object_space::ObjectSpace, task::Task, task_context::TaskContext,
     },
-    util::{config::Config, path_maker::LpcPath},
+    util::{config::Config, get_simul_efuns, path_maker::LpcPath},
     Result,
 };
 use std::{cell::RefCell, rc::Rc};
-use crate::util::get_simul_efuns;
 
 #[derive(Debug)]
 pub struct Vm {

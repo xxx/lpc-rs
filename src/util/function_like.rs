@@ -1,13 +1,5 @@
-use crate::{
-    core::{function_arity::FunctionArity, lpc_type::LpcType},
-    interpreter::process::Process,
-    parser::span::Span,
-    semantic::{
-        function_flags::FunctionFlags, function_prototype::FunctionPrototype,
-        program_function::ProgramFunction,
-    },
-};
-use std::{cell::RefCell, rc::Rc};
+use crate::semantic::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
+use std::rc::Rc;
 
 /// A facade to allow us to lookup prototypes or compiled functions
 #[derive(Debug, PartialEq)]
@@ -57,16 +49,12 @@ mod tests {
             FunctionFlags::default(),
             None,
             Vec::new(),
-            Vec::new()
+            Vec::new(),
         );
         let function_like = FunctionLike::from(&prototype);
         assert_eq!(function_like.prototype(), &prototype);
 
-        let function_like = FunctionLike::from(
-            Rc::new(
-                ProgramFunction::new(prototype.clone(), 0)
-            )
-        );
+        let function_like = FunctionLike::from(Rc::new(ProgramFunction::new(prototype.clone(), 0)));
         assert_eq!(function_like.prototype(), &prototype);
     }
 }

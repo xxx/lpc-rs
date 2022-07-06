@@ -466,38 +466,55 @@ mod tests {
 
         assert_eq!(
             // gets from the inherited parent
-            context.lookup_function_complete("hello_friends", &CallNamespace::Local).unwrap().prototype(),
+            context
+                .lookup_function_complete("hello_friends", &CallNamespace::Local)
+                .unwrap()
+                .prototype(),
             &inherited_proto.prototype
         );
 
         assert_eq!(
             // gets the local version
-            context.lookup_function_complete("foo", &CallNamespace::Local).unwrap().prototype(),
+            context
+                .lookup_function_complete("foo", &CallNamespace::Local)
+                .unwrap()
+                .prototype(),
             &proto
         );
 
         assert_eq!(
             // gets the parent version
-            context.lookup_function_complete("foo", &CallNamespace::Parent).unwrap().prototype(),
+            context
+                .lookup_function_complete("foo", &CallNamespace::Parent)
+                .unwrap()
+                .prototype(),
             &overridden.prototype
         );
 
         assert_eq!(
             // gets the more local overridden version
-            context.lookup_function_complete("this_object", &CallNamespace::Local).unwrap().prototype(),
+            context
+                .lookup_function_complete("this_object", &CallNamespace::Local)
+                .unwrap()
+                .prototype(),
             &efun_override
         );
 
         assert_eq!(
             // efun namespace
-            context.lookup_function_complete("this_object", &CallNamespace::Named("efun".into())).unwrap().prototype(),
+            context
+                .lookup_function_complete("this_object", &CallNamespace::Named("efun".into()))
+                .unwrap()
+                .prototype(),
             EFUN_PROTOTYPES.get("this_object").unwrap()
         );
 
         assert_eq!(
             // specifically-named namespace
             context
-                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into())).unwrap().prototype(),
+                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into()))
+                .unwrap()
+                .prototype(),
             &named_overridden.prototype
         );
 
@@ -522,13 +539,19 @@ mod tests {
 
         assert_eq!(
             // efun
-            context.lookup_function_complete("dump", &CallNamespace::Local).unwrap().prototype(),
+            context
+                .lookup_function_complete("dump", &CallNamespace::Local)
+                .unwrap()
+                .prototype(),
             EFUN_PROTOTYPES.get("dump").unwrap()
         );
 
         assert_eq!(
             // efun
-            context.lookup_function_complete("simul_efun", &CallNamespace::Local).unwrap().prototype(),
+            context
+                .lookup_function_complete("simul_efun", &CallNamespace::Local)
+                .unwrap()
+                .prototype(),
             &simul_efun.prototype
         );
 

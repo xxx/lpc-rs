@@ -114,7 +114,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         program: Program,
         config: C,
-        object_space: O
+        object_space: O,
     ) -> Result<TaskContext>
     where
         C: Into<Rc<Config>> + Debug,

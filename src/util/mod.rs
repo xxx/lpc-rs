@@ -3,13 +3,16 @@ pub mod function_like;
 pub mod path_maker;
 pub mod repeat_string;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::process::Process;
-use crate::util::config::Config;
+use crate::{
+    interpreter::{object_space::ObjectSpace, process::Process},
+    util::config::Config,
+};
+use std::{cell::RefCell, rc::Rc};
 
-pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Rc<RefCell<Process>>> {
+pub fn get_simul_efuns(
+    config: &Config,
+    object_space: &ObjectSpace,
+) -> Option<Rc<RefCell<Process>>> {
     config.simul_efun_file().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
         object_space.lookup(file).cloned()
@@ -18,10 +21,9 @@ pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Rc
 
 #[cfg(test)]
 mod tests {
-    use claim::{assert_none, assert_some_eq};
-    use crate::interpreter::program::Program;
-    use crate::util::path_maker::LpcPath;
     use super::*;
+    use crate::{interpreter::program::Program, util::path_maker::LpcPath};
+    use claim::assert_none;
 
     #[test]
     fn test_get_simul_efuns() {
