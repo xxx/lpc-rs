@@ -355,7 +355,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         // look locally
                         let func = borrowed_proc.lookup_function(&*s, &CallNamespace::Local);
                         match func {
-                            Some(program_function) => FunctionAddress::Local(proc, program_function.clone()),
+                            Some(program_function) => {
+                                FunctionAddress::Local(proc, program_function.clone())
+                            }
                             None => {
                                 if_chain! {
                                     // check simul efuns, which use the `Local` FunctionTarget

@@ -38,10 +38,11 @@ impl<'a> From<Rc<ProgramFunction>> for FunctionLike<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::function_arity::FunctionArity;
-    use crate::core::lpc_type::LpcType;
-    use crate::semantic::function_flags::FunctionFlags;
     use super::*;
+    use crate::{
+        core::{function_arity::FunctionArity, lpc_type::LpcType},
+        semantic::function_flags::FunctionFlags,
+    };
 
     #[test]
     fn test_prototype() {

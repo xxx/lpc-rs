@@ -1305,7 +1305,7 @@ impl TreeWalker for CodegenWalker {
                                     "Symbol `{}` has no location set.",
                                     s.name
                                 ))
-                                    .with_span(node.span));
+                                .with_span(node.span));
                             }
                         };
 
@@ -1921,14 +1921,13 @@ mod tests {
         },
         compiler::Compiler,
         core::lpc_type::LpcType,
+        interpreter::{process::Process, program::Program},
         lpc_parser,
         parser::{lexer::LexWrapper, span::Span},
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
         LpcFloat, Result,
     };
-    use crate::interpreter::process::Process;
-    use crate::interpreter::program::Program;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
@@ -1948,9 +1947,11 @@ mod tests {
                     Default::default(),
                     None,
                     vec![],
-                    vec![]
+                    vec![],
                 ),
-                0).into()
+                0,
+            )
+            .into(),
         );
         let process = Process::new(prog);
         walker.context.simul_efuns = Some(process.into());
@@ -1963,14 +1964,12 @@ mod tests {
     }
 
     fn walk_code(code: &str) -> Result<CodegenWalker> {
-        let config = Config::default().with_lib_dir(LIB_DIR)
+        let config = Config::default()
+            .with_lib_dir(LIB_DIR)
             .with_simul_efun_file(Some("/secure/simul_efuns"));
         let compiler = Compiler::new(config.into());
         let (mut program, context) = compiler
-            .parse_string(
-                &LpcPath::new_in_game("/my_test.c", "/", LIB_DIR),
-                code,
-            )
+            .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)
             .expect("failed to parse");
 
         let context = apply_walker!(InheritanceWalker, program, context, false);
@@ -3456,9 +3455,7 @@ mod tests {
 
     mod test_visit_function_ptr {
         use super::*;
-        use crate::{
-            ast::function_ptr_node::FunctionPtrNode,
-        };
+        use crate::ast::function_ptr_node::FunctionPtrNode;
 
         #[test]
         fn populates_the_instructions_for_efuns() {
@@ -3472,14 +3469,17 @@ mod tests {
             let mut walker = default_walker();
             walker.visit_function_ptr(&mut node).unwrap();
 
-            let expected = vec![
-                FunctionPtrConst {
-                    location: Register(1),
-                    target: FunctionTarget::Efun(String::from("dump")),
-                    arity: FunctionArity { num_args: 1, num_default_args: 0, ellipsis: true, varargs: false },
-                    applied_arguments: Vec::new(),
+            let expected = vec![FunctionPtrConst {
+                location: Register(1),
+                target: FunctionTarget::Efun(String::from("dump")),
+                arity: FunctionArity {
+                    num_args: 1,
+                    num_default_args: 0,
+                    ellipsis: true,
+                    varargs: false,
                 },
-            ];
+                applied_arguments: Vec::new(),
+            }];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
@@ -3496,17 +3496,20 @@ mod tests {
             let mut walker = default_walker();
             walker.visit_function_ptr(&mut node).unwrap();
 
-            let expected = vec![
-                FunctionPtrConst {
-                    location: Register(1),
-                    target: FunctionTarget::Local(
-                        FunctionName::Literal("simul_efun".into()),
-                        FunctionReceiver::Local
-                    ),
-                    arity: FunctionArity { num_args: 0, num_default_args: 0, ellipsis: false, varargs: false },
-                    applied_arguments: Vec::new(),
+            let expected = vec![FunctionPtrConst {
+                location: Register(1),
+                target: FunctionTarget::Local(
+                    FunctionName::Literal("simul_efun".into()),
+                    FunctionReceiver::Local,
+                ),
+                arity: FunctionArity {
+                    num_args: 0,
+                    num_default_args: 0,
+                    ellipsis: false,
+                    varargs: false,
                 },
-            ];
+                applied_arguments: Vec::new(),
+            }];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
