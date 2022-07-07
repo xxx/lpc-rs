@@ -144,7 +144,7 @@ impl CodegenWalker {
     /// Create a new [`CodegenWalker`] that consumes the passed scopes
     ///
     /// # Arguments
-    /// `context` - The [`Context`] state that this tree walker will use for its internal workings.
+    /// `context` - The [`CompilationContext`] state that this tree walker will use for its internal workings.
     pub fn new(context: CompilationContext) -> Self {
         let num_globals = context.num_globals;
         let num_init_registers = context.num_init_registers;

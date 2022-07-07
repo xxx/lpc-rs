@@ -31,12 +31,12 @@ pub struct CallFrame {
     pc: Cell<usize>,
     /// How many explicit arguments were passed to the call that created this frame?
     /// This will include partially-applied arguments in the case that
-    /// the StackFrame is for a call to a function pointer.
+    /// the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
 }
 
 impl CallFrame {
-    /// Create a new [`StackFrame`] instance
+    /// Create a new [`CallFrame`] instance
     ///
     /// # Arguments
     ///
@@ -60,7 +60,7 @@ impl CallFrame {
         }
     }
 
-    /// Create a new [`StackFrame`] instance with space for at least `arg_capacity` registers.
+    /// Create a new [`CallFrame`] instance with space for at least `arg_capacity` registers.
     ///
     /// # Arguments
     ///
@@ -133,7 +133,7 @@ impl CallFrame {
         self.pc.replace(new_val);
     }
 
-    /// Set the pc to the address for the passed [`Label`].
+    /// Set the pc to the address for the passed label.
     /// Returns an error if the label is not found.
     #[inline]
     pub fn set_pc_from_label(&self, label: &str) -> Result<()> {

@@ -273,7 +273,7 @@ impl Compiler {
     ///
     /// # Returns
     /// A [`Result`] with a tuple containing the parsed [`ProgramNode`],
-    /// as well as the [`Preprocessor`]'s [`Context`]
+    /// as well as the [`Preprocessor`]'s [`CompilationContext`]
     #[instrument(skip(self, code))]
     pub fn parse_string<T>(
         &self,

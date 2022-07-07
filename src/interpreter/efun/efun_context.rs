@@ -61,7 +61,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    /// Get a reference to the current [`StackFrame`]
+    /// Get a reference to the current [`CallFrame`]
     #[inline]
     pub fn frame(&self) -> &CallFrame {
         self.stack.last().unwrap()

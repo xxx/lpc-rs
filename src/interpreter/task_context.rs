@@ -12,9 +12,10 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc};
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]
 pub struct TaskContext {
-    /// The [`Config`] that's in use for the [`Task`]
+    /// The [`Config`] that's in use for the [`Task`](crate::interpreter::task::Task).
     config: Rc<Config>,
-    /// The [`Process`] that owns the function being called in this [`Task`]
+    /// The [`Process`] that owns the function being
+    /// called in this [`Task`](crate::interpreter::task::Task).
     process: Rc<RefCell<Process>>,
     /// The global [`ObjectSpace`]
     object_space: Rc<RefCell<ObjectSpace>>,
