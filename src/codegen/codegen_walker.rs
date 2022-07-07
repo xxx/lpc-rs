@@ -1305,7 +1305,7 @@ impl TreeWalker for CodegenWalker {
                                     "Symbol `{}` has no location set.",
                                     s.name
                                 ))
-                                .with_span(node.span));
+                                    .with_span(node.span));
                             }
                         };
 
@@ -1317,15 +1317,28 @@ impl TreeWalker for CodegenWalker {
 
             target = FunctionTarget::Local(name, FunctionReceiver::Local);
             arity = prototype.arity;
-        } else if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
-            target = FunctionTarget::Efun(node.name.clone());
-            arity = prototype.arity;
         } else {
-            return Err(LpcError::new(format!(
-                "Unknown call in function pointer: `{}`",
-                node.name
-            ))
-            .with_span(node.span));
+            if_chain! {
+                if let Some(se) = &self.context.simul_efuns;
+                let simul_efuns = se.borrow();
+                if let Some(prototype) = simul_efuns.lookup_function(node.name.as_str(), &CallNamespace::Local);
+                then {
+                    let name = FunctionName::Literal(node.name.clone());
+                    target = FunctionTarget::Local(name, FunctionReceiver::Local);
+                    arity = prototype.arity();
+                } else {
+                    if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
+                        target = FunctionTarget::Efun(node.name.clone());
+                        arity = prototype.arity;
+                    } else {
+                        return Err(LpcError::new(format!(
+                            "unknown call in function pointer: `{}`",
+                            node.name
+                        ))
+                            .with_span(node.span));
+                    }
+                }
+            }
         }
 
         let location = self.register_counter.next().unwrap();
@@ -1914,10 +1927,34 @@ mod tests {
         util::{config::Config, path_maker::LpcPath},
         LpcFloat, Result,
     };
+    use crate::interpreter::process::Process;
+    use crate::interpreter::program::Program;
+
+    const LIB_DIR: &str = "./tests/fixtures/code";
 
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
         walker.setup_init();
+
+        let path = LpcPath::new_in_game("/secure/simul_efuns", "/", LIB_DIR);
+        let mut prog = Program::new(path);
+        prog.functions.insert(
+            "simul_efun".into(),
+            ProgramFunction::new(
+                FunctionPrototype::new(
+                    "simul_efun",
+                    LpcType::Void,
+                    Default::default(),
+                    Default::default(),
+                    None,
+                    vec![],
+                    vec![]
+                ),
+                0).into()
+        );
+        let process = Process::new(prog);
+        walker.context.simul_efuns = Some(process.into());
+
         walker
     }
 
@@ -1926,11 +1963,12 @@ mod tests {
     }
 
     fn walk_code(code: &str) -> Result<CodegenWalker> {
-        let config = Config::default().with_lib_dir("./tests/fixtures/code");
+        let config = Config::default().with_lib_dir(LIB_DIR)
+            .with_simul_efun_file(Some("/secure/simul_efuns"));
         let compiler = Compiler::new(config.into());
         let (mut program, context) = compiler
             .parse_string(
-                &LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"),
+                &LpcPath::new_in_game("/my_test.c", "/", LIB_DIR),
                 code,
             )
             .expect("failed to parse");
@@ -3413,6 +3451,64 @@ mod tests {
                     Jmp("function-body-start_0".into()),
                 ],
             );
+        }
+    }
+
+    mod test_visit_function_ptr {
+        use super::*;
+        use crate::{
+            ast::function_ptr_node::FunctionPtrNode,
+        };
+
+        #[test]
+        fn populates_the_instructions_for_efuns() {
+            let mut node = FunctionPtrNode {
+                receiver: None,
+                name: "dump".to_string(),
+                arguments: None,
+                span: None,
+            };
+
+            let mut walker = default_walker();
+            walker.visit_function_ptr(&mut node).unwrap();
+
+            let expected = vec![
+                FunctionPtrConst {
+                    location: Register(1),
+                    target: FunctionTarget::Efun(String::from("dump")),
+                    arity: FunctionArity { num_args: 1, num_default_args: 0, ellipsis: true, varargs: false },
+                    applied_arguments: Vec::new(),
+                },
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_simul_efuns() {
+            let mut node = FunctionPtrNode {
+                receiver: None,
+                name: "simul_efun".to_string(),
+                arguments: None,
+                span: None,
+            };
+
+            let mut walker = default_walker();
+            walker.visit_function_ptr(&mut node).unwrap();
+
+            let expected = vec![
+                FunctionPtrConst {
+                    location: Register(1),
+                    target: FunctionTarget::Local(
+                        FunctionName::Literal("simul_efun".into()),
+                        FunctionReceiver::Local
+                    ),
+                    arity: FunctionArity { num_args: 0, num_default_args: 0, ellipsis: false, varargs: false },
+                    applied_arguments: Vec::new(),
+                },
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
         }
     }
 

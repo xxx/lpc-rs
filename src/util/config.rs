@@ -134,7 +134,7 @@ impl Config {
         let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
 
         let dug = dig(&config, SIMUL_EFUN_FILE);
-        let simul_efun_file = dug.and_then(|x| x.as_str()).map(|x| String::from(x));
+        let simul_efun_file = dug.and_then(|x| x.as_str()).map(String::from);
 
         Ok(Self {
             lib_dir,

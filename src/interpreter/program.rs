@@ -51,6 +51,16 @@ pub struct Program {
 }
 
 impl<'a> Program {
+    pub fn new<T>(filename: T) -> Self
+    where
+        T: Into<LpcPath>,
+    {
+        Self {
+            filename: filename.into(),
+            ..Default::default()
+        }
+    }
+
     /// Serialize the program to msgpack format, suitable for saving to disk.
     pub fn to_msgpack(&self) -> Vec<u8> {
         let mut buf = vec![];

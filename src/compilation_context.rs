@@ -180,20 +180,20 @@ impl CompilationContext {
             return None;
         }
 
-        let r = name.as_ref();
-        self.lookup_function(r, namespace)
-            .map(|f| FunctionLike::from(f))
+        let nm = name.as_ref();
+        // This ugly nest looks locally, then up to inherits, then simul efuns, then efuns
+        self.lookup_function(nm, namespace)
+            .map(FunctionLike::from)
             .or_else(|| {
                 if namespace == &CallNamespace::Local {
                     self.simul_efuns
                         .as_ref()
                         .and_then(|rc| {
                             rc.borrow()
-                                .lookup_function(r, namespace)
+                                .lookup_function(nm, namespace)
                                 .map(|f| FunctionLike::from(f.clone()))
                         })
-                        .or_else(|| EFUN_PROTOTYPES.get(r).map(|f| FunctionLike::from(f)))
-                    // EFUN_PROTOTYPES.get(r)
+                        .or_else(|| EFUN_PROTOTYPES.get(nm).map(FunctionLike::from))
                 } else {
                     None
                 }

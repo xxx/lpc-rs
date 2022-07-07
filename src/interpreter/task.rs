@@ -352,12 +352,26 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let s = frame.resolve_function_name(&func_name)?;
                         let proc_ref = &frame.process;
                         let borrowed_proc = proc_ref.borrow();
+                        // look locally
                         let func = borrowed_proc.lookup_function(&*s, &CallNamespace::Local);
-                        if func.is_none() {
-                            return Err(self.runtime_error(format!("Unknown local target `{}`", s)));
+                        match func {
+                            Some(program_function) => FunctionAddress::Local(proc, program_function.clone()),
+                            None => {
+                                if_chain! {
+                                    // check simul efuns, which use the `Local` FunctionTarget
+                                    if let Some(rc) = task_context.simul_efuns();
+                                    let b = rc.borrow();
+                                    if let Some(func) = b.lookup_function(&*s, &CallNamespace::Local);
+                                    then {
+                                        FunctionAddress::Local(proc, func.clone())
+                                    } else {
+                                        return Err(
+                                            self.runtime_error(format!("unknown local target `{}`", s))
+                                        );
+                                    }
+                                }
+                            }
                         }
-
-                        FunctionAddress::Local(proc, func.unwrap().clone())
                     }
                 };
 
@@ -2462,7 +2476,7 @@ mod tests {
             #[test]
             fn stores_the_value() {
                 let code = indoc! { r##"
-                    float pi = 3.14;
+                    float π = 3.14;
                 "##};
 
                 let (task, _) = run_prog(code);
@@ -2478,7 +2492,7 @@ mod tests {
             use super::*;
 
             #[test]
-            fn stores_the_value() {
+            fn stores_the_value_for_efuns() {
                 let code = indoc! { r##"
                     function f = dump;
                 "##};
@@ -2490,6 +2504,24 @@ mod tests {
                     Int(0),
                     Function("dump".to_string(), vec![]),
                     Function("dump".to_string(), vec![]),
+                ];
+
+                assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_simul_efuns() {
+                let code = indoc! { r##"
+                    function f = simul_efun;
+                "##};
+
+                let (task, _) = run_prog(code);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    Function("simul_efun".to_string(), vec![]),
+                    Function("simul_efun".to_string(), vec![]),
                 ];
 
                 assert_eq!(&expected, &registers);

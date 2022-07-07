@@ -45,17 +45,18 @@ impl Vm {
 
         let master_path =
             LpcPath::new_in_game(self.config.master_object(), "/", self.config.lib_dir());
-        self.initialize_file(&master_path).map(|_| ()).or_else(|e| {
+        self.initialize_file(&master_path).map(|_| ()).map_err(|e| {
             e.emit_diagnostics();
-            Err(e)
+            e
         })
     }
 
     fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
-        let borrowed = self.object_space.borrow();
-
-        let compiler = Compiler::new(self.config.clone())
-            .with_simul_efuns(get_simul_efuns(&self.config, &*borrowed));
+        let compiler = {
+            let borrowed = self.object_space.borrow();
+            Compiler::new(self.config.clone())
+                .with_simul_efuns(get_simul_efuns(&self.config, &*borrowed))
+        };
 
         compiler
             .compile_in_game_file(filename, None)
