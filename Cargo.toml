@@ -11,7 +11,7 @@ lalrpop = "0.19.4"
 arrayvec = "0.7.1"
 auto_impl = "1.0.1"
 bstr = "0.2.17"
-cached = "0.34.0"
+cached = "0.36.0"
 codespan-reporting = "0.11.0"
 decorum = "0.3.1"
 delegate = "0.7"
@@ -46,7 +46,7 @@ indoc = "1.0"
 [features]
 default = ["max_level_trace", "release_max_level_info"]
 
-# Max log level (development environment))
+# Max log level (development build))
 max_level_off = ["tracing/max_level_off"]
 max_level_error = ["tracing/max_level_error"]
 max_level_warn = ["tracing/max_level_warn"]
@@ -54,7 +54,7 @@ max_level_info = ["tracing/max_level_info"]
 max_level_debug = ["tracing/max_level_debug"]
 max_level_trace = ["tracing/max_level_trace"]
 
-# Max log level (release environment)
+# Max log level (release build)
 release_max_level_off = ["tracing/release_max_level_off"]
 release_max_level_error = ["tracing/release_max_level_error"]
 release_max_level_warn = ["tracing/release_max_level_warn"]
