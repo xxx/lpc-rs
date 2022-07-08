@@ -1926,8 +1926,9 @@ mod tests {
         parser::{lexer::LexWrapper, span::Span},
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
-        LpcFloat, Result,
+        Result,
     };
+    use crate::core::LpcFloat;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 

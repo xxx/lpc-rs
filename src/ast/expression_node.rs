@@ -23,9 +23,10 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    BaseFloat, LpcInt, Result,
+    Result,
 };
 use indexmap::IndexMap;
+use crate::core::{BaseFloat, LpcInt};
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -236,8 +237,9 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::binary_op_node::BinaryOperation, core::call_namespace::CallNamespace, LpcFloat,
+        ast::binary_op_node::BinaryOperation, core::call_namespace::CallNamespace,
     };
+    use crate::core::LpcFloat;
 
     use super::*;
 

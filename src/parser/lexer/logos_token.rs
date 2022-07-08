@@ -1,4 +1,4 @@
-use crate::{parser::span::Span, BaseFloat, LpcInt};
+use crate::{parser::span::Span, core::BaseFloat, core::LpcInt};
 
 /// Some small wrappers to store both a [`Span`] and a value for compatibility with [Logos](logos),
 /// which only allows a single field in token defs.

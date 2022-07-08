@@ -26,7 +26,7 @@ use crate::{
     semantic::program_function::ProgramFunction,
     try_extract_value,
     util::config::Config,
-    LpcInt, Result,
+    Result,
 };
 use decorum::Total;
 use if_chain::if_chain;
@@ -38,6 +38,7 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
+use crate::core::LpcInt;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -1661,13 +1662,13 @@ mod tests {
     use crate::{
         extract_value,
         test_support::{compile_prog, run_prog},
-        LpcFloat, LpcInt,
     };
     use indoc::indoc;
     use std::{
         collections::HashMap,
         hash::{Hash, Hasher},
     };
+    use crate::core::{LpcFloat, LpcInt};
 
     /// A type to make it easier to set up test expectations for register contents
     #[derive(Debug, PartialEq, Eq, Clone)]

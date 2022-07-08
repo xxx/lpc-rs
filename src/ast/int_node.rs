@@ -7,8 +7,9 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    LpcInt, Result,
+    Result,
 };
+use crate::core::LpcInt;
 
 /// A node representing an integer literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

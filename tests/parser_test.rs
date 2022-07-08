@@ -25,8 +25,9 @@ use lpc_rs::{
         span::Span,
     },
     semantic::{global_var_flags::GlobalVarFlags, visibility::Visibility},
-    LpcFloat, LpcInt, Result,
+    Result,
 };
+use lpc_rs::core::{LpcFloat, LpcInt};
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {

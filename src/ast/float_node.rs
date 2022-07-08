@@ -7,8 +7,9 @@ use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
     parser::span::Span,
-    BaseFloat, LpcFloat, Result,
+    Result,
 };
+use crate::core::{BaseFloat, LpcFloat};
 
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

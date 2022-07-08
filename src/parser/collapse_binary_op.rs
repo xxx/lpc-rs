@@ -7,7 +7,7 @@ use crate::{
     },
     parser::{lexer, span::Span},
     util::repeat_string,
-    LpcError, LpcInt,
+    LpcError, core::LpcInt,
 };
 use lalrpop_util::ParseError;
 

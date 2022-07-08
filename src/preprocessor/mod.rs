@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Debug, path::Path};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
-    convert_escapes,
+    core::convert_escapes,
     errors::{format_expected, lazy_files::FileCache, LpcError},
     parser::{
         lexer::{
@@ -20,7 +20,7 @@ use crate::{
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
     util::path_maker::LpcPath,
-    LpcInt, Result,
+    core::LpcInt, Result,
 };
 use once_cell::sync::Lazy;
 use std::iter::Peekable;
