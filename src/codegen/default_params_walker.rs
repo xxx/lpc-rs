@@ -45,7 +45,7 @@ mod tests {
     use lpc_rs_core::lpc_type::LpcType;
 
     use super::*;
-    use crate::semantic::function_flags::FunctionFlags;
+    use lpc_rs_core::function_flags::FunctionFlags;
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {

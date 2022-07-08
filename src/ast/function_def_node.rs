@@ -9,9 +9,9 @@ use crate::{
         var_init_node::VarInitNode,
     },
     codegen::tree_walker::TreeWalker,
-    semantic::function_flags::FunctionFlags,
 };
 use itertools::Itertools;
+use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;

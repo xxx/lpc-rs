@@ -3,12 +3,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef},
-    semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
+    semantic::{program_function::ProgramFunction},
 };
 use delegate::delegate;
 use lpc_rs_core::{function_arity::FunctionArity, register::Register};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use lpc_rs_core::function_flags::FunctionFlags;
 
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {

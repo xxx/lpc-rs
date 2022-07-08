@@ -43,7 +43,7 @@ use crate::{
         program::Program,
     },
     semantic::{
-        function_flags::FunctionFlags, function_prototype::FunctionPrototype,
+        function_prototype::FunctionPrototype,
         program_function::ProgramFunction, symbol::Symbol,
     },
 };
@@ -56,6 +56,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
+use lpc_rs_core::function_flags::FunctionFlags;
 use tree_walker::TreeWalker;
 
 macro_rules! push_instruction {
@@ -2608,10 +2609,11 @@ mod tests {
     mod test_visit_call {
         use crate::asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::function_arity::FunctionArity;
+        use lpc_rs_core::function_flags::FunctionFlags;
 
         use super::*;
         use crate::semantic::{
-            function_flags::FunctionFlags, function_prototype::FunctionPrototype,
+            function_prototype::FunctionPrototype,
         };
 
         #[test]

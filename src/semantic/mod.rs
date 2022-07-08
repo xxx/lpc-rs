@@ -1,5 +1,3 @@
-#[allow(clippy::identity_op)]
-pub mod function_flags;
 pub mod function_prototype;
 #[allow(clippy::identity_op)]
 pub mod global_var_flags;

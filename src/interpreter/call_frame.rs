@@ -204,8 +204,9 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype};
+    use crate::semantic::{function_prototype::FunctionPrototype};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+    use lpc_rs_core::function_flags::FunctionFlags;
 
     #[test]
     fn new_sets_up_registers() {

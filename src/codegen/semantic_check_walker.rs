@@ -1050,13 +1050,14 @@ mod tests {
     }
 
     mod test_visit_call {
+        use lpc_rs_core::function_flags::FunctionFlags;
         use lpc_rs_core::visibility::Visibility;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
             semantic::{
-                function_flags::FunctionFlags, program_function::ProgramFunction,
+                program_function::ProgramFunction,
             },
         };
 
@@ -1860,13 +1861,14 @@ mod tests {
     }
 
     mod test_visit_function_def {
+        use lpc_rs_core::function_flags::FunctionFlags;
         use super::*;
         use crate::{
             assert_regex,
             ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
             codegen::scope_walker::ScopeWalker,
             interpreter::program::Program,
-            semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
+            semantic::{program_function::ProgramFunction},
         };
 
         #[test]
@@ -2011,13 +2013,14 @@ mod tests {
     }
 
     mod test_visit_function_ptr {
+        use lpc_rs_core::function_flags::FunctionFlags;
         use lpc_rs_core::visibility::Visibility;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
             semantic::{
-                function_flags::FunctionFlags, program_function::ProgramFunction,
+                program_function::ProgramFunction,
             },
         };
 
@@ -2282,7 +2285,7 @@ mod tests {
 
     mod test_visit_return {
         use super::*;
-        use crate::semantic::function_flags::FunctionFlags;
+        use lpc_rs_core::function_flags::FunctionFlags;
 
         #[test]
         fn test_visit_return() {
@@ -2526,7 +2529,7 @@ mod tests {
 
     mod test_visit_var_init {
         use super::*;
-        use crate::semantic::function_flags::FunctionFlags;
+        use lpc_rs_core::function_flags::FunctionFlags;
 
         #[test]
         fn validates_both_sides() {

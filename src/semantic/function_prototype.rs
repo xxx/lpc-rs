@@ -1,4 +1,4 @@
-use crate::semantic::function_flags::FunctionFlags;
+use lpc_rs_core::function_flags::FunctionFlags;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};

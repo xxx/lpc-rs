@@ -313,8 +313,9 @@ impl Default for CompilationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::{function_flags::FunctionFlags, program_function::ProgramFunction};
+    use crate::semantic::{program_function::ProgramFunction};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+    use lpc_rs_core::function_flags::FunctionFlags;
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototype::new(

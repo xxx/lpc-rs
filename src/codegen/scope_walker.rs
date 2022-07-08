@@ -292,7 +292,7 @@ mod tests {
         use lpc_rs_core::lpc_type::LpcType;
 
         use super::*;
-        use crate::semantic::function_flags::FunctionFlags;
+        use lpc_rs_core::function_flags::FunctionFlags;
 
         #[test]
         fn sets_up_argv_for_ellipsis() {

@@ -39,7 +39,7 @@ impl<'a> From<Rc<ProgramFunction>> for FunctionLike<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::function_flags::FunctionFlags;
+    use lpc_rs_core::function_flags::FunctionFlags;
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 
     #[test]
