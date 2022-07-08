@@ -1,10 +1,9 @@
 use crate::{
     compilation_context::CompilationContext,
     semantic::{local_scope::LocalScope, symbol::Symbol},
-    Result,
 };
 use indextree::{Arena, Node, NodeId};
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

@@ -7,10 +7,9 @@ use crate::{
     },
     try_extract_value,
     util::path_maker::LpcPath,
-    Result,
 };
 use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use std::{cell::RefCell, rc::Rc};
 
 fn load_master<const N: usize>(

@@ -1,4 +1,4 @@
-use lpc_rs_errors::{span::Span, LpcError};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -11,7 +11,6 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use std::convert::TryFrom;
 

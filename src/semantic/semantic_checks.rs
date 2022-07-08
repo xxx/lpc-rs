@@ -1,23 +1,22 @@
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use phf::phf_set;
 
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
         ast_node::SpannedNode,
-        binary_op_node::{BinaryOpNode, BinaryOperation},
+        binary_op_node::{BinaryOperation, BinaryOpNode},
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOpNode, UnaryOperation},
+        unary_op_node::{UnaryOperation, UnaryOpNode},
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
     compilation_context::CompilationContext,
     semantic::local_scope::LocalScope,
-    Result,
 };
 
 /// Utility functions for doing various semantic checks.
@@ -1778,7 +1777,7 @@ mod tests {
                 ast::array_node::ArrayNode,
                 semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
             };
-            use lpc_rs_core::{function_arity::FunctionArity, EFUN};
+            use lpc_rs_core::{EFUN, function_arity::FunctionArity};
 
             #[test]
             fn empty_array_is_mixed() {

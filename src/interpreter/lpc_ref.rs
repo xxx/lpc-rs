@@ -3,10 +3,9 @@ use crate::{
     interpreter::lpc_value::LpcValue,
     try_extract_value,
     util::repeat_string,
-    Result,
 };
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use refpool::PoolRef;
 use std::{
     cell::RefCell,

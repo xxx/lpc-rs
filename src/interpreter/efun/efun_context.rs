@@ -4,10 +4,9 @@ use crate::{
         memory::Memory, process::Process, program::Program, task_context::TaskContext,
     },
     util::config::Config,
-    Result,
 };
 use delegate::delegate;
-use lpc_rs_errors::{span::Span, LpcError};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
 
 /// A structure to hold various pieces of interpreter state, to be passed to Efuns

@@ -1,3 +1,4 @@
+use lpc_rs_errors::Result;
 use crate::{
     ast::{
         array_node::ArrayNode,
@@ -33,7 +34,6 @@ use crate::{
         while_node::WhileNode,
     },
     compilation_context::CompilationContext,
-    Result,
 };
 
 pub trait ContextHolder {

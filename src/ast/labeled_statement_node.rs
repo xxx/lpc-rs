@@ -4,12 +4,12 @@ use crate::{
         label_node::LabelNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_errors::Result;
 
 /// A wrapper for nodes to allow labels to be applied.
 /// They are only allowed in `switch` statements.

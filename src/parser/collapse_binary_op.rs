@@ -7,11 +7,11 @@ use crate::{
     },
     parser::lexer,
     util::repeat_string,
-    LpcError,
 };
 use lalrpop_util::ParseError;
 use lpc_rs_core::LpcInt;
 use lpc_rs_errors::span::Span;
+use lpc_rs_errors::LpcError;
 
 /// Combine literals in cases where we have enough information to do so.
 ///

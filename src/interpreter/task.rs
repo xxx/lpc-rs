@@ -21,16 +21,15 @@ use crate::{
     semantic::program_function::ProgramFunction,
     try_extract_value,
     util::config::Config,
-    Result,
 };
 use decorum::Total;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, LpcInt, EFUN,
-    INIT_PROGRAM,
+    call_namespace::CallNamespace, EFUN, function_arity::FunctionArity, INIT_PROGRAM, LpcInt,
+    register::Register,
 };
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use std::{
     borrow::Cow,
     cell::RefCell,

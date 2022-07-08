@@ -4,7 +4,7 @@ use lpc_rs::{
     ast::{
         assignment_node::AssignmentNode,
         ast_node::AstNode,
-        binary_op_node::{BinaryOpNode, BinaryOperation},
+        binary_op_node::{BinaryOperation, BinaryOpNode},
         decl_node::DeclNode,
         expression_node::ExpressionNode,
         float_node::FloatNode,
@@ -21,9 +21,9 @@ use lpc_rs::{
     lpc_parser,
     parser::lexer::{LexWrapper, TokenVecWrapper},
     semantic::{global_var_flags::GlobalVarFlags, visibility::Visibility},
-    Result,
 };
 use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 // just a helper for a very common pattern

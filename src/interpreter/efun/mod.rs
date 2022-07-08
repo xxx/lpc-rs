@@ -10,14 +10,13 @@ mod throw;
 use crate::{
     interpreter::efun::efun_context::EfunContext,
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
-    Result,
 };
 use clone_object::clone_object;
 use debug::debug;
 use dump::dump;
 use file_name::file_name;
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use this_object::this_object;

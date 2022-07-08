@@ -4,10 +4,10 @@ use crate::{
         process::Process, program::Program,
     },
     util::{config::Config, get_simul_efuns},
-    Result,
 };
 use delegate::delegate;
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use lpc_rs_errors::Result;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]

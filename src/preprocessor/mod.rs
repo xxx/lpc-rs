@@ -3,19 +3,18 @@ use crate::{
     compilation_context::CompilationContext,
     interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
     parser::lexer::{
-        logos_token::{IntToken, StringToken},
-        LexWrapper, Spanned, Token, TokenVecWrapper,
+        LexWrapper,
+        logos_token::{IntToken, StringToken}, Spanned, Token, TokenVecWrapper,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
     util::path_maker::LpcPath,
-    Result,
 };
 use define::{Define, ObjectMacro};
 use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
 use lpc_rs_core::{convert_escapes, LpcInt};
-use lpc_rs_errors::{format_expected, lazy_files::FileCache, span::Span, LpcError};
+use lpc_rs_errors::{format_expected, lazy_files::FileCache, LpcError, Result, span::Span};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};

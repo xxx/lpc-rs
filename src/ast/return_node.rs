@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_errors::Result;
 
 use crate::{
     ast::{
@@ -9,7 +10,6 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use lpc_rs_errors::span::Span;
 

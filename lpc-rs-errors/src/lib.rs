@@ -1,8 +1,4 @@
-use std::{
-    error::Error,
-    fmt::{Debug, Display, Formatter},
-    fs::OpenOptions,
-};
+use std::{error::Error, fmt::{Debug, Display, Formatter}, fs::OpenOptions, result};
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
@@ -246,3 +242,6 @@ pub fn format_expected(expected: &[String]) -> String {
         format!("expected one of: {}", expected.join(", "))
     }
 }
+
+/// Common `Result` type
+pub type Result<T> = result::Result<T, LpcError>;

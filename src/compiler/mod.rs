@@ -1,5 +1,5 @@
 use fs_err as fs;
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
@@ -15,7 +15,6 @@ use crate::{
     parser::lexer::{Spanned, Token, TokenVecWrapper},
     preprocessor::Preprocessor,
     util::{config::Config, path_maker::LpcPath},
-    Result,
 };
 use lpc_rs_errors::span::Span;
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};

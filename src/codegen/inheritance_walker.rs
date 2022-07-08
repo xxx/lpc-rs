@@ -4,9 +4,9 @@ use crate::{
     compilation_context::CompilationContext,
     compiler::Compiler,
     util::path_maker::LpcPath,
-    LpcError, Result,
 };
 use lpc_rs_core::EFUN;
+use lpc_rs_errors::{LpcError, Result};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]

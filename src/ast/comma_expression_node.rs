@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use itertools::Itertools;
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// A node representing a comma-separated list of expressions

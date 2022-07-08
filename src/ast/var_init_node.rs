@@ -10,9 +10,9 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     semantic::global_var_flags::GlobalVarFlags,
-    Result,
 };
 use lpc_rs_core::lpc_type::LpcType;
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// A node representing a variable definition, with optional initialization

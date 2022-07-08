@@ -5,9 +5,9 @@ use crate::{
         register_bank::RegisterBank,
     },
     semantic::program_function::ProgramFunction,
-    try_extract_value, Result,
+    try_extract_value,
 };
-use lpc_rs_errors::{span::Span, LpcError};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},

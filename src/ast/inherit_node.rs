@@ -2,11 +2,11 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_errors::Result;
 
 use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use lpc_rs_errors::span::Span;
 

@@ -8,6 +8,7 @@ use auto_impl::auto_impl;
 
 use expression_node::ExpressionNode;
 use int_node::IntNode;
+use lpc_rs_errors::Result;
 use program_node::ProgramNode;
 
 use crate::{
@@ -20,7 +21,6 @@ use crate::{
         switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use lpc_rs_errors::span::Span;
 

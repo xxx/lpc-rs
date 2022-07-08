@@ -1,3 +1,4 @@
+use lpc_rs_errors::Result;
 use tree_walker::TreeWalker;
 
 use crate::{
@@ -13,7 +14,6 @@ use crate::{
         while_node::WhileNode,
     },
     codegen::tree_walker,
-    Result,
 };
 
 /// A tree walker for pretty-printing an AST

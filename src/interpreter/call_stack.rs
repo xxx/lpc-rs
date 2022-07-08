@@ -1,10 +1,9 @@
 use crate::{
     interpreter::{call_frame::CallFrame, lpc_ref::LpcRef},
-    Result,
 };
 use arrayvec::ArrayVec;
 use delegate::delegate;
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone)]

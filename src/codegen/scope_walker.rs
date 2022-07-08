@@ -3,9 +3,9 @@ use crate::{
         ast_node::AstNodeTrait,
         block_node::BlockNode,
         do_while_node::DoWhileNode,
-        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
         for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
+        function_def_node::{ARGV, FunctionDefNode},
         if_node::IfNode,
         program_node::ProgramNode,
         var_init_node::VarInitNode,
@@ -17,10 +17,9 @@ use crate::{
     semantic::{
         global_var_flags::GlobalVarFlags, semantic_checks::check_var_redefinition, symbol::Symbol,
     },
-    Result,
 };
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.

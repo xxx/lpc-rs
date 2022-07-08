@@ -3,9 +3,9 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     semantic::function_prototype::FunctionPrototype,
-    Result,
 };
 use lpc_rs_core::function_arity::FunctionArity;
+use lpc_rs_errors::Result;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]

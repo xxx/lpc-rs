@@ -22,9 +22,3 @@ extern crate serde;
 
 #[macro_use]
 extern crate educe;
-
-use lpc_rs_errors::LpcError;
-use std::result;
-
-/// Common `Result` type
-pub type Result<T> = result::Result<T, LpcError>;

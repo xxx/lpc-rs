@@ -1,4 +1,4 @@
-use crate::Result;
+use lpc_rs_errors::Result;
 use fs_err as fs;
 use if_chain::if_chain;
 use lpc_rs_errors::LpcError;

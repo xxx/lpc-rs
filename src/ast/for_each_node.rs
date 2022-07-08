@@ -6,11 +6,11 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 
 use crate::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode};
 use indextree::NodeId;
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// A constant to track the implicit variable we reserve space for,

@@ -10,10 +10,10 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use itertools::Itertools;
 use lpc_rs_core::call_namespace::CallNamespace;
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// Representation of a function call.

@@ -7,7 +7,7 @@ use crate::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOpNode, BinaryOperation},
+        binary_op_node::{BinaryOperation, BinaryOpNode},
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::CallNode,
@@ -16,9 +16,9 @@ use crate::{
         do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
         float_node::FloatNode,
-        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
         for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
+        function_def_node::{ARGV, FunctionDefNode},
         function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
         if_node::IfNode,
         int_node::IntNode,
@@ -30,7 +30,7 @@ use crate::{
         string_node::StringNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOpNode, UnaryOperation},
+        unary_op_node::{UnaryOperation, UnaryOpNode},
         var_init_node::VarInitNode,
         var_node::VarNode,
         while_node::WhileNode,
@@ -46,15 +46,14 @@ use crate::{
         function_flags::FunctionFlags, function_prototype::FunctionPrototype,
         program_function::ProgramFunction, symbol::Symbol,
     },
-    Result,
 };
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
-    register::Register, CREATE_FUNCTION, INIT_PROGRAM,
+    call_namespace::CallNamespace, CREATE_FUNCTION, function_arity::FunctionArity,
+    INIT_PROGRAM, lpc_type::LpcType, register::Register,
 };
-use lpc_rs_errors::{span::Span, LpcError};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
 use tree_walker::TreeWalker;
@@ -1924,9 +1923,9 @@ mod tests {
         parser::lexer::LexWrapper,
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
-        Result,
     };
     use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
+    use lpc_rs_errors::Result;
     use lpc_rs_errors::span::Span;
 
     const LIB_DIR: &str = "./tests/fixtures/code";

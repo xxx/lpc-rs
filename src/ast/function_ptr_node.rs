@@ -9,10 +9,10 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use itertools::Itertools;
 use lazy_format::lazy_format;
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// Receiver types. Function pointers can be declared with a dynamic receiver

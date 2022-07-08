@@ -9,9 +9,9 @@ use crate::{
         inherit_node::InheritNode,
     },
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use itertools::Itertools;
+use lpc_rs_errors::Result;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Default)]

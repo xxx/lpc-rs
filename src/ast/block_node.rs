@@ -6,10 +6,10 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 
 use indextree::NodeId;
+use lpc_rs_errors::Result;
 
 /// A node representing a code block
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

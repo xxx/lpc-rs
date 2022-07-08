@@ -6,11 +6,11 @@ use std::{
 use crate::{
     ast::ast_node::{AstNode, AstNodeTrait},
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 
 use crate::ast::expression_node::ExpressionNode;
 use indextree::NodeId;
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// A node representing a `do {} while` loop

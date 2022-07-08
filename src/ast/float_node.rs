@@ -6,9 +6,9 @@ use std::{
 use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
-    Result,
 };
 use lpc_rs_core::{BaseFloat, LpcFloat};
+use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 
 /// A node representing a float literal

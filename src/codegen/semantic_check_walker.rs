@@ -11,7 +11,7 @@ use crate::{
         expression_node::ExpressionNode,
         for_each_node::{ForEachInit, ForEachNode},
         for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
+        function_def_node::{ARGV, FunctionDefNode},
         function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
         int_node::IntNode,
         label_node::LabelNode,
@@ -20,7 +20,7 @@ use crate::{
         return_node::ReturnNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOpNode, UnaryOperation},
+        unary_op_node::{UnaryOperation, UnaryOpNode},
         var_init_node::VarInitNode,
         while_node::WhileNode,
     },
@@ -29,11 +29,10 @@ use crate::{
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },
-    Result,
 };
 use if_chain::if_chain;
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
-use lpc_rs_errors::LpcError;
+use lpc_rs_core::{call_namespace::CallNamespace, EFUN, lpc_type::LpcType};
+use lpc_rs_errors::{LpcError, Result};
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
