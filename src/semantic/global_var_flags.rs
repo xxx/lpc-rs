@@ -1,4 +1,4 @@
-use crate::semantic::visibility::Visibility;
+use lpc_rs_core::visibility::Visibility;
 use modular_bitfield::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};

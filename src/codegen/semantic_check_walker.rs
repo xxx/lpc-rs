@@ -1050,13 +1050,13 @@ mod tests {
     }
 
     mod test_visit_call {
+        use lpc_rs_core::visibility::Visibility;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
             semantic::{
                 function_flags::FunctionFlags, program_function::ProgramFunction,
-                visibility::Visibility,
             },
         };
 
@@ -2011,13 +2011,13 @@ mod tests {
     }
 
     mod test_visit_function_ptr {
+        use lpc_rs_core::visibility::Visibility;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
             semantic::{
                 function_flags::FunctionFlags, program_function::ProgramFunction,
-                visibility::Visibility,
             },
         };
 
