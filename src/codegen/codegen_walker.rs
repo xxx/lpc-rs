@@ -1922,10 +1922,10 @@ mod tests {
         interpreter::{process::Process, program::Program},
         lpc_parser,
         parser::lexer::LexWrapper,
-        semantic::global_var_flags::GlobalVarFlags,
         util::config::Config,
     };
     use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
+    use lpc_rs_core::global_var_flags::GlobalVarFlags;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_errors::Result;
     use lpc_rs_errors::span::Span;
@@ -2032,7 +2032,7 @@ mod tests {
 
     mod test_visit_assignment {
         use super::*;
-        use crate::semantic::global_var_flags::GlobalVarFlags;
+        use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
         #[test]
         fn test_populates_the_instructions_for_globals() {

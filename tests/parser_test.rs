@@ -20,9 +20,9 @@ use lpc_rs::{
     compiler::Compiler,
     lpc_parser,
     parser::lexer::{LexWrapper, TokenVecWrapper},
-    semantic::global_var_flags::GlobalVarFlags,
 };
 use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
+use lpc_rs_core::global_var_flags::GlobalVarFlags;
 use lpc_rs_core::visibility::Visibility;
 use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;

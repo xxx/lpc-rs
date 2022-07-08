@@ -1,6 +1,4 @@
 pub mod function_prototype;
-#[allow(clippy::identity_op)]
-pub mod global_var_flags;
 pub mod local_scope;
 pub mod program_function;
 pub mod scope_tree;

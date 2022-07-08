@@ -15,10 +15,11 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     semantic::{
-        global_var_flags::GlobalVarFlags, semantic_checks::check_var_redefinition, symbol::Symbol,
+        semantic_checks::check_var_redefinition, symbol::Symbol,
     },
 };
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_core::global_var_flags::GlobalVarFlags;
 use lpc_rs_errors::{LpcError, Result};
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating

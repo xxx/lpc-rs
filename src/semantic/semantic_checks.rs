@@ -381,9 +381,10 @@ mod tests {
         use super::*;
         use crate::{
             ast::range_node::RangeNode,
-            semantic::{global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol},
+            semantic::{scope_tree::ScopeTree, symbol::Symbol},
         };
         use indexmap::IndexMap;
+        use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1513,9 +1514,10 @@ mod tests {
     mod check_unary_operation_tests {
         use super::*;
         use crate::semantic::{
-            global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol,
+            scope_tree::ScopeTree, symbol::Symbol,
         };
         use indexmap::IndexMap;
+        use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1904,8 +1906,9 @@ mod tests {
         mod binary_ops {
             use super::*;
             use crate::semantic::{
-                global_var_flags::GlobalVarFlags, scope_tree::ScopeTree, symbol::Symbol,
+                scope_tree::ScopeTree, symbol::Symbol,
             };
+            use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
             #[test]
             fn test_index_array_returns_singular_of_left_type() {

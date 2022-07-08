@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
 use crate::{
     ast::{
@@ -9,7 +10,6 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    semantic::global_var_flags::GlobalVarFlags,
 };
 use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::Result;

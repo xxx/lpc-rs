@@ -1,10 +1,10 @@
 use crate::{
     ast::var_init_node::VarInitNode,
     semantic::{
-        function_prototype::FunctionPrototype, global_var_flags::GlobalVarFlags,
+        function_prototype::FunctionPrototype,
     },
 };
-use lpc_rs_core::{lpc_type::LpcType, register::Register};
+use lpc_rs_core::{lpc_type::LpcType, register::Register, global_var_flags::GlobalVarFlags};
 use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
 use lpc_rs_core::visibility::Visibility;

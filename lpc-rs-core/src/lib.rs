@@ -12,6 +12,8 @@ pub mod visibility;
 pub mod pragma_flags;
 #[allow(clippy::identity_op)]
 pub mod function_flags;
+#[allow(clippy::identity_op)]
+pub mod global_var_flags;
 
 /// Name of the user-overridable initializer function for objects
 pub const CREATE_FUNCTION: &str = "create";

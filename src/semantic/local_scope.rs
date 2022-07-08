@@ -57,7 +57,7 @@ impl Default for LocalScope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::global_var_flags::GlobalVarFlags;
+    use lpc_rs_core::global_var_flags::GlobalVarFlags;
     use lpc_rs_core::lpc_type::LpcType;
 
     #[test]

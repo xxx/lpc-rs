@@ -47,7 +47,7 @@ use crate::parser::lexer::logos_token::{StringToken, IntToken, FloatToken};
 use lpc_rs_core::LpcFloat;
 use crate::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
-use crate::semantic::global_var_flags::GlobalVarFlags;
+use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
 grammar<'context>(context: &'context CompilationContext);
 
