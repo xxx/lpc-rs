@@ -3,9 +3,9 @@ use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     compiler::Compiler,
-    util::path_maker::LpcPath,
 };
 use lpc_rs_core::EFUN;
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
 
 /// A walker to handle compiling and linking inherited files.

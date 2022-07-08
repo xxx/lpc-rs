@@ -1,7 +1,7 @@
+use lpc_rs_core::lpc_path::LpcPath;
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
-    util::path_maker::LpcPath,
 };
 use lpc_rs_errors::{LpcError, Result};
 

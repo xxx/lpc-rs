@@ -611,7 +611,6 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "auto_impl",
- "bstr",
  "claim",
  "decorum",
  "delegate",
@@ -631,7 +630,6 @@ dependencies = [
  "modular-bitfield",
  "multimap",
  "once_cell",
- "path-absolutize",
  "phf",
  "refpool",
  "regex",
@@ -646,8 +644,10 @@ dependencies = [
 name = "lpc-rs-core"
 version = "0.1.0"
 dependencies = [
+ "bstr",
  "decorum",
  "modular-bitfield",
+ "path-absolutize",
  "serde",
 ]
 

@@ -8,7 +8,6 @@ use crate::{
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
-    util::path_maker::LpcPath,
 };
 use define::{Define, ObjectMacro};
 use fs_err as fs;
@@ -19,6 +18,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 use tracing::{instrument, trace};
+use lpc_rs_core::lpc_path::LpcPath;
 
 pub mod define;
 pub mod preprocessor_node;

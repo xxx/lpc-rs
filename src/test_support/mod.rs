@@ -5,9 +5,10 @@ use crate::{
         memory::Memory, object_space::ObjectSpace, process::Process, program::Program, task::Task,
         task_context::TaskContext,
     },
-    util::{config::Config, path_maker::LpcPath},
+    util::config::Config,
 };
 use std::{cell::RefCell, rc::Rc};
+use lpc_rs_core::lpc_path::LpcPath;
 
 /// Module for various test utilities that are shared among unit tests.
 

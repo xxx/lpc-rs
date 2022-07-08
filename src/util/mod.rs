@@ -1,6 +1,5 @@
 pub mod config;
 pub mod function_like;
-pub mod path_maker;
 pub mod repeat_string;
 
 use crate::{
@@ -22,8 +21,9 @@ pub fn get_simul_efuns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{interpreter::program::Program, util::path_maker::LpcPath};
+    use crate::interpreter::program::Program;
     use claim::assert_none;
+    use lpc_rs_core::lpc_path::LpcPath;
 
     #[test]
     fn test_get_simul_efuns() {

@@ -668,7 +668,6 @@ mod tests {
         },
         compiler::Compiler,
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
-        util::path_maker::LpcPath,
     };
     use claim::*;
     use indoc::indoc;
@@ -676,6 +675,7 @@ mod tests {
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
     };
     use std::{collections::HashMap, default::Default};
+    use lpc_rs_core::lpc_path::LpcPath;
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();

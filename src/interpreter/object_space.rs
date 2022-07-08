@@ -108,7 +108,7 @@ impl From<ObjectSpace> for Rc<RefCell<ObjectSpace>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::path_maker::LpcPath;
+    use lpc_rs_core::lpc_path::LpcPath;
 
     #[test]
     fn test_insert_master() {

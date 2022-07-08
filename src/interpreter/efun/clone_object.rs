@@ -6,11 +6,11 @@ use crate::{
         task::Task,
     },
     try_extract_value,
-    util::path_maker::LpcPath,
 };
 use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
 use lpc_rs_errors::{LpcError, Result};
 use std::{cell::RefCell, rc::Rc};
+use lpc_rs_core::lpc_path::LpcPath;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,

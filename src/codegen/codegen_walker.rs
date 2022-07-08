@@ -1922,9 +1922,10 @@ mod tests {
         lpc_parser,
         parser::lexer::LexWrapper,
         semantic::global_var_flags::GlobalVarFlags,
-        util::{config::Config, path_maker::LpcPath},
+        util::config::Config,
     };
     use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
+    use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_errors::Result;
     use lpc_rs_errors::span::Span;
 

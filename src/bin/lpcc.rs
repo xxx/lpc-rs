@@ -4,9 +4,10 @@ use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
-    util::{config::Config, path_maker::LpcPath},
+    util::config::Config,
 };
 use std::rc::Rc;
+use lpc_rs_core::lpc_path::LpcPath;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 

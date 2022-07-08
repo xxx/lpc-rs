@@ -164,7 +164,7 @@ impl TaskContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::path_maker::LpcPath;
+    use lpc_rs_core::lpc_path::LpcPath;
 
     #[test]
     fn test_in_game_cwd() {
