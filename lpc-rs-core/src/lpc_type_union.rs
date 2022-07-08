@@ -1,4 +1,3 @@
-use crate::core::lpc_type::LpcType;
 use modular_bitfield::prelude::*;
 use std::{
     convert::TryInto,
@@ -7,6 +6,7 @@ use std::{
     ops::BitOr,
 };
 use serde::{Deserialize, Serialize};
+use crate::lpc_type::LpcType;
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.

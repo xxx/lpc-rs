@@ -3,7 +3,6 @@ use crate::{
     semantic::program_function::ProgramFunction, util::path_maker::LpcPath,
 };
 use rmp_serde::Serializer;
-use serde::Serialize;
 use std::{
     borrow::Cow,
     cmp::Ordering,
@@ -13,12 +12,13 @@ use std::{
     rc::Rc,
 };
 
-use crate::core::call_namespace::CallNamespace;
+use lpc_rs_core::call_namespace::CallNamespace;
 use itertools::Itertools;
 
 use crate::{core::INIT_PROGRAM, interpreter::efun::EFUN_PROTOTYPES};
 
 use crate::semantic::symbol::Symbol;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

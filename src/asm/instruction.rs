@@ -8,6 +8,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use serde::{Deserialize, Serialize};
 use crate::core::{LpcFloat, LpcInt};
 
 /// Really just a `pc` index in the vm.

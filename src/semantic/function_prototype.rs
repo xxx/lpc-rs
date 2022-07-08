@@ -9,6 +9,7 @@ use std::{
     borrow::Cow,
     fmt::{Display, Formatter},
 };
+use serde::{Deserialize, Serialize};
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

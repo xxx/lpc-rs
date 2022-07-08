@@ -21,8 +21,6 @@ lalrpop_mod!(#[allow(clippy::all)] pub lpc_parser);
 lalrpop_mod!(#[allow(clippy::all)] pub preprocessor_parser);
 
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 
 #[macro_use]
 extern crate educe;

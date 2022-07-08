@@ -10,6 +10,7 @@ use crate::{
 };
 use delegate::delegate;
 use std::fmt::{Display, Formatter};
+use serde::{Deserialize, Serialize};
 
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {

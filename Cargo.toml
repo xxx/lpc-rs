@@ -8,6 +8,8 @@ edition = "2021"
 lalrpop = "0.19.4"
 
 [dependencies]
+lpc-rs-core = { path = "./lpc-rs-core"}
+
 arrayvec = "0.7.1"
 auto_impl = "1.0.1"
 bstr = "0.2.17"
@@ -34,7 +36,6 @@ refpool = "0.4.3"
 regex = "1"
 rmp-serde = "1.0.0"
 serde = { version = "1.0.123", features = ["derive", "rc"] }
-serde_derive = "1.0.123"
 toml = "0.5.8"
 tracing = "0.1"
 tracing-subscriber = "0.3.11"
@@ -61,6 +62,9 @@ release_max_level_warn = ["tracing/release_max_level_warn"]
 release_max_level_info = ["tracing/release_max_level_info"]
 release_max_level_debug = ["tracing/release_max_level_debug"]
 release_max_level_trace = ["tracing/release_max_level_trace"]
+
+[workspace]
+members = ["lpc-rs-core"]
 
 [profile.release]
 lto = "thin"

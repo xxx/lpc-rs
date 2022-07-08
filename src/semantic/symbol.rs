@@ -7,6 +7,7 @@ use crate::{
         visibility::Visibility,
     },
 };
+use serde::{Deserialize, Serialize};
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
 use crate::semantic::visibility::Visibility;
 use modular_bitfield::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// A struct to keep track of the various boolean flags that can be set
 /// on functions, like `varargs` and `static`, as well as whether the function

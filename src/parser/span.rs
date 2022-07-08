@@ -5,6 +5,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::Range,
 };
+use serde::{Deserialize, Serialize};
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.

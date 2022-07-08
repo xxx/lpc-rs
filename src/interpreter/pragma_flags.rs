@@ -1,4 +1,5 @@
 use modular_bitfield::prelude::*;
+use serde::{Deserialize, Serialize};
 
 pub const NO_CLONE: &str = "no_clone";
 pub const NO_INHERIT: &str = "no_inherit";

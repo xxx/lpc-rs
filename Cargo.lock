@@ -628,6 +628,7 @@ dependencies = [
  "lalrpop-util",
  "lazy_format",
  "logos",
+ "lpc-rs-core",
  "modular-bitfield",
  "multimap",
  "once_cell",
@@ -638,10 +639,18 @@ dependencies = [
  "regex",
  "rmp-serde",
  "serde",
- "serde_derive",
  "toml",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "lpc-rs-core"
+version = "0.1.0"
+dependencies = [
+ "decorum",
+ "modular-bitfield",
+ "serde",
 ]
 
 [[package]]
