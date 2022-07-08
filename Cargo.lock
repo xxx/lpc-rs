@@ -627,7 +627,6 @@ dependencies = [
  "logos",
  "lpc-rs-core",
  "lpc-rs-errors",
- "modular-bitfield",
  "multimap",
  "once_cell",
  "phf",

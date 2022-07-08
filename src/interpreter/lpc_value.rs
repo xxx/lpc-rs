@@ -2,8 +2,8 @@ use crate::interpreter::{function_type::LpcFunction, lpc_ref::LpcRef, process::P
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
-use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 use std::{cell::RefCell, fmt, fmt::Display, rc::Rc};
+use std::fmt::Formatter;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
