@@ -3,6 +3,7 @@ use std::{
     fmt::{Debug, Display},
     fs::OpenOptions,
 };
+use std::fmt::Formatter;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
@@ -10,7 +11,6 @@ use codespan_reporting::{
 };
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
-use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
 use crate::{
     errors::{file_stream::FileStream, lazy_files::FILE_CACHE},
