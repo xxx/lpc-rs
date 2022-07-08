@@ -1,6 +1,4 @@
-use crate::{
-    interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction,
-};
+use crate::semantic::program_function::ProgramFunction;
 use lpc_rs_core::EFUN;
 use rmp_serde::Serializer;
 use std::{
@@ -18,6 +16,7 @@ use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
 use crate::{interpreter::efun::EFUN_PROTOTYPES, semantic::symbol::Symbol};
 use serde::{Deserialize, Serialize};
 use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::pragma_flags::PragmaFlags;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

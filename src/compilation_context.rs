@@ -1,7 +1,7 @@
 use crate::{
     ast::expression_node::ExpressionNode,
     interpreter::{
-        efun::EFUN_PROTOTYPES, pragma_flags::PragmaFlags, process::Process, program::Program,
+        efun::EFUN_PROTOTYPES, process::Process, program::Program,
     },
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
     util::{config::Config, function_like::FunctionLike},
@@ -11,6 +11,7 @@ use lpc_rs_core::{call_namespace::CallNamespace, EFUN};
 use lpc_rs_errors::LpcError;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::pragma_flags::PragmaFlags;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
