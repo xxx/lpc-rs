@@ -8,13 +8,12 @@ use lpc_rs_core::{LpcInt, convert_escapes};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
-    errors::{format_expected, lazy_files::FileCache, LpcError},
+    errors::{format_expected, lazy_files::FileCache, LpcError, span::Span},
     parser::{
         lexer::{
             logos_token::{IntToken, StringToken},
             LexWrapper, Spanned, Token, TokenVecWrapper,
         },
-        span::Span,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,

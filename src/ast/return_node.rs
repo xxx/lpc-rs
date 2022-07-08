@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
+use crate::errors::span::Span;
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

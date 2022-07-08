@@ -1,7 +1,7 @@
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 use crate::{
     asm::instruction::{Address, Instruction},
-    parser::span::Span,
+    errors::span::Span,
     semantic::function_prototype::FunctionPrototype,
 };
 use multimap::MultiMap;

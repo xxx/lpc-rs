@@ -9,11 +9,11 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     semantic::global_var_flags::GlobalVarFlags,
     Result,
 };
 use lpc_rs_core::lpc_type::LpcType;
+use crate::errors::span::Span;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

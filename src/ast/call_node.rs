@@ -10,11 +10,11 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
 use itertools::Itertools;
 use lpc_rs_core::call_namespace::CallNamespace;
+use crate::errors::span::Span;
 
 /// Representation of a function call.
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]

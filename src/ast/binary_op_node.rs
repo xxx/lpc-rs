@@ -11,10 +11,10 @@ use crate::{
     },
     codegen::tree_walker::TreeWalker,
     errors::LpcError,
-    parser::span::Span,
     Result,
 };
 use std::convert::TryFrom;
+use crate::errors::span::Span;
 
 /// All possible binary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

@@ -9,10 +9,10 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
 use itertools::Itertools;
+use crate::errors::span::Span;
 
 /// A node representing a comma-separated list of expressions
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

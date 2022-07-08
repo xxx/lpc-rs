@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
+use crate::errors::span::Span;
 
 /// All possible unary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

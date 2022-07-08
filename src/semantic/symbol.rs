@@ -1,7 +1,7 @@
 use lpc_rs_core::{lpc_type::LpcType, register::Register};
 use crate::{
     ast::var_init_node::VarInitNode,
-    parser::span::Span,
+    errors::span::Span,
     semantic::{
         function_prototype::FunctionPrototype, global_var_flags::GlobalVarFlags,
         visibility::Visibility,

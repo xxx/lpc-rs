@@ -9,8 +9,9 @@ use crate::{
     Result,
 };
 
-use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
+use crate::{ast::expression_node::ExpressionNode};
 use indextree::NodeId;
+use crate::errors::span::Span;
 
 /// A node representing a `do {} while` loop
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

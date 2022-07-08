@@ -5,7 +5,6 @@ use crate::{
         function_type::FunctionName, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         register_bank::RegisterBank,
     },
-    parser::span::Span,
     semantic::program_function::ProgramFunction,
     try_extract_value, Result,
 };
@@ -17,6 +16,7 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
+use crate::errors::span::Span;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]

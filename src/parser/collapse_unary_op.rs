@@ -39,7 +39,7 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::span::Span;
+    use crate::errors::span::Span;
     use decorum::Total;
 
     #[test]

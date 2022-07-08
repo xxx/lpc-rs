@@ -14,11 +14,13 @@ use modular_bitfield::private::static_assertions::_core::fmt::Formatter;
 
 use crate::{
     errors::{file_stream::FileStream, lazy_files::FILE_CACHE},
-    parser::{lexer::Token, span::Span},
+    parser::{lexer::Token},
 };
+use crate::errors::span::Span;
 
 pub mod file_stream;
 pub mod lazy_files;
+pub mod span;
 
 #[derive(Debug, Clone)]
 pub struct LpcError {

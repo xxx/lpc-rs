@@ -9,11 +9,11 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
 use itertools::Itertools;
 use lazy_format::lazy_format;
+use crate::errors::span::Span;
 
 /// Receiver types. Function pointers can be declared with a dynamic receiver
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]

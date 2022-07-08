@@ -6,9 +6,9 @@ use std::{
 use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
+use crate::errors::span::Span;
 
 /// A node representing the use of a variable.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

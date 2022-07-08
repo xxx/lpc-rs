@@ -11,9 +11,9 @@ use crate::{
 
 use crate::{
     ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
-    parser::span::Span,
 };
 use indextree::NodeId;
+use crate::errors::span::Span;
 
 /// A constant to track the implicit variable we reserve space for,
 /// for `foreach` loops.

@@ -22,11 +22,11 @@ use lpc_rs::{
     lpc_parser,
     parser::{
         lexer::{LexWrapper, TokenVecWrapper},
-        span::Span,
     },
     semantic::{global_var_flags::GlobalVarFlags, visibility::Visibility},
     Result,
 };
+use lpc_rs::errors::span::Span;
 use lpc_rs_core::{LpcFloat, LpcInt};
 
 // just a helper for a very common pattern

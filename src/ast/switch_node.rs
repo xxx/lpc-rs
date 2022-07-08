@@ -9,7 +9,8 @@ use crate::{
     Result,
 };
 
-use crate::{ast::expression_node::ExpressionNode, parser::span::Span};
+use crate::{ast::expression_node::ExpressionNode};
+use crate::errors::span::Span;
 
 /// A node representing a `switch` statement
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

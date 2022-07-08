@@ -1,4 +1,4 @@
-use crate::parser::span::Span;
+use crate::errors::span::Span;
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error, Files, SimpleFile};
 use fs_err as fs;

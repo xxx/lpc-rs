@@ -20,9 +20,9 @@ use crate::{
         switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
+use crate::errors::span::Span;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

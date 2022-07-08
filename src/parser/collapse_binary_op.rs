@@ -6,9 +6,10 @@ use crate::{
         int_node::IntNode,
         string_node::StringNode,
     },
-    parser::{lexer, span::Span},
+    parser::{lexer},
     util::repeat_string,
     LpcError,
+    errors::span::Span,
 };
 use lalrpop_util::ParseError;
 

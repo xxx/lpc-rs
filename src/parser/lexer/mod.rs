@@ -8,13 +8,12 @@ use logos::{Lexer, Logos};
 use lpc_rs_core::{LpcInt, BaseFloat, convert_escapes};
 
 use crate::{
-    errors::{lazy_files::FileId, LpcError},
+    errors::{lazy_files::FileId, LpcError, span::Span},
     parser::{
         lexer::{
             lex_state::LexState,
             logos_token::{FloatToken, IntToken, StringToken},
         },
-        span::Span,
     },
     Result,
 };

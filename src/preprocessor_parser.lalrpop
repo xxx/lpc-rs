@@ -2,7 +2,7 @@ use crate::preprocessor::preprocessor_node::PreprocessorNode;
 use crate::ast::binary_op_node::BinaryOperation;
 use crate::parser::lexer::Token;
 use crate::errors::LpcError;
-use crate::parser::span::Span;
+use crate::errors::span::Span;
 use crate::parser::lexer::logos_token::{StringToken, IntToken};
 use lpc_rs_core::LpcInt;
 

@@ -9,9 +9,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
+use crate::errors::span::Span;
 
 /// Representation of a Range, with optional ends.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

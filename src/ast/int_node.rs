@@ -6,10 +6,10 @@ use std::{
 use crate::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
-    parser::span::Span,
     Result,
 };
 use lpc_rs_core::LpcInt;
+use crate::errors::span::Span;
 
 /// A node representing an integer literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

@@ -47,7 +47,6 @@ use crate::{
         function_type::{FunctionName, FunctionReceiver, FunctionTarget},
         program::Program,
     },
-    parser::span::Span,
     semantic::{
         function_flags::FunctionFlags, function_prototype::FunctionPrototype,
         program_function::ProgramFunction, symbol::Symbol,
@@ -59,6 +58,7 @@ use indexmap::IndexMap;
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
 use tree_walker::TreeWalker;
+use crate::errors::span::Span;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1924,11 +1924,12 @@ mod tests {
         compiler::Compiler,
         interpreter::{process::Process, program::Program},
         lpc_parser,
-        parser::{lexer::LexWrapper, span::Span},
+        parser::{lexer::LexWrapper},
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
         Result,
     };
+    use crate::errors::span::Span;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 

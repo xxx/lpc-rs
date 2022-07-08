@@ -14,7 +14,6 @@ use crate::{
     lpc_parser,
     parser::{
         lexer::{Spanned, Token, TokenVecWrapper},
-        span::Span,
     },
     preprocessor::Preprocessor,
     util::{config::Config, path_maker::LpcPath},
@@ -22,6 +21,7 @@ use crate::{
 };
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
+use crate::errors::span::Span;
 
 #[macro_export]
 macro_rules! apply_walker {
