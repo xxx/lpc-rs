@@ -72,8 +72,8 @@ impl Span {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::errors::lazy_files::FileCache;
-    /// use lpc_rs::errors::span::Span;
+    /// use lpc_rs_errors::lazy_files::FileCache;
+    /// use lpc_rs_errors::span::Span;
     ///
     /// let file_id = FileCache::insert("tests/fixtures/code/example.c");
     /// let span = Span::new(file_id, 1..8);
