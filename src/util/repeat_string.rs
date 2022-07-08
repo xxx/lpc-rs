@@ -1,4 +1,4 @@
-use crate::{LpcError};
+use crate::LpcError;
 use lpc_rs_core::LpcInt;
 
 /// Repeat `s`, `i` times, and return a new String of it.

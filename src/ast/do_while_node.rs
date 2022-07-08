@@ -9,7 +9,7 @@ use crate::{
     Result,
 };
 
-use crate::{ast::expression_node::ExpressionNode};
+use crate::ast::expression_node::ExpressionNode;
 use indextree::NodeId;
 use lpc_rs_errors::span::Span;
 

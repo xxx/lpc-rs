@@ -1,5 +1,5 @@
-use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 /// A newtype around a usize representing a Register numbered with its value, `x.0`.
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]

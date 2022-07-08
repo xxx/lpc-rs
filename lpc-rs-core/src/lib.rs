@@ -32,8 +32,8 @@ pub type LpcFloat = Total<BaseFloat>;
 ///
 /// `s` - Something that can be represented as a `&str` through `as_ref`.
 pub fn convert_escapes<T>(s: T) -> String
-    where
-        T: AsRef<str>,
+where
+    T: AsRef<str>,
 {
     s.as_ref()
         .replace("\\n", "\n")

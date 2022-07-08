@@ -1,7 +1,7 @@
-use lpc_rs_errors::LpcError;
-use crate::{Result};
+use crate::Result;
 use fs_err as fs;
 use if_chain::if_chain;
+use lpc_rs_errors::LpcError;
 use std::{path::Path, str::FromStr};
 use toml::{value::Index, Value};
 

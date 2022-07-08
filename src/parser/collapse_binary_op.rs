@@ -1,5 +1,3 @@
-use lpc_rs_core::LpcInt;
-use lpc_rs_errors::span::Span;
 use crate::{
     ast::{
         binary_op_node::{BinaryOpNode, BinaryOperation},
@@ -7,11 +5,13 @@ use crate::{
         int_node::IntNode,
         string_node::StringNode,
     },
-    parser::{lexer},
+    parser::lexer,
     util::repeat_string,
     LpcError,
 };
 use lalrpop_util::ParseError;
+use lpc_rs_core::LpcInt;
+use lpc_rs_errors::span::Span;
 
 /// Combine literals in cases where we have enough information to do so.
 ///

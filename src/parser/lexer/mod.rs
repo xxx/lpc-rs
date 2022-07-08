@@ -4,19 +4,20 @@ use std::{
     str::FromStr,
 };
 
-use logos::{Lexer, Logos};
-use lpc_rs_core::{BaseFloat, convert_escapes, LpcInt};
-use lpc_rs_errors::{lazy_files::FileId, LpcError, span::Span};
 use crate::{
-    parser::{
-        lexer::{
-            lex_state::LexState,
-            logos_token::{FloatToken, IntToken, StringToken},
-        },
+    parser::lexer::{
+        lex_state::LexState,
+        logos_token::{FloatToken, IntToken, StringToken},
     },
     Result,
 };
-use lpc_rs_errors::span::HasSpan;
+use logos::{Lexer, Logos};
+use lpc_rs_core::{convert_escapes, BaseFloat, LpcInt};
+use lpc_rs_errors::{
+    lazy_files::FileId,
+    span::{HasSpan, Span},
+    LpcError,
+};
 
 pub mod lex_state;
 pub mod logos_token;

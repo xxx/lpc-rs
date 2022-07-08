@@ -1,17 +1,15 @@
-use std::{cell::RefCell, collections::HashMap};
-use lpc_rs_core::call_namespace::CallNamespace;
-use lpc_rs_core::EFUN;
-use lpc_rs_errors::LpcError;
 use crate::{
     ast::expression_node::ExpressionNode,
-    interpreter::efun::EFUN_PROTOTYPES,
-    semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
-    interpreter::{pragma_flags::PragmaFlags, process::Process, program::Program},
-    semantic::symbol::Symbol,
+    interpreter::{
+        efun::EFUN_PROTOTYPES, pragma_flags::PragmaFlags, process::Process, program::Program,
+    },
+    semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
     util::{config::Config, function_like::FunctionLike, path_maker::LpcPath},
 };
 use delegate::delegate;
-use std::rc::Rc;
+use lpc_rs_core::{call_namespace::CallNamespace, EFUN};
+use lpc_rs_errors::LpcError;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -313,10 +311,8 @@ impl Default for CompilationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::semantic::{function_flags::FunctionFlags, program_function::ProgramFunction};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-use crate::{
-        semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
-    };
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototype::new(

@@ -1,4 +1,3 @@
-use lpc_rs_errors::LpcError;
 use crate::{
     asm::instruction::{Address, Instruction},
     interpreter::{
@@ -8,6 +7,7 @@ use crate::{
     semantic::program_function::ProgramFunction,
     try_extract_value, Result,
 };
+use lpc_rs_errors::{span::Span, LpcError};
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
@@ -16,7 +16,6 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
-use lpc_rs_errors::span::Span;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -205,10 +204,8 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-    use crate::{
-        semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
-    };
 
     #[test]
     fn new_sets_up_registers() {

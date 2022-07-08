@@ -1,10 +1,10 @@
-use lpc_rs_errors::LpcError;
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
     util::path_maker::LpcPath,
     Result,
 };
+use lpc_rs_errors::LpcError;
 
 /// `file_name`, an efun for returning the full path and clone number of an object
 pub fn file_name<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {

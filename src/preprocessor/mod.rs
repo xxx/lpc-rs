@@ -1,27 +1,24 @@
-use crate::interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
-use define::{Define, ObjectMacro};
-use fs_err as fs;
-use lalrpop_util::ParseError as LalrpopParseError;
-use regex::Regex;
-use std::{collections::HashMap, fmt::Debug, path::Path};
-use lpc_rs_core::{LpcInt, convert_escapes};
-use lpc_rs_errors::{format_expected, lazy_files::FileCache, LpcError, span::Span};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
-    parser::{
-        lexer::{
-            logos_token::{IntToken, StringToken},
-            LexWrapper, Spanned, Token, TokenVecWrapper,
-        },
+    interpreter::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    parser::lexer::{
+        logos_token::{IntToken, StringToken},
+        LexWrapper, Spanned, Token, TokenVecWrapper,
     },
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
     util::path_maker::LpcPath,
     Result,
 };
+use define::{Define, ObjectMacro};
+use fs_err as fs;
+use lalrpop_util::ParseError as LalrpopParseError;
+use lpc_rs_core::{convert_escapes, LpcInt};
+use lpc_rs_errors::{format_expected, lazy_files::FileCache, span::Span, LpcError};
 use once_cell::sync::Lazy;
-use std::iter::Peekable;
+use regex::Regex;
+use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 use tracing::{instrument, trace};
 
 pub mod define;

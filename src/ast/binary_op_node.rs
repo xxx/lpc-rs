@@ -1,9 +1,8 @@
+use lpc_rs_errors::{span::Span, LpcError};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lpc_rs_errors::span::Span;
-use lpc_rs_errors::LpcError;
 
 use crate::{
     ast::{

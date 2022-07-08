@@ -1,13 +1,13 @@
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-use lpc_rs_errors::span::Span;
 use crate::{
     asm::instruction::{Address, Instruction},
     semantic::function_prototype::FunctionPrototype,
 };
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use tracing::trace;
-use serde::{Deserialize, Serialize};
 
 /// A [`Program`](crate::interpreter::program::Program) function,which stores
 /// its actual code, along with metadata for type checking, etc.

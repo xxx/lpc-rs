@@ -1,6 +1,6 @@
 use modular_bitfield::prelude::*;
-use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 #[derive(
     BitfieldSpecifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize,

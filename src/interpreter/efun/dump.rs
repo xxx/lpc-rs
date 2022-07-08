@@ -1,9 +1,9 @@
-use lpc_rs_errors::LpcError;
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value, Result,
 };
 use indexmap::IndexMap;
+use lpc_rs_errors::LpcError;
 
 const MAX_RECURSION: usize = 20;
 

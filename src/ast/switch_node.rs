@@ -9,7 +9,7 @@ use crate::{
     Result,
 };
 
-use crate::{ast::expression_node::ExpressionNode};
+use crate::ast::expression_node::ExpressionNode;
 use lpc_rs_errors::span::Span;
 
 /// A node representing a `switch` statement

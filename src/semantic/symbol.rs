@@ -1,4 +1,3 @@
-use lpc_rs_core::{lpc_type::LpcType, register::Register};
 use crate::{
     ast::var_init_node::VarInitNode,
     semantic::{
@@ -6,8 +5,9 @@ use crate::{
         visibility::Visibility,
     },
 };
-use serde::{Deserialize, Serialize};
+use lpc_rs_core::{lpc_type::LpcType, register::Register};
 use lpc_rs_errors::span::Span;
+use serde::{Deserialize, Serialize};
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

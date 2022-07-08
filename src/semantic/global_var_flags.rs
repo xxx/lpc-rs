@@ -1,7 +1,7 @@
 use crate::semantic::visibility::Visibility;
 use modular_bitfield::prelude::*;
-use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 /// A struct to keep track of the various boolean flags that can be set
 /// on global variables, like `public` and `private`.

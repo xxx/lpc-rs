@@ -1,8 +1,3 @@
-use lpc_rs_core::{
-    call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, EFUN,
-    INIT_PROGRAM,
-};
-use lpc_rs_errors::LpcError;
 use crate::{
     asm::instruction::{Address, Instruction},
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -31,6 +26,11 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use indexmap::IndexMap;
+use lpc_rs_core::{
+    call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, LpcInt, EFUN,
+    INIT_PROGRAM,
+};
+use lpc_rs_errors::LpcError;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -38,7 +38,6 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
-use lpc_rs_core::LpcInt;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -1664,11 +1663,11 @@ mod tests {
         test_support::{compile_prog, run_prog},
     };
     use indoc::indoc;
+    use lpc_rs_core::{LpcFloat, LpcInt};
     use std::{
         collections::HashMap,
         hash::{Hash, Hasher},
     };
-    use lpc_rs_core::{LpcFloat, LpcInt};
 
     /// A type to make it easier to set up test expectations for register contents
     #[derive(Debug, PartialEq, Eq, Clone)]

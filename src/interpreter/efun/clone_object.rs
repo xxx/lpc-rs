@@ -1,5 +1,3 @@
-use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
-use lpc_rs_errors::LpcError;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
@@ -11,6 +9,8 @@ use crate::{
     util::path_maker::LpcPath,
     Result,
 };
+use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
+use lpc_rs_errors::LpcError;
 use std::{cell::RefCell, rc::Rc};
 
 fn load_master<const N: usize>(

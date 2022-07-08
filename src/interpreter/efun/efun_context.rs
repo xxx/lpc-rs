@@ -1,4 +1,3 @@
-use lpc_rs_errors::LpcError;
 use crate::{
     interpreter::{
         call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
@@ -8,8 +7,8 @@ use crate::{
     Result,
 };
 use delegate::delegate;
+use lpc_rs_errors::{span::Span, LpcError};
 use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
-use lpc_rs_errors::span::Span;
 
 /// A structure to hold various pieces of interpreter state, to be passed to Efuns
 #[derive(Debug)]

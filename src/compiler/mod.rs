@@ -12,16 +12,14 @@ use crate::{
     compilation_context::CompilationContext,
     interpreter::{process::Process, program::Program},
     lpc_parser,
-    parser::{
-        lexer::{Spanned, Token, TokenVecWrapper},
-    },
+    parser::lexer::{Spanned, Token, TokenVecWrapper},
     preprocessor::Preprocessor,
     util::{config::Config, path_maker::LpcPath},
     Result,
 };
+use lpc_rs_errors::span::Span;
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
-use lpc_rs_errors::span::Span;
 
 #[macro_export]
 macro_rules! apply_walker {

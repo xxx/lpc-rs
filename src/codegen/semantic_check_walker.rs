@@ -1,6 +1,3 @@
-use if_chain::if_chain;
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
-use lpc_rs_errors::LpcError;
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
@@ -34,6 +31,9 @@ use crate::{
     },
     Result,
 };
+use if_chain::if_chain;
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
+use lpc_rs_errors::LpcError;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -660,8 +660,7 @@ impl TreeWalker for SemanticCheckWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, function_arity::FunctionArity};
-use crate::{
+    use crate::{
         apply_walker,
         ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
         codegen::{
@@ -674,6 +673,9 @@ use crate::{
     };
     use claim::*;
     use indoc::indoc;
+    use lpc_rs_core::{
+        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
+    };
     use std::{collections::HashMap, default::Default};
 
     fn empty_context() -> CompilationContext {
@@ -1864,7 +1866,7 @@ use crate::{
             assert_regex,
             ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
             codegen::scope_walker::ScopeWalker,
-                        interpreter::program::Program,
+            interpreter::program::Program,
             semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
         };
 
@@ -2013,7 +2015,7 @@ use crate::{
         use super::*;
         use crate::{
             assert_regex,
-                        interpreter::program::Program,
+            interpreter::program::Program,
             semantic::{
                 function_flags::FunctionFlags, program_function::ProgramFunction,
                 visibility::Visibility,

@@ -1,5 +1,3 @@
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::LpcError;
 use crate::{
     ast::{
         ast_node::AstNodeTrait,
@@ -21,6 +19,8 @@ use crate::{
     },
     Result,
 };
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_errors::LpcError;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.
@@ -392,8 +392,8 @@ mod tests {
     }
 
     mod test_visit_var {
+        use crate::interpreter::program::Program;
         use lpc_rs_core::lpc_type::LpcType;
-        use crate::{interpreter::program::Program};
 
         use super::*;
 

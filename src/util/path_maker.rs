@@ -1,5 +1,6 @@
 use bstr::ByteSlice;
 use path_absolutize::Absolutize;
+use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
@@ -8,7 +9,6 @@ use std::{
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LpcPath {

@@ -1,11 +1,11 @@
-use crate::lazy_files::{FILE_CACHE, FileId};
+use crate::lazy_files::{FileId, FILE_CACHE};
 use codespan_reporting::files::Files;
 use if_chain::if_chain;
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
     ops::Range,
 };
-use serde::{Deserialize, Serialize};
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.

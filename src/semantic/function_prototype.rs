@@ -1,15 +1,13 @@
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-use lpc_rs_errors::span::Span;
-use crate::{
-    semantic::function_flags::FunctionFlags,
-};
+use crate::semantic::function_flags::FunctionFlags;
 use itertools::Itertools;
 use lazy_format::lazy_format;
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_errors::span::Span;
+use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     fmt::{Display, Formatter},
 };
-use serde::{Deserialize, Serialize};
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

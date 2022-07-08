@@ -1,8 +1,3 @@
-use lpc_rs_core::{
-    call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
-    register::Register, CREATE_FUNCTION, INIT_PROGRAM,
-};
-use lpc_rs_errors::{LpcError, span::Span};
 use crate::{
     asm::{
         instruction::{Address, Instruction, Instruction::RegCopy, Label},
@@ -55,6 +50,11 @@ use crate::{
 };
 use if_chain::if_chain;
 use indexmap::IndexMap;
+use lpc_rs_core::{
+    call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
+    register::Register, CREATE_FUNCTION, INIT_PROGRAM,
+};
+use lpc_rs_errors::{span::Span, LpcError};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
 use tree_walker::TreeWalker;
@@ -1905,8 +1905,6 @@ impl Default for CodegenWalker {
 mod tests {
     use super::*;
 
-    use lpc_rs_core::lpc_type::LpcType;
-    use lpc_rs_core::LpcFloat;
     use crate::{
         apply_walker,
         asm::instruction::Instruction::*,
@@ -1923,11 +1921,12 @@ mod tests {
         compiler::Compiler,
         interpreter::{process::Process, program::Program},
         lpc_parser,
-        parser::{lexer::LexWrapper},
+        parser::lexer::LexWrapper,
         semantic::global_var_flags::GlobalVarFlags,
         util::{config::Config, path_maker::LpcPath},
         Result,
     };
+    use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::span::Span;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
@@ -2607,10 +2606,8 @@ mod tests {
     }
 
     mod test_visit_call {
+        use crate::asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::function_arity::FunctionArity;
-        use crate::{
-            asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv},
-        };
 
         use super::*;
         use crate::semantic::{

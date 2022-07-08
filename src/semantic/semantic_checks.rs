@@ -1,6 +1,6 @@
-use phf::phf_set;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::LpcError;
+use phf::phf_set;
 
 use crate::{
     ast::{
@@ -1774,11 +1774,11 @@ mod tests {
 
         mod arrays {
             use super::*;
-            use lpc_rs_core::{function_arity::FunctionArity, EFUN};
-        use crate::{
+            use crate::{
                 ast::array_node::ArrayNode,
                 semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
             };
+            use lpc_rs_core::{function_arity::FunctionArity, EFUN};
 
             #[test]
             fn empty_array_is_mixed() {

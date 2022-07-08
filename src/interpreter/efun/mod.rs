@@ -7,10 +7,6 @@ mod file_name;
 mod this_object;
 mod throw;
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-use lpc_rs_errors::LpcError;
 use crate::{
     interpreter::efun::efun_context::EfunContext,
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
@@ -20,6 +16,10 @@ use clone_object::clone_object;
 use debug::debug;
 use dump::dump;
 use file_name::file_name;
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_errors::LpcError;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use this_object::this_object;
 use throw::throw;
 

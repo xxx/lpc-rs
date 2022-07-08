@@ -1,6 +1,5 @@
 use if_chain::if_chain;
 use indoc::indoc;
-use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs::{
     ast::{
         assignment_node::AssignmentNode,
@@ -20,13 +19,11 @@ use lpc_rs::{
     compilation_context::CompilationContext,
     compiler::Compiler,
     lpc_parser,
-    parser::{
-        lexer::{LexWrapper, TokenVecWrapper},
-    },
+    parser::lexer::{LexWrapper, TokenVecWrapper},
     semantic::{global_var_flags::GlobalVarFlags, visibility::Visibility},
     Result,
 };
-use lpc_rs_core::{LpcFloat, LpcInt};
+use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
 use lpc_rs_errors::span::Span;
 
 // just a helper for a very common pattern

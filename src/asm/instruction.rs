@@ -1,15 +1,15 @@
-use crate::{
-    interpreter::function_type::FunctionTarget,
-};
-use lpc_rs_core::{call_namespace::CallNamespace, function_arity::FunctionArity, register::Register};
+use crate::interpreter::function_type::FunctionTarget;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use lpc_rs_core::{
+    call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, LpcFloat,
+    LpcInt,
+};
+use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use serde::{Deserialize, Serialize};
-use lpc_rs_core::{LpcFloat, LpcInt};
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;

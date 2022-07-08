@@ -9,9 +9,7 @@ use crate::{
     Result,
 };
 
-use crate::{
-    ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
-};
+use crate::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode};
 use indextree::NodeId;
 use lpc_rs_errors::span::Span;
 

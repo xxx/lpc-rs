@@ -1,8 +1,8 @@
-use lpc_rs_core::EFUN;
 use crate::{
-    interpreter::pragma_flags::PragmaFlags,
-    semantic::program_function::ProgramFunction, util::path_maker::LpcPath,
+    interpreter::pragma_flags::PragmaFlags, semantic::program_function::ProgramFunction,
+    util::path_maker::LpcPath,
 };
+use lpc_rs_core::EFUN;
 use rmp_serde::Serializer;
 use std::{
     borrow::Cow,
@@ -13,12 +13,10 @@ use std::{
     rc::Rc,
 };
 
-use lpc_rs_core::call_namespace::CallNamespace;
-use lpc_rs_core::INIT_PROGRAM;
 use itertools::Itertools;
+use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
 
-use crate::{interpreter::efun::EFUN_PROTOTYPES};
-use crate::semantic::symbol::Symbol;
+use crate::{interpreter::efun::EFUN_PROTOTYPES, semantic::symbol::Symbol};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
