@@ -5,7 +5,7 @@ use std::{
 };
 
 use logos::{Lexer, Logos};
-use lpc_rs_core::{LpcInt, BaseFloat, convert_escapes};
+use lpc_rs_core::{BaseFloat, convert_escapes, LpcInt};
 
 use crate::{
     errors::{lazy_files::FileId, LpcError, span::Span},
@@ -17,6 +17,7 @@ use crate::{
     },
     Result,
 };
+use crate::errors::span::HasSpan;
 
 pub mod lex_state;
 pub mod logos_token;
@@ -444,8 +445,8 @@ fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
     FloatToken(Span::new(lex.extras.current_file_id, lex.span()), f)
 }
 
-impl Token {
-    pub fn span(&self) -> Span {
+impl HasSpan for Token {
+    fn span(&self) -> Span {
         match self {
             Token::Plus(x)
             | Token::Minus(x)
@@ -545,7 +546,9 @@ impl Token {
             Token::Error => Span::new(0, 0..0),
         }
     }
+}
 
+impl Token {
     /// A helper to allow us to correct spans, for cases when we lex `#define`d
     /// values for macro expansion.
     fn span_ref(&mut self) -> Option<&mut Span> {

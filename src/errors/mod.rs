@@ -14,9 +14,9 @@ use lalrpop_util::ParseError as LalrpopParseError;
 
 use crate::{
     errors::{file_stream::FileStream, lazy_files::FILE_CACHE},
-    parser::{lexer::Token},
 };
 use crate::errors::span::Span;
+use span::HasSpan;
 
 pub mod file_stream;
 pub mod lazy_files;
@@ -149,8 +149,11 @@ impl AsRef<str> for LpcError {
 }
 
 /// Map LALRpop's parse errors into our local error type
-impl<'a> From<LalrpopParseError<usize, Token, LpcError>> for LpcError {
-    fn from(err: LalrpopParseError<usize, Token, LpcError>) -> Self {
+impl<'a, T> From<LalrpopParseError<usize, T, LpcError>> for LpcError
+where
+    T: Display + HasSpan
+{
+    fn from(err: LalrpopParseError<usize, T, LpcError>) -> Self {
         match err {
             LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
             LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {

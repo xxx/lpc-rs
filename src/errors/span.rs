@@ -1,4 +1,4 @@
-use crate::errors::lazy_files::{FileId, FILE_CACHE};
+use crate::errors::lazy_files::{FILE_CACHE, FileId};
 use codespan_reporting::files::Files;
 use if_chain::if_chain;
 use std::{
@@ -116,4 +116,9 @@ impl From<Span> for Range<usize> {
     fn from(span: Span) -> Self {
         Self::from(&span)
     }
+}
+
+pub trait HasSpan {
+    /// Return a [`Span`] for this object
+    fn span(&self) -> Span;
 }
