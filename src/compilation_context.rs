@@ -56,7 +56,7 @@ pub struct CompilationContext {
     /// allocate for global variables.
     pub num_globals: usize,
 
-    /// How many [`Register`](crate::core::register::Register)s were required for initializing global variables,
+    /// How many [`Register`](lpc_rs_core::register::Register)s were required for initializing global variables,
     /// in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for the global `init-program` call, when an object is cloned.

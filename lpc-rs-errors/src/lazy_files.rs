@@ -24,7 +24,7 @@ enum LazyFile<Name, Source> {
 pub static FILE_CACHE: Lazy<RwLock<LazyFiles<String, String>>> =
     Lazy::new(|| RwLock::new(LazyFiles::new()));
 
-/// A wrapper type for the global [`FILE_CACHE`](static@crate::errors::lazy_files::FILE_CACHE)
+/// A wrapper type for the global [`FILE_CACHE`]
 pub struct FileCache;
 
 impl FileCache {

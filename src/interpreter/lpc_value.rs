@@ -30,7 +30,7 @@ pub enum LpcValue {
 /// `path`: The expected LpcValue subtype of value.
 ///
 /// # Errors
-/// Will immediately return an `Err` with an [`LpcError`](crate::errors::LpcError) if `path` does not match `expr`'s type.
+/// Will immediately return an `Err` with an [`LpcError`](lpc_rs_errors::LpcError) if `path` does not match `expr`'s type.
 #[macro_export]
 macro_rules! try_extract_value {
     ( $x:expr, $y:path ) => {

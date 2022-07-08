@@ -15,7 +15,7 @@ pub struct Span {
     pub l: usize,
     /// Right index of the span
     pub r: usize,
-    /// The ID of the file in the global [`FILE_CACHE`](static@crate::errors::lazy_files::FILE_CACHE)
+    /// The ID of the file in the global [`FILE_CACHE`]
     pub file_id: FileId,
 }
 
@@ -66,7 +66,7 @@ impl Span {
     /// Create a new [`Span`]
     ///
     /// # Arguments
-    /// `file_id` - The [`FileId`] of the file from the [`FILE_CACHE`](static@crate::errors::lazy_files::FILE_CACHE)
+    /// `file_id` - The [`FileId`] of the file from the [`FILE_CACHE`](static@crate::lazy_files::FILE_CACHE)
     /// `range` - The range containing the start and end indices of the span.
     ///           It's assumed that `l..r` is the correct code span in error messaging.
     ///
