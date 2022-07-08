@@ -1,10 +1,10 @@
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_core::LpcInt;
 
 /// Repeat `s`, `i` times, and return a new String of it.
 ///
 /// Return an error if there is an overflow.
-pub fn repeat_string(s: &str, i: LpcInt) -> lpc_rs_errors::Result<String> {
+pub fn repeat_string(s: &str, i: LpcInt) -> Result<String> {
     if i >= 0 {
         let capacity = (i as usize).checked_mul(s.len());
         match capacity {
