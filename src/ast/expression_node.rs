@@ -26,7 +26,7 @@ use crate::{
     Result,
 };
 use indexmap::IndexMap;
-use crate::core::{BaseFloat, LpcInt};
+use lpc_rs_core::{BaseFloat, LpcInt};
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -236,10 +236,12 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
+
     use crate::{
-        ast::binary_op_node::BinaryOperation, core::call_namespace::CallNamespace,
+        ast::binary_op_node::BinaryOperation,
     };
-    use crate::core::LpcFloat;
+    use lpc_rs_core::LpcFloat;
+    use lpc_rs_core::call_namespace::CallNamespace;
 
     use super::*;
 

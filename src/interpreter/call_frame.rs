@@ -205,8 +205,8 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use crate::{
-        core::{function_arity::FunctionArity, lpc_type::LpcType},
         semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
     };
 

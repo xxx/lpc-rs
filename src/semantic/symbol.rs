@@ -1,6 +1,6 @@
+use lpc_rs_core::{lpc_type::LpcType, register::Register};
 use crate::{
     ast::var_init_node::VarInitNode,
-    core::{lpc_type::LpcType, register::Register},
     parser::span::Span,
     semantic::{
         function_prototype::FunctionPrototype, global_var_flags::GlobalVarFlags,

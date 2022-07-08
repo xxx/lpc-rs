@@ -1,6 +1,6 @@
 use crate::{ast::binary_op_node::BinaryOperation};
 use std::fmt::{Display, Formatter};
-use crate::core::LpcInt;
+use lpc_rs_core::LpcInt;
 
 /// A node type for evaluating preprocessor `#if` expressions
 #[derive(Debug, PartialEq)]

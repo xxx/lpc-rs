@@ -9,9 +9,8 @@ mod throw;
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 use crate::{
-    core::{function_arity::FunctionArity, lpc_type::LpcType},
     errors::LpcError,
     interpreter::efun::efun_context::EfunContext,
     semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},

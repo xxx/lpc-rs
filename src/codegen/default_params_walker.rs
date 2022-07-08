@@ -41,9 +41,9 @@ impl TreeWalker for DefaultParamsWalker {
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_core::lpc_type::LpcType;
     use crate::{
         ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
-        core::lpc_type::LpcType,
     };
 
     use super::*;

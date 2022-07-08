@@ -1,5 +1,5 @@
 use crate::{LpcError};
-use crate::core::LpcInt;
+use lpc_rs_core::LpcInt;
 
 /// Repeat `s`, `i` times, and return a new String of it.
 ///

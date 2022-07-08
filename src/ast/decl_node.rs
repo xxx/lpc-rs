@@ -2,11 +2,10 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-
+use lpc_rs_core::lpc_type::LpcType;
 use crate::{
     ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
     codegen::tree_walker::TreeWalker,
-    core::lpc_type::LpcType,
     Result,
 };
 use itertools::Itertools;

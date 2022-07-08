@@ -9,7 +9,7 @@ use crate::{
     parser::span::Span,
     Result,
 };
-use crate::core::LpcInt;
+use lpc_rs_core::LpcInt;
 
 /// A node representing an integer literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

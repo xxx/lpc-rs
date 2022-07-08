@@ -279,7 +279,7 @@ impl BitOr for LpcTypeUnion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::lpc_type::LpcType;
+    use lpc_rs_core::lpc_type::LpcType;
 
     #[test]
     fn test_bitor() {

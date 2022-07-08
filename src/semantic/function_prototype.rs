@@ -1,5 +1,5 @@
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 use crate::{
-    core::{function_arity::FunctionArity, lpc_type::LpcType},
     parser::span::Span,
     semantic::function_flags::FunctionFlags,
 };

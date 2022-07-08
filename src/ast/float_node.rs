@@ -9,7 +9,7 @@ use crate::{
     parser::span::Span,
     Result,
 };
-use crate::core::{BaseFloat, LpcFloat};
+use lpc_rs_core::{BaseFloat, LpcFloat};
 
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

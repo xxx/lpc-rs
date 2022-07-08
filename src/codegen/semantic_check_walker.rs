@@ -1,5 +1,5 @@
 use if_chain::if_chain;
-
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
@@ -28,7 +28,6 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN},
     errors::LpcError,
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
@@ -661,7 +660,8 @@ impl TreeWalker for SemanticCheckWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
+    use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, function_arity::FunctionArity};
+use crate::{
         apply_walker,
         ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
         codegen::{
@@ -669,7 +669,6 @@ mod tests {
             semantic_check_walker::SemanticCheckWalker,
         },
         compiler::Compiler,
-        core::{call_namespace::CallNamespace, lpc_type::LpcType},
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
         util::path_maker::LpcPath,
     };
@@ -1053,7 +1052,6 @@ mod tests {
         use super::*;
         use crate::{
             assert_regex,
-            core::function_arity::FunctionArity,
             interpreter::program::Program,
             semantic::{
                 function_flags::FunctionFlags, program_function::ProgramFunction,
@@ -1866,8 +1864,7 @@ mod tests {
             assert_regex,
             ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
             codegen::scope_walker::ScopeWalker,
-            core::function_arity::FunctionArity,
-            interpreter::program::Program,
+                        interpreter::program::Program,
             semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
         };
 
@@ -2016,8 +2013,7 @@ mod tests {
         use super::*;
         use crate::{
             assert_regex,
-            core::function_arity::FunctionArity,
-            interpreter::program::Program,
+                        interpreter::program::Program,
             semantic::{
                 function_flags::FunctionFlags, program_function::ProgramFunction,
                 visibility::Visibility,

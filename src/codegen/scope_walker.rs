@@ -1,3 +1,4 @@
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 use crate::{
     ast::{
         ast_node::AstNodeTrait,
@@ -14,7 +15,6 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    core::{call_namespace::CallNamespace, lpc_type::LpcType},
     errors::LpcError,
     semantic::{
         global_var_flags::GlobalVarFlags, semantic_checks::check_var_redefinition, symbol::Symbol,
@@ -290,7 +290,7 @@ mod tests {
     use crate::assert_regex;
 
     mod test_visit_function_def {
-        use crate::core::lpc_type::LpcType;
+        use lpc_rs_core::lpc_type::LpcType;
 
         use super::*;
         use crate::semantic::function_flags::FunctionFlags;
@@ -325,7 +325,7 @@ mod tests {
     }
 
     mod test_visit_var_init {
-        use crate::core::lpc_type::LpcType;
+        use lpc_rs_core::lpc_type::LpcType;
 
         use super::*;
 
@@ -392,7 +392,8 @@ mod tests {
     }
 
     mod test_visit_var {
-        use crate::{core::lpc_type::LpcType, interpreter::program::Program};
+        use lpc_rs_core::lpc_type::LpcType;
+        use crate::{interpreter::program::Program};
 
         use super::*;
 

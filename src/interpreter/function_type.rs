@@ -2,9 +2,8 @@ use crate::interpreter::process::Process;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::interpreter::lpc_ref::LpcRef;
-
+use lpc_rs_core::{function_arity::FunctionArity, register::Register};
 use crate::{
-    core::{function_arity::FunctionArity, register::Register},
     interpreter::efun::EFUN_PROTOTYPES,
     semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
 };

@@ -1,6 +1,6 @@
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 use crate::{
     asm::instruction::{Address, Instruction},
-    core::{function_arity::FunctionArity, lpc_type::LpcType},
     parser::span::Span,
     semantic::function_prototype::FunctionPrototype,
 };

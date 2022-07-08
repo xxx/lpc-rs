@@ -1,3 +1,4 @@
+use lpc_rs_core::LpcInt;
 use crate::{
     ast::{
         binary_op_node::{BinaryOpNode, BinaryOperation},
@@ -7,7 +8,7 @@ use crate::{
     },
     parser::{lexer, span::Span},
     util::repeat_string,
-    LpcError, core::LpcInt,
+    LpcError,
 };
 use lalrpop_util::ParseError;
 

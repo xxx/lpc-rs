@@ -1,14 +1,13 @@
 use std::{cell::RefCell, collections::HashMap};
-
+use lpc_rs_core::call_namespace::CallNamespace;
+use lpc_rs_core::EFUN;
 use crate::{
     ast::expression_node::ExpressionNode,
-    core::EFUN,
     interpreter::efun::EFUN_PROTOTYPES,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
 };
 
 use crate::{
-    core::call_namespace::CallNamespace,
     errors::LpcError,
     interpreter::{pragma_flags::PragmaFlags, process::Process, program::Program},
     semantic::symbol::Symbol,
@@ -317,8 +316,8 @@ impl Default for CompilationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        core::{function_arity::FunctionArity, lpc_type::LpcType},
+    use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use crate::{
         semantic::{function_flags::FunctionFlags, program_function::ProgramFunction},
     };
 

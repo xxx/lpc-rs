@@ -5,9 +5,9 @@ use std::{
 };
 
 use logos::{Lexer, Logos};
+use lpc_rs_core::{LpcInt, BaseFloat, convert_escapes};
 
 use crate::{
-    core::convert_escapes,
     errors::{lazy_files::FileId, LpcError},
     parser::{
         lexer::{
@@ -16,7 +16,7 @@ use crate::{
         },
         span::Span,
     },
-    core::BaseFloat, core::LpcInt, Result,
+    Result,
 };
 
 pub mod lex_state;

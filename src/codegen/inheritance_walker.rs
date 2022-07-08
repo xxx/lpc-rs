@@ -1,9 +1,9 @@
+use lpc_rs_core::EFUN;
 use crate::{
     ast::inherit_node::InheritNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     compiler::Compiler,
-    core::EFUN,
     util::path_maker::LpcPath,
     LpcError, Result,
 };

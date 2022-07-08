@@ -4,7 +4,7 @@ use crate::parser::lexer::Token;
 use crate::errors::LpcError;
 use crate::parser::span::Span;
 use crate::parser::lexer::logos_token::{StringToken, IntToken};
-use crate::core::LpcInt;
+use lpc_rs_core::LpcInt;
 
 grammar;
 

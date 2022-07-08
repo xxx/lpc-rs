@@ -1,4 +1,5 @@
-use crate::{core::register::Register, interpreter::lpc_ref::LpcRef};
+use lpc_rs_core::register::Register;
+use crate::{interpreter::lpc_ref::LpcRef};
 use delegate::delegate;
 use std::{
     ops::{Index, IndexMut, Range, RangeInclusive},

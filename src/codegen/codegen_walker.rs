@@ -1,3 +1,7 @@
+use lpc_rs_core::{
+    call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
+    register::Register, CREATE_FUNCTION, INIT_PROGRAM,
+};
 use crate::{
     asm::{
         instruction::{Address, Instruction, Instruction::RegCopy, Label},
@@ -37,10 +41,6 @@ use crate::{
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
     compilation_context::CompilationContext,
-    core::{
-        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
-        register::Register, CREATE_FUNCTION, INIT_PROGRAM,
-    },
     errors::LpcError,
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
@@ -1906,6 +1906,8 @@ impl Default for CodegenWalker {
 mod tests {
     use super::*;
 
+    use lpc_rs_core::lpc_type::LpcType;
+    use lpc_rs_core::LpcFloat;
     use crate::{
         apply_walker,
         asm::instruction::Instruction::*,
@@ -1920,7 +1922,6 @@ mod tests {
             semantic_check_walker::SemanticCheckWalker,
         },
         compiler::Compiler,
-        core::lpc_type::LpcType,
         interpreter::{process::Process, program::Program},
         lpc_parser,
         parser::{lexer::LexWrapper, span::Span},
@@ -1928,7 +1929,6 @@ mod tests {
         util::{config::Config, path_maker::LpcPath},
         Result,
     };
-    use crate::core::LpcFloat;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
@@ -2384,7 +2384,7 @@ mod tests {
 
     mod test_break {
         use super::*;
-        use crate::core::register::Register;
+        use lpc_rs_core::register::Register;
 
         #[test]
         fn breaks_out_of_while_loops() {
@@ -2607,9 +2607,9 @@ mod tests {
     }
 
     mod test_visit_call {
+        use lpc_rs_core::function_arity::FunctionArity;
         use crate::{
             asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv},
-            core::function_arity::FunctionArity,
         };
 
         use super::*;
@@ -3034,7 +3034,7 @@ mod tests {
 
     mod test_continue {
         use super::*;
-        use crate::core::register::Register;
+        use lpc_rs_core::register::Register;
 
         #[test]
         fn continues_while_loops() {

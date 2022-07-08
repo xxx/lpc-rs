@@ -4,11 +4,10 @@ use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, path::Path};
-
+use lpc_rs_core::{LpcInt, convert_escapes};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
-    core::convert_escapes,
     errors::{format_expected, lazy_files::FileCache, LpcError},
     parser::{
         lexer::{
@@ -20,7 +19,7 @@ use crate::{
     preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
     util::path_maker::LpcPath,
-    core::LpcInt, Result,
+    Result,
 };
 use once_cell::sync::Lazy;
 use std::iter::Peekable;

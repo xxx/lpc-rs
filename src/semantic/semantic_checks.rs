@@ -1,4 +1,5 @@
 use phf::phf_set;
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 
 use crate::{
     ast::{
@@ -14,7 +15,6 @@ use crate::{
         var_node::VarNode,
     },
     compilation_context::CompilationContext,
-    core::{call_namespace::CallNamespace, lpc_type::LpcType},
     errors::LpcError,
     semantic::local_scope::LocalScope,
     Result,
@@ -376,7 +376,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::call_namespace::CallNamespace;
+    use lpc_rs_core::call_namespace::CallNamespace;
 
     mod check_binary_operation_tests {
         use super::*;
@@ -1774,9 +1774,9 @@ mod tests {
 
         mod arrays {
             use super::*;
-            use crate::{
+            use lpc_rs_core::{function_arity::FunctionArity, EFUN};
+        use crate::{
                 ast::array_node::ArrayNode,
-                core::{function_arity::FunctionArity, EFUN},
                 semantic::{function_flags::FunctionFlags, function_prototype::FunctionPrototype},
             };
 

@@ -1,8 +1,8 @@
+use lpc_rs_core::function_arity::FunctionArity;
 use crate::{
     ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    core::function_arity::FunctionArity,
     semantic::function_prototype::FunctionPrototype,
     Result,
 };
@@ -66,7 +66,8 @@ impl TreeWalker for FunctionPrototypeWalker {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ast::var_init_node::VarInitNode, core::lpc_type::LpcType};
+    use lpc_rs_core::lpc_type::LpcType;
+    use crate::{ast::var_init_node::VarInitNode};
 
     use super::*;
     use crate::semantic::function_flags::FunctionFlags;

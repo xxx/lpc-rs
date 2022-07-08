@@ -16,7 +16,7 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
-use crate::core::{BaseFloat, LpcFloat, LpcInt};
+use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///

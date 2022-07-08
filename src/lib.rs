@@ -4,7 +4,6 @@ pub mod codegen;
 pub mod compilation_context;
 pub mod compile_time_config;
 pub mod compiler;
-pub mod core;
 pub mod errors;
 pub mod interpreter;
 pub mod parser;
