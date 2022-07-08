@@ -5,10 +5,10 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, path::Path};
 use lpc_rs_core::{LpcInt, convert_escapes};
+use lpc_rs_errors::{format_expected, lazy_files::FileCache, LpcError, span::Span};
 use crate::{
     ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
-    errors::{format_expected, lazy_files::FileCache, LpcError, span::Span},
     parser::{
         lexer::{
             logos_token::{IntToken, StringToken},

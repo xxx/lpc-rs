@@ -1,5 +1,5 @@
+use lpc_rs_errors::LpcError;
 use crate::{
-    errors::LpcError,
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
     util::path_maker::LpcPath,

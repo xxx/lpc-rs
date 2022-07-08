@@ -1,5 +1,5 @@
+use lpc_rs_errors::LpcError;
 use crate::{
-    errors::LpcError,
     interpreter::{call_frame::CallFrame, lpc_ref::LpcRef},
     Result,
 };

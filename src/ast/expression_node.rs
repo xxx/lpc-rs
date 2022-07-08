@@ -26,7 +26,7 @@ use crate::{
 };
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

@@ -2,10 +2,10 @@ use lpc_rs_core::{
     call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, EFUN,
     INIT_PROGRAM,
 };
+use lpc_rs_errors::LpcError;
 use crate::{
     asm::instruction::{Address, Instruction},
     compile_time_config::MAX_CALL_STACK_SIZE,
-    errors::LpcError,
     interpreter::{
         call_frame::CallFrame,
         call_stack::CallStack,

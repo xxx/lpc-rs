@@ -13,7 +13,7 @@ use crate::{
     Result,
 };
 use lpc_rs_core::lpc_type::LpcType;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

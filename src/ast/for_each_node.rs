@@ -13,7 +13,7 @@ use crate::{
     ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
 };
 use indextree::NodeId;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A constant to track the implicit variable we reserve space for,
 /// for `foreach` loops.

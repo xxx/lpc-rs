@@ -8,7 +8,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a `break` statement.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

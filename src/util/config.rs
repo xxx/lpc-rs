@@ -1,4 +1,5 @@
-use crate::{errors::LpcError, Result};
+use lpc_rs_errors::LpcError;
+use crate::{Result};
 use fs_err as fs;
 use if_chain::if_chain;
 use std::{path::Path, str::FromStr};

@@ -11,7 +11,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// Representation of a Range, with optional ends.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

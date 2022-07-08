@@ -2,6 +2,8 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_errors::span::Span;
+use lpc_rs_errors::LpcError;
 
 use crate::{
     ast::{
@@ -10,11 +12,9 @@ use crate::{
         expression_node::ExpressionNode,
     },
     codegen::tree_walker::TreeWalker,
-    errors::LpcError,
     Result,
 };
 use std::convert::TryFrom;
-use crate::errors::span::Span;
 
 /// All possible binary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

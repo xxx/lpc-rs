@@ -1,4 +1,4 @@
-use crate::errors::lazy_files::FileId;
+use lpc_rs_errors::lazy_files::FileId;
 
 /// A struct to store state during lexing.
 #[derive(Debug)]

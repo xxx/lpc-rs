@@ -6,9 +6,8 @@ use std::{
 
 use logos::{Lexer, Logos};
 use lpc_rs_core::{BaseFloat, convert_escapes, LpcInt};
-
+use lpc_rs_errors::{lazy_files::FileId, LpcError, span::Span};
 use crate::{
-    errors::{lazy_files::FileId, LpcError, span::Span},
     parser::{
         lexer::{
             lex_state::LexState,
@@ -17,7 +16,7 @@ use crate::{
     },
     Result,
 };
-use crate::errors::span::HasSpan;
+use lpc_rs_errors::span::HasSpan;
 
 pub mod lex_state;
 pub mod logos_token;

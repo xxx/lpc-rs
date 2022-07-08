@@ -1,14 +1,11 @@
 use std::{cell::RefCell, collections::HashMap};
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
+use lpc_rs_errors::LpcError;
 use crate::{
     ast::expression_node::ExpressionNode,
     interpreter::efun::EFUN_PROTOTYPES,
     semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree},
-};
-
-use crate::{
-    errors::LpcError,
     interpreter::{pragma_flags::PragmaFlags, process::Process, program::Program},
     semantic::symbol::Symbol,
     util::{config::Config, function_like::FunctionLike, path_maker::LpcPath},

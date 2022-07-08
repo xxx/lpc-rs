@@ -1,5 +1,5 @@
 use lpc_rs_core::{BaseFloat, LpcInt};
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// Some small wrappers to store both a [`Span`] and a value for compatibility with [Logos](logos),
 /// which only allows a single field in token defs.

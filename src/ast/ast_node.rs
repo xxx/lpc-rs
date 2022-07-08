@@ -22,7 +22,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

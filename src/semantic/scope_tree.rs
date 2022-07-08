@@ -1,6 +1,6 @@
+use lpc_rs_errors::LpcError;
 use crate::{
     compilation_context::CompilationContext,
-    errors::LpcError,
     semantic::{local_scope::LocalScope, symbol::Symbol},
     Result,
 };

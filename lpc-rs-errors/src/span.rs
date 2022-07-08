@@ -1,4 +1,4 @@
-use crate::errors::lazy_files::{FILE_CACHE, FileId};
+use crate::lazy_files::{FILE_CACHE, FileId};
 use codespan_reporting::files::Files;
 use if_chain::if_chain;
 use std::{

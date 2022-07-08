@@ -1,6 +1,6 @@
+use lpc_rs_errors::LpcError;
 use crate::{
     ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    errors::LpcError,
     interpreter::lpc_value::LpcValue,
     try_extract_value,
     util::repeat_string,

@@ -13,7 +13,7 @@ use crate::{
 };
 use itertools::Itertools;
 use lazy_format::lazy_format;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// Receiver types. Function pointers can be declared with a dynamic receiver
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]

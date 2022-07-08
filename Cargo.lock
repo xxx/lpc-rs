@@ -612,9 +612,7 @@ dependencies = [
  "arrayvec",
  "auto_impl",
  "bstr",
- "cached",
  "claim",
- "codespan-reporting",
  "decorum",
  "delegate",
  "educe",
@@ -629,10 +627,10 @@ dependencies = [
  "lazy_format",
  "logos",
  "lpc-rs-core",
+ "lpc-rs-errors",
  "modular-bitfield",
  "multimap",
  "once_cell",
- "parking_lot",
  "path-absolutize",
  "phf",
  "refpool",
@@ -650,6 +648,21 @@ version = "0.1.0"
 dependencies = [
  "decorum",
  "modular-bitfield",
+ "serde",
+]
+
+[[package]]
+name = "lpc-rs-errors"
+version = "0.1.0"
+dependencies = [
+ "cached",
+ "codespan-reporting",
+ "fs-err",
+ "if_chain",
+ "itertools",
+ "lalrpop-util",
+ "once_cell",
+ "parking_lot",
  "serde",
 ]
 

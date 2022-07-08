@@ -10,7 +10,7 @@ use crate::{
 };
 
 use crate::{ast::expression_node::ExpressionNode};
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a `switch` statement
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

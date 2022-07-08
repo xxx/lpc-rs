@@ -1,4 +1,5 @@
-use crate::{errors::LpcError, util::config::Config, Result};
+use lpc_rs_errors::LpcError;
+use crate::{util::config::Config, Result};
 use std::cell::Cell;
 
 /// A struct to encapsulate counting instructions, and erroring in the case of hitting the eval limit

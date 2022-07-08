@@ -1,5 +1,6 @@
 use phf::phf_set;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_errors::LpcError;
 
 use crate::{
     ast::{
@@ -15,7 +16,6 @@ use crate::{
         var_node::VarNode,
     },
     compilation_context::CompilationContext,
-    errors::LpcError,
     semantic::local_scope::LocalScope,
     Result,
 };

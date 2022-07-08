@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_errors::span::Span;
 
 use crate::{
     ast::{
@@ -11,7 +12,6 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
-use crate::errors::span::Span;
 
 /// A node representing an array literal
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

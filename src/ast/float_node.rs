@@ -9,7 +9,7 @@ use crate::{
     Result,
 };
 use lpc_rs_core::{BaseFloat, LpcFloat};
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

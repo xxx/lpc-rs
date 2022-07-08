@@ -2,6 +2,7 @@ use lpc_rs_core::{
     call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
     register::Register, CREATE_FUNCTION, INIT_PROGRAM,
 };
+use lpc_rs_errors::{LpcError, span::Span};
 use crate::{
     asm::{
         instruction::{Address, Instruction, Instruction::RegCopy, Label},
@@ -41,7 +42,6 @@ use crate::{
     },
     codegen::{tree_walker, tree_walker::ContextHolder},
     compilation_context::CompilationContext,
-    errors::LpcError,
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         function_type::{FunctionName, FunctionReceiver, FunctionTarget},
@@ -58,7 +58,6 @@ use indexmap::IndexMap;
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
 use tree_walker::TreeWalker;
-use crate::errors::span::Span;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1929,7 +1928,7 @@ mod tests {
         util::{config::Config, path_maker::LpcPath},
         Result,
     };
-    use crate::errors::span::Span;
+    use lpc_rs_errors::span::Span;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 

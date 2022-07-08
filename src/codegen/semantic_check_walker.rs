@@ -1,5 +1,6 @@
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
+use lpc_rs_errors::LpcError;
 use crate::{
     ast::{
         assignment_node::AssignmentNode,
@@ -28,7 +29,6 @@ use crate::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    errors::LpcError,
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },

@@ -1,8 +1,8 @@
 use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
+use lpc_rs_errors::LpcError;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
-    errors::LpcError,
     interpreter::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         task::Task,

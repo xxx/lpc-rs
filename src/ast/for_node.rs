@@ -11,7 +11,7 @@ use crate::{
 
 use crate::{ast::expression_node::ExpressionNode};
 use indextree::NodeId;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a `while` loop
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

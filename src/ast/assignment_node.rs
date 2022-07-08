@@ -11,7 +11,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// All possible assignment operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialEq)]

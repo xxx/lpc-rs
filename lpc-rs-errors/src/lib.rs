@@ -12,10 +12,8 @@ use codespan_reporting::{
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
 
-use crate::{
-    errors::{file_stream::FileStream, lazy_files::FILE_CACHE},
-};
-use crate::errors::span::Span;
+use crate::{file_stream::FileStream, lazy_files::FILE_CACHE};
+use crate::span::Span;
 use span::HasSpan;
 
 pub mod file_stream;
@@ -42,8 +40,8 @@ pub struct LpcError {
 impl LpcError {
     /// Create a new `LpcError`, with a message
     pub fn new<T>(message: T) -> Self
-    where
-        T: Into<String>,
+        where
+            T: Into<String>,
     {
         Self {
             message: message.into(),
@@ -64,8 +62,8 @@ impl LpcError {
 
     /// Add a secondary label for this error
     pub fn with_label<T>(mut self, message: T, span: Option<Span>) -> Self
-    where
-        T: AsRef<str>,
+        where
+            T: AsRef<str>,
     {
         if let Some(s) = span {
             self.labels
@@ -77,8 +75,8 @@ impl LpcError {
 
     /// Add some notes the diagnostic
     pub fn with_note<T>(mut self, note: T) -> Self
-    where
-        T: Into<String>,
+        where
+            T: Into<String>,
     {
         self.notes.push(note.into());
 
@@ -150,8 +148,8 @@ impl AsRef<str> for LpcError {
 
 /// Map LALRpop's parse errors into our local error type
 impl<'a, T> From<LalrpopParseError<usize, T, LpcError>> for LpcError
-where
-    T: Display + HasSpan
+    where
+        T: Display + HasSpan
 {
     fn from(err: LalrpopParseError<usize, T, LpcError>) -> Self {
         match err {

@@ -1,4 +1,4 @@
-use crate::errors::span::Span;
+use crate::span::Span;
 use cached::{proc_macro::cached, SizedCache};
 use codespan_reporting::files::{Error, Files, SimpleFile};
 use fs_err as fs;
@@ -49,7 +49,7 @@ pub type FileId = usize;
 /// # Examples
 ///
 /// ```
-/// use lpc_rs::errors::lazy_files::LazyFiles;
+/// use lpc_rs_errors::lazy_files::LazyFiles;
 ///
 /// let mut files: LazyFiles<&str, String> = LazyFiles::new();
 /// let path = "tests/fixtures/code/include/simple.h";

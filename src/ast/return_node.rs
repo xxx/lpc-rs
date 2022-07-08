@@ -11,7 +11,7 @@ use crate::{
     codegen::tree_walker::TreeWalker,
     Result,
 };
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a function return call.
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

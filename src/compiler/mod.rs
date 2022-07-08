@@ -1,4 +1,5 @@
 use fs_err as fs;
+use lpc_rs_errors::LpcError;
 
 use crate::{
     ast::{ast_node::AstNodeTrait, program_node::ProgramNode},
@@ -9,7 +10,6 @@ use crate::{
         tree_walker::ContextHolder,
     },
     compilation_context::CompilationContext,
-    errors::LpcError,
     interpreter::{process::Process, program::Program},
     lpc_parser,
     parser::{
@@ -21,7 +21,7 @@ use crate::{
 };
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 #[macro_export]
 macro_rules! apply_walker {

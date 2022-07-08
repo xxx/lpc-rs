@@ -12,7 +12,7 @@ use crate::{
     Result,
 };
 use itertools::Itertools;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing an array literal
 #[derive(Hash, Debug, Clone, Eq, PartialEq, PartialOrd)]

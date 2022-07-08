@@ -12,7 +12,7 @@ use crate::{
     Result,
 };
 use itertools::Itertools;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A node representing a comma-separated list of expressions
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

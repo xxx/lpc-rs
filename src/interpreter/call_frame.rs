@@ -1,6 +1,6 @@
+use lpc_rs_errors::LpcError;
 use crate::{
     asm::instruction::{Address, Instruction},
-    errors::LpcError,
     interpreter::{
         function_type::FunctionName, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         register_bank::RegisterBank,
@@ -16,7 +16,7 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]

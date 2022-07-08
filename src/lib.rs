@@ -4,7 +4,6 @@ pub mod codegen;
 pub mod compilation_context;
 pub mod compile_time_config;
 pub mod compiler;
-pub mod errors;
 pub mod interpreter;
 pub mod parser;
 pub mod preprocessor;
@@ -24,7 +23,7 @@ extern crate serde;
 #[macro_use]
 extern crate educe;
 
-use crate::errors::LpcError;
+use lpc_rs_errors::LpcError;
 use std::result;
 
 /// Common `Result` type

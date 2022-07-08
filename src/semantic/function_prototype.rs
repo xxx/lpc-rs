@@ -1,6 +1,6 @@
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_errors::span::Span;
 use crate::{
-    errors::span::Span,
     semantic::function_flags::FunctionFlags,
 };
 use itertools::Itertools;

@@ -14,7 +14,7 @@ use crate::{
 };
 use itertools::Itertools;
 use lpc_rs_core::lpc_type::LpcType;
-use crate::errors::span::Span;
+use lpc_rs_errors::span::Span;
 
 /// A constant for the `argv` variable that's automatically created in functions with ellipsis args
 pub const ARGV: &str = "argv";
