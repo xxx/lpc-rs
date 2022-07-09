@@ -662,6 +662,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lpc-rs-driver"
+version = "0.1.0"
+dependencies = [
+ "if_chain",
+ "lpc-rs",
+ "lpc-rs-utils",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lpc-rs-errors"
 version = "0.1.0"
 dependencies = [

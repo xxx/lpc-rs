@@ -1,0 +1,15 @@
+[package]
+name = "lpc-rs-driver"
+version = "0.1.0"
+authors = ["mpd <mpd@jesters-court.net>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lpc-rs = { path = ".." }
+lpc-rs-utils = { path = "../lpc-rs-utils" }
+
+if_chain = "1.0.1"
+tracing = "0.1"
+tracing-subscriber = "0.3.11"
