@@ -24,7 +24,7 @@ use crate::compiler::ast::{
 /// use lpc_rs::codegen::tree_printer::TreePrinter;
 /// use lpc_rs::codegen::tree_walker::TreeWalker;
 /// use lpc_rs::parser::lexer::LexWrapper;
-/// use lpc_rs::compilation_context::CompilationContext;
+/// use lpc_rs::compiler::compilation_context::CompilationContext;
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let lexer = LexWrapper::new(prog);

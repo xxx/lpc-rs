@@ -1,6 +1,5 @@
 use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
-    compilation_context::CompilationContext,
     semantic::semantic_checks::{
         check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
     },
@@ -33,6 +32,7 @@ use crate::compiler::ast::{
     var_init_node::VarInitNode,
     while_node::WhileNode,
 };
+use crate::compiler::compilation_context::CompilationContext;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);

@@ -15,7 +15,7 @@ use crate::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    compilation_context::CompilationContext,
+    compiler::compilation_context::CompilationContext,
     semantic::local_scope::LocalScope,
 };
 

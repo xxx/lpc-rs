@@ -1,7 +1,5 @@
 use lpc_rs_errors::Result;
-use crate::{
-    compilation_context::CompilationContext,
-};
+use crate::{};
 use crate::compiler::ast::{
     array_node::ArrayNode,
     assignment_node::AssignmentNode,
@@ -35,6 +33,7 @@ use crate::compiler::ast::{
     var_node::VarNode,
     while_node::WhileNode,
 };
+use crate::compiler::compilation_context::CompilationContext;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.

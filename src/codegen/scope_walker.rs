@@ -1,6 +1,5 @@
 use crate::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
-    compilation_context::CompilationContext,
     semantic::{
         semantic_checks::check_var_redefinition, symbol::Symbol,
     },
@@ -21,6 +20,7 @@ use crate::compiler::ast::{
     var_node::VarNode,
     while_node::WhileNode,
 };
+use crate::compiler::compilation_context::CompilationContext;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.

@@ -1,6 +1,6 @@
 use crate::{
     compiler::ast::binary_op_node::BinaryOperation,
-    compilation_context::CompilationContext,
+    compiler::compilation_context::CompilationContext,
     parser::lexer::{
         LexWrapper,
         logos_token::{IntToken, StringToken}, Spanned, Token, TokenVecWrapper,
@@ -85,7 +85,7 @@ impl Preprocessor {
     /// # Examples
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
-    /// use lpc_rs::compilation_context::CompilationContext;
+    /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     /// use std::rc::Rc;
     ///
@@ -119,7 +119,7 @@ impl Preprocessor {
     /// # Examples
     /// ```
     /// use lpc_rs::preprocessor::Preprocessor;
-    /// use lpc_rs::compilation_context::CompilationContext;
+    /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     /// use std::rc::Rc;
     ///

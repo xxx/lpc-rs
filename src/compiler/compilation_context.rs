@@ -87,7 +87,7 @@ impl CompilationContext {
     /// # Examples
     /// ```
     /// use std::rc::Rc;
-    /// use lpc_rs::compilation_context::CompilationContext;
+    /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     ///
     /// let context = CompilationContext::new("./test.c", Rc::new(Config::default()));

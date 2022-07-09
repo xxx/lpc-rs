@@ -1,7 +1,6 @@
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
-    compilation_context::CompilationContext,
     compiler::Compiler,
     lpc_parser,
     parser::lexer::{LexWrapper, TokenVecWrapper},
@@ -21,6 +20,7 @@ use lpc_rs::compiler::ast::{
     var_init_node::VarInitNode,
     var_node::VarNode,
 };
+use lpc_rs::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 use lpc_rs_core::visibility::Visibility;

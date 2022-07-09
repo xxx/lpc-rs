@@ -1,6 +1,5 @@
 use crate::{
     codegen::{tree_walker, tree_walker::ContextHolder},
-    compilation_context::CompilationContext,
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         program::Program,
@@ -56,6 +55,7 @@ use crate::compiler::ast::{
     var_node::VarNode,
     while_node::WhileNode,
 };
+use crate::compiler::compilation_context::CompilationContext;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {

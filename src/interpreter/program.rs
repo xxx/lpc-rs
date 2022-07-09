@@ -146,7 +146,7 @@ impl<'a> Program {
     /// use lpc_rs::compiler::ast::expression_node::ExpressionNode;
     /// use lpc_rs::codegen::codegen_walker::CodegenWalker;
     /// use lpc_rs::codegen::tree_walker::TreeWalker;
-    /// use lpc_rs::compilation_context::CompilationContext;
+    /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let code = r#"
