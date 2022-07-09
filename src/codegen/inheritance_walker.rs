@@ -1,5 +1,4 @@
 use crate::{
-    ast::inherit_node::InheritNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     compiler::Compiler,
@@ -7,6 +6,7 @@ use crate::{
 use lpc_rs_core::EFUN;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
+use crate::compiler::ast::inherit_node::InheritNode;
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]

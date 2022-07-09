@@ -1,5 +1,4 @@
 use crate::{
-    ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::lpc_value::LpcValue,
     try_extract_value,
     util::repeat_string,
@@ -16,6 +15,7 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
+use crate::compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///

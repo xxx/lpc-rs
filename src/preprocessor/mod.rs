@@ -1,5 +1,5 @@
 use crate::{
-    ast::binary_op_node::BinaryOperation,
+    compiler::ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
     parser::lexer::{
         LexWrapper,

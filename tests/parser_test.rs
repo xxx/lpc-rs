@@ -1,25 +1,25 @@
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
-    ast::{
-        assignment_node::AssignmentNode,
-        ast_node::AstNode,
-        binary_op_node::{BinaryOperation, BinaryOpNode},
-        decl_node::DeclNode,
-        expression_node::ExpressionNode,
-        float_node::FloatNode,
-        function_def_node::FunctionDefNode,
-        function_ptr_node::FunctionPtrNode,
-        int_node::IntNode,
-        program_node::ProgramNode,
-        string_node::StringNode,
-        var_init_node::VarInitNode,
-        var_node::VarNode,
-    },
     compilation_context::CompilationContext,
     compiler::Compiler,
     lpc_parser,
     parser::lexer::{LexWrapper, TokenVecWrapper},
+};
+use lpc_rs::compiler::ast::{
+    assignment_node::AssignmentNode,
+    ast_node::AstNode,
+    binary_op_node::{BinaryOperation, BinaryOpNode},
+    decl_node::DeclNode,
+    expression_node::ExpressionNode,
+    float_node::FloatNode,
+    function_def_node::FunctionDefNode,
+    function_ptr_node::FunctionPtrNode,
+    int_node::IntNode,
+    program_node::ProgramNode,
+    string_node::StringNode,
+    var_init_node::VarInitNode,
+    var_node::VarNode,
 };
 use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
 use lpc_rs_core::global_var_flags::GlobalVarFlags;

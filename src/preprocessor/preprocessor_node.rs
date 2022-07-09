@@ -1,4 +1,4 @@
-use crate::ast::binary_op_node::BinaryOperation;
+use crate::compiler::ast::binary_op_node::BinaryOperation;
 use lpc_rs_core::LpcInt;
 use std::fmt::{Display, Formatter};
 

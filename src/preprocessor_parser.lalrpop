@@ -1,5 +1,5 @@
 use crate::preprocessor::preprocessor_node::PreprocessorNode;
-use crate::ast::binary_op_node::BinaryOperation;
+use crate::compiler::ast::binary_op_node::BinaryOperation;
 use crate::parser::lexer::Token;
 use lpc_rs_errors::LpcError;
 use lpc_rs_errors::span::Span;

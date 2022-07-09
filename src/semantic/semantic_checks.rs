@@ -3,7 +3,7 @@ use lpc_rs_errors::{LpcError, Result};
 use phf::phf_set;
 
 use crate::{
-    ast::{
+    compiler::ast::{
         assignment_node::AssignmentNode,
         ast_node::SpannedNode,
         binary_op_node::{BinaryOperation, BinaryOpNode},
@@ -380,7 +380,7 @@ mod tests {
     mod check_binary_operation_tests {
         use super::*;
         use crate::{
-            ast::range_node::RangeNode,
+            compiler::ast::range_node::RangeNode,
             semantic::{scope_tree::ScopeTree, symbol::Symbol},
         };
         use indexmap::IndexMap;
@@ -1776,7 +1776,7 @@ mod tests {
         mod arrays {
             use super::*;
             use crate::{
-                ast::array_node::ArrayNode,
+                compiler::ast::array_node::ArrayNode,
                 semantic::function_prototype::FunctionPrototype,
             };
             use lpc_rs_core::{EFUN, function_arity::FunctionArity, function_flags::FunctionFlags};

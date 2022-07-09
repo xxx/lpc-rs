@@ -1,11 +1,11 @@
 use crate::{
-    ast::function_def_node::FunctionDefNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     semantic::function_prototype::FunctionPrototype,
 };
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
+use crate::compiler::ast::function_def_node::FunctionDefNode;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]
@@ -66,7 +66,7 @@ impl TreeWalker for FunctionPrototypeWalker {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::var_init_node::VarInitNode;
+    use crate::compiler::ast::var_init_node::VarInitNode;
     use lpc_rs_core::lpc_type::LpcType;
 
     use super::*;

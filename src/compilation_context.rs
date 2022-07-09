@@ -1,5 +1,4 @@
 use crate::{
-    ast::expression_node::ExpressionNode,
     interpreter::{
         efun::EFUN_PROTOTYPES, process::Process, program::Program,
     },
@@ -12,6 +11,7 @@ use lpc_rs_errors::LpcError;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::pragma_flags::PragmaFlags;
+use crate::compiler::ast::expression_node::ExpressionNode;
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in

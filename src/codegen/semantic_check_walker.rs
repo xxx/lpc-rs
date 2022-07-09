@@ -1,29 +1,4 @@
 use crate::{
-    ast::{
-        assignment_node::AssignmentNode,
-        ast_node::{AstNodeTrait, SpannedNode},
-        binary_op_node::BinaryOpNode,
-        block_node::BlockNode,
-        break_node::BreakNode,
-        call_node::CallNode,
-        continue_node::ContinueNode,
-        do_while_node::DoWhileNode,
-        expression_node::ExpressionNode,
-        for_each_node::{ForEachInit, ForEachNode},
-        for_node::ForNode,
-        function_def_node::{ARGV, FunctionDefNode},
-        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
-        int_node::IntNode,
-        label_node::LabelNode,
-        program_node::ProgramNode,
-        range_node::RangeNode,
-        return_node::ReturnNode,
-        switch_node::SwitchNode,
-        ternary_node::TernaryNode,
-        unary_op_node::{UnaryOperation, UnaryOpNode},
-        var_init_node::VarInitNode,
-        while_node::WhileNode,
-    },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     semantic::semantic_checks::{
@@ -33,6 +8,31 @@ use crate::{
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, EFUN, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
+use crate::compiler::ast::{
+    assignment_node::AssignmentNode,
+    ast_node::{AstNodeTrait, SpannedNode},
+    binary_op_node::BinaryOpNode,
+    block_node::BlockNode,
+    break_node::BreakNode,
+    call_node::CallNode,
+    continue_node::ContinueNode,
+    do_while_node::DoWhileNode,
+    expression_node::ExpressionNode,
+    for_each_node::{ForEachInit, ForEachNode},
+    for_node::ForNode,
+    function_def_node::{ARGV, FunctionDefNode},
+    function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
+    int_node::IntNode,
+    label_node::LabelNode,
+    program_node::ProgramNode,
+    range_node::RangeNode,
+    return_node::ReturnNode,
+    switch_node::SwitchNode,
+    ternary_node::TernaryNode,
+    unary_op_node::{UnaryOperation, UnaryOpNode},
+    var_init_node::VarInitNode,
+    while_node::WhileNode,
+};
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -661,7 +661,6 @@ mod tests {
     use super::*;
     use crate::{
         apply_walker,
-        ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
         codegen::{
             default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
             semantic_check_walker::SemanticCheckWalker,
@@ -676,6 +675,7 @@ mod tests {
     };
     use std::{collections::HashMap, default::Default};
     use lpc_rs_core::lpc_path::LpcPath;
+    use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode};
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
@@ -712,7 +712,7 @@ mod tests {
     }
 
     mod test_visit_assignment {
-        use crate::ast::binary_op_node::BinaryOperation;
+        use crate::compiler::ast::binary_op_node::BinaryOperation;
 
         use super::*;
 
@@ -918,7 +918,7 @@ mod tests {
     }
 
     mod test_visit_binary_op {
-        use crate::ast::binary_op_node::BinaryOperation;
+        use crate::compiler::ast::binary_op_node::BinaryOperation;
 
         use super::*;
 
@@ -1865,11 +1865,11 @@ mod tests {
         use super::*;
         use crate::{
             assert_regex,
-            ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
             codegen::scope_walker::ScopeWalker,
             interpreter::program::Program,
             semantic::{program_function::ProgramFunction},
         };
+        use crate::compiler::ast::{ast_node::AstNode, binary_op_node::BinaryOperation};
 
         #[test]
         fn handles_scopes() {
@@ -2416,7 +2416,7 @@ mod tests {
     }
 
     mod test_visit_unary_op {
-        use crate::ast::unary_op_node::UnaryOperation;
+        use crate::compiler::ast::unary_op_node::UnaryOperation;
 
         use super::*;
 

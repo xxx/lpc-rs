@@ -2,18 +2,18 @@ use lpc_rs_errors::Result;
 use tree_walker::TreeWalker;
 
 use crate::{
-    ast::{
-        array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
-        block_node::BlockNode, call_node::CallNode, comma_expression_node::CommaExpressionNode,
-        decl_node::DeclNode, do_while_node::DoWhileNode, float_node::FloatNode,
-        for_each_node::ForEachNode, for_node::ForNode, function_def_node::FunctionDefNode,
-        function_ptr_node::FunctionPtrNode, if_node::IfNode, inherit_node::InheritNode,
-        int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
-        range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
-        unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
-        while_node::WhileNode,
-    },
     codegen::tree_walker,
+};
+use crate::compiler::ast::{
+    array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
+    block_node::BlockNode, call_node::CallNode, comma_expression_node::CommaExpressionNode,
+    decl_node::DeclNode, do_while_node::DoWhileNode, float_node::FloatNode,
+    for_each_node::ForEachNode, for_node::ForNode, function_def_node::FunctionDefNode,
+    function_ptr_node::FunctionPtrNode, if_node::IfNode, inherit_node::InheritNode,
+    int_node::IntNode, mapping_node::MappingNode, program_node::ProgramNode,
+    range_node::RangeNode, return_node::ReturnNode, string_node::StringNode,
+    unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
+    while_node::WhileNode,
 };
 
 /// A tree walker for pretty-printing an AST

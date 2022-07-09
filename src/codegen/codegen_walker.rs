@@ -1,36 +1,4 @@
 use crate::{
-    ast::{
-        array_node::ArrayNode,
-        assignment_node::AssignmentNode,
-        ast_node::{AstNode, AstNodeTrait, SpannedNode},
-        binary_op_node::{BinaryOperation, BinaryOpNode},
-        block_node::BlockNode,
-        break_node::BreakNode,
-        call_node::CallNode,
-        continue_node::ContinueNode,
-        decl_node::DeclNode,
-        do_while_node::DoWhileNode,
-        expression_node::ExpressionNode,
-        float_node::FloatNode,
-        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
-        for_node::ForNode,
-        function_def_node::{ARGV, FunctionDefNode},
-        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
-        if_node::IfNode,
-        int_node::IntNode,
-        label_node::LabelNode,
-        mapping_node::MappingNode,
-        program_node::ProgramNode,
-        range_node::RangeNode,
-        return_node::ReturnNode,
-        string_node::StringNode,
-        switch_node::SwitchNode,
-        ternary_node::TernaryNode,
-        unary_op_node::{UnaryOperation, UnaryOpNode},
-        var_init_node::VarInitNode,
-        var_node::VarNode,
-        while_node::WhileNode,
-    },
     codegen::{tree_walker, tree_walker::ContextHolder},
     compilation_context::CompilationContext,
     interpreter::{
@@ -56,6 +24,38 @@ use lpc_rs_core::register_counter::RegisterCounter;
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 use lpc_rs_core::function_flags::FunctionFlags;
 use tree_walker::TreeWalker;
+use crate::compiler::ast::{
+    array_node::ArrayNode,
+    assignment_node::AssignmentNode,
+    ast_node::{AstNode, AstNodeTrait, SpannedNode},
+    binary_op_node::{BinaryOperation, BinaryOpNode},
+    block_node::BlockNode,
+    break_node::BreakNode,
+    call_node::CallNode,
+    continue_node::ContinueNode,
+    decl_node::DeclNode,
+    do_while_node::DoWhileNode,
+    expression_node::ExpressionNode,
+    float_node::FloatNode,
+    for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
+    for_node::ForNode,
+    function_def_node::{ARGV, FunctionDefNode},
+    function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
+    if_node::IfNode,
+    int_node::IntNode,
+    label_node::LabelNode,
+    mapping_node::MappingNode,
+    program_node::ProgramNode,
+    range_node::RangeNode,
+    return_node::ReturnNode,
+    string_node::StringNode,
+    switch_node::SwitchNode,
+    ternary_node::TernaryNode,
+    unary_op_node::{UnaryOperation, UnaryOpNode},
+    var_init_node::VarInitNode,
+    var_node::VarNode,
+    while_node::WhileNode,
+};
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1906,10 +1906,6 @@ mod tests {
 
     use crate::{
         apply_walker,
-        ast::{
-            ast_node::AstNode, comma_expression_node::CommaExpressionNode,
-            expression_node::ExpressionNode,
-        },
         codegen::{
             codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
             function_prototype_walker::FunctionPrototypeWalker,
@@ -1927,6 +1923,10 @@ mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_errors::Result;
     use lpc_rs_errors::span::Span;
+    use crate::compiler::ast::{
+        ast_node::AstNode, comma_expression_node::CommaExpressionNode,
+        expression_node::ExpressionNode,
+    };
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
@@ -3247,7 +3247,7 @@ mod tests {
     mod test_visit_do_while {
         use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
         use super::*;
-        use crate::ast::do_while_node::DoWhileNode;
+        use crate::compiler::ast::do_while_node::DoWhileNode;
 
         #[test]
         fn test_populates_the_instructions() {
@@ -3294,7 +3294,7 @@ mod tests {
     mod test_visit_for {
         use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
         use super::*;
-        use crate::ast::for_node::ForNode;
+        use crate::compiler::ast::for_node::ForNode;
 
         #[test]
         fn populates_the_instructions() {
@@ -3447,7 +3447,7 @@ mod tests {
 
     mod test_visit_function_ptr {
         use super::*;
-        use crate::ast::function_ptr_node::FunctionPtrNode;
+        use crate::compiler::ast::function_ptr_node::FunctionPtrNode;
 
         #[test]
         fn populates_the_instructions_for_efuns() {
@@ -3761,7 +3761,7 @@ mod tests {
     mod test_visit_ternary {
         use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
         use super::*;
-        use crate::ast::ternary_node::TernaryNode;
+        use crate::compiler::ast::ternary_node::TernaryNode;
 
         #[test]
         fn populates_the_instructions() {
