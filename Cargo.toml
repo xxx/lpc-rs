@@ -66,6 +66,7 @@ members = [
     "lpc-rs-driver",
     "lpc-rs-errors",
     "lpc-rs-function-support",
+    "lpc-rs-lpcc",
     "lpc-rs-utils",
 ]
 
