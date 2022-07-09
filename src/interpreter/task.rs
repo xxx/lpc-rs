@@ -97,7 +97,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Self {
             memory: memory.into(),
             stack: CallStack::default(),
-            catch_points: Vec::new(),
+            catch_points: vec![],
 
             #[cfg(test)]
             popped_frame: None,

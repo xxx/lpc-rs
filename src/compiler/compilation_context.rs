@@ -296,12 +296,12 @@ impl Default for CompilationContext {
         Self {
             filename: LpcPath::default(),
             config: Rc::new(Config::default()),
-            errors: Vec::new(),
+            errors: vec![],
             scopes: ScopeTree::default(),
             default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
-            inherits: Vec::new(),
+            inherits: vec![],
             inherit_names: HashMap::new(),
             inherit_depth: 0,
             num_globals: 0,
@@ -326,8 +326,8 @@ mod tests {
             FunctionArity::new(0),
             FunctionFlags::default(),
             None,
-            Vec::new(),
-            Vec::new(),
+            vec![],
+            vec![],
         )
     }
 

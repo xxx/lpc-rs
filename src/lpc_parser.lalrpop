@@ -253,13 +253,13 @@ pub FunctionDef: FunctionDefNode = {
 
 Parameters: (Vec<VarInitNode>, bool) = {
     "(" ")" => {
-        (Vec::new(), false)
+        (vec![], false)
     },
     "(" <params:ParameterList> <ellipsis:("," "...")?> ")" => {
         (params, ellipsis.is_some())
     },
     "(" "..." ")" => {
-        (Vec::new(), true)
+        (vec![], true)
     }
 };
 
@@ -518,7 +518,7 @@ pub PrimaryExpression: ExpressionNode = {
     <FunctionPointer>,
     "(" <Expression> ")",
     "(" "{" <l:(ExpressionList ","?)?>  "}" ")" => {
-        let vec = l.map(|list| list.0).unwrap_or_else(|| Vec::new());
+        let vec = l.map(|list| list.0).unwrap_or_else(|| vec![]);
 
         ExpressionNode::Array(ArrayNode::new(vec))
     },
@@ -532,7 +532,7 @@ pub PrimaryExpression: ExpressionNode = {
             // before the `unique_by` runs
             reversed.into_iter().rev().collect_vec()
         } else {
-            Vec::new()
+            vec![]
         };
 
         let span = Span {
@@ -873,7 +873,7 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 
 pub Call: CallNode = {
     <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
-        let arguments = list.unwrap_or_else(|| Vec::new());
+        let arguments = list.unwrap_or_else(|| vec![]);
 
         let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
         let file_id = left.file_id;

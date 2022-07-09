@@ -150,7 +150,7 @@ impl Preprocessor {
     {
         trace!("scanning {:?}", path);
 
-        let mut output = Vec::new();
+        let mut output = vec![];
 
         let lpc_path = path.into();
         let file_id =
@@ -329,8 +329,8 @@ impl Preprocessor {
         iter.next(); // consume the opening paren
 
         let mut parens = 1;
-        let mut args: Vec<Vec<Spanned<Token>>> = Vec::new();
-        let mut arg = Vec::new();
+        let mut args: Vec<Vec<Spanned<Token>>> = vec![];
+        let mut arg = vec![];
 
         while parens != 0 {
             let next = iter.next();
@@ -348,7 +348,7 @@ impl Preprocessor {
 
                             if parens == 0 {
                                 args.push(arg);
-                                arg = Vec::new();
+                                arg = vec![];
                             } else {
                                 arg.push(t);
                             }
@@ -357,7 +357,7 @@ impl Preprocessor {
                             if parens == 1 {
                                 // we're inside only the outermost parens
                                 args.push(arg);
-                                arg = Vec::new();
+                                arg = vec![];
                             } else {
                                 arg.push(t)
                             }
@@ -930,7 +930,7 @@ impl Default for Preprocessor {
         Self {
             context: CompilationContext::default(),
             defines: HashMap::new(),
-            ifdefs: Vec::new(),
+            ifdefs: vec![],
             current_else: None,
             last_slice: String::from("\n"),
         }

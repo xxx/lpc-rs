@@ -45,8 +45,8 @@ impl LpcError {
         Self {
             message: message.into(),
             span: None,
-            labels: Vec::new(),
-            notes: Vec::new(),
+            labels: vec![],
+            notes: vec![],
             additional_errors: None,
             stack_trace: None,
         }

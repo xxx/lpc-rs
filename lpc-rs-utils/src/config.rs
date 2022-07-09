@@ -63,7 +63,7 @@ impl Config {
                     )))
                 }
             },
-            None => Vec::new(),
+            None => vec![],
         };
 
         let dug = dig(&config, LIB_DIR);

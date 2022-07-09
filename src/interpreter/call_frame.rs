@@ -219,8 +219,8 @@ mod tests {
             FunctionArity::new(4),
             FunctionFlags::default(),
             None,
-            Vec::new(),
-            Vec::new(),
+            vec![],
+            vec![],
         );
 
         let fs = ProgramFunction::new(prototype, 7);
@@ -244,8 +244,8 @@ mod tests {
                 FunctionArity::new(4),
                 FunctionFlags::default(),
                 None,
-                Vec::new(),
-                Vec::new(),
+                vec![],
+                vec![],
             );
 
             let fs = ProgramFunction::new(prototype, 7);
@@ -266,8 +266,8 @@ mod tests {
                 FunctionArity::new(4),
                 FunctionFlags::default(),
                 None,
-                Vec::new(),
-                Vec::new(),
+                vec![],
+                vec![],
             );
 
             let fs = ProgramFunction::new(prototype, 7);

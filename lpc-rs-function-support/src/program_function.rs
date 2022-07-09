@@ -53,8 +53,8 @@ impl ProgramFunction {
         Self {
             prototype,
             num_locals,
-            instructions: Vec::new(),
-            debug_spans: Vec::new(),
+            instructions: vec![],
+            debug_spans: vec![],
             labels: HashMap::new(),
         }
     }
@@ -76,7 +76,7 @@ impl ProgramFunction {
 
     /// Get a listing of this function's instructions, for use in debugging.
     pub fn listing(&self) -> Vec<String> {
-        let mut v = Vec::new();
+        let mut v = vec![];
 
         v.push(format!(
             "fn {} num_args={} num_locals={}:",

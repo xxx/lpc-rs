@@ -207,7 +207,7 @@ impl TreeWalker for ScopeWalker {
             }
         };
 
-        let mut errors = Vec::new();
+        let mut errors = vec![];
 
         if let Some(symbol) = sym {
             if !symbol.public() && self.context.scopes.lookup(&node.name).is_none() {

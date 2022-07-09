@@ -57,8 +57,8 @@ impl SemanticCheckWalker {
         Self {
             context,
             current_function: None,
-            valid_jumps: Vec::new(),
-            valid_labels: Vec::new(),
+            valid_jumps: vec![],
+            valid_labels: vec![],
         }
     }
 
@@ -205,7 +205,7 @@ impl TreeWalker for SemanticCheckWalker {
             .context
             .lookup_function_complete(&node.name, &node.namespace);
 
-        let mut errors = Vec::new();
+        let mut errors = vec![];
 
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
@@ -1985,8 +1985,8 @@ mod tests {
                 FunctionArity::new(4),
                 FunctionFlags::default().with_nomask(true),
                 None,
-                Vec::new(),
-                Vec::new(),
+                vec![],
+                vec![],
             );
 
             let func = ProgramFunction::new(prototype, 7);
@@ -2160,7 +2160,7 @@ mod tests {
         #[test]
         fn checks_its_body() {
             let mut node = ProgramNode {
-                inherits: Vec::new(),
+                inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
                     type_: LpcType::String(false),
                     name: "mapping".to_string(),

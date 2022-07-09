@@ -1880,8 +1880,8 @@ mod tests {
                     FunctionArity::default(),
                     FunctionFlags::default(),
                     None,
-                    Vec::new(),
-                    Vec::new(),
+                    vec![],
+                    vec![],
                 );
                 context
                     .function_prototypes

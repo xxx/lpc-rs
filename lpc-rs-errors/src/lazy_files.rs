@@ -174,7 +174,7 @@ where
 {
     fn default() -> Self {
         Self {
-            paths: Vec::new(),
+            paths: vec![],
             source: PhantomData,
         }
     }

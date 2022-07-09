@@ -51,8 +51,8 @@ mod tests {
             FunctionArity::default(),
             FunctionFlags::default(),
             None,
-            Vec::new(),
-            Vec::new(),
+            vec![],
+            vec![],
         );
         let function_like = FunctionLike::from(&prototype);
         assert_eq!(function_like.prototype(), &prototype);

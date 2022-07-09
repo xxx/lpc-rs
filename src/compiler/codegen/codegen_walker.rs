@@ -180,14 +180,14 @@ impl CodegenWalker {
             FunctionArity::default(),
             FunctionFlags::default(),
             None,
-            Vec::new(),
-            Vec::new(),
+            vec![],
+            vec![],
         );
 
         let mut func = ProgramFunction::new(prototype, 0);
 
-        let mut new_init_instructions = Vec::new();
-        let mut new_init_debug_spans = Vec::new();
+        let mut new_init_instructions = vec![];
+        let mut new_init_debug_spans = vec![];
         self.combine_inits(&mut new_init_instructions, &mut new_init_debug_spans);
 
         func.instructions = new_init_instructions;
@@ -1143,7 +1143,7 @@ impl TreeWalker for CodegenWalker {
         if num_default_args > 0 {
             populate_defaults_index = Some(self.current_address());
             // the addresses are backpatched below, once we have them.
-            let instruction = Instruction::PopulateDefaults(Vec::new());
+            let instruction = Instruction::PopulateDefaults(vec![]);
             push_instruction!(self, instruction, node.span);
         } else {
             populate_defaults_index = None;
@@ -1190,7 +1190,7 @@ impl TreeWalker for CodegenWalker {
         if num_default_args > 0 {
             debug_assert_eq!(node.parameters.len(), parameter_locations.len());
 
-            let mut default_init_addresses = Vec::new();
+            let mut default_init_addresses = vec![];
 
             for (idx, parameter) in &mut node.parameters.iter_mut().enumerate() {
                 if let Some(value) = &mut parameter.value {
@@ -1247,7 +1247,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let mut applied_arguments = Vec::new();
+        let mut applied_arguments = vec![];
         if let Some(args) = &mut node.arguments {
             for argument in args {
                 if let Some(n) = argument {
@@ -1554,7 +1554,7 @@ impl TreeWalker for CodegenWalker {
         let end_label = self.new_label("switch-end");
         self.jump_targets
             .push(JumpTarget::new(end_label.clone(), "".into()));
-        let addresses = Vec::new();
+        let addresses = vec![];
         self.case_addresses.push(addresses);
 
         node.body.visit(self)?;
@@ -3475,7 +3475,7 @@ mod tests {
                     ellipsis: true,
                     varargs: false,
                 },
-                applied_arguments: Vec::new(),
+                applied_arguments: vec![],
             }];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3505,7 +3505,7 @@ mod tests {
                     ellipsis: false,
                     varargs: false,
                 },
-                applied_arguments: Vec::new(),
+                applied_arguments: vec![],
             }];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
