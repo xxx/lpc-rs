@@ -7,17 +7,14 @@ pub const NO_SHADOW: &str = "no_shadow";
 pub const RESIDENT: &str = "resident";
 pub const STRICT_TYPES: &str = "strict_types";
 
-/// A struct to track which `pragma`s have been enabled in a
-/// [`Program`](crate::interpreter::program::Program).
+/// A struct to track which `pragma`s have been enabled in a `Program`
 #[bitfield(filled = false)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PragmaFlags {
-    /// Disallow a [`Program`](crate::interpreter::program::Program)
-    /// from being cloned at runtime via `clone_object`
+    /// Disallow a `Program` from being cloned at runtime via `clone_object`
     pub no_clone: bool,
 
-    /// Disallow a [`Program`](crate::interpreter::program::Program)
-    /// from being `inherit`ed from
+    /// Disallow a `Program` from being `inherit`ed from
     pub no_inherit: bool,
 
     /// A large bludgeon to prevent shadowing via both `shadow` directly, as well

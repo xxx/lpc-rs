@@ -20,7 +20,7 @@ fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::
 }
 
 /// Different ways to store a function address, for handling at runtime.
-/// This is the run-time equivalent of [`FunctionTarget`]
+/// This is the run-time equivalent of [`FunctionTarget`](lpc_rs_core::function::FunctionTarget).
 #[derive(Educe, Clone, PartialEq, Eq)]
 #[educe(Debug)]
 pub enum FunctionAddress {
