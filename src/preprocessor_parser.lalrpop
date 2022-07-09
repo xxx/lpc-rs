@@ -1,4 +1,4 @@
-use crate::preprocessor::preprocessor_node::PreprocessorNode;
+use crate::compiler::preprocessor::preprocessor_node::PreprocessorNode;
 use crate::compiler::ast::binary_op_node::BinaryOperation;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::LpcError;

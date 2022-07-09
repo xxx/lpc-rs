@@ -1,7 +1,7 @@
 use crate::{
     compiler::lexer::{Spanned, Token},
-    preprocessor::preprocessor_node::PreprocessorNode,
 };
+use crate::compiler::preprocessor::preprocessor_node::PreprocessorNode;
 
 /// An object macro, e.g. `#define FOO 123`
 #[derive(Debug)]

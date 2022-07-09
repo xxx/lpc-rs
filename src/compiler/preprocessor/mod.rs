@@ -5,7 +5,6 @@ use crate::{
         LexWrapper,
         logos_token::{IntToken, StringToken}, Spanned, Token, TokenVecWrapper,
     },
-    preprocessor::preprocessor_node::PreprocessorNode,
     preprocessor_parser,
 };
 use define::{Define, ObjectMacro};
@@ -19,6 +18,7 @@ use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 use tracing::{instrument, trace};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
+use crate::compiler::preprocessor::preprocessor_node::PreprocessorNode;
 
 pub mod define;
 pub mod preprocessor_node;
@@ -84,7 +84,7 @@ impl Preprocessor {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::preprocessor::Preprocessor;
+    /// use lpc_rs::compiler::preprocessor::Preprocessor;
     /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     /// use std::rc::Rc;
@@ -118,7 +118,7 @@ impl Preprocessor {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::preprocessor::Preprocessor;
+    /// use lpc_rs::compiler::preprocessor::Preprocessor;
     /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs::util::config::Config;
     /// use std::rc::Rc;
