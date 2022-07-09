@@ -4,10 +4,7 @@ This will eventually be an [LPC](https://mud.fandom.com/wiki/LPC) compiler and d
 
 1. pull this repo down locally
 2. cd to the repo root
-3. `cp config.toml.default config.toml`
-4. `mkdir lib`
-5. `cd lib`
-6. open `hello.c`, with content:
+3. open `hello.c`, with content:
 ```c
 #define MSG "hello, world!"
 
@@ -15,5 +12,4 @@ void create() {
     dump(MSG);
 }
 ```
-7. `cd ..` (This step is needed only because it's making an assumption that `config.toml` is in the same directory you're running from. It will eventually be squeezed out.)
-8. `cargo run --bin lpcc lib/hello.c`
+4`cargo run -p lpc-rs-lpcc -- hello.c`
