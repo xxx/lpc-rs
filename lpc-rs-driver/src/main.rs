@@ -1,11 +1,30 @@
+use clap::Parser;
 use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::Config;
 
-fn main() {
-    // let args: Vec<String> = env::args().collect();
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// The directory to use as LIB_DIR for includes, etc. Defaults to what is contained in the config file.
+    #[clap(short, long, value_parser, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
+    lib_dir: Option<String>,
 
-    let config = match Config::new(None::<&str>) {
+    /// Use a specific configuration file
+    #[clap(short, long, value_parser)]
+    config: Option<String>,
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let config_override = if let Some(config_path) = args.config {
+        Some(config_path)
+    } else {
+        None
+    };
+
+    let config = match Config::new(config_override) {
         Ok(c) => c,
         Err(e) => {
             e.emit_diagnostics();
