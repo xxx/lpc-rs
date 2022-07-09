@@ -1909,7 +1909,6 @@ mod tests {
         compiler::Compiler,
         interpreter::{process::Process, program::Program},
         lpc_parser,
-        parser::lexer::LexWrapper,
         util::config::Config,
     };
     use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
@@ -1927,6 +1926,7 @@ mod tests {
         inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
         semantic_check_walker::SemanticCheckWalker,
     };
+    use crate::compiler::lexer::LexWrapper;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 

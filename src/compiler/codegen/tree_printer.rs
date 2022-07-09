@@ -21,7 +21,7 @@ use crate::compiler::codegen::tree_walker;
 /// use lpc_rs::lpc_parser;
 /// use lpc_rs::compiler::codegen::tree_printer::TreePrinter;
 /// use lpc_rs::compiler::codegen::tree_walker::TreeWalker;
-/// use lpc_rs::parser::lexer::LexWrapper;
+/// use lpc_rs::compiler::lexer::LexWrapper;
 /// use lpc_rs::compiler::compilation_context::CompilationContext;
 ///
 /// let prog = "int main() { int b = 123; return b; }";

@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::parser::lexer::{
+use crate::compiler::lexer::{
     lex_state::LexState,
     logos_token::{FloatToken, IntToken, StringToken},
 };

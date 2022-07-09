@@ -5,7 +5,7 @@ use crate::{
         int_node::IntNode,
         string_node::StringNode,
     },
-    parser::lexer,
+    compiler::lexer,
     util::repeat_string,
 };
 use lalrpop_util::ParseError;

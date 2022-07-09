@@ -3,7 +3,6 @@ use indoc::indoc;
 use lpc_rs::{
     compiler::Compiler,
     lpc_parser,
-    parser::lexer::{LexWrapper, TokenVecWrapper},
 };
 use lpc_rs::compiler::ast::{
     assignment_node::AssignmentNode,
@@ -21,6 +20,7 @@ use lpc_rs::compiler::ast::{
     var_node::VarNode,
 };
 use lpc_rs::compiler::compilation_context::CompilationContext;
+use lpc_rs::compiler::lexer::{LexWrapper, TokenVecWrapper};
 use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 use lpc_rs_core::visibility::Visibility;

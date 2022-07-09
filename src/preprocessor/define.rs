@@ -1,5 +1,5 @@
 use crate::{
-    parser::lexer::{Spanned, Token},
+    compiler::lexer::{Spanned, Token},
     preprocessor::preprocessor_node::PreprocessorNode,
 };
 

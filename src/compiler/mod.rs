@@ -4,7 +4,6 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::{
     interpreter::{process::Process, program::Program},
     lpc_parser,
-    parser::lexer::{Spanned, Token, TokenVecWrapper},
     preprocessor::Preprocessor,
     util::config::Config,
 };
@@ -19,11 +18,13 @@ use codegen::{
     tree_walker::ContextHolder,
 };
 use compilation_context::CompilationContext;
+use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
 
 pub mod ast;
 pub mod compilation_context;
 pub mod codegen;
+pub mod lexer;
 
 #[macro_export]
 macro_rules! apply_walker {

@@ -1,7 +1,7 @@
 use crate::{
     compiler::ast::binary_op_node::BinaryOperation,
     compiler::compilation_context::CompilationContext,
-    parser::lexer::{
+    compiler::lexer::{
         LexWrapper,
         logos_token::{IntToken, StringToken}, Spanned, Token, TokenVecWrapper,
     },
