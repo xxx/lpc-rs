@@ -1,5 +1,4 @@
 use crate::{
-    asm::instruction::{Address, Instruction},
     interpreter::{
         lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         register_bank::RegisterBank,
@@ -16,6 +15,7 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
+use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::function::FunctionName;
 
 /// A representation of a function call's context.

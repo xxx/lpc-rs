@@ -1,8 +1,4 @@
 use crate::{
-    asm::{
-        instruction::{Address, Instruction, Instruction::RegCopy, Label},
-        register_counter::RegisterCounter,
-    },
     ast::{
         array_node::ArrayNode,
         assignment_node::AssignmentNode,
@@ -55,6 +51,8 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
+use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
+use lpc_rs_asm::register_counter::RegisterCounter;
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 use lpc_rs_core::function_flags::FunctionFlags;
 use tree_walker::TreeWalker;
@@ -1903,11 +1901,11 @@ impl Default for CodegenWalker {
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_asm::instruction::Instruction::*;
     use super::*;
 
     use crate::{
         apply_walker,
-        asm::instruction::Instruction::*,
         ast::{
             ast_node::AstNode, comma_expression_node::CommaExpressionNode,
             expression_node::ExpressionNode,
@@ -2149,7 +2147,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use crate::asm::instruction::Instruction::{
+        use lpc_rs_asm::instruction::Instruction::{
             FConst, IConst0, IMul, Jnz, Jz, Load, MAdd, Range,
         };
 
@@ -2607,7 +2605,7 @@ mod tests {
     }
 
     mod test_visit_call {
-        use crate::asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
+        use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::function_arity::FunctionArity;
         use lpc_rs_core::function_flags::FunctionFlags;
 
@@ -3247,11 +3245,9 @@ mod tests {
     }
 
     mod test_visit_do_while {
+        use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
         use super::*;
-        use crate::{
-            asm::instruction::Instruction::{EqEq, Jnz},
-            ast::do_while_node::DoWhileNode,
-        };
+        use crate::ast::do_while_node::DoWhileNode;
 
         #[test]
         fn test_populates_the_instructions() {
@@ -3296,11 +3292,9 @@ mod tests {
     }
 
     mod test_visit_for {
+        use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
         use super::*;
-        use crate::{
-            asm::instruction::Instruction::{ISub, Jmp, Jz},
-            ast::for_node::ForNode,
-        };
+        use crate::ast::for_node::ForNode;
 
         #[test]
         fn populates_the_instructions() {
@@ -3515,7 +3509,7 @@ mod tests {
 
     mod test_visit_if {
         use super::*;
-        use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
+        use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jz};
 
         #[test]
         fn test_populates_the_instructions() {
@@ -3765,11 +3759,9 @@ mod tests {
     }
 
     mod test_visit_ternary {
+        use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
         use super::*;
-        use crate::{
-            asm::instruction::Instruction::{Jmp, Jz, Lte},
-            ast::ternary_node::TernaryNode,
-        };
+        use crate::ast::ternary_node::TernaryNode;
 
         #[test]
         fn populates_the_instructions() {
@@ -3999,7 +3991,7 @@ mod tests {
 
     mod test_visit_var_init {
         use super::*;
-        use crate::asm::instruction::Instruction::{FConst, MapConst};
+        use lpc_rs_asm::instruction::Instruction::{FConst, MapConst};
         use decorum::Total;
 
         fn setup() -> CodegenWalker {
@@ -4295,7 +4287,7 @@ mod tests {
 
     mod test_visit_while {
         use super::*;
-        use crate::asm::instruction::Instruction::{EqEq, Jmp, Jz};
+        use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jz};
 
         #[test]
         fn test_populates_the_instructions() {

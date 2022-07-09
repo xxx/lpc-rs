@@ -1,5 +1,4 @@
 use crate::{
-    asm::instruction::{Address, Instruction},
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         call_frame::CallFrame,
@@ -37,6 +36,7 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
+use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 
 macro_rules! pop_frame {

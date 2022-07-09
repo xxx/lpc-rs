@@ -625,6 +625,7 @@ dependencies = [
  "lalrpop-util",
  "lazy_format",
  "logos",
+ "lpc-rs-asm",
  "lpc-rs-core",
  "lpc-rs-errors",
  "multimap",
@@ -637,6 +638,16 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "lpc-rs-asm"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "itertools",
+ "lpc-rs-core",
+ "serde",
 ]
 
 [[package]]

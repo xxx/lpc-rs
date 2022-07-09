@@ -8,6 +8,7 @@ edition = "2021"
 lalrpop = "0.19.4"
 
 [dependencies]
+lpc-rs-asm = { path = "./lpc-rs-asm"}
 lpc-rs-core = { path = "./lpc-rs-core"}
 lpc-rs-errors = { path = "./lpc-rs-errors"}
 
@@ -59,7 +60,11 @@ release_max_level_debug = ["tracing/release_max_level_debug"]
 release_max_level_trace = ["tracing/release_max_level_trace"]
 
 [workspace]
-members = ["lpc-rs-core", "lpc-rs-errors"]
+members = [
+    "lpc-rs-asm",
+    "lpc-rs-core",
+    "lpc-rs-errors"
+]
 
 [profile.release]
 lto = "thin"
