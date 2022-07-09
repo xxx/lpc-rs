@@ -12,4 +12,4 @@ void create() {
     dump(MSG);
 }
 ```
-4`cargo run -p lpc-rs-lpcc -- hello.c`
+4. `cargo run -p lpc-rs-lpcc -- hello.c`
