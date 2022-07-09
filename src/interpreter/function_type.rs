@@ -6,8 +6,8 @@ use crate::{
     semantic::program_function::ProgramFunction,
 };
 use delegate::delegate;
-use lpc_rs_core::{function_arity::FunctionArity, register::Register};
-use serde::{Deserialize, Serialize};
+use lpc_rs_core::{function_arity::FunctionArity};
+
 use std::fmt::{Display, Formatter};
 use lpc_rs_core::function_flags::FunctionFlags;
 
