@@ -3,19 +3,19 @@ use decorum::Total;
 pub mod call_namespace;
 pub mod function;
 pub mod function_arity;
-pub mod lpc_type;
-#[allow(clippy::identity_op)]
-pub mod lpc_type_union;
-pub mod register;
-pub mod lpc_path;
-pub mod visibility;
-#[allow(clippy::identity_op)]
-pub mod pragma_flags;
 #[allow(clippy::identity_op)]
 pub mod function_flags;
 #[allow(clippy::identity_op)]
 pub mod global_var_flags;
+pub mod lpc_path;
+pub mod lpc_type;
+#[allow(clippy::identity_op)]
+pub mod lpc_type_union;
+#[allow(clippy::identity_op)]
+pub mod pragma_flags;
+pub mod register;
 pub mod register_counter;
+pub mod visibility;
 
 /// Name of the user-overridable initializer function for objects
 pub const CREATE_FUNCTION: &str = "create";
