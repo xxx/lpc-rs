@@ -1,5 +1,41 @@
 use crate::{
-    compiler::semantic::symbol::Symbol,
+    compiler::{
+        ast::{
+            array_node::ArrayNode,
+            assignment_node::AssignmentNode,
+            ast_node::{AstNode, AstNodeTrait, SpannedNode},
+            binary_op_node::{BinaryOpNode, BinaryOperation},
+            block_node::BlockNode,
+            break_node::BreakNode,
+            call_node::CallNode,
+            continue_node::ContinueNode,
+            decl_node::DeclNode,
+            do_while_node::DoWhileNode,
+            expression_node::ExpressionNode,
+            float_node::FloatNode,
+            for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+            for_node::ForNode,
+            function_def_node::{FunctionDefNode, ARGV},
+            function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
+            if_node::IfNode,
+            int_node::IntNode,
+            label_node::LabelNode,
+            mapping_node::MappingNode,
+            program_node::ProgramNode,
+            range_node::RangeNode,
+            return_node::ReturnNode,
+            string_node::StringNode,
+            switch_node::SwitchNode,
+            ternary_node::TernaryNode,
+            unary_op_node::{UnaryOpNode, UnaryOperation},
+            var_init_node::VarInitNode,
+            var_node::VarNode,
+            while_node::WhileNode,
+        },
+        codegen::{tree_walker, tree_walker::ContextHolder},
+        compilation_context::CompilationContext,
+        semantic::symbol::Symbol,
+    },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         program::Program,
@@ -7,54 +43,24 @@ use crate::{
 };
 use if_chain::if_chain;
 use indexmap::IndexMap;
+use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
 use lpc_rs_core::{
-    call_namespace::CallNamespace, CREATE_FUNCTION, function_arity::FunctionArity,
-    INIT_PROGRAM, lpc_type::LpcType, register::Register,
+    call_namespace::CallNamespace,
+    function::{FunctionName, FunctionReceiver, FunctionTarget},
+    function_arity::FunctionArity,
+    function_flags::FunctionFlags,
+    lpc_type::LpcType,
+    register::Register,
+    register_counter::RegisterCounter,
+    CREATE_FUNCTION, INIT_PROGRAM,
 };
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_function_support::{
+    function_prototype::FunctionPrototype, program_function::ProgramFunction,
+};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
-use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
-use lpc_rs_core::register_counter::RegisterCounter;
-use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
-use lpc_rs_core::function_flags::FunctionFlags;
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
-use lpc_rs_function_support::program_function::ProgramFunction;
 use tree_walker::TreeWalker;
-use crate::compiler::ast::{
-    array_node::ArrayNode,
-    assignment_node::AssignmentNode,
-    ast_node::{AstNode, AstNodeTrait, SpannedNode},
-    binary_op_node::{BinaryOperation, BinaryOpNode},
-    block_node::BlockNode,
-    break_node::BreakNode,
-    call_node::CallNode,
-    continue_node::ContinueNode,
-    decl_node::DeclNode,
-    do_while_node::DoWhileNode,
-    expression_node::ExpressionNode,
-    float_node::FloatNode,
-    for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
-    for_node::ForNode,
-    function_def_node::{ARGV, FunctionDefNode},
-    function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
-    if_node::IfNode,
-    int_node::IntNode,
-    label_node::LabelNode,
-    mapping_node::MappingNode,
-    program_node::ProgramNode,
-    range_node::RangeNode,
-    return_node::ReturnNode,
-    string_node::StringNode,
-    switch_node::SwitchNode,
-    ternary_node::TernaryNode,
-    unary_op_node::{UnaryOperation, UnaryOpNode},
-    var_init_node::VarInitNode,
-    var_node::VarNode,
-    while_node::WhileNode,
-};
-use crate::compiler::codegen::{tree_walker, tree_walker::ContextHolder};
-use crate::compiler::compilation_context::CompilationContext;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -1900,32 +1906,33 @@ impl Default for CodegenWalker {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_asm::instruction::Instruction::*;
     use super::*;
+    use lpc_rs_asm::instruction::Instruction::*;
 
     use crate::{
         apply_walker,
-        compiler::Compiler,
+        compiler::{
+            ast::{
+                ast_node::AstNode, comma_expression_node::CommaExpressionNode,
+                expression_node::ExpressionNode,
+            },
+            codegen::{
+                codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
+                function_prototype_walker::FunctionPrototypeWalker,
+                inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
+                semantic_check_walker::SemanticCheckWalker,
+            },
+            lexer::LexWrapper,
+            Compiler,
+        },
         interpreter::{process::Process, program::Program},
         lpc_parser,
     };
-    use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
-    use lpc_rs_core::global_var_flags::GlobalVarFlags;
-    use lpc_rs_core::lpc_path::LpcPath;
-    use lpc_rs_errors::Result;
-    use lpc_rs_errors::span::Span;
+    use lpc_rs_core::{
+        global_var_flags::GlobalVarFlags, lpc_path::LpcPath, lpc_type::LpcType, LpcFloat,
+    };
+    use lpc_rs_errors::{span::Span, Result};
     use lpc_rs_utils::config::Config;
-    use crate::compiler::ast::{
-        ast_node::AstNode, comma_expression_node::CommaExpressionNode,
-        expression_node::ExpressionNode,
-    };
-    use crate::compiler::codegen::{
-        codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-        function_prototype_walker::FunctionPrototypeWalker,
-        inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
-        semantic_check_walker::SemanticCheckWalker,
-    };
-    use crate::compiler::lexer::LexWrapper;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
@@ -2605,8 +2612,7 @@ mod tests {
 
     mod test_visit_call {
         use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
-        use lpc_rs_core::function_arity::FunctionArity;
-        use lpc_rs_core::function_flags::FunctionFlags;
+        use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
 
         use super::*;
         use lpc_rs_function_support::function_prototype::FunctionPrototype;
@@ -3244,9 +3250,9 @@ mod tests {
     }
 
     mod test_visit_do_while {
-        use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
         use super::*;
         use crate::compiler::ast::do_while_node::DoWhileNode;
+        use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
 
         #[test]
         fn test_populates_the_instructions() {
@@ -3291,9 +3297,9 @@ mod tests {
     }
 
     mod test_visit_for {
-        use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
         use super::*;
         use crate::compiler::ast::for_node::ForNode;
+        use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
 
         #[test]
         fn populates_the_instructions() {
@@ -3758,9 +3764,9 @@ mod tests {
     }
 
     mod test_visit_ternary {
-        use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
         use super::*;
         use crate::compiler::ast::ternary_node::TernaryNode;
+        use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
 
         #[test]
         fn populates_the_instructions() {
@@ -3990,8 +3996,8 @@ mod tests {
 
     mod test_visit_var_init {
         use super::*;
-        use lpc_rs_asm::instruction::Instruction::{FConst, MapConst};
         use decorum::Total;
+        use lpc_rs_asm::instruction::Instruction::{FConst, MapConst};
 
         fn setup() -> CodegenWalker {
             let mut context = CompilationContext::default();

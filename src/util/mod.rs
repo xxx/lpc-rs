@@ -1,8 +1,6 @@
-use crate::{
-    interpreter::{object_space::ObjectSpace, process::Process},
-};
-use std::{cell::RefCell, rc::Rc};
+use crate::interpreter::{object_space::ObjectSpace, process::Process};
 use lpc_rs_utils::config::Config;
+use std::{cell::RefCell, rc::Rc};
 
 pub fn get_simul_efuns(
     config: &Config,

@@ -3,12 +3,16 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::compiler::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode};
+use crate::compiler::{
+    ast::{
+        ast_node::{AstNode, AstNodeTrait},
+        expression_node::ExpressionNode,
+        var_init_node::VarInitNode,
+    },
+    codegen::tree_walker::TreeWalker,
+};
 use indextree::NodeId;
-use lpc_rs_errors::Result;
-use lpc_rs_errors::span::Span;
-use crate::compiler::ast::ast_node::{AstNode, AstNodeTrait};
-use crate::compiler::codegen::tree_walker::TreeWalker;
+use lpc_rs_errors::{span::Span, Result};
 
 /// A constant to track the implicit variable we reserve space for,
 /// for `foreach` loops.

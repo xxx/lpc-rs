@@ -1,24 +1,29 @@
 use crate::{
-    compiler::ast::binary_op_node::BinaryOperation,
-    compiler::compilation_context::CompilationContext,
-    compiler::lexer::{
-        LexWrapper,
-        logos_token::{IntToken, StringToken}, Spanned, Token, TokenVecWrapper,
+    compiler::{
+        ast::binary_op_node::BinaryOperation,
+        compilation_context::CompilationContext,
+        lexer::{
+            logos_token::{IntToken, StringToken},
+            LexWrapper, Spanned, Token, TokenVecWrapper,
+        },
+        preprocessor::preprocessor_node::PreprocessorNode,
     },
     preprocessor_parser,
 };
 use define::{Define, ObjectMacro};
 use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
-use lpc_rs_core::{convert_escapes, LpcInt};
-use lpc_rs_errors::{format_expected, lazy_files::FileCache, LpcError, Result, span::Span};
+use lpc_rs_core::{
+    convert_escapes,
+    lpc_path::LpcPath,
+    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    LpcInt,
+};
+use lpc_rs_errors::{format_expected, lazy_files::FileCache, span::Span, LpcError, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 use tracing::{instrument, trace};
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES};
-use crate::compiler::preprocessor::preprocessor_node::PreprocessorNode;
 
 pub mod define;
 pub mod preprocessor_node;

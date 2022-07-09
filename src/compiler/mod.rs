@@ -5,9 +5,6 @@ use crate::{
     interpreter::{process::Process, program::Program},
     lpc_parser,
 };
-use lpc_rs_errors::span::Span;
-use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
-use tracing::instrument;
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use codegen::{
     codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
@@ -18,16 +15,19 @@ use codegen::{
 use compilation_context::CompilationContext;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::span::Span;
 use lpc_rs_utils::config::Config;
 use preprocessor::Preprocessor;
+use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use tracing::instrument;
 
 pub mod ast;
-pub mod compilation_context;
 pub mod codegen;
+pub mod compilation_context;
 pub mod lexer;
-pub mod semantic;
-pub mod preprocessor;
 pub mod parser;
+pub mod preprocessor;
+pub mod semantic;
 
 #[macro_export]
 macro_rules! apply_walker {

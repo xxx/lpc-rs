@@ -1,6 +1,6 @@
-use lpc_rs_function_support::program_function::ProgramFunction;
-use crate::{interpreter::efun::EFUN_PROTOTYPES, compiler::semantic::symbol::Symbol};
+use crate::{compiler::semantic::symbol::Symbol, interpreter::efun::EFUN_PROTOTYPES};
 use lpc_rs_core::EFUN;
+use lpc_rs_function_support::program_function::ProgramFunction;
 use rmp_serde::Serializer;
 use std::{
     borrow::Cow,
@@ -14,9 +14,8 @@ use std::{
 use itertools::Itertools;
 use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
 
+use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use serde::{Deserialize, Serialize};
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::pragma_flags::PragmaFlags;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

@@ -1,5 +1,5 @@
-use lpc_rs_utils::config::Config;
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::config::Config;
 use std::cell::Cell;
 
 /// A struct to encapsulate counting instructions, and erroring in the case of hitting the eval limit

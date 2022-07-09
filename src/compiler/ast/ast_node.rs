@@ -11,16 +11,18 @@ use int_node::IntNode;
 use lpc_rs_errors::Result;
 use program_node::ProgramNode;
 
-use lpc_rs_errors::span::Span;
-use crate::compiler::ast::{
-    binary_op_node::BinaryOpNode, block_node::BlockNode, break_node::BreakNode,
-    call_node::CallNode, continue_node::ContinueNode, decl_node::DeclNode,
-    do_while_node::DoWhileNode, expression_node, for_each_node::ForEachNode, for_node::ForNode,
-    function_def_node::FunctionDefNode, if_node::IfNode, int_node,
-    labeled_statement_node::LabeledStatementNode, program_node, return_node::ReturnNode,
-    switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
+use crate::compiler::{
+    ast::{
+        binary_op_node::BinaryOpNode, block_node::BlockNode, break_node::BreakNode,
+        call_node::CallNode, continue_node::ContinueNode, decl_node::DeclNode,
+        do_while_node::DoWhileNode, expression_node, for_each_node::ForEachNode, for_node::ForNode,
+        function_def_node::FunctionDefNode, if_node::IfNode, int_node,
+        labeled_statement_node::LabeledStatementNode, program_node, return_node::ReturnNode,
+        switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
+    },
+    codegen::tree_walker::TreeWalker,
 };
-use crate::compiler::codegen::tree_walker::TreeWalker;
+use lpc_rs_errors::span::Span;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

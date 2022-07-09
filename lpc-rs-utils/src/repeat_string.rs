@@ -1,5 +1,5 @@
-use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_core::LpcInt;
+use lpc_rs_errors::{LpcError, Result};
 
 /// Repeat `s`, `i` times, and return a new String of it.
 ///

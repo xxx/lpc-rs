@@ -2,8 +2,8 @@ use std::env;
 
 use lpc_rs::compiler::Compiler;
 
-use std::rc::Rc;
 use lpc_rs_utils::config::Config;
+use std::rc::Rc;
 
 const DEFAULT_FILE: &str = "local/mathfile.c";
 

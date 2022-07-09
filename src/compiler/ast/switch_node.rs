@@ -1,13 +1,17 @@
+use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lpc_rs_errors::Result;
 
-use crate::compiler::ast::expression_node::ExpressionNode;
+use crate::compiler::{
+    ast::{
+        ast_node::{AstNode, AstNodeTrait},
+        expression_node::ExpressionNode,
+    },
+    codegen::tree_walker::TreeWalker,
+};
 use lpc_rs_errors::span::Span;
-use crate::compiler::ast::ast_node::{AstNode, AstNodeTrait};
-use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing a `switch` statement
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

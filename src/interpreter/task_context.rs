@@ -6,9 +6,9 @@ use crate::{
     util::get_simul_efuns,
 };
 use delegate::delegate;
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]

@@ -1,19 +1,18 @@
 use crate::{
-    compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol},
-    interpreter::{
-        efun::EFUN_PROTOTYPES, process::Process, program::Program,
+    compiler::{
+        ast::expression_node::ExpressionNode,
+        semantic::{scope_tree::ScopeTree, symbol::Symbol},
     },
+    interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
 };
 use delegate::delegate;
-use lpc_rs_core::{call_namespace::CallNamespace, EFUN};
+use lpc_rs_core::{
+    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
+};
 use lpc_rs_errors::LpcError;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::pragma_flags::PragmaFlags;
-use lpc_rs_function_support::function_like::FunctionLike;
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_function_support::{function_like::FunctionLike, function_prototype::FunctionPrototype};
 use lpc_rs_utils::config::Config;
-use crate::compiler::ast::expression_node::ExpressionNode;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// A big, fat state object to store data created at various stages of compilation.
 /// A single one of these will be used for loading/compiling a single file (files `#include`d in
@@ -315,9 +314,10 @@ impl Default for CompilationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lpc_rs_core::{
+        function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
+    };
     use lpc_rs_function_support::program_function::ProgramFunction;
-    use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-    use lpc_rs_core::function_flags::FunctionFlags;
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototype::new(

@@ -12,12 +12,13 @@ use clone_object::clone_object;
 use debug::debug;
 use dump::dump;
 use file_name::file_name;
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_core::{
+    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
+};
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use lpc_rs_core::function_flags::FunctionFlags;
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use this_object::this_object;
 use throw::throw;
 

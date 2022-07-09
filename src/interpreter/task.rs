@@ -4,10 +4,7 @@ use crate::{
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        function_type::{
-            FunctionAddress, FunctionPtr,
-            LpcFunction,
-        },
+        function_type::{FunctionAddress, FunctionPtr, LpcFunction},
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
         memory::Memory,
@@ -22,11 +19,17 @@ use crate::{
 use decorum::Total;
 use if_chain::if_chain;
 use indexmap::IndexMap;
+use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{
-    call_namespace::CallNamespace, EFUN, function_arity::FunctionArity, INIT_PROGRAM, LpcInt,
+    call_namespace::CallNamespace,
+    function::{FunctionName, FunctionReceiver, FunctionTarget},
+    function_arity::FunctionArity,
     register::Register,
+    LpcInt, EFUN, INIT_PROGRAM,
 };
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_utils::config::Config;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -34,10 +37,6 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
-use lpc_rs_asm::instruction::{Address, Instruction};
-use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
-use lpc_rs_function_support::program_function::ProgramFunction;
-use lpc_rs_utils::config::Config;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

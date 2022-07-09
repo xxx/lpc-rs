@@ -1,4 +1,9 @@
-use std::{error::Error, fmt::{Debug, Display, Formatter}, fs::OpenOptions, result};
+use std::{
+    error::Error,
+    fmt::{Debug, Display, Formatter},
+    fs::OpenOptions,
+    result,
+};
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},

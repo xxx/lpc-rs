@@ -3,28 +3,29 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use crate::compiler::{
+    ast::{
+        array_node::ArrayNode,
+        assignment_node::AssignmentNode,
+        ast_node::{AstNodeTrait, SpannedNode},
+        binary_op_node::BinaryOpNode,
+        call_node::CallNode,
+        comma_expression_node::CommaExpressionNode,
+        float_node::FloatNode,
+        function_ptr_node::FunctionPtrNode,
+        int_node::IntNode,
+        mapping_node::MappingNode,
+        range_node::RangeNode,
+        string_node::StringNode,
+        ternary_node::TernaryNode,
+        unary_op_node::UnaryOpNode,
+        var_node::VarNode,
+    },
+    codegen::tree_walker::TreeWalker,
+};
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
-use lpc_rs_errors::Result;
-use lpc_rs_errors::span::Span;
-use crate::compiler::ast::{
-    array_node::ArrayNode,
-    assignment_node::AssignmentNode,
-    ast_node::{AstNodeTrait, SpannedNode},
-    binary_op_node::BinaryOpNode,
-    call_node::CallNode,
-    comma_expression_node::CommaExpressionNode,
-    float_node::FloatNode,
-    function_ptr_node::FunctionPtrNode,
-    int_node::IntNode,
-    mapping_node::MappingNode,
-    range_node::RangeNode,
-    string_node::StringNode,
-    ternary_node::TernaryNode,
-    unary_op_node::UnaryOpNode,
-    var_node::VarNode,
-};
-use crate::compiler::codegen::tree_walker::TreeWalker;
+use lpc_rs_errors::{span::Span, Result};
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

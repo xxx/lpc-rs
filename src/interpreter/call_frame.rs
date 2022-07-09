@@ -1,11 +1,13 @@
 use crate::{
     interpreter::{
-        lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
-        register_bank::RegisterBank,
+        lpc_ref::LpcRef, lpc_value::LpcValue, process::Process, register_bank::RegisterBank,
     },
     try_extract_value,
 };
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_core::function::FunctionName;
+use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_function_support::program_function::ProgramFunction;
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
@@ -14,9 +16,6 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
-use lpc_rs_asm::instruction::{Address, Instruction};
-use lpc_rs_core::function::FunctionName;
-use lpc_rs_function_support::program_function::ProgramFunction;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -205,9 +204,10 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lpc_rs_core::{
+        function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
+    };
     use lpc_rs_function_support::function_prototype::FunctionPrototype;
-    use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-    use lpc_rs_core::function_flags::FunctionFlags;
 
     #[test]
     fn new_sets_up_registers() {

@@ -1,9 +1,8 @@
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::function::FunctionTarget;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, LpcFloat,
-    LpcInt,
+    call_namespace::CallNamespace, function::FunctionTarget, function_arity::FunctionArity,
+    register::Register, LpcFloat, LpcInt,
 };
 use serde::{Deserialize, Serialize};
 use std::{

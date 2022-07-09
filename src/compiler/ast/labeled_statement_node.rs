@@ -1,13 +1,15 @@
+use crate::compiler::{
+    ast::{
+        ast_node::{AstNode, AstNodeTrait},
+        label_node::LabelNode,
+    },
+    codegen::tree_walker::TreeWalker,
+};
+use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lpc_rs_errors::Result;
-use crate::compiler::ast::{
-    ast_node::{AstNode, AstNodeTrait},
-    label_node::LabelNode,
-};
-use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A wrapper for nodes to allow labels to be applied.
 /// They are only allowed in `switch` statements.

@@ -1,9 +1,11 @@
 use crate::{
+    compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::lpc_value::LpcValue,
     try_extract_value,
 };
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::repeat_string;
 use refpool::PoolRef;
 use std::{
     cell::RefCell,
@@ -14,8 +16,6 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
-use lpc_rs_utils::repeat_string;
-use crate::compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation};
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///

@@ -1,26 +1,25 @@
-use crate::{
-    compiler::semantic::{
-        semantic_checks::check_var_redefinition, symbol::Symbol,
+use crate::compiler::{
+    ast::{
+        ast_node::AstNodeTrait,
+        block_node::BlockNode,
+        do_while_node::DoWhileNode,
+        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+        for_node::ForNode,
+        function_def_node::{FunctionDefNode, ARGV},
+        if_node::IfNode,
+        program_node::ProgramNode,
+        var_init_node::VarInitNode,
+        var_node::VarNode,
+        while_node::WhileNode,
     },
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    compilation_context::CompilationContext,
+    semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
 };
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_core::global_var_flags::GlobalVarFlags;
+use lpc_rs_core::{
+    call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
+};
 use lpc_rs_errors::{LpcError, Result};
-use crate::compiler::ast::{
-    ast_node::AstNodeTrait,
-    block_node::BlockNode,
-    do_while_node::DoWhileNode,
-    for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
-    for_node::ForNode,
-    function_def_node::{ARGV, FunctionDefNode},
-    if_node::IfNode,
-    program_node::ProgramNode,
-    var_init_node::VarInitNode,
-    var_node::VarNode,
-    while_node::WhileNode,
-};
-use crate::compiler::codegen::tree_walker::{ContextHolder, TreeWalker};
-use crate::compiler::compilation_context::CompilationContext;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating
 /// errors for undefined and redefined variables.

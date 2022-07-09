@@ -1,9 +1,7 @@
-use crate::{
-    interpreter::{process::Process, program::Program},
-};
+use crate::interpreter::{process::Process, program::Program};
 use delegate::delegate;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use lpc_rs_utils::config::Config;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master and cloned objects.
 /// In other words, this is the map that `find_object()` uses.

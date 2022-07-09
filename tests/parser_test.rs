@@ -1,31 +1,32 @@
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
-    compiler::Compiler,
+    compiler::{
+        ast::{
+            assignment_node::AssignmentNode,
+            ast_node::AstNode,
+            binary_op_node::{BinaryOpNode, BinaryOperation},
+            decl_node::DeclNode,
+            expression_node::ExpressionNode,
+            float_node::FloatNode,
+            function_def_node::FunctionDefNode,
+            function_ptr_node::FunctionPtrNode,
+            int_node::IntNode,
+            program_node::ProgramNode,
+            string_node::StringNode,
+            var_init_node::VarInitNode,
+            var_node::VarNode,
+        },
+        compilation_context::CompilationContext,
+        lexer::{LexWrapper, TokenVecWrapper},
+        Compiler,
+    },
     lpc_parser,
 };
-use lpc_rs::compiler::ast::{
-    assignment_node::AssignmentNode,
-    ast_node::AstNode,
-    binary_op_node::{BinaryOperation, BinaryOpNode},
-    decl_node::DeclNode,
-    expression_node::ExpressionNode,
-    float_node::FloatNode,
-    function_def_node::FunctionDefNode,
-    function_ptr_node::FunctionPtrNode,
-    int_node::IntNode,
-    program_node::ProgramNode,
-    string_node::StringNode,
-    var_init_node::VarInitNode,
-    var_node::VarNode,
+use lpc_rs_core::{
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloat, LpcInt,
 };
-use lpc_rs::compiler::compilation_context::CompilationContext;
-use lpc_rs::compiler::lexer::{LexWrapper, TokenVecWrapper};
-use lpc_rs_core::{lpc_type::LpcType, LpcFloat, LpcInt};
-use lpc_rs_core::global_var_flags::GlobalVarFlags;
-use lpc_rs_core::visibility::Visibility;
-use lpc_rs_errors::Result;
-use lpc_rs_errors::span::Span;
+use lpc_rs_errors::{span::Span, Result};
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {

@@ -1,7 +1,8 @@
-use lpc_rs_core::function_flags::FunctionFlags;
 use itertools::Itertools;
 use lazy_format::lazy_format;
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_core::{
+    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
+};
 use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
 use std::{

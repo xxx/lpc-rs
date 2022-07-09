@@ -1,16 +1,15 @@
-use crate::{
-    compiler::ast::{
-        binary_op_node::{BinaryOperation, BinaryOpNode},
+use crate::compiler::{
+    ast::{
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         expression_node::ExpressionNode,
         int_node::IntNode,
         string_node::StringNode,
     },
-    compiler::lexer,
+    lexer,
 };
 use lalrpop_util::ParseError;
 use lpc_rs_core::LpcInt;
-use lpc_rs_errors::span::Span;
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{span::Span, LpcError};
 use lpc_rs_utils::repeat_string;
 
 /// Combine literals in cases where we have enough information to do so.

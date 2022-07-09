@@ -1,9 +1,11 @@
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use crate::compiler::{
+    ast::function_def_node::FunctionDefNode,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    compilation_context::CompilationContext,
+};
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
-use crate::compiler::ast::function_def_node::FunctionDefNode;
-use crate::compiler::codegen::tree_walker::{ContextHolder, TreeWalker};
-use crate::compiler::compilation_context::CompilationContext;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]

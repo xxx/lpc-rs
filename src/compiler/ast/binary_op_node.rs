@@ -1,16 +1,18 @@
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
 
-use std::convert::TryFrom;
-use crate::compiler::ast::{
-    assignment_node::AssignmentOperation,
-    ast_node::{AstNodeTrait, SpannedNode},
-    expression_node::ExpressionNode,
+use crate::compiler::{
+    ast::{
+        assignment_node::AssignmentOperation,
+        ast_node::{AstNodeTrait, SpannedNode},
+        expression_node::ExpressionNode,
+    },
+    codegen::tree_walker::TreeWalker,
 };
-use crate::compiler::codegen::tree_walker::TreeWalker;
+use std::convert::TryFrom;
 
 /// All possible binary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

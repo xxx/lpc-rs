@@ -9,8 +9,12 @@ use crate::compiler::lexer::{
     logos_token::{FloatToken, IntToken, StringToken},
 };
 use logos::{Lexer, Logos};
-use lpc_rs_core::{BaseFloat, convert_escapes, LpcInt};
-use lpc_rs_errors::{lazy_files::FileId, LpcError, Result, span::{HasSpan, Span}};
+use lpc_rs_core::{convert_escapes, BaseFloat, LpcInt};
+use lpc_rs_errors::{
+    lazy_files::FileId,
+    span::{HasSpan, Span},
+    LpcError, Result,
+};
 
 pub mod lex_state;
 pub mod logos_token;

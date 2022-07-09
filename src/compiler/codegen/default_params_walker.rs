@@ -1,7 +1,9 @@
+use crate::compiler::{
+    ast::function_def_node::FunctionDefNode,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    compilation_context::CompilationContext,
+};
 use lpc_rs_errors::Result;
-use crate::compiler::ast::function_def_node::FunctionDefNode;
-use crate::compiler::codegen::tree_walker::{ContextHolder, TreeWalker};
-use crate::compiler::compilation_context::CompilationContext;
 
 /// A walker to collect function argument lists, so codegen can access them for default arguments.
 #[derive(Debug, Default)]

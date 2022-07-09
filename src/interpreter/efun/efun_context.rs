@@ -1,13 +1,11 @@
-use crate::{
-    interpreter::{
-        call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
-        memory::Memory, process::Process, program::Program, task_context::TaskContext,
-    },
+use crate::interpreter::{
+    call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
+    memory::Memory, process::Process, program::Program, task_context::TaskContext,
 };
 use delegate::delegate;
-use lpc_rs_errors::{LpcError, Result, span::Span};
-use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
+use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
 
 /// A structure to hold various pieces of interpreter state, to be passed to Efuns
 #[derive(Debug)]

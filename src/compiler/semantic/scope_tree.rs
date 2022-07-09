@@ -1,6 +1,6 @@
-use crate::{
-    compiler::compilation_context::CompilationContext,
-    compiler::semantic::{local_scope::LocalScope, symbol::Symbol},
+use crate::compiler::{
+    compilation_context::CompilationContext,
+    semantic::{local_scope::LocalScope, symbol::Symbol},
 };
 use indextree::{Arena, Node, NodeId};
 use lpc_rs_errors::{LpcError, Result};

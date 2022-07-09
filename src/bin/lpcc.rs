@@ -5,9 +5,9 @@ use lpc_rs::{
     compiler::Compiler,
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
-use std::rc::Rc;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::Config;
+use std::rc::Rc;
 
 const DEFAULT_FILE: &str = "mathfile.c";
 

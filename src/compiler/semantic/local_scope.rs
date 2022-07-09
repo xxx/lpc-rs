@@ -57,8 +57,7 @@ impl Default for LocalScope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lpc_rs_core::global_var_flags::GlobalVarFlags;
-    use lpc_rs_core::lpc_type::LpcType;
+    use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {

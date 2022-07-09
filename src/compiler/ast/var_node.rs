@@ -1,12 +1,14 @@
+use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lpc_rs_errors::Result;
 
+use crate::compiler::{
+    ast::ast_node::{AstNodeTrait, SpannedNode},
+    codegen::tree_walker::TreeWalker,
+};
 use lpc_rs_errors::span::Span;
-use crate::compiler::ast::ast_node::{AstNodeTrait, SpannedNode};
-use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing the use of a variable.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

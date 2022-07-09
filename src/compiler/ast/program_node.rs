@@ -3,13 +3,15 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use crate::compiler::{
+    ast::{
+        ast_node::{AstNode, AstNodeTrait},
+        inherit_node::InheritNode,
+    },
+    codegen::tree_walker::TreeWalker,
+};
 use itertools::Itertools;
 use lpc_rs_errors::Result;
-use crate::compiler::ast::{
-    ast_node::{AstNode, AstNodeTrait},
-    inherit_node::InheritNode,
-};
-use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Default)]

@@ -2,21 +2,21 @@ use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
 use phf::phf_set;
 
-use crate::{
-    compiler::ast::{
+use crate::compiler::{
+    ast::{
         assignment_node::AssignmentNode,
         ast_node::SpannedNode,
-        binary_op_node::{BinaryOperation, BinaryOpNode},
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
         ternary_node::TernaryNode,
-        unary_op_node::{UnaryOperation, UnaryOpNode},
+        unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    compiler::compilation_context::CompilationContext,
-    compiler::semantic::local_scope::LocalScope,
+    compilation_context::CompilationContext,
+    semantic::local_scope::LocalScope,
 };
 
 /// Utility functions for doing various semantic checks.
@@ -379,9 +379,9 @@ mod tests {
 
     mod check_binary_operation_tests {
         use super::*;
-        use crate::{
-            compiler::ast::range_node::RangeNode,
-            compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol},
+        use crate::compiler::{
+            ast::range_node::RangeNode,
+            semantic::{scope_tree::ScopeTree, symbol::Symbol},
         };
         use indexmap::IndexMap;
         use lpc_rs_core::global_var_flags::GlobalVarFlags;
@@ -1513,9 +1513,7 @@ mod tests {
 
     mod check_unary_operation_tests {
         use super::*;
-        use crate::compiler::semantic::{
-            scope_tree::ScopeTree, symbol::Symbol,
-        };
+        use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
         use indexmap::IndexMap;
         use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
@@ -1776,7 +1774,7 @@ mod tests {
         mod arrays {
             use super::*;
             use crate::compiler::ast::array_node::ArrayNode;
-            use lpc_rs_core::{EFUN, function_arity::FunctionArity, function_flags::FunctionFlags};
+            use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags, EFUN};
             use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
             #[test]
@@ -1903,9 +1901,7 @@ mod tests {
 
         mod binary_ops {
             use super::*;
-            use crate::compiler::semantic::{
-                scope_tree::ScopeTree, symbol::Symbol,
-            };
+            use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
             use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
             #[test]

@@ -1,10 +1,11 @@
-use crate::compiler::Compiler;
-use lpc_rs_core::EFUN;
-use lpc_rs_core::lpc_path::LpcPath;
+use crate::compiler::{
+    ast::inherit_node::InheritNode,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    compilation_context::CompilationContext,
+    Compiler,
+};
+use lpc_rs_core::{lpc_path::LpcPath, EFUN};
 use lpc_rs_errors::{LpcError, Result};
-use crate::compiler::ast::inherit_node::InheritNode;
-use crate::compiler::codegen::tree_walker::{ContextHolder, TreeWalker};
-use crate::compiler::compilation_context::CompilationContext;
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]

@@ -8,8 +8,8 @@ use lpc_rs::{
     compiler::Compiler,
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
 };
-use std::rc::Rc;
 use lpc_rs_utils::config::Config;
+use std::rc::Rc;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)

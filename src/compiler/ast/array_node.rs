@@ -1,15 +1,16 @@
-use lpc_rs_errors::span::Span;
+use lpc_rs_errors::{span::Span, Result};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lpc_rs_errors::Result;
 
-use crate::compiler::ast::{
-    ast_node::{AstNodeTrait, SpannedNode},
-    expression_node::ExpressionNode,
+use crate::compiler::{
+    ast::{
+        ast_node::{AstNodeTrait, SpannedNode},
+        expression_node::ExpressionNode,
+    },
+    codegen::tree_walker::TreeWalker,
 };
-use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing an array literal
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

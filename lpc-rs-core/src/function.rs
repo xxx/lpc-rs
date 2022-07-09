@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
-use serde::{Serialize, Deserialize};
 use crate::register::Register;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 /// An enum to handle function names that are either vars or literal names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -6,10 +6,10 @@ use crate::{
     },
     util::get_simul_efuns,
 };
-use std::{cell::RefCell, rc::Rc};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
 pub struct Vm {

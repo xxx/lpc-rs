@@ -1,6 +1,4 @@
-use crate::{
-    interpreter::{call_frame::CallFrame, lpc_ref::LpcRef},
-};
+use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 use arrayvec::ArrayVec;
 use delegate::delegate;
 use lpc_rs_errors::{LpcError, Result};
