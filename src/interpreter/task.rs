@@ -17,7 +17,6 @@ use crate::{
         register_bank::RegisterBank,
         task_context::TaskContext,
     },
-    compiler::semantic::program_function::ProgramFunction,
     try_extract_value,
     util::config::Config,
 };
@@ -38,6 +37,7 @@ use std::{
 use tracing::{instrument, trace};
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
+use lpc_rs_function_support::program_function::ProgramFunction;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

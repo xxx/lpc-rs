@@ -660,7 +660,7 @@ mod tests {
     use crate::{
         apply_walker,
         compiler::Compiler,
-        compiler::semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
+        compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol},
     };
     use claim::*;
     use indoc::indoc;
@@ -669,6 +669,7 @@ mod tests {
     };
     use std::{collections::HashMap, default::Default};
     use lpc_rs_core::lpc_path::LpcPath;
+    use lpc_rs_function_support::function_prototype::FunctionPrototype;
     use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode};
     use crate::compiler::codegen::{
         default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
@@ -1050,11 +1051,11 @@ mod tests {
     mod test_visit_call {
         use lpc_rs_core::function_flags::FunctionFlags;
         use lpc_rs_core::visibility::Visibility;
+        use lpc_rs_function_support::program_function::ProgramFunction;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            compiler::semantic::program_function::ProgramFunction,
         };
 
         #[test]
@@ -1858,11 +1859,11 @@ mod tests {
 
     mod test_visit_function_def {
         use lpc_rs_core::function_flags::FunctionFlags;
+        use lpc_rs_function_support::program_function::ProgramFunction;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            compiler::semantic::program_function::ProgramFunction,
         };
         use crate::compiler::ast::{ast_node::AstNode, binary_op_node::BinaryOperation};
         use crate::compiler::codegen::scope_walker::ScopeWalker;
@@ -2011,11 +2012,11 @@ mod tests {
     mod test_visit_function_ptr {
         use lpc_rs_core::function_flags::FunctionFlags;
         use lpc_rs_core::visibility::Visibility;
+        use lpc_rs_function_support::program_function::ProgramFunction;
         use super::*;
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            compiler::semantic::program_function::ProgramFunction,
         };
 
         #[test]

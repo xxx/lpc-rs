@@ -11,6 +11,7 @@ lalrpop = "0.19.4"
 lpc-rs-asm = { path = "./lpc-rs-asm"}
 lpc-rs-core = { path = "./lpc-rs-core"}
 lpc-rs-errors = { path = "./lpc-rs-errors"}
+lpc-rs-function-support = { path = "./lpc-rs-function-support"}
 
 arrayvec = "0.7.1"
 auto_impl = "1.0.1"
@@ -25,7 +26,6 @@ itertools = "0.10.0"
 lalrpop-util = "0.19.4"
 lazy_format = "1.8.4"
 logos = "0.12.0"
-multimap = "0.8.2"
 once_cell = "1.10.0"
 phf = { version = "0.10.0", features = ["macros"] }
 refpool = "0.4.3"
@@ -63,7 +63,8 @@ release_max_level_trace = ["tracing/release_max_level_trace"]
 members = [
     "lpc-rs-asm",
     "lpc-rs-core",
-    "lpc-rs-errors"
+    "lpc-rs-errors",
+    "lpc-rs-function-support",
 ]
 
 [profile.release]

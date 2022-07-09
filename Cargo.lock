@@ -628,7 +628,7 @@ dependencies = [
  "lpc-rs-asm",
  "lpc-rs-core",
  "lpc-rs-errors",
- "multimap",
+ "lpc-rs-function-support",
  "once_cell",
  "phf",
  "refpool",
@@ -674,6 +674,20 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "serde",
+]
+
+[[package]]
+name = "lpc-rs-function-support"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "lazy_format",
+ "lpc-rs-asm",
+ "lpc-rs-core",
+ "lpc-rs-errors",
+ "multimap",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

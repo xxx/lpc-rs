@@ -1,8 +1,8 @@
 use crate::{
+    compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol},
     interpreter::{
         efun::EFUN_PROTOTYPES, process::Process, program::Program,
     },
-    compiler::semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
     util::{config::Config, function_like::FunctionLike},
 };
 use delegate::delegate;
@@ -11,6 +11,7 @@ use lpc_rs_errors::LpcError;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::pragma_flags::PragmaFlags;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use crate::compiler::ast::expression_node::ExpressionNode;
 
 /// A big, fat state object to store data created at various stages of compilation.
@@ -313,7 +314,7 @@ impl Default for CompilationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::semantic::{program_function::ProgramFunction};
+    use lpc_rs_function_support::program_function::ProgramFunction;
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_core::function_flags::FunctionFlags;
 

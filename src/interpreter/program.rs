@@ -1,4 +1,4 @@
-use crate::compiler::semantic::program_function::ProgramFunction;
+use lpc_rs_function_support::program_function::ProgramFunction;
 use crate::{interpreter::efun::EFUN_PROTOTYPES, compiler::semantic::symbol::Symbol};
 use lpc_rs_core::EFUN;
 use rmp_serde::Serializer;

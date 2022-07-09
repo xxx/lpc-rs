@@ -1,4 +1,4 @@
-use crate::compiler::semantic::function_prototype::FunctionPrototype;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
 use crate::compiler::ast::function_def_node::FunctionDefNode;

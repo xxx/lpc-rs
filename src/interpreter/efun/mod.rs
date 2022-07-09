@@ -7,10 +7,7 @@ mod file_name;
 mod this_object;
 mod throw;
 
-use crate::{
-    interpreter::efun::efun_context::EfunContext,
-    compiler::semantic::{function_prototype::FunctionPrototype},
-};
+use crate::interpreter::efun::efun_context::EfunContext;
 use clone_object::clone_object;
 use debug::debug;
 use dump::dump;
@@ -20,6 +17,7 @@ use lpc_rs_errors::{LpcError, Result};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use lpc_rs_core::function_flags::FunctionFlags;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use this_object::this_object;
 use throw::throw;
 

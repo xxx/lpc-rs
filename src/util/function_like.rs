@@ -1,5 +1,6 @@
-use crate::compiler::semantic::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
+use lpc_rs_function_support::program_function::ProgramFunction;
 use std::rc::Rc;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
 /// A facade to allow us to lookup prototypes or compiled functions
 #[derive(Debug, PartialEq)]

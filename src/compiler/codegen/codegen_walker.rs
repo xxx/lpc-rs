@@ -1,11 +1,8 @@
 use crate::{
+    compiler::semantic::symbol::Symbol,
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         program::Program,
-    },
-    compiler::semantic::{
-        function_prototype::FunctionPrototype,
-        program_function::ProgramFunction, symbol::Symbol,
     },
 };
 use if_chain::if_chain;
@@ -21,6 +18,8 @@ use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label}
 use lpc_rs_core::register_counter::RegisterCounter;
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 use lpc_rs_core::function_flags::FunctionFlags;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_function_support::program_function::ProgramFunction;
 use tree_walker::TreeWalker;
 use crate::compiler::ast::{
     array_node::ArrayNode,
@@ -2610,7 +2609,7 @@ mod tests {
         use lpc_rs_core::function_flags::FunctionFlags;
 
         use super::*;
-        use crate::compiler::semantic::function_prototype::FunctionPrototype;
+        use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
         #[test]
         fn populates_the_instructions() {

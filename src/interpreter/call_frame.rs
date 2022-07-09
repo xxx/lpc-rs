@@ -3,7 +3,6 @@ use crate::{
         lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         register_bank::RegisterBank,
     },
-    compiler::semantic::program_function::ProgramFunction,
     try_extract_value,
 };
 use lpc_rs_errors::{LpcError, Result, span::Span};
@@ -17,6 +16,7 @@ use std::{
 use tracing::instrument;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::function::FunctionName;
+use lpc_rs_function_support::program_function::ProgramFunction;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -205,7 +205,7 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::semantic::function_prototype::FunctionPrototype;
+    use lpc_rs_function_support::function_prototype::FunctionPrototype;
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_core::function_flags::FunctionFlags;
 

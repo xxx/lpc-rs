@@ -1,6 +1,6 @@
-use lpc_rs_core::function::FunctionTarget;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use lpc_rs_core::function::FunctionTarget;
 use lpc_rs_core::{
     call_namespace::CallNamespace, function_arity::FunctionArity, register::Register, LpcFloat,
     LpcInt,

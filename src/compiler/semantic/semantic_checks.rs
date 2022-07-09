@@ -1775,11 +1775,9 @@ mod tests {
 
         mod arrays {
             use super::*;
-            use crate::{
-                compiler::ast::array_node::ArrayNode,
-                compiler::semantic::function_prototype::FunctionPrototype,
-            };
+            use crate::compiler::ast::array_node::ArrayNode;
             use lpc_rs_core::{EFUN, function_arity::FunctionArity, function_flags::FunctionFlags};
+            use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
             #[test]
             fn empty_array_is_mixed() {

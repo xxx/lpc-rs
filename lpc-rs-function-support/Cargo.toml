@@ -1,0 +1,17 @@
+[package]
+name = "lpc-rs-function-support"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lpc-rs-asm = { path = "../lpc-rs-asm" }
+lpc-rs-core = { path = "../lpc-rs-core" }
+lpc-rs-errors = { path = "../lpc-rs-errors" }
+
+itertools = "0.10.0"
+lazy_format = "1.8.4"
+multimap = "0.8.2"
+serde = { version = "1.0.123", features = ["derive", "rc"] }
+tracing = "0.1"
