@@ -1,4 +1,4 @@
-use lpc_rs_core::register::Register;
+use crate::register::Register;
 
 /// A [`Register`]-aware counter, used during code generation.
 #[derive(Debug, Clone, Default)]

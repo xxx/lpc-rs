@@ -52,7 +52,7 @@ use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
 use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
-use lpc_rs_asm::register_counter::RegisterCounter;
+use lpc_rs_core::register_counter::RegisterCounter;
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 use lpc_rs_core::function_flags::FunctionFlags;
 use tree_walker::TreeWalker;
