@@ -1,5 +1,4 @@
 pub mod config;
-pub mod function_like;
 pub mod repeat_string;
 
 use crate::{

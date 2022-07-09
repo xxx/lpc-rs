@@ -3,7 +3,7 @@ use crate::{
     interpreter::{
         efun::EFUN_PROTOTYPES, process::Process, program::Program,
     },
-    util::{config::Config, function_like::FunctionLike},
+    util::config::Config,
 };
 use delegate::delegate;
 use lpc_rs_core::{call_namespace::CallNamespace, EFUN};
@@ -11,6 +11,7 @@ use lpc_rs_errors::LpcError;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::pragma_flags::PragmaFlags;
+use lpc_rs_function_support::function_like::FunctionLike;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use crate::compiler::ast::expression_node::ExpressionNode;
 
