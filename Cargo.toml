@@ -12,6 +12,7 @@ lpc-rs-asm = { path = "./lpc-rs-asm"}
 lpc-rs-core = { path = "./lpc-rs-core"}
 lpc-rs-errors = { path = "./lpc-rs-errors"}
 lpc-rs-function-support = { path = "./lpc-rs-function-support"}
+lpc-rs-utils = { path = "./lpc-rs-utils"}
 
 arrayvec = "0.7.1"
 auto_impl = "1.0.1"
@@ -32,7 +33,7 @@ refpool = "0.4.3"
 regex = "1"
 rmp-serde = "1.0.0"
 serde = { version = "1.0.123", features = ["derive", "rc"] }
-toml = "0.5.8"
+#toml = "0.5.8"
 tracing = "0.1"
 tracing-subscriber = "0.3.11"
 
@@ -65,6 +66,7 @@ members = [
     "lpc-rs-core",
     "lpc-rs-errors",
     "lpc-rs-function-support",
+    "lpc-rs-utils",
 ]
 
 [profile.release]

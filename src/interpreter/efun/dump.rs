@@ -148,13 +148,12 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-
+    use lpc_rs_utils::config::Config;
     use crate::interpreter::program::Program;
 
     use crate::{
         compiler::Compiler,
         interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
-        util::config::Config,
     };
 
     fn compile_prog(code: &str) -> Program {

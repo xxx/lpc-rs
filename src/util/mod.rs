@@ -1,11 +1,8 @@
-pub mod config;
-pub mod repeat_string;
-
 use crate::{
     interpreter::{object_space::ObjectSpace, process::Process},
-    util::config::Config,
 };
 use std::{cell::RefCell, rc::Rc};
+use lpc_rs_utils::config::Config;
 
 pub fn get_simul_efuns(
     config: &Config,

@@ -1,5 +1,6 @@
 use if_chain::if_chain;
-use lpc_rs::{interpreter::vm::Vm, util::config::Config};
+use lpc_rs::interpreter::vm::Vm;
+use lpc_rs_utils::config::Config;
 
 fn main() {
     // let args: Vec<String> = env::args().collect();

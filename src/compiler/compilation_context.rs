@@ -3,7 +3,6 @@ use crate::{
     interpreter::{
         efun::EFUN_PROTOTYPES, process::Process, program::Program,
     },
-    util::config::Config,
 };
 use delegate::delegate;
 use lpc_rs_core::{call_namespace::CallNamespace, EFUN};
@@ -13,6 +12,7 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::pragma_flags::PragmaFlags;
 use lpc_rs_function_support::function_like::FunctionLike;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_utils::config::Config;
 use crate::compiler::ast::expression_node::ExpressionNode;
 
 /// A big, fat state object to store data created at various stages of compilation.
@@ -90,7 +90,7 @@ impl CompilationContext {
     /// ```
     /// use std::rc::Rc;
     /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs::util::config::Config;
+    /// use lpc_rs_utils::config::Config;
     ///
     /// let context = CompilationContext::new("./test.c", Rc::new(Config::default()));
     /// ```

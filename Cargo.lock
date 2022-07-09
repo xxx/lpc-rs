@@ -629,13 +629,13 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
  "lpc-rs-function-support",
+ "lpc-rs-utils",
  "once_cell",
  "phf",
  "refpool",
  "regex",
  "rmp-serde",
  "serde",
- "toml",
  "tracing",
  "tracing-subscriber",
 ]
@@ -687,6 +687,18 @@ dependencies = [
  "lpc-rs-errors",
  "multimap",
  "serde",
+ "tracing",
+]
+
+[[package]]
+name = "lpc-rs-utils"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "if_chain",
+ "lpc-rs-core",
+ "lpc-rs-errors",
+ "toml",
  "tracing",
 ]
 

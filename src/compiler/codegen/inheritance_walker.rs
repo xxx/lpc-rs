@@ -119,7 +119,7 @@ impl TreeWalker for InheritanceWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::config::Config;
+    use lpc_rs_utils::config::Config;
 
     fn walker() -> InheritanceWalker {
         let config = Config::default().with_lib_dir("./tests/fixtures/code/");

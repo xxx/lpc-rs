@@ -4,11 +4,12 @@ use crate::{
     interpreter::{
         memory::Memory, object_space::ObjectSpace, task::Task, task_context::TaskContext,
     },
-    util::{config::Config, get_simul_efuns},
+    util::get_simul_efuns,
 };
 use std::{cell::RefCell, rc::Rc};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
+use lpc_rs_utils::config::Config;
 
 #[derive(Debug)]
 pub struct Vm {

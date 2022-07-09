@@ -116,9 +116,9 @@ mod tests {
             memory::Memory, object_space::ObjectSpace, program::Program, task_context::TaskContext,
         },
         test_support::compile_prog,
-        util::config::Config,
     };
     use indoc::indoc;
+    use lpc_rs_utils::config::Config;
 
     fn task_context_fixture(program: Program, config: Rc<Config>) -> TaskContext {
         let process = Process::new(program);

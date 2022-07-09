@@ -4,7 +4,6 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::{
     interpreter::{process::Process, program::Program},
     lpc_parser,
-    util::config::Config,
 };
 use lpc_rs_errors::span::Span;
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
@@ -19,6 +18,7 @@ use codegen::{
 use compilation_context::CompilationContext;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_utils::config::Config;
 use preprocessor::Preprocessor;
 
 pub mod ast;

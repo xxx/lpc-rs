@@ -1,0 +1,16 @@
+[package]
+name = "lpc-rs-utils"
+version = "0.1.0"
+authors = ["mpd <mpd@jesters-court.net>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lpc-rs-core = { path = "../lpc-rs-core"}
+lpc-rs-errors = { path = "../lpc-rs-errors"}
+
+fs-err = "2.6.0"
+if_chain = "1.0.1"
+toml = "0.5.8"
+tracing = "0.1"

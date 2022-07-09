@@ -1,4 +1,4 @@
-use crate::util::config::Config;
+use lpc_rs_utils::config::Config;
 use lpc_rs_errors::{LpcError, Result};
 use std::cell::Cell;
 

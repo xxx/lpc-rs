@@ -18,7 +18,6 @@ use crate::{
         task_context::TaskContext,
     },
     try_extract_value,
-    util::config::Config,
 };
 use decorum::Total;
 use if_chain::if_chain;
@@ -38,6 +37,7 @@ use tracing::{instrument, trace};
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_utils::config::Config;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

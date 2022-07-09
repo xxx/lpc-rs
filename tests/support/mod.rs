@@ -5,8 +5,8 @@ use lpc_rs::{
         memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
         task_context::TaskContext,
     },
-    util::config::Config,
 };
+use lpc_rs_utils::config::Config;
 
 #[macro_export]
 macro_rules! assert_regex {

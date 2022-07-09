@@ -7,9 +7,9 @@ use indoc::indoc;
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
-    util::config::Config,
 };
 use std::rc::Rc;
+use lpc_rs_utils::config::Config;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)

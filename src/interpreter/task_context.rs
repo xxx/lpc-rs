@@ -3,11 +3,12 @@ use crate::{
         instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
         process::Process, program::Program,
     },
-    util::{config::Config, get_simul_efuns},
+    util::get_simul_efuns,
 };
 use delegate::delegate;
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use lpc_rs_errors::Result;
+use lpc_rs_utils::config::Config;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]

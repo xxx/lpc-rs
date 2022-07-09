@@ -86,7 +86,7 @@ impl Preprocessor {
     /// ```
     /// use lpc_rs::compiler::preprocessor::Preprocessor;
     /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs::util::config::Config;
+    /// use lpc_rs_utils::config::Config;
     /// use std::rc::Rc;
     ///
     /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
@@ -120,7 +120,7 @@ impl Preprocessor {
     /// ```
     /// use lpc_rs::compiler::preprocessor::Preprocessor;
     /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs::util::config::Config;
+    /// use lpc_rs_utils::config::Config;
     /// use std::rc::Rc;
     ///
     /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
@@ -937,7 +937,7 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
-    use crate::util::config::Config;
+    use lpc_rs_utils::config::Config;
     use std::rc::Rc;
 
     fn fixture() -> Preprocessor {

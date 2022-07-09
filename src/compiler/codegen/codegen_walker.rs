@@ -1908,13 +1908,13 @@ mod tests {
         compiler::Compiler,
         interpreter::{process::Process, program::Program},
         lpc_parser,
-        util::config::Config,
     };
     use lpc_rs_core::{lpc_type::LpcType, LpcFloat};
     use lpc_rs_core::global_var_flags::GlobalVarFlags;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_errors::Result;
     use lpc_rs_errors::span::Span;
+    use lpc_rs_utils::config::Config;
     use crate::compiler::ast::{
         ast_node::AstNode, comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
