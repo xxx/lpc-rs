@@ -59,7 +59,7 @@ impl ProgramFunction {
         }
     }
 
-    /// Push and [`Instruction`] and corresponding [`Span`] into this function's code.
+    /// Push an [`Instruction`] and corresponding [`Span`] into this function's code.
     pub fn push_instruction(&mut self, instruction: Instruction, debug_span: Option<Span>) {
         trace!(instruction = %instruction, span = ?debug_span, "pushing instruction");
         self.instructions.push(instruction);
