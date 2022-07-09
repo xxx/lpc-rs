@@ -27,6 +27,7 @@ pub mod codegen;
 pub mod lexer;
 pub mod semantic;
 pub mod preprocessor;
+pub mod parser;
 
 #[macro_export]
 macro_rules! apply_walker {
