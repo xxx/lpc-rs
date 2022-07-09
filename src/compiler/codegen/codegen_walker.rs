@@ -3,7 +3,7 @@ use crate::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         program::Program,
     },
-    semantic::{
+    compiler::semantic::{
         function_prototype::FunctionPrototype,
         program_function::ProgramFunction, symbol::Symbol,
     },
@@ -2610,7 +2610,7 @@ mod tests {
         use lpc_rs_core::function_flags::FunctionFlags;
 
         use super::*;
-        use crate::semantic::function_prototype::FunctionPrototype;
+        use crate::compiler::semantic::function_prototype::FunctionPrototype;
 
         #[test]
         fn populates_the_instructions() {

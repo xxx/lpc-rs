@@ -1,4 +1,4 @@
-use crate::semantic::semantic_checks::{
+use crate::compiler::semantic::semantic_checks::{
     check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
 };
 use if_chain::if_chain;
@@ -660,7 +660,7 @@ mod tests {
     use crate::{
         apply_walker,
         compiler::Compiler,
-        semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
+        compiler::semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
     };
     use claim::*;
     use indoc::indoc;
@@ -1054,7 +1054,7 @@ mod tests {
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            semantic::program_function::ProgramFunction,
+            compiler::semantic::program_function::ProgramFunction,
         };
 
         #[test]
@@ -1862,7 +1862,7 @@ mod tests {
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            semantic::program_function::ProgramFunction,
+            compiler::semantic::program_function::ProgramFunction,
         };
         use crate::compiler::ast::{ast_node::AstNode, binary_op_node::BinaryOperation};
         use crate::compiler::codegen::scope_walker::ScopeWalker;
@@ -2015,7 +2015,7 @@ mod tests {
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            semantic::program_function::ProgramFunction,
+            compiler::semantic::program_function::ProgramFunction,
         };
 
         #[test]

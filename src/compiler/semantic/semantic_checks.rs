@@ -16,7 +16,7 @@ use crate::{
         var_node::VarNode,
     },
     compiler::compilation_context::CompilationContext,
-    semantic::local_scope::LocalScope,
+    compiler::semantic::local_scope::LocalScope,
 };
 
 /// Utility functions for doing various semantic checks.
@@ -381,7 +381,7 @@ mod tests {
         use super::*;
         use crate::{
             compiler::ast::range_node::RangeNode,
-            semantic::{scope_tree::ScopeTree, symbol::Symbol},
+            compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol},
         };
         use indexmap::IndexMap;
         use lpc_rs_core::global_var_flags::GlobalVarFlags;
@@ -1513,7 +1513,7 @@ mod tests {
 
     mod check_unary_operation_tests {
         use super::*;
-        use crate::semantic::{
+        use crate::compiler::semantic::{
             scope_tree::ScopeTree, symbol::Symbol,
         };
         use indexmap::IndexMap;
@@ -1777,7 +1777,7 @@ mod tests {
             use super::*;
             use crate::{
                 compiler::ast::array_node::ArrayNode,
-                semantic::function_prototype::FunctionPrototype,
+                compiler::semantic::function_prototype::FunctionPrototype,
             };
             use lpc_rs_core::{EFUN, function_arity::FunctionArity, function_flags::FunctionFlags};
 
@@ -1905,7 +1905,7 @@ mod tests {
 
         mod binary_ops {
             use super::*;
-            use crate::semantic::{
+            use crate::compiler::semantic::{
                 scope_tree::ScopeTree, symbol::Symbol,
             };
             use lpc_rs_core::global_var_flags::GlobalVarFlags;

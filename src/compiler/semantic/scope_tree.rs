@@ -1,6 +1,6 @@
 use crate::{
     compiler::compilation_context::CompilationContext,
-    semantic::{local_scope::LocalScope, symbol::Symbol},
+    compiler::semantic::{local_scope::LocalScope, symbol::Symbol},
 };
 use indextree::{Arena, Node, NodeId};
 use lpc_rs_errors::{LpcError, Result};
@@ -28,7 +28,7 @@ impl ScopeTree {
     ///
     /// # Example
     /// ```
-    /// use lpc_rs::semantic::scope_tree::ScopeTree;
+    /// use lpc_rs::compiler::semantic::scope_tree::ScopeTree;
     ///
     /// let mut tree = ScopeTree::default();
     ///
@@ -40,8 +40,7 @@ impl ScopeTree {
     /// tree.pop();
     /// let grandchild_id_2 = tree.push_new();
     ///
-    /// // etc.
-    ///
+    /// // etc.    ///
     pub fn push_new(&mut self) -> NodeId {
         let id = self.scopes.count();
 

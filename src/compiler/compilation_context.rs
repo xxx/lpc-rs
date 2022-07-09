@@ -2,7 +2,7 @@ use crate::{
     interpreter::{
         efun::EFUN_PROTOTYPES, process::Process, program::Program,
     },
-    semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
+    compiler::semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
     util::{config::Config, function_like::FunctionLike},
 };
 use delegate::delegate;
@@ -313,7 +313,7 @@ impl Default for CompilationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::{program_function::ProgramFunction};
+    use crate::compiler::semantic::{program_function::ProgramFunction};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_core::function_flags::FunctionFlags;
 

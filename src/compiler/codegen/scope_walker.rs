@@ -1,5 +1,5 @@
 use crate::{
-    semantic::{
+    compiler::semantic::{
         semantic_checks::check_var_redefinition, symbol::Symbol,
     },
 };

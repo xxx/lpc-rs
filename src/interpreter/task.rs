@@ -17,7 +17,7 @@ use crate::{
         register_bank::RegisterBank,
         task_context::TaskContext,
     },
-    semantic::program_function::ProgramFunction,
+    compiler::semantic::program_function::ProgramFunction,
     try_extract_value,
     util::config::Config,
 };

@@ -3,7 +3,7 @@ use crate::{
         lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         register_bank::RegisterBank,
     },
-    semantic::program_function::ProgramFunction,
+    compiler::semantic::program_function::ProgramFunction,
     try_extract_value,
 };
 use lpc_rs_errors::{LpcError, Result, span::Span};
@@ -205,7 +205,7 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::function_prototype::FunctionPrototype;
+    use crate::compiler::semantic::function_prototype::FunctionPrototype;
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_core::function_flags::FunctionFlags;
 

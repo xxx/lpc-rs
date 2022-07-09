@@ -1,4 +1,5 @@
-use crate::semantic::program_function::ProgramFunction;
+use crate::compiler::semantic::program_function::ProgramFunction;
+use crate::{interpreter::efun::EFUN_PROTOTYPES, compiler::semantic::symbol::Symbol};
 use lpc_rs_core::EFUN;
 use rmp_serde::Serializer;
 use std::{
@@ -13,7 +14,6 @@ use std::{
 use itertools::Itertools;
 use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
 
-use crate::{interpreter::efun::EFUN_PROTOTYPES, semantic::symbol::Symbol};
 use serde::{Deserialize, Serialize};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::pragma_flags::PragmaFlags;

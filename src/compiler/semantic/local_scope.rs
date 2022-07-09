@@ -1,4 +1,4 @@
-use crate::semantic::symbol::Symbol;
+use crate::compiler::semantic::symbol::Symbol;
 use delegate::delegate;
 use std::collections::HashMap;
 

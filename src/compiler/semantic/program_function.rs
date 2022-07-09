@@ -1,4 +1,4 @@
-use crate::semantic::function_prototype::FunctionPrototype;
+use crate::compiler::semantic::function_prototype::FunctionPrototype;
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;

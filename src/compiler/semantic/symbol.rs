@@ -1,6 +1,6 @@
 use crate::{
     compiler::ast::var_init_node::VarInitNode,
-    semantic::{
+    compiler::semantic::{
         function_prototype::FunctionPrototype,
     },
 };

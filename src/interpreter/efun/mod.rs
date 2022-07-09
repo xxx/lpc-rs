@@ -9,7 +9,7 @@ mod throw;
 
 use crate::{
     interpreter::efun::efun_context::EfunContext,
-    semantic::{function_prototype::FunctionPrototype},
+    compiler::semantic::{function_prototype::FunctionPrototype},
 };
 use clone_object::clone_object;
 use debug::debug;

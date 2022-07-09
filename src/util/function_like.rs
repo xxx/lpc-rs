@@ -1,4 +1,4 @@
-use crate::semantic::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
+use crate::compiler::semantic::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
 use std::rc::Rc;
 
 /// A facade to allow us to lookup prototypes or compiled functions

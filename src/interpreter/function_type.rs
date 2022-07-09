@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef},
-    semantic::program_function::ProgramFunction,
+    compiler::semantic::program_function::ProgramFunction,
 };
 use delegate::delegate;
 use lpc_rs_core::{function_arity::FunctionArity};

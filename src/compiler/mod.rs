@@ -25,6 +25,7 @@ pub mod ast;
 pub mod compilation_context;
 pub mod codegen;
 pub mod lexer;
+pub mod semantic;
 
 #[macro_export]
 macro_rules! apply_walker {
