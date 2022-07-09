@@ -34,7 +34,9 @@ fn main() {
         None
     };
 
-    let config = Config::new(config_override).unwrap().with_lib_dir(args.lib_dir);
+    let config = Config::new(config_override)
+        .unwrap()
+        .with_lib_dir(args.lib_dir);
 
     let config = Rc::new(config);
 
