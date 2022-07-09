@@ -2,12 +2,6 @@ use fs_err as fs;
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
-    codegen::{
-        codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-        function_prototype_walker::FunctionPrototypeWalker, inheritance_walker::InheritanceWalker,
-        scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
-        tree_walker::ContextHolder,
-    },
     interpreter::{process::Process, program::Program},
     lpc_parser,
     parser::lexer::{Spanned, Token, TokenVecWrapper},
@@ -18,11 +12,18 @@ use lpc_rs_errors::span::Span;
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
+use codegen::{
+    codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
+    function_prototype_walker::FunctionPrototypeWalker, inheritance_walker::InheritanceWalker,
+    scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
+    tree_walker::ContextHolder,
+};
 use compilation_context::CompilationContext;
 use lpc_rs_core::lpc_path::LpcPath;
 
 pub mod ast;
 pub mod compilation_context;
+pub mod codegen;
 
 #[macro_export]
 macro_rules! apply_walker {

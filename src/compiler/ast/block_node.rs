@@ -3,13 +3,10 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
-
 use indextree::NodeId;
 use lpc_rs_errors::Result;
 use crate::compiler::ast::ast_node::{AstNode, AstNodeTrait};
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing a code block
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

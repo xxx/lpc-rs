@@ -3,9 +3,6 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use itertools::Itertools;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::lpc_type::LpcType;
@@ -15,6 +12,7 @@ use crate::compiler::ast::{
     ast_node::{AstNode, AstNodeTrait, SpannedNode},
     var_init_node::VarInitNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A constant for the `argv` variable that's automatically created in functions with ellipsis args
 pub const ARGV: &str = "argv";

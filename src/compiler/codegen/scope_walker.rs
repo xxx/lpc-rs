@@ -1,5 +1,4 @@
 use crate::{
-    codegen::tree_walker::{ContextHolder, TreeWalker},
     semantic::{
         semantic_checks::check_var_redefinition, symbol::Symbol,
     },
@@ -20,6 +19,7 @@ use crate::compiler::ast::{
     var_node::VarNode,
     while_node::WhileNode,
 };
+use crate::compiler::codegen::tree_walker::{ContextHolder, TreeWalker};
 use crate::compiler::compilation_context::CompilationContext;
 
 /// A tree walker to handle populating all the scopes in the program, as well as generating

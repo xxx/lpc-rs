@@ -4,11 +4,9 @@ use std::{
 };
 use lpc_rs_errors::Result;
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use lpc_rs_errors::span::Span;
 use crate::compiler::ast::ast_node::{AstNodeTrait, SpannedNode};
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing a `break` statement.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]

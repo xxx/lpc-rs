@@ -1,6 +1,3 @@
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use itertools::Itertools;
 use lpc_rs_core::lpc_type::LpcType;
 use std::{
@@ -9,6 +6,7 @@ use std::{
 };
 use lpc_rs_errors::Result;
 use crate::compiler::ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode};
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A container for a set of variable declarations.
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

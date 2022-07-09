@@ -3,15 +3,12 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
-
 use crate::compiler::ast::expression_node::ExpressionNode;
 use indextree::NodeId;
 use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
 use crate::compiler::ast::ast_node::{AstNode, AstNodeTrait};
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing an `if` statement
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

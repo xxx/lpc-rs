@@ -1,8 +1,5 @@
-use crate::{
-    codegen::tree_walker::{ContextHolder, TreeWalker},
-    semantic::semantic_checks::{
-        check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
-    },
+use crate::semantic::semantic_checks::{
+    check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
 };
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, EFUN, lpc_type::LpcType};
@@ -32,6 +29,7 @@ use crate::compiler::ast::{
     var_init_node::VarInitNode,
     while_node::WhileNode,
 };
+use crate::compiler::codegen::tree_walker::{ContextHolder, TreeWalker};
 use crate::compiler::compilation_context::CompilationContext;
 
 struct BreakAllowed(bool);
@@ -661,10 +659,6 @@ mod tests {
     use super::*;
     use crate::{
         apply_walker,
-        codegen::{
-            default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
-            semantic_check_walker::SemanticCheckWalker,
-        },
         compiler::Compiler,
         semantic::{function_prototype::FunctionPrototype, scope_tree::ScopeTree, symbol::Symbol},
     };
@@ -676,6 +670,10 @@ mod tests {
     use std::{collections::HashMap, default::Default};
     use lpc_rs_core::lpc_path::LpcPath;
     use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode};
+    use crate::compiler::codegen::{
+        default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
+        semantic_check_walker::SemanticCheckWalker,
+    };
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();
@@ -1056,9 +1054,7 @@ mod tests {
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            semantic::{
-                program_function::ProgramFunction,
-            },
+            semantic::program_function::ProgramFunction,
         };
 
         #[test]
@@ -1865,11 +1861,11 @@ mod tests {
         use super::*;
         use crate::{
             assert_regex,
-            codegen::scope_walker::ScopeWalker,
             interpreter::program::Program,
-            semantic::{program_function::ProgramFunction},
+            semantic::program_function::ProgramFunction,
         };
         use crate::compiler::ast::{ast_node::AstNode, binary_op_node::BinaryOperation};
+        use crate::compiler::codegen::scope_walker::ScopeWalker;
 
         #[test]
         fn handles_scopes() {
@@ -2019,9 +2015,7 @@ mod tests {
         use crate::{
             assert_regex,
             interpreter::program::Program,
-            semantic::{
-                program_function::ProgramFunction,
-            },
+            semantic::program_function::ProgramFunction,
         };
 
         #[test]

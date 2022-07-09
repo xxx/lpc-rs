@@ -4,15 +4,13 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use std::convert::TryFrom;
 use crate::compiler::ast::{
     assignment_node::AssignmentOperation,
     ast_node::{AstNodeTrait, SpannedNode},
     expression_node::ExpressionNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// All possible binary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

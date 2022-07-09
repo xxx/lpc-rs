@@ -11,9 +11,6 @@ use int_node::IntNode;
 use lpc_rs_errors::Result;
 use program_node::ProgramNode;
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use lpc_rs_errors::span::Span;
 use crate::compiler::ast::{
     binary_op_node::BinaryOpNode, block_node::BlockNode, break_node::BreakNode,
@@ -23,6 +20,7 @@ use crate::compiler::ast::{
     labeled_statement_node::LabeledStatementNode, program_node, return_node::ReturnNode,
     switch_node::SwitchNode, var_init_node::VarInitNode, while_node::WhileNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

@@ -1,9 +1,6 @@
 use lpc_rs_errors::Result;
 use tree_walker::TreeWalker;
 
-use crate::{
-    codegen::tree_walker,
-};
 use crate::compiler::ast::{
     array_node::ArrayNode, ast_node::AstNodeTrait, binary_op_node::BinaryOpNode,
     block_node::BlockNode, call_node::CallNode, comma_expression_node::CommaExpressionNode,
@@ -15,14 +12,15 @@ use crate::compiler::ast::{
     unary_op_node::UnaryOpNode, var_init_node::VarInitNode, var_node::VarNode,
     while_node::WhileNode,
 };
+use crate::compiler::codegen::tree_walker;
 
 /// A tree walker for pretty-printing an AST
 ///
 /// # Examples
 /// ```
 /// use lpc_rs::lpc_parser;
-/// use lpc_rs::codegen::tree_printer::TreePrinter;
-/// use lpc_rs::codegen::tree_walker::TreeWalker;
+/// use lpc_rs::compiler::codegen::tree_printer::TreePrinter;
+/// use lpc_rs::compiler::codegen::tree_walker::TreeWalker;
 /// use lpc_rs::parser::lexer::LexWrapper;
 /// use lpc_rs::compiler::compilation_context::CompilationContext;
 ///

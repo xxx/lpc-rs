@@ -3,9 +3,6 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use itertools::Itertools;
 use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
@@ -13,6 +10,7 @@ use crate::compiler::ast::{
     ast_node::{AstNodeTrait, SpannedNode},
     expression_node::ExpressionNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing an array literal
 #[derive(Hash, Debug, Clone, Eq, PartialEq, PartialOrd)]

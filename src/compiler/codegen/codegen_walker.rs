@@ -1,5 +1,4 @@
 use crate::{
-    codegen::{tree_walker, tree_walker::ContextHolder},
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
         program::Program,
@@ -55,6 +54,7 @@ use crate::compiler::ast::{
     var_node::VarNode,
     while_node::WhileNode,
 };
+use crate::compiler::codegen::{tree_walker, tree_walker::ContextHolder};
 use crate::compiler::compilation_context::CompilationContext;
 
 macro_rules! push_instruction {
@@ -1906,12 +1906,6 @@ mod tests {
 
     use crate::{
         apply_walker,
-        codegen::{
-            codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-            function_prototype_walker::FunctionPrototypeWalker,
-            inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
-            semantic_check_walker::SemanticCheckWalker,
-        },
         compiler::Compiler,
         interpreter::{process::Process, program::Program},
         lpc_parser,
@@ -1926,6 +1920,12 @@ mod tests {
     use crate::compiler::ast::{
         ast_node::AstNode, comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
+    };
+    use crate::compiler::codegen::{
+        codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
+        function_prototype_walker::FunctionPrototypeWalker,
+        inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
+        semantic_check_walker::SemanticCheckWalker,
     };
 
     const LIB_DIR: &str = "./tests/fixtures/code";

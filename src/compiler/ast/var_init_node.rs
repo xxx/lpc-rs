@@ -4,9 +4,6 @@ use std::{
 };
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::Result;
 use lpc_rs_errors::span::Span;
@@ -14,6 +11,7 @@ use crate::compiler::ast::{
     ast_node::{AstNodeTrait, SpannedNode},
     expression_node::ExpressionNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

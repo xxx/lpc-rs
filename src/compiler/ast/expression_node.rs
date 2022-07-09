@@ -3,9 +3,6 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::Result;
@@ -27,6 +24,7 @@ use crate::compiler::ast::{
     unary_op_node::UnaryOpNode,
     var_node::VarNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)

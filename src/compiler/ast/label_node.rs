@@ -4,14 +4,12 @@ use std::{
 };
 use lpc_rs_errors::Result;
 
-use crate::{
-    codegen::tree_walker::TreeWalker,
-};
 use lpc_rs_errors::span::Span;
 use crate::compiler::ast::{
     ast_node::{AstNodeTrait, SpannedNode},
     expression_node::ExpressionNode,
 };
+use crate::compiler::codegen::tree_walker::TreeWalker;
 
 /// A node representing a `switch` label
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
