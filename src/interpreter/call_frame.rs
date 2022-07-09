@@ -1,7 +1,7 @@
 use crate::{
     asm::instruction::{Address, Instruction},
     interpreter::{
-        function_type::FunctionName, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
+        lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         register_bank::RegisterBank,
     },
     semantic::program_function::ProgramFunction,
@@ -16,6 +16,7 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
+use lpc_rs_core::function::FunctionName;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -204,7 +205,7 @@ impl Display for CallFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantic::{function_prototype::FunctionPrototype};
+    use crate::semantic::function_prototype::FunctionPrototype;
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_core::function_flags::FunctionFlags;
 

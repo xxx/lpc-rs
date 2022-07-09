@@ -6,7 +6,7 @@ use crate::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{
-            FunctionAddress, FunctionName, FunctionPtr, FunctionReceiver, FunctionTarget,
+            FunctionAddress, FunctionPtr,
             LpcFunction,
         },
         lpc_ref::LpcRef,
@@ -37,6 +37,7 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
+use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

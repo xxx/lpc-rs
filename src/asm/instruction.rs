@@ -1,4 +1,4 @@
-use crate::interpreter::function_type::FunctionTarget;
+use lpc_rs_core::function::FunctionTarget;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{

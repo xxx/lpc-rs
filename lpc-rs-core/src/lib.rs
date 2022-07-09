@@ -1,6 +1,7 @@
 use decorum::Total;
 
 pub mod call_namespace;
+pub mod function;
 pub mod function_arity;
 pub mod lpc_type;
 #[allow(clippy::identity_op)]

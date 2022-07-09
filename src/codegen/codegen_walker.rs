@@ -39,7 +39,6 @@ use crate::{
     compilation_context::CompilationContext,
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
-        function_type::{FunctionName, FunctionReceiver, FunctionTarget},
         program::Program,
     },
     semantic::{
@@ -56,6 +55,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
+use lpc_rs_core::function::{FunctionName, FunctionReceiver, FunctionTarget};
 use lpc_rs_core::function_flags::FunctionFlags;
 use tree_walker::TreeWalker;
 
@@ -2612,9 +2612,7 @@ mod tests {
         use lpc_rs_core::function_flags::FunctionFlags;
 
         use super::*;
-        use crate::semantic::{
-            function_prototype::FunctionPrototype,
-        };
+        use crate::semantic::function_prototype::FunctionPrototype;
 
         #[test]
         fn populates_the_instructions() {

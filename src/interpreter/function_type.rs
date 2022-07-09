@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef},
-    semantic::{program_function::ProgramFunction},
+    semantic::program_function::ProgramFunction,
 };
 use delegate::delegate;
 use lpc_rs_core::{function_arity::FunctionArity, register::Register};
@@ -19,61 +19,6 @@ fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
 /// used for local Debug implementations, to avoid stack overflow when dumping function pointers
 fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
     f.write_str(&*owner.borrow().filename())
-}
-
-/// An enum to handle function names that are either vars or literal names.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FunctionName {
-    /// The name is a variable, that needs to be resolved at runtime.
-    Var(Register),
-    /// The name is a literal function name, so call it directly.
-    Literal(String),
-}
-
-impl Display for FunctionName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FunctionName::Var(reg) => write!(f, "var({})", reg),
-            FunctionName::Literal(name) => write!(f, "{}", name),
-        }
-    }
-}
-
-/// The possible receivers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FunctionReceiver {
-    /// The receiver is the object that defines the function.
-    Local,
-
-    /// The receiver is the Process stored in the [`Register`].
-    Var(Register),
-
-    /// The receiver will be filled-in at call time, with the first argument passed to the call.
-    /// i.e. the `&->foo()` syntax
-    Argument,
-}
-
-/// Used as the target that's stored for a function pointer
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FunctionTarget {
-    /// The call will be to an efun
-    Efun(String),
-
-    /// The call will be to an lfun defined in some object
-    Local(FunctionName, FunctionReceiver),
-}
-
-impl Display for FunctionTarget {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FunctionTarget::Efun(name) => write!(f, "{}", name),
-            FunctionTarget::Local(name, receiver) => match receiver {
-                FunctionReceiver::Local => write!(f, "{}", name),
-                FunctionReceiver::Var(reg) => write!(f, "var({})->{}", reg, name),
-                FunctionReceiver::Argument => write!(f, "&->{}", name),
-            },
-        }
-    }
 }
 
 /// Different ways to store a function address, for handling at runtime.
