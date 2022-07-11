@@ -3,6 +3,7 @@ use if_chain::if_chain;
 use lpc_rs_errors::{LpcError, Result};
 use std::{path::Path, str::FromStr};
 use toml::{value::Index, Value};
+use tracing::Level;
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -49,6 +50,48 @@ impl Config {
             }
         };
 
+        let driver_log_file = Self::get_driver_log_file(&config);
+        let driver_log_level = Self::get_driver_log_level(&config);
+        let lib_dir = Self::get_lib_dir(&config)?;
+        let master_object = Self::get_master_object(&config)?;
+        let max_inherit_depth = Self::get_max_inherit_depth(&config)?;
+        let max_task_instructions = Self::get_max_task_instructions(&config);
+        let simul_efun_file = Self::get_simul_efun_file(&config);
+        let system_include_dirs = Self::get_system_include_dirs(&config)?;
+
+        Ok(Self {
+            driver_log_file,
+            driver_log_level,
+            lib_dir,
+            master_object,
+            max_inherit_depth,
+            max_task_instructions,
+            simul_efun_file,
+            system_include_dirs,
+        })
+    }
+
+    fn get_simul_efun_file(config: &Value) -> Option<String> {
+        let dug = dig(&config, SIMUL_EFUN_FILE);
+        let simul_efun_file = dug.and_then(|x| x.as_str()).map(String::from);
+        simul_efun_file
+    }
+
+    fn get_driver_log_file(config: &Value) -> Option<String> {
+        let dug = dig(&config, DRIVER_LOG_FILE);
+        let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
+        driver_log_file
+    }
+
+    fn get_driver_log_level(config: &Value) -> Option<Level> {
+        let dug = dig(&config, DRIVER_LOG_LEVEL);
+        let driver_log_level = dug
+            .and_then(|x| x.as_str())
+            .and_then(|x| tracing::Level::from_str(x).ok());
+        driver_log_level
+    }
+
+    fn get_system_include_dirs(config: &Value) -> Result<Vec<String>> {
         let system_include_dirs = match dig(&config, SYSTEM_INCLUDE_DIRS) {
             Some(v) => match v.as_array() {
                 Some(arr) => arr
@@ -66,6 +109,10 @@ impl Config {
             None => vec![],
         };
 
+        Ok(system_include_dirs)
+    }
+
+    fn get_lib_dir(config: &Value) -> Result<String> {
         let dug = dig(&config, LIB_DIR);
         let non_canon = match dug {
             Some(x) => String::from(x.as_str().unwrap_or(".")),
@@ -76,6 +123,10 @@ impl Config {
         };
         let lib_dir = canonicalized_path(non_canon)?;
 
+        Ok(lib_dir)
+    }
+
+    fn get_master_object(config: &Value) -> Result<String> {
         let dug = dig(&config, MASTER_OBJECT);
         let master_object = match dug {
             Some(x) => match x.as_str() {
@@ -93,6 +144,10 @@ impl Config {
             }
         };
 
+        Ok(master_object)
+    }
+
+    fn get_max_inherit_depth(config: &Value) -> Result<usize> {
         let dug = dig(&config, MAX_INHERIT_DEPTH);
         let max_inherit_depth = match dug {
             Some(x) => match x.as_integer() {
@@ -113,6 +168,10 @@ impl Config {
             None => DEFAULT_MAX_INHERIT_DEPTH,
         };
 
+        Ok(max_inherit_depth)
+    }
+
+    fn get_max_task_instructions(config: &Value) -> Option<usize> {
         let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
         let max_task_instructions = if_chain! {
             if let Some(x) = dug;
@@ -124,28 +183,7 @@ impl Config {
                 None
             }
         };
-
-        let dug = dig(&config, DRIVER_LOG_LEVEL);
-        let driver_log_level = dug
-            .and_then(|x| x.as_str())
-            .and_then(|x| tracing::Level::from_str(x).ok());
-
-        let dug = dig(&config, DRIVER_LOG_FILE);
-        let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
-
-        let dug = dig(&config, SIMUL_EFUN_FILE);
-        let simul_efun_file = dug.and_then(|x| x.as_str()).map(String::from);
-
-        Ok(Self {
-            lib_dir,
-            system_include_dirs,
-            master_object,
-            max_inherit_depth,
-            max_task_instructions,
-            driver_log_level,
-            driver_log_file,
-            simul_efun_file,
-        })
+        max_task_instructions
     }
 
     pub fn with_lib_dir<S>(mut self, lib_dir: S) -> Self
