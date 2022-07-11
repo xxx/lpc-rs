@@ -11,4 +11,4 @@ bstr = "0.2.17"
 decorum = "0.3.1"
 modular-bitfield = "0.11.2"
 path-absolutize = { version = "3.0.6", features = ["lazy_static_cache"] }
-serde = { version = "1.0.123", features = ["derive"] }
+serde = { version = "1.0.139", features = ["derive"] }
