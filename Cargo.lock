@@ -682,7 +682,6 @@ dependencies = [
  "rmp-serde",
  "serde",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
