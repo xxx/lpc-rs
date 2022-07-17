@@ -148,8 +148,6 @@ impl Preprocessor {
         let mut output = vec![];
 
         let lpc_path = path.into();
-        let file_id =
-            FileCache::insert(&lpc_path.as_server(self.context.config.lib_dir()).display());
 
         // handle auto-include
         if let Some(auto_include) = self.context.config.auto_include_file() {
@@ -164,6 +162,23 @@ impl Preprocessor {
                 }
             }
         }
+
+        self.internal_scan(&lpc_path, code, Some(output))
+    }
+
+    /// The recursive function that takes care of scanning everything.
+    fn internal_scan<C>(
+        &mut self,
+        lpc_path: &LpcPath,
+        code: C,
+        existing_output: Option<Vec<Spanned<Token>>>
+    ) -> Result<Vec<Spanned<Token>>>
+    where
+        C: AsRef<str> + Debug
+    {
+        let mut output = existing_output.unwrap_or_default();
+        let file_id =
+            FileCache::insert(&lpc_path.as_server(self.context.config.lib_dir()).display());
 
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
@@ -880,7 +895,7 @@ impl Preprocessor {
         };
 
         let path = LpcPath::new_server(canon_include_path);
-        self.scan(path, &file_content)
+        self.internal_scan(&path, &file_content, None)
     }
 
     /// Are we skipping lines right now due to `#if`s?
@@ -1000,10 +1015,13 @@ mod tests {
     #[test]
     fn test_auto_include() {
         let input = indoc! { r#"
-                object marf = TO;
+                string marf = MY_FN;
             "# };
 
-        test_valid(input, &vec!["object", "marf", "=", "this_object", "(", ")", ";"]);
+        test_valid(input, &vec![
+            "string", "marf", "=",
+            "file_name", "(", "efun", "::", "this_object", "(", ")", ")", ";"
+        ]);
     }
 
     mod test_system_includes {
