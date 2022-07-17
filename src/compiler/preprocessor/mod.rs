@@ -11,14 +11,8 @@ use crate::{
     preprocessor_parser,
 };
 use define::{Define, ObjectMacro};
-use fs_err as fs;
 use lalrpop_util::ParseError as LalrpopParseError;
-use lpc_rs_core::{
-    convert_escapes,
-    lpc_path::LpcPath,
-    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
-    LpcInt,
-};
+use lpc_rs_core::{convert_escapes, lpc_path::LpcPath, pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES}, LpcInt, read_lpc_file};
 use lpc_rs_errors::{format_expected, lazy_files::FileCache, span::Span, LpcError, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -116,6 +110,7 @@ impl Preprocessor {
     }
 
     /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
+    /// This is the standard way to use the preprocessor
     ///
     /// # Arguments
     /// `path` - The in-game [`Path`]like representing the file.
@@ -142,19 +137,33 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("foo.c", code);
     /// ```
-    #[instrument]
+    #[instrument(skip(self))]
     pub fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
     where
         P: Into<LpcPath> + Debug,
         C: AsRef<str> + Debug,
     {
-        trace!("scanning {:?}", path);
+        trace!("scanning");
 
         let mut output = vec![];
 
         let lpc_path = path.into();
         let file_id =
             FileCache::insert(&lpc_path.as_server(self.context.config.lib_dir()).display());
+
+        // handle auto-include
+        if let Some(auto_include) = self.context.config.auto_include_file() {
+            let auto_include_path =
+                LpcPath::new_server(format!("{}/{}", self.context.config.lib_dir(), auto_include));
+
+            if auto_include_path != lpc_path {
+                let included = self.include_local_file(&auto_include_path, None)?;
+
+                for spanned in included {
+                    self.append_spanned(&mut output, spanned)
+                }
+            }
+        }
 
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
@@ -220,9 +229,7 @@ impl Preprocessor {
             }
         }
 
-        if !self.ifdefs.is_empty() {
-            let ifdef = self.ifdefs.last().unwrap();
-
+        if let Some(ifdef) = self.ifdefs.last() {
             return Err(
                 LpcError::new("Found `#if` without a corresponding `#endif`")
                     .with_span(Some(ifdef.span)),
@@ -271,7 +278,7 @@ impl Preprocessor {
             }
             Some(Define::Function(function)) => {
                 if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
-                    return Err(LpcError::new("Functional macro call missing arguments.")
+                    return Err(LpcError::new("functional macro call missing arguments")
                         .with_span(Some(token.0)));
                 }
 
@@ -279,7 +286,7 @@ impl Preprocessor {
 
                 if args.len() != function.args.len() {
                     return Err(
-                        LpcError::new("Incorrect number of macro arguments").with_span(Some(span))
+                        LpcError::new("incorrect number of macro arguments").with_span(Some(span))
                     );
                 }
 
@@ -377,7 +384,7 @@ impl Preprocessor {
         }
 
         if parens != 0 {
-            return Err(LpcError::new("Mismatched parentheses").with_span(Some(span)));
+            return Err(LpcError::new("mismatched parentheses").with_span(Some(span)));
         }
 
         Ok(args)
@@ -457,7 +464,7 @@ impl Preprocessor {
                     Ok(i) => i,
                     Err(e) => {
                         return Err(LpcError::new(format!(
-                            "Parse Error ({}) for expression `{}`",
+                            "parse error: {}, for expression `{}`",
                             e, &captures[2]
                         ))
                         .with_span(Some(token.0)))
@@ -511,7 +518,7 @@ impl Preprocessor {
             let config = self.context.config.clone();
             for dir in config.system_include_dirs() {
                 let to_include = LpcPath::new_in_game(matched.as_str(), dir, config.lib_dir());
-                return match self.include_local_file(&to_include, token.0) {
+                return match self.include_local_file(&to_include, Some(token.0)) {
                     Ok(included) => {
                         for spanned in included {
                             self.append_spanned(output, spanned)
@@ -534,7 +541,7 @@ impl Preprocessor {
             let to_include = LpcPath::new_in_game(matched.as_str(), &cwd, config.lib_dir());
 
             // Fall back to trying the path directly
-            let included = self.include_local_file(&to_include, token.0)?;
+            let included = self.include_local_file(&to_include, Some(token.0))?;
 
             for spanned in included {
                 self.append_spanned(output, spanned)
@@ -571,7 +578,7 @@ impl Preprocessor {
             let to_include =
                 LpcPath::new_in_game(matched.as_str(), cwd, self.context.config.lib_dir());
 
-            let included = self.include_local_file(&to_include, token.0)?;
+            let included = self.include_local_file(&to_include, Some(token.0))?;
 
             for spanned in included {
                 self.append_spanned(output, spanned)
@@ -608,22 +615,22 @@ impl Preprocessor {
                     // Is there a better way?
                     let err = match e {
                         LalrpopParseError::InvalidToken { location } => {
-                            LpcError::new(format!("Invalid token `{}` at {}", token.1, location))
+                            LpcError::new(format!("invalid token `{}` at {}", token.1, location))
                         }
                         LalrpopParseError::UnrecognizedEOF { expected, .. } => {
-                            LpcError::new("Unexpected EOF").with_note(format_expected(&expected))
+                            LpcError::new("unexpected EOF").with_note(format_expected(&expected))
                         }
                         LalrpopParseError::UnrecognizedToken { expected, .. } => {
-                            LpcError::new(format!("Unrecognized Token: {}", token.1))
+                            LpcError::new(format!("unrecognized Token: {}", token.1))
                                 .with_span(Some(token.0))
                                 .with_note(format_expected(&expected))
                         }
                         LalrpopParseError::ExtraToken { .. } => {
-                            LpcError::new(format!("Extra Token: `{}`", token.1))
+                            LpcError::new(format!("extra Token: `{}`", token.1))
                                 .with_span(Some(token.0))
                         }
                         LalrpopParseError::User { error } => {
-                            LpcError::new(format!("User error: {}", error))
+                            LpcError::new(format!("error: {}", error))
                         }
                     };
 
@@ -705,7 +712,7 @@ impl Preprocessor {
                     BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcInt),
 
                     operation => Err(LpcError::new(format!(
-                        "Unknown binary operation `{}` in expression `{}`",
+                        "unknown binary operation `{}` in expression `{}`",
                         operation, expr
                     ))
                     .with_span(span)),
@@ -764,7 +771,7 @@ impl Preprocessor {
         if ELSE.is_match(&token.1) {
             if self.ifdefs.is_empty() {
                 return Err(LpcError::new(
-                    "Found `#else` without a corresponding `#if` or `#ifdef`",
+                    "found `#else` without a corresponding `#if` or `#ifdef`",
                 )
                 .with_span(Some(token.0)));
             }
@@ -772,7 +779,7 @@ impl Preprocessor {
             if let Some(else_span) = &self.current_else {
                 let err = LpcError::new("duplicate `#else` found")
                     .with_span(Some(token.0))
-                    .with_label("First used here", Some(*else_span));
+                    .with_label("first used here", Some(*else_span));
 
                 return Err(err);
             }
@@ -796,7 +803,7 @@ impl Preprocessor {
 
         if self.ifdefs.is_empty() {
             return Err(
-                LpcError::new("Found `#endif` without a corresponding `#if`")
+                LpcError::new("found `#endif` without a corresponding `#if`")
                     .with_span(Some(token.0)),
             );
         }
@@ -820,7 +827,7 @@ impl Preprocessor {
                     RESIDENT => self.context.pragmas.set_resident(true),
                     STRICT_TYPES => self.context.pragmas.set_strict_types(true),
                     x => {
-                        return Err(LpcError::new(format!("Unknown pragma `{}`", x))
+                        return Err(LpcError::new(format!("unknown pragma `{}`", x))
                             .with_span(Some(token.0)));
                     }
                 }
@@ -838,13 +845,8 @@ impl Preprocessor {
     /// `cwd` - The current working directory. Used for resolving relative pathnames.
     /// `span` - The [`Span`] of the `#include` token.
     #[instrument(skip(self))]
-    fn include_local_file(&mut self, path: &LpcPath, span: Span) -> Result<Vec<Spanned<Token>>> {
+    fn include_local_file(&mut self, path: &LpcPath, span: Option<Span>) -> Result<Vec<Spanned<Token>>> {
         let canon_include_path = path.as_server(self.context.lib_dir());
-
-        println!(
-            "include local file path & canon {:?} {:?}",
-            path, canon_include_path
-        );
 
         if !path.is_within_root(self.context.lib_dir()) {
             return Err(LpcError::new(&format!(
@@ -853,7 +855,7 @@ impl Preprocessor {
                 canon_include_path.display(),
                 self.context.lib_dir()
             ))
-                .with_span(Some(span)));
+                .with_span(span));
         }
 
         if canon_include_path.is_dir() {
@@ -863,17 +865,17 @@ impl Preprocessor {
                 canon_include_path.display(),
                 self.context.lib_dir()
             ))
-            .with_span(Some(span)));
+            .with_span(span));
         }
 
-        let file_content = match fs::read_to_string(&canon_include_path) {
+        let file_content = match read_lpc_file(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
                 return Err(LpcError::new(&format!(
                     "unable to read include file `{}`: {:?}",
                     path, e
                 ))
-                .with_span(Some(span)));
+                .with_span(span));
             }
         };
 
@@ -944,11 +946,13 @@ mod tests {
     use super::*;
     use lpc_rs_utils::config::Config;
     use std::rc::Rc;
+    use crate::assert_regex;
 
     fn fixture() -> Preprocessor {
         let config = Config::default()
             .with_lib_dir("./tests/fixtures/code")
-            .with_system_include_dirs(vec!["/sys", "sys2"]);
+            .with_system_include_dirs(vec!["/sys", "sys2"])
+            .with_auto_include_file(Some("/include/auto.h"));
 
         let context = CompilationContext::new("test.c", Rc::new(config));
         Preprocessor::new(context)
@@ -976,8 +980,7 @@ mod tests {
                 panic!("Expected to fail, but passed with {:?}", result);
             }
             Err(e) => {
-                let regex = Regex::new(expected).unwrap();
-                assert!(regex.is_match(&e.to_string()), "error = {:?}", e);
+                assert_regex!(&e.to_string(), expected);
             }
         }
     }
@@ -992,6 +995,15 @@ mod tests {
             "# };
 
         test_valid(input, &["This should be printed"]);
+    }
+
+    #[test]
+    fn test_auto_include() {
+        let input = indoc! { r#"
+                object marf = TO;
+            "# };
+
+        test_valid(input, &vec!["object", "marf", "=", "this_object", "(", ")", ";"]);
     }
 
     mod test_system_includes {
@@ -1183,6 +1195,7 @@ mod tests {
     }
 
     mod test_defines {
+        use claim::assert_matches;
         use super::*;
 
         #[test]
@@ -1192,6 +1205,7 @@ mod tests {
                 #define MAR
                 #define DOOD 666 + MAR
                 #define SNUH 0x123
+                #define TO this_object()
             "# };
             let mut preprocessor = fixture();
 
@@ -1225,13 +1239,20 @@ mod tests {
                     } else {
                         panic!("Failed to match.")
                     }
-                    assert!(matches!(
+                    assert_matches!(
                         preprocessor.defines.get("SNUH").unwrap(),
                         Define::Object(ObjectMacro {
                             expr: PreprocessorNode::Int(291),
                             ..
                         })
-                    ));
+                    );
+                    assert_matches!(
+                        preprocessor.defines.get("TO").unwrap(),
+                        Define::Object(ObjectMacro {
+                            expr: PreprocessorNode::Int(1),
+                            ..
+                        })
+                    );
                 }
                 Err(e) => {
                     panic!("{:?}", e)
@@ -1378,7 +1399,7 @@ mod tests {
                 #endif
             "# };
 
-            test_invalid(prog, "Found `#endif` without a corresponding `#if`");
+            test_invalid(prog, "found `#endif` without a corresponding `#if`");
         }
 
         #[test]
@@ -1787,7 +1808,7 @@ mod tests {
                 BAR;
             "## };
 
-            test_invalid(prog, "Functional macro call missing arguments.");
+            test_invalid(prog, "functional macro call missing arguments");
         }
 
         #[test]
@@ -1797,7 +1818,7 @@ mod tests {
                 BAR(dump("asdf");
             "## };
 
-            test_invalid(prog, "Mismatched parentheses");
+            test_invalid(prog, "mismatched parentheses");
         }
 
         #[test]
@@ -1807,7 +1828,7 @@ mod tests {
                 BAR(34);
             "## };
 
-            test_invalid(prog, "Incorrect number of macro arguments");
+            test_invalid(prog, "incorrect number of macro arguments");
         }
     }
 

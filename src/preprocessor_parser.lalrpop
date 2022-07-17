@@ -102,6 +102,8 @@ PrimaryExpression: PreprocessorNode = {
     "(" <Expression> ")",
     <not:"not"?> "defined" "(" <var:Var> ")" => PreprocessorNode::Defined(var, not.is_some()),
     <not:"not"?> "defined(" <var:Var> ")" => PreprocessorNode::Defined(var, not.is_some()),
+    // anything else can be passed through, as it has no meaning in the preprocessor
+    ! => PreprocessorNode::Int(1)
 };
 
 AdditiveExpression: PreprocessorNode = {

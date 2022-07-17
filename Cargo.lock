@@ -700,6 +700,7 @@ version = "0.1.0"
 dependencies = [
  "bstr",
  "decorum",
+ "fs-err",
  "modular-bitfield",
  "path-absolutize",
  "serde",

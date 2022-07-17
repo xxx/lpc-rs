@@ -1,4 +1,3 @@
-use fs_err as fs;
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
@@ -20,6 +19,7 @@ use lpc_rs_utils::config::Config;
 use preprocessor::Preprocessor;
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
+use lpc_rs_core::read_lpc_file;
 
 pub mod ast;
 pub mod codegen;
@@ -62,6 +62,7 @@ pub struct Compiler {
     /// The current depth in the inheritance chain of this compiler
     inherit_depth: usize,
 
+    /// Pointer to the simul_efuns to be used for this compilation
     simul_efuns: Option<Rc<RefCell<Process>>>,
 }
 
@@ -109,7 +110,7 @@ impl Compiler {
         let lpc_path = path.into();
         let absolute = lpc_path.as_server(self.config.lib_dir());
 
-        let file_content = match fs::read_to_string(&*absolute) {
+        let file_content = match read_lpc_file(&*absolute) {
             Ok(s) => s,
             Err(e) => {
                 return match e.kind() {
@@ -194,19 +195,8 @@ impl Compiler {
             .with_simul_efuns(self.simul_efuns.clone());
 
         let mut preprocessor = Preprocessor::new(context);
-        let code = match preprocessor.scan(&lpc_path, &code) {
-            Ok(c) => c,
-            Err(e) => {
-                let err = e;
 
-                // err.emit_diagnostics();
-
-                // Preprocessor errors are fatal.
-                return Err(err);
-            }
-        };
-
-        Ok((code, preprocessor))
+        preprocessor.scan(&lpc_path, &code).map(|tokens| (tokens, preprocessor))
     }
 
     /// Compile a string containing an LPC program into a Program struct
@@ -294,18 +284,10 @@ impl Compiler {
         let wrapper = TokenVecWrapper::new(&tokens);
         let context = preprocessor.into_context();
 
-        let program = lpc_parser::ProgramParser::new().parse(&context, wrapper);
-
-        match program {
-            Ok(prog) => Ok((prog, context)),
-            Err(e) => {
-                let err = LpcError::from(e);
-                // err.emit_diagnostics();
-
-                // Parse errors are fatal, so we're done here.
-                Err(err)
-            }
-        }
+        lpc_parser::ProgramParser::new()
+            .parse(&context, wrapper)
+            .map(|p| (p, context))
+            .map_err(|e| LpcError::from(e))
     }
 }
 

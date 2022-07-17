@@ -23,13 +23,18 @@ lib_dir = "./lib"
 # This can be overridden from the command line with the `--includes` / `-i` options.
 # Multiple directories passed on the command line can be separated by a comma.
 # Where applicable, the mudlib itself can also override this setting directly.
-system_include_dirs = ["/sys"]
+system_include_dirs = ["/include"]
 
 # Location of a file where simulated efuns live (a.k.a "simul efuns").
 # These are functions that can be called from anywhere, like an efun, but are written in LPC.
 # This file is relative to `lib_dir`.
 # Remove this line, or comment it out, to disable the use of simul efuns.
-simul_efun_file = "/secure/simul_efun.c"
+# simul_efun_file = "/secure/simul_efun.c"
+
+# Location of a file that will be `#include`d when compiling all files.
+# This file is relative to `lib_dir`.
+# Remove this line, or comment it out, to disable its use.
+# auto_include_file = "/include/auto.h"
 
 # How many instructions / efun loop iterations can execute in a given
 # Task before the driver breaks-in.

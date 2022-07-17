@@ -1,4 +1,4 @@
-use std::fs;
+use fs_err as fs;
 use std::path::Path;
 use decorum::Total;
 
@@ -58,6 +58,7 @@ where
 }
 
 /// A convenience helper to handle adding a trailing newline if one isn't there.
+/// This is just a thin wrapper around `read_to_string()`
 pub fn read_lpc_file<P>(path: P) -> std::io::Result<String>
 where
     P: AsRef<Path>,

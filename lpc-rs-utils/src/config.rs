@@ -3,11 +3,11 @@ use if_chain::if_chain;
 use lpc_rs_errors::{LpcError, Result};
 use std::{path::Path, str::FromStr};
 use toml::{value::Index, Value};
-use tracing::Level;
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
 
+const AUTO_INCLUDE_FILE: &[&str] = &["lpc-rs", "auto_include_file"];
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
 const MAX_INHERIT_DEPTH: &[&str] = &["lpc-rs", "max_inherit_depth"];
 const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
@@ -29,6 +29,7 @@ pub struct Config {
     driver_log_level: Option<tracing::Level>,
     driver_log_file: Option<String>,
     simul_efun_file: Option<String>,
+    auto_include_file: Option<String>,
 }
 
 impl Config {
@@ -58,6 +59,7 @@ impl Config {
         let max_task_instructions = Self::get_max_task_instructions(&config);
         let simul_efun_file = Self::get_simul_efun_file(&config);
         let system_include_dirs = Self::get_system_include_dirs(&config)?;
+        let auto_include_file = Self::get_auto_include_file(&config);
 
         Ok(Self {
             driver_log_file,
@@ -68,6 +70,7 @@ impl Config {
             max_task_instructions,
             simul_efun_file,
             system_include_dirs,
+            auto_include_file,
         })
     }
 
@@ -83,7 +86,7 @@ impl Config {
         driver_log_file
     }
 
-    fn get_driver_log_level(config: &Value) -> Option<Level> {
+    fn get_driver_log_level(config: &Value) -> Option<tracing::Level> {
         let dug = dig(&config, DRIVER_LOG_LEVEL);
         let driver_log_level = dug
             .and_then(|x| x.as_str())
@@ -186,6 +189,12 @@ impl Config {
         max_task_instructions
     }
 
+    fn get_auto_include_file(config: &Value) -> Option<String> {
+        let dug = dig(&config, AUTO_INCLUDE_FILE);
+        let auto_include_file = dug.and_then(|x| x.as_str()).map(String::from);
+        auto_include_file
+    }
+
     pub fn with_lib_dir<S>(mut self, lib_dir: S) -> Self
     where
         S: Into<String>,
@@ -229,6 +238,15 @@ impl Config {
         self
     }
 
+    pub fn with_auto_include_file<T>(mut self, file: Option<T>) -> Self
+    where
+        T: Into<String>,
+    {
+        self.auto_include_file = file.map(|t| t.into());
+
+        self
+    }
+
     #[inline]
     pub fn lib_dir(&self) -> &str {
         &self.lib_dir
@@ -268,6 +286,11 @@ impl Config {
     pub fn simul_efun_file(&self) -> Option<&str> {
         self.simul_efun_file.as_deref()
     }
+
+    #[inline]
+    pub fn auto_include_file(&self) -> Option<&str> {
+        self.auto_include_file.as_deref()
+    }
 }
 
 impl Default for Config {
@@ -281,6 +304,7 @@ impl Default for Config {
             driver_log_level: None,
             driver_log_file: Some("STDOUT".into()),
             simul_efun_file: None,
+            auto_include_file: None,
         }
     }
 }
