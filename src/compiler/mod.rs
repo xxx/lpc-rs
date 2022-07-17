@@ -13,13 +13,12 @@ use codegen::{
 };
 use compilation_context::CompilationContext;
 use lexer::{Spanned, Token, TokenVecWrapper};
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::{lpc_path::LpcPath, read_lpc_file};
 use lpc_rs_errors::span::Span;
 use lpc_rs_utils::config::Config;
 use preprocessor::Preprocessor;
 use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
-use lpc_rs_core::read_lpc_file;
 
 pub mod ast;
 pub mod codegen;
@@ -196,7 +195,9 @@ impl Compiler {
 
         let mut preprocessor = Preprocessor::new(context);
 
-        preprocessor.scan(&lpc_path, &code).map(|tokens| (tokens, preprocessor))
+        preprocessor
+            .scan(&lpc_path, &code)
+            .map(|tokens| (tokens, preprocessor))
     }
 
     /// Compile a string containing an LPC program into a Program struct

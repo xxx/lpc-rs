@@ -1,6 +1,6 @@
+use decorum::Total;
 use fs_err as fs;
 use std::path::Path;
-use decorum::Total;
 
 pub mod call_namespace;
 pub mod function;
@@ -63,13 +63,7 @@ pub fn read_lpc_file<P>(path: P) -> std::io::Result<String>
 where
     P: AsRef<Path>,
 {
-    fs::read_to_string(path).map(|x| {
-        if !x.ends_with('\n') {
-            x + "\n"
-        } else {
-            x
-        }
-    })
+    fs::read_to_string(path).map(|x| if !x.ends_with('\n') { x + "\n" } else { x })
 }
 
 #[cfg(test)]
@@ -83,15 +77,7 @@ mod tests {
         assert!(with_newline.ends_with('\n'));
 
         let path_without = "./tests/fixtures/newlines/file_not_ending_with_newline.h";
-        assert!(
-            !fs::read_to_string(path_without)
-                .unwrap()
-                .ends_with('\n')
-        );
-        assert!(
-            read_lpc_file(path_without)
-                .unwrap()
-                .ends_with('\n')
-        );
+        assert!(!fs::read_to_string(path_without).unwrap().ends_with('\n'));
+        assert!(read_lpc_file(path_without).unwrap().ends_with('\n'));
     }
 }

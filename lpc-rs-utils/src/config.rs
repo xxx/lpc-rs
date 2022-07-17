@@ -86,8 +86,7 @@ impl Config {
 
     fn get_driver_log_level(config: &Value) -> Option<tracing::Level> {
         let dug = dig(config, DRIVER_LOG_LEVEL);
-        dug
-            .and_then(|x| x.as_str())
+        dug.and_then(|x| x.as_str())
             .and_then(|x| tracing::Level::from_str(x).ok())
     }
 

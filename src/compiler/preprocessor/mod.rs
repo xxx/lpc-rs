@@ -12,7 +12,12 @@ use crate::{
 };
 use define::{Define, ObjectMacro};
 use lalrpop_util::ParseError as LalrpopParseError;
-use lpc_rs_core::{convert_escapes, lpc_path::LpcPath, pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES}, LpcInt, read_lpc_file};
+use lpc_rs_core::{
+    convert_escapes,
+    lpc_path::LpcPath,
+    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    read_lpc_file, LpcInt,
+};
 use lpc_rs_errors::{format_expected, lazy_files::FileCache, span::Span, LpcError, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -151,8 +156,11 @@ impl Preprocessor {
 
         // handle auto-include
         if let Some(auto_include) = self.context.config.auto_include_file() {
-            let auto_include_path =
-                LpcPath::new_server(format!("{}/{}", self.context.config.lib_dir(), auto_include));
+            let auto_include_path = LpcPath::new_server(format!(
+                "{}/{}",
+                self.context.config.lib_dir(),
+                auto_include
+            ));
 
             if auto_include_path != lpc_path {
                 let included = self.include_local_file(&auto_include_path, None)?;
@@ -171,10 +179,10 @@ impl Preprocessor {
         &mut self,
         lpc_path: &LpcPath,
         code: C,
-        existing_output: Option<Vec<Spanned<Token>>>
+        existing_output: Option<Vec<Spanned<Token>>>,
     ) -> Result<Vec<Spanned<Token>>>
     where
-        C: AsRef<str> + Debug
+        C: AsRef<str> + Debug,
     {
         let mut output = existing_output.unwrap_or_default();
         let file_id =
@@ -860,7 +868,11 @@ impl Preprocessor {
     /// `cwd` - The current working directory. Used for resolving relative pathnames.
     /// `span` - The [`Span`] of the `#include` token.
     #[instrument(skip(self))]
-    fn include_local_file(&mut self, path: &LpcPath, span: Option<Span>) -> Result<Vec<Spanned<Token>>> {
+    fn include_local_file(
+        &mut self,
+        path: &LpcPath,
+        span: Option<Span>,
+    ) -> Result<Vec<Spanned<Token>>> {
         let canon_include_path = path.as_server(self.context.lib_dir());
 
         if !path.is_within_root(self.context.lib_dir()) {
@@ -959,9 +971,9 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
+    use crate::assert_regex;
     use lpc_rs_utils::config::Config;
     use std::rc::Rc;
-    use crate::assert_regex;
 
     fn fixture() -> Preprocessor {
         let config = Config::default()
@@ -1018,10 +1030,23 @@ mod tests {
                 string marf = MY_FN;
             "# };
 
-        test_valid(input, &vec![
-            "string", "marf", "=",
-            "file_name", "(", "efun", "::", "this_object", "(", ")", ")", ";"
-        ]);
+        test_valid(
+            input,
+            &vec![
+                "string",
+                "marf",
+                "=",
+                "file_name",
+                "(",
+                "efun",
+                "::",
+                "this_object",
+                "(",
+                ")",
+                ")",
+                ";",
+            ],
+        );
     }
 
     mod test_system_includes {
@@ -1213,8 +1238,8 @@ mod tests {
     }
 
     mod test_defines {
-        use claim::assert_matches;
         use super::*;
+        use claim::assert_matches;
 
         #[test]
         fn test_object_define() {
