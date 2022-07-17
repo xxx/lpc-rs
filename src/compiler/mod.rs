@@ -287,7 +287,7 @@ impl Compiler {
         lpc_parser::ProgramParser::new()
             .parse(&context, wrapper)
             .map(|p| (p, context))
-            .map_err(|e| LpcError::from(e))
+            .map_err(LpcError::from)
     }
 }
 

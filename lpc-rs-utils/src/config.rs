@@ -75,27 +75,24 @@ impl Config {
     }
 
     fn get_simul_efun_file(config: &Value) -> Option<String> {
-        let dug = dig(&config, SIMUL_EFUN_FILE);
-        let simul_efun_file = dug.and_then(|x| x.as_str()).map(String::from);
-        simul_efun_file
+        let dug = dig(config, SIMUL_EFUN_FILE);
+        dug.and_then(|x| x.as_str()).map(String::from)
     }
 
     fn get_driver_log_file(config: &Value) -> Option<String> {
-        let dug = dig(&config, DRIVER_LOG_FILE);
-        let driver_log_file = dug.and_then(|x| x.as_str()).map(String::from);
-        driver_log_file
+        let dug = dig(config, DRIVER_LOG_FILE);
+        dug.and_then(|x| x.as_str()).map(String::from)
     }
 
     fn get_driver_log_level(config: &Value) -> Option<tracing::Level> {
-        let dug = dig(&config, DRIVER_LOG_LEVEL);
-        let driver_log_level = dug
+        let dug = dig(config, DRIVER_LOG_LEVEL);
+        dug
             .and_then(|x| x.as_str())
-            .and_then(|x| tracing::Level::from_str(x).ok());
-        driver_log_level
+            .and_then(|x| tracing::Level::from_str(x).ok())
     }
 
     fn get_system_include_dirs(config: &Value) -> Result<Vec<String>> {
-        let system_include_dirs = match dig(&config, SYSTEM_INCLUDE_DIRS) {
+        let system_include_dirs = match dig(config, SYSTEM_INCLUDE_DIRS) {
             Some(v) => match v.as_array() {
                 Some(arr) => arr
                     .iter()
@@ -116,7 +113,7 @@ impl Config {
     }
 
     fn get_lib_dir(config: &Value) -> Result<String> {
-        let dug = dig(&config, LIB_DIR);
+        let dug = dig(config, LIB_DIR);
         let non_canon = match dug {
             Some(x) => String::from(x.as_str().unwrap_or(".")),
             None => {
@@ -130,7 +127,7 @@ impl Config {
     }
 
     fn get_master_object(config: &Value) -> Result<String> {
-        let dug = dig(&config, MASTER_OBJECT);
+        let dug = dig(config, MASTER_OBJECT);
         let master_object = match dug {
             Some(x) => match x.as_str() {
                 Some(s) => String::from(s),
@@ -151,7 +148,7 @@ impl Config {
     }
 
     fn get_max_inherit_depth(config: &Value) -> Result<usize> {
-        let dug = dig(&config, MAX_INHERIT_DEPTH);
+        let dug = dig(config, MAX_INHERIT_DEPTH);
         let max_inherit_depth = match dug {
             Some(x) => match x.as_integer() {
                 Some(0) => DEFAULT_MAX_INHERIT_DEPTH,
@@ -175,7 +172,7 @@ impl Config {
     }
 
     fn get_max_task_instructions(config: &Value) -> Option<usize> {
-        let dug = dig(&config, MAX_TASK_INSTRUCTIONS);
+        let dug = dig(config, MAX_TASK_INSTRUCTIONS);
         let max_task_instructions = if_chain! {
             if let Some(x) = dug;
             if let Some(y) = x.as_integer();
@@ -190,9 +187,8 @@ impl Config {
     }
 
     fn get_auto_include_file(config: &Value) -> Option<String> {
-        let dug = dig(&config, AUTO_INCLUDE_FILE);
-        let auto_include_file = dug.and_then(|x| x.as_str()).map(String::from);
-        auto_include_file
+        let dug = dig(config, AUTO_INCLUDE_FILE);
+        dug.and_then(|x| x.as_str()).map(String::from)
     }
 
     pub fn with_lib_dir<S>(mut self, lib_dir: S) -> Self
