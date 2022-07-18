@@ -1,10 +1,10 @@
-use std::fmt::Write;
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
 };
 use indexmap::IndexMap;
 use lpc_rs_errors::{LpcError, Result};
+use std::fmt::Write;
 
 const MAX_RECURSION: usize = 20;
 
