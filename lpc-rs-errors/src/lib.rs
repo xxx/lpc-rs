@@ -146,7 +146,7 @@ impl AsRef<str> for LpcError {
 }
 
 /// Map LALRpop's parse errors into our local error type
-impl<'a, T> From<LalrpopParseError<usize, T, LpcError>> for LpcError
+impl<T> From<LalrpopParseError<usize, T, LpcError>> for LpcError
 where
     T: Display + HasSpan,
 {

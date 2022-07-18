@@ -71,7 +71,7 @@ where
     source: PhantomData<Source>,
 }
 
-impl<'a, Name, Source> LazyFiles<Name, Source>
+impl<Name, Source> LazyFiles<Name, Source>
 where
     Name: AsRef<Path> + Clone + std::fmt::Display + std::cmp::PartialEq,
     Source: std::fmt::Display + AsRef<str>,
