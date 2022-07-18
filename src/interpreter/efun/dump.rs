@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
@@ -82,7 +83,7 @@ fn format_array<const N: usize>(
     let inner = inner.join(",\n");
 
     result.push_str(&inner);
-    result.push_str(&format!("\n{:width$}}})", "", width = indent));
+    let _ = write!(result, "\n{:width$}}})", "", width = indent);
 
     Ok(result)
 }
@@ -122,7 +123,7 @@ fn format_mapping<const N: usize>(
     let inner = inner.join(",\n");
 
     result.push_str(&inner);
-    result.push_str(&format!("\n{:width$}])", "", width = indent));
+    let _ = write!(result, "\n{:width$}])", "", width = indent);
 
     Ok(result)
 }

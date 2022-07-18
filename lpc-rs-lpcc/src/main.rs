@@ -28,11 +28,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let config_override = if let Some(config_path) = args.config {
-        Some(config_path)
-    } else {
-        None
-    };
+    let config_override = args.config;
 
     let config = Config::new(config_override)
         .unwrap()

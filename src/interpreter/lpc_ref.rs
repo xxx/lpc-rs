@@ -436,7 +436,7 @@ impl Shl for &LpcRef {
                 let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
 
                 let shift_by: u32 = if modulo < 0 {
-                    LpcInt::BITS - (modulo.abs() as u32)
+                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
                 } else {
                     modulo as u32
                 };
@@ -457,7 +457,7 @@ impl Shr for &LpcRef {
                 let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
 
                 let shift_by: u32 = if modulo < 0 {
-                    LpcInt::BITS - (modulo.abs() as u32)
+                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
                 } else {
                     modulo as u32
                 };
