@@ -12,4 +12,4 @@ lpc-rs = { path = ".." }
 lpc-rs-core = { path = "../lpc-rs-core" }
 lpc-rs-utils = { path = "../lpc-rs-utils" }
 
-clap = { version = "3.2.8", features = ["derive"] }
+clap = { version = "3.2.13", features = ["derive"] }
