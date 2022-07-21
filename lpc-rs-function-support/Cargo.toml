@@ -14,5 +14,5 @@ lpc-rs-errors = { path = "../lpc-rs-errors" }
 itertools = "0.10.0"
 lazy_format = "1.8.4"
 multimap = "0.8.2"
-serde = { version = "1.0.123", features = ["derive", "rc"] }
+serde = { version = "1.0.140", features = ["derive", "rc"] }
 tracing = "0.1"
