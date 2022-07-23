@@ -8,6 +8,7 @@ const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
 
 const AUTO_INCLUDE_FILE: &[&str] = &["lpc-rs", "auto_include_file"];
+const AUTO_INHERIT_FILE: &[&str] = &["lpc-rs", "auto_inherit_file"];
 const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
 const MAX_INHERIT_DEPTH: &[&str] = &["lpc-rs", "max_inherit_depth"];
 const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
@@ -30,6 +31,7 @@ pub struct Config {
     driver_log_file: Option<String>,
     simul_efun_file: Option<String>,
     auto_include_file: Option<String>,
+    auto_inherit_file: Option<String>,
 }
 
 impl Config {
@@ -60,6 +62,7 @@ impl Config {
         let simul_efun_file = Self::get_simul_efun_file(&config);
         let system_include_dirs = Self::get_system_include_dirs(&config)?;
         let auto_include_file = Self::get_auto_include_file(&config);
+        let auto_inherit_file = Self::get_auto_inherit_file(&config);
 
         Ok(Self {
             driver_log_file,
@@ -71,6 +74,7 @@ impl Config {
             simul_efun_file,
             system_include_dirs,
             auto_include_file,
+            auto_inherit_file,
         })
     }
 
@@ -190,6 +194,11 @@ impl Config {
         dug.and_then(|x| x.as_str()).map(String::from)
     }
 
+    fn get_auto_inherit_file(config: &Value) -> Option<String> {
+        let dug = dig(config, AUTO_INHERIT_FILE);
+        dug.and_then(|x| x.as_str()).map(String::from)
+    }
+
     pub fn with_lib_dir<S>(mut self, lib_dir: S) -> Self
     where
         S: Into<String>,
@@ -242,6 +251,15 @@ impl Config {
         self
     }
 
+    pub fn with_auto_inherit_file<T>(mut self, file: Option<T>) -> Self
+    where
+        T: Into<String>,
+    {
+        self.auto_inherit_file = file.map(|t| t.into());
+
+        self
+    }
+
     #[inline]
     pub fn lib_dir(&self) -> &str {
         &self.lib_dir
@@ -286,6 +304,11 @@ impl Config {
     pub fn auto_include_file(&self) -> Option<&str> {
         self.auto_include_file.as_deref()
     }
+
+    #[inline]
+    pub fn auto_inherit_file(&self) -> Option<&str> {
+        self.auto_inherit_file.as_deref()
+    }
 }
 
 impl Default for Config {
@@ -300,6 +323,7 @@ impl Default for Config {
             driver_log_file: Some("STDOUT".into()),
             simul_efun_file: None,
             auto_include_file: None,
+            auto_inherit_file: None,
         }
     }
 }

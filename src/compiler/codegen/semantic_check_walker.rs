@@ -634,9 +634,10 @@ impl TreeWalker for SemanticCheckWalker {
                 ))
                 .with_span(node.span);
 
-                self.context.errors.push(e.clone());
+                self.context.errors.push(e);
 
-                Err(e)
+                // Non-fatal error.
+                Ok(())
             };
 
             return ret;

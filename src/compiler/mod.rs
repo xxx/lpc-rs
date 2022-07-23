@@ -1,6 +1,7 @@
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
+    compiler::ast::inherit_node::InheritNode,
     interpreter::{process::Process, program::Program},
     lpc_parser,
 };
@@ -226,8 +227,22 @@ impl Compiler {
         T: Into<LpcPath> + Debug,
         U: AsRef<str> + Debug,
     {
-        let (mut program_node, context) = self.parse_string(&path.into(), code)?;
+        let lpc_path = path.into();
+        let (mut program_node, context) = self.parse_string(&lpc_path, code)?;
 
+        // inject the auto-inherit if it's to be used.
+        if let Some(dir) = self.config.auto_inherit_file() {
+            let lpc_dir = LpcPath::new_in_game(dir, "/", self.config.lib_dir());
+            if lpc_dir != lpc_path {
+                let node = InheritNode {
+                    path: dir.to_string(),
+                    namespace: None,
+                    span: None,
+                };
+
+                program_node.inherits.insert(0, node);
+            }
+        }
         // println!("{:?}", program);
 
         // let mut printer = TreePrinter::new();
@@ -288,7 +303,10 @@ impl Compiler {
         lpc_parser::ProgramParser::new()
             .parse(&context, wrapper)
             .map(|p| (p, context))
-            .map_err(LpcError::from)
+            .map_err(|e| {
+                println!("{:?}", e);
+                LpcError::from(e)
+            })
     }
 }
 
@@ -331,6 +349,49 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .starts_with("attempt to access a file outside of lib_dir"));
+        }
+    }
+
+    mod test_compile_string {
+        use super::*;
+
+        #[test]
+        fn uses_auto_inherit_if_specified() {
+            let config: Rc<Config> = Config::new(None::<&str>)
+                .unwrap()
+                .with_lib_dir("tests/fixtures/code")
+                .with_auto_inherit_file(Some("/std/auto.c"))
+                .into();
+            let compiler = Compiler::new(config);
+            let code = r#"
+                inherit "/std/object";
+
+                string foo = auto_inherited();
+            "#;
+            let prog = compiler.compile_string("my_file.c", code).unwrap();
+            assert_eq!(prog.inherits.len(), 2);
+            assert_eq!(prog.inherits[0].filename.to_str().unwrap(), "/std/auto.c");
+        }
+
+        #[test]
+        fn skips_auto_inherit_if_not_specified() {
+            let config: Rc<Config> = Config::new(None::<&str>)
+                .unwrap()
+                .with_lib_dir("tests/fixtures/code")
+                .with_auto_inherit_file(None::<String>)
+                .into();
+            println!("config: {:?}", config);
+            let compiler = Compiler::new(config);
+            let code = r#"
+                inherit "/std/object";
+
+                string foo = auto_inherited();
+            "#;
+            let err = compiler.compile_string("my_file.c", code).unwrap_err();
+            assert_eq!(
+                &err.to_string(),
+                "call to unknown function `auto_inherited`"
+            );
         }
     }
 }
