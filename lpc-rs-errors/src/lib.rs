@@ -19,6 +19,12 @@ pub mod file_stream;
 pub mod lazy_files;
 pub mod span;
 
+#[derive(Debug, Clone, Copy)]
+pub enum LpcErrorSeverity {
+    Warning,
+    Error
+}
+
 #[derive(Debug, Clone)]
 pub struct LpcError {
     /// The main message to be printed out
@@ -34,10 +40,13 @@ pub struct LpcError {
     additional_errors: Option<Vec<LpcError>>,
     /// Optional stack trace for printing
     stack_trace: Option<Vec<String>>,
+    /// The severity of this error. Warnings are printed, but do not stop
+    /// compilation or execution.
+    severity: LpcErrorSeverity,
 }
 
 impl LpcError {
-    /// Create a new `LpcError`, with a message
+    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Error`], and a message
     pub fn new<T>(message: T) -> Self
     where
         T: Into<String>,
@@ -49,6 +58,23 @@ impl LpcError {
             notes: vec![],
             additional_errors: None,
             stack_trace: None,
+            severity: LpcErrorSeverity::Error,
+        }
+    }
+
+    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Warning`], and a message
+    pub fn new_warning<T>(message: T) -> Self
+    where
+        T: Into<String>,
+    {
+        Self {
+            message: message.into(),
+            span: None,
+            labels: vec![],
+            notes: vec![],
+            additional_errors: None,
+            stack_trace: None,
+            severity: LpcErrorSeverity::Warning,
         }
     }
 
@@ -178,7 +204,17 @@ impl From<std::io::Error> for LpcError {
 
 impl From<&LpcError> for Diagnostic<usize> {
     fn from(error: &LpcError) -> Self {
-        let mut diagnostic = Diagnostic::error().with_message(format!("{}", error));
+        let mut diagnostic = match error.severity {
+            LpcErrorSeverity::Warning => {
+                Diagnostic::warning()
+            }
+            LpcErrorSeverity::Error => {
+                Diagnostic::error()
+            }
+        };
+
+        diagnostic = diagnostic.with_message(format!("{}", error));
+
         let mut labels = vec![];
 
         if let Some(span) = error.span {
