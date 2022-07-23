@@ -1,4 +1,5 @@
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{LpcError, LpcErrorSeverity, Result};
+use std::collections::VecDeque;
 
 use crate::{
     compiler::ast::inherit_node::InheritNode,
@@ -35,18 +36,29 @@ macro_rules! apply_walker {
         let mut walker = <$walker>::new($context);
         let result = $program.visit(&mut walker);
 
-        let context = walker.into_context();
+        let mut context = walker.into_context();
 
         if let Err(e) = result {
             let e = e.with_additional_errors(context.errors);
-            // e.emit_diagnostics();
             return Err(e);
-        } else if $fatal && !context.errors.is_empty() {
-            // TODO: get rid of this clone
-            let mut e = context.errors[0].clone();
+        } else if $fatal
+            && context
+                .errors
+                .iter()
+                .any(|e| e.severity == LpcErrorSeverity::Error)
+        {
+            let mut errors = std::mem::take(&mut context.errors);
+            // put all warnings first, but otherwise keep them in the original order
+            errors.sort_by(|a, b| match (a.severity, b.severity) {
+                (LpcErrorSeverity::Warning, LpcErrorSeverity::Error) => std::cmp::Ordering::Less,
+                (LpcErrorSeverity::Error, LpcErrorSeverity::Warning) => std::cmp::Ordering::Greater,
+                _ => std::cmp::Ordering::Equal,
+            });
 
-            e = e.with_additional_errors(context.errors[1..].to_vec());
-            // e.emit_diagnostics();
+            // TODO: benchmark these type conversions vs `errors.remove(0)`
+            let mut deq = VecDeque::from(errors);
+            let mut e = deq.pop_front().unwrap();
+            e = e.with_additional_errors(Vec::from(deq));
             return Err(e);
         }
 
@@ -253,12 +265,23 @@ impl Compiler {
         let context = apply_walker!(ScopeWalker, program_node, context, false);
         let context = apply_walker!(DefaultParamsWalker, program_node, context, false);
         let context = apply_walker!(SemanticCheckWalker, program_node, context, true);
+
         let mut asm_walker = CodegenWalker::new(context);
 
         if let Err(e) = program_node.visit(&mut asm_walker) {
             // e.emit_diagnostics();
             return Err(e);
         }
+
+        // emit warnings
+        asm_walker
+            .context()
+            .errors
+            .iter()
+            .filter(|e| e.is_warning())
+            .for_each(|e| {
+                e.emit_diagnostics();
+            });
 
         // for s in asm_walker.listing() {
         //     println!("{}", s);
@@ -298,10 +321,10 @@ impl Compiler {
         let (tokens, preprocessor) = self.preprocess_string(path, code)?;
 
         let wrapper = TokenVecWrapper::new(&tokens);
-        let context = preprocessor.into_context();
+        let mut context = preprocessor.into_context();
 
         lpc_parser::ProgramParser::new()
-            .parse(&context, wrapper)
+            .parse(&mut context, wrapper)
             .map(|p| (p, context))
             .map_err(|e| {
                 println!("{:?}", e);
@@ -380,7 +403,6 @@ mod tests {
                 .with_lib_dir("tests/fixtures/code")
                 .with_auto_inherit_file(None::<String>)
                 .into();
-            println!("config: {:?}", config);
             let compiler = Compiler::new(config);
             let code = r#"
                 inherit "/std/object";

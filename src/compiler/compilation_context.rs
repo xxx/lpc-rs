@@ -36,7 +36,7 @@ pub struct CompilationContext {
     /// Storage for default function params, for the functions that have them
     pub default_function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
-    /// Any errors that have been collected
+    /// Any warnings & errors that have been collected
     pub errors: Vec<LpcError>,
 
     /// The pragmas that have been set

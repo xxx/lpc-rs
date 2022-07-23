@@ -19,10 +19,10 @@ pub mod file_stream;
 pub mod lazy_files;
 pub mod span;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LpcErrorSeverity {
     Warning,
-    Error
+    Error,
 }
 
 #[derive(Debug, Clone)]
@@ -42,7 +42,7 @@ pub struct LpcError {
     stack_trace: Option<Vec<String>>,
     /// The severity of this error. Warnings are printed, but do not stop
     /// compilation or execution.
-    severity: LpcErrorSeverity,
+    pub severity: LpcErrorSeverity,
 }
 
 impl LpcError {
@@ -76,6 +76,14 @@ impl LpcError {
             stack_trace: None,
             severity: LpcErrorSeverity::Warning,
         }
+    }
+
+    pub fn is_warning(&self) -> bool {
+        self.severity == LpcErrorSeverity::Warning
+    }
+
+    pub fn is_error(&self) -> bool {
+        self.severity == LpcErrorSeverity::Error
     }
 
     /// Set the primary span for this error
@@ -205,12 +213,8 @@ impl From<std::io::Error> for LpcError {
 impl From<&LpcError> for Diagnostic<usize> {
     fn from(error: &LpcError) -> Self {
         let mut diagnostic = match error.severity {
-            LpcErrorSeverity::Warning => {
-                Diagnostic::warning()
-            }
-            LpcErrorSeverity::Error => {
-                Diagnostic::error()
-            }
+            LpcErrorSeverity::Warning => Diagnostic::warning(),
+            LpcErrorSeverity::Error => Diagnostic::error(),
         };
 
         diagnostic = diagnostic.with_message(format!("{}", error));

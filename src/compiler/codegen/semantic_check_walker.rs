@@ -678,8 +678,12 @@ mod tests {
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
         lpc_type::LpcType,
     };
+    use lpc_rs_errors::LpcErrorSeverity;
     use lpc_rs_function_support::function_prototype::FunctionPrototype;
-    use std::{collections::HashMap, default::Default};
+    use std::{
+        collections::{HashMap, VecDeque},
+        default::Default,
+    };
 
     fn empty_context() -> CompilationContext {
         let mut scopes = ScopeTree::default();

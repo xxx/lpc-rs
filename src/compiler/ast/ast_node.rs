@@ -44,6 +44,9 @@ pub enum AstNode {
     Switch(SwitchNode),
     VarInit(VarInitNode),
     While(WhileNode),
+
+    /// Used for anything that is parsed, but ignored (e.g. function prototypes)
+    NoOp,
 }
 
 #[auto_impl(&mut)]
@@ -57,39 +60,30 @@ pub trait SpannedNode {
     fn span(&self) -> Option<Span>;
 }
 
-macro_rules! node_defs {
-    ( $( $x:ident ),+ ) => {
-        impl AstNodeTrait for AstNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-                match self {
-                 $(
-                    AstNode::$x(y) => y.visit(tree_walker),
-                 )*
-                }
-            }
+impl AstNodeTrait for AstNode {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
+        match self {
+            AstNode::Block(y) => y.visit(tree_walker),
+            AstNode::Break(y) => y.visit(tree_walker),
+            AstNode::Call(y) => y.visit(tree_walker),
+            AstNode::Continue(y) => y.visit(tree_walker),
+            AstNode::Decl(y) => y.visit(tree_walker),
+            AstNode::DoWhile(y) => y.visit(tree_walker),
+            AstNode::Expression(y) => y.visit(tree_walker),
+            AstNode::For(y) => y.visit(tree_walker),
+            AstNode::ForEach(y) => y.visit(tree_walker),
+            AstNode::FunctionDef(y) => y.visit(tree_walker),
+            AstNode::If(y) => y.visit(tree_walker),
+            AstNode::LabeledStatement(y) => y.visit(tree_walker),
+            AstNode::Program(y) => y.visit(tree_walker),
+            AstNode::Return(y) => y.visit(tree_walker),
+            AstNode::Switch(y) => y.visit(tree_walker),
+            AstNode::VarInit(y) => y.visit(tree_walker),
+            AstNode::While(y) => y.visit(tree_walker),
+            AstNode::NoOp => Ok(()),
         }
-    };
+    }
 }
-
-node_defs!(
-    Block,
-    Break,
-    Call,
-    Continue,
-    Decl,
-    DoWhile,
-    Expression,
-    For,
-    ForEach,
-    FunctionDef,
-    If,
-    LabeledStatement,
-    Program,
-    Return,
-    Switch,
-    VarInit,
-    While
-);
 
 impl Display for AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

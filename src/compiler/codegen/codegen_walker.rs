@@ -536,6 +536,11 @@ impl CodegenWalker {
             }
         }
     }
+
+    // Get a reference to the current [`CompilationContext`]
+    pub fn context(&self) -> &CompilationContext {
+        &self.context
+    }
 }
 
 impl ContextHolder for CodegenWalker {
@@ -1908,6 +1913,8 @@ impl Default for CodegenWalker {
 mod tests {
     use super::*;
     use lpc_rs_asm::instruction::Instruction::*;
+    use lpc_rs_errors::LpcErrorSeverity;
+    use std::collections::VecDeque;
 
     use crate::{
         apply_walker,
@@ -2622,7 +2629,7 @@ mod tests {
             let mut walker = default_walker();
             let call = "dump(4 - 5)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&CompilationContext::default(), LexWrapper::new(call))
+                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2645,7 +2652,7 @@ mod tests {
             let check = |code: &str, expected: &[Instruction]| {
                 let mut walker = default_walker();
                 let mut tree = lpc_parser::ExpressionParser::new()
-                    .parse(&CompilationContext::default(), LexWrapper::new(code))
+                    .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                     .unwrap();
 
                 let _ = tree.visit(&mut walker);
@@ -2690,7 +2697,7 @@ mod tests {
             let check = |code: &str, expected: &[Instruction]| {
                 let mut walker = default_walker();
                 let mut tree = lpc_parser::ExpressionParser::new()
-                    .parse(&CompilationContext::default(), LexWrapper::new(code))
+                    .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                     .unwrap();
 
                 let _ = tree.visit(&mut walker);
@@ -2713,7 +2720,7 @@ mod tests {
             let mut walker = default_walker();
             let call = "catch(12 / 0)";
             let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&CompilationContext::default(), LexWrapper::new(call))
+                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = tree.visit(&mut walker);
@@ -2754,7 +2761,7 @@ mod tests {
 
             let call = "my_func(666)";
             let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&context, LexWrapper::new(call))
+                .parse(&mut context, LexWrapper::new(call))
                 .unwrap();
 
             let mut walker = CodegenWalker::new(context);
@@ -2797,7 +2804,7 @@ mod tests {
 
             let call = "my_func(666)";
             let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&context, LexWrapper::new(call))
+                .parse(&mut context, LexWrapper::new(call))
                 .unwrap();
 
             let mut walker = CodegenWalker::new(context);
@@ -2836,7 +2843,7 @@ mod tests {
             let mut walker = CodegenWalker::new(context);
             let call = "marfin(666)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&walker.context, LexWrapper::new(call))
+                .parse(&mut walker.context, LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2874,7 +2881,7 @@ mod tests {
             let mut walker = CodegenWalker::new(context);
             let call = "void_thing(666)";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&walker.context, LexWrapper::new(call))
+                .parse(&mut walker.context, LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2897,7 +2904,7 @@ mod tests {
             let mut walker = default_walker();
             let call = r#"clone_object("/foo.c")"#;
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&CompilationContext::default(), LexWrapper::new(call))
+                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2921,7 +2928,7 @@ mod tests {
             let mut walker = default_walker();
             let call = r#"dump("lkajsdflkajsdf")"#;
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&CompilationContext::default(), LexWrapper::new(call))
+                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2958,7 +2965,7 @@ mod tests {
             let mut walker = CodegenWalker::new(context);
             let call = "my_func(\"hello!\", 42, \"cool beans\")";
             let mut tree = lpc_parser::CallParser::new()
-                .parse(&walker.context, LexWrapper::new(call))
+                .parse(&mut walker.context, LexWrapper::new(call))
                 .unwrap();
 
             let _ = walker.visit_call(&mut tree);
@@ -2986,7 +2993,7 @@ mod tests {
     fn test_visit_block_populates_instructions() {
         let block = "{ int a = '🏯'; dump(a); }";
         let mut tree = lpc_parser::BlockParser::new()
-            .parse(&CompilationContext::default(), LexWrapper::new(block))
+            .parse(&mut CompilationContext::default(), LexWrapper::new(block))
             .unwrap();
 
         let mut scope_walker = ScopeWalker::default();
@@ -3196,7 +3203,7 @@ mod tests {
     fn test_decl_sets_scope_and_instructions() {
         let call = "int foo = 1, *bar = ({ 56 })";
         let mut tree = lpc_parser::DeclParser::new()
-            .parse(&CompilationContext::default(), LexWrapper::new(call))
+            .parse(&mut CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
 
         let mut scope_walker = ScopeWalker::default();
@@ -3380,7 +3387,7 @@ mod tests {
 
             let _walker = CodegenWalker::default();
             let tree = lpc_parser::DefParser::new()
-                .parse(&CompilationContext::default(), LexWrapper::new(code))
+                .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                 .unwrap();
 
             let mut node = if let AstNode::FunctionDef(node) = tree {

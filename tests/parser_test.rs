@@ -1,3 +1,4 @@
+use claim::assert_ok;
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
@@ -32,7 +33,7 @@ use lpc_rs_errors::{span::Span, Result};
 fn assert_int(value: LpcInt, expr: &str) {
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::Int(IntNode {
@@ -52,7 +53,7 @@ fn program_global_vars() {
     let prog = "int i = 123; private int j = i - 8; private static string *k;";
     let lexer = LexWrapper::new(prog);
     let node = lpc_parser::ProgramParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ProgramNode {
@@ -191,7 +192,7 @@ fn float_literal_underscores() {
     let expr = "1_1.234_332e2_2";
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::Float(FloatNode {
@@ -211,7 +212,7 @@ fn string_literal_concat() {
     let expr = r##""foo" + "bar" + "baz" + "quux""##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
@@ -231,7 +232,7 @@ fn string_literal_repeat() {
     let expr = r##""foo" * 3"##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
@@ -249,7 +250,7 @@ fn string_literal_repeat() {
     let expr = r##""foo" * -3"##;
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::String(StringNode {
@@ -267,7 +268,7 @@ fn string_literal_repeat() {
     let expr = r##""foo" * 9223372036854775807"##;
     let lexer = LexWrapper::new(expr);
     let error = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap_err();
 
     assert_eq!(error.to_string(), "capacity overflow in string repetition");
@@ -278,7 +279,7 @@ fn compound_assignment_decompose() {
     let expr = "a += 2";
     let lexer = LexWrapper::new(expr);
     let node = lpc_parser::ExpressionParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
@@ -336,7 +337,7 @@ fn typeless_functions_are_mixed() {
     .replace("\n", "");
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     assert!(matches!(
@@ -401,7 +402,7 @@ fn ellipsis_sets_the_flag_when_only_arg() {
 
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
     assert!(node.flags.ellipsis());
 }
@@ -418,7 +419,7 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
 
     let lexer = LexWrapper::new(&prog);
     let node = lpc_parser::FunctionDefParser::new()
-        .parse(&CompilationContext::default(), lexer)
+        .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
     assert!(node.flags.ellipsis());
@@ -540,13 +541,34 @@ fn error_on_nomask_var() {
     );
 }
 
+#[test]
+fn warning_on_prototype() {
+    let prog = indoc! { r#"
+        private int tacos(string a);
+    "# };
+
+    let compiler = Compiler::default();
+    let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
+    let code = TokenVecWrapper::new(&code);
+    let mut context = preprocessor.into_context();
+
+    let program = lpc_parser::ProgramParser::new().parse(&mut context, code);
+
+    assert_ok!(program);
+
+    assert_eq!(
+        &context.errors.first().unwrap().to_string(),
+        "prototypes are ignored in this flavor of LPC"
+    );
+}
+
 fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
     let code = TokenVecWrapper::new(&code);
-    let context = preprocessor.into_context();
+    let mut context = preprocessor.into_context();
 
-    match lpc_parser::ProgramParser::new().parse(&context, code) {
+    match lpc_parser::ProgramParser::new().parse(&mut context, code) {
         Ok(pr) => Ok(pr),
         Err(e) => Err(e.into()),
     }

@@ -28,7 +28,7 @@ use crate::compiler::{
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let lexer = LexWrapper::new(prog);
-/// let mut program_node = lpc_parser::ProgramParser::new().parse(&CompilationContext::default(), lexer).unwrap();
+/// let mut program_node = lpc_parser::ProgramParser::new().parse(&mut CompilationContext::default(), lexer).unwrap();
 /// let mut walker = TreePrinter::new();
 /// walker.visit_program(&mut program_node);
 /// ```

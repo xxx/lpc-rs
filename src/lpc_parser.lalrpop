@@ -49,7 +49,7 @@ use crate::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
-grammar<'context>(context: &'context CompilationContext);
+grammar<'context>(context: &'context mut CompilationContext);
 
 extern {
     type Location = usize;
@@ -174,6 +174,19 @@ pub Inherit: InheritNode = {
 
 pub Def: AstNode = {
     <FunctionDef> => AstNode::from(<>),
+    <proto:FunctionPrototype> <r:";"> => {
+        let (flags, r_type, _, name, _) = proto;
+        let left = flags.first().map_or_else(
+            || r_type.map_or(name.0, |ty| ty.1),
+            |flag| flag.1
+        );
+        let span = combine_spans(Some(left), Some(r));
+
+        let warning = LpcError::new_warning("prototypes are ignored in this flavor of LPC")
+            .with_span(Some(span));
+        context.errors.push(warning);
+        AstNode::NoOp
+    },
     <flags:GlobalFlag*> <mut node:Decl> ";" =>? {
         let flag_strs = flags.iter().map(|i| i.0).collect::<Vec<_>>();
         let invalid = GlobalVarFlags::validate(&flag_strs);
@@ -196,8 +209,21 @@ pub Def: AstNode = {
     }
 };
 
+FunctionPrototype: (
+    Vec<(&'static str, Span)>,
+    Option<(&'static str, Span)>,
+    Option<Span>,
+    StringToken,
+    (Vec<VarInitNode>, bool)
+) = {
+    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> => {
+        (flags, r_type, star, name, parameter_tuple)
+    }
+}
+
 pub FunctionDef: FunctionDefNode = {
-    <flags:GlobalFlag*> <r_type:Type?> <star:"*"?> <name:"ID"> <parameter_tuple:Parameters> "{" <body:Statements> "}" =>? {
+    <proto:FunctionPrototype> "{" <body:Statements> "}" =>? {
+        let (flags, r_type, star, name, parameter_tuple) = proto;
         let array = star.is_some();
         let (parameters, ellipsis) = parameter_tuple;
 
