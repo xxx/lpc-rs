@@ -5,7 +5,7 @@ use crate::{
 };
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_utils::string;
+use lpc_rs_utils::{string, string::concatenate_strings};
 use refpool::PoolRef;
 use std::{
     cell::RefCell,
@@ -16,7 +16,6 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
-use lpc_rs_utils::string::concatenate_strings;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -227,24 +226,21 @@ impl Add for &LpcRef {
             LpcRef::Int(i) => match rhs {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
-                LpcRef::String(s) => Ok(LpcValue::String(
-                    concatenate_strings(i.to_string(), try_extract_value!(*s.borrow(), LpcValue::String))?
-                )),
+                LpcRef::String(s) => Ok(LpcValue::String(concatenate_strings(
+                    i.to_string(),
+                    try_extract_value!(*s.borrow(), LpcValue::String),
+                )?)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
-                LpcRef::String(s2) => Ok(LpcValue::String(
-                    concatenate_strings(
-                        try_extract_value!(*s.borrow(), LpcValue::String),
-                        try_extract_value!(*s2.borrow(), LpcValue::String),
-                    )?
-                )),
-                LpcRef::Int(i) => Ok(LpcValue::String(
-                    concatenate_strings(
-                        try_extract_value!(*s.borrow(), LpcValue::String),
-                        &i.to_string(),
-                    )?
-                )),
+                LpcRef::String(s2) => Ok(LpcValue::String(concatenate_strings(
+                    try_extract_value!(*s.borrow(), LpcValue::String),
+                    try_extract_value!(*s2.borrow(), LpcValue::String),
+                )?)),
+                LpcRef::Int(i) => Ok(LpcValue::String(concatenate_strings(
+                    try_extract_value!(*s.borrow(), LpcValue::String),
+                    &i.to_string(),
+                )?)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Array(vec) => match rhs {

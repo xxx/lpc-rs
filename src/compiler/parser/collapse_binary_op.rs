@@ -10,8 +10,7 @@ use crate::compiler::{
 use lalrpop_util::ParseError;
 use lpc_rs_core::LpcInt;
 use lpc_rs_errors::{span::Span, LpcError};
-use lpc_rs_utils::string;
-use lpc_rs_utils::string::concatenate_strings;
+use lpc_rs_utils::{string, string::concatenate_strings};
 
 /// Combine literals in cases where we have enough information to do so.
 ///
@@ -287,8 +286,8 @@ fn collapse_repeat_string(
     amount: LpcInt,
     span: Span,
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
-    let value = string::repeat_string(string.as_str(), amount)
-        .map_err(|e| e.with_span(Some(span)))?;
+    let value =
+        string::repeat_string(string.as_str(), amount).map_err(|e| e.with_span(Some(span)))?;
     let node = ExpressionNode::String(StringNode {
         value,
         span: Some(span),

@@ -31,7 +31,8 @@ pub fn repeat_string(s: &str, i: LpcInt) -> Result<String> {
 pub fn concatenate_strings<T, U>(s1: T, s2: U) -> Result<String>
 where
     T: Into<String>,
-    U: AsRef<str> {
+    U: AsRef<str>,
+{
     let string1 = s1.into();
     let str2 = s2.as_ref();
 
@@ -90,7 +91,10 @@ mod tests {
             let s1 = repeat_string("a", 1_000_000_000).unwrap();
             let s2 = repeat_string("b", 1_000_000_000).unwrap();
             let result = concatenate_strings(s1, &s2);
-            assert_eq!(result.unwrap_err().to_string().as_str(), "overflow in string concatenation");
+            assert_eq!(
+                result.unwrap_err().to_string().as_str(),
+                "overflow in string concatenation"
+            );
         }
     }
 }
