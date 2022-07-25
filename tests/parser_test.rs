@@ -225,6 +225,15 @@ fn string_literal_concat() {
     });
 
     assert_eq!(node, expected);
+
+    // test overflow
+    let expr = r##"("f" * 1_000_000_000) + ("b" * 1_000_000_000)"##;
+    let lexer = LexWrapper::new(expr);
+    let error = lpc_parser::ExpressionParser::new()
+        .parse(&mut CompilationContext::default(), lexer)
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "overflow in string concatenation");
 }
 
 #[test]
@@ -271,7 +280,7 @@ fn string_literal_repeat() {
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap_err();
 
-    assert_eq!(error.to_string(), "capacity overflow in string repetition");
+    assert_eq!(error.to_string(), "overflow in string repetition");
 }
 
 #[test]

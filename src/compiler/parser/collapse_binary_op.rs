@@ -10,7 +10,8 @@ use crate::compiler::{
 use lalrpop_util::ParseError;
 use lpc_rs_core::LpcInt;
 use lpc_rs_errors::{span::Span, LpcError};
-use lpc_rs_utils::repeat_string;
+use lpc_rs_utils::string;
+use lpc_rs_utils::string::concatenate_strings;
 
 /// Combine literals in cases where we have enough information to do so.
 ///
@@ -43,7 +44,7 @@ pub fn collapse_binary_op(
         | BinaryOperation::Gt
         | BinaryOperation::Gte
         | BinaryOperation::AndAnd
-        | BinaryOperation::OrOr => Ok(default_node(op, l, r, span)),
+        | BinaryOperation::OrOr => Ok(non_collapse(op, l, r, span)),
     }
 }
 
@@ -60,27 +61,30 @@ fn collapse_add(
                 span: Some(span),
             }),
             ExpressionNode::String(node2) => ExpressionNode::String(StringNode {
-                value: node.value.to_string() + &node2.value,
+                value: concatenate_strings(node.value.to_string(), &node2.value)
+                    .map_err(|e| e.with_span(Some(span)))?,
                 span: Some(span),
             }),
-            _ => default_node(op, l, r, span),
+            _ => non_collapse(op, l, r, span),
         },
         ExpressionNode::String(node) => {
             match r {
                 // "string" + 123 == "string123"
                 ExpressionNode::Int(node2) => ExpressionNode::String(StringNode {
-                    value: node.value.clone() + &node2.value.to_string(),
+                    value: concatenate_strings(&node.value, &node2.value.to_string())
+                        .map_err(|e| e.with_span(Some(span)))?,
                     span: Some(span),
                 }),
                 // concat string literals
                 ExpressionNode::String(node2) => ExpressionNode::String(StringNode {
-                    value: node.value.clone() + &node2.value,
+                    value: concatenate_strings(&node.value, &node2.value)
+                        .map_err(|e| e.with_span(Some(span)))?,
                     span: Some(span),
                 }),
-                _ => default_node(op, l, r, span),
+                _ => non_collapse(op, l, r, span),
             }
         }
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -98,9 +102,9 @@ fn collapse_sub(
                 value: node.value - node2.value,
                 span: Some(span),
             }),
-            _ => default_node(op, l, r, span),
+            _ => non_collapse(op, l, r, span),
         },
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -120,7 +124,7 @@ fn collapse_mul(
             }),
             // 3 * "string" = "stringstringstring"
             ExpressionNode::String(node2) => collapse_repeat_string(node2.value, node.value, span)?,
-            _ => default_node(op, l, r, span),
+            _ => non_collapse(op, l, r, span),
         },
         ExpressionNode::String(node) => {
             match r {
@@ -128,10 +132,10 @@ fn collapse_mul(
                 ExpressionNode::Int(node2) => {
                     collapse_repeat_string(node.value.clone(), node2.value, span)?
                 }
-                _ => default_node(op, l, r, span),
+                _ => non_collapse(op, l, r, span),
             }
         }
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -153,10 +157,10 @@ fn collapse_div(
             } else {
                 // Push it off until runtime so errors are nicer
                 // This branch is only hit if you're dividing by a 0 int literal.
-                default_node(op, l, r, span)
+                non_collapse(op, l, r, span)
             }
         }
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -186,7 +190,7 @@ fn collapse_mod(
                 })
             }
         }
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -203,7 +207,7 @@ fn collapse_and(
             value: node.value & node2.value,
             span: Some(span),
         }),
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -220,7 +224,7 @@ fn collapse_or(
             value: node.value | node2.value,
             span: Some(span),
         }),
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -237,7 +241,7 @@ fn collapse_xor(
             value: node.value ^ node2.value,
             span: Some(span),
         }),
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -254,7 +258,7 @@ fn collapse_shl(
             value: node.value << node2.value,
             span: Some(span),
         }),
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -271,7 +275,7 @@ fn collapse_shr(
             value: node.value >> node2.value,
             span: Some(span),
         }),
-        _ => default_node(op, l, r, span),
+        _ => non_collapse(op, l, r, span),
     };
 
     Ok(result)
@@ -283,7 +287,8 @@ fn collapse_repeat_string(
     amount: LpcInt,
     span: Span,
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
-    let value = repeat_string::repeat_string(string.as_str(), amount)?;
+    let value = string::repeat_string(string.as_str(), amount)
+        .map_err(|e| e.with_span(Some(span)))?;
     let node = ExpressionNode::String(StringNode {
         value,
         span: Some(span),
@@ -293,7 +298,7 @@ fn collapse_repeat_string(
 }
 
 #[inline]
-fn default_node(
+fn non_collapse(
     op: BinaryOperation,
     l: ExpressionNode,
     r: ExpressionNode,
@@ -485,7 +490,7 @@ mod tests {
         assert_err!(result.clone());
         assert_eq!(
             result.unwrap_err().to_string().as_str(),
-            "capacity overflow in string repetition"
+            "overflow in string repetition"
         );
     }
 

@@ -5,7 +5,7 @@ use crate::{
 };
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_utils::repeat_string;
+use lpc_rs_utils::string;
 use refpool::PoolRef;
 use std::{
     cell::RefCell,
@@ -16,6 +16,7 @@ use std::{
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
+use lpc_rs_utils::string::concatenate_strings;
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -227,17 +228,22 @@ impl Add for &LpcRef {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
                 LpcRef::String(s) => Ok(LpcValue::String(
-                    i.to_string() + try_extract_value!(*s.borrow(), LpcValue::String),
+                    concatenate_strings(i.to_string(), try_extract_value!(*s.borrow(), LpcValue::String))?
                 )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
                 LpcRef::String(s2) => Ok(LpcValue::String(
-                    try_extract_value!(*s.borrow(), LpcValue::String).clone()
-                        + try_extract_value!(*s2.borrow(), LpcValue::String),
+                    concatenate_strings(
+                        try_extract_value!(*s.borrow(), LpcValue::String),
+                        try_extract_value!(*s2.borrow(), LpcValue::String),
+                    )?
                 )),
                 LpcRef::Int(i) => Ok(LpcValue::String(
-                    try_extract_value!(*s.borrow(), LpcValue::String).clone() + &i.to_string(),
+                    concatenate_strings(
+                        try_extract_value!(*s.borrow(), LpcValue::String),
+                        &i.to_string(),
+                    )?
                 )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -306,12 +312,12 @@ impl Mul for &LpcRef {
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string::repeat_string(string, *y)?))
+                Ok(LpcValue::String(string::repeat_string(string, *y)?))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(repeat_string::repeat_string(string, *x)?))
+                Ok(LpcValue::String(string::repeat_string(string, *x)?))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
@@ -813,7 +819,7 @@ mod tests {
             assert_err!(result.clone());
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
-                "capacity overflow in string repetition"
+                "overflow in string repetition"
             )
         }
 
