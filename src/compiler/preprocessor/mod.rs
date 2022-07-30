@@ -18,7 +18,7 @@ use lpc_rs_core::{
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
     read_lpc_file, LpcInt,
 };
-use lpc_rs_errors::{format_expected, lazy_files::FileCache, span::Span, LpcError, Result};
+use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
@@ -185,8 +185,16 @@ impl Preprocessor {
         C: AsRef<str> + Debug,
     {
         let mut output = existing_output.unwrap_or_default();
-        let file_id =
-            FileCache::insert(&lpc_path.as_server(self.context.config.lib_dir()).display());
+
+        let file_id = {
+            let server_path = lpc_path.as_server(self.context.config.lib_dir());
+            let mut cache = FILE_CACHE.write();
+            if Path::exists(&*server_path) {
+                cache.add(server_path.to_string_lossy())
+            } else {
+                cache.add_eager(server_path.to_string_lossy(), code.as_ref())
+            }
+        };
 
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);

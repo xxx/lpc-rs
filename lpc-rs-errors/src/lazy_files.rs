@@ -59,7 +59,7 @@ pub type FileId = usize;
 /// println!("contents: {}", files.get_by_path(&path).unwrap().source());
 ///
 /// // Also handles eagerly-adding code to the cache
-/// let id2 = files.add_eager("my-in-memory-file.c", String::from("int j = 123;"));
+/// let id2 = files.add_eager("my-in-memory-file.c", "int j = 123;");
 /// assert_eq!(files.get(id2).unwrap().source(), "int j = 123;");
 /// ```
 #[derive(Debug)]
@@ -85,28 +85,37 @@ where
     ///
     /// # Arguments
     /// `path` - The absolute on-server path, including filename, to the file being added.
-    pub fn add(&mut self, path: Name) -> FileId {
-        if let Some(id) = self.id_for(&path) {
+    pub fn add<T>(&mut self, path: T) -> FileId
+    where
+        T: Into<Name>,
+    {
+        let name = path.into();
+        if let Some(id) = self.id_for(&name) {
             return id;
         }
 
         let id = self.paths.len();
-        self.paths.push(LazyFile::Lazy(path));
+        self.paths.push(LazyFile::Lazy(name));
         id
     }
 
-    /// Add a new file plus its source code to the cache
+    /// Add a new file, along with its source code, to the cache
     ///
     /// # Arguments
-    /// `path` - The absolute full path, including filename, to the file being added.
+    /// `path` - The absolute on-server path to the file being added.
     /// `code` - The source code for the file in question
-    pub fn add_eager(&mut self, path: Name, code: Source) -> FileId {
-        if let Some(id) = self.id_for(&path) {
+    pub fn add_eager<T, U>(&mut self, path: T, code: U) -> FileId
+    where
+        T: Into<Name>,
+        U: Into<Source>,
+    {
+        let name = path.into();
+        if let Some(id) = self.id_for(&name) {
             return id;
         }
 
         let id = self.paths.len();
-        self.paths.push(LazyFile::Eager(path, code));
+        self.paths.push(LazyFile::Eager(name, code.into()));
         id
     }
 
