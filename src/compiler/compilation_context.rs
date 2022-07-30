@@ -140,6 +140,7 @@ impl CompilationContext {
         let r = name.as_ref();
 
         let find_in_inherit = || {
+            // look up in reverse, so later declarations override earlier ones
             self.inherits.iter().rev().find_map(|inherit| {
                 inherit
                     .lookup_function(r, &CallNamespace::Local)

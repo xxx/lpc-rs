@@ -290,13 +290,28 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Call(CallNode {
             name, namespace, ..
         }) => {
-            let return_type = context
-                .lookup_function_complete(name.as_str(), namespace)
-                .map_or(LpcType::Int(false), |function_like| {
-                    function_like.as_ref().return_type
-                });
-
-            Ok(return_type)
+            // first check to see if we're calling a function pointer that's
+            // overridden the function with this name
+            context.lookup_var(name.as_str()).map_or_else(
+                || {
+                    context
+                        .lookup_function_complete(name.as_str(), namespace)
+                        .map_or(Ok(LpcType::Int(false)), |function_like| {
+                            Ok(function_like.as_ref().return_type)
+                        })
+                },
+                |var| {
+                    if var.type_.matches_type(LpcType::Function(false)) {
+                        // TODO: Get the real return type here somehow
+                        Ok(LpcType::Mixed(false))
+                    } else {
+                        Err(LpcError::new(format!(
+                            "invalid call: `{}` is not a function",
+                            name
+                        )))
+                    }
+                },
+            )
         }
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
@@ -1968,6 +1983,57 @@ mod tests {
                     r: Box::new(r),
                     op: BinaryOperation::Index,
                     span: None,
+                });
+
+                let context = CompilationContext {
+                    scopes: scope_tree,
+                    ..Default::default()
+                };
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
+            }
+        }
+
+        mod calls {
+            use super::*;
+            use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
+            use lpc_rs_core::global_var_flags::GlobalVarFlags;
+
+            #[test]
+            fn is_return_type_for_normal_functions() {
+                let node = ExpressionNode::Call(CallNode {
+                    receiver: None,
+                    arguments: vec![],
+                    name: "this_object".to_string(),
+                    span: None,
+                    namespace: Default::default(),
+                });
+
+                let context = CompilationContext::default();
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
+            }
+
+            #[test]
+            fn is_mixed_for_function_pointers() {
+                let mut scope_tree = ScopeTree::default();
+                let id = scope_tree.push_new();
+                let scope = scope_tree.get_mut(id).unwrap();
+                scope.insert(Symbol {
+                    name: "foo".to_string(),
+                    type_: LpcType::Function(false),
+                    location: None,
+                    scope_id: 0,
+                    span: None,
+                    flags: GlobalVarFlags::default(),
+                });
+
+                let node = ExpressionNode::Call(CallNode {
+                    receiver: None,
+                    arguments: vec![],
+                    name: "foo".to_string(),
+                    span: None,
+                    namespace: Default::default(),
                 });
 
                 let context = CompilationContext {
