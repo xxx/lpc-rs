@@ -53,7 +53,7 @@ pub type FileId = usize;
 ///
 /// let mut files: LazyFiles<&str, String> = LazyFiles::new();
 /// let path = "tests/fixtures/code/include/simple.h";
-/// let id = files.add(&path);
+/// let id = files.add(path);
 ///
 /// println!("contents: {}", files.get(id).unwrap().source());
 /// println!("contents: {}", files.get_by_path(&path).unwrap().source());
