@@ -1037,7 +1037,7 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         let locations = match &mut node.initializer {
-            ForEachInit::Array(ref mut node) => {
+            ForEachInit::Array(ref mut node) | ForEachInit::String(ref mut node) => {
                 node.visit(self)?;
 
                 vec![self.current_result]
@@ -1070,7 +1070,7 @@ impl TreeWalker for CodegenWalker {
 
         // assign next element(s) to the locations
         match &node.initializer {
-            ForEachInit::Array(node) => {
+            ForEachInit::Array(node) | ForEachInit::String(node) => {
                 debug_assert!(locations.len() == 1);
 
                 let instruction =

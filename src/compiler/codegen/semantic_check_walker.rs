@@ -309,7 +309,10 @@ impl TreeWalker for SemanticCheckWalker {
         self.context.scopes.goto(node.scope_id);
 
         let collection_type = node_type(&node.collection, &self.context)?;
-        if !collection_type.is_array() && !collection_type.matches_type(LpcType::Mapping(false)) {
+        if !collection_type.is_array()
+            && !collection_type.matches_type(LpcType::Mapping(false))
+            && !collection_type.matches_type(LpcType::String(false))
+        {
             let e = LpcError::new(format!(
                 "`foreach` must iterate over an array or mapping, found {}",
                 collection_type
@@ -319,7 +322,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         match &mut node.initializer {
-            ForEachInit::Array(ref mut init) => {
+            ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
                 let _ = init.visit(self);
             }
             ForEachInit::Mapping {
@@ -1834,6 +1837,21 @@ mod tests {
                 void create() {
                     mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
                     foreach(key, value: a) {
+                        dump(key);
+                    }
+                }
+            "# };
+            let context = walk_code(code).expect("failed to parse?");
+
+            assert!(context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_strings() {
+            let code = indoc! { r#"
+                void create() {
+                    string s = "hello, world!";
+                    foreach(key, value: s) {
                         dump(key);
                     }
                 }

@@ -29,12 +29,13 @@ pub enum ForEachInit {
         key: VarInitNode,
         value: VarInitNode,
     },
+    String(VarInitNode),
 }
 
 impl Display for ForEachInit {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ForEachInit::Array(node) => write!(f, "{}", node),
+            ForEachInit::Array(node) | ForEachInit::String(node) => write!(f, "{}", node),
             ForEachInit::Mapping { key, value } => write!(f, "{} {}", key, value),
         }
     }

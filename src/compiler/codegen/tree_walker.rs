@@ -191,7 +191,7 @@ pub trait TreeWalker {
         Self: Sized,
     {
         match &mut node.initializer {
-            ForEachInit::Array(ref mut init) => {
+            ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
                 let _ = init.visit(self);
             }
             ForEachInit::Mapping {

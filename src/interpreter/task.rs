@@ -741,11 +741,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         LpcValue::from(map.len() as LpcInt)
                     }
-                    LpcRef::Float(_)
-                    | LpcRef::Int(_)
-                    | LpcRef::Object(_)
-                    | LpcRef::Function(_)
-                    | LpcRef::String(_) => LpcValue::from(0),
+                    LpcRef::String(x) => {
+                        let borrowed = x.borrow();
+                        let string = try_extract_value!(*borrowed, LpcValue::String);
+
+                        LpcValue::from(string.len() as LpcInt)
+                    }
+                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
+                        LpcValue::from(0)
+                    }
                 };
 
                 let lpc_ref = self.memory.value_to_ref(value);
@@ -3585,6 +3589,10 @@ mod tests {
 
         mod test_sizeof {
             use super::*;
+            use crate::test_support::test_config;
+            use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
+            use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
+            use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
             #[test]
             fn stores_the_value_for_arrays() {
@@ -3640,6 +3648,61 @@ mod tests {
                 ];
 
                 assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn stores_the_value_for_strings() {
+                let config = Rc::new(test_config());
+                let path = LpcPath::new_in_game("/my_file.c", "/", config.lib_dir());
+
+                let mut functions = HashMap::new();
+                functions.insert(
+                    INIT_PROGRAM.to_string(),
+                    ProgramFunction {
+                        prototype: FunctionPrototype::new(
+                            INIT_PROGRAM,
+                            LpcType::Void,
+                            Default::default(),
+                            Default::default(),
+                            None,
+                            vec![],
+                            vec![],
+                        ),
+                        num_locals: 2,
+                        instructions: vec![
+                            SConst(Register(1), "Hello, world!".into()),
+                            Sizeof(Register(1), Register(2)),
+                        ],
+                        debug_spans: vec![None, None],
+                        labels: Default::default(),
+                    }
+                    .into(),
+                );
+
+                let program = Program {
+                    filename: path,
+                    functions,
+                    global_variables: Default::default(),
+                    num_globals: 0,
+                    num_init_registers: 2,
+                    pragmas: Default::default(),
+                    inherits: vec![],
+                    inherit_names: Default::default(),
+                };
+
+                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default());
+
+                let object_space = ObjectSpace::default();
+
+                let _ctx = task
+                    .initialize_program(program, config, object_space)
+                    .expect("failed to initialize");
+
+                let registers = &task.stack.last().unwrap().registers;
+
+                let expected = vec![Int(0), String("Hello, world!".into()), Int(13)];
+
+                assert_eq!(&expected, registers);
             }
         }
 
