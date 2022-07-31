@@ -256,6 +256,7 @@ impl CodegenWalker {
             | ExpressionNode::Mapping(_)
             // TODO: Calls can be optimized if we can get the return types available here
             | ExpressionNode::Call(_)
+            | ExpressionNode::Closure(_)
             | ExpressionNode::CommaExpression(_)
             | ExpressionNode::Range(_)
             | ExpressionNode::FunctionPtr(_) => OperationType::Memory,
@@ -2624,15 +2625,29 @@ mod tests {
         use super::*;
         use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
+        fn get_call_node(code: &str, context: &mut CompilationContext) -> CallNode {
+            let mut prog_node = lpc_parser::ProgramParser::new()
+                .parse(context, LexWrapper::new(code))
+                .unwrap();
+            if_chain! {
+                if let Some(AstNode::Decl(mut node)) = prog_node.body.pop();
+                if let Some(VarInitNode { value, .. }) = node.initializations.pop();
+                if let Some(ExpressionNode::Call(node)) = value;
+                then {
+                    node
+                } else {
+                    panic!("expected call node");
+                }
+            }
+        }
+
         #[test]
         fn populates_the_instructions() {
             let mut walker = default_walker();
-            let call = "dump(4 - 5)";
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
-                .unwrap();
+            let call = "mixed m = dump(4 - 5);";
+            let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut tree);
+            let _ = walker.visit_call(&mut node);
 
             let expected = vec![
                 IConst(Register(1), -1),
@@ -2841,12 +2856,10 @@ mod tests {
                 .function_prototypes
                 .insert("marfin".into(), prototype);
             let mut walker = CodegenWalker::new(context);
-            let call = "marfin(666)";
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&mut walker.context, LexWrapper::new(call))
-                .unwrap();
+            let call = "mixed m = marfin(666);";
+            let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut tree);
+            let _ = walker.visit_call(&mut node);
 
             let expected = vec![
                 IConst(Register(1), 666),
@@ -2879,12 +2892,10 @@ mod tests {
                 .function_prototypes
                 .insert("void_thing".into(), prototype);
             let mut walker = CodegenWalker::new(context);
-            let call = "void_thing(666)";
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&mut walker.context, LexWrapper::new(call))
-                .unwrap();
+            let call = "mixed m = void_thing(666);";
+            let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut tree);
+            let _ = walker.visit_call(&mut node);
 
             let expected = vec![
                 IConst(Register(1), 666),
@@ -2902,12 +2913,10 @@ mod tests {
         #[test]
         fn copies_non_void_efun_results() {
             let mut walker = default_walker();
-            let call = r#"clone_object("/foo.c")"#;
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
-                .unwrap();
+            let call = r#"mixed m = clone_object("/foo.c");"#;
+            let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut tree);
+            let _ = walker.visit_call(&mut node);
 
             let expected = vec![
                 SConst(Register(1), String::from("/foo.c")),
@@ -2926,12 +2935,10 @@ mod tests {
         #[test]
         fn does_not_copy_void_efun_results() {
             let mut walker = default_walker();
-            let call = r#"dump("lkajsdflkajsdf")"#;
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
-                .unwrap();
+            let call = r#"mixed m = dump("lkajsdflkajsdf");"#;
+            let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut tree);
+            let _ = walker.visit_call(&mut node);
 
             let expected = vec![
                 SConst(Register(1), String::from("lkajsdflkajsdf")),
@@ -2963,12 +2970,10 @@ mod tests {
                 .function_prototypes
                 .insert("my_func".into(), prototype);
             let mut walker = CodegenWalker::new(context);
-            let call = "my_func(\"hello!\", 42, \"cool beans\")";
-            let mut tree = lpc_parser::CallParser::new()
-                .parse(&mut walker.context, LexWrapper::new(call))
-                .unwrap();
+            let call = "mixed m = my_func(\"hello!\", 42, \"cool beans\");";
+            let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut tree);
+            let _ = walker.visit_call(&mut node);
 
             let expected = vec![
                 SConst(Register(1), "hello!".into()),
@@ -2991,17 +2996,27 @@ mod tests {
 
     #[test]
     fn test_visit_block_populates_instructions() {
-        let block = "{ int a = '🏯'; dump(a); }";
-        let mut tree = lpc_parser::BlockParser::new()
+        let block = "void marf() { { int a = '🏯'; dump(a); } }";
+        let mut prog_node = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(block))
             .unwrap();
+        let mut node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap()
+        {
+            if let AstNode::Block(n) = n.body.first_mut().unwrap() {
+                n
+            } else {
+                panic!("Expected a block node");
+            }
+        } else {
+            panic!("Expected a function def node");
+        };
 
         let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_block(&mut tree);
+        let _ = scope_walker.visit_block(&mut node);
 
         let context = scope_walker.into_context();
         let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_block(&mut tree);
+        let _ = walker.visit_block(&mut node);
 
         let expected = vec![
             IConst(Register(1), 127983),
@@ -3201,17 +3216,22 @@ mod tests {
 
     #[test]
     fn test_decl_sets_scope_and_instructions() {
-        let call = "int foo = 1, *bar = ({ 56 })";
-        let mut tree = lpc_parser::DeclParser::new()
+        let call = "int foo = 1, *bar = ({ 56 });";
+        let mut prog_node = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
+        let mut node = if let AstNode::Decl(node) = prog_node.body.first_mut().unwrap() {
+            node
+        } else {
+            panic!("Expected decl node");
+        };
 
         let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_decl(&mut tree);
+        let _ = scope_walker.visit_decl(&mut node);
 
         let context = scope_walker.into_context();
         let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_decl(&mut tree);
+        let _ = walker.visit_decl(&mut node);
 
         let expected = vec![
             IConst1(Register(1)),
@@ -3385,12 +3405,11 @@ mod tests {
         fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
             let mut prototype_walker = FunctionPrototypeWalker::default();
 
-            let _walker = CodegenWalker::default();
-            let tree = lpc_parser::DefParser::new()
+            let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                 .unwrap();
-
-            let mut node = if let AstNode::FunctionDef(node) = tree {
+            let ast_node = prog_node.body.first_mut().unwrap();
+            let mut node = if let AstNode::FunctionDef(node) = ast_node {
                 node
             } else {
                 panic!("Didn't receive a function def?");

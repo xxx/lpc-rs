@@ -10,6 +10,7 @@ use crate::compiler::{
         ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
+        closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         float_node::FloatNode,
         function_ptr_node::FunctionPtrNode,
@@ -34,6 +35,7 @@ pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
     Call(CallNode),
+    Closure(ClosureNode),
     CommaExpression(CommaExpressionNode),
     Float(FloatNode),
     FunctionPtr(FunctionPtrNode),
@@ -48,18 +50,16 @@ pub enum ExpressionNode {
 }
 
 /// A convenience helper to get the first `span` we can find in a list of nodes.
-/// Returns 0 if no spans are found.
+/// Returns a default if no spans are found.
 ///
 /// # Arguments
 /// `nodes` - A reference to a slice of Expression nodes.
 pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
-    for node in nodes {
-        if let Some(span) = node.span() {
-            return span;
-        }
-    }
-
-    Span::new(0, 0..0)
+    nodes
+        .iter()
+        .find(|node| node.span().is_some())
+        .and_then(|node| node.span())
+        .unwrap_or_else(|| Span::new(0, 0..0))
 }
 
 impl SpannedNode for ExpressionNode {
@@ -68,6 +68,7 @@ impl SpannedNode for ExpressionNode {
             ExpressionNode::Assignment(node) => node.span,
             ExpressionNode::BinaryOp(node) => node.span,
             ExpressionNode::Call(node) => node.span,
+            ExpressionNode::Closure(node) => node.span,
             ExpressionNode::CommaExpression(node) => node.span,
             ExpressionNode::Float(node) => node.span,
             ExpressionNode::FunctionPtr(node) => node.span,
@@ -111,6 +112,7 @@ delegated_traits!(
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Call,
+    ExpressionNode::Closure,
     ExpressionNode::CommaExpression,
     ExpressionNode::Float,
     ExpressionNode::FunctionPtr,

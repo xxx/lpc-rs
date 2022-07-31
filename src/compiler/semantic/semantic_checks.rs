@@ -8,6 +8,7 @@ use crate::compiler::{
         ast_node::SpannedNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallNode,
+        closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
         ternary_node::TernaryNode,
@@ -313,6 +314,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 },
             )
         }
+        ExpressionNode::Closure(ClosureNode { return_type, .. }) => Ok(*return_type),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
@@ -1911,6 +1913,22 @@ mod tests {
                 });
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
+            }
+
+            #[test]
+            fn closure_uses_return_type() {
+                let context = CompilationContext::default();
+
+                let node = ExpressionNode::Closure(ClosureNode {
+                    return_type: LpcType::Mapping(true),
+                    parameters: None,
+                    flags: Default::default(),
+                    body: vec![],
+                    span: None,
+                    scope_id: None,
+                });
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mapping(true));
             }
         }
 

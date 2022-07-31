@@ -9,6 +9,7 @@ use crate::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::compiler::ast::block_node::BlockNode;
 use crate::compiler::ast::break_node::BreakNode;
 use crate::compiler::ast::call_node::CallNode;
+use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
 use crate::compiler::ast::continue_node::ContinueNode;
 use crate::compiler::ast::decl_node::DeclNode;
@@ -149,7 +150,7 @@ pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> => ProgramNode {
     body: body.into_iter().map(|i| AstNode::from(i)).collect::<Vec<_>>()
 };
 
-pub Inherit: InheritNode = {
+Inherit: InheritNode = {
     <l:"inherit"> <path_node:String> <namespace:"ID"?> <r:";"> =>? {
         let span = combine_spans(Some(l), Some(r));
 
@@ -172,7 +173,7 @@ pub Inherit: InheritNode = {
     }
 };
 
-pub Def: AstNode = {
+Def: AstNode = {
     <FunctionDef> => AstNode::from(<>),
     <proto:FunctionPrototype> <r:";"> => {
         let (flags, r_type, _, name, _) = proto;
@@ -221,7 +222,7 @@ FunctionPrototype: (
     }
 }
 
-pub FunctionDef: FunctionDefNode = {
+FunctionDef: FunctionDefNode = {
     <proto:FunctionPrototype> "{" <body:Statements> "}" =>? {
         let (flags, r_type, star, name, parameter_tuple) = proto;
         let array = star.is_some();
@@ -255,16 +256,13 @@ pub FunctionDef: FunctionDefNode = {
 
         let flag_strs = flags.into_iter().map(|f| f.0).collect::<Vec<_>>();
         if flag_strs.iter().filter(|f| ["public", "private", "protected", "static"].contains(f)).count() > 1 {
-            let err = LpcError::new(
-                "multiple visibilities specified. use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility".to_string()
-            ).with_span(Some(span));
+            let err = LpcError::new("multiple visibilities specified")
+            .with_note("Use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility.")
+            .with_span(Some(span));
 
             return Err(ParseError::User { error: err });
         }
         let flags = FunctionFlags::from(flag_strs).with_ellipsis(ellipsis);
-        // if !flags.public() && !flags.private() && !flags.protected() {
-        //     flags.set_public(true);
-        // }
 
         Ok(FunctionDefNode {
             name: name.1,
@@ -274,6 +272,40 @@ pub FunctionDef: FunctionDefNode = {
             return_type,
             span: Some(span)
         })
+    },
+}
+
+// Closures do not require a semicolon for the final statement
+ClosureBodyEnd: AstNode = {
+    <Expression> => AstNode::from(<>),
+    <Return> => AstNode::from(<>),
+    <Decl> => AstNode::from(<>),
+};
+
+ClosureBody: Vec<AstNode> = {
+    <mut statements:Statement+> <final_statement:ClosureBodyEnd?> => {
+        if let Some(stmt) = final_statement {
+            statements.push(stmt);
+        }
+        statements
+    },
+    <ClosureBodyEnd> => vec![<>]
+};
+
+Closure: ExpressionNode = {
+     <l:"("> ":" <body:ClosureBody?> ":" <r:")"> =>? {
+        let span = combine_spans(Some(l), Some(r));
+
+        let flags = FunctionFlags::default().with_ellipsis(false);
+
+        Ok(ExpressionNode::Closure(ClosureNode {
+            return_type: LpcType::Mixed(false),
+            parameters: None,
+            flags,
+            body: body.unwrap_or_default(),
+            span: Some(span),
+            scope_id: None,
+        }))
     },
 }
 
@@ -326,20 +358,16 @@ GlobalFlag: (&'static str, Span) = {
     "nomask" => ("nomask", <>),
 };
 
-pub Statement: AstNode = {
+Statement: AstNode = {
     <OpenStatement>,
     <ClosedStatement>,
 };
 
-pub Statements: Vec<AstNode> = {
+Statements: Vec<AstNode> = {
     <Statement*>
 };
 
-pub ExpressionStatement: Option<ExpressionNode> = {
-    <Expression?> ";"
-}
-
-pub SimpleStatement: AstNode = {
+SimpleStatement: AstNode = {
     <Expression> ";" => AstNode::from(<>),
     <Return> ";" => AstNode::from(<>),
     <Decl> ";" => AstNode::from(<>),
@@ -508,7 +536,7 @@ VarInit: VarInitNode = {
     }
 }
 
-pub Decl: DeclNode = {
+Decl: DeclNode = {
     <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> => {
         let new_type = LpcType::from(var_type.0).as_array(init.array);
         let mut initializations = vec![init];
@@ -527,18 +555,19 @@ pub Decl: DeclNode = {
     }
 }
 
-pub Block: BlockNode = {
+Block: BlockNode = {
     "{" <Statements> "}" => {
         BlockNode::new(<>)
     }
 };
 
-pub PrimaryExpression: ExpressionNode = {
+PrimaryExpression: ExpressionNode = {
     <Int>,
     <Float>,
     <String>,
     <Var>,
     <FunctionPointer>,
+    <Closure>,
     "(" <Expression> ")",
     "(" "{" <l:(ExpressionList ","?)?>  "}" ")" => {
         let vec = l.map(|list| list.0).unwrap_or_else(|| vec![]);
@@ -567,7 +596,7 @@ pub PrimaryExpression: ExpressionNode = {
     }
 };
 
-pub PostfixExpression: ExpressionNode = {
+PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
     <l:PostfixExpression> "[" <r:Expression> <right:"]"> =>? {
         let file_id = first_span(&[&l, &r]).file_id;
@@ -646,7 +675,7 @@ pub PostfixExpression: ExpressionNode = {
     },
 };
 
-pub UnaryExpression: ExpressionNode = {
+UnaryExpression: ExpressionNode = {
     <PostfixExpression>,
     <op:UnaryOp> <expr:CastExpression> => {
         let span = expr.span().map(|s| {
@@ -667,11 +696,11 @@ pub UnaryExpression: ExpressionNode = {
     }
 };
 
-pub CastExpression: ExpressionNode = {
+CastExpression: ExpressionNode = {
     <UnaryExpression>,
 }
 
-pub MultiplicitiveExpression: ExpressionNode = {
+MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
     <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -680,7 +709,7 @@ pub MultiplicitiveExpression: ExpressionNode = {
     },
 };
 
-pub AdditiveExpression: ExpressionNode = {
+AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
     <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -689,7 +718,7 @@ pub AdditiveExpression: ExpressionNode = {
     }
 };
 
-pub ShiftExpression: ExpressionNode = {
+ShiftExpression: ExpressionNode = {
     <AdditiveExpression>,
     <l:ShiftExpression> <op:ShiftOp> <r:AdditiveExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -698,7 +727,7 @@ pub ShiftExpression: ExpressionNode = {
     }
 };
 
-pub RelationalExpression: ExpressionNode = {
+RelationalExpression: ExpressionNode = {
     <ShiftExpression>,
     <l:RelationalExpression> <op:RelationalOp> <r:ShiftExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -707,7 +736,7 @@ pub RelationalExpression: ExpressionNode = {
     }
 };
 
-pub EqualityExpression: ExpressionNode = {
+EqualityExpression: ExpressionNode = {
     <RelationalExpression>,
     <l:EqualityExpression> <op:EqualityOp> <r:RelationalExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -716,7 +745,7 @@ pub EqualityExpression: ExpressionNode = {
     }
 };
 
-pub AndExpression: ExpressionNode = {
+AndExpression: ExpressionNode = {
     <EqualityExpression>,
     <l:AndExpression> "&" <r:EqualityExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -725,7 +754,7 @@ pub AndExpression: ExpressionNode = {
     }
 };
 
-pub ExclusiveOrExpression: ExpressionNode = {
+ExclusiveOrExpression: ExpressionNode = {
     <AndExpression>,
     <l:ExclusiveOrExpression> "^" <r:AndExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -734,7 +763,7 @@ pub ExclusiveOrExpression: ExpressionNode = {
     }
 };
 
-pub OrExpression: ExpressionNode = {
+OrExpression: ExpressionNode = {
     <ExclusiveOrExpression>,
     <l:OrExpression> "|" <r:ExclusiveOrExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -743,7 +772,7 @@ pub OrExpression: ExpressionNode = {
     }
 };
 
-pub LogicalAndExpression: ExpressionNode = {
+LogicalAndExpression: ExpressionNode = {
     <OrExpression>,
     <l:LogicalAndExpression> "&&" <r:OrExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -752,7 +781,7 @@ pub LogicalAndExpression: ExpressionNode = {
     }
 };
 
-pub LogicalOrExpression: ExpressionNode = {
+LogicalOrExpression: ExpressionNode = {
     <LogicalAndExpression>,
     <l:LogicalOrExpression> "||" <r:LogicalAndExpression> =>? {
         let span = combine_spans(l.span(), r.span());
@@ -761,7 +790,7 @@ pub LogicalOrExpression: ExpressionNode = {
     }
 };
 
-pub ConditionalExpression: ExpressionNode = {
+ConditionalExpression: ExpressionNode = {
     <LogicalOrExpression>,
     <cond:LogicalOrExpression> "?" <body:Expression> ":" <else_clause:ConditionalExpression> => {
         let file_id = first_span(&[&cond, &body, &else_clause]).file_id;
@@ -772,7 +801,7 @@ pub ConditionalExpression: ExpressionNode = {
     }
 };
 
-pub AssignmentExpression: ExpressionNode = {
+AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => {
         let span = combine_spans(lhs.span(), rhs.span());
@@ -847,7 +876,7 @@ pub Expression: ExpressionNode = {
     }
 };
 
-pub Return: ReturnNode = {
+Return: ReturnNode = {
     <ret:"return"> <e:Expression?> => {
         let r = if let Some(expr) = &e {
             expr.span().unwrap_or(ret).r
@@ -894,7 +923,7 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
     }
 }
 
-pub Call: CallNode = {
+Call: CallNode = {
     <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
         let arguments = list.unwrap_or_else(|| vec![]);
 

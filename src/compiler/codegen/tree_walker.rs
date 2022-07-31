@@ -7,6 +7,7 @@ use crate::compiler::{
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::CallNode,
+        closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
         decl_node::DeclNode,
@@ -111,6 +112,24 @@ pub trait TreeWalker {
 
         for argument in &mut node.arguments {
             argument.visit(self)?;
+        }
+
+        Ok(())
+    }
+
+    /// Visit a closure node
+    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        if let Some(parameters) = &mut node.parameters {
+            for param in parameters {
+                param.visit(self)?;
+            }
+        }
+
+        for expression in &mut node.body {
+            expression.visit(self)?;
         }
 
         Ok(())

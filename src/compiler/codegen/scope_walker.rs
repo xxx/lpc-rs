@@ -2,6 +2,7 @@ use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
         block_node::BlockNode,
+        closure_node::ClosureNode,
         do_while_node::DoWhileNode,
         for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
         for_node::ForNode,
@@ -58,6 +59,49 @@ impl TreeWalker for ScopeWalker {
         for stmt in &mut node.body {
             stmt.visit(self)?;
         }
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+        node.scope_id = Some(scope_id);
+
+        if let Some(parameters) = &mut node.parameters {
+            for param in parameters {
+                param.visit(self)?;
+            }
+        }
+
+        // if node.flags.ellipsis() {
+        //     let sym = Symbol {
+        //         name: ARGV.to_string(),
+        //         type_: LpcType::Mixed(true),
+        //         location: None,
+        //         scope_id: scope_id.into(),
+        //         span: node.span,
+        //         flags: GlobalVarFlags::default(),
+        //     };
+        //
+        //     self.insert_symbol(sym);
+        // }
+
+        for statement in &mut node.body {
+            statement.visit(self)?;
+        }
+
+        // // calculate the real return type here, now that all the prototypes
+        // // are populated, but before we start semantic checks
+        // let return_type = node.body.last().map(|s| {
+        //     if let AstNode::Expression(expr) = s {
+        //         node_type(expr, &self.context)?
+        //     } else {
+        //         LpcType::Mixed(false)
+        //     }
+        // }).unwrap_or(LpcType::Mixed(false));
+        //
+        // node.return_type = return_type;
 
         self.context.scopes.pop();
         Ok(())

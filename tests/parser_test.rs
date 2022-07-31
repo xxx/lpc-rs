@@ -345,16 +345,17 @@ fn typeless_functions_are_mixed() {
         }"#
     .replace("\n", "");
     let lexer = LexWrapper::new(&prog);
-    let node = lpc_parser::FunctionDefParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+    let node = prog_node.body.first().unwrap();
 
     assert!(matches!(
         node,
-        FunctionDefNode {
+        AstNode::FunctionDef(FunctionDefNode {
             return_type: LpcType::Mixed(false),
             ..
-        }
+        })
     ));
 }
 
@@ -410,10 +411,16 @@ fn ellipsis_sets_the_flag_when_only_arg() {
     .replace("\n", "");
 
     let lexer = LexWrapper::new(&prog);
-    let node = lpc_parser::FunctionDefParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
-    assert!(node.flags.ellipsis());
+    let node = prog_node.body.first().unwrap();
+
+    if let AstNode::FunctionDef(fd_node) = node {
+        assert!(fd_node.flags.ellipsis())
+    } else {
+        panic!("Expected function def node");
+    }
 }
 
 #[test]
@@ -427,11 +434,16 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
     .replace("\n", "");
 
     let lexer = LexWrapper::new(&prog);
-    let node = lpc_parser::FunctionDefParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+    let node = prog_node.body.first().unwrap();
 
-    assert!(node.flags.ellipsis());
+    if let AstNode::FunctionDef(fd_node) = node {
+        assert!(fd_node.flags.ellipsis())
+    } else {
+        panic!("Expected function def node");
+    }
 }
 
 #[test]
@@ -518,7 +530,7 @@ fn error_when_multiple_visibilities_given() {
 
     assert_eq!(
         &program.unwrap_err().to_string(),
-        "multiple visibilities specified. use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility"
+        "multiple visibilities specified"
     );
 }
 
@@ -571,14 +583,38 @@ fn warning_on_prototype() {
     );
 }
 
+#[test]
+fn test_closure_bodies() {
+    let prog = indoc! { r#"
+        function f = (: :);
+        function g = (: 1 :);
+        function h = (: 1; :);
+        function i = (: this_object() :);
+        function j = (: this_object(); :);
+        function k = (: "foo" + "bar" :);
+        function l = (: k() + "baz"; :);
+        function m = (: return l(); :);
+        function n = (: return m :);
+        function o = (:
+            if (!f()) {
+                int i = 666;
+                return i;
+            } else {
+                return 1;
+            }
+        :);
+    "#};
+
+    assert_ok!(parse_prog(prog));
+}
+
 fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
     let code = TokenVecWrapper::new(&code);
     let mut context = preprocessor.into_context();
 
-    match lpc_parser::ProgramParser::new().parse(&mut context, code) {
-        Ok(pr) => Ok(pr),
-        Err(e) => Err(e.into()),
-    }
+    lpc_parser::ProgramParser::new()
+        .parse(&mut context, code)
+        .map_err(|e| e.into())
 }
