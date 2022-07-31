@@ -278,14 +278,11 @@ pub FunctionDef: FunctionDefNode = {
 }
 
 Parameters: (Vec<VarInitNode>, bool) = {
-    "(" ")" => {
-        (vec![], false)
+    <l:"("> <ellipsis:"..."?> <r:")"> => {
+        (vec![], ellipsis.is_some())
     },
     "(" <params:ParameterList> <ellipsis:("," "...")?> ")" => {
         (params, ellipsis.is_some())
-    },
-    "(" "..." ")" => {
-        (vec![], true)
     }
 };
 
