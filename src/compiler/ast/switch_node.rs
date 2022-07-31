@@ -14,7 +14,7 @@ use crate::compiler::{
 use lpc_rs_errors::span::Span;
 
 /// A node representing a `switch` statement
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct SwitchNode {
     pub expression: ExpressionNode,
     pub body: Box<AstNode>,

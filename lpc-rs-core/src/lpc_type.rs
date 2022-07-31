@@ -5,7 +5,7 @@ use std::{fmt, ops::BitOr};
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.
-#[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Hash, Serialize, Deserialize)]
 pub enum LpcType {
     Void,
     Int(bool),

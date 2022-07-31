@@ -11,7 +11,7 @@ use indextree::NodeId;
 use lpc_rs_errors::Result;
 
 /// A node representing a code block
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct BlockNode {
     pub body: Vec<AstNode>,
     pub scope_id: Option<NodeId>,

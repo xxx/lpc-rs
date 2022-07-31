@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// on functions, like `varargs` and `static`, as well as whether the function
 /// takes ellipsis args.
 #[bitfield(filled = false)]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Hash, Default, Serialize, Deserialize)]
 pub struct FunctionFlags {
     pub ellipsis: bool,
     pub varargs: bool,

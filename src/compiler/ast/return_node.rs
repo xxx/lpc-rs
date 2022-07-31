@@ -14,7 +14,7 @@ use crate::compiler::{
 use lpc_rs_errors::span::Span;
 
 /// A node representing a function return call.
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct ReturnNode {
     /// The value to return from the function.
     pub value: Option<ExpressionNode>,

@@ -14,7 +14,7 @@ use indextree::NodeId;
 use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing an `if` statement
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct IfNode {
     pub condition: ExpressionNode,
     pub body: Box<AstNode>,

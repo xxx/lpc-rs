@@ -14,7 +14,7 @@ use indextree::NodeId;
 use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing a `while` loop
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct ForNode {
     pub initializer: Box<Option<AstNode>>,
     pub condition: Option<ExpressionNode>,

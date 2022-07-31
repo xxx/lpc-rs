@@ -14,7 +14,7 @@ use itertools::Itertools;
 use lpc_rs_errors::Result;
 
 /// A node representing a full object. This is the top-level translation unit.
-#[derive(Debug, PartialEq, PartialOrd, Clone, Default)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Default, Hash, Eq)]
 pub struct ProgramNode {
     /// The list of inherits of this Program
     pub inherits: Vec<InheritNode>,

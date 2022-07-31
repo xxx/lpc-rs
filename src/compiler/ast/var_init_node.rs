@@ -15,7 +15,7 @@ use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing a variable definition, with optional initialization
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Hash)]
 pub struct VarInitNode {
     /// The LPC type.
     pub type_: LpcType,

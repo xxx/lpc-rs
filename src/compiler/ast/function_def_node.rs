@@ -18,7 +18,7 @@ use lpc_rs_errors::{span::Span, Result};
 pub const ARGV: &str = "argv";
 
 /// A node representation a function definition
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub struct FunctionDefNode {
     pub return_type: LpcType,
     pub name: String,

@@ -13,7 +13,7 @@ use std::{
 
 /// A wrapper for nodes to allow labels to be applied.
 /// They are only allowed in `switch` statements.
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct LabeledStatementNode {
     node: Box<AstNode>,
     label: LabelNode,

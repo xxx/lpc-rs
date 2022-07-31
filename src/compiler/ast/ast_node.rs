@@ -25,7 +25,7 @@ use crate::compiler::{
 use lpc_rs_errors::span::Span;
 
 /// Representation of a top-level node in the AST.
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub enum AstNode {
     Block(BlockNode),
     Break(BreakNode),

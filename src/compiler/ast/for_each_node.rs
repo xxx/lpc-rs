@@ -22,7 +22,7 @@ pub const FOREACH_INDEX: &str = "foreach-index";
 /// A constant to cache the length of the collection we're `foreach`ing over
 pub const FOREACH_LENGTH: &str = "foreach-length";
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub enum ForEachInit {
     Array(VarInitNode),
     Mapping {
@@ -42,7 +42,7 @@ impl Display for ForEachInit {
 }
 
 /// A node representing a `while` loop
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct ForEachNode {
     pub initializer: ForEachInit,
     pub collection: ExpressionNode,
