@@ -33,6 +33,7 @@ use crate::compiler::{
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use lpc_rs_errors::{LpcError, Result};
+use crate::compiler::ast::closure_node::ClosureNode;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -258,6 +259,24 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.context.errors.append(&mut errors);
+
+        Ok(())
+    }
+
+    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id)?;
+
+        if let Some(parameters) = &mut node.parameters {
+            for param in parameters {
+                param.visit(self)?;
+            }
+        }
+
+        for expression in &mut node.body {
+            expression.visit(self)?;
+        }
+
+        self.context.scopes.pop();
 
         Ok(())
     }
