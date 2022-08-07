@@ -264,7 +264,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id)?;
+        self.context.scopes.goto(node.scope_id);
 
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {

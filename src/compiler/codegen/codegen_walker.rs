@@ -61,6 +61,7 @@ use lpc_rs_function_support::{
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
 use tree_walker::TreeWalker;
+use crate::compiler::ast::closure_node::ClosureNode;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -912,6 +913,25 @@ impl TreeWalker for CodegenWalker {
             ))
             .with_span(node.span));
         }
+
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        if let Some(parameters) = &mut node.parameters {
+            for param in parameters {
+                param.visit(self)?;
+            }
+        }
+
+        for expression in &mut node.body {
+            expression.visit(self)?;
+        }
+
+        self.context.scopes.pop();
 
         Ok(())
     }

@@ -7,7 +7,7 @@ use std::{
 };
 
 /// A type to handle data movement (the arena itself stores the actual data)
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegisterBank {
     /// Our storage. By convention, `registers[0]` is for the return value function calls.
     pub registers: Vec<LpcRef>,

@@ -110,6 +110,7 @@ impl FunctionPtr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LpcFunction {
     FunctionPtr(FunctionPtr),
+    // Closure(Closure),
 }
 
 impl LpcFunction {

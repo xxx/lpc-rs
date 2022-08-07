@@ -9,6 +9,7 @@ use std::{
     path::Path,
     rc::Rc,
 };
+use crate::interpreter::register_bank::RegisterBank;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -22,6 +23,11 @@ pub struct Process {
 
     /// What is the clone ID of this process? If `None`, this is a master object
     clone_id: Option<usize>,
+
+    /// Local variables that are referred to by closures, which need to be
+    /// stored beyond the scope of their original invocation.
+    /// TODO: This needs to be garbage-collected
+    upvalues: Option<RegisterBank>,
 }
 
 impl Process {
@@ -36,6 +42,7 @@ impl Process {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             clone_id: None,
+            upvalues: None,
         }
     }
 
@@ -46,6 +53,7 @@ impl Process {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             clone_id: Some(clone_id),
+            upvalues: None,
         }
     }
 

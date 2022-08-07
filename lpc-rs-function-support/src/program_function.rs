@@ -9,6 +9,10 @@ use tracing::trace;
 
 /// A `Program` function, which stores its actual code, along with
 /// metadata for type checking, etc.
+///
+/// Note that closures also use this structure. By convention, they are named
+/// `closure-<id>`, which is unparsable, and cannot conflict with user-defined functions
+/// They otherwise act as normal functions, with the exception of upvalue access.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProgramFunction {
     /// My prototype from compilation
