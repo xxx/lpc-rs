@@ -1,15 +1,13 @@
 use crate::{
     interpreter::{
-        lpc_ref::LpcRef, lpc_value::LpcValue, process::Process, register_bank::RegisterBank,
+        lpc_ref::LpcRef, process::Process, register_bank::RegisterBank,
     },
-    try_extract_value,
 };
 use lpc_rs_asm::instruction::{Address, Instruction};
-use lpc_rs_core::function::FunctionName;
+
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use std::{
-    borrow::Cow,
     cell::{Cell, RefCell},
     fmt,
     fmt::{Debug, Display, Formatter},
@@ -89,39 +87,11 @@ impl CallFrame {
         }
     }
 
-    /// Resolve a register
-    #[inline]
-    pub fn resolve_lpc_ref<I>(&self, register: I) -> LpcRef
-    where
-        I: Into<usize>,
-    {
-        self.registers[register.into()].clone()
-    }
-
-    /// Get the true name of the function to call.
-    #[instrument(skip(self))]
-    pub fn resolve_function_name<'a>(&'a self, name: &'a FunctionName) -> Result<Cow<'a, str>> {
-        match name {
-            FunctionName::Var(reg) => {
-                let name_ref = self.resolve_lpc_ref(reg.index());
-
-                if let LpcRef::String(s) = name_ref {
-                    let b = s.borrow();
-                    let str = try_extract_value!(*b, LpcValue::String);
-                    Ok(str.clone().into())
-                } else {
-                    Err(self.runtime_error("Found function var that didn't resolve to a string?"))
-                }
-            }
-            FunctionName::Literal(s) => Ok(s.into()),
-        }
-    }
-
     /// get the debug span for the current instruction
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
-        // subtract 1, because we increment the pc after fetching an instruction,
-        // but before evaluating it.
+        // subtract 1, because we increment the pc just after fetching
+        // an instruction, but before evaluating it.
         let idx = self.pc.get().saturating_sub(1);
         self.function.debug_spans.get(idx).and_then(|s| *s)
     }

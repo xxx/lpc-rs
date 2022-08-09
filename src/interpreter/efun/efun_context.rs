@@ -90,7 +90,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     where
         I: Into<usize>,
     {
-        self.frame().resolve_lpc_ref(register)
+        // TODO: update for upvalues
+        self.frame().registers[register.into()].clone()
     }
 
     /// Lookup the process with the passed path.
