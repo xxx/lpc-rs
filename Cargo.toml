@@ -32,7 +32,7 @@ phf = { version = "0.11.0", features = ["macros"] }
 refpool = "0.4.3"
 regex = "1"
 rmp-serde = "1.0.0"
-serde = { version = "1.0.123", features = ["derive", "rc"] }
+serde = { version = "1.0.143", features = ["derive", "rc"] }
 tracing = "0.1"
 
 [dev-dependencies]
