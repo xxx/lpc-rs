@@ -25,7 +25,7 @@ indexmap = { version = "1.8.2", features = ["serde"] }
 indextree = "4.3.1"
 itertools = "0.10.0"
 lalrpop-util = "0.19.4"
-lazy_format = "1.8.4"
+lazy_format = "2.0.0"
 logos = "0.12.0"
 once_cell = "1.10.0"
 phf = { version = "0.11.0", features = ["macros"] }
