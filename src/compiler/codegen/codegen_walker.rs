@@ -1919,7 +1919,7 @@ impl Default for CodegenWalker {
             function_stack: vec![],
             label_count: 0,
             functions: Default::default(),
-            current_result: RegisterVariant::Register(Register(0)),
+            current_result: RegisterVariant::Local(Register(0)),
             register_counter: Default::default(),
             global_counter,
             global_init_registers: 0,
@@ -2053,19 +2053,19 @@ mod tests {
         let _ = walker.visit_array(&mut arr);
 
         let expected = vec![
-            IConst(RegisterVariant::Register(Register(1)), 123),
-            SConst(RegisterVariant::Register(Register(2)), String::from("foo")),
-            IConst(RegisterVariant::Register(Register(3)), 666),
+            IConst(RegisterVariant::Local(Register(1)), 123),
+            SConst(RegisterVariant::Local(Register(2)), String::from("foo")),
+            IConst(RegisterVariant::Local(Register(3)), 666),
             AConst(
-                RegisterVariant::Register(Register(4)),
-                vec![RegisterVariant::Register(Register(3))],
+                RegisterVariant::Local(Register(4)),
+                vec![RegisterVariant::Local(Register(3))],
             ),
             AConst(
-                RegisterVariant::Register(Register(5)),
+                RegisterVariant::Local(Register(5)),
                 vec![
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(4)),
                 ],
             ),
         ];
@@ -2086,7 +2086,7 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
-                location: Some(RegisterVariant::Register(Register(666))),
+                location: Some(RegisterVariant::Local(Register(666))),
                 scope_id: 0,
                 span: None,
                 flags: GlobalVarFlags::default(),
@@ -2108,18 +2108,18 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
-                    IConst(RegisterVariant::Register(Register(1)), -12),
+                    IConst(RegisterVariant::Local(Register(1)), -12),
                     GLoad(
-                        RegisterVariant::Register(Register(666)),
-                        RegisterVariant::Register(Register(2))
+                        RegisterVariant::Local(Register(666)),
+                        RegisterVariant::Local(Register(2))
                     ),
                     RegCopy(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2))
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2))
                     ),
                     GStore(
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(666))
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(666))
                     )
                 ]
             );
@@ -2135,7 +2135,7 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
-                location: Some(RegisterVariant::Register(Register(666))),
+                location: Some(RegisterVariant::Local(Register(666))),
                 scope_id: 1,
                 span: None,
                 flags: GlobalVarFlags::default(),
@@ -2153,10 +2153,10 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
-                    IConst(RegisterVariant::Register(Register(1)), -12),
+                    IConst(RegisterVariant::Local(Register(1)), -12),
                     RegCopy(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(666))
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(666))
                     )
                 ]
             );
@@ -2172,7 +2172,7 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(true),
-                location: Some(RegisterVariant::Register(Register(666))),
+                location: Some(RegisterVariant::Local(Register(666))),
                 scope_id: 1,
                 span: None,
                 flags: GlobalVarFlags::default(),
@@ -2195,12 +2195,12 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
-                    IConst(RegisterVariant::Register(Register(1)), -12),
-                    IConst1(RegisterVariant::Register(Register(2))),
+                    IConst(RegisterVariant::Local(Register(1)), -12),
+                    IConst1(RegisterVariant::Local(Register(2))),
                     Store(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(666)),
-                        RegisterVariant::Register(Register(2))
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(666)),
+                        RegisterVariant::Local(Register(2))
                     )
                 ]
             );
@@ -2233,18 +2233,18 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
-                IConst(RegisterVariant::Register(Register(2)), 123),
-                IConst(RegisterVariant::Register(Register(3)), 456),
+                IConst(RegisterVariant::Local(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(2)), 123),
+                IConst(RegisterVariant::Local(Register(3)), 456),
                 IAdd(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 IMul(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
             ];
 
@@ -2256,7 +2256,7 @@ mod tests {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
-            sym.location = Some(RegisterVariant::Register(Register(1)));
+            sym.location = Some(RegisterVariant::Local(Register(1)));
             context.scopes.current_mut().unwrap().insert(sym);
 
             let mut walker = CodegenWalker::new(context);
@@ -2282,23 +2282,23 @@ mod tests {
 
             let expected = vec![
                 FConst(
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(1)),
                     LpcFloat::from(123.45),
                 ),
                 GLoad(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                IConst(RegisterVariant::Register(Register(3)), 456),
+                IConst(RegisterVariant::Local(Register(3)), 456),
                 IMul(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
             ];
 
@@ -2324,18 +2324,18 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                SConst(RegisterVariant::Register(Register(1)), String::from("foo")),
-                SConst(RegisterVariant::Register(Register(2)), String::from("bar")),
-                SConst(RegisterVariant::Register(Register(3)), String::from("baz")),
+                SConst(RegisterVariant::Local(Register(1)), String::from("foo")),
+                SConst(RegisterVariant::Local(Register(2)), String::from("bar")),
+                SConst(RegisterVariant::Local(Register(3)), String::from("baz")),
                 MAdd(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 MAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
             ];
 
@@ -2356,20 +2356,20 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 123),
+                IConst(RegisterVariant::Local(Register(1)), 123),
                 AConst(
-                    RegisterVariant::Register(Register(2)),
-                    vec![RegisterVariant::Register(Register(1))],
+                    RegisterVariant::Local(Register(2)),
+                    vec![RegisterVariant::Local(Register(1))],
                 ),
-                IConst(RegisterVariant::Register(Register(3)), 456),
+                IConst(RegisterVariant::Local(Register(3)), 456),
                 AConst(
-                    RegisterVariant::Register(Register(4)),
-                    vec![RegisterVariant::Register(Register(3))],
+                    RegisterVariant::Local(Register(4)),
+                    vec![RegisterVariant::Local(Register(3))],
                 ),
                 MAdd(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
             ];
 
@@ -2391,16 +2391,16 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 123),
+                IConst(RegisterVariant::Local(Register(1)), 123),
                 AConst(
-                    RegisterVariant::Register(Register(2)),
-                    vec![RegisterVariant::Register(Register(1))],
+                    RegisterVariant::Local(Register(2)),
+                    vec![RegisterVariant::Local(Register(1))],
                 ),
-                IConst0(RegisterVariant::Register(Register(3))),
+                IConst0(RegisterVariant::Local(Register(3))),
                 Load(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
             ];
 
@@ -2425,18 +2425,18 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 123),
+                IConst(RegisterVariant::Local(Register(1)), 123),
                 AConst(
-                    RegisterVariant::Register(Register(2)),
-                    vec![RegisterVariant::Register(Register(1))],
+                    RegisterVariant::Local(Register(2)),
+                    vec![RegisterVariant::Local(Register(1))],
                 ),
-                IConst1(RegisterVariant::Register(Register(3))),
-                IConst(RegisterVariant::Register(Register(4)), -1),
+                IConst1(RegisterVariant::Local(Register(3))),
+                IConst(RegisterVariant::Local(Register(4)), -1),
                 Range(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
             ];
 
@@ -2457,20 +2457,20 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 123),
+                IConst(RegisterVariant::Local(Register(1)), 123),
                 Jz(
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(1)),
                     "andand-end_0".into(),
                 ),
                 // and also
-                SConst(RegisterVariant::Register(Register(2)), "marf!".into()),
+                SConst(RegisterVariant::Local(Register(2)), "marf!".into()),
                 Jz(
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(2)),
                     "andand-end_0".into(),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
                 // end is here
             ];
@@ -2492,17 +2492,17 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 123),
+                IConst(RegisterVariant::Local(Register(1)), 123),
                 RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Register(Register(2)), "oror-end_0".into()),
+                Jnz(RegisterVariant::Local(Register(2)), "oror-end_0".into()),
                 // else
-                SConst(RegisterVariant::Register(Register(3)), "sup?".into()),
+                SConst(RegisterVariant::Local(Register(3)), "sup?".into()),
                 RegCopy(
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(2)),
                 ),
                 // end is here
             ];
@@ -2533,43 +2533,43 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(2)), 10),
+                IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "while-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(4)), 5),
+                IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Register(Register(5)), "if-else_3".into()),
-                SConst(RegisterVariant::Register(Register(6)), "breaking".into()),
+                Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
+                SConst(RegisterVariant::Local(Register(6)), "breaking".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(6)),
+                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("while-end_2".into()),
-                IConst1(RegisterVariant::Register(Register(7))),
+                IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("while-start_1".into()),
                 Ret,
@@ -2598,54 +2598,54 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
-                IConst0(RegisterVariant::Register(Register(1))),
-                IConst(RegisterVariant::Register(Register(2)), 10),
+                IConst0(RegisterVariant::Local(Register(1))),
+                IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "for-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(4)), 5),
+                IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Register(Register(5)), "if-else_4".into()),
-                SConst(RegisterVariant::Register(Register(6)), "breaking".into()),
+                Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
+                SConst(RegisterVariant::Local(Register(6)), "breaking".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(6)),
+                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("for-end_2".into()),
-                IConst1(RegisterVariant::Register(Register(7))),
+                IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(1)),
                 ),
-                IConst1(RegisterVariant::Register(Register(9))),
+                IConst1(RegisterVariant::Local(Register(9))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(9)),
-                    RegisterVariant::Register(Register(10)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(9)),
+                    RegisterVariant::Local(Register(10)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(10)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(10)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("for-start_1".into()),
                 Ret,
@@ -2679,41 +2679,41 @@ mod tests {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(2)), 5),
+                IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "if-else_4".into()),
-                SConst(RegisterVariant::Register(Register(4)), "breaking".into()),
+                Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
+                SConst(RegisterVariant::Local(Register(4)), "breaking".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(4)),
+                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("do-while-end_2".into()),
-                IConst1(RegisterVariant::Register(Register(5))),
+                IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(5)),
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(6)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(6)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(6)),
+                    RegisterVariant::Local(Register(1)),
                 ),
-                IConst(RegisterVariant::Register(Register(7)), 10),
+                IConst(RegisterVariant::Local(Register(7)), 10),
                 Lt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
                 ),
                 Jnz(
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(8)),
                     "do-while-start_1".into(),
                 ),
                 Ret,
@@ -2745,60 +2745,60 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 Jmp("switch-test_1".into()),
-                SConst(RegisterVariant::Register(Register(2)), "YEAH BABY".into()),
+                SConst(RegisterVariant::Local(Register(2)), "YEAH BABY".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(2)),
+                    initial_arg: RegisterVariant::Local(Register(2)),
                 },
                 Jmp("switch-end_2".into()),
-                SConst(RegisterVariant::Register(Register(3)), "very".into()),
+                SConst(RegisterVariant::Local(Register(3)), "very".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(3)),
+                    initial_arg: RegisterVariant::Local(Register(3)),
                 },
-                SConst(RegisterVariant::Register(Register(4)), "weak".into()),
+                SConst(RegisterVariant::Local(Register(4)), "weak".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(4)),
+                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("switch-end_2".into()),
-                IConst(RegisterVariant::Register(Register(5)), 666),
+                IConst(RegisterVariant::Local(Register(5)), 666),
                 EqEq(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(5)),
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(6)),
                 ),
                 Jnz(
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(6)),
                     "switch-case_3".into(),
                 ),
-                IConst(RegisterVariant::Register(Register(7)), 10),
-                IConst(RegisterVariant::Register(Register(8)), 200),
+                IConst(RegisterVariant::Local(Register(7)), 10),
+                IConst(RegisterVariant::Local(Register(8)), 200),
                 Gte(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(10)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(10)),
                 ),
                 Lte(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(11)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(11)),
                 ),
                 And(
-                    RegisterVariant::Register(Register(10)),
-                    RegisterVariant::Register(Register(11)),
-                    RegisterVariant::Register(Register(9)),
+                    RegisterVariant::Local(Register(10)),
+                    RegisterVariant::Local(Register(11)),
+                    RegisterVariant::Local(Register(9)),
                 ),
                 Jnz(
-                    RegisterVariant::Register(Register(9)),
+                    RegisterVariant::Local(Register(9)),
                     "switch-case_4".into(),
                 ),
                 Jmp("switch-default_5".into()),
@@ -2844,12 +2844,12 @@ mod tests {
             let _ = walker.visit_call(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), -1),
+                IConst(RegisterVariant::Local(Register(1)), -1),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
             ];
 
@@ -2870,53 +2870,53 @@ mod tests {
             };
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), -1),
-                SConst(RegisterVariant::Register(Register(2)), String::from("foo")),
+                IConst(RegisterVariant::Local(Register(1)), -1),
+                SConst(RegisterVariant::Local(Register(2)), String::from("foo")),
                 SConst(
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(3)),
                     String::from("print"),
                 ),
                 CallOther {
-                    receiver: RegisterVariant::Register(Register(2)),
-                    name: RegisterVariant::Register(Register(3)),
+                    receiver: RegisterVariant::Local(Register(2)),
+                    name: RegisterVariant::Local(Register(3)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
-                    RegisterVariant::Register(Register(0)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(4)),
                 ),
             ];
             check(r#""foo"->print(4 - 5)"#, &expected);
 
             let expected = vec![
-                SConst(RegisterVariant::Register(Register(1)), String::from("foo")),
+                SConst(RegisterVariant::Local(Register(1)), String::from("foo")),
                 SConst(
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(2)),
                     String::from("print"),
                 ),
-                IConst(RegisterVariant::Register(Register(3)), -1),
+                IConst(RegisterVariant::Local(Register(3)), -1),
                 RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(5)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(6)),
                 ),
                 CallOther {
-                    receiver: RegisterVariant::Register(Register(1)),
-                    name: RegisterVariant::Register(Register(2)),
+                    receiver: RegisterVariant::Local(Register(1)),
+                    name: RegisterVariant::Local(Register(2)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(3)),
+                    initial_arg: RegisterVariant::Local(Register(3)),
                 },
                 RegCopy(
-                    RegisterVariant::Register(Register(0)),
-                    RegisterVariant::Register(Register(7)),
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(7)),
                 ),
             ];
             check(r#"call_other("foo", "print", 4 - 5)"#, &expected);
@@ -2936,20 +2936,20 @@ mod tests {
             };
 
             let expected = vec![
-                IConst1(RegisterVariant::Register(Register(1))),
-                IConst(RegisterVariant::Register(Register(2)), 2),
-                SConst(RegisterVariant::Register(Register(3)), String::from("c")),
+                IConst1(RegisterVariant::Local(Register(1))),
+                IConst(RegisterVariant::Local(Register(2)), 2),
+                SConst(RegisterVariant::Local(Register(3)), String::from("c")),
                 AConst(
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(4)),
                     vec![
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(3)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(3)),
                     ],
                 ),
                 Sizeof(
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
             ];
             check(r#"sizeof(({ 1, 2, "c" }))"#, &expected);
@@ -2966,13 +2966,13 @@ mod tests {
             let _ = tree.visit(&mut walker);
 
             let expected = vec![
-                CatchStart(RegisterVariant::Register(Register(1)), "catch_end_0".into()),
-                IConst(RegisterVariant::Register(Register(2)), 12),
-                IConst0(RegisterVariant::Register(Register(3))),
+                CatchStart(RegisterVariant::Local(Register(1)), "catch_end_0".into()),
+                IConst(RegisterVariant::Local(Register(2)), 12),
+                IConst0(RegisterVariant::Local(Register(3))),
                 IDiv(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 CatchEnd,
             ];
@@ -3000,7 +3000,7 @@ mod tests {
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
             let mut sym = Symbol::new("my_func", LpcType::Function(false));
-            sym.location = Some(RegisterVariant::Register(Register(1)));
+            sym.location = Some(RegisterVariant::Local(Register(1)));
             context.scopes.current_mut().unwrap().insert(sym);
 
             let call = "my_func(666)";
@@ -3012,15 +3012,15 @@ mod tests {
             let _ = tree.visit(&mut walker);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 CallFp {
-                    location: RegisterVariant::Register(Register(1)),
+                    location: RegisterVariant::Local(Register(1)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
-                    RegisterVariant::Register(Register(0)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(2)),
                 ),
             ];
 
@@ -3046,7 +3046,7 @@ mod tests {
 
             context.scopes.push_new(); // push a global scope
             let mut sym = Symbol::new("my_func", LpcType::Function(false));
-            sym.location = Some(RegisterVariant::Register(Register(1)));
+            sym.location = Some(RegisterVariant::Local(Register(1)));
             context.scopes.current_mut().unwrap().insert(sym);
 
             let call = "my_func(666)";
@@ -3058,19 +3058,19 @@ mod tests {
             let _ = tree.visit(&mut walker);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 GLoad(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
                 ),
                 CallFp {
-                    location: RegisterVariant::Register(Register(2)),
+                    location: RegisterVariant::Local(Register(2)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
-                    RegisterVariant::Register(Register(0)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(3)),
                 ),
             ];
 
@@ -3100,16 +3100,16 @@ mod tests {
             let _ = walker.visit_call(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 Call {
                     name: String::from("marfin"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
-                    RegisterVariant::Register(Register(0)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(2)),
                 ),
             ];
 
@@ -3139,12 +3139,12 @@ mod tests {
             let _ = walker.visit_call(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 Call {
                     name: String::from("void_thing"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
             ];
 
@@ -3161,18 +3161,18 @@ mod tests {
 
             let expected = vec![
                 SConst(
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(1)),
                     String::from("/foo.c"),
                 ),
                 Call {
                     name: String::from("clone_object"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
-                    RegisterVariant::Register(Register(0)),
-                    RegisterVariant::Register(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(2)),
                 ),
             ];
 
@@ -3189,14 +3189,14 @@ mod tests {
 
             let expected = vec![
                 SConst(
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(1)),
                     String::from("lkajsdflkajsdf"),
                 ),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
             ];
 
@@ -3226,26 +3226,26 @@ mod tests {
             let _ = walker.visit_call(&mut node);
 
             let expected = vec![
-                SConst(RegisterVariant::Register(Register(1)), "hello!".into()),
-                IConst(RegisterVariant::Register(Register(2)), 42),
-                SConst(RegisterVariant::Register(Register(3)), "cool beans".into()),
+                SConst(RegisterVariant::Local(Register(1)), "hello!".into()),
+                IConst(RegisterVariant::Local(Register(2)), 42),
+                SConst(RegisterVariant::Local(Register(3)), "cool beans".into()),
                 RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(5)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(6)),
                 ),
                 Call {
                     name: "my_func".into(),
                     namespace: CallNamespace::Local,
                     num_args: 3,
-                    initial_arg: RegisterVariant::Register(Register(4)),
+                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
             ];
 
@@ -3278,12 +3278,12 @@ mod tests {
         let _ = walker.visit_block(&mut node);
 
         let expected = vec![
-            IConst(RegisterVariant::Register(Register(1)), 127983),
+            IConst(RegisterVariant::Local(Register(1)), 127983),
             Call {
                 name: String::from("dump"),
                 namespace: CallNamespace::Local,
                 num_args: 1,
-                initial_arg: RegisterVariant::Register(Register(1)),
+                initial_arg: RegisterVariant::Local(Register(1)),
             },
         ];
 
@@ -3303,19 +3303,19 @@ mod tests {
         let _ = walker.visit_comma_expression(&mut expr);
 
         let expected = vec![
-            IConst(RegisterVariant::Register(Register(1)), 123),
-            SConst(RegisterVariant::Register(Register(2)), String::from("foo")),
-            IConst(RegisterVariant::Register(Register(3)), 666),
+            IConst(RegisterVariant::Local(Register(1)), 123),
+            SConst(RegisterVariant::Local(Register(2)), String::from("foo")),
+            IConst(RegisterVariant::Local(Register(3)), 666),
             AConst(
-                RegisterVariant::Register(Register(4)),
-                vec![RegisterVariant::Register(Register(3))],
+                RegisterVariant::Local(Register(4)),
+                vec![RegisterVariant::Local(Register(3))],
             ),
         ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
         assert_eq!(
             walker.current_result,
-            RegisterVariant::Register(Register(4))
+            RegisterVariant::Local(Register(4))
         );
     }
 
@@ -3341,46 +3341,46 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(2)), 10),
+                IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "while-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(4)), 5),
+                IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Register(Register(5)), "if-else_3".into()),
+                Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
                 SConst(
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(6)),
                     "goin' infinite!".into(),
                 ),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(6)),
+                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("while-start_1".into()),
-                IConst1(RegisterVariant::Register(Register(7))),
+                IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("while-start_1".into()),
                 Ret,
@@ -3409,57 +3409,57 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
-                IConst0(RegisterVariant::Register(Register(1))),
-                IConst(RegisterVariant::Register(Register(2)), 10),
+                IConst0(RegisterVariant::Local(Register(1))),
+                IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "for-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(4)), 5),
+                IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(4)),
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Register(Register(5)), "if-else_4".into()),
+                Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
                 SConst(
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(6)),
                     "goin' infinite!".into(),
                 ),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(6)),
+                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("for-continue_3".into()),
-                IConst1(RegisterVariant::Register(Register(7))),
+                IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(1)),
                 ),
-                IConst1(RegisterVariant::Register(Register(9))),
+                IConst1(RegisterVariant::Local(Register(9))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(9)),
-                    RegisterVariant::Register(Register(10)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(9)),
+                    RegisterVariant::Local(Register(10)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(10)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(10)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("for-start_1".into()),
                 Ret,
@@ -3493,44 +3493,44 @@ mod tests {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(2)), 5),
+                IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "if-else_4".into()),
+                Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
                 SConst(
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(4)),
                     "goin' infinite!".into(),
                 ),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(4)),
+                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("do-while-continue_3".into()),
-                IConst1(RegisterVariant::Register(Register(5))),
+                IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(5)),
-                    RegisterVariant::Register(Register(6)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(6)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(6)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(6)),
+                    RegisterVariant::Local(Register(1)),
                 ),
-                IConst(RegisterVariant::Register(Register(7)), 10),
+                IConst(RegisterVariant::Local(Register(7)), 10),
                 Lt(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(7)),
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
                 ),
                 Jnz(
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(8)),
                     "do-while-start_1".into(),
                 ),
                 Ret,
@@ -3563,19 +3563,19 @@ mod tests {
         let _ = walker.visit_decl(&mut node);
 
         let expected = vec![
-            IConst1(RegisterVariant::Register(Register(1))),
+            IConst1(RegisterVariant::Local(Register(1))),
             GStore(
-                RegisterVariant::Register(Register(1)),
-                RegisterVariant::Register(Register(0)),
+                RegisterVariant::Local(Register(1)),
+                RegisterVariant::Local(Register(0)),
             ),
-            IConst(RegisterVariant::Register(Register(2)), 56),
+            IConst(RegisterVariant::Local(Register(2)), 56),
             AConst(
-                RegisterVariant::Register(Register(3)),
-                vec![RegisterVariant::Register(Register(2))],
+                RegisterVariant::Local(Register(3)),
+                vec![RegisterVariant::Local(Register(2))],
             ),
             GStore(
-                RegisterVariant::Register(Register(3)),
-                RegisterVariant::Register(Register(1)),
+                RegisterVariant::Local(Register(3)),
+                RegisterVariant::Local(Register(1)),
             ),
         ];
 
@@ -3587,7 +3587,7 @@ mod tests {
             Symbol {
                 name: String::from("foo"),
                 type_: LpcType::Int(false),
-                location: Some(RegisterVariant::Register(Register(0))),
+                location: Some(RegisterVariant::Local(Register(0))),
                 scope_id: 0,
                 span: Some(Span {
                     file_id: 0,
@@ -3602,7 +3602,7 @@ mod tests {
             Symbol {
                 name: String::from("bar"),
                 type_: LpcType::Int(true),
-                location: Some(RegisterVariant::Register(Register(1))),
+                location: Some(RegisterVariant::Local(Register(1))),
                 scope_id: 0,
                 span: Some(Span {
                     file_id: 0,
@@ -3644,22 +3644,22 @@ mod tests {
             let _ = walker.visit_do_while(&mut node);
 
             let expected = vec![
-                SConst(RegisterVariant::Register(Register(1)), String::from("body")),
+                SConst(RegisterVariant::Local(Register(1)), String::from("body")),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst(RegisterVariant::Register(Register(2)), 666),
-                IConst(RegisterVariant::Register(Register(3)), 777),
+                IConst(RegisterVariant::Local(Register(2)), 666),
+                IConst(RegisterVariant::Local(Register(3)), 777),
                 EqEq(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 Jnz(
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(4)),
                     "do-while-start_0".into(),
                 ),
             ];
@@ -3726,23 +3726,23 @@ mod tests {
             let _ = walker.visit_for(&mut node).unwrap();
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 10),
-                Jz(RegisterVariant::Register(Register(1)), "for-end_1".into()),
+                IConst(RegisterVariant::Local(Register(1)), 10),
+                Jz(RegisterVariant::Local(Register(1)), "for-end_1".into()),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
-                IConst1(RegisterVariant::Register(Register(2))),
+                IConst1(RegisterVariant::Local(Register(2))),
                 ISub(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
                 RegCopy(
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("for-start_0".into()),
             ];
@@ -3789,15 +3789,15 @@ mod tests {
             assert_compiles_to(
                 "int main(int i) { return i + 4; }",
                 vec![
-                    IConst(RegisterVariant::Register(Register(2)), 4),
+                    IConst(RegisterVariant::Local(Register(2)), 4),
                     IAdd(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(3)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(3)),
                     ),
                     RegCopy(
-                        RegisterVariant::Register(Register(3)),
-                        RegisterVariant::Register(Register(0)),
+                        RegisterVariant::Local(Register(3)),
+                        RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
                 ],
@@ -3809,10 +3809,10 @@ mod tests {
             assert_compiles_to(
                 "int main(int i, ...) { return argv; }",
                 vec![
-                    PopulateArgv(RegisterVariant::Register(Register(2)), 1, 1),
+                    PopulateArgv(RegisterVariant::Local(Register(2)), 1, 1),
                     RegCopy(
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(0)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
                 ],
@@ -3826,24 +3826,24 @@ mod tests {
                 vec![
                     PopulateDefaults(vec![4, 6]),
                     IMul(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(4)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(4)),
                     ),
                     RegCopy(
-                        RegisterVariant::Register(Register(4)),
-                        RegisterVariant::Register(Register(0)),
+                        RegisterVariant::Local(Register(4)),
+                        RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
-                    IConst(RegisterVariant::Register(Register(5)), 666),
+                    IConst(RegisterVariant::Local(Register(5)), 666),
                     RegCopy(
-                        RegisterVariant::Register(Register(5)),
-                        RegisterVariant::Register(Register(2)),
+                        RegisterVariant::Local(Register(5)),
+                        RegisterVariant::Local(Register(2)),
                     ),
-                    FConst(RegisterVariant::Register(Register(6)), 3.14.into()),
+                    FConst(RegisterVariant::Local(Register(6)), 3.14.into()),
                     RegCopy(
-                        RegisterVariant::Register(Register(6)),
-                        RegisterVariant::Register(Register(3)),
+                        RegisterVariant::Local(Register(6)),
+                        RegisterVariant::Local(Register(3)),
                     ),
                     Jmp("function-body-start_0".into()),
                 ],
@@ -3868,7 +3868,7 @@ mod tests {
             walker.visit_function_ptr(&mut node).unwrap();
 
             let expected = vec![FunctionPtrConst {
-                location: RegisterVariant::Register(Register(1)),
+                location: RegisterVariant::Local(Register(1)),
                 target: FunctionTarget::Efun(String::from("dump")),
                 arity: FunctionArity {
                     num_args: 1,
@@ -3895,7 +3895,7 @@ mod tests {
             walker.visit_function_ptr(&mut node).unwrap();
 
             let expected = vec![FunctionPtrConst {
-                location: RegisterVariant::Register(Register(1)),
+                location: RegisterVariant::Local(Register(1)),
                 target: FunctionTarget::Local(
                     FunctionName::Literal("simul_efun".into()),
                     FunctionReceiver::Local,
@@ -3949,31 +3949,31 @@ mod tests {
             let _ = walker.visit_if(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
-                IConst(RegisterVariant::Register(Register(2)), 777),
+                IConst(RegisterVariant::Local(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(2)), 777),
                 EqEq(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "if-else_0".into()),
-                SConst(RegisterVariant::Register(Register(4)), String::from("true")),
+                Jz(RegisterVariant::Local(Register(3)), "if-else_0".into()),
+                SConst(RegisterVariant::Local(Register(4)), String::from("true")),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(4)),
+                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("if-end_1".into()),
                 SConst(
-                    RegisterVariant::Register(Register(5)),
+                    RegisterVariant::Local(Register(5)),
                     String::from("false"),
                 ),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(5)),
+                    initial_arg: RegisterVariant::Local(Register(5)),
                 },
             ];
 
@@ -3994,9 +3994,9 @@ mod tests {
         let _ = walker.visit_int(&mut tree1);
 
         let expected = vec![
-            IConst(RegisterVariant::Register(Register(1)), 666),
-            IConst0(RegisterVariant::Register(Register(2))),
-            IConst1(RegisterVariant::Register(Register(3))),
+            IConst(RegisterVariant::Local(Register(1)), 666),
+            IConst0(RegisterVariant::Local(Register(2))),
+            IConst1(RegisterVariant::Local(Register(3))),
         ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4021,7 +4021,7 @@ mod tests {
                     name: String::from("create"),
                     namespace: CallNamespace::Local,
                     num_args: 0,
-                    initial_arg: RegisterVariant::Register(Register(1)),
+                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 Ret,
             ];
@@ -4032,13 +4032,13 @@ mod tests {
             );
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), -1),
-                IConst(RegisterVariant::Register(Register(2)), 9),
+                IConst(RegisterVariant::Local(Register(1)), -1),
+                IConst(RegisterVariant::Local(Register(2)), 9),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(2)),
+                    initial_arg: RegisterVariant::Local(Register(2)),
                 },
                 Ret, // Automatically added due to no explicit return
             ];
@@ -4062,15 +4062,15 @@ mod tests {
             let instructions = generate_init_instructions(prog);
 
             let expected = [
-                IConst(RegisterVariant::Register(Register(1)), 123),
+                IConst(RegisterVariant::Local(Register(1)), 123),
                 GStore(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(0)),
                 ),
-                SConst(RegisterVariant::Register(Register(2)), String::from("cool")),
+                SConst(RegisterVariant::Local(Register(2)), String::from("cool")),
                 GStore(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Ret,
             ];
@@ -4093,16 +4093,16 @@ mod tests {
             let instructions = generate_init_instructions(prog);
 
             let expected = [
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 GStore(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(0)),
                 ),
                 Call {
                     name: String::from("create"),
                     namespace: CallNamespace::Local,
                     num_args: 0,
-                    initial_arg: RegisterVariant::Register(Register(2)),
+                    initial_arg: RegisterVariant::Local(Register(2)),
                 },
                 Ret, // end of initialization
             ];
@@ -4123,15 +4123,15 @@ mod tests {
             let instructions = generate_init_instructions(prog);
 
             let expected = [
-                IConst(RegisterVariant::Register(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(1)), 666),
                 GStore(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(0)),
                 ),
-                IConst(RegisterVariant::Register(Register(2)), 777),
+                IConst(RegisterVariant::Local(Register(2)), 777),
                 GStore(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Ret,
             ];
@@ -4148,10 +4148,10 @@ mod tests {
         let _ = walker.visit_return(&mut node);
 
         let expected = vec![
-            IConst(RegisterVariant::Register(Register(1)), 666),
+            IConst(RegisterVariant::Local(Register(1)), 666),
             RegCopy(
-                RegisterVariant::Register(Register(1)),
-                RegisterVariant::Register(Register(0)),
+                RegisterVariant::Local(Register(1)),
+                RegisterVariant::Local(Register(0)),
             ),
             Ret,
         ];
@@ -4181,12 +4181,12 @@ mod tests {
         let _ = walker.visit_string(&mut node3);
 
         let expected = vec![
-            SConst(RegisterVariant::Register(Register(1)), String::from("marf")),
+            SConst(RegisterVariant::Local(Register(1)), String::from("marf")),
             SConst(
-                RegisterVariant::Register(Register(2)),
+                RegisterVariant::Local(Register(2)),
                 String::from("tacos"),
             ),
-            SConst(RegisterVariant::Register(Register(3)), String::from("marf")),
+            SConst(RegisterVariant::Local(Register(3)), String::from("marf")),
         ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4216,27 +4216,27 @@ mod tests {
             let _ = walker.visit_ternary(&mut node).unwrap();
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(2)), 2),
-                IConst(RegisterVariant::Register(Register(3)), 3),
+                IConst(RegisterVariant::Local(Register(2)), 2),
+                IConst(RegisterVariant::Local(Register(3)), 3),
                 Lte(
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
                 ),
                 Jz(
-                    RegisterVariant::Register(Register(4)),
+                    RegisterVariant::Local(Register(4)),
                     "ternary-else_0".into(),
                 ), // jump to else
-                IConst(RegisterVariant::Register(Register(5)), 666),
+                IConst(RegisterVariant::Local(Register(5)), 666),
                 RegCopy(
-                    RegisterVariant::Register(Register(5)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("ternary-end_1".into()), // jump to end
-                IConst(RegisterVariant::Register(Register(6)), 777),
+                IConst(RegisterVariant::Local(Register(6)), 777),
                 RegCopy(
-                    RegisterVariant::Register(Register(6)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(6)),
+                    RegisterVariant::Local(Register(1)),
                 ),
             ];
 
@@ -4268,12 +4268,12 @@ mod tests {
                 let mut walker = setup(UnaryOperation::Negate, false);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
-                    IConst(RegisterVariant::Register(Register(2)), -1),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
+                    IConst(RegisterVariant::Local(Register(2)), -1),
                     MMul(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(3)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(3)),
                     ),
                 ];
 
@@ -4289,8 +4289,8 @@ mod tests {
                 let mut walker = setup(UnaryOperation::Inc, false);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
-                    Inc(RegisterVariant::Register(Register(1))),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
+                    Inc(RegisterVariant::Local(Register(1))),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4301,12 +4301,12 @@ mod tests {
                 let mut walker = setup(UnaryOperation::Inc, true);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
                     RegCopy(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
                     ),
-                    Inc(RegisterVariant::Register(Register(1))),
+                    Inc(RegisterVariant::Local(Register(1))),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4321,8 +4321,8 @@ mod tests {
                 let mut walker = setup(UnaryOperation::Dec, false);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
-                    Dec(RegisterVariant::Register(Register(1))),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
+                    Dec(RegisterVariant::Local(Register(1))),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4333,12 +4333,12 @@ mod tests {
                 let mut walker = setup(UnaryOperation::Dec, true);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
                     RegCopy(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
                     ),
-                    Dec(RegisterVariant::Register(Register(1))),
+                    Dec(RegisterVariant::Local(Register(1))),
                 ];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4353,10 +4353,10 @@ mod tests {
                 let mut walker = setup(UnaryOperation::Bang, false);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
                     Not(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
                     ),
                 ];
 
@@ -4372,10 +4372,10 @@ mod tests {
                 let mut walker = setup(UnaryOperation::BitwiseNot, false);
 
                 let expected = vec![
-                    IConst(RegisterVariant::Register(Register(1)), 666),
+                    IConst(RegisterVariant::Local(Register(1)), 666),
                     BitwiseNot(
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
                     ),
                 ];
 
@@ -4399,7 +4399,7 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    location: Some(RegisterVariant::Register(Register(666))),
+                    location: Some(RegisterVariant::Local(Register(666))),
                     scope_id: 0,
                     span: None,
                     flags: GlobalVarFlags::default(),
@@ -4416,12 +4416,12 @@ mod tests {
             let _ = walker.visit_var(&mut node);
             assert_eq!(
                 walker.current_result,
-                RegisterVariant::Register(Register(1))
+                RegisterVariant::Local(Register(1))
             ); // global loaded into r1
 
             let expected = vec![GLoad(
-                RegisterVariant::Register(Register(666)),
-                RegisterVariant::Register(Register(1)),
+                RegisterVariant::Local(Register(666)),
+                RegisterVariant::Local(Register(1)),
             )];
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
@@ -4438,7 +4438,7 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    location: Some(RegisterVariant::Register(Register(444))),
+                    location: Some(RegisterVariant::Local(Register(444))),
                     scope_id: 0,
                     span: None,
                     flags: GlobalVarFlags::default(),
@@ -4450,7 +4450,7 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    location: Some(RegisterVariant::Register(Register(666))),
+                    location: Some(RegisterVariant::Local(Register(666))),
                     scope_id: 1,
                     span: None,
                     flags: GlobalVarFlags::default(),
@@ -4462,7 +4462,7 @@ mod tests {
             let _ = walker.visit_var(&mut node);
             assert_eq!(
                 walker.current_result,
-                RegisterVariant::Register(Register(666))
+                RegisterVariant::Local(Register(666))
             );
 
             let expected = vec![];
@@ -4533,15 +4533,15 @@ mod tests {
 
             let mut map = IndexMap::new();
             map.insert(
-                RegisterVariant::Register(Register(1)),
-                RegisterVariant::Register(Register(2)),
+                RegisterVariant::Local(Register(1)),
+                RegisterVariant::Local(Register(2)),
             );
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
-                    SConst(RegisterVariant::Register(Register(1)), String::from("foo")),
-                    SConst(RegisterVariant::Register(Register(2)), String::from("bar")),
-                    MapConst(RegisterVariant::Register(Register(3)), map)
+                    SConst(RegisterVariant::Local(Register(1)), String::from("foo")),
+                    SConst(RegisterVariant::Local(Register(2)), String::from("bar")),
+                    MapConst(RegisterVariant::Local(Register(3)), map)
                 ]
             );
         }
@@ -4554,8 +4554,8 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2))
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2))
                 )]
             );
         }
@@ -4571,7 +4571,7 @@ mod tests {
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
-                [IConst(RegisterVariant::Register(Register(1)), 123)]
+                [IConst(RegisterVariant::Local(Register(1)), 123)]
             );
         }
 
@@ -4583,8 +4583,8 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2))
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2))
                 )]
             );
         }
@@ -4601,7 +4601,7 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [FConst(
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(1)),
                     Total::from(123.0)
                 )]
             );
@@ -4615,8 +4615,8 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2))
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2))
                 )]
             );
         }
@@ -4633,7 +4633,7 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [SConst(
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(1)),
                     String::from("foo")
                 )]
             );
@@ -4647,8 +4647,8 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2))
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2))
                 )]
             );
         }
@@ -4665,10 +4665,10 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
-                    IConst(RegisterVariant::Register(Register(1)), 1234),
+                    IConst(RegisterVariant::Local(Register(1)), 1234),
                     AConst(
-                        RegisterVariant::Register(Register(2)),
-                        vec![RegisterVariant::Register(Register(1))]
+                        RegisterVariant::Local(Register(2)),
+                        vec![RegisterVariant::Local(Register(1))]
                     )
                 ]
             );
@@ -4682,8 +4682,8 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [RegCopy(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2))
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2))
                 )]
             );
         }
@@ -4716,18 +4716,18 @@ mod tests {
                 walker_init_instructions(&mut walker),
                 [
                     SConst(
-                        RegisterVariant::Register(Register(1)),
+                        RegisterVariant::Local(Register(1)),
                         String::from("/foo/bar.c")
                     ),
                     Call {
                         name: String::from("clone_object"),
                         namespace: CallNamespace::Local,
                         num_args: 1,
-                        initial_arg: RegisterVariant::Register(Register(1))
+                        initial_arg: RegisterVariant::Local(Register(1))
                     },
                     RegCopy(
-                        RegisterVariant::Register(Register(0)),
-                        RegisterVariant::Register(Register(2))
+                        RegisterVariant::Local(Register(0)),
+                        RegisterVariant::Local(Register(2))
                     )
                 ]
             );
@@ -4777,37 +4777,37 @@ mod tests {
             let _ = walker.visit_var_init(&mut node2);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 12),
-                FConst(RegisterVariant::Register(Register(2)), 4.3.into()),
-                SConst(RegisterVariant::Register(Register(3)), "hello".into()),
-                IConst1(RegisterVariant::Register(Register(4))),
-                IConst(RegisterVariant::Register(Register(5)), 2),
-                IConst(RegisterVariant::Register(Register(6)), 3),
+                IConst(RegisterVariant::Local(Register(1)), 12),
+                FConst(RegisterVariant::Local(Register(2)), 4.3.into()),
+                SConst(RegisterVariant::Local(Register(3)), "hello".into()),
+                IConst1(RegisterVariant::Local(Register(4))),
+                IConst(RegisterVariant::Local(Register(5)), 2),
+                IConst(RegisterVariant::Local(Register(6)), 3),
                 AConst(
-                    RegisterVariant::Register(Register(7)),
+                    RegisterVariant::Local(Register(7)),
                     vec![
-                        RegisterVariant::Register(Register(4)),
-                        RegisterVariant::Register(Register(5)),
-                        RegisterVariant::Register(Register(6)),
+                        RegisterVariant::Local(Register(4)),
+                        RegisterVariant::Local(Register(5)),
+                        RegisterVariant::Local(Register(6)),
                     ],
                 ),
                 AConst(
-                    RegisterVariant::Register(Register(8)),
+                    RegisterVariant::Local(Register(8)),
                     vec![
-                        RegisterVariant::Register(Register(1)),
-                        RegisterVariant::Register(Register(2)),
-                        RegisterVariant::Register(Register(3)),
-                        RegisterVariant::Register(Register(7)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(3)),
+                        RegisterVariant::Local(Register(7)),
                     ],
                 ),
                 GStore(
-                    RegisterVariant::Register(Register(8)),
-                    RegisterVariant::Register(Register(0)),
+                    RegisterVariant::Local(Register(8)),
+                    RegisterVariant::Local(Register(0)),
                 ),
-                SConst(RegisterVariant::Register(Register(9)), "sup".into()),
+                SConst(RegisterVariant::Local(Register(9)), "sup".into()),
                 GStore(
-                    RegisterVariant::Register(Register(9)),
-                    RegisterVariant::Register(Register(1)),
+                    RegisterVariant::Local(Register(9)),
+                    RegisterVariant::Local(Register(1)),
                 ),
             ];
 
@@ -4846,20 +4846,20 @@ mod tests {
             let _ = walker.visit_while(&mut node);
 
             let expected = vec![
-                IConst(RegisterVariant::Register(Register(1)), 666),
-                IConst(RegisterVariant::Register(Register(2)), 777),
+                IConst(RegisterVariant::Local(Register(1)), 666),
+                IConst(RegisterVariant::Local(Register(2)), 777),
                 EqEq(
-                    RegisterVariant::Register(Register(1)),
-                    RegisterVariant::Register(Register(2)),
-                    RegisterVariant::Register(Register(3)),
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Register(Register(3)), "while-end_1".into()),
-                SConst(RegisterVariant::Register(Register(4)), String::from("body")),
+                Jz(RegisterVariant::Local(Register(3)), "while-end_1".into()),
+                SConst(RegisterVariant::Local(Register(4)), String::from("body")),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Register(Register(4)),
+                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("while-start_0".into()),
             ];
@@ -4951,13 +4951,13 @@ mod tests {
 
         let mut grandparent_init = ProgramFunction::new(prototype.clone(), 0);
         let grandparent_init_instructions = vec![
-            IConst1(RegisterVariant::Register(Register(0))),
-            IConst(RegisterVariant::Register(Register(0)), 666),
+            IConst1(RegisterVariant::Local(Register(0))),
+            IConst(RegisterVariant::Local(Register(0)), 666),
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
                 num_args: 0,
-                initial_arg: RegisterVariant::Register(Register(0)),
+                initial_arg: RegisterVariant::Local(Register(0)),
             },
             Ret,
         ];
@@ -4987,15 +4987,15 @@ mod tests {
 
         let mut parent_init = ProgramFunction::new(prototype.clone(), 0);
         let parent_init_instructions = vec![
-            Instruction::IConst1(RegisterVariant::Register(Register(0))),
-            Instruction::IConst(RegisterVariant::Register(Register(0)), 666),
-            Instruction::SConst(RegisterVariant::Register(Register(1)), "moop".to_string()),
-            Instruction::IConst(RegisterVariant::Register(Register(5)), 4321),
+            Instruction::IConst1(RegisterVariant::Local(Register(0))),
+            Instruction::IConst(RegisterVariant::Local(Register(0)), 666),
+            Instruction::SConst(RegisterVariant::Local(Register(1)), "moop".to_string()),
+            Instruction::IConst(RegisterVariant::Local(Register(5)), 4321),
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
                 num_args: 0,
-                initial_arg: RegisterVariant::Register(Register(0)),
+                initial_arg: RegisterVariant::Local(Register(0)),
             },
             Instruction::Ret,
         ];
@@ -5020,10 +5020,10 @@ mod tests {
         walker.context.inherits.push(parent);
 
         let expected = vec![
-            IConst1(RegisterVariant::Register(Register(0))),
-            IConst(RegisterVariant::Register(Register(0)), 666),
-            SConst(RegisterVariant::Register(Register(1)), "moop".to_string()),
-            IConst(RegisterVariant::Register(Register(5)), 4321),
+            IConst1(RegisterVariant::Local(Register(0))),
+            IConst(RegisterVariant::Local(Register(0)), 666),
+            SConst(RegisterVariant::Local(Register(1)), "moop".to_string()),
+            IConst(RegisterVariant::Local(Register(5)), 4321),
             // Note call to create is added later in the process, at the end of visit_program()
         ];
 

@@ -59,7 +59,7 @@ fn get_location<const N: usize>(
     location: RegisterVariant,
 ) -> Result<&LpcRef> {
     match location {
-        RegisterVariant::Register(reg) => {
+        RegisterVariant::Local(reg) => {
             let frame = stack.current_frame()?;
             let registers = &frame.registers;
             Ok(&registers[reg])
@@ -75,7 +75,7 @@ fn set_location<const N: usize>(
     value: LpcRef,
 ) -> Result<()> {
     match location {
-        RegisterVariant::Register(reg) => {
+        RegisterVariant::Local(reg) => {
             let frame = stack.current_frame_mut()?;
             let registers = &mut frame.registers;
             registers[reg] = value;

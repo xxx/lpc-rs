@@ -5,14 +5,14 @@ use std::fmt::{Display, Formatter};
 /// and previously-closed-over local variables
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RegisterVariant {
-    Register(Register),
+    Local(Register),
     Upvalue(Register),
 }
 
 impl RegisterVariant {
     pub fn index(&self) -> usize {
         match self {
-            RegisterVariant::Register(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
+            RegisterVariant::Local(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
         }
     }
 }
@@ -20,7 +20,7 @@ impl RegisterVariant {
 impl Display for RegisterVariant {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            RegisterVariant::Register(r) => r.to_string(),
+            RegisterVariant::Local(r) => r.to_string(),
             RegisterVariant::Upvalue(r) => format!("u{}", r.index()),
         };
 
@@ -41,7 +41,7 @@ impl Register {
 
     /// convenience method
     pub fn as_register(&self) -> RegisterVariant {
-        RegisterVariant::Register(*self)
+        RegisterVariant::Local(*self)
     }
 
     /// convenience method
