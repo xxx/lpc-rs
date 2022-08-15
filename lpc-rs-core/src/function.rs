@@ -1,4 +1,4 @@
-use crate::register::{Register, RegisterVariant};
+use crate::register::{RegisterVariant};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 

@@ -1,6 +1,6 @@
 use crate::compiler::ast::var_init_node::VarInitNode;
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::Register, visibility::Visibility,
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility,
 };
 use lpc_rs_errors::span::Span;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
