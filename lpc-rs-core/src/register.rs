@@ -1,9 +1,32 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
+/// A struct to handle the split between normal, in-function registers,
+/// and previously-closed-over local variables
+#[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RegisterVariant {
     Register(Register),
     Upvalue(Register)
+}
+
+impl RegisterVariant {
+    pub fn index(&self) -> usize {
+        match self {
+            RegisterVariant::Register(reg)
+            | RegisterVariant::Upvalue(reg) => reg.index(),
+        }
+    }
+}
+
+impl Display for RegisterVariant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            RegisterVariant::Register(r) => r.to_string(),
+            RegisterVariant::Upvalue(r) => format!("u{}", r.index())
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 /// A newtype around a usize representing a Register numbered with its value, `x.0`.
@@ -15,6 +38,16 @@ impl Register {
     /// An alias to get the number.
     pub fn index(self) -> usize {
         self.0
+    }
+
+    /// convenience method
+    pub fn as_register(&self) -> RegisterVariant {
+        RegisterVariant::Register(*self)
+    }
+
+    /// convenience method
+    pub fn as_upvalue(&self) -> RegisterVariant {
+        RegisterVariant::Upvalue(*self)
     }
 }
 

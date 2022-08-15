@@ -37,6 +37,7 @@ use std::{
     rc::Rc,
 };
 use tracing::{instrument, trace};
+use lpc_rs_core::register::RegisterVariant;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -54,26 +55,28 @@ macro_rules! pop_frame {
 }
 
 #[inline]
-fn get_location<const N: usize>(stack: &CallStack<N>, location: Register) -> Result<&LpcRef> {
-    let frame = stack.current_frame()?;
-    let registers = &frame.registers;
-    Ok(&registers[location])
-    // match $loc {
-    //     RegisterVariant::Register(reg) => {
-    //         let frame = self.stack.current_frame_mut()?;
-    //         let registers = &mut frame.registers;
-    //         &registers[$loc]
-    //     },
-    //     RegisterVariant::Upvalue(upv) => return Err(LpcError::new("No location found")),
-    // }
+fn get_location<const N: usize>(stack: &CallStack<N>, location: RegisterVariant) -> Result<&LpcRef> {
+    match location {
+        RegisterVariant::Register(reg) => {
+            let frame = stack.current_frame()?;
+            let registers = &frame.registers;
+            Ok(&registers[reg])
+        },
+        RegisterVariant::Upvalue(_upv) => todo!()
+    }
 }
 
 #[inline]
-fn set_location<const N: usize>(stack: &mut CallStack<N>, location: Register, value: LpcRef) -> Result<()> {
-    let frame = stack.current_frame_mut()?;
-    let registers = &mut frame.registers;
-    registers[location] = value;
-    Ok(())
+fn set_location<const N: usize>(stack: &mut CallStack<N>, location: RegisterVariant, value: LpcRef) -> Result<()> {
+    match location {
+        RegisterVariant::Register(reg) => {
+            let frame = stack.current_frame_mut()?;
+            let registers = &mut frame.registers;
+            registers[reg] = value;
+            Ok(())
+        },
+        RegisterVariant::Upvalue(_upv) => todo!()
+    }
 }
 
 macro_rules! get_loc {
@@ -99,7 +102,7 @@ struct CatchPoint {
 
     /// The register to put the error in, within the above [`StackFrame`]
     /// TODO: update this for closures
-    register: Register,
+    register: RegisterVariant,
 }
 
 /// An abstraction to allow for isolated running to completion of a specified function.
@@ -993,7 +996,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     };
 
                     if !public {
-                        return set_loc!(self, Register(0), LpcRef::Int(0));
+                        return set_loc!(self, Register(0).as_register(), LpcRef::Int(0));
                     }
                 }
 
@@ -1572,7 +1575,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // set up the catch point's return value
         let value = LpcValue::from(error.to_string());
         let lpc_ref = self.memory.value_to_ref(value);
-        set_loc!(self, Register(result_index), lpc_ref)?;
+        set_loc!(self, Register(result_index).as_register(), lpc_ref)?;
         let frame = self.stack.current_frame_mut()?;
 
         // jump to the corresponding catchend instruction
@@ -1584,9 +1587,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
     fn binary_operation<F>(
         &mut self,
-        r1: Register,
-        r2: Register,
-        r3: Register,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+        r3: RegisterVariant,
         operation: F,
     ) -> Result<()>
     where
@@ -1614,9 +1617,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
     fn binary_boolean_operation<F>(
         &mut self,
-        r1: Register,
-        r2: Register,
-        r3: Register,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+        r3: RegisterVariant,
         operation: F,
     ) -> Result<()>
     where
@@ -3706,8 +3709,8 @@ mod tests {
                         ),
                         num_locals: 2,
                         instructions: vec![
-                            SConst(Register(1), "Hello, world!".into()),
-                            Sizeof(Register(1), Register(2)),
+                            SConst(Register(1).as_register(), "Hello, world!".into()),
+                            Sizeof(Register(1).as_register(), Register(2).as_register()),
                         ],
                         debug_spans: vec![None, None],
                         labels: Default::default(),

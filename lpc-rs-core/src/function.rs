@@ -1,4 +1,4 @@
-use crate::register::Register;
+use crate::register::{Register, RegisterVariant};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionName {
     /// The name is a variable, that needs to be resolved at runtime.
-    Var(Register),
+    Var(RegisterVariant),
     /// The name is a literal function name, so call it directly.
     Literal(String),
 }
@@ -26,8 +26,8 @@ pub enum FunctionReceiver {
     /// The receiver is the object that defines the function.
     Local,
 
-    /// The receiver is the Process stored in the [`Register`].
-    Var(Register),
+    /// The receiver is the Process stored in the [`RegisterVariant`].
+    Var(RegisterVariant),
 
     /// The receiver will be filled-in at call time, with the first argument passed to the call.
     /// i.e. the `&->foo()` syntax

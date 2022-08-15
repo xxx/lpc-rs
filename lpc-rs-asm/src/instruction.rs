@@ -9,6 +9,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use lpc_rs_core::register::RegisterVariant;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -20,36 +21,36 @@ pub type Label = String;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
-    AConst(Register, Vec<Register>),
+    AConst(RegisterVariant, Vec<RegisterVariant>),
 
     /// bitwise-and combination.
     /// x.2 = x.0 & x.1
-    And(Register, Register, Register),
+    And(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// x.1 = ~x.0
-    BitwiseNot(Register, Register),
+    BitwiseNot(RegisterVariant, RegisterVariant),
 
     /// Call a function
     Call {
         name: String,
         namespace: CallNamespace,
         num_args: usize,
-        initial_arg: Register,
+        initial_arg: RegisterVariant,
     },
 
     /// Call a function pointer, located in `location`
     CallFp {
-        location: Register,
+        location: RegisterVariant,
         num_args: usize,
-        initial_arg: Register,
+        initial_arg: RegisterVariant,
     },
 
     /// Call a function in another object
     CallOther {
-        receiver: Register,
-        name: Register,
+        receiver: RegisterVariant,
+        name: RegisterVariant,
         num_args: usize,
-        initial_arg: Register,
+        initial_arg: RegisterVariant,
     },
 
     /// Finish a block of instructions that can catch errors and continue execution.
@@ -58,112 +59,112 @@ pub enum Instruction {
 
     /// Start a block of instructions that can catch errors and continue execution.
     /// Store the error in x.0, and jump to x.1 to continue execution
-    CatchStart(Register, Label),
+    CatchStart(RegisterVariant, Label),
 
     /// Decrement the value in x.0 by 1
-    Dec(Register),
+    Dec(RegisterVariant),
 
     /// == comparison
     /// x.2 = x.0 == x.1
-    EqEq(Register, Register, Register),
+    EqEq(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Float Constant
-    FConst(Register, LpcFloat),
+    FConst(RegisterVariant, LpcFloat),
 
     /// A function pointer constant
     FunctionPtrConst {
-        location: Register,
+        location: RegisterVariant,
         target: FunctionTarget,
         arity: FunctionArity,
-        applied_arguments: Vec<Option<Register>>,
+        applied_arguments: Vec<Option<RegisterVariant>>, // TODO: should this be RegisterVariant?
     },
 
     /// Copy a global from the global registers, into the current stack frame.
     /// Copies *global* register x.0 to *local* register x.1.
-    GLoad(Register, Register),
+    GLoad(RegisterVariant, RegisterVariant),
 
     /// Copy a variable from the current stack frame, to the global registers.
     /// Copies a variable from *local* register x.0, into the *global* register x.1.
-    GStore(Register, Register),
+    GStore(RegisterVariant, RegisterVariant),
 
     /// Greater than
     /// x.2 = x.0 > x.1
-    Gt(Register, Register, Register),
+    Gt(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Greater than or equal to
     /// x.2 = x.0 >= x.1
-    Gte(Register, Register, Register),
+    Gte(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Integer addition - x.2 = x.0 + x.1
-    IAdd(Register, Register, Register),
+    IAdd(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Integer constant
-    IConst(Register, LpcInt),
+    IConst(RegisterVariant, LpcInt),
 
     /// Integer constant 0
-    IConst0(Register),
+    IConst0(RegisterVariant),
 
     /// Integer constant 1
-    IConst1(Register),
+    IConst1(RegisterVariant),
 
     /// Integer division - x.2 = x.0 / x.1
-    IDiv(Register, Register, Register),
+    IDiv(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Integer modulo division - x.2 = x.0 % x.1
-    IMod(Register, Register, Register),
+    IMod(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Increment the value in x.0 by 1
-    Inc(Register),
+    Inc(RegisterVariant),
 
     /// Integer division - x.2 = x.0 * x.1
-    IMul(Register, Register, Register),
+    IMul(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Integer division - x.2 = x.0 - x.1
-    ISub(Register, Register, Register),
+    ISub(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Unconditional jump
     Jmp(Label),
 
     /// Jump if the value in the register is not zero (Int or Float)
-    Jnz(Register, Label),
+    Jnz(RegisterVariant, Label),
 
     /// Jump if the value in the register is zero (Int or Float)
-    Jz(Register, Label),
+    Jz(RegisterVariant, Label),
 
     /// Load a single item from an array or mapping into a register
     /// x.2 = x.0[x.1]
-    Load(Register, Register, Register),
+    Load(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Load the value of a key from a mapping into a register
     /// x.2 = x.0[x.1]
-    LoadMappingKey(Register, Register, Register),
+    LoadMappingKey(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Less than
     /// x.2 = x.0 < x.1
-    Lt(Register, Register, Register),
+    Lt(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Less than or equal to
     /// x.2 = x.0 <= x.1
-    Lte(Register, Register, Register),
+    Lte(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Create a mapping from the keys and values in the hashmap
-    MapConst(Register, IndexMap<Register, Register>),
+    MapConst(RegisterVariant, IndexMap<RegisterVariant, RegisterVariant>),
 
     /// Addition where at least one side is a reference type, so check at runtime.
-    MAdd(Register, Register, Register),
+    MAdd(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Multiplication where at least one side is a reference type, so check at runtime.
-    MMul(Register, Register, Register),
+    MMul(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Subtraction where at least one side is a reference type, so check at runtime.
-    MSub(Register, Register, Register),
+    MSub(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Check if x.0 is equal to 0
-    Not(Register, Register),
+    Not(RegisterVariant, RegisterVariant),
 
     /// bitwise | comparison.
     /// x.2 = x.0 | x.1
-    Or(Register, Register, Register),
+    Or(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Special case instruction to dynamically populate the `argv` variable
     ///   that is created for ellipsis functions.
@@ -175,7 +176,7 @@ pub enum Instruction {
     /// We know both of these numbers at compile time, and any other register
     ///   present in the frame is an ellipsis argument, so those are the ones we
     ///   populate.
-    PopulateArgv(Register, usize, usize),
+    PopulateArgv(RegisterVariant, usize, usize),
 
     /// Special case instruction to handle calls to functions that have default
     /// argument values.
@@ -187,37 +188,37 @@ pub enum Instruction {
 
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
-    Range(Register, Register, Register, Register),
+    Range(RegisterVariant, RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Copy x.0 to x.1
-    RegCopy(Register, Register),
+    RegCopy(RegisterVariant, RegisterVariant),
 
     /// Return from current function
     Ret,
 
     /// left shift
     /// x.2 = x.0 << x.1
-    Shl(Register, Register, Register),
+    Shl(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// right shift
     /// x.1 = x.1 >> x.1
-    Shr(Register, Register, Register),
+    Shr(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Get the size of arrays or mappings
     /// x.1 = sizeof(x.0)
-    Sizeof(Register, Register),
+    Sizeof(RegisterVariant, RegisterVariant),
 
     /// Store a single item into an array or mapping
     /// x.1[x.2] = x.0
-    Store(Register, Register, Register),
+    Store(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// String constant.
     /// Store an index into the program's ConstantPool in the passed register
-    SConst(Register, String),
+    SConst(RegisterVariant, String),
 
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
-    Xor(Register, Register, Register),
+    Xor(RegisterVariant, RegisterVariant, RegisterVariant),
 }
 
 impl Display for Instruction {

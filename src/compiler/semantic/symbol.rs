@@ -5,6 +5,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::span::Span;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use serde::{Deserialize, Serialize};
+use lpc_rs_core::register::RegisterVariant;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -14,7 +15,7 @@ pub struct Symbol {
     /// The type of this var
     pub type_: LpcType,
     /// Which register is tracking this variable?
-    pub location: Option<Register>,
+    pub location: Option<RegisterVariant>,
     /// to which scope do i belong?
     pub scope_id: usize,
     /// The text span that first defined this symbol.
