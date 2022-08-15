@@ -1,11 +1,11 @@
 use crate::compiler::ast::var_init_node::VarInitNode;
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility,
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
+    visibility::Visibility,
 };
 use lpc_rs_errors::span::Span;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use serde::{Deserialize, Serialize};
-use lpc_rs_core::register::RegisterVariant;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

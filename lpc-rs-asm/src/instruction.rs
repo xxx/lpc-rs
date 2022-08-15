@@ -1,14 +1,14 @@
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, function::FunctionTarget, function_arity::FunctionArity, LpcFloat, LpcInt,
+    call_namespace::CallNamespace, function::FunctionTarget, function_arity::FunctionArity,
+    register::RegisterVariant, LpcFloat, LpcInt,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use lpc_rs_core::register::RegisterVariant;
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -187,7 +187,12 @@ pub enum Instruction {
 
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
-    Range(RegisterVariant, RegisterVariant, RegisterVariant, RegisterVariant),
+    Range(
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+    ),
 
     /// Copy x.0 to x.1
     RegCopy(RegisterVariant, RegisterVariant),

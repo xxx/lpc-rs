@@ -1,4 +1,4 @@
-use crate::interpreter::{lpc_ref::LpcRef, program::Program};
+use crate::interpreter::{lpc_ref::LpcRef, program::Program, register_bank::RegisterBank};
 use delegate::delegate;
 use std::{
     borrow::Cow,
@@ -9,7 +9,6 @@ use std::{
     path::Path,
     rc::Rc,
 };
-use crate::interpreter::register_bank::RegisterBank;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.

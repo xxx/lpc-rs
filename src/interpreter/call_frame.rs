@@ -1,8 +1,4 @@
-use crate::{
-    interpreter::{
-        lpc_ref::LpcRef, process::Process, register_bank::RegisterBank,
-    },
-};
+use crate::interpreter::{lpc_ref::LpcRef, process::Process, register_bank::RegisterBank};
 use lpc_rs_asm::instruction::{Address, Instruction};
 
 use lpc_rs_errors::{span::Span, LpcError, Result};

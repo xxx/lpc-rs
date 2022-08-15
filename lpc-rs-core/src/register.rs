@@ -6,14 +6,13 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RegisterVariant {
     Register(Register),
-    Upvalue(Register)
+    Upvalue(Register),
 }
 
 impl RegisterVariant {
     pub fn index(&self) -> usize {
         match self {
-            RegisterVariant::Register(reg)
-            | RegisterVariant::Upvalue(reg) => reg.index(),
+            RegisterVariant::Register(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
         }
     }
 }
@@ -22,7 +21,7 @@ impl Display for RegisterVariant {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             RegisterVariant::Register(r) => r.to_string(),
-            RegisterVariant::Upvalue(r) => format!("u{}", r.index())
+            RegisterVariant::Upvalue(r) => format!("u{}", r.index()),
         };
 
         write!(f, "{}", s)

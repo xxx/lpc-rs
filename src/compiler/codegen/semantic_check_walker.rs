@@ -6,6 +6,7 @@ use crate::compiler::{
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::CallNode,
+        closure_node::ClosureNode,
         continue_node::ContinueNode,
         do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
@@ -33,7 +34,6 @@ use crate::compiler::{
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use lpc_rs_errors::{LpcError, Result};
-use crate::compiler::ast::closure_node::ClosureNode;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
