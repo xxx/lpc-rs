@@ -297,7 +297,8 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 || {
                     context
                         .lookup_function_complete(name.as_str(), namespace)
-                        .map_or(Ok(LpcType::Int(false)), |function_like| {
+                        // TODO: This `or` clause is where call_other checks end up
+                        .map_or(Ok(LpcType::Mixed(false)), |function_like| {
                             Ok(function_like.as_ref().return_type)
                         })
                 },
@@ -1920,6 +1921,7 @@ mod tests {
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::Closure(ClosureNode {
+                    name: "closure-123".into(),
                     return_type: LpcType::Mapping(true),
                     parameters: None,
                     flags: Default::default(),

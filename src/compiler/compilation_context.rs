@@ -30,7 +30,7 @@ pub struct CompilationContext {
     pub scopes: ScopeTree,
 
     /// The map of function names, to their respective prototypes.
-    /// Used for checking forward references.
+    /// Used for checking forward references, and other things.
     pub function_prototypes: HashMap<String, FunctionPrototype>,
 
     /// Storage for default function params, for the functions that have them
@@ -65,6 +65,9 @@ pub struct CompilationContext {
 
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Rc<RefCell<Process>>>,
+
+    /// The count of closures that have been defined, so we can give them unique names.
+    pub closure_count: usize,
 }
 
 impl CompilationContext {
@@ -308,6 +311,7 @@ impl Default for CompilationContext {
             num_globals: 0,
             num_init_registers: 0,
             simul_efuns: None,
+            closure_count: 0,
         }
     }
 }

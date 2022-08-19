@@ -298,7 +298,11 @@ Closure: ExpressionNode = {
 
         let flags = FunctionFlags::default().with_ellipsis(false);
 
+        let name = format!("closure-{}", context.closure_count);
+        context.closure_count += 1;
+
         Ok(ExpressionNode::Closure(ClosureNode {
+            name,
             return_type: LpcType::Mixed(false),
             parameters: None,
             flags,

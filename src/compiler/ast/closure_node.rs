@@ -18,6 +18,7 @@ use lpc_rs_errors::{span::Span, Result};
 /// A node representation a function definition
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub struct ClosureNode {
+    pub name: String,
     pub return_type: LpcType,
     pub parameters: Option<Vec<VarInitNode>>,
     pub flags: FunctionFlags,

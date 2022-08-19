@@ -920,22 +920,181 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        if let Some(parameters) = &mut node.parameters {
-            for param in parameters {
-                param.visit(self)?;
+        let prototype = match self.context.function_prototypes.get(&node.name) {
+            Some(p) => p,
+            None => {
+                return Err(LpcError::new(format!(
+                    "closure prototype for {} not found",
+                    node.name
+                ))
+                    .with_span(node.span));
             }
+        };
+
+        let arity = prototype.arity;
+        let num_args = arity.num_args;
+        let num_default_args = arity.num_default_args;
+        let passed_param_count = node.parameters.as_ref().map(|nodes| nodes.len()).unwrap_or_default();
+
+        let sym = ProgramFunction::new(prototype.clone(), 0);
+        let populate_argv_index: Option<usize>;
+        let populate_defaults_index: Option<usize>;
+
+        self.function_stack.push(sym);
+
+        let len = self.current_address();
+
+        let parent_scope_id = self.context.scopes.current_id;
+        self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
+        self.register_counter.push(0);
+
+        let passed_param_locations = &node
+            .parameters
+            .as_ref()
+            .map(|nodes| { // XXX difference between closure and function def
+                nodes.iter()
+                    .map(|parameter| self.visit_parameter(parameter))
+                    .collect::<Vec<_>>()
+            }).unwrap_or_default();
+
+        if num_default_args > 0 {
+            populate_defaults_index = Some(self.current_address());
+            // the addresses are backpatched below, once we have them.
+            let instruction = Instruction::PopulateDefaults(vec![]);
+            push_instruction!(self, instruction, node.span);
+        } else {
+            populate_defaults_index = None;
         }
+
+        if node.flags.ellipsis() {
+            let argv_location = self.assign_sym_location(ARGV);
+            // We don't set `argv_location` as `self.current_result`, because it's
+            // being assigned implicitly, and doesn't need to be made available
+            // to more complex expressions. Expressions that use `argv` explicitly
+            // are handled elsewhere, as any other expr would be.
+
+            populate_argv_index = Some(self.current_address());
+
+            // The number of locals isn't known yet, so just set it to zero for now.
+            // This gets backpatched after the function body is generated.
+            let instruction = Instruction::PopulateArgv(
+                argv_location,
+                // XXX difference between closure and function def
+                passed_param_count,
+                0
+            );
+
+            push_instruction!(self, instruction, node.span);
+        } else {
+            populate_argv_index = None;
+        }
+
+        let start_label = self.new_label("closure-body-start");
+        self.insert_label(&start_label, self.current_address());
 
         for expression in &mut node.body {
             expression.visit(self)?;
         }
 
+        // return the current result if there is no explicit return.
+        {
+            let sym = self.function_stack.last_mut().unwrap();
+            if sym.instructions.len() == len
+                || (!sym.instructions.is_empty()
+                && *sym.instructions.last().unwrap() != Instruction::Ret)
+            {
+                sym.push_instruction(
+                    RegCopy(self.current_result, Register(0).as_register()),
+                    node.span
+                );
+                sym.push_instruction(Instruction::Ret, node.span);
+            }
+        }
+
+        // handle default arg initialization.
+        if num_default_args > 0 {
+            debug_assert_eq!(passed_param_count, passed_param_locations.len());
+
+            let mut default_init_addresses = vec![];
+
+            if let Some(parameters) = &mut node.parameters {
+                for (idx, parameter) in parameters.iter_mut().enumerate() {
+                    if let Some(value) = &mut parameter.value {
+                        default_init_addresses.push(self.current_address());
+
+                        // generate code for only the value, then assign by hand, because we pre-generated
+                        // locations of the parameters above.
+                        value.visit(self)?;
+                        let instruction = RegCopy(self.current_result, passed_param_locations[idx]);
+                        push_instruction!(self, instruction, node.span);
+                    }
+                }
+            }
+
+            // backpatch the the correct init addresses for the PopulateDefaults call.
+            if let Some(idx) = populate_defaults_index {
+                let sym = self.function_stack.last_mut().unwrap();
+                let instruction = &sym.instructions[idx];
+                if let Instruction::PopulateDefaults(_) = instruction {
+                    let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
+                    sym.instructions[idx] = new_instruction;
+                } else {
+                    return Err(
+                        LpcError::new("Invalid populate_defaults_index").with_span(node.span)
+                    );
+                }
+            }
+
+            // jump back to the function now that defaults are populated.
+            let instruction = Instruction::Jmp(start_label);
+            push_instruction!(self, instruction, node.span);
+        }
+
         self.context.scopes.pop();
+        let mut sym = self.function_stack.pop().unwrap();
+        sym.num_locals = self.register_counter.as_usize() - num_args;
+
+        // backpatch the PopulateArgv instruction now that we have the correct number of locals.
+        if let Some(idx) = populate_argv_index {
+            let instruction = &sym.instructions[idx];
+            if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
+                let new_instruction = Instruction::PopulateArgv(*loc, *num_args, sym.num_locals);
+                sym.instructions[idx] = new_instruction;
+            } else {
+                return Err(LpcError::new("Invalid populate_argv_index").with_span(node.span));
+            }
+        }
+
+        self.functions.insert(node.name.clone(), sym.into());
+
+        self.register_counter.pop();
+
+        // At this point, the closure has been generated and stored.
+        // We just need to store a reference to it in the current result.
+        self.context.scopes.goto(parent_scope_id);
+
+        let location = self.register_counter.next().unwrap().as_register();
+        self.current_result = location;
+
+        // closures are just local functions, with a pointer to them stored in a register at runtime.
+        // TODO: Ensure this still works when calling a returned closure in another object
+        let target = FunctionTarget::Local(
+            FunctionName::Literal(node.name.clone()),
+            FunctionReceiver::Local
+        );
+
+        let instruction = Instruction::FunctionPtrConst {
+            location,
+            target,
+            arity,
+            applied_arguments: vec![],
+        };
+
+        push_instruction!(self, instruction, node.span);
 
         Ok(())
     }
+
 
     #[instrument(skip_all)]
     fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
