@@ -10,6 +10,8 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::Config;
 use std::{cell::RefCell, rc::Rc};
 
+pub mod factories;
+
 /// Module for various test utilities that are shared among unit tests.
 
 #[macro_export]

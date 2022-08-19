@@ -37,6 +37,8 @@ tracing = "0.1"
 
 [dev-dependencies]
 claim = "0.5.0"
+factori = "1.1.0"
+fake = "2.5.0"
 indoc = "1.0"
 
 [features]

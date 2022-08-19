@@ -394,6 +394,8 @@ where
 mod tests {
     use super::*;
     use lpc_rs_core::call_namespace::CallNamespace;
+    use crate::test_support::factories::*;
+    use factori::create;
 
     mod check_binary_operation_tests {
         use super::*;
@@ -2032,6 +2034,20 @@ mod tests {
                 let context = CompilationContext::default();
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
+            }
+
+            #[test]
+            fn is_mixed_for_call_other() {
+                let node = ExpressionNode::Call(
+                    create!(
+                        CallNode,
+                        receiver: Some(Box::new(ExpressionNode::from(12345666))),
+                    )
+                );
+
+                let context = CompilationContext::default();
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
             }
 
             #[test]

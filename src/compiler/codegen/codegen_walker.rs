@@ -3478,6 +3478,115 @@ mod tests {
         );
     }
 
+    mod test_visit_closure {
+        use super::*;
+
+        fn get_closure_node(code: &str, context: &mut CompilationContext) -> ClosureNode {
+            let mut prog_node = lpc_parser::ProgramParser::new()
+                .parse(context, LexWrapper::new(code))
+                .unwrap();
+            if_chain! {
+                if let Some(AstNode::Decl(mut node)) = prog_node.body.pop();
+                if let Some(VarInitNode { value, .. }) = node.initializations.pop();
+                if let Some(ExpressionNode::Closure(node)) = value;
+                then {
+                    node
+                } else {
+                    panic!("expected call node");
+                }
+            }
+        }
+
+        fn compile(code: &str) -> CodegenWalker {
+            let mut context = CompilationContext::default();
+
+            let mut node = get_closure_node(code, &mut context);
+
+            let mut prototype_walker = FunctionPrototypeWalker::new(context);
+            let _ = prototype_walker.visit_closure(&mut node);
+            let mut context = prototype_walker.into_context();
+
+            context.scopes.push_new(); // global scope
+
+            let mut scope_walker = ScopeWalker::new(context);
+            let _ = scope_walker.visit_closure(&mut node);
+
+            let mut context = scope_walker.into_context();
+            context.scopes.goto_root();
+
+            let mut walker = CodegenWalker::new(context);
+            let _ = walker.visit_closure(&mut node);
+
+            walker
+        }
+
+        #[test]
+        fn populates_the_instructions() {
+            let mut walker = compile("function f = (: dump(4 + 5) :);");
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "closure-0"),
+                vec![
+                    IConst(RegisterVariant::Local(Register(1)), 9),
+                    Call {
+                        name: "dump".into(),
+                        namespace: CallNamespace::Local,
+                        num_args: 1,
+                        initial_arg: RegisterVariant::Local(Register(1))
+                    },
+                    RegCopy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(0))),
+                    Ret
+                ]
+            );
+        }
+
+        // #[test]
+        // fn handles_ellipses() {
+        //     assert_compiles_to(
+        //         "int main(int i, ...) { return argv; }",
+        //         vec![
+        //             PopulateArgv(RegisterVariant::Local(Register(2)), 1, 1),
+        //             RegCopy(
+        //                 RegisterVariant::Local(Register(2)),
+        //                 RegisterVariant::Local(Register(0)),
+        //             ),
+        //             Ret,
+        //         ],
+        //     );
+        // }
+        //
+        // #[test]
+        // fn populates_the_default_arguments() {
+        //     assert_compiles_to(
+        //         "int main(int i, int j = 666, float d = 3.14) { return i * j; }",
+        //         vec![
+        //             PopulateDefaults(vec![4, 6]),
+        //             IMul(
+        //                 RegisterVariant::Local(Register(1)),
+        //                 RegisterVariant::Local(Register(2)),
+        //                 RegisterVariant::Local(Register(4)),
+        //             ),
+        //             RegCopy(
+        //                 RegisterVariant::Local(Register(4)),
+        //                 RegisterVariant::Local(Register(0)),
+        //             ),
+        //             Ret,
+        //             IConst(RegisterVariant::Local(Register(5)), 666),
+        //             RegCopy(
+        //                 RegisterVariant::Local(Register(5)),
+        //                 RegisterVariant::Local(Register(2)),
+        //             ),
+        //             FConst(RegisterVariant::Local(Register(6)), 3.14.into()),
+        //             RegCopy(
+        //                 RegisterVariant::Local(Register(6)),
+        //                 RegisterVariant::Local(Register(3)),
+        //             ),
+        //             Jmp("function-body-start_0".into()),
+        //         ],
+        //     );
+        // }
+    }
+
     mod test_continue {
         use super::*;
         use lpc_rs_core::register::Register;
