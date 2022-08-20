@@ -346,6 +346,9 @@ pub enum Token {
     #[regex(r"[\p{Alphabetic}_]\w*", string_token, priority = 2)]
     Id(StringToken),
 
+    #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
+    ClosureArgVar(StringToken),
+
     // Preprocessor "tokens" just grab the entire line
     #[regex("#[^\n\\S]*include[^\n\\S]+\"[^\"]+\"[^\n]*\n?", string_token)]
     LocalInclude(StringToken),
@@ -424,7 +427,7 @@ fn string_token(lex: &mut Lexer<Token>) -> StringToken {
 /// Used for processing string literals and include paths.
 fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
-    let slice = &lex.extras.last_slice;
+    let slice: &str = &lex.extras.last_slice;
 
     let s = if slice.len() < 3 {
         String::from("")
@@ -520,6 +523,7 @@ impl HasSpan for Token {
             | Token::IntLiteral(IntToken(x, _))
             | Token::FloatLiteral(FloatToken(x, _))
             | Token::Id(StringToken(x, _))
+            | Token::ClosureArgVar(StringToken(x, _))
             | Token::LocalInclude(StringToken(x, _))
             | Token::SysInclude(StringToken(x, _))
             | Token::PreprocessorIf(StringToken(x, _))
@@ -625,6 +629,7 @@ impl Token {
             | Token::IntLiteral(IntToken(x, _))
             | Token::FloatLiteral(FloatToken(x, _))
             | Token::Id(StringToken(x, _))
+            | Token::ClosureArgVar(StringToken(x, _))
             | Token::LocalInclude(StringToken(x, _))
             | Token::SysInclude(StringToken(x, _))
             | Token::PreprocessorIf(StringToken(x, _))
@@ -754,6 +759,7 @@ impl Display for Token {
 
             Token::StringLiteral(s)
             | Token::Id(s)
+            | Token::ClosureArgVar(s)
             | Token::LocalInclude(s)
             | Token::SysInclude(s)
             | Token::PreprocessorIf(s)

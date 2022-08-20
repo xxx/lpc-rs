@@ -6,19 +6,24 @@ use crate::compiler::{
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_utils::string::closure_arg_number;
 use crate::compiler::ast::ast_node::AstNodeTrait;
 use crate::compiler::ast::closure_node::ClosureNode;
+use crate::compiler::ast::var_node::VarNode;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]
 pub struct FunctionPrototypeWalker {
     /// The compilation context
     context: CompilationContext,
+
+    /// Track the max number used in any `$\d` vars within closures
+    max_closure_arg_reference: usize,
 }
 
 impl FunctionPrototypeWalker {
     pub fn new(context: CompilationContext) -> Self {
-        Self { context }
+        Self { context, max_closure_arg_reference: 0 }
     }
 }
 
@@ -30,7 +35,7 @@ impl ContextHolder for FunctionPrototypeWalker {
 
 impl TreeWalker for FunctionPrototypeWalker {
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        let num_args = node.parameters.as_ref().map(|nodes| nodes.len()).unwrap_or(0);
+        let mut num_args = node.parameters.as_ref().map(|nodes| nodes.len()).unwrap_or(0);
         let num_default_args = node.parameters
             .as_ref()
             .map(|nodes| {
@@ -63,6 +68,21 @@ impl TreeWalker for FunctionPrototypeWalker {
             })
             .unwrap_or_else(|| vec![]);
 
+        // look for cases of closures-within-closures
+        if let Some(parameters) = &mut node.parameters {
+            for param in parameters {
+                param.visit(self)?;
+            }
+        }
+
+        for expression in &mut node.body {
+            expression.visit(self)?;
+        }
+
+        if self.max_closure_arg_reference > num_args {
+            num_args = self.max_closure_arg_reference;
+        }
+
         self.context.function_prototypes.insert(
             node.name.clone(),
             FunctionPrototype {
@@ -80,17 +100,6 @@ impl TreeWalker for FunctionPrototypeWalker {
                 flags: node.flags,
             },
         );
-
-        // look for cases of closures-within-closures
-        if let Some(parameters) = &mut node.parameters {
-            for param in parameters {
-                param.visit(self)?;
-            }
-        }
-
-        for expression in &mut node.body {
-            expression.visit(self)?;
-        }
 
         Ok(())
     }
@@ -139,6 +148,18 @@ impl TreeWalker for FunctionPrototypeWalker {
 
         Ok(())
     }
+
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+        if node.is_closure_arg_var() {
+            let idx = closure_arg_number(&node.name)?;
+
+            if idx > self.max_closure_arg_reference {
+                self.max_closure_arg_reference = idx;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +169,8 @@ mod tests {
 
     use super::*;
     use lpc_rs_core::function_flags::FunctionFlags;
+    use crate::compiler::ast::ast_node::AstNode;
+    use crate::compiler::ast::expression_node::ExpressionNode;
 
     #[test]
     fn function_def_stores_the_prototype() {
@@ -204,7 +227,9 @@ mod tests {
                 VarInitNode::new("bar", LpcType::Mapping(true)),
             ]
             ),
-            body: vec![],
+            body: vec![
+                AstNode::Expression(ExpressionNode::Var(VarNode::new("$4")))
+            ],
             span: None,
             scope_id: None
         };
@@ -223,7 +248,7 @@ mod tests {
                 name: "closure-123".into(),
                 return_type: LpcType::Mixed(false),
                 arity: FunctionArity {
-                    num_args: 2,
+                    num_args: 4, // $4 implies 4, which is more than the declared params `foo` and `bar`.
                     num_default_args: 0,
                     ellipsis: false,
                     varargs: false

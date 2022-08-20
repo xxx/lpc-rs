@@ -226,6 +226,12 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+        // positional closure arg references are 1) always allowed (at this point),
+        // 2) never global, and 3) will point to the same location regardless of what's in it.
+        if node.is_closure_arg_var() {
+            return Ok(())
+        }
+
         let sym = self.context.lookup_var(&node.name);
 
         if sym.is_none() {
@@ -319,6 +325,9 @@ impl Default for ScopeWalker {
 mod tests {
     use super::*;
     use crate::assert_regex;
+    use factori::create;
+    use claim::assert_ok;
+    use crate::test_support::factories::*;
 
     mod test_visit_function_def {
         use lpc_rs_core::lpc_type::LpcType;
@@ -468,6 +477,17 @@ mod tests {
                 walker.context.errors[0].as_ref(),
                 "undefined variable `foo`"
             );
+        }
+
+        #[test]
+        fn allows_closure_positional_arg_vars() {
+            let mut walker = ScopeWalker::default();
+            let mut node = create!(VarNode, name: "$7".to_string());
+
+            let result = walker.visit_var(&mut node);
+
+            assert_ok!(result);
+            assert!(walker.context.errors.is_empty());
         }
 
         #[test]

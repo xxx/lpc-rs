@@ -142,6 +142,7 @@ extern {
         "IntLiteral" => Token::IntLiteral(<IntToken>),
         "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
         "ID" => Token::Id(<StringToken>),
+        "ClosureArgVar" => Token::ClosureArgVar(<StringToken>),
     }
 }
 
@@ -1003,15 +1004,27 @@ UnaryOp: (UnaryOperation, Range<usize>) = {
     <l:@L> "~" <r:@R> => (UnaryOperation::BitwiseNot, l..r),
 }
 
-Var: ExpressionNode = <name:"ID"> => {
-    ExpressionNode::Var(
-        VarNode {
-            name: name.1,
-            span: Some(name.0),
-            global: false,
-            function_name: false,
-        }
-    )
+Var: ExpressionNode = {
+    <name:"ID"> => {
+        ExpressionNode::Var(
+            VarNode {
+                name: name.1,
+                span: Some(name.0),
+                global: false,
+                function_name: false,
+            }
+        )
+    },
+    <var:"ClosureArgVar"> => {
+        ExpressionNode::Var(
+            VarNode {
+                name: var.1,
+                span: Some(var.0),
+                global: false,
+                function_name: false,
+            }
+        )
+    }
 };
 
 Int: ExpressionNode = {

@@ -61,6 +61,7 @@ use lpc_rs_function_support::{
 };
 use std::{collections::HashMap, ops::Range, rc::Rc};
 use tracing::instrument;
+use lpc_rs_utils::string::closure_arg_number;
 use tree_walker::TreeWalker;
 
 macro_rules! push_instruction {
@@ -964,6 +965,14 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, instruction, node.span);
         } else {
             populate_defaults_index = None;
+        }
+
+        // bump the register counter if they have used `$\d` vars that go beyond
+        // declared parameters, so that the positional params point to the correct slot.
+        let current_index = self.register_counter.as_usize();
+        if num_args > current_index {
+            self.register_counter.set(num_args);
+            self.current_result = Register(num_args).as_register();
         }
 
         if node.flags.ellipsis() {
@@ -1929,6 +1938,13 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+        if node.is_closure_arg_var() {
+            let idx = closure_arg_number(&node.name)?;
+            self.current_result = Register(idx).as_register();
+
+            return Ok(());
+        }
+
         if node.function_name {
             let mut fptr_node = FunctionPtrNode {
                 receiver: None,
@@ -3522,17 +3538,22 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-            let mut walker = compile("function f = (: dump(4 + 5) :);");
+            let mut walker = compile("function f = (: dump(4 + 5 + $1) :);");
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
-                    IConst(RegisterVariant::Local(Register(1)), 9),
+                    IConst(RegisterVariant::Local(Register(2)), 9),
+                    MAdd(
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(3))
+                    ),
                     Call {
                         name: "dump".into(),
                         namespace: CallNamespace::Local,
                         num_args: 1,
-                        initial_arg: RegisterVariant::Local(Register(1))
+                        initial_arg: RegisterVariant::Local(Register(3))
                     },
                     RegCopy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(0))),
                     Ret

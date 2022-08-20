@@ -44,6 +44,15 @@ where
     }
 }
 
+/// Pull the number of out of `$1`, etc. closure argument variable references
+pub fn closure_arg_number<T>(i: T) -> Result<usize>
+where
+    T: AsRef<str>
+{
+    i.as_ref().strip_prefix("$").and_then(|s| s.parse().ok())
+        .ok_or_else(|| LpcError::new(format!("invalid closure argument number: `{}`", i.as_ref())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,6 +103,20 @@ mod tests {
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
                 "overflow in string concatenation"
+            );
+        }
+    }
+
+    mod test_closure_arg_number {
+        use super::*;
+
+        #[test]
+        fn returns_number() {
+            assert_eq!(closure_arg_number("$1").unwrap(), 1);
+            assert_eq!(closure_arg_number("$123").unwrap(), 123);
+            assert_eq!(
+                closure_arg_number("foobar").unwrap_err().to_string(),
+                "invalid closure argument number: `foobar`"
             );
         }
     }

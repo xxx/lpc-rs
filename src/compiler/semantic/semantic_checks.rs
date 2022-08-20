@@ -331,17 +331,24 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Int(_) => Ok(LpcType::Int(false)),
         ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
-        ExpressionNode::Var(VarNode { name, span, .. }) => match context.lookup_var(name) {
-            Some(sym) => Ok(sym.type_),
-            None => {
-                if context.contains_function_complete(name.as_str(), &CallNamespace::default()) {
-                    Ok(LpcType::Function(false))
-                } else {
-                    return Err(
-                        LpcError::new(format!("undefined symbol {}", name)).with_span(*span)
-                    );
+        ExpressionNode::Var(VarNode { name, span, .. }) => {
+            if name.starts_with("$") {
+                Ok(LpcType::Mixed(false))
+            } else {
+                match context.lookup_var(name) {
+                    Some(sym) => Ok(sym.type_),
+                    None => {
+                        if context.contains_function_complete(name.as_str(), &CallNamespace::default()) {
+                            Ok(LpcType::Function(false))
+                        } else {
+                            return Err(
+                                LpcError::new(format!("undefined symbol {}", name)).with_span(*span)
+                            );
+                        }
+                    }
                 }
             }
+
         },
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(
             node_type(l, context)?,

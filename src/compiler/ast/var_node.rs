@@ -49,6 +49,11 @@ impl VarNode {
     pub fn set_function_name(&mut self, val: bool) {
         self.function_name = val;
     }
+
+    /// Is this var a reference to a positional closure parameter?
+    pub fn is_closure_arg_var(&self) -> bool {
+        self.name.starts_with("$")
+    }
 }
 
 impl SpannedNode for VarNode {
@@ -66,5 +71,18 @@ impl AstNodeTrait for VarNode {
 impl Display for VarNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_closure_arg_var() {
+        let mut node = VarNode::new("$0");
+        assert!(node.is_closure_arg_var());
+        node.name = "asdf".into();
+        assert!(!node.is_closure_arg_var());
     }
 }
