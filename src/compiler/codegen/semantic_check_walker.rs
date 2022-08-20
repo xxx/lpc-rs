@@ -1,42 +1,44 @@
-use crate::compiler::{
-    ast::{
-        assignment_node::AssignmentNode,
-        ast_node::{AstNodeTrait, SpannedNode},
-        binary_op_node::BinaryOpNode,
-        block_node::BlockNode,
-        break_node::BreakNode,
-        call_node::CallNode,
-        closure_node::ClosureNode,
-        continue_node::ContinueNode,
-        do_while_node::DoWhileNode,
-        expression_node::ExpressionNode,
-        for_each_node::{ForEachInit, ForEachNode},
-        for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
-        function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
-        int_node::IntNode,
-        label_node::LabelNode,
-        program_node::ProgramNode,
-        range_node::RangeNode,
-        return_node::ReturnNode,
-        switch_node::SwitchNode,
-        ternary_node::TernaryNode,
-        unary_op_node::{UnaryOpNode, UnaryOperation},
-        var_init_node::VarInitNode,
-        while_node::WhileNode,
-    },
-    codegen::tree_walker::{ContextHolder, TreeWalker},
-    compilation_context::CompilationContext,
-    semantic::semantic_checks::{
-        check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
+use crate::{
+    compile_time_config::MAX_CLOSURE_ARG_REFERENCE,
+    compiler::{
+        ast::{
+            assignment_node::AssignmentNode,
+            ast_node::{AstNodeTrait, SpannedNode},
+            binary_op_node::BinaryOpNode,
+            block_node::BlockNode,
+            break_node::BreakNode,
+            call_node::CallNode,
+            closure_node::ClosureNode,
+            continue_node::ContinueNode,
+            do_while_node::DoWhileNode,
+            expression_node::ExpressionNode,
+            for_each_node::{ForEachInit, ForEachNode},
+            for_node::ForNode,
+            function_def_node::{FunctionDefNode, ARGV},
+            function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
+            int_node::IntNode,
+            label_node::LabelNode,
+            program_node::ProgramNode,
+            range_node::RangeNode,
+            return_node::ReturnNode,
+            switch_node::SwitchNode,
+            ternary_node::TernaryNode,
+            unary_op_node::{UnaryOpNode, UnaryOperation},
+            var_init_node::VarInitNode,
+            var_node::VarNode,
+            while_node::WhileNode,
+        },
+        codegen::tree_walker::{ContextHolder, TreeWalker},
+        compilation_context::CompilationContext,
+        semantic::semantic_checks::{
+            check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
+        },
     },
 };
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::string::closure_arg_number;
-use crate::compile_time_config::MAX_CLOSURE_ARG_REFERENCE;
-use crate::compiler::ast::var_node::VarNode;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -630,23 +632,22 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()>
-    {
+    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
             if self.closure_depth == 0 {
-                let e = LpcError::new("positional argument variables can only be used within a closure")
-                    .with_span(node.span);
+                let e = LpcError::new(
+                    "positional argument variables can only be used within a closure",
+                )
+                .with_span(node.span);
                 self.context.errors.push(e);
             }
 
             if closure_arg_number(&node.name)? > MAX_CLOSURE_ARG_REFERENCE {
-                let e = LpcError::new(
-                    format!(
-                        "positional argument variables can only be used up to `${}`",
-                        MAX_CLOSURE_ARG_REFERENCE
-                    )
-                )
-                    .with_span(node.span);
+                let e = LpcError::new(format!(
+                    "positional argument variables can only be used up to `${}`",
+                    MAX_CLOSURE_ARG_REFERENCE
+                ))
+                .with_span(node.span);
                 self.context.errors.push(e);
             }
         }
@@ -729,8 +730,8 @@ mod tests {
         test_support::factories::*,
     };
     use claim::*;
-    use indoc::indoc;
     use factori::create;
+    use indoc::indoc;
     use lpc_rs_core::{
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
         lpc_type::LpcType,

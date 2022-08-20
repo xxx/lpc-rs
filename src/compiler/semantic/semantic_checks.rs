@@ -338,18 +338,18 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 match context.lookup_var(name) {
                     Some(sym) => Ok(sym.type_),
                     None => {
-                        if context.contains_function_complete(name.as_str(), &CallNamespace::default()) {
+                        if context
+                            .contains_function_complete(name.as_str(), &CallNamespace::default())
+                        {
                             Ok(LpcType::Function(false))
                         } else {
-                            return Err(
-                                LpcError::new(format!("undefined symbol {}", name)).with_span(*span)
-                            );
+                            return Err(LpcError::new(format!("undefined symbol {}", name))
+                                .with_span(*span));
                         }
                     }
                 }
             }
-
-        },
+        }
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(
             node_type(l, context)?,
             node_type(r, context)?,
@@ -400,9 +400,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lpc_rs_core::call_namespace::CallNamespace;
     use crate::test_support::factories::*;
     use factori::create;
+    use lpc_rs_core::call_namespace::CallNamespace;
 
     mod check_binary_operation_tests {
         use super::*;
@@ -2045,12 +2045,10 @@ mod tests {
 
             #[test]
             fn is_mixed_for_call_other() {
-                let node = ExpressionNode::Call(
-                    create!(
-                        CallNode,
-                        receiver: Some(Box::new(ExpressionNode::from(12345666))),
-                    )
-                );
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
+                    receiver: Some(Box::new(ExpressionNode::from(12345666))),
+                ));
 
                 let context = CompilationContext::default();
 

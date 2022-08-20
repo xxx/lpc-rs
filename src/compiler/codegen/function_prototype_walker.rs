@@ -1,5 +1,8 @@
 use crate::compiler::{
-    ast::function_def_node::FunctionDefNode,
+    ast::{
+        ast_node::AstNodeTrait, closure_node::ClosureNode, function_def_node::FunctionDefNode,
+        var_node::VarNode,
+    },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
 };
@@ -7,9 +10,6 @@ use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use lpc_rs_utils::string::closure_arg_number;
-use crate::compiler::ast::ast_node::AstNodeTrait;
-use crate::compiler::ast::closure_node::ClosureNode;
-use crate::compiler::ast::var_node::VarNode;
 
 /// A walker to collect all of the function definitions. This runs early on to allow for forward references.
 #[derive(Debug, Default)]
@@ -23,7 +23,10 @@ pub struct FunctionPrototypeWalker {
 
 impl FunctionPrototypeWalker {
     pub fn new(context: CompilationContext) -> Self {
-        Self { context, max_closure_arg_reference: 0 }
+        Self {
+            context,
+            max_closure_arg_reference: 0,
+        }
     }
 }
 
@@ -35,37 +38,27 @@ impl ContextHolder for FunctionPrototypeWalker {
 
 impl TreeWalker for FunctionPrototypeWalker {
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        let mut num_args = node.parameters.as_ref().map(|nodes| nodes.len()).unwrap_or(0);
-        let num_default_args = node.parameters
+        let mut num_args = node
+            .parameters
             .as_ref()
-            .map(|nodes| {
-                nodes
-                    .iter()
-                    .filter(|p| p.value.is_some())
-                    .count()
-            })
+            .map(|nodes| nodes.len())
+            .unwrap_or(0);
+        let num_default_args = node
+            .parameters
+            .as_ref()
+            .map(|nodes| nodes.iter().filter(|p| p.value.is_some()).count())
             .unwrap_or(0);
 
         let arg_types = node
             .parameters
             .as_ref()
-            .map(|nodes| {
-                nodes.iter()
-                    .map(|parm| parm.type_)
-                    .collect::<Vec<_>>()
-
-            })
+            .map(|nodes| nodes.iter().map(|parm| parm.type_).collect::<Vec<_>>())
             .unwrap_or_else(Vec::new);
 
         let arg_spans = node
             .parameters
             .as_ref()
-            .map(|nodes| {
-                nodes
-                    .iter()
-                    .flat_map(|n| n.span)
-                    .collect::<Vec<_>>()
-            })
+            .map(|nodes| nodes.iter().flat_map(|n| n.span).collect::<Vec<_>>())
             .unwrap_or_else(Vec::new);
 
         // look for cases of closures-within-closures
@@ -168,9 +161,8 @@ mod tests {
     use lpc_rs_core::lpc_type::LpcType;
 
     use super::*;
+    use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode};
     use lpc_rs_core::function_flags::FunctionFlags;
-    use crate::compiler::ast::ast_node::AstNode;
-    use crate::compiler::ast::expression_node::ExpressionNode;
 
     #[test]
     fn function_def_stores_the_prototype() {
@@ -221,17 +213,13 @@ mod tests {
             name: "closure-123".into(),
             return_type: LpcType::Mixed(false),
             flags: FunctionFlags::default(),
-            parameters: Some(
-                vec![
+            parameters: Some(vec![
                 VarInitNode::new("foo", LpcType::Int(false)),
                 VarInitNode::new("bar", LpcType::Mapping(true)),
-            ]
-            ),
-            body: vec![
-                AstNode::Expression(ExpressionNode::Var(VarNode::new("$4")))
-            ],
+            ]),
+            body: vec![AstNode::Expression(ExpressionNode::Var(VarNode::new("$4")))],
             span: None,
-            scope_id: None
+            scope_id: None,
         };
 
         let _ = walker.visit_closure(&mut node);

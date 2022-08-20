@@ -229,7 +229,7 @@ impl TreeWalker for ScopeWalker {
         // positional closure arg references are 1) always allowed (at this point),
         // 2) never global, and 3) will point to the same location regardless of what's in it.
         if node.is_closure_arg_var() {
-            return Ok(())
+            return Ok(());
         }
 
         let sym = self.context.lookup_var(&node.name);
@@ -324,10 +324,9 @@ impl Default for ScopeWalker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_regex;
-    use factori::create;
+    use crate::{assert_regex, test_support::factories::*};
     use claim::assert_ok;
-    use crate::test_support::factories::*;
+    use factori::create;
 
     mod test_visit_function_def {
         use lpc_rs_core::lpc_type::LpcType;

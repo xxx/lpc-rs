@@ -1,7 +1,6 @@
 use factori::factori;
 use fake::Fake;
-use lpc_rs_core::function_flags::FunctionFlags;
-use lpc_rs_core::lpc_type::LpcType;
+use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 
 use crate::compiler::ast::closure_node::ClosureNode;
 
