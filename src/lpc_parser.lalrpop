@@ -263,7 +263,7 @@ FunctionDef: FunctionDefNode = {
 
             return Err(ParseError::User { error: err });
         }
-        let flags = FunctionFlags::from(flag_strs).with_ellipsis(ellipsis);
+        let flags = FunctionFlags::from(&flag_strs[..]).with_ellipsis(ellipsis);
 
         Ok(FunctionDefNode {
             name: name.1,
@@ -294,10 +294,15 @@ ClosureBody: Vec<AstNode> = {
 };
 
 Closure: ExpressionNode = {
-     <l:"("> ":" <body:ClosureBody?> ":" <r:")"> =>? {
+     <l:"("> ":" <params:ClosureParameters?> <body:ClosureBody?> ":" <r:")"> =>? {
         let span = combine_spans(Some(l), Some(r));
 
-        let flags = FunctionFlags::default().with_ellipsis(false);
+        let (parameters, ellipsis) = params.map(|tuple| {
+            (Some(tuple.0), tuple.1)
+        }).unwrap_or((None, false));
+
+        // closures are private to ensure they can't be called directly via the actual `call_other` efun
+        let flags = FunctionFlags::from(&["private"][..]).with_ellipsis(ellipsis);
 
         let name = format!("closure-{}", context.closure_count);
         context.closure_count += 1;
@@ -305,7 +310,7 @@ Closure: ExpressionNode = {
         Ok(ExpressionNode::Closure(ClosureNode {
             name,
             return_type: LpcType::Mixed(false),
-            parameters: None,
+            parameters,
             flags,
             body: body.unwrap_or_default(),
             span: Some(span),
@@ -314,14 +319,16 @@ Closure: ExpressionNode = {
     },
 }
 
-Parameters: (Vec<VarInitNode>, bool) = {
-    <l:"("> <ellipsis:"..."?> <r:")"> => {
+DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool) = {
+    L_DELIM <ellipsis:"..."?> R_DELIM => {
         (vec![], ellipsis.is_some())
     },
-    "(" <params:ParameterList> <ellipsis:("," "...")?> ")" => {
+    L_DELIM <params:ParameterList> <ellipsis:("," "...")?> R_DELIM => {
         (params, ellipsis.is_some())
     }
-};
+}
+Parameters = DelimitedParameters<"(", ")">;
+ClosureParameters = DelimitedParameters<"[", "]">;
 
 ParameterList: Vec<VarInitNode> = {
     <list:(<ParameterList> ",")?> <name:ArgName> => {
@@ -329,7 +336,7 @@ ParameterList: Vec<VarInitNode> = {
         v.push(name);
         v
     }
-};
+}
 
 ArgName: VarInitNode = {
     <var_type:Type> <mut init:VarInit> => {

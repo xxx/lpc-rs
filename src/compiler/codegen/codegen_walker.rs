@@ -3543,20 +3543,22 @@ mod tests {
             );
         }
 
-        // #[test]
-        // fn handles_ellipses() {
-        //     assert_compiles_to(
-        //         "int main(int i, ...) { return argv; }",
-        //         vec![
-        //             PopulateArgv(RegisterVariant::Local(Register(2)), 1, 1),
-        //             RegCopy(
-        //                 RegisterVariant::Local(Register(2)),
-        //                 RegisterVariant::Local(Register(0)),
-        //             ),
-        //             Ret,
-        //         ],
-        //     );
-        // }
+        #[test]
+        fn handles_ellipses() {
+            let mut walker = compile("function f = (: [int i, ...] argv :);");
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "closure-0"),
+                vec![
+                    PopulateArgv(RegisterVariant::Local(Register(2)), 1, 1),
+                    RegCopy(
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(0)),
+                    ),
+                    Ret,
+                ]
+            );
+        }
         //
         // #[test]
         // fn populates_the_default_arguments() {

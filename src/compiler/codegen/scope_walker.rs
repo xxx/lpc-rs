@@ -74,18 +74,18 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        // if node.flags.ellipsis() {
-        //     let sym = Symbol {
-        //         name: ARGV.to_string(),
-        //         type_: LpcType::Mixed(true),
-        //         location: None,
-        //         scope_id: scope_id.into(),
-        //         span: node.span,
-        //         flags: GlobalVarFlags::default(),
-        //     };
-        //
-        //     self.insert_symbol(sym);
-        // }
+        if node.flags.ellipsis() {
+            let sym = Symbol {
+                name: ARGV.to_string(),
+                type_: LpcType::Mixed(true),
+                location: None,
+                scope_id: scope_id.into(),
+                span: node.span,
+                flags: GlobalVarFlags::default(),
+            };
+
+            self.insert_symbol(sym);
+        }
 
         for statement in &mut node.body {
             statement.visit(self)?;
@@ -327,6 +327,38 @@ mod tests {
     use crate::{assert_regex, test_support::factories::*};
     use claim::assert_ok;
     use factori::create;
+
+    mod test_visit_closure {
+        use lpc_rs_core::lpc_type::LpcType;
+
+        use super::*;
+        use lpc_rs_core::function_flags::FunctionFlags;
+
+        #[test]
+        fn sets_up_argv_for_ellipsis() {
+            let mut walker = ScopeWalker::default();
+            let mut node = create!(
+                ClosureNode,
+                name: "marf".into(),
+                flags: FunctionFlags::default().with_ellipsis(true),
+            );
+
+            let _ = walker.visit_closure(&mut node);
+
+            walker.context.scopes.goto(node.scope_id);
+
+            let argv = walker
+                .context
+                .scopes
+                .current()
+                .expect("where the scope?")
+                .lookup(ARGV)
+                .expect("where's argv?");
+
+            assert_eq!(argv.name, ARGV);
+            assert_eq!(argv.type_, LpcType::Mixed(true));
+        }
+    }
 
     mod test_visit_function_def {
         use lpc_rs_core::lpc_type::LpcType;

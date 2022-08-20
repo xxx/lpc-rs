@@ -35,11 +35,11 @@ impl FunctionFlags {
     }
 }
 
-impl<T> From<Vec<T>> for FunctionFlags
+impl<T> From<&[T]> for FunctionFlags
 where
     T: AsRef<str>,
 {
-    fn from(vec: Vec<T>) -> Self {
+    fn from(vec: &[T]) -> Self {
         let mut flags = Self::default();
         for s in vec {
             match s.as_ref() {

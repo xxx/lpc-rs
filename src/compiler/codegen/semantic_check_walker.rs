@@ -1294,7 +1294,7 @@ mod tests {
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
-                flags: FunctionFlags::from(vec!["private"]),
+                flags: FunctionFlags::from(&["private"][..]),
             };
 
             let program_function = ProgramFunction::new(prototype, 0);
@@ -1397,7 +1397,7 @@ mod tests {
                 arg_types: vec![],
                 span: None,
                 arg_spans: vec![],
-                flags: FunctionFlags::from(vec!["private"]),
+                flags: FunctionFlags::from(&["private"][..]),
             };
 
             let program_function = ProgramFunction::new(prototype, 0);
