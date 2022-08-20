@@ -136,3 +136,48 @@ fn test_duffs_device() {
         }
     }
 }
+
+// TODO: re-enable this once it's supported
+// #[test]
+// fn test_closures() {
+//     let code = indoc! { r##"
+//         function f = (:
+//             function f = &->tacos();
+//             function g = (: f($1, $2) :);
+//             dump(g(this_object(), "assmar"));
+//             return 666;
+//         :);
+//
+//         void create() {
+//             int i = f();
+//         }
+//     "## };
+//
+//     let (_task, ctx) = run_prog(code);
+//     let proc = ctx.process();
+//     let borrowed = proc.borrow();
+//     let b = borrowed.globals[1].borrow();
+//
+//     if_chain! {
+//         if let LpcRef::Array(pool_ref) = &*b;
+//         let b = pool_ref.borrow();
+//         if let LpcValue::Array(arr) = &*b;
+//         then {
+//             assert_eq!(
+//                 arr,
+//                 &[
+//                     LpcRef::Int(0),
+//                     LpcRef::Int(2),
+//                     LpcRef::Int(3),
+//                     LpcRef::Int(4),
+//                     LpcRef::Int(5),
+//                     LpcRef::Int(6),
+//                     LpcRef::Int(7),
+//                     LpcRef::Int(0),
+//                 ]
+//             );
+//         } else {
+//             panic!("expected array");
+//         }
+//     }
+// }
