@@ -332,7 +332,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
         ExpressionNode::Var(VarNode { name, span, .. }) => {
-            if name.starts_with("$") {
+            if name.starts_with('$') {
                 Ok(LpcType::Mixed(false))
             } else {
                 match context.lookup_var(name) {

@@ -52,7 +52,7 @@ impl VarNode {
 
     /// Is this var a reference to a positional closure parameter?
     pub fn is_closure_arg_var(&self) -> bool {
-        self.name.starts_with("$")
+        self.name.starts_with('$')
     }
 }
 

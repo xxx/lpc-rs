@@ -55,7 +55,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                     .collect::<Vec<_>>()
 
             })
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_else(Vec::new);
 
         let arg_spans = node
             .parameters
@@ -66,7 +66,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                     .flat_map(|n| n.span)
                     .collect::<Vec<_>>()
             })
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_else(Vec::new);
 
         // look for cases of closures-within-closures
         if let Some(parameters) = &mut node.parameters {

@@ -49,7 +49,7 @@ pub fn closure_arg_number<T>(i: T) -> Result<usize>
 where
     T: AsRef<str>
 {
-    i.as_ref().strip_prefix("$").and_then(|s| s.parse().ok())
+    i.as_ref().strip_prefix('$').and_then(|s| s.parse().ok())
         .ok_or_else(|| LpcError::new(format!("invalid closure argument number: `{}`", i.as_ref())))
 }
 
