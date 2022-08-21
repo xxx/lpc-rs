@@ -558,6 +558,109 @@ impl CodegenWalker {
     pub fn context(&self) -> &CompilationContext {
         &self.context
     }
+
+    fn setup_populate_defaults(&mut self, span: Option<Span>, num_default_args: usize) -> Option<usize> {
+        if num_default_args > 0 {
+            let address = Some(self.current_address());
+
+            // the addresses are backpatched below, once we have them.
+            let instruction = Instruction::PopulateDefaults(vec![]);
+            push_instruction!(self, instruction, span);
+
+            address
+        } else {
+            None
+        }
+    }
+
+    fn setup_populate_argv(&mut self, ellipsis: bool, span: Option<Span>, passed_param_count: usize) -> Option<usize> {
+        if ellipsis {
+            let argv_location = self.assign_sym_location(ARGV);
+
+            // We don't set `argv_location` as `self.current_result`, because it's
+            // being assigned implicitly, and doesn't need to be made available
+            // to more complex expressions. Expressions that use `argv` explicitly
+            // are handled elsewhere, as any other expr would be.
+
+            let result = Some(self.current_address());
+
+            // The number of locals isn't known yet, so just set it to zero for now.
+            // This gets backpatched after the function body is generated.
+            let instruction = Instruction::PopulateArgv(
+                argv_location,
+                passed_param_count,
+                0,
+            );
+            push_instruction!(self, instruction, span);
+
+            result
+        } else {
+            None
+        }
+    }
+
+    fn init_default_params(
+        &mut self,
+        parameters: &mut [VarInitNode],
+        passed_param_locations: &[RegisterVariant],
+        span: Option<Span>,
+        populate_defaults_index: Option<usize>,
+        start_label: Label,
+    ) -> Result<()> {
+        let mut default_init_addresses = vec![];
+
+        for (idx, parameter) in parameters.iter_mut().enumerate() {
+            if let Some(value) = &mut parameter.value {
+                default_init_addresses.push(self.current_address());
+
+                // generate code for only the value, then assign by hand, because we
+                // pre-generated locations of the parameters above.
+                value.visit(self)?;
+                let instruction = RegCopy(self.current_result, passed_param_locations[idx]);
+                push_instruction!(self, instruction, span);
+            }
+        }
+
+        // backpatch the the correct init addresses for the PopulateDefaults call.
+        if let Some(idx) = populate_defaults_index {
+            let sym = self.function_stack.last_mut().unwrap();
+            let instruction = &sym.instructions[idx];
+            if let Instruction::PopulateDefaults(_) = instruction {
+                let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
+                sym.instructions[idx] = new_instruction;
+            } else {
+                return Err(
+                    LpcError::new("Invalid populate_defaults_index").with_span(span)
+                );
+            }
+        }
+
+        // jump back to the function now that defaults are populated.
+        let instruction = Instruction::Jmp(start_label);
+        push_instruction!(self, instruction, span);
+
+        Ok(())
+    }
+
+    fn backpatch_populate_argv(func: &mut ProgramFunction, populate_argv_index: usize, span: Option<Span>) -> Result<()> {
+        let instruction = &func.instructions[populate_argv_index];
+
+        if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
+            let new_instruction = Instruction::PopulateArgv(*loc, *num_args, func.num_locals);
+            func.instructions[populate_argv_index] = new_instruction;
+
+            Ok(())
+        } else {
+            Err(LpcError::new("Invalid populate_argv_index").with_span(span))
+        }
+    }
+
+    fn visit_parameters(&mut self, nodes: &Vec<VarInitNode>) -> Vec<RegisterVariant> {
+        nodes
+            .iter()
+            .map(|parameter| self.visit_parameter(parameter))
+            .collect::<Vec<_>>()
+    }
 }
 
 impl ContextHolder for CodegenWalker {
@@ -956,8 +1059,6 @@ impl TreeWalker for CodegenWalker {
             .unwrap_or_default();
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
-        let populate_argv_index: Option<usize>;
-        let populate_defaults_index: Option<usize>;
 
         self.function_stack.push(sym);
 
@@ -970,23 +1071,10 @@ impl TreeWalker for CodegenWalker {
         let passed_param_locations = &node
             .parameters
             .as_ref()
-            .map(|nodes| {
-                // XXX difference between closure and function def
-                nodes
-                    .iter()
-                    .map(|parameter| self.visit_parameter(parameter))
-                    .collect::<Vec<_>>()
-            })
+            .map(|nodes| self.visit_parameters(&nodes))
             .unwrap_or_default();
 
-        if num_default_args > 0 {
-            populate_defaults_index = Some(self.current_address());
-            // the addresses are backpatched below, once we have them.
-            let instruction = Instruction::PopulateDefaults(vec![]);
-            push_instruction!(self, instruction, node.span);
-        } else {
-            populate_defaults_index = None;
-        }
+        let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
         // bump the register counter if they have used `$\d` vars that go beyond
         // declared parameters, so that the positional params point to the correct slot.
@@ -996,28 +1084,7 @@ impl TreeWalker for CodegenWalker {
             self.current_result = Register(num_args).as_register();
         }
 
-        if node.flags.ellipsis() {
-            let argv_location = self.assign_sym_location(ARGV);
-            // We don't set `argv_location` as `self.current_result`, because it's
-            // being assigned implicitly, and doesn't need to be made available
-            // to more complex expressions. Expressions that use `argv` explicitly
-            // are handled elsewhere, as any other expr would be.
-
-            populate_argv_index = Some(self.current_address());
-
-            // The number of locals isn't known yet, so just set it to zero for now.
-            // This gets backpatched after the function body is generated.
-            let instruction = Instruction::PopulateArgv(
-                argv_location,
-                // XXX difference between closure and function def
-                passed_param_count,
-                0,
-            );
-
-            push_instruction!(self, instruction, node.span);
-        } else {
-            populate_argv_index = None;
-        }
+        let populate_argv_index = self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
 
         let start_label = self.new_label("closure-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1033,67 +1100,39 @@ impl TreeWalker for CodegenWalker {
                 || (!sym.instructions.is_empty()
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
-                sym.push_instruction(
-                    RegCopy(self.current_result, Register(0).as_register()),
-                    node.span,
-                );
+                let target = RegisterVariant::Local(Register(0));
+
+                if self.current_result != target {
+                    sym.push_instruction(
+                        RegCopy(self.current_result, target),
+                        node.span,
+                    );
+                }
+
                 sym.push_instruction(Instruction::Ret, node.span);
             }
         }
 
-        // handle default arg initialization.
+        debug_assert_eq!(passed_param_count, passed_param_locations.len());
+
         if num_default_args > 0 {
-            debug_assert_eq!(passed_param_count, passed_param_locations.len());
-
-            let mut default_init_addresses = vec![];
-
             if let Some(parameters) = &mut node.parameters {
-                for (idx, parameter) in parameters.iter_mut().enumerate() {
-                    if let Some(value) = &mut parameter.value {
-                        default_init_addresses.push(self.current_address());
-
-                        // generate code for only the value, then assign by hand, because we
-                        // pre-generated locations of the parameters above.
-                        value.visit(self)?;
-                        let instruction = RegCopy(self.current_result, passed_param_locations[idx]);
-                        push_instruction!(self, instruction, node.span);
-                    }
-                }
+                self.init_default_params(
+                    parameters,
+                    passed_param_locations,
+                    node.span,
+                    populate_defaults_index,
+                    start_label
+                )?;
             }
-
-            // backpatch the the correct init addresses for the PopulateDefaults call.
-            if let Some(idx) = populate_defaults_index {
-                let sym = self.function_stack.last_mut().unwrap();
-                let instruction = &sym.instructions[idx];
-                if let Instruction::PopulateDefaults(_) = instruction {
-                    let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
-                    sym.instructions[idx] = new_instruction;
-                } else {
-                    return Err(
-                        LpcError::new("Invalid populate_defaults_index").with_span(node.span)
-                    );
-                }
-            }
-
-            // jump back to the function now that defaults are populated.
-            let instruction = Instruction::Jmp(start_label);
-            push_instruction!(self, instruction, node.span);
         }
 
         self.context.scopes.pop();
         let mut sym = self.function_stack.pop().unwrap();
         sym.num_locals = self.register_counter.as_usize() - num_args;
 
-        // backpatch the PopulateArgv instruction now that we have the correct number of
-        // locals.
         if let Some(idx) = populate_argv_index {
-            let instruction = &sym.instructions[idx];
-            if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
-                let new_instruction = Instruction::PopulateArgv(*loc, *num_args, sym.num_locals);
-                sym.instructions[idx] = new_instruction;
-            } else {
-                return Err(LpcError::new("Invalid populate_argv_index").with_span(node.span));
-            }
+            Self::backpatch_populate_argv(&mut sym, idx, node.span)?;
         }
 
         self.functions.insert(node.name.clone(), sym.into());
@@ -1340,10 +1379,9 @@ impl TreeWalker for CodegenWalker {
         let arity = prototype.arity;
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
+        let passed_param_count = node.parameters.len();
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
-        let populate_argv_index: Option<usize>;
-        let populate_defaults_index: Option<usize>;
 
         self.function_stack.push(sym);
 
@@ -1351,38 +1389,11 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.goto_function(&node.name)?;
         self.register_counter.push(0);
 
-        let parameter_locations = &node
-            .parameters
-            .iter()
-            .map(|parameter| self.visit_parameter(parameter))
-            .collect::<Vec<_>>();
+        let passed_param_locations = self.visit_parameters(&node.parameters);
 
-        if num_default_args > 0 {
-            populate_defaults_index = Some(self.current_address());
-            // the addresses are backpatched below, once we have them.
-            let instruction = Instruction::PopulateDefaults(vec![]);
-            push_instruction!(self, instruction, node.span);
-        } else {
-            populate_defaults_index = None;
-        }
+        let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        if node.flags.ellipsis() {
-            let argv_location = self.assign_sym_location(ARGV);
-            // We don't set `argv_location` as `self.current_result`, because it's
-            // being assigned implicitly, and doesn't need to be made available
-            // to more complex expressions. Expressions that use `argv` explicitly
-            // are handled elsewhere, as any other expr would be.
-
-            populate_argv_index = Some(self.current_address());
-
-            // The number of locals isn't known yet, so just set it to zero for now.
-            // This gets backpatched after the function body is generated.
-            let instruction = Instruction::PopulateArgv(argv_location, node.parameters.len(), 0);
-
-            push_instruction!(self, instruction, node.span);
-        } else {
-            populate_argv_index = None;
-        }
+        let populate_argv_index = self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
 
         let start_label = self.new_label("function-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1403,57 +1414,24 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        // handle default arg initialization.
+        debug_assert_eq!(passed_param_count, passed_param_locations.len());
+
         if num_default_args > 0 {
-            debug_assert_eq!(node.parameters.len(), parameter_locations.len());
-
-            let mut default_init_addresses = vec![];
-
-            for (idx, parameter) in &mut node.parameters.iter_mut().enumerate() {
-                if let Some(value) = &mut parameter.value {
-                    default_init_addresses.push(self.current_address());
-
-                    // generate code for only the value, then assign by hand, because we
-                    // pre-generated locations of the parameters above.
-                    value.visit(self)?;
-                    let instruction = RegCopy(self.current_result, parameter_locations[idx]);
-                    push_instruction!(self, instruction, node.span);
-                }
-            }
-
-            // backpatch the the correct init addresses for the PopulateDefaults call.
-            if let Some(idx) = populate_defaults_index {
-                let sym = self.function_stack.last_mut().unwrap();
-                let instruction = &sym.instructions[idx];
-                if let Instruction::PopulateDefaults(_) = instruction {
-                    let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
-                    sym.instructions[idx] = new_instruction;
-                } else {
-                    return Err(
-                        LpcError::new("Invalid populate_defaults_index").with_span(node.span)
-                    );
-                }
-            }
-
-            // jump back to the function now that defaults are populated.
-            let instruction = Instruction::Jmp(start_label);
-            push_instruction!(self, instruction, node.span);
+            self.init_default_params(
+                &mut node.parameters,
+                &passed_param_locations,
+                node.span,
+                populate_defaults_index,
+                start_label
+            )?;
         }
 
         self.context.scopes.pop();
         let mut sym = self.function_stack.pop().unwrap();
         sym.num_locals = self.register_counter.as_usize() - num_args;
 
-        // backpatch the PopulateArgv instruction now that we have the correct number of
-        // locals.
         if let Some(idx) = populate_argv_index {
-            let instruction = &sym.instructions[idx];
-            if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
-                let new_instruction = Instruction::PopulateArgv(*loc, *num_args, sym.num_locals);
-                sym.instructions[idx] = new_instruction;
-            } else {
-                return Err(LpcError::new("Invalid populate_argv_index").with_span(node.span));
-            }
+            Self::backpatch_populate_argv(&mut sym, idx, node.span)?;
         }
 
         self.functions.insert(node.name.clone(), sym.into());
@@ -3555,10 +3533,6 @@ mod tests {
                         num_args: 1,
                         initial_arg: RegisterVariant::Local(Register(3))
                     },
-                    RegCopy(
-                        RegisterVariant::Local(Register(0)),
-                        RegisterVariant::Local(Register(0))
-                    ),
                     Ret
                 ]
             );
