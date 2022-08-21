@@ -1025,21 +1025,23 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // Type-check the args.
         // TODO: Maybe make this optional somehow?
         let arg_types = &function.prototype.arg_types;
-        for (i, lpc_ref) in new_registers[1..].iter().enumerate() {
-            if_chain! {
-                if let Some(arg_type) = arg_types.get(i);
-                let ref_type = lpc_ref.as_lpc_type();
-                if !ref_type.matches_type(*arg_type);
-                then {
-                    let arg_spans = &function.prototype.arg_spans;
-                    let arg_def_span = arg_spans.get(i).copied();
-                    let error = self.runtime_error(format!(
-                        "unexpected argument type to `{}`: {}. expected {}.",
-                        function.prototype.name, ref_type, arg_type
-                    ))
-                    .with_label("defined here", arg_def_span);
+        if !arg_types.is_empty() {
+            for (i, lpc_ref) in new_registers[1..].iter().enumerate() {
+                if_chain! {
+                    if let Some(arg_type) = arg_types.get(i);
+                    let ref_type = lpc_ref.as_lpc_type();
+                    if !ref_type.matches_type(*arg_type);
+                    then {
+                        let arg_spans = &function.prototype.arg_spans;
+                        let arg_def_span = arg_spans.get(i).copied();
+                        let error = self.runtime_error(format!(
+                            "unexpected argument type to `{}`: {}. expected {}.",
+                            function.prototype.name, ref_type, arg_type
+                        ))
+                        .with_label("defined here", arg_def_span);
 
-                    return Err(error);
+                        return Err(error);
+                    }
                 }
             }
         }
