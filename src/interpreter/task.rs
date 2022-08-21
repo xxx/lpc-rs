@@ -4,7 +4,7 @@ use crate::{
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        function_type::{FunctionAddress, FunctionPtr, LpcFunction},
+        function_type::{FunctionAddress, FunctionPtr},
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
         memory::Memory,
@@ -440,9 +440,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     call_other,
                 };
 
-                let func = LpcFunction::FunctionPtr(fp);
-
-                let new_ref = self.memory.value_to_ref(LpcValue::from(func));
+                let new_ref = self.memory.value_to_ref(LpcValue::from(fp));
 
                 set_loc!(self, location, new_ref)?;
             }
@@ -960,31 +958,27 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                     if let LpcRef::Function(func) = func_ref {
                         let borrowed = func.borrow();
-                        let func = try_extract_value!(*borrowed, LpcValue::Function);
-                        match func {
-                            LpcFunction::FunctionPtr(ptr) => {
-                                match &ptr.address {
-                                    FunctionAddress::Local(receiver, pf) => {
-                                        if !ptr.call_other
-                                            && Rc::ptr_eq(&task_context.process(), receiver)
-                                        {
-                                            // local functions are always "public" to the caller
-                                            public = true;
-                                        } else {
-                                            public = pf.public();
-                                        }
-
-                                        dynamic_receiver = false;
-                                    }
-                                    FunctionAddress::Dynamic(_) => {
-                                        public = true;
-                                        dynamic_receiver = true;
-                                    }
-                                    FunctionAddress::Efun(_) => {
-                                        public = true;
-                                        dynamic_receiver = false;
-                                    }
+                        let ptr = try_extract_value!(*borrowed, LpcValue::Function);
+                        match &ptr.address {
+                            FunctionAddress::Local(receiver, pf) => {
+                                if !ptr.call_other
+                                    && Rc::ptr_eq(&task_context.process(), receiver)
+                                {
+                                    // local functions are always "public" to the caller
+                                    public = true;
+                                } else {
+                                    public = pf.public();
                                 }
+
+                                dynamic_receiver = false;
+                            }
+                            FunctionAddress::Dynamic(_) => {
+                                public = true;
+                                dynamic_receiver = true;
+                            }
+                            FunctionAddress::Efun(_) => {
+                                public = true;
+                                dynamic_receiver = false;
                             }
                         }
                     } else {
@@ -1001,73 +995,69 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let new_frame = if_chain! {
                     if let LpcRef::Function(func) = func_ref;
                     let borrowed = func.borrow();
-                    let func = try_extract_value!(*borrowed, LpcValue::Function);
+                    let ptr = try_extract_value!(*borrowed, LpcValue::Function);
                     then {
                         let mut new_frame;
                         let partial_args;
                         let arity;
 
-                        match func {
-                            LpcFunction::FunctionPtr(ptr) => {
-                                partial_args = &ptr.partial_args;
-                                arity = ptr.arity;
-                                let called_args = *num_args + partial_args
-                                    .iter()
-                                    .fold(0, |sum, arg| sum + arg.is_some() as usize);
+                        partial_args = &ptr.partial_args;
+                        arity = ptr.arity;
+                        let called_args = *num_args + partial_args
+                            .iter()
+                            .fold(0, |sum, arg| sum + arg.is_some() as usize);
 
-                                let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
+                        let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
 
-                                match &ptr.address {
-                                    FunctionAddress::Local(proc, function) => {
+                        match &ptr.address {
+                            FunctionAddress::Local(proc, function) => {
+                                new_frame = CallFrame::with_minimum_arg_capacity(
+                                    proc.clone(),
+                                    function.clone(),
+                                    called_args,
+                                    max
+                                );
+                            }
+                            FunctionAddress::Dynamic(name) => {
+                                let lpc_ref = get_loc!(self, *initial_arg)?;
+
+                                if let LpcRef::Object(lpc_ref) = lpc_ref {
+                                    let b = lpc_ref.borrow();
+                                    let cell = try_extract_value!(*b, LpcValue::Object);
+                                    let proc = cell.borrow();
+                                    let func = proc.lookup_function(name, &CallNamespace::Local);
+
+                                    if let Some(func) = func {
                                         new_frame = CallFrame::with_minimum_arg_capacity(
-                                            proc.clone(),
-                                            function.clone(),
+                                            cell.clone(),
+                                            func.clone(),
                                             called_args,
-                                            max
+                                            max + 1
                                         );
+                                    } else {
+                                        return Err(self.runtime_error(format!("call to unknown function `{}", name)));
                                     }
-                                    FunctionAddress::Dynamic(name) => {
-                                        let lpc_ref = get_loc!(self, *initial_arg)?;
-
-                                        if let LpcRef::Object(lpc_ref) = lpc_ref {
-                                            let b = lpc_ref.borrow();
-                                            let cell = try_extract_value!(*b, LpcValue::Object);
-                                            let proc = cell.borrow();
-                                            let func = proc.lookup_function(name, &CallNamespace::Local);
-
-                                            if let Some(func) = func {
-                                                new_frame = CallFrame::with_minimum_arg_capacity(
-                                                    cell.clone(),
-                                                    func.clone(),
-                                                    called_args,
-                                                    max + 1
-                                                );
-                                            } else {
-                                                return Err(self.runtime_error(format!("call to unknown function `{}", name)));
-                                            }
-                                        } else {
-                                            return Err(self.runtime_error("non-object receiver to function pointer call"));
-                                        }
-                                    }
-                                    FunctionAddress::Efun(name) => {
-                                        // unwrap is safe because this should have been checked in an earlier step
-                                        let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                                        let pf = ProgramFunction::new(prototype.clone(), 0);
-
-                                        function_is_local = false;
-
-                                        let frame = self.stack.current_frame()?;
-
-                                        new_frame = CallFrame::with_minimum_arg_capacity(
-                                            frame.process.clone(),
-                                            Rc::new(pf),
-                                            called_args,
-                                            max
-                                        );
-                                    }
+                                } else {
+                                    return Err(self.runtime_error("non-object receiver to function pointer call"));
                                 }
                             }
-                        };
+                            FunctionAddress::Efun(name) => {
+                                // unwrap is safe because this should have been checked in an earlier step
+                                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                                let pf = ProgramFunction::new(prototype.clone(), 0);
+
+                                function_is_local = false;
+
+                                let frame = self.stack.current_frame()?;
+
+                                new_frame = CallFrame::with_minimum_arg_capacity(
+                                    frame.process.clone(),
+                                    Rc::new(pf),
+                                    called_args,
+                                    max
+                                );
+                            }
+                        }
 
                         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
                             let mut index = initial_arg.index();
@@ -1753,18 +1743,14 @@ mod tests {
                 }
                 LpcRef::Function(x) => {
                     let xb = x.borrow();
-                    let o = extract_value!(&*xb, LpcValue::Function);
-                    match o {
-                        LpcFunction::FunctionPtr(f) => {
-                            let args = f
-                                .partial_args
-                                .iter()
-                                .map(|item| item.as_ref().map(|r| r.into()))
-                                .collect::<Vec<_>>();
+                    let fp = extract_value!(&*xb, LpcValue::Function);
+                    let args = fp
+                        .partial_args
+                        .iter()
+                        .map(|item| item.as_ref().map(|r| r.into()))
+                        .collect::<Vec<_>>();
 
-                            BareVal::Function(f.name().into(), args)
-                        }
-                    }
+                    BareVal::Function(fp.name().into(), args)
                 }
             }
         }

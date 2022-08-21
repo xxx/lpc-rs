@@ -60,13 +60,6 @@ impl FunctionAddress {
     }
 }
 
-// pub struct Closure {
-//     owner: Rc<Process>,
-//     address: Address,
-//     frame: Rc<StackFrame>,
-// }
-//
-
 /// A pointer to a function, created with the `&` syntax.
 /// Partially-applied functions
 #[derive(Educe, Clone, PartialEq, Eq)]
@@ -98,6 +91,11 @@ impl FunctionPtr {
         self.address.function_name()
     }
 
+    /// How many arguments do we expect to be called with at runtime?
+    pub fn arity(&self) -> usize {
+        self.partial_args.iter().filter(|x| x.is_none()).count()
+    }
+
     delegate! {
         to self.address {
             /// retrieve the flags for the function
@@ -106,30 +104,7 @@ impl FunctionPtr {
     }
 }
 
-/// `function` type variations
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LpcFunction {
-    FunctionPtr(FunctionPtr),
-    // Closure(Closure),
-}
-
-impl LpcFunction {
-    /// How many arguments do we expect to be called with at runtime?
-    pub fn arity(&self) -> usize {
-        match self {
-            LpcFunction::FunctionPtr(x) => x.partial_args.iter().filter(|x| x.is_none()).count(),
-        }
-    }
-
-    /// Get the flags for the function
-    pub fn flags(&self) -> FunctionFlags {
-        match self {
-            LpcFunction::FunctionPtr(x) => x.flags(),
-        }
-    }
-}
-
-impl Display for LpcFunction {
+impl Display for FunctionPtr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }

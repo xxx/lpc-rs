@@ -1,4 +1,4 @@
-use crate::interpreter::{function_type::LpcFunction, lpc_ref::LpcRef, process::Process};
+use crate::interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
@@ -19,7 +19,7 @@ pub enum LpcValue {
     Array(Vec<LpcRef>),
     Mapping(IndexMap<LpcRef, LpcRef>),
     Object(Rc<RefCell<Process>>),
-    Function(LpcFunction),
+    Function(FunctionPtr),
 }
 
 /// Extract the final value (or reference to such, in the case of non-`Copy` value types)
@@ -129,8 +129,8 @@ impl From<Rc<RefCell<Process>>> for LpcValue {
     }
 }
 
-impl From<LpcFunction> for LpcValue {
-    fn from(f: LpcFunction) -> Self {
+impl From<FunctionPtr> for LpcValue {
+    fn from(f: FunctionPtr) -> Self {
         Self::Function(f)
     }
 }
