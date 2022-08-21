@@ -290,8 +290,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call { .. } => {
                 self.handle_call(&instruction, task_context)?;
             }
-            Instruction::CallFp { .. } => {
-                self.handle_call_fp(&instruction, task_context)?;
+            Instruction::CallFp { location, num_args, initial_arg } => {
+                self.handle_call_fp(task_context, &location, &num_args, &initial_arg)?;
             }
             Instruction::CallOther { .. } => {
                 self.handle_call_other(&instruction, task_context)?;
@@ -943,192 +943,151 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
     fn handle_call_fp(
         &mut self,
-        instruction: &Instruction,
         task_context: &TaskContext,
+        location: &RegisterVariant,
+        num_args: &usize,
+        initial_arg: &RegisterVariant
     ) -> Result<()> {
-        match instruction {
-            Instruction::CallFp {
-                location,
-                num_args,
-                initial_arg,
-            } => {
-                let dynamic_receiver;
+        let func = {
+            let r = get_loc!(self, *location)?;
+            if let LpcRef::Function(func) = r {
+                func.clone() // this is a cheap clone
+            } else {
+                return Err(self.runtime_error("callfp instruction on non-function"));
 
-                {
-                    // TODO: Is there some way to avoid this redundant check, while still being able
-                    // to update the register?
-                    let func_ref = get_loc!(self, *location)?;
-                    let public;
-
-                    if let LpcRef::Function(func) = func_ref {
-                        let borrowed = func.borrow();
-                        let ptr = try_extract_value!(*borrowed, LpcValue::Function);
-                        match &ptr.address {
-                            FunctionAddress::Local(receiver, pf) => {
-                                if !ptr.call_other && Rc::ptr_eq(&task_context.process(), receiver)
-                                {
-                                    // local functions are always "public" to the caller
-                                    public = true;
-                                } else {
-                                    public = pf.public();
-                                }
-
-                                dynamic_receiver = false;
-                            }
-                            FunctionAddress::Dynamic(_) => {
-                                public = true;
-                                dynamic_receiver = true;
-                            }
-                            FunctionAddress::Efun(_) => {
-                                public = true;
-                                dynamic_receiver = false;
-                            }
-                        }
-                    } else {
-                        return Err(self.runtime_error("callfp instruction on non-function"));
-                    };
-
-                    if !public {
-                        return set_loc!(self, Register(0).as_register(), LpcRef::Int(0));
-                    }
-                }
-
-                let mut function_is_local = true;
-                let func_ref = get_loc!(self, *location)?;
-                let new_frame = if_chain! {
-                    if let LpcRef::Function(func) = func_ref;
-                    let borrowed = func.borrow();
-                    let ptr = try_extract_value!(*borrowed, LpcValue::Function);
-                    then {
-                        let partial_args = &ptr.partial_args;
-                        let arity = ptr.arity;
-
-                        let called_args = *num_args + partial_args
-                            .iter()
-                            .fold(0, |sum, arg| sum + arg.is_some() as usize);
-
-                        let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
-
-                        let mut new_frame = match &ptr.address {
-                            FunctionAddress::Local(proc, function) => {
-                                CallFrame::with_minimum_arg_capacity(
-                                    proc.clone(),
-                                    function.clone(),
-                                    called_args,
-                                    max
-                                )
-                            }
-                            FunctionAddress::Dynamic(name) => {
-                                let lpc_ref = get_loc!(self, *initial_arg)?;
-
-                                if let LpcRef::Object(lpc_ref) = lpc_ref {
-                                    let b = lpc_ref.borrow();
-                                    let cell = try_extract_value!(*b, LpcValue::Object);
-                                    let proc = cell.borrow();
-                                    let func = proc.lookup_function(name, &CallNamespace::Local);
-
-                                    if let Some(func) = func {
-                                        CallFrame::with_minimum_arg_capacity(
-                                            cell.clone(),
-                                            func.clone(),
-                                            called_args,
-                                            max + 1
-                                        )
-                                    } else {
-                                        return Err(self.runtime_error(format!("call to unknown function `{}", name)));
-                                    }
-                                } else {
-                                    return Err(self.runtime_error("non-object receiver to function pointer call"));
-                                }
-                            }
-                            FunctionAddress::Efun(name) => {
-                                // unwrap is safe because this should have been checked in an earlier step
-                                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                                let pf = ProgramFunction::new(prototype.clone(), 0);
-
-                                function_is_local = false;
-
-                                let frame = self.stack.current_frame()?;
-
-                                CallFrame::with_minimum_arg_capacity(
-                                    frame.process.clone(),
-                                    Rc::new(pf),
-                                    called_args,
-                                    max
-                                )
-                            }
-                        };
-
-                        if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
-                            let mut index = initial_arg.index();
-                            let mut arg_count = *num_args;
-                            let frame = self.stack.current_frame()?;
-                            let registers = &frame.registers;
-
-                            if dynamic_receiver {
-                                // skip the first arg register, which contains the receiver
-                                index += 1;
-                                arg_count -= 1;
-                            }
-
-                            if !partial_args.is_empty() {
-                                let max = Self::calculate_max_arg_length(arg_count, partial_args, arity);
-
-                                let mut from_index = 0;
-
-                                let from_slice = &registers[index..(index + arg_count)];
-                                let to_slice = &mut new_frame.registers[1..=max];
-
-                                for (i, item) in to_slice.iter_mut().enumerate().take(max) {
-                                    if let Some(Some(x)) = partial_args.get(i) {
-                                        // if a partially-appliable arg is present, use it
-                                        let _ = std::mem::replace(item, x.clone());
-                                    } else if let Some(x) = from_slice.get(from_index) {
-                                        // check if the user passed an argument to
-                                        // fill in a hole in the partial arguments
-                                        let _ = std::mem::replace(item, x.clone());
-                                        from_index += 1;
-                                    }
-                                }
-                            } else {
-                                // just copy argument registers from old frame to new
-                                new_frame.registers[1..=arg_count]
-                                    .clone_from_slice(&registers[index..(index + arg_count)]);
-                            }
-                        }
-
-                        new_frame
-                    } else {
-                        return Err(self.runtime_error("`callfp` instruction on a non-function?"));
-                    }
-                };
-
-                // TODO: get rid of this clone
-                let name = &new_frame.function.name().clone();
-                self.stack.push(new_frame)?;
-
-                if !function_is_local {
-                    let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
-
-                    call_efun(name, &mut ctx)?;
-
-                    #[cfg(test)]
-                    {
-                        if ctx.snapshot.is_some() {
-                            self.snapshot = ctx.snapshot;
-                        }
-                    }
-
-                    pop_frame!(self, task_context);
-                }
-
-                Ok(())
             }
-            _ => Err(self.runtime_error(format!(
-                "non-CallFp instruction passed to `handle_call_fp`: {}",
-                instruction
-            ))),
+        };
+
+        let borrowed = func.borrow();
+        let ptr = try_extract_value!(*borrowed, LpcValue::Function);
+        let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
+        let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
+
+        if let FunctionAddress::Local(receiver, pf) = &ptr.address {
+            if !pf.public() && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver)) {
+                return set_loc!(self, Register(0).as_register(), LpcRef::Int(0));
+            }
         }
+
+        let new_frame = {
+            let partial_args = &ptr.partial_args;
+            let arity = ptr.arity;
+
+            let called_args = *num_args + partial_args
+                .iter()
+                .fold(0, |sum, arg| sum + arg.is_some() as usize);
+
+            let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
+
+            let mut created_frame = match &ptr.address {
+                FunctionAddress::Local(proc, function) => {
+                    CallFrame::with_minimum_arg_capacity(
+                        proc.clone(),
+                        function.clone(),
+                        called_args,
+                        max
+                    )
+                }
+                FunctionAddress::Dynamic(name) => {
+                    let lpc_ref = get_loc!(self, *initial_arg)?;
+
+                    if let LpcRef::Object(lpc_ref) = lpc_ref {
+                        let b = lpc_ref.borrow();
+                        let cell = try_extract_value!(*b, LpcValue::Object);
+                        let proc = cell.borrow();
+                        let func = proc.lookup_function(name, &CallNamespace::Local);
+
+                        if let Some(func) = func {
+                            CallFrame::with_minimum_arg_capacity(
+                                cell.clone(),
+                                func.clone(),
+                                called_args,
+                                max + 1
+                            )
+                        } else {
+                            return Err(self.runtime_error(format!("call to unknown function `{}", name)));
+                        }
+                    } else {
+                        return Err(self.runtime_error("non-object receiver to function pointer call"));
+                    }
+                }
+                FunctionAddress::Efun(name) => {
+                    // unwrap is safe because this should have been checked in an earlier step
+                    let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                    let pf = ProgramFunction::new(prototype.clone(), 0);
+
+                    let frame = self.stack.current_frame()?;
+
+                    CallFrame::with_minimum_arg_capacity(
+                        frame.process.clone(),
+                        Rc::new(pf),
+                        called_args,
+                        max
+                    )
+                }
+            };
+
+            if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
+                let mut index = initial_arg.index();
+                let mut arg_count = *num_args;
+                let frame = self.stack.current_frame()?;
+                let registers = &frame.registers;
+
+                if dynamic_receiver {
+                    // skip the first arg register, which contains the receiver
+                    index += 1;
+                    arg_count -= 1;
+                }
+
+                if !partial_args.is_empty() {
+                    let max = Self::calculate_max_arg_length(arg_count, partial_args, arity);
+
+                    let mut from_index = 0;
+
+                    let from_slice = &registers[index..(index + arg_count)];
+                    let to_slice = &mut created_frame.registers[1..=max];
+
+                    for (i, item) in to_slice.iter_mut().enumerate().take(max) {
+                        if let Some(Some(x)) = partial_args.get(i) {
+                            // if a partially-appliable arg is present, use it
+                            let _ = std::mem::replace(item, x.clone());
+                        } else if let Some(x) = from_slice.get(from_index) {
+                            // check if the user passed an argument to
+                            // fill in a hole in the partial arguments
+                            let _ = std::mem::replace(item, x.clone());
+                            from_index += 1;
+                        }
+                    }
+                } else {
+                    // just copy argument registers from old frame to new
+                    created_frame.registers[1..=arg_count]
+                        .clone_from_slice(&registers[index..(index + arg_count)]);
+                }
+            }
+
+            created_frame
+        };
+
+        let fc = new_frame.function.clone();
+        let name = fc.name();
+        self.stack.push(new_frame)?;
+
+        if function_is_efun {
+            let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
+
+            call_efun(name, &mut ctx)?;
+
+            #[cfg(test)]
+            {
+                if ctx.snapshot.is_some() {
+                    self.snapshot = ctx.snapshot;
+                }
+            }
+
+            pop_frame!(self, task_context);
+        }
+
+        Ok(())
     }
 
     #[instrument(skip_all)]
