@@ -3694,12 +3694,8 @@ mod tests {
                 let program = Program {
                     filename: path,
                     functions,
-                    global_variables: Default::default(),
-                    num_globals: 0,
                     num_init_registers: 2,
-                    pragmas: Default::default(),
-                    inherits: vec![],
-                    inherit_names: Default::default(),
+                    ..Default::default()
                 };
 
                 let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default());

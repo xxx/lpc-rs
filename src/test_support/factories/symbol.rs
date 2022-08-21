@@ -11,6 +11,7 @@ factori!(Symbol, {
         location = None,
         scope_id = 0,
         span = None,
-        flags = GlobalVarFlags::default()
+        flags = GlobalVarFlags::default(),
+        upvalue = false
     }
 });

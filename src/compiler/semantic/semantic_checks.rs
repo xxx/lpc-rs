@@ -419,90 +419,57 @@ mod tests {
             let int1 = Symbol {
                 name: "int1".to_string(),
                 type_: LpcType::Int(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let int2 = Symbol {
                 name: "int2".to_string(),
                 type_: LpcType::Int(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let string1 = Symbol {
                 name: "string1".to_string(),
                 type_: LpcType::String(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let string2 = Symbol {
                 name: "string2".to_string(),
                 type_: LpcType::String(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let array1 = Symbol {
                 name: "array1".to_string(),
                 type_: LpcType::Int(true),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let array2 = Symbol {
                 name: "array2".to_string(),
                 type_: LpcType::Int(true),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let float1 = Symbol {
                 name: "float1".to_string(),
                 type_: LpcType::Float(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let float2 = Symbol {
                 name: "float2".to_string(),
                 type_: LpcType::Float(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let mapping1 = Symbol {
                 name: "mapping1".to_string(),
                 type_: LpcType::Mapping(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let mapping2 = Symbol {
                 name: "mapping2".to_string(),
                 type_: LpcType::Mapping(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let mixed1 = Symbol {
                 name: "mixed1".to_string(),
                 type_: LpcType::Mixed(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
 
             let mut scope_tree = ScopeTree::default();
@@ -1551,42 +1518,27 @@ mod tests {
             let int1 = Symbol {
                 name: "int1".to_string(),
                 type_: LpcType::Int(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let string1 = Symbol {
                 name: "string1".to_string(),
                 type_: LpcType::String(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let array1 = Symbol {
                 name: "array1".to_string(),
                 type_: LpcType::Int(true),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let float1 = Symbol {
                 name: "float1".to_string(),
                 type_: LpcType::Float(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             let mapping1 = Symbol {
                 name: "mapping1".to_string(),
                 type_: LpcType::Mapping(false),
-                location: None,
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
 
             let mut scope_tree = ScopeTree::default();
@@ -1961,10 +1913,7 @@ mod tests {
                 scope.insert(Symbol {
                     name: "foo".to_string(),
                     type_: LpcType::Int(true),
-                    location: None,
-                    scope_id: 0,
-                    span: None,
-                    flags: GlobalVarFlags::default(),
+                    ..Default::default()
                 });
 
                 let l = ExpressionNode::Var(VarNode {
@@ -1998,10 +1947,7 @@ mod tests {
                 scope.insert(Symbol {
                     name: "foo".to_string(),
                     type_: LpcType::Mapping(false),
-                    location: None,
-                    scope_id: 0,
-                    span: None,
-                    flags: GlobalVarFlags::default(),
+                    ..Default::default()
                 });
 
                 let l = ExpressionNode::Var(VarNode {
@@ -2069,10 +2015,7 @@ mod tests {
                 scope.insert(Symbol {
                     name: "foo".to_string(),
                     type_: LpcType::Function(false),
-                    location: None,
-                    scope_id: 0,
-                    span: None,
-                    flags: GlobalVarFlags::default(),
+                    ..Default::default()
                 });
 
                 let node = ExpressionNode::Call(CallNode {

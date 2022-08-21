@@ -58,7 +58,7 @@ impl Default for LocalScope {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
+    use lpc_rs_core::{lpc_type::LpcType};
 
     use super::*;
 
@@ -72,10 +72,7 @@ mod tests {
         let sym = Symbol {
             name: "foo".to_string(),
             type_: LpcType::Int(false),
-            scope_id: 0,
-            location: None,
-            span: None,
-            flags: GlobalVarFlags::default(),
+            ..Default::default()
         };
 
         scope.insert(sym);

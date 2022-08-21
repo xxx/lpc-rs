@@ -83,6 +83,7 @@ impl TreeWalker for ScopeWalker {
                 scope_id: scope_id.into(),
                 span: node.span,
                 flags: GlobalVarFlags::default(),
+                upvalue: false,
             };
 
             self.insert_symbol(sym);
@@ -139,6 +140,7 @@ impl TreeWalker for ScopeWalker {
             scope_id: scope_id.into(),
             span: node.span,
             flags: GlobalVarFlags::default(),
+            upvalue: false,
         };
         self.insert_symbol(sym);
 
@@ -149,6 +151,7 @@ impl TreeWalker for ScopeWalker {
             scope_id: scope_id.into(),
             span: node.span,
             flags: GlobalVarFlags::default(),
+            upvalue: false,
         };
         self.insert_symbol(sym);
 
@@ -187,6 +190,7 @@ impl TreeWalker for ScopeWalker {
                 scope_id: scope_id.into(),
                 span: node.span,
                 flags: GlobalVarFlags::default(),
+                upvalue: false,
             };
 
             self.insert_symbol(sym);
@@ -420,6 +424,7 @@ mod tests {
                 scope_id: 0,
                 span: None,
                 flags: GlobalVarFlags::default(),
+                upvalue: false,
             });
 
             (walker, node)
@@ -492,6 +497,7 @@ mod tests {
                 scope_id: 0, // denotes a global symbol
                 span: None,
                 flags: GlobalVarFlags::default(),
+                upvalue: false,
             });
 
             let _ = walker.visit_var(&mut node);
@@ -535,6 +541,7 @@ mod tests {
                 scope_id: 0,
                 span: None,
                 flags: GlobalVarFlags::from(vec!["private"]),
+                upvalue: false,
             };
 
             inherited.global_variables.insert("foo".to_string(), sym);
@@ -560,6 +567,7 @@ mod tests {
                 scope_id: 0,
                 span: None,
                 flags: GlobalVarFlags::from(vec!["private"]),
+                upvalue: false,
             };
 
             walker.insert_symbol(sym);

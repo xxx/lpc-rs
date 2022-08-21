@@ -28,7 +28,7 @@ pub struct Process {
     /// Local variables that are referred to by closures, which need to be
     /// stored beyond the scope of their original invocation.
     /// TODO: This needs to be garbage-collected
-    upvalues: Option<RegisterBank>,
+    upvalues: RegisterBank,
 }
 
 impl Process {
@@ -38,23 +38,25 @@ impl Process {
     {
         let program = prog.into();
         let num_globals = program.num_globals;
+        let num_upvalues = program.num_upvalues;
 
         Self {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             clone_id: None,
-            upvalues: None,
+            upvalues: RegisterBank::new(vec![LpcRef::Int(0); num_upvalues]),
         }
     }
 
     pub fn new_clone(program: Rc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
+        let num_upvalues = program.num_upvalues;
 
         Self {
             program,
             globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
             clone_id: Some(clone_id),
-            upvalues: None,
+            upvalues: RegisterBank::new(vec![LpcRef::Int(0); num_upvalues]),
         }
     }
 

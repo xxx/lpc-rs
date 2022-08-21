@@ -23,6 +23,9 @@ pub struct Symbol {
     pub span: Option<Span>,
     /// The flags, used for global variables
     pub flags: GlobalVarFlags,
+    /// Whether this variable is referred to by a closure, meaning we
+    /// need to store it beyond the invocation of the function it's defined within.
+    pub upvalue: bool,
 }
 
 impl Symbol {
@@ -35,6 +38,7 @@ impl Symbol {
             scope_id: 0,
             span: None,
             flags: GlobalVarFlags::default(),
+            upvalue: false,
         }
     }
 
@@ -44,7 +48,7 @@ impl Symbol {
         self.scope_id == 0
     }
 
-    /// This variable public Only matters for globals.
+    /// Visibility only matters for globals.
     #[inline]
     pub fn public(&self) -> bool {
         self.flags.visibility() == Visibility::Public
@@ -72,6 +76,7 @@ impl From<&FunctionPrototype> for Symbol {
             scope_id: 0,
             span: proto.span,
             flags: GlobalVarFlags::default(),
+            upvalue: false,
         }
     }
 }
@@ -79,5 +84,19 @@ impl From<&FunctionPrototype> for Symbol {
 impl PartialEq<Symbol> for &Symbol {
     fn eq(&self, other: &Symbol) -> bool {
         *self == other
+    }
+}
+
+impl Default for Symbol {
+    fn default() -> Self {
+        Self {
+            name: "".to_string(),
+            type_: LpcType::Int(false),
+            location: None,
+            scope_id: 0,
+            span: None,
+            flags: GlobalVarFlags::default(),
+            upvalue: false
+        }
     }
 }

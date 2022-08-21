@@ -220,8 +220,10 @@ impl CodegenWalker {
             filename: self.context.filename,
             functions: self.functions,
             global_variables,
-            // add +1 because globals are stored in r0
+            // add +1 because return values for calls used to initialize
+            // globals are stored in r0
             num_globals: self.global_counter.as_usize() + 1,
+            num_upvalues: 0, // TODO: update for upvalues
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
@@ -2121,7 +2123,7 @@ mod tests {
 
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{
-        global_var_flags::GlobalVarFlags, lpc_path::LpcPath, lpc_type::LpcType, LpcFloat,
+        lpc_path::LpcPath, lpc_type::LpcType, LpcFloat,
     };
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::Config;
@@ -2258,8 +2260,6 @@ mod tests {
     }
 
     mod test_visit_assignment {
-        use lpc_rs_core::global_var_flags::GlobalVarFlags;
-
         use super::*;
 
         #[test]
@@ -2272,9 +2272,7 @@ mod tests {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
                 location: Some(RegisterVariant::Local(Register(666))),
-                scope_id: 0,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
             insert_symbol(&mut walker, sym);
 
@@ -2322,8 +2320,7 @@ mod tests {
                 type_: LpcType::Int(false),
                 location: Some(RegisterVariant::Local(Register(666))),
                 scope_id: 1,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
 
             insert_symbol(&mut walker, sym);
@@ -2359,8 +2356,7 @@ mod tests {
                 type_: LpcType::Int(true),
                 location: Some(RegisterVariant::Local(Register(666))),
                 scope_id: 1,
-                span: None,
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             };
 
             insert_symbol(&mut walker, sym);
@@ -3872,7 +3868,7 @@ mod tests {
                     l: 4,
                     r: 11
                 }),
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             }
         );
         assert_eq!(
@@ -3887,7 +3883,7 @@ mod tests {
                     l: 13,
                     r: 25
                 }),
-                flags: GlobalVarFlags::default(),
+                ..Default::default()
             }
         );
     }
@@ -4673,9 +4669,7 @@ mod tests {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
                     location: Some(RegisterVariant::Local(Register(666))),
-                    scope_id: 0,
-                    span: None,
-                    flags: GlobalVarFlags::default(),
+                    ..Default::default()
                 },
             );
 
@@ -4709,9 +4703,7 @@ mod tests {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
                     location: Some(RegisterVariant::Local(Register(444))),
-                    scope_id: 0,
-                    span: None,
-                    flags: GlobalVarFlags::default(),
+                    ..Default::default()
                 },
             );
             walker.context.scopes.push_new(); // push a local scope
@@ -4722,8 +4714,7 @@ mod tests {
                     type_: LpcType::Int(false),
                     location: Some(RegisterVariant::Local(Register(666))),
                     scope_id: 1,
-                    span: None,
-                    flags: GlobalVarFlags::default(),
+                    ..Default::default()
                 },
             );
 
