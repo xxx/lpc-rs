@@ -3554,37 +3554,39 @@ mod tests {
                 ]
             );
         }
-        //
-        // #[test]
-        // fn populates_the_default_arguments() {
-        //     assert_compiles_to(
-        //         "int main(int i, int j = 666, float d = 3.14) { return i * j;
-        // }",         vec![
-        //             PopulateDefaults(vec![4, 6]),
-        //             IMul(
-        //                 RegisterVariant::Local(Register(1)),
-        //                 RegisterVariant::Local(Register(2)),
-        //                 RegisterVariant::Local(Register(4)),
-        //             ),
-        //             RegCopy(
-        //                 RegisterVariant::Local(Register(4)),
-        //                 RegisterVariant::Local(Register(0)),
-        //             ),
-        //             Ret,
-        //             IConst(RegisterVariant::Local(Register(5)), 666),
-        //             RegCopy(
-        //                 RegisterVariant::Local(Register(5)),
-        //                 RegisterVariant::Local(Register(2)),
-        //             ),
-        //             FConst(RegisterVariant::Local(Register(6)), 3.14.into()),
-        //             RegCopy(
-        //                 RegisterVariant::Local(Register(6)),
-        //                 RegisterVariant::Local(Register(3)),
-        //             ),
-        //             Jmp("function-body-start_0".into()),
-        //         ],
-        //     );
-        // }
+
+        #[test]
+        fn populates_the_default_arguments() {
+            let mut walker = compile("function f = (: [int i, int j = 666, float d = 3.14] i * j :);");
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "closure-0"),
+                vec![
+                    PopulateDefaults(vec![4, 6]),
+                    IMul(
+                        RegisterVariant::Local(Register(1)),
+                        RegisterVariant::Local(Register(2)),
+                        RegisterVariant::Local(Register(4)),
+                    ),
+                    RegCopy(
+                        RegisterVariant::Local(Register(4)),
+                        RegisterVariant::Local(Register(0)),
+                    ),
+                    Ret,
+                    IConst(RegisterVariant::Local(Register(5)), 666),
+                    RegCopy(
+                        RegisterVariant::Local(Register(5)),
+                        RegisterVariant::Local(Register(2)),
+                    ),
+                    FConst(RegisterVariant::Local(Register(6)), 3.14.into()),
+                    RegCopy(
+                        RegisterVariant::Local(Register(6)),
+                        RegisterVariant::Local(Register(3)),
+                    ),
+                    Jmp("closure-body-start_0".into()),
+                ],
+            );
+        }
     }
 
     mod test_continue {
