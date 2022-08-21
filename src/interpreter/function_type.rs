@@ -5,6 +5,7 @@ use std::{
 };
 
 use delegate::delegate;
+use educe::Educe;
 use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
