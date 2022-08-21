@@ -1,3 +1,5 @@
+use if_chain::if_chain;
+use indextree::NodeId;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
 };
@@ -29,12 +31,16 @@ use crate::compiler::{
 pub struct ScopeWalker {
     /// The compilation context
     context: CompilationContext,
+
+    /// track the scope IDs of each closure, to help determine if
+    /// a variable needs to be upvalued or not.
+    closure_scope_stack: Vec<NodeId>
 }
 
 impl ScopeWalker {
     /// Create a new `ScopeWalker`, with `context` as the context.
     pub fn new(context: CompilationContext) -> Self {
-        Self { context }
+        Self { context, closure_scope_stack: vec![] }
     }
 
     /// Insert a new symbol into the current scope
@@ -69,6 +75,9 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
+        self.context.closure_depth += 1;
+        self.closure_scope_stack.push(scope_id);
+
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
                 param.visit(self)?;
@@ -92,6 +101,9 @@ impl TreeWalker for ScopeWalker {
         for statement in &mut node.body {
             statement.visit(self)?;
         }
+
+        self.closure_scope_stack.pop();
+        self.context.closure_depth -= 1;
 
         self.context.scopes.pop();
         Ok(())
@@ -232,23 +244,21 @@ impl TreeWalker for ScopeWalker {
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         // positional closure arg references are 1) always allowed (at this point),
-        // 2) never global, and 3) will point to the same location regardless of what's
-        // in it.
+        // 2) never global, 3) never upvalued, and 4) will point to the same
+        // location regardless of what's in it.
         if node.is_closure_arg_var() {
             return Ok(());
         }
 
         let sym = self.context.lookup_var(&node.name);
 
-        if sym.is_none() {
-            // check for functions e.g. declaring function pointers with no arguments
-            if self
-                .context
+        // check for functions (i.e. declaring function pointers with no arguments)
+        if sym.is_none() &&
+            self.context
                 .contains_function_complete(&node.name, &CallNamespace::default())
-            {
-                node.set_function_name(true);
-                return Ok(());
-            }
+        {
+            node.set_function_name(true);
+            return Ok(());
         };
 
         let mut errors = vec![];
@@ -265,16 +275,24 @@ impl TreeWalker for ScopeWalker {
                 errors.push(e);
             }
 
+            // if_chain! {
+            //     if let Some(closure_scope_id) = self.closure_scope_stack.last();
+            //     if self.context.closure_depth > 0 && symbol.scope_id != *closure_scope_id;
+            //     then {
+            //         symbol.upvalue = true;
+            //     }
+            // }
+
             if symbol.is_global() {
                 // Set the node to global, so we know whether to look at the program registers,
                 // or the global registers, during codegen.
                 node.set_global(true);
             }
         } else {
+            // We check for undefined vars here, in case a symbol is subsequently defined.
             let e =
                 LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
 
-            // We check for undefined vars here in case a symbol is subsequently defined.
             errors.push(e);
         }
 
@@ -323,7 +341,7 @@ impl Default for ScopeWalker {
         // Push a default global scope.
         context.scopes.push_new();
 
-        Self { context }
+        Self { context, closure_scope_stack: vec![] }
     }
 }
 
