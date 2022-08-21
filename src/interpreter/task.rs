@@ -1000,7 +1000,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let borrowed = func.borrow();
                     let ptr = try_extract_value!(*borrowed, LpcValue::Function);
                     then {
-                        let mut new_frame;
                         let partial_args = &ptr.partial_args;
                         let arity = ptr.arity;
 
@@ -1010,14 +1009,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         let max = Self::calculate_max_arg_length(*num_args, partial_args, arity);
 
-                        match &ptr.address {
+                        let mut new_frame = match &ptr.address {
                             FunctionAddress::Local(proc, function) => {
-                                new_frame = CallFrame::with_minimum_arg_capacity(
+                                CallFrame::with_minimum_arg_capacity(
                                     proc.clone(),
                                     function.clone(),
                                     called_args,
                                     max
-                                );
+                                )
                             }
                             FunctionAddress::Dynamic(name) => {
                                 let lpc_ref = get_loc!(self, *initial_arg)?;
@@ -1029,12 +1028,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     let func = proc.lookup_function(name, &CallNamespace::Local);
 
                                     if let Some(func) = func {
-                                        new_frame = CallFrame::with_minimum_arg_capacity(
+                                        CallFrame::with_minimum_arg_capacity(
                                             cell.clone(),
                                             func.clone(),
                                             called_args,
                                             max + 1
-                                        );
+                                        )
                                     } else {
                                         return Err(self.runtime_error(format!("call to unknown function `{}", name)));
                                     }
@@ -1051,14 +1050,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                 let frame = self.stack.current_frame()?;
 
-                                new_frame = CallFrame::with_minimum_arg_capacity(
+                                CallFrame::with_minimum_arg_capacity(
                                     frame.process.clone(),
                                     Rc::new(pf),
                                     called_args,
                                     max
-                                );
+                                )
                             }
-                        }
+                        };
 
                         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
                             let mut index = initial_arg.index();
