@@ -21,7 +21,7 @@ impl DefaultParamsWalker {
         Self { context }
     }
 
-    fn insert_params<T>(&mut self, name: T, parameters: &Vec<VarInitNode>)
+    fn insert_params<T>(&mut self, name: T, parameters: &[VarInitNode])
     where
         T: Into<String>,
     {

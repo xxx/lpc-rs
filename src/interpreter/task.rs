@@ -1001,11 +1001,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let ptr = try_extract_value!(*borrowed, LpcValue::Function);
                     then {
                         let mut new_frame;
-                        let partial_args;
-                        let arity;
+                        let partial_args = &ptr.partial_args;
+                        let arity = ptr.arity;
 
-                        partial_args = &ptr.partial_args;
-                        arity = ptr.arity;
                         let called_args = *num_args + partial_args
                             .iter()
                             .fold(0, |sum, arg| sum + arg.is_some() as usize);
