@@ -407,7 +407,6 @@ mod tests {
 
     mod check_binary_operation_tests {
         use indexmap::IndexMap;
-        
 
         use super::*;
         use crate::compiler::{
@@ -1509,7 +1508,6 @@ mod tests {
 
     mod check_unary_operation_tests {
         use indexmap::IndexMap;
-        
 
         use super::*;
         use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
@@ -1900,7 +1898,6 @@ mod tests {
         }
 
         mod binary_ops {
-            
 
             use super::*;
             use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
@@ -1975,7 +1972,6 @@ mod tests {
         }
 
         mod calls {
-            
 
             use super::*;
             use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};

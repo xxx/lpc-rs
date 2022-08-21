@@ -1,7 +1,6 @@
-use std::fmt::Debug;
 use std::{
     fmt,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
 };
 
 use auto_impl::auto_impl;

@@ -58,7 +58,7 @@ impl Default for LocalScope {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{lpc_type::LpcType};
+    use lpc_rs_core::lpc_type::LpcType;
 
     use super::*;
 

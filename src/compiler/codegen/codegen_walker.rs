@@ -2122,9 +2122,7 @@ mod tests {
     use std::collections::VecDeque;
 
     use lpc_rs_asm::instruction::Instruction::*;
-    use lpc_rs_core::{
-        lpc_path::LpcPath, lpc_type::LpcType, LpcFloat,
-    };
+    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::Config;
 

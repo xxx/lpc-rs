@@ -24,7 +24,8 @@ pub struct Symbol {
     /// The flags, used for global variables
     pub flags: GlobalVarFlags,
     /// Whether this variable is referred to by a closure, meaning we
-    /// need to store it beyond the invocation of the function it's defined within.
+    /// need to store it beyond the invocation of the function it's defined
+    /// within.
     pub upvalue: bool,
 }
 
@@ -96,7 +97,7 @@ impl Default for Symbol {
             scope_id: 0,
             span: None,
             flags: GlobalVarFlags::default(),
-            upvalue: false
+            upvalue: false,
         }
     }
 }
