@@ -407,7 +407,7 @@ mod tests {
 
     mod check_binary_operation_tests {
         use indexmap::IndexMap;
-        use lpc_rs_core::global_var_flags::GlobalVarFlags;
+        
 
         use super::*;
         use crate::compiler::{
@@ -1509,7 +1509,7 @@ mod tests {
 
     mod check_unary_operation_tests {
         use indexmap::IndexMap;
-        use lpc_rs_core::global_var_flags::GlobalVarFlags;
+        
 
         use super::*;
         use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
@@ -1900,7 +1900,7 @@ mod tests {
         }
 
         mod binary_ops {
-            use lpc_rs_core::global_var_flags::GlobalVarFlags;
+            
 
             use super::*;
             use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
@@ -1975,7 +1975,7 @@ mod tests {
         }
 
         mod calls {
-            use lpc_rs_core::global_var_flags::GlobalVarFlags;
+            
 
             use super::*;
             use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
