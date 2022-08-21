@@ -2,6 +2,7 @@ use std::{
     ops::{Index, IndexMut, Range, RangeInclusive},
     slice::Iter,
 };
+use std::ops::RangeFrom;
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;
@@ -112,6 +113,20 @@ impl Index<RangeInclusive<usize>> for RegisterBank {
 
 impl IndexMut<RangeInclusive<usize>> for RegisterBank {
     fn index_mut(&mut self, index: RangeInclusive<usize>) -> &mut Self::Output {
+        &mut self.registers[index]
+    }
+}
+
+impl Index<RangeFrom<usize>> for RegisterBank {
+    type Output = [LpcRef];
+
+    fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
+        &self.registers[index]
+    }
+}
+
+impl IndexMut<RangeFrom<usize>> for RegisterBank {
+    fn index_mut(&mut self, index: RangeFrom<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
 }

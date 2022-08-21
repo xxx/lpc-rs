@@ -1045,6 +1045,28 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
+        // Type-check the args.
+        // TODO: Maybe make this optional somehow?
+        let arg_types = &function.prototype.arg_types;
+        for (i, lpc_ref) in new_registers[1..].into_iter().enumerate() {
+            if_chain! {
+                if let Some(arg_type) = arg_types.get(i);
+                let ref_type = lpc_ref.as_lpc_type();
+                if !ref_type.matches_type(*arg_type);
+                then {
+                    let arg_spans = &function.prototype.arg_spans;
+                    let arg_def_span = arg_spans.get(i).map(|s| *s);
+                    let error = self.runtime_error(format!(
+                        "unexpected argument type to `{}`: {}. expected {}.",
+                        function.prototype.name, ref_type, arg_type
+                    ))
+                    .with_label("defined here", arg_def_span);
+
+                    return Err(error);
+                }
+            }
+        }
+
         let new_frame = CallFrame::with_registers(
             proc,
             function,
@@ -2242,6 +2264,53 @@ mod tests {
                 ];
 
                 assert_eq!(&expected, &registers);
+            }
+
+            #[test]
+            fn checks_types() {
+                let code = indoc! { r##"
+                    function q = &tacos("foo");
+                    int a = q();
+                    private int tacos(int j) {
+                        return j;
+                    }
+                "##};
+
+                let mut object_space = ObjectSpace::default();
+                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default());
+
+                let (program, config, process) = compile_prog(code);
+                object_space.insert_process(process);
+
+                let result = task
+                    .initialize_program(program, config, object_space);
+
+                assert_eq!(
+                    result.unwrap_err().to_string(),
+                    "runtime error: unexpected argument type to `tacos`: string. expected int."
+                );
+
+                let code = indoc! { r##"
+                    function q = &tacos(5, , 666);
+
+                    int a = q(123.4);
+
+                    private int tacos(int i, string s, int j) {
+                        return i + j;
+                    }
+                "##};
+
+                let (program, config, process) = compile_prog(code);
+                let mut object_space = ObjectSpace::default();
+                object_space.insert_process(process);
+
+                let result = task
+                    .initialize_program(program, config, object_space);
+
+                assert_eq!(
+                    result.unwrap_err().to_string(),
+                    "runtime error: unexpected argument type to `tacos`: float. expected string."
+                );
             }
         }
 

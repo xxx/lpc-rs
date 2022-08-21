@@ -12,6 +12,7 @@ use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use refpool::PoolRef;
+use lpc_rs_core::lpc_type::LpcType;
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
@@ -144,6 +145,18 @@ impl LpcRef {
             _ => Err(LpcError::new(
                 "runtime error: invalid decrement".to_string(),
             )),
+        }
+    }
+
+    pub fn as_lpc_type(&self) -> LpcType {
+        match self {
+            LpcRef::Float(_) => LpcType::Float(false),
+            LpcRef::Int(_) => LpcType::Int(false),
+            LpcRef::String(_) => LpcType::String(false),
+            LpcRef::Array(_) => LpcType::Mixed(true), // TODO: this could be better
+            LpcRef::Mapping(_) => LpcType::Mapping(false),
+            LpcRef::Object(_) => LpcType::Object(false),
+            LpcRef::Function(_) => LpcType::Function(false)
         }
     }
 }
