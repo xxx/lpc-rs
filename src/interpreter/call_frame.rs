@@ -81,6 +81,31 @@ impl CallFrame {
         }
     }
 
+    /// Create a new [`CallFrame`] instance, using the passed [`RegisterBank`]
+    /// as the registers
+    ///
+    /// # Arguments
+    ///
+    /// * `process` - The process that owns the function being called
+    /// * `function` - The function being called
+    /// * `called_with_num_args` - how many arguments were explicitly passed in
+    ///   the call to this function?
+    /// * `registers` - The registers that the CallFrame will use
+    pub fn with_registers<P>(
+        process: P,
+        function: Rc<ProgramFunction>,
+        called_with_num_args: usize,
+        registers: RegisterBank,
+    ) -> Self
+    where
+        P: Into<Rc<RefCell<Process>>>,
+    {
+        Self {
+            registers,
+            ..Self::new(process, function, called_with_num_args)
+        }
+    }
+
     /// get the debug span for the current instruction
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
@@ -240,6 +265,34 @@ mod tests {
             let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
 
             assert_eq!(frame.registers.len(), 12);
+            assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
+        }
+    }
+
+    mod test_with_registers {
+        use super::*;
+
+        #[test]
+        fn uses_the_passed_registers() {
+            let process = Process::default();
+
+            let prototype = FunctionPrototype::new(
+                "my_function",
+                LpcType::Void,
+                FunctionArity::new(4),
+                FunctionFlags::default(),
+                None,
+                vec![],
+                vec![],
+            );
+
+            let fs = ProgramFunction::new(prototype, 7);
+
+            let registers = RegisterBank::new(vec![LpcRef::Int(0); 21]);
+
+            let frame = CallFrame::with_registers(process, Rc::new(fs), 4, registers);
+
+            assert_eq!(frame.registers.len(), 21);
             assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
         }
     }
