@@ -3,12 +3,13 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use lpc_rs_core::{BaseFloat, LpcFloat};
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_core::{BaseFloat, LpcFloat};
-use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

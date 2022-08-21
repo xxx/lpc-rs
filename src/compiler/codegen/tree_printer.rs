@@ -20,15 +20,20 @@ use crate::compiler::{
 ///
 /// # Examples
 /// ```
-/// use lpc_rs::lpc_parser;
-/// use lpc_rs::compiler::codegen::tree_printer::TreePrinter;
-/// use lpc_rs::compiler::codegen::tree_walker::TreeWalker;
-/// use lpc_rs::compiler::lexer::LexWrapper;
-/// use lpc_rs::compiler::compilation_context::CompilationContext;
+/// use lpc_rs::{
+///     compiler::{
+///         codegen::{tree_printer::TreePrinter, tree_walker::TreeWalker},
+///         compilation_context::CompilationContext,
+///         lexer::LexWrapper,
+///     },
+///     lpc_parser,
+/// };
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let lexer = LexWrapper::new(prog);
-/// let mut program_node = lpc_parser::ProgramParser::new().parse(&mut CompilationContext::default(), lexer).unwrap();
+/// let mut program_node = lpc_parser::ProgramParser::new()
+///     .parse(&mut CompilationContext::default(), lexer)
+///     .unwrap();
 /// let mut walker = TreePrinter::new();
 /// walker.visit_program(&mut program_node);
 /// ```

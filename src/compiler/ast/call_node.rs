@@ -1,8 +1,12 @@
-use lazy_format::lazy_format;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use itertools::Itertools;
+use lazy_format::lazy_format;
+use lpc_rs_core::call_namespace::CallNamespace;
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -11,9 +15,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lpc_rs_core::call_namespace::CallNamespace;
-use lpc_rs_errors::{span::Span, Result};
 
 /// Representation of a function call.
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
@@ -27,7 +28,8 @@ pub struct CallNode {
     /// The name of the function being called
     pub name: String,
 
-    /// The text span in the original file that this node represents. Used for error messages.
+    /// The text span in the original file that this node represents. Used for
+    /// error messages.
     pub span: Option<Span>,
 
     /// When searching for this function, where do we start?

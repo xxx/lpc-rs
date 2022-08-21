@@ -1,3 +1,8 @@
+use lpc_rs_core::{
+    call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
+};
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
@@ -17,13 +22,9 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
 };
-use lpc_rs_core::{
-    call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
-};
-use lpc_rs_errors::{LpcError, Result};
 
-/// A tree walker to handle populating all the scopes in the program, as well as generating
-/// errors for undefined and redefined variables.
+/// A tree walker to handle populating all the scopes in the program, as well as
+/// generating errors for undefined and redefined variables.
 #[derive(Debug)]
 pub struct ScopeWalker {
     /// The compilation context
@@ -227,7 +228,8 @@ impl TreeWalker for ScopeWalker {
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         // positional closure arg references are 1) always allowed (at this point),
-        // 2) never global, and 3) will point to the same location regardless of what's in it.
+        // 2) never global, and 3) will point to the same location regardless of what's
+        // in it.
         if node.is_closure_arg_var() {
             return Ok(());
         }
@@ -323,16 +325,16 @@ impl Default for ScopeWalker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{assert_regex, test_support::factories::*};
     use claim::assert_ok;
     use factori::create;
 
+    use super::*;
+    use crate::{assert_regex, test_support::factories::*};
+
     mod test_visit_closure {
-        use lpc_rs_core::lpc_type::LpcType;
+        use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 
         use super::*;
-        use lpc_rs_core::function_flags::FunctionFlags;
 
         #[test]
         fn sets_up_argv_for_ellipsis() {
@@ -361,10 +363,9 @@ mod tests {
     }
 
     mod test_visit_function_def {
-        use lpc_rs_core::lpc_type::LpcType;
+        use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 
         use super::*;
-        use lpc_rs_core::function_flags::FunctionFlags;
 
         #[test]
         fn sets_up_argv_for_ellipsis() {
@@ -463,10 +464,10 @@ mod tests {
     }
 
     mod test_visit_var {
-        use crate::interpreter::program::Program;
         use lpc_rs_core::lpc_type::LpcType;
 
         use super::*;
+        use crate::interpreter::program::Program;
 
         fn setup() -> (ScopeWalker, VarNode) {
             let walker = ScopeWalker::default();

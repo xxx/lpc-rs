@@ -1,8 +1,10 @@
-use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_utils::config::Config;
 use std::cell::Cell;
 
-/// A struct to encapsulate counting instructions, and erroring in the case of hitting the eval limit
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::config::Config;
+
+/// A struct to encapsulate counting instructions, and erroring in the case of
+/// hitting the eval limit
 #[derive(Debug, Default, Clone)]
 pub struct InstructionCounter {
     count: Cell<usize>,

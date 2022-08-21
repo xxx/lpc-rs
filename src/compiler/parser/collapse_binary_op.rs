@@ -1,3 +1,8 @@
+use lalrpop_util::ParseError;
+use lpc_rs_core::LpcInt;
+use lpc_rs_errors::{span::Span, LpcError};
+use lpc_rs_utils::{string, string::concatenate_strings};
+
 use crate::compiler::{
     ast::{
         binary_op_node::{BinaryOpNode, BinaryOperation},
@@ -7,10 +12,6 @@ use crate::compiler::{
     },
     lexer,
 };
-use lalrpop_util::ParseError;
-use lpc_rs_core::LpcInt;
-use lpc_rs_errors::{span::Span, LpcError};
-use lpc_rs_utils::{string, string::concatenate_strings};
 
 /// Combine literals in cases where we have enough information to do so.
 ///
@@ -313,8 +314,9 @@ fn non_collapse(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use claim::*;
+
+    use super::*;
 
     #[test]
     fn test_collapses_add_int_and_int() {

@@ -1,6 +1,3 @@
-use bstr::ByteSlice;
-use path_absolutize::Absolutize;
-use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
@@ -10,9 +7,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bstr::ByteSlice;
+use path_absolutize::Absolutize;
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LpcPath {
-    /// Represent an on-server path. Relative paths are relative to the running process' dir.
+    /// Represent an on-server path. Relative paths are relative to the running
+    /// process' dir.
     Server(PathBuf),
 
     /// Represent an in-game path. Relative paths are relative to `lib_dir`.
@@ -20,8 +22,9 @@ pub enum LpcPath {
 }
 
 impl LpcPath {
-    /// Create a new on-server path. This essentially means the path will be treated
-    /// as it's passed. An attempt will be made to canonicalize the path before storage.
+    /// Create a new on-server path. This essentially means the path will be
+    /// treated as it's passed. An attempt will be made to canonicalize the
+    /// path before storage.
     pub fn new_server<T>(path: T) -> Self
     where
         T: AsRef<Path>,
@@ -99,7 +102,8 @@ impl LpcPath {
         }
     }
 
-    /// Is this path underneath the given root? Used to check for traversal attacks
+    /// Is this path underneath the given root? Used to check for traversal
+    /// attacks
     pub fn is_within_root<P>(&self, root: P) -> bool
     where
         P: AsRef<Path>,
@@ -234,8 +238,8 @@ impl Deref for LpcPath {
     }
 }
 
-/// Convert an in-game path, relative or absolute, to a canonical, absolute *on-server* path.
-/// This function is used for resolving included files.
+/// Convert an in-game path, relative or absolute, to a canonical, absolute
+/// *on-server* path. This function is used for resolving included files.
 ///
 /// # Arguments
 /// `path` - An in-game path.
@@ -274,8 +278,9 @@ where
     .to_path_buf()
 }
 
-/// Convert an in-game path, relative or absolute, to a canonical, absolute *in-game* path.
-/// This just returns the canonical path, without the in-game root dir at the front.
+/// Convert an in-game path, relative or absolute, to a canonical, absolute
+/// *in-game* path. This just returns the canonical path, without the in-game
+/// root dir at the front.
 ///
 /// # Arguments
 /// `path` - An in-game path.
@@ -340,7 +345,8 @@ mod tests {
             canonicalize_server_path("root.c", ".", LIB_DIR).as_os_str(),
             "/home/mud/lib/root.c"
         );
-        // assert_eq!(canonicalize_server_path("root.c", "/", LIB_DIR).as_os_str(), "/home/mud/lib/root.c");
+        // assert_eq!(canonicalize_server_path("root.c", "/", LIB_DIR).as_os_str(),
+        // "/home/mud/lib/root.c");
         assert_eq!(
             canonicalize_server_path("./root.c", "/foobar", LIB_DIR).as_os_str(),
             "/home/mud/lib/foobar/root.c"

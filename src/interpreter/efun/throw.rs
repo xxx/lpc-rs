@@ -1,5 +1,6 @@
-use crate::interpreter::efun::efun_context::EfunContext;
 use lpc_rs_errors::{LpcError, Result};
+
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `throw`, intentionally throw an error. Can be caught by `catch`.
 pub fn throw<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {

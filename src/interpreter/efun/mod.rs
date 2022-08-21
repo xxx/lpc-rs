@@ -7,7 +7,8 @@ mod file_name;
 mod this_object;
 mod throw;
 
-use crate::interpreter::efun::efun_context::EfunContext;
+use std::collections::HashMap;
+
 use clone_object::clone_object;
 use debug::debug;
 use dump::dump;
@@ -18,9 +19,10 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
 use this_object::this_object;
 use throw::throw;
+
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
@@ -64,8 +66,8 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
         },
     );
 
-    // "catch" is a special form of the language, implemented with custom [`Instruction`]s.
-    //   A prototype is defined here to enforce type checks,
+    // "catch" is a special form of the language, implemented with custom
+    // [`Instruction`]s.   A prototype is defined here to enforce type checks,
     //   as `catch` looks and acts like a function call.
     m.insert(
         CATCH,

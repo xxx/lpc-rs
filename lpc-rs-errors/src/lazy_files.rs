@@ -1,15 +1,17 @@
-use crate::span::Span;
-use cached::{proc_macro::cached, SizedCache};
-use codespan_reporting::files::{Error, Files, SimpleFile};
-use fs_err as fs;
-use once_cell::sync::Lazy;
-use parking_lot::RwLock;
 use std::{
     ffi::{OsStr, OsString},
     marker::PhantomData,
     ops::Range,
     path::Path,
 };
+
+use cached::{proc_macro::cached, SizedCache};
+use codespan_reporting::files::{Error, Files, SimpleFile};
+use fs_err as fs;
+use once_cell::sync::Lazy;
+use parking_lot::RwLock;
+
+use crate::span::Span;
 
 #[derive(Debug)]
 enum LazyFile<Name, Source> {
@@ -32,7 +34,8 @@ impl FileCache {
     /// This function will block if it needs to wait for the mutex.
     ///
     /// # Arguments
-    /// `path` - The path of the file to add. It will be used as the key in the file cache.
+    /// `path` - The path of the file to add. It will be used as the key in the
+    /// file cache.
     pub fn insert<T>(path: T) -> FileId
     where
         T: std::fmt::Display,
@@ -45,8 +48,8 @@ impl FileCache {
 /// For readability
 pub type FileId = usize;
 
-/// A memoizing lazy-loaded Files store for [`codespan-reporting`](codespan_reporting)
-/// # Examples
+/// A memoizing lazy-loaded Files store for
+/// [`codespan-reporting`](codespan_reporting) # Examples
 ///
 /// ```
 /// use lpc_rs_errors::lazy_files::LazyFiles;
@@ -84,7 +87,8 @@ where
     /// Add a new file to the cache
     ///
     /// # Arguments
-    /// `path` - The absolute on-server path, including filename, to the file being added.
+    /// `path` - The absolute on-server path, including filename, to the file
+    /// being added.
     pub fn add<T>(&mut self, path: T) -> FileId
     where
         T: Into<Name>,
@@ -189,8 +193,8 @@ where
     }
 }
 
-/// Memoized function that simply stores the content of a file at the given path.
-/// Concrete types are used here because of memoization
+/// Memoized function that simply stores the content of a file at the given
+/// path. Concrete types are used here because of memoization
 ///
 /// # Arguments
 /// `path` - An [`OsStr`] reference representing a full path.

@@ -17,7 +17,8 @@ pub struct ObjectMacro {
 pub struct FunctionMacro {
     /// The vector of Tokens being defined
     pub tokens: Vec<Spanned<Token>>,
-    /// The vector of defined arguments, which are matched against during expansion for replacement
+    /// The vector of defined arguments, which are matched against during
+    /// expansion for replacement
     pub args: Vec<String>,
 }
 

@@ -1,24 +1,28 @@
-use crate::function_prototype::FunctionPrototype;
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
+
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use tracing::trace;
+
+use crate::function_prototype::FunctionPrototype;
 
 /// A `Program` function, which stores its actual code, along with
 /// metadata for type checking, etc.
 ///
 /// Note that closures also use this structure. By convention, they are named
-/// `closure-<id>`, which is unparsable, and cannot conflict with user-defined functions
-/// They otherwise act as normal functions, with the exception of upvalue access.
+/// `closure-<id>`, which is unparsable, and cannot conflict with user-defined
+/// functions They otherwise act as normal functions, with the exception of
+/// upvalue access.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProgramFunction {
     /// My prototype from compilation
     pub prototype: FunctionPrototype,
 
-    /// The number of non-argument, non-return-value locals. Used for register allocation.
+    /// The number of non-argument, non-return-value locals. Used for register
+    /// allocation.
     pub num_locals: usize,
 
     /// The actual instructions of this function
@@ -63,7 +67,8 @@ impl ProgramFunction {
         }
     }
 
-    /// Push an [`Instruction`] and corresponding [`Span`] into this function's code.
+    /// Push an [`Instruction`] and corresponding [`Span`] into this function's
+    /// code.
     pub fn push_instruction(&mut self, instruction: Instruction, debug_span: Option<Span>) {
         trace!(instruction = %instruction, span = ?debug_span, "pushing instruction");
         self.instructions.push(instruction);

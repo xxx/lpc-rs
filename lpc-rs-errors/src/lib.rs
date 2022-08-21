@@ -11,9 +11,9 @@ use codespan_reporting::{
 };
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
+use span::HasSpan;
 
 use crate::{file_stream::FileStream, lazy_files::FILE_CACHE, span::Span};
-use span::HasSpan;
 
 pub mod file_stream;
 pub mod lazy_files;
@@ -46,7 +46,8 @@ pub struct LpcError {
 }
 
 impl LpcError {
-    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Error`], and a message
+    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Error`], and a
+    /// message
     pub fn new<T>(message: T) -> Self
     where
         T: Into<String>,
@@ -62,7 +63,8 @@ impl LpcError {
         }
     }
 
-    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Warning`], and a message
+    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Warning`], and
+    /// a message
     pub fn new_warning<T>(message: T) -> Self
     where
         T: Into<String>,
@@ -263,7 +265,8 @@ fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteC
     }
 }
 
-/// An extracted function that covers the most common use case for generating diagnostics.
+/// An extracted function that covers the most common use case for generating
+/// diagnostics.
 ///
 /// # Arguments
 /// `message` - The main message for the error

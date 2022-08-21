@@ -1,8 +1,9 @@
-use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -11,7 +12,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_errors::span::Span;
 
 /// All possible unary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]

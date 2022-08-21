@@ -7,15 +7,15 @@ use crate::program_function::ProgramFunction;
 //       seems like FunctionAddress::Local handles it
 
 /// A closure (i.e. a function that is bound to a particular environment).
-/// This is the run-time representation, which includes its upvalue bindings, and
-/// is contained within an LpcRef
+/// This is the run-time representation, which includes its upvalue bindings,
+/// and is contained within an LpcRef
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Closure {
     /// Our underlying function
     pub function: ProgramFunction,
 
-    /// The indexes into the Process-level upvalues vector, that links all of the
-    /// closed-over variables.
+    /// The indexes into the Process-level upvalues vector, that links all of
+    /// the closed-over variables.
     pub upvalue_indexes: Vec<usize>,
 }
 

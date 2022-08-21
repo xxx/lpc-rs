@@ -3,6 +3,10 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use indexmap::IndexMap;
+use lpc_rs_core::{BaseFloat, LpcInt};
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         array_node::ArrayNode,
@@ -24,9 +28,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use indexmap::IndexMap;
-use lpc_rs_core::{BaseFloat, LpcInt};
-use lpc_rs_errors::{span::Span, Result};
 
 /// A wrapper node for anything that can be considered an expression
 /// (i.e. an operation that returns a value)
@@ -238,10 +239,10 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 #[cfg(test)]
 mod tests {
 
-    use crate::compiler::ast::binary_op_node::BinaryOperation;
     use lpc_rs_core::{call_namespace::CallNamespace, LpcFloat};
 
     use super::*;
+    use crate::compiler::ast::binary_op_node::BinaryOperation;
 
     #[test]
     fn test_from_binary_op_node() {

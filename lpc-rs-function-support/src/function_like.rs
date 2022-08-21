@@ -1,5 +1,6 @@
-use crate::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
 use std::rc::Rc;
+
+use crate::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
 
 /// A facade to allow us to lookup prototypes or compiled functions
 #[derive(Debug, PartialEq)]
@@ -38,10 +39,11 @@ impl<'a> From<Rc<ProgramFunction>> for FunctionLike<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::{
         function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
     };
+
+    use super::*;
 
     #[test]
     fn test_prototype() {

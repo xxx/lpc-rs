@@ -1,6 +1,8 @@
-use crate::interpreter::{object_space::ObjectSpace, process::Process};
-use lpc_rs_utils::config::Config;
 use std::{cell::RefCell, rc::Rc};
+
+use lpc_rs_utils::config::Config;
+
+use crate::interpreter::{object_space::ObjectSpace, process::Process};
 
 pub fn get_simul_efuns(
     config: &Config,
@@ -14,10 +16,11 @@ pub fn get_simul_efuns(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::interpreter::program::Program;
     use claim::assert_none;
     use lpc_rs_core::lpc_path::LpcPath;
+
+    use super::*;
+    use crate::interpreter::program::Program;
 
     #[test]
     fn test_get_simul_efuns() {

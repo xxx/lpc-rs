@@ -4,16 +4,17 @@ use std::{
     str::FromStr,
 };
 
-use crate::compiler::lexer::{
-    lex_state::LexState,
-    logos_token::{FloatToken, IntToken, StringToken},
-};
 use logos::{Lexer, Logos};
 use lpc_rs_core::{convert_escapes, BaseFloat, LpcInt};
 use lpc_rs_errors::{
     lazy_files::FileId,
     span::{HasSpan, Span},
     LpcError, Result,
+};
+
+use crate::compiler::lexer::{
+    lex_state::LexState,
+    logos_token::{FloatToken, IntToken, StringToken},
 };
 
 pub mod lex_state;
@@ -423,8 +424,8 @@ fn string_token(lex: &mut Lexer<Token>) -> StringToken {
     StringToken(span, lex.extras.last_slice.clone())
 }
 
-/// Strip off the start and end characters of a string, then store the result in a [`StringToken`].
-/// Used for processing string literals and include paths.
+/// Strip off the start and end characters of a string, then store the result in
+/// a [`StringToken`]. Used for processing string literals and include paths.
 fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
     track_slice(lex);
     let slice: &str = &lex.extras.last_slice;

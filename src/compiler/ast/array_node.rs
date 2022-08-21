@@ -1,8 +1,9 @@
-use lpc_rs_errors::{span::Span, Result};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -17,8 +18,8 @@ use crate::compiler::{
 pub struct ArrayNode {
     pub value: Vec<ExpressionNode>,
 
-    /// The full span of all expressions in the array - from the left side of the first item
-    /// to the right side of the last
+    /// The full span of all expressions in the array - from the left side of
+    /// the first item to the right side of the last
     pub span: Option<Span>,
 }
 

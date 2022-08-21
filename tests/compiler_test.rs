@@ -1,6 +1,7 @@
 mod support;
 
-use crate::support::run_prog;
+use std::rc::Rc;
+
 use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
@@ -9,7 +10,8 @@ use lpc_rs::{
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
 };
 use lpc_rs_utils::config::Config;
-use std::rc::Rc;
+
+use crate::support::run_prog;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = Config::new(None::<&str>)

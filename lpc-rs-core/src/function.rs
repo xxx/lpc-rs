@@ -1,6 +1,8 @@
-use crate::register::RegisterVariant;
-use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+
+use serde::{Deserialize, Serialize};
+
+use crate::register::RegisterVariant;
 
 /// An enum to handle function names that are either vars or literal names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,8 +31,8 @@ pub enum FunctionReceiver {
     /// The receiver is the Process stored in the [`RegisterVariant`].
     Var(RegisterVariant),
 
-    /// The receiver will be filled-in at call time, with the first argument passed to the call.
-    /// i.e. the `&->foo()` syntax
+    /// The receiver will be filled-in at call time, with the first argument
+    /// passed to the call. i.e. the `&->foo()` syntax
     Argument,
 }
 

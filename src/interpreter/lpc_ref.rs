@@ -1,12 +1,3 @@
-use crate::{
-    compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    interpreter::lpc_value::LpcValue,
-    try_extract_value,
-};
-use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
-use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_utils::{string, string::concatenate_strings};
-use refpool::PoolRef;
 use std::{
     cell::RefCell,
     cmp::Ordering,
@@ -15,6 +6,17 @@ use std::{
     hash::{Hash, Hasher},
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
+};
+
+use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::{string, string::concatenate_strings};
+use refpool::PoolRef;
+
+use crate::{
+    compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
+    interpreter::lpc_value::LpcValue,
+    try_extract_value,
 };
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
@@ -59,21 +61,24 @@ macro_rules! extract_value {
     };
 }
 
-/// Represent a variable stored in a `Register`. Value types store the actual value.
-/// Reference types store a reference to the actual value.
+/// Represent a variable stored in a `Register`. Value types store the actual
+/// value. Reference types store a reference to the actual value.
 /// This type is intended to be cheap to clone.
 #[derive(Eq, Debug, Clone)]
 pub enum LpcRef {
     Float(LpcFloat),
     Int(LpcInt),
 
-    /// Reference type, and stores a reference-counting pointer to the actual value
+    /// Reference type, and stores a reference-counting pointer to the actual
+    /// value
     String(PoolRef<RefCell<LpcValue>>),
 
-    /// Reference type, and stores a reference-counting pointer to the actual value
+    /// Reference type, and stores a reference-counting pointer to the actual
+    /// value
     Array(PoolRef<RefCell<LpcValue>>),
 
-    /// Reference type, and stores a reference-counting pointer to the actual value
+    /// Reference type, and stores a reference-counting pointer to the actual
+    /// value
     Mapping(PoolRef<RefCell<LpcValue>>),
 
     /// Reference type, pointing to an LPC `object`
@@ -491,14 +496,17 @@ impl Default for LpcRef {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use claim::assert_err;
-    use refpool::{Pool, PoolRef};
     use std::cell::RefCell;
 
+    use claim::assert_err;
+    use refpool::{Pool, PoolRef};
+
+    use super::*;
+
     mod test_add {
-        use super::*;
         use indexmap::IndexMap;
+
+        use super::*;
 
         #[test]
         fn int_int() {

@@ -1,3 +1,26 @@
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    fmt::{Debug, Display},
+    rc::Rc,
+};
+
+use decorum::Total;
+use if_chain::if_chain;
+use indexmap::IndexMap;
+use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_core::{
+    call_namespace::CallNamespace,
+    function::{FunctionName, FunctionReceiver, FunctionTarget},
+    function_arity::FunctionArity,
+    register::{Register, RegisterVariant},
+    LpcInt, EFUN, INIT_PROGRAM,
+};
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_utils::config::Config;
+use tracing::{instrument, trace};
+
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
@@ -16,27 +39,6 @@ use crate::{
     },
     try_extract_value,
 };
-use decorum::Total;
-use if_chain::if_chain;
-use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction};
-use lpc_rs_core::{
-    call_namespace::CallNamespace,
-    function::{FunctionName, FunctionReceiver, FunctionTarget},
-    function_arity::FunctionArity,
-    register::{Register, RegisterVariant},
-    LpcInt, EFUN, INIT_PROGRAM,
-};
-use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_function_support::program_function::ProgramFunction;
-use lpc_rs_utils::config::Config;
-use std::{
-    borrow::Cow,
-    cell::RefCell,
-    fmt::{Debug, Display},
-    rc::Rc,
-};
-use tracing::{instrument, trace};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -111,8 +113,8 @@ struct CatchPoint {
     register: RegisterVariant,
 }
 
-/// An abstraction to allow for isolated running to completion of a specified function.
-/// It represents a single thread of execution
+/// An abstraction to allow for isolated running to completion of a specified
+/// function. It represents a single thread of execution
 #[derive(Debug, Clone)]
 pub struct Task<'pool, const STACKSIZE: usize> {
     /// The call stack
@@ -230,7 +232,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     /// Evaluate the instruction at the current value of the PC
-    /// The boolean represents whether we are at the end of input (i.e. we should halt the machine)
+    /// The boolean represents whether we are at the end of input (i.e. we
+    /// should halt the machine)
     #[instrument(skip_all)]
     fn eval_one_instruction(&mut self, task_context: &TaskContext) -> Result<bool> {
         if self.stack.is_empty() {
@@ -952,7 +955,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let dynamic_receiver;
 
                 {
-                    // TODO: Is there some way to avoid this redundant check, while still being able to update the register?
+                    // TODO: Is there some way to avoid this redundant check, while still being able
+                    // to update the register?
                     let func_ref = get_loc!(self, *location)?;
                     let public;
 
@@ -961,8 +965,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let ptr = try_extract_value!(*borrowed, LpcValue::Function);
                         match &ptr.address {
                             FunctionAddress::Local(receiver, pf) => {
-                                if !ptr.call_other
-                                    && Rc::ptr_eq(&task_context.process(), receiver)
+                                if !ptr.call_other && Rc::ptr_eq(&task_context.process(), receiver)
                                 {
                                     // local functions are always "public" to the caller
                                     public = true;
@@ -1161,8 +1164,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                     let initial_index = initial_arg.index();
 
-                    // An inner helper function to actually calculate the result, for easy re-use when
-                    // using `call_other` with arrays and mappings.
+                    // An inner helper function to actually calculate the result, for easy re-use
+                    // when using `call_other` with arrays and mappings.
                     fn resolve_result(
                         receiver_ref: &LpcRef,
                         function_name: &str,
@@ -1190,10 +1193,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                     let new_context =
                                         task_context.clone().with_process(receiver.clone());
-                                    // unwrap() is ok because resolve_call_other_receiver() checks for the function's presence.
+                                    // unwrap() is ok because resolve_call_other_receiver() checks
+                                    // for the function's presence.
                                     let function = receiver
                                         .borrow()
-                                        // TODO: namespace needs to be made available to this instruction
+                                        // TODO: namespace needs to be made available to this
+                                        // instruction
                                         .lookup_function(function_name, &CallNamespace::Local)
                                         .unwrap()
                                         .clone();
@@ -1541,8 +1546,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let frame_index = catch_point.frame_index;
         let new_pc = catch_point.address;
 
-        // clear away stack frames that won't be executed any further, which lie between the
-        // error and the catch point's stack frame.
+        // clear away stack frames that won't be executed any further, which lie between
+        // the error and the catch point's stack frame.
         // Does nothing if you're already in the correct stack frame, or one away.
         self.stack.truncate(frame_index + 2);
 
@@ -1686,19 +1691,22 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        extract_value,
-        test_support::{compile_prog, run_prog},
-    };
-    use indoc::indoc;
-    use lpc_rs_core::{LpcFloat, LpcInt};
     use std::{
         collections::HashMap,
         hash::{Hash, Hasher},
     };
 
-    /// A type to make it easier to set up test expectations for register contents
+    use indoc::indoc;
+    use lpc_rs_core::{LpcFloat, LpcInt};
+
+    use super::*;
+    use crate::{
+        extract_value,
+        test_support::{compile_prog, run_prog},
+    };
+
+    /// A type to make it easier to set up test expectations for register
+    /// contents
     #[derive(Debug, PartialEq, Eq, Clone)]
     enum BareVal {
         String(String),
@@ -1794,7 +1802,8 @@ mod tests {
             let mut stack = task.snapshot.unwrap();
 
             // The top of the stack in the snapshot is the object initialization frame,
-            // which is not what we care about here, so we get the second-to-top frame instead.
+            // which is not what we care about here, so we get the second-to-top frame
+            // instead.
             let index = stack.len() - 2;
 
             std::mem::take(&mut stack[index].registers)
@@ -1995,8 +2004,9 @@ mod tests {
         }
 
         mod test_call_fp {
-            use super::*;
             use itertools::Itertools;
+
+            use super::*;
 
             #[test]
             fn stores_the_value() {
@@ -3610,11 +3620,12 @@ mod tests {
         }
 
         mod test_sizeof {
-            use super::*;
-            use crate::test_support::test_config;
             use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
             use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
             use lpc_rs_function_support::function_prototype::FunctionPrototype;
+
+            use super::*;
+            use crate::test_support::test_config;
 
             #[test]
             fn stores_the_value_for_arrays() {

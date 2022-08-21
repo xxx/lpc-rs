@@ -1,3 +1,9 @@
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
+
+use delegate::delegate;
+use lpc_rs_errors::Result;
+use lpc_rs_utils::config::Config;
+
 use crate::{
     interpreter::{
         instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
@@ -5,15 +11,12 @@ use crate::{
     },
     util::get_simul_efuns,
 };
-use delegate::delegate;
-use lpc_rs_errors::Result;
-use lpc_rs_utils::config::Config;
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Debug, Clone)]
 pub struct TaskContext {
-    /// The [`Config`] that's in use for the [`Task`](crate::interpreter::task::Task).
+    /// The [`Config`] that's in use for the
+    /// [`Task`](crate::interpreter::task::Task).
     config: Rc<Config>,
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
@@ -85,7 +88,8 @@ impl TaskContext {
         self.object_space.borrow().lookup(path).cloned()
     }
 
-    /// Directly insert the passed [`Process`] into the object space, with in-game local filename.
+    /// Directly insert the passed [`Process`] into the object space, with
+    /// in-game local filename.
     #[inline]
     pub fn insert_process<P>(&self, process: P)
     where
@@ -164,8 +168,9 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::lpc_path::LpcPath;
+
+    use super::*;
 
     #[test]
     fn test_in_game_cwd() {

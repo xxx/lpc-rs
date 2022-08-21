@@ -3,6 +3,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use itertools::Itertools;
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNodeTrait, SpannedNode},
@@ -10,16 +13,14 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing a comma-separated list of expressions
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct CommaExpressionNode {
     pub value: Vec<ExpressionNode>,
 
-    /// The full span of all expressions in the list - from the left side of the first item
-    /// to the right side of the last
+    /// The full span of all expressions in the list - from the left side of the
+    /// first item to the right side of the last
     pub span: Option<Span>,
 }
 

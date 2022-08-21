@@ -1,8 +1,10 @@
-use lpc_rs_errors::{span::Span, LpcError, Result};
 use std::{
+    convert::TryFrom,
     fmt,
     fmt::{Display, Formatter},
 };
+
+use lpc_rs_errors::{span::Span, LpcError, Result};
 
 use crate::compiler::{
     ast::{
@@ -12,7 +14,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use std::convert::TryFrom;
 
 /// All possible binary operations
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
@@ -102,7 +103,8 @@ pub struct BinaryOpNode {
     /// The operation to perform
     pub op: BinaryOperation,
 
-    /// The text span in the original file that this node represents. Used for error messages.
+    /// The text span in the original file that this node represents. Used for
+    /// error messages.
     pub span: Option<Span>,
 }
 

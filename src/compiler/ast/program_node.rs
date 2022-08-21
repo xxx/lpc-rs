@@ -3,6 +3,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use itertools::Itertools;
+use lpc_rs_errors::Result;
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNode, AstNodeTrait},
@@ -10,8 +13,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lpc_rs_errors::Result;
 
 /// A node representing a full object. This is the top-level translation unit.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Default, Hash, Eq)]

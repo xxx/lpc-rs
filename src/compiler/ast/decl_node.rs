@@ -1,13 +1,15 @@
-use crate::compiler::{
-    ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
-    codegen::tree_walker::TreeWalker,
-};
-use itertools::Itertools;
-use lpc_rs_core::lpc_type::LpcType;
-use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
+};
+
+use itertools::Itertools;
+use lpc_rs_core::lpc_type::LpcType;
+use lpc_rs_errors::Result;
+
+use crate::compiler::{
+    ast::{ast_node::AstNodeTrait, var_init_node::VarInitNode},
+    codegen::tree_walker::TreeWalker,
 };
 
 /// A container for a set of variable declarations.

@@ -6,7 +6,8 @@ use lpc_rs_utils::config::Config;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// The directory to use as LIB_DIR for includes, etc. Defaults to what is contained in the config file.
+    /// The directory to use as LIB_DIR for includes, etc. Defaults to what is
+    /// contained in the config file.
     #[clap(short, long, value_parser, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     lib_dir: Option<String>,
 

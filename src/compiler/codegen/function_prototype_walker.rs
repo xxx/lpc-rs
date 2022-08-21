@@ -1,3 +1,8 @@
+use lpc_rs_core::function_arity::FunctionArity;
+use lpc_rs_errors::Result;
+use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_utils::string::closure_arg_number;
+
 use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait, closure_node::ClosureNode, function_def_node::FunctionDefNode,
@@ -6,12 +11,9 @@ use crate::compiler::{
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
 };
-use lpc_rs_core::function_arity::FunctionArity;
-use lpc_rs_errors::Result;
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
-use lpc_rs_utils::string::closure_arg_number;
 
-/// A walker to collect all of the function definitions. This runs early on to allow for forward references.
+/// A walker to collect all of the function definitions. This runs early on to
+/// allow for forward references.
 #[derive(Debug, Default)]
 pub struct FunctionPrototypeWalker {
     /// The compilation context
@@ -157,12 +159,12 @@ impl TreeWalker for FunctionPrototypeWalker {
 
 #[cfg(test)]
 mod tests {
-    use crate::compiler::ast::var_init_node::VarInitNode;
-    use lpc_rs_core::lpc_type::LpcType;
+    use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 
     use super::*;
-    use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode};
-    use lpc_rs_core::function_flags::FunctionFlags;
+    use crate::compiler::ast::{
+        ast_node::AstNode, expression_node::ExpressionNode, var_init_node::VarInitNode,
+    };
 
     #[test]
     fn function_def_stores_the_prototype() {
@@ -236,7 +238,8 @@ mod tests {
                 name: "closure-123".into(),
                 return_type: LpcType::Mixed(false),
                 arity: FunctionArity {
-                    num_args: 4, // $4 implies 4, which is more than the declared params `foo` and `bar`.
+                    num_args: 4, /* $4 implies 4, which is more than the declared params `foo`
+                                  * and `bar`. */
                     num_default_args: 0,
                     ellipsis: false,
                     varargs: false

@@ -1,20 +1,24 @@
+use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
+
+use delegate::delegate;
+use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_utils::config::Config;
+
 use crate::interpreter::{
     call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
     memory::Memory, process::Process, program::Program, task_context::TaskContext,
 };
-use delegate::delegate;
-use lpc_rs_errors::{span::Span, LpcError, Result};
-use lpc_rs_utils::config::Config;
-use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
 
-/// A structure to hold various pieces of interpreter state, to be passed to Efuns
+/// A structure to hold various pieces of interpreter state, to be passed to
+/// Efuns
 #[derive(Debug)]
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
     memory: &'task Memory,
 
-    /// Allow the user to take a snapshot of the callstack, for testing and debugging
+    /// Allow the user to take a snapshot of the callstack, for testing and
+    /// debugging
     #[cfg(test)]
     pub snapshot: Option<CallStack<N>>,
 }
@@ -115,7 +119,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         &self.frame().process
     }
 
-    /// Directly insert the passed [`Process`] into the object space, with in-game local filename.
+    /// Directly insert the passed [`Process`] into the object space, with
+    /// in-game local filename.
     #[inline]
     pub fn insert_process<P>(&self, process: P)
     where

@@ -1,6 +1,7 @@
+use std::path::Path;
+
 use decorum::Total;
 use fs_err as fs;
-use std::path::Path;
 
 pub mod call_namespace;
 pub mod function;
@@ -35,7 +36,8 @@ pub type LpcInt = i64;
 /// The base float-type that in-game `float`s are backed by
 pub type BaseFloat = f64;
 
-/// Abstracted type for in-game `float`s. The wrapper is to handle hashing, ordering, etc.
+/// Abstracted type for in-game `float`s. The wrapper is to handle hashing,
+/// ordering, etc.
 pub type LpcFloat = Total<BaseFloat>;
 
 /// Convert various literal escapes to actual escape characters

@@ -1,15 +1,18 @@
-use crate::interpreter::lpc_ref::LpcRef;
-use delegate::delegate;
-use lpc_rs_core::register::Register;
 use std::{
     ops::{Index, IndexMut, Range, RangeInclusive},
     slice::Iter,
 };
 
+use delegate::delegate;
+use lpc_rs_core::register::Register;
+
+use crate::interpreter::lpc_ref::LpcRef;
+
 /// A type to handle data movement (the arena itself stores the actual data)
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegisterBank {
-    /// Our storage. By convention, `registers[0]` is for the return value function calls.
+    /// Our storage. By convention, `registers[0]` is for the return value
+    /// function calls.
     pub registers: Vec<LpcRef>,
 }
 

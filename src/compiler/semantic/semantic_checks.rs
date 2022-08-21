@@ -246,8 +246,8 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
     }
 }
 
-/// Check two types, and return the promotion if one occurs (or the same type if both are the same)
-/// Returns the first type if no promotion is possible.
+/// Check two types, and return the promotion if one occurs (or the same type if
+/// both are the same) Returns the first type if no promotion is possible.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
     if op == BinaryOperation::Index {
         if matches!(type1, LpcType::Mapping(_)) {
@@ -399,19 +399,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::test_support::factories::*;
     use factori::create;
     use lpc_rs_core::call_namespace::CallNamespace;
 
+    use super::*;
+    use crate::test_support::factories::*;
+
     mod check_binary_operation_tests {
+        use indexmap::IndexMap;
+        use lpc_rs_core::global_var_flags::GlobalVarFlags;
+
         use super::*;
         use crate::compiler::{
             ast::range_node::RangeNode,
             semantic::{scope_tree::ScopeTree, symbol::Symbol},
         };
-        use indexmap::IndexMap;
-        use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1539,10 +1541,11 @@ mod tests {
     }
 
     mod check_unary_operation_tests {
-        use super::*;
-        use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
         use indexmap::IndexMap;
         use lpc_rs_core::global_var_flags::GlobalVarFlags;
+
+        use super::*;
+        use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1799,10 +1802,11 @@ mod tests {
         use super::*;
 
         mod arrays {
-            use super::*;
-            use crate::compiler::ast::array_node::ArrayNode;
             use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags, EFUN};
             use lpc_rs_function_support::function_prototype::FunctionPrototype;
+
+            use super::*;
+            use crate::compiler::ast::array_node::ArrayNode;
 
             #[test]
             fn empty_array_is_mixed() {
@@ -1944,9 +1948,10 @@ mod tests {
         }
 
         mod binary_ops {
+            use lpc_rs_core::global_var_flags::GlobalVarFlags;
+
             use super::*;
             use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
-            use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
             #[test]
             fn test_index_array_returns_singular_of_left_type() {
@@ -2024,9 +2029,10 @@ mod tests {
         }
 
         mod calls {
+            use lpc_rs_core::global_var_flags::GlobalVarFlags;
+
             use super::*;
             use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
-            use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
             #[test]
             fn is_return_type_for_normal_functions() {

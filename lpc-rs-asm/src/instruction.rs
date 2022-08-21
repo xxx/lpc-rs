@@ -1,3 +1,8 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
@@ -5,10 +10,6 @@ use lpc_rs_core::{
     register::RegisterVariant, LpcFloat, LpcInt,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
-};
 
 /// Really just a `pc` index in the vm.
 pub type Address = usize;
@@ -16,7 +17,8 @@ pub type Address = usize;
 pub type Label = String;
 
 /// Representation of an assembly language instruction.
-/// In general, they are structured as `name(arg1, ...argn, destination)`, a la the AT&T syntax
+/// In general, they are structured as `name(arg1, ...argn, destination)`, a la
+/// the AT&T syntax
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
@@ -52,12 +54,14 @@ pub enum Instruction {
         initial_arg: RegisterVariant,
     },
 
-    /// Finish a block of instructions that can catch errors and continue execution.
-    /// Store the error in x.0, and jump to x.1 to continue execution
+    /// Finish a block of instructions that can catch errors and continue
+    /// execution. Store the error in x.0, and jump to x.1 to continue
+    /// execution
     CatchEnd,
 
-    /// Start a block of instructions that can catch errors and continue execution.
-    /// Store the error in x.0, and jump to x.1 to continue execution
+    /// Start a block of instructions that can catch errors and continue
+    /// execution. Store the error in x.0, and jump to x.1 to continue
+    /// execution
     CatchStart(RegisterVariant, Label),
 
     /// Decrement the value in x.0 by 1
@@ -83,7 +87,8 @@ pub enum Instruction {
     GLoad(RegisterVariant, RegisterVariant),
 
     /// Copy a variable from the current stack frame, to the global registers.
-    /// Copies a variable from *local* register x.0, into the *global* register x.1.
+    /// Copies a variable from *local* register x.0, into the *global* register
+    /// x.1.
     GStore(RegisterVariant, RegisterVariant),
 
     /// Greater than
@@ -149,13 +154,16 @@ pub enum Instruction {
     /// Create a mapping from the keys and values in the hashmap
     MapConst(RegisterVariant, IndexMap<RegisterVariant, RegisterVariant>),
 
-    /// Addition where at least one side is a reference type, so check at runtime.
+    /// Addition where at least one side is a reference type, so check at
+    /// runtime.
     MAdd(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// Multiplication where at least one side is a reference type, so check at runtime.
+    /// Multiplication where at least one side is a reference type, so check at
+    /// runtime.
     MMul(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// Subtraction where at least one side is a reference type, so check at runtime.
+    /// Subtraction where at least one side is a reference type, so check at
+    /// runtime.
     MSub(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Check if x.0 is equal to 0
@@ -171,18 +179,18 @@ pub enum Instruction {
     /// The first `usize` is the number of formal parameters to the function
     ///   (whether they have default values or not, basically just the count
     ///   of non-ellipsis params).
-    /// The second `usize` is the number of local variables used by the function.
-    /// We know both of these numbers at compile time, and any other register
-    ///   present in the frame is an ellipsis argument, so those are the ones we
-    ///   populate.
+    /// The second `usize` is the number of local variables used by the
+    /// function. We know both of these numbers at compile time, and any
+    /// other register   present in the frame is an ellipsis argument, so
+    /// those are the ones we   populate.
     PopulateArgv(RegisterVariant, usize, usize),
 
     /// Special case instruction to handle calls to functions that have default
     /// argument values.
     /// The first `usize` is the number of formal parameters to the function
     ///   (whether they have default values or not).
-    /// The vector is the list of addresses to jump to, to initialize the parameters
-    ///   that have default values.
+    /// The vector is the list of addresses to jump to, to initialize the
+    /// parameters   that have default values.
     PopulateDefaults(Vec<Address>),
 
     /// Create a new value from some range of another value

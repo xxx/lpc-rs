@@ -3,6 +3,10 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use itertools::Itertools;
+use lazy_format::lazy_format;
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNodeTrait, SpannedNode},
@@ -10,9 +14,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lazy_format::lazy_format;
-use lpc_rs_errors::{span::Span, Result};
 
 /// Receiver types. Function pointers can be declared with a dynamic receiver
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]

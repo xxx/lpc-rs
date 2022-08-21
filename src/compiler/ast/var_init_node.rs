@@ -1,8 +1,10 @@
-use lpc_rs_core::global_var_flags::GlobalVarFlags;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -11,8 +13,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_core::lpc_type::LpcType;
-use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing a variable definition, with optional initialization
 #[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Hash)]
@@ -32,7 +32,8 @@ pub struct VarInitNode {
     /// Is this var a global variable?
     pub global: bool,
 
-    /// The text span in the original file that this node represents. Used for error messages.
+    /// The text span in the original file that this node represents. Used for
+    /// error messages.
     pub span: Option<Span>,
 
     /// The flags for this variable. Only applicable for globals.

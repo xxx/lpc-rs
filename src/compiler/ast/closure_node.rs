@@ -1,8 +1,12 @@
-use indextree::NodeId;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use indextree::NodeId;
+use itertools::Itertools;
+use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -11,9 +15,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
-use lpc_rs_errors::{span::Span, Result};
 
 /// A node representation a function definition
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]

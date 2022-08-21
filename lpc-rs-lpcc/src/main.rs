@@ -1,5 +1,6 @@
-use clap::Parser;
+use std::rc::Rc;
 
+use clap::Parser;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
@@ -7,7 +8,6 @@ use lpc_rs::{
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::Config;
-use std::rc::Rc;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

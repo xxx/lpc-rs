@@ -1,14 +1,16 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
+use lpc_rs_errors::Result;
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNode, AstNodeTrait},
         label_node::LabelNode,
     },
     codegen::tree_walker::TreeWalker,
-};
-use lpc_rs_errors::Result;
-use std::{
-    fmt,
-    fmt::{Display, Formatter},
 };
 
 /// A wrapper for nodes to allow labels to be applied.

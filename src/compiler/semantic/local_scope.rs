@@ -1,6 +1,8 @@
-use crate::compiler::semantic::symbol::Symbol;
-use delegate::delegate;
 use std::collections::HashMap;
+
+use delegate::delegate;
+
+use crate::compiler::semantic::symbol::Symbol;
 
 /// A representation of a local scope / symbol table
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -56,8 +58,9 @@ impl Default for LocalScope {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
+
+    use super::*;
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {

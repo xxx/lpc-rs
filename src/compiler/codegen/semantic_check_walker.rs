@@ -1,3 +1,8 @@
+use if_chain::if_chain;
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::string::closure_arg_number;
+
 use crate::{
     compile_time_config::MAX_CLOSURE_ARG_REFERENCE,
     compiler::{
@@ -35,10 +40,6 @@ use crate::{
         },
     },
 };
-use if_chain::if_chain;
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
-use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_utils::string::closure_arg_number;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -543,7 +544,8 @@ impl TreeWalker for SemanticCheckWalker {
         if let Some(function_def) = &self.current_function {
             if let Some(expression) = &node.value {
                 if let ExpressionNode::Int(IntNode { value: 0, .. }) = expression {
-                    // returning a literal 0 is allowable for any type, including void.
+                    // returning a literal 0 is allowable for any type,
+                    // including void.
                 } else {
                     let return_type = node_type(expression, &self.context)?;
 
@@ -715,6 +717,21 @@ impl TreeWalker for SemanticCheckWalker {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::{HashMap, VecDeque},
+        default::Default,
+    };
+
+    use claim::*;
+    use factori::create;
+    use indoc::indoc;
+    use lpc_rs_core::{
+        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
+        lpc_type::LpcType,
+    };
+    use lpc_rs_errors::LpcErrorSeverity;
+    use lpc_rs_function_support::function_prototype::FunctionPrototype;
+
     use super::*;
     use crate::{
         apply_walker,
@@ -728,19 +745,6 @@ mod tests {
             Compiler,
         },
         test_support::factories::*,
-    };
-    use claim::*;
-    use factori::create;
-    use indoc::indoc;
-    use lpc_rs_core::{
-        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
-        lpc_type::LpcType,
-    };
-    use lpc_rs_errors::LpcErrorSeverity;
-    use lpc_rs_function_support::function_prototype::FunctionPrototype;
-    use std::{
-        collections::{HashMap, VecDeque},
-        default::Default,
     };
 
     fn empty_context() -> CompilationContext {
@@ -778,9 +782,8 @@ mod tests {
     }
 
     mod test_visit_assignment {
-        use crate::compiler::ast::binary_op_node::BinaryOperation;
-
         use super::*;
+        use crate::compiler::ast::binary_op_node::BinaryOperation;
 
         #[test]
         fn validates_both_sides() -> Result<()> {
@@ -984,9 +987,8 @@ mod tests {
     }
 
     mod test_visit_binary_op {
-        use crate::compiler::ast::binary_op_node::BinaryOperation;
-
         use super::*;
+        use crate::compiler::ast::binary_op_node::BinaryOperation;
 
         #[test]
         fn validates_both_sides() -> Result<()> {
@@ -1116,10 +1118,11 @@ mod tests {
     }
 
     mod test_visit_call {
-        use super::*;
-        use crate::{assert_regex, interpreter::program::Program};
         use lpc_rs_core::{function_flags::FunctionFlags, visibility::Visibility};
         use lpc_rs_function_support::program_function::ProgramFunction;
+
+        use super::*;
+        use crate::{assert_regex, interpreter::program::Program};
 
         #[test]
         fn allows_known_functions() {
@@ -1936,6 +1939,9 @@ mod tests {
     }
 
     mod test_visit_function_def {
+        use lpc_rs_core::function_flags::FunctionFlags;
+        use lpc_rs_function_support::program_function::ProgramFunction;
+
         use super::*;
         use crate::{
             assert_regex,
@@ -1945,8 +1951,6 @@ mod tests {
             },
             interpreter::program::Program,
         };
-        use lpc_rs_core::function_flags::FunctionFlags;
-        use lpc_rs_function_support::program_function::ProgramFunction;
 
         #[test]
         fn handles_scopes() {
@@ -2090,10 +2094,11 @@ mod tests {
     }
 
     mod test_visit_function_ptr {
-        use super::*;
-        use crate::{assert_regex, interpreter::program::Program};
         use lpc_rs_core::{function_flags::FunctionFlags, visibility::Visibility};
         use lpc_rs_function_support::program_function::ProgramFunction;
+
+        use super::*;
+        use crate::{assert_regex, interpreter::program::Program};
 
         #[test]
         fn allows_local_private_functions() {
@@ -2355,8 +2360,9 @@ mod tests {
     }
 
     mod test_visit_return {
-        use super::*;
         use lpc_rs_core::function_flags::FunctionFlags;
+
+        use super::*;
 
         #[test]
         fn test_visit_return() {
@@ -2487,9 +2493,8 @@ mod tests {
     }
 
     mod test_visit_unary_op {
-        use crate::compiler::ast::unary_op_node::UnaryOperation;
-
         use super::*;
+        use crate::compiler::ast::unary_op_node::UnaryOperation;
 
         mod test_negate {
             use super::*;
@@ -2644,8 +2649,9 @@ mod tests {
     }
 
     mod test_visit_var_init {
-        use super::*;
         use lpc_rs_core::function_flags::FunctionFlags;
+
+        use super::*;
 
         #[test]
         fn validates_both_sides() {

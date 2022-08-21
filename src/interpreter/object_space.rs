@@ -1,10 +1,13 @@
-use crate::interpreter::{process::Process, program::Program};
-use delegate::delegate;
-use lpc_rs_utils::config::Config;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-/// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master and cloned objects.
-/// In other words, this is the map that `find_object()` uses.
+use delegate::delegate;
+use lpc_rs_utils::config::Config;
+
+use crate::interpreter::{process::Process, program::Program};
+
+/// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
+/// and cloned objects. In other words, this is the map that `find_object()`
+/// uses.
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
@@ -43,9 +46,9 @@ impl ObjectSpace {
         }
     }
 
-    /// Create a [`Process`] from a [`Program`], and add add it to the process table.
-    /// If a new program with the same filename as an existing one is added,
-    /// the new will overwrite the old in the table.
+    /// Create a [`Process`] from a [`Program`], and add add it to the process
+    /// table. If a new program with the same filename as an existing one is
+    /// added, the new will overwrite the old in the table.
     /// Storage keys are the in-game filename
     pub fn insert_master(&mut self, program: Program) -> Rc<RefCell<Process>> {
         let process: Rc<RefCell<Process>> = Process::new(program).into();
@@ -61,7 +64,8 @@ impl ObjectSpace {
         process
     }
 
-    /// Directly insert the passed [`Process`] into the space, with in-game local filename.
+    /// Directly insert the passed [`Process`] into the space, with in-game
+    /// local filename.
     pub fn insert_process<P>(&mut self, process: P)
     where
         P: Into<Rc<RefCell<Process>>>,
@@ -105,8 +109,9 @@ impl From<ObjectSpace> for Rc<RefCell<ObjectSpace>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::lpc_path::LpcPath;
+
+    use super::*;
 
     #[test]
     fn test_insert_master() {

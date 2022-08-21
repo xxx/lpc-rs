@@ -1,11 +1,13 @@
-use crate::lazy_files::{FileId, FILE_CACHE};
-use codespan_reporting::files::Files;
-use if_chain::if_chain;
-use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
     ops::Range,
 };
+
+use codespan_reporting::files::Files;
+use if_chain::if_chain;
+use serde::{Deserialize, Serialize};
+
+use crate::lazy_files::{FileId, FILE_CACHE};
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
@@ -66,14 +68,15 @@ impl Span {
     /// Create a new [`Span`]
     ///
     /// # Arguments
-    /// `file_id` - The [`FileId`] of the file from the [`FILE_CACHE`](static@crate::lazy_files::FILE_CACHE)
-    /// `range` - The range containing the start and end indices of the span.
-    ///           It's assumed that `l..r` is the correct code span in error messaging.
+    /// `file_id` - The [`FileId`] of the file from the
+    /// [`FILE_CACHE`](static@crate::lazy_files::FILE_CACHE) `range` - The
+    /// range containing the start and end indices of the span.
+    ///           It's assumed that `l..r` is the correct code span in error
+    /// messaging.
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs_errors::lazy_files::FileCache;
-    /// use lpc_rs_errors::span::Span;
+    /// use lpc_rs_errors::{lazy_files::FileCache, span::Span};
     ///
     /// let file_id = FileCache::insert("tests/fixtures/code/example.c");
     /// let span = Span::new(file_id, 1..8);

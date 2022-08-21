@@ -1,7 +1,9 @@
-use crate::lpc_type_union::LpcTypeUnion;
+use std::{fmt, ops::BitOr};
+
 use fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
-use std::{fmt, ops::BitOr};
+
+use crate::lpc_type_union::LpcTypeUnion;
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.

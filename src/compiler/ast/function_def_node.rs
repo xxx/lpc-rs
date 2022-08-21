@@ -3,6 +3,10 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use itertools::Itertools;
+use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNode, AstNodeTrait, SpannedNode},
@@ -10,11 +14,9 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
-use lpc_rs_errors::{span::Span, Result};
 
-/// A constant for the `argv` variable that's automatically created in functions with ellipsis args
+/// A constant for the `argv` variable that's automatically created in functions
+/// with ellipsis args
 pub const ARGV: &str = "argv";
 
 /// A node representation a function definition

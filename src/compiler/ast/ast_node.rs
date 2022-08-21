@@ -5,10 +5,9 @@ use std::{
 };
 
 use auto_impl::auto_impl;
-
 use expression_node::ExpressionNode;
 use int_node::IntNode;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{span::Span, Result};
 use program_node::ProgramNode;
 
 use crate::compiler::{
@@ -22,7 +21,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_errors::span::Span;
 
 /// Representation of a top-level node in the AST.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]

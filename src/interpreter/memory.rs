@@ -1,9 +1,11 @@
+use std::{borrow::Cow, cell::RefCell};
+
+use refpool::{Pool, PoolRef};
+
 use crate::{
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
     value_to_ref,
 };
-use refpool::{Pool, PoolRef};
-use std::{borrow::Cow, cell::RefCell};
 
 /// The initial size (in cells) of system memory
 const MEMORY_SIZE: usize = 100_000;
@@ -11,7 +13,8 @@ const MEMORY_SIZE: usize = 100_000;
 /// Encapsulate the shared VM memory. All tasks share the same pool.
 #[derive(Debug, Clone)]
 pub struct Memory {
-    /// Where things are actually stored. Only reference types use any space from this pool.
+    /// Where things are actually stored. Only reference types use any space
+    /// from this pool.
     pool: Pool<RefCell<LpcValue>>,
 }
 
@@ -24,7 +27,8 @@ impl Memory {
         }
     }
 
-    /// Convert an [`LpcValue`] to an [`LpcRef`], allocating from the pool if necessary
+    /// Convert an [`LpcValue`] to an [`LpcRef`], allocating from the pool if
+    /// necessary
     pub fn value_to_ref(&self, value: LpcValue) -> LpcRef {
         value_to_ref!(value, self.pool)
     }

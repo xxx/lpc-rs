@@ -1,3 +1,9 @@
+use std::{cell::RefCell, rc::Rc};
+
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::Result;
+use lpc_rs_utils::config::Config;
+
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
@@ -6,14 +12,11 @@ use crate::{
     },
     util::get_simul_efuns,
 };
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
-use lpc_rs_utils::config::Config;
-use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
 pub struct Vm {
-    /// Our object space, which stores all of the system objects (masters and clones)
+    /// Our object space, which stores all of the system objects (masters and
+    /// clones)
     object_space: Rc<RefCell<ObjectSpace>>,
 
     /// Shared VM memory

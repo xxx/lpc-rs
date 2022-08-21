@@ -1,3 +1,26 @@
+use std::{collections::HashMap, ops::Range, rc::Rc};
+
+use if_chain::if_chain;
+use indexmap::IndexMap;
+use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
+use lpc_rs_core::{
+    call_namespace::CallNamespace,
+    function::{FunctionName, FunctionReceiver, FunctionTarget},
+    function_arity::FunctionArity,
+    function_flags::FunctionFlags,
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    register_counter::RegisterCounter,
+    CREATE_FUNCTION, INIT_PROGRAM,
+};
+use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_function_support::{
+    function_prototype::FunctionPrototype, program_function::ProgramFunction,
+};
+use lpc_rs_utils::string::closure_arg_number;
+use tracing::instrument;
+use tree_walker::TreeWalker;
+
 use crate::{
     compiler::{
         ast::{
@@ -42,27 +65,6 @@ use crate::{
         program::Program,
     },
 };
-use if_chain::if_chain;
-use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
-use lpc_rs_core::{
-    call_namespace::CallNamespace,
-    function::{FunctionName, FunctionReceiver, FunctionTarget},
-    function_arity::FunctionArity,
-    function_flags::FunctionFlags,
-    lpc_type::LpcType,
-    register::{Register, RegisterVariant},
-    register_counter::RegisterCounter,
-    CREATE_FUNCTION, INIT_PROGRAM,
-};
-use lpc_rs_errors::{span::Span, LpcError, Result};
-use lpc_rs_function_support::{
-    function_prototype::FunctionPrototype, program_function::ProgramFunction,
-};
-use lpc_rs_utils::string::closure_arg_number;
-use std::{collections::HashMap, ops::Range, rc::Rc};
-use tracing::instrument;
-use tree_walker::TreeWalker;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -73,8 +75,9 @@ macro_rules! push_instruction {
     };
 }
 
-/// Partition on whether the value is stored in registers or memory, to help select instructions.
-/// tl;dr - Value types use `Register`, while reference types use `Memory`.
+/// Partition on whether the value is stored in registers or memory, to help
+/// select instructions. tl;dr - Value types use `Register`, while reference
+/// types use `Memory`.
 #[derive(Debug)]
 enum OperationType {
     Register,
@@ -110,7 +113,8 @@ impl SwitchCase {
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug)]
 pub struct CodegenWalker {
-    /// Keep track of the current function being generated (including global initialization)
+    /// Keep track of the current function being generated (including global
+    /// initialization)
     function_stack: Vec<ProgramFunction>,
 
     /// Counter for labels, as they need to be unique.
@@ -137,11 +141,14 @@ pub struct CodegenWalker {
     /// Labels where jumps at any particular time need to go to.
     jump_targets: Vec<JumpTarget>,
 
-    /// Mapping of `switch` cases to the address of the first instruction for a match
+    /// Mapping of `switch` cases to the address of the first instruction for a
+    /// match
     case_addresses: Vec<Vec<(SwitchCase, Address)>>,
 
-    /// Because Ranges have two results, we store both locations when we `visit_range`.
-    // TODO: test if this works with multi-dimensional arrays, or do we need to use a stack to track these?
+    /// Because Ranges have two results, we store both locations when we
+    /// `visit_range`.
+    // TODO: test if this works with multi-dimensional arrays, or do we need to use a stack to
+    // track these?
     visit_range_results: Option<(Option<RegisterVariant>, Option<RegisterVariant>)>,
 }
 
@@ -149,7 +156,8 @@ impl CodegenWalker {
     /// Create a new [`CodegenWalker`] that consumes the passed scopes
     ///
     /// # Arguments
-    /// `context` - The [`CompilationContext`] state that this tree walker will use for its internal workings.
+    /// `context` - The [`CompilationContext`] state that this tree walker will
+    /// use for its internal workings.
     pub fn new(context: CompilationContext) -> Self {
         let num_globals = context.num_globals;
         let num_init_registers = context.num_init_registers;
@@ -304,7 +312,8 @@ impl CodegenWalker {
         }
     }
 
-    /// The main switch to determine which instruction we select for a binary operation
+    /// The main switch to determine which instruction we select for a binary
+    /// operation
     fn choose_op_instruction(
         &self,
         node: &BinaryOpNode,
@@ -350,9 +359,10 @@ impl CodegenWalker {
         }
     }
 
-    /// Allows for recursive determination of typed binary operator instructions, allowing
-    /// choice between a numeric (i.e. held in registers) and mixed (i.e. tracked via references)
-    /// Switching on the instructions lets us avoid some value lookups at runtime.
+    /// Allows for recursive determination of typed binary operator
+    /// instructions, allowing choice between a numeric (i.e. held in
+    /// registers) and mixed (i.e. tracked via references) Switching on the
+    /// instructions lets us avoid some value lookups at runtime.
     fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
     where
         F: Fn() -> Instruction,
@@ -367,9 +377,9 @@ impl CodegenWalker {
         }
     }
 
-    /// A special case for function def parameters, where we don't want to generate code
-    /// for default arguments - we just want to have it on hand to refer to
-    /// when we generate code for calls.
+    /// A special case for function def parameters, where we don't want to
+    /// generate code for default arguments - we just want to have it on
+    /// hand to refer to when we generate code for calls.
     fn visit_parameter(&mut self, node: &VarInitNode) -> RegisterVariant {
         self.assign_sym_location(&node.name)
     }
@@ -389,14 +399,16 @@ impl CodegenWalker {
 
     /// Emit the instruction(s) to take the range of an array or string
     /// # Arguments
-    /// `reference` - The [`Register`] holding the reference to the ref we're taking a slice from.
-    /// `node` - A reference to the [`RangeNode`] that holds the range of the slice we're taking.
+    /// `reference` - The [`Register`] holding the reference to the ref we're
+    /// taking a slice from. `node` - A reference to the [`RangeNode`] that
+    /// holds the range of the slice we're taking.
     fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
         let first_index = if let Some(expr) = &mut *node.l {
             expr.visit(self)?;
             self.current_result
         } else {
-            // Default to 0. No instruction needed as the value in registers defaults to int 0.
+            // Default to 0. No instruction needed as the value in registers defaults to int
+            // 0.
             self.register_counter.next().unwrap().as_register()
         };
 
@@ -447,9 +459,9 @@ impl CodegenWalker {
             argument.visit(self)?;
         }
 
-        // get the address of the `catchend` pseudo-instruction, so we can jump to a location
-        // that is both guaranteed to have an instruction, as well as clean up the handled
-        // catch point
+        // get the address of the `catchend` pseudo-instruction, so we can jump to a
+        // location that is both guaranteed to have an instruction, as well as
+        // clean up the handled catch point
         let label_address = self.current_address();
         self.insert_label(label, label_address);
 
@@ -481,14 +493,15 @@ impl CodegenWalker {
     }
 
     /// Create the combined initializer from all of my inherited-from parents.
-    /// This method assumes that my immediate parents already have their own init
-    /// functions correctly combined from *their* parents, etc.
+    /// This method assumes that my immediate parents already have their own
+    /// init functions correctly combined from *their* parents, etc.
     ///
     /// # Arguments
-    /// * instructions: A mutable reference to a vector, where the combined instructions will be stored.
-    ///                 Done this way to avoid a lot of vector creations in the recursion.
-    /// * debug_spans: A mutable reference to a vector, where the debug spans of the
-    ///                combined instructions will be stored.
+    /// * instructions: A mutable reference to a vector, where the combined
+    ///   instructions will be stored. Done this way to avoid a lot of vector
+    ///   creations in the recursion.
+    /// * debug_spans: A mutable reference to a vector, where the debug spans of
+    ///   the combined instructions will be stored.
     fn combine_inits(
         &mut self,
         instructions: &mut Vec<Instruction>,
@@ -805,7 +818,8 @@ impl TreeWalker for CodegenWalker {
                 register = self.register_counter.next().unwrap().as_register();
             }
 
-            // Undo the final call to .next() in the above for-loop to avoid wasting a register
+            // Undo the final call to .next() in the above for-loop to avoid wasting a
+            // register
             self.register_counter.go_back();
 
             if let Some(rcvr) = &mut node.receiver {
@@ -1038,8 +1052,8 @@ impl TreeWalker for CodegenWalker {
                     if let Some(value) = &mut parameter.value {
                         default_init_addresses.push(self.current_address());
 
-                        // generate code for only the value, then assign by hand, because we pre-generated
-                        // locations of the parameters above.
+                        // generate code for only the value, then assign by hand, because we
+                        // pre-generated locations of the parameters above.
                         value.visit(self)?;
                         let instruction = RegCopy(self.current_result, passed_param_locations[idx]);
                         push_instruction!(self, instruction, node.span);
@@ -1070,7 +1084,8 @@ impl TreeWalker for CodegenWalker {
         let mut sym = self.function_stack.pop().unwrap();
         sym.num_locals = self.register_counter.as_usize() - num_args;
 
-        // backpatch the PopulateArgv instruction now that we have the correct number of locals.
+        // backpatch the PopulateArgv instruction now that we have the correct number of
+        // locals.
         if let Some(idx) = populate_argv_index {
             let instruction = &sym.instructions[idx];
             if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
@@ -1092,8 +1107,9 @@ impl TreeWalker for CodegenWalker {
         let location = self.register_counter.next().unwrap().as_register();
         self.current_result = location;
 
-        // closures are just local functions, with a pointer to them stored in a register at runtime.
-        // TODO: Ensure this still works when calling a returned closure in another object
+        // closures are just local functions, with a pointer to them stored in a
+        // register at runtime. TODO: Ensure this still works when calling a
+        // returned closure in another object
         let target = FunctionTarget::Local(
             FunctionName::Literal(node.name.clone()),
             FunctionReceiver::Local,
@@ -1397,8 +1413,8 @@ impl TreeWalker for CodegenWalker {
                 if let Some(value) = &mut parameter.value {
                     default_init_addresses.push(self.current_address());
 
-                    // generate code for only the value, then assign by hand, because we pre-generated
-                    // locations of the parameters above.
+                    // generate code for only the value, then assign by hand, because we
+                    // pre-generated locations of the parameters above.
                     value.visit(self)?;
                     let instruction = RegCopy(self.current_result, parameter_locations[idx]);
                     push_instruction!(self, instruction, node.span);
@@ -1428,7 +1444,8 @@ impl TreeWalker for CodegenWalker {
         let mut sym = self.function_stack.pop().unwrap();
         sym.num_locals = self.register_counter.as_usize() - num_args;
 
-        // backpatch the PopulateArgv instruction now that we have the correct number of locals.
+        // backpatch the PopulateArgv instruction now that we have the correct number of
+        // locals.
         if let Some(idx) = populate_argv_index {
             let instruction = &sym.instructions[idx];
             if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
@@ -1498,7 +1515,8 @@ impl TreeWalker for CodegenWalker {
             let name = match self.context.lookup_var(&node.name) {
                 Some(s) => {
                     if !s.type_.matches_type(LpcType::Function(false)) {
-                        // if there are no function-type vars of this name, assume the name is literal
+                        // if there are no function-type vars of this name, assume the name is
+                        // literal
                         FunctionName::Literal(node.name.clone())
                     } else {
                         let sym_loc = match s.location {
@@ -1568,8 +1586,9 @@ impl TreeWalker for CodegenWalker {
         // Visit the condition
         node.condition.visit(self)?;
 
-        // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the "then" body.
-        // Insert a placeholder address, which we correct below after the body's code is generated
+        // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the
+        // "then" body. Insert a placeholder address, which we correct below
+        // after the body's code is generated
         let instruction = Instruction::Jz(self.current_result, else_label.clone());
         push_instruction!(self, instruction, node.span);
 
@@ -2114,11 +2133,16 @@ impl Default for CodegenWalker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use lpc_rs_asm::instruction::Instruction::*;
-    use lpc_rs_errors::LpcErrorSeverity;
     use std::collections::VecDeque;
 
+    use lpc_rs_asm::instruction::Instruction::*;
+    use lpc_rs_core::{
+        global_var_flags::GlobalVarFlags, lpc_path::LpcPath, lpc_type::LpcType, LpcFloat,
+    };
+    use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
+    use lpc_rs_utils::config::Config;
+
+    use super::*;
     use crate::{
         apply_walker,
         compiler::{
@@ -2138,11 +2162,6 @@ mod tests {
         interpreter::{process::Process, program::Program},
         lpc_parser,
     };
-    use lpc_rs_core::{
-        global_var_flags::GlobalVarFlags, lpc_path::LpcPath, lpc_type::LpcType, LpcFloat,
-    };
-    use lpc_rs_errors::{span::Span, Result};
-    use lpc_rs_utils::config::Config;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
@@ -2255,8 +2274,9 @@ mod tests {
     }
 
     mod test_visit_assignment {
-        use super::*;
         use lpc_rs_core::global_var_flags::GlobalVarFlags;
+
+        use super::*;
 
         #[test]
         fn test_populates_the_instructions_for_globals() {
@@ -2684,8 +2704,9 @@ mod tests {
     }
 
     mod test_break {
-        use super::*;
         use lpc_rs_core::register::Register;
+
+        use super::*;
 
         #[test]
         fn breaks_out_of_while_loops() {
@@ -2981,9 +3002,9 @@ mod tests {
     mod test_visit_call {
         use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
+        use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
         use super::*;
-        use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
         fn get_call_node(code: &str, context: &mut CompilationContext) -> CallNode {
             let mut prog_node = lpc_parser::ProgramParser::new()
@@ -3563,8 +3584,8 @@ mod tests {
         // #[test]
         // fn populates_the_default_arguments() {
         //     assert_compiles_to(
-        //         "int main(int i, int j = 666, float d = 3.14) { return i * j; }",
-        //         vec![
+        //         "int main(int i, int j = 666, float d = 3.14) { return i * j;
+        // }",         vec![
         //             PopulateDefaults(vec![4, 6]),
         //             IMul(
         //                 RegisterVariant::Local(Register(1)),
@@ -3593,8 +3614,9 @@ mod tests {
     }
 
     mod test_continue {
-        use super::*;
         use lpc_rs_core::register::Register;
+
+        use super::*;
 
         #[test]
         fn continues_while_loops() {
@@ -3888,9 +3910,10 @@ mod tests {
     }
 
     mod test_visit_do_while {
+        use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
+
         use super::*;
         use crate::compiler::ast::do_while_node::DoWhileNode;
-        use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
 
         #[test]
         fn test_populates_the_instructions() {
@@ -3942,9 +3965,10 @@ mod tests {
     }
 
     mod test_visit_for {
+        use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
+
         use super::*;
         use crate::compiler::ast::for_node::ForNode;
-        use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
 
         #[test]
         fn populates_the_instructions() {
@@ -4187,8 +4211,9 @@ mod tests {
     }
 
     mod test_visit_if {
-        use super::*;
         use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jz};
+
+        use super::*;
 
         #[test]
         fn test_populates_the_instructions() {
@@ -4460,9 +4485,10 @@ mod tests {
     }
 
     mod test_visit_ternary {
+        use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
+
         use super::*;
         use crate::compiler::ast::ternary_node::TernaryNode;
-        use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
 
         #[test]
         fn populates_the_instructions() {
@@ -4729,9 +4755,10 @@ mod tests {
     }
 
     mod test_visit_var_init {
-        use super::*;
         use decorum::Total;
         use lpc_rs_asm::instruction::Instruction::{FConst, MapConst};
+
+        use super::*;
 
         fn setup() -> CodegenWalker {
             let mut context = CompilationContext::default();
@@ -5076,8 +5103,9 @@ mod tests {
     }
 
     mod test_visit_while {
-        use super::*;
         use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jz};
+
+        use super::*;
 
         #[test]
         fn test_populates_the_instructions() {

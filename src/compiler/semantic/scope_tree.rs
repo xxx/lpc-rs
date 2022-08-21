@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
+use indextree::{Arena, Node, NodeId};
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::{local_scope::LocalScope, symbol::Symbol},
 };
-use indextree::{Arena, Node, NodeId};
-use lpc_rs_errors::{LpcError, Result};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -105,8 +107,8 @@ impl ScopeTree {
     }
 
     /// Set the current scope to the current's parent.
-    /// Note that this method does *not* actually remove the scope from the tree.
-    /// It remains accessible.
+    /// Note that this method does *not* actually remove the scope from the
+    /// tree. It remains accessible.
     pub fn pop(&mut self) {
         self.current_id = match self.current_node() {
             Some(n) => n.parent(),
@@ -222,8 +224,9 @@ impl From<CompilationContext> for ScopeTree {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::lpc_type::LpcType;
+
+    use super::*;
 
     #[test]
     fn push_new() {

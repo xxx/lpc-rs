@@ -1,8 +1,9 @@
-use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -11,7 +12,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_errors::span::Span;
 
 /// A node representing a `switch` label
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
@@ -24,7 +24,8 @@ pub struct LabelNode {
 }
 
 impl LabelNode {
-    /// Create a new [`LabelNode`] with using the passed expression as the case value
+    /// Create a new [`LabelNode`] with using the passed expression as the case
+    /// value
     pub fn new(case: ExpressionNode, span: Option<Span>) -> Self {
         Self {
             case: Some(case),

@@ -1,10 +1,5 @@
-use crate::{
-    compiler::{
-        ast::expression_node::ExpressionNode,
-        semantic::{scope_tree::ScopeTree, symbol::Symbol},
-    },
-    interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
 use delegate::delegate;
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
@@ -12,12 +7,19 @@ use lpc_rs_core::{
 use lpc_rs_errors::LpcError;
 use lpc_rs_function_support::{function_like::FunctionLike, function_prototype::FunctionPrototype};
 use lpc_rs_utils::config::Config;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-/// A big, fat state object to store data created at various stages of compilation.
-/// A single one of these will be used for loading/compiling a single file (files `#include`d in
-/// that file will share this state object when they are compiled, as well.)
-/// Inherited files will have their own.
+use crate::{
+    compiler::{
+        ast::expression_node::ExpressionNode,
+        semantic::{scope_tree::ScopeTree, symbol::Symbol},
+    },
+    interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
+};
+
+/// A big, fat state object to store data created at various stages of
+/// compilation. A single one of these will be used for loading/compiling a
+/// single file (files `#include`d in that file will share this state object
+/// when they are compiled, as well.) Inherited files will have their own.
 #[derive(Debug)]
 pub struct CompilationContext {
     /// The name of the main file being compiled.
@@ -43,7 +45,8 @@ pub struct CompilationContext {
     pub pragmas: PragmaFlags,
 
     /// All of my Inherited parent objects
-    /// The ordering of this field can be assumed to be in the order of declaration
+    /// The ordering of this field can be assumed to be in the order of
+    /// declaration
     pub inherits: Vec<Program>,
 
     /// The index of name -> inherited objects, for inherits with names
@@ -57,8 +60,8 @@ pub struct CompilationContext {
     /// allocate for global variables.
     pub num_globals: usize,
 
-    /// How many [`Register`](lpc_rs_core::register::Register)s were required for initializing global variables,
-    /// in inherited-from parents?
+    /// How many [`Register`](lpc_rs_core::register::Register)s were required
+    /// for initializing global variables, in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for the global `init-program` call, when an object is cloned.
     pub num_init_registers: usize,
@@ -66,7 +69,8 @@ pub struct CompilationContext {
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Rc<RefCell<Process>>>,
 
-    /// The count of closures that have been defined, so we can give them unique names.
+    /// The count of closures that have been defined, so we can give them unique
+    /// names.
     pub closure_count: usize,
 }
 
@@ -85,12 +89,14 @@ impl CompilationContext {
     ///
     /// # Arguments
     ///
-    /// `filename` - The path to the file (relative to config's `root_dir`) this context will be collected for.
-    /// `config` - The [`Config`] from `config.toml` or the command line
+    /// `filename` - The path to the file (relative to config's `root_dir`) this
+    /// context will be collected for. `config` - The [`Config`] from
+    /// `config.toml` or the command line
     ///
     /// # Examples
     /// ```
     /// use std::rc::Rc;
+    ///
     /// use lpc_rs::compiler::compilation_context::CompilationContext;
     /// use lpc_rs_utils::config::Config;
     ///
@@ -182,7 +188,8 @@ impl CompilationContext {
         }
 
         let nm = name.as_ref();
-        // This ugly nest looks locally, then up to inherits, then simul efuns, then efuns
+        // This ugly nest looks locally, then up to inherits, then simul efuns, then
+        // efuns
         self.lookup_function(nm, namespace)
             .map(FunctionLike::from)
             .or_else(|| {
@@ -279,7 +286,8 @@ impl CompilationContext {
         })
     }
 
-    /// Get a mutable reference to a variable by name, checking inherited parents if not found
+    /// Get a mutable reference to a variable by name, checking inherited
+    /// parents if not found
     pub fn lookup_var_mut<T>(&mut self, name: T) -> Option<&mut Symbol>
     where
         T: AsRef<str>,
@@ -318,11 +326,12 @@ impl Default for CompilationContext {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::{
         function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
     };
     use lpc_rs_function_support::program_function::ProgramFunction;
+
+    use super::*;
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototype::new(

@@ -1,10 +1,12 @@
+use std::fmt::Write;
+
+use indexmap::IndexMap;
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
 };
-use indexmap::IndexMap;
-use lpc_rs_errors::{LpcError, Result};
-use std::fmt::Write;
 
 const MAX_RECURSION: usize = 20;
 
@@ -149,12 +151,11 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::program::Program;
     use lpc_rs_utils::config::Config;
 
     use crate::{
         compiler::Compiler,
-        interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
+        interpreter::{memory::Memory, object_space::ObjectSpace, program::Program, task::Task},
     };
 
     fn compile_prog(code: &str) -> Program {

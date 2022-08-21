@@ -3,6 +3,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use itertools::Itertools;
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNodeTrait, SpannedNode},
@@ -10,16 +13,14 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use itertools::Itertools;
-use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing an array literal
 #[derive(Hash, Debug, Clone, Eq, PartialEq, PartialOrd)]
 pub struct MappingNode {
     pub value: Vec<(ExpressionNode, ExpressionNode)>,
 
-    /// The full span of the mapping declaration - from the left side of the first item
-    /// to the right side of the last
+    /// The full span of the mapping declaration - from the left side of the
+    /// first item to the right side of the last
     pub span: Option<Span>,
 }
 

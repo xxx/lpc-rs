@@ -1,7 +1,8 @@
+use std::{path::Path, str::FromStr};
+
 use fs_err as fs;
 use if_chain::if_chain;
 use lpc_rs_errors::{LpcError, Result};
-use std::{path::Path, str::FromStr};
 use toml::{value::Index, Value};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";

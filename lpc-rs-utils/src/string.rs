@@ -57,8 +57,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use claim::*;
+
+    use super::*;
 
     mod test_repeat_string {
         use super::*;

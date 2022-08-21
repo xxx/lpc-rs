@@ -17,14 +17,15 @@ pub struct PragmaFlags {
     /// Disallow a `Program` from being `inherit`ed from
     pub no_inherit: bool,
 
-    /// A large bludgeon to prevent shadowing via both `shadow` directly, as well
-    /// as overriding any of the functions within, as if all functions were declared
-    /// as `nomask`.
+    /// A large bludgeon to prevent shadowing via both `shadow` directly, as
+    /// well as overriding any of the functions within, as if all functions
+    /// were declared as `nomask`.
     pub no_shadow: bool,
 
-    /// Prevent the master object from being unloaded from memory, even if all clones
-    /// have been removed from the game. This should not be used for normal in-game
-    /// objects, but is useful for e.g. singleton daemons that run in the background.
+    /// Prevent the master object from being unloaded from memory, even if all
+    /// clones have been removed from the game. This should not be used for
+    /// normal in-game objects, but is useful for e.g. singleton daemons
+    /// that run in the background.
     pub resident: bool,
 
     /// When true, enforce explicit return types on functions at compile time.

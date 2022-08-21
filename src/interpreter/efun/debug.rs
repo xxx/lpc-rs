@@ -1,8 +1,9 @@
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
 };
-use lpc_rs_errors::{LpcError, Result};
 
 const SNAPSHOT_STACK: &str = "snapshot_stack";
 

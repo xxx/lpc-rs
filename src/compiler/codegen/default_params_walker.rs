@@ -1,13 +1,15 @@
+use lpc_rs_errors::Result;
+
 use crate::compiler::{
-    ast::function_def_node::FunctionDefNode,
+    ast::{
+        closure_node::ClosureNode, function_def_node::FunctionDefNode, var_init_node::VarInitNode,
+    },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
 };
-use lpc_rs_errors::Result;
-use crate::compiler::ast::closure_node::ClosureNode;
-use crate::compiler::ast::var_init_node::VarInitNode;
 
-/// A walker to collect function argument lists, so codegen can access them for default arguments.
+/// A walker to collect function argument lists, so codegen can access them for
+/// default arguments.
 #[derive(Debug, Default)]
 pub struct DefaultParamsWalker {
     /// The compilation context
@@ -21,7 +23,7 @@ impl DefaultParamsWalker {
 
     fn insert_params<T>(&mut self, name: T, parameters: &Vec<VarInitNode>)
     where
-        T: Into<String>
+        T: Into<String>,
     {
         let vec = parameters
             .iter()
@@ -58,12 +60,13 @@ impl TreeWalker for DefaultParamsWalker {
 #[cfg(test)]
 mod tests {
     use factori::create;
-    use crate::compiler::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode};
-    use lpc_rs_core::lpc_type::LpcType;
-    use crate::test_support::factories::*;
+    use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 
     use super::*;
-    use lpc_rs_core::function_flags::FunctionFlags;
+    use crate::{
+        compiler::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
+        test_support::factories::*,
+    };
 
     #[test]
     fn test_visit_closure_populates_the_functions() {

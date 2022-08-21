@@ -1,11 +1,13 @@
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
 };
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result};
 
-/// `file_name`, an efun for returning the full path and clone number of an object
+/// `file_name`, an efun for returning the full path and clone number of an
+/// object
 pub fn file_name<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     let lpc_ref = context.resolve_lpc_ref(1_usize);
     let value = match lpc_ref {

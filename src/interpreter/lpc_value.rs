@@ -1,13 +1,15 @@
-use crate::interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process};
-use indexmap::IndexMap;
-use itertools::Itertools;
-use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use std::{
     cell::RefCell,
     fmt,
     fmt::{Display, Formatter},
     rc::Rc,
 };
+
+use indexmap::IndexMap;
+use itertools::Itertools;
+use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
+
+use crate::interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process};
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -22,9 +24,10 @@ pub enum LpcValue {
     Function(FunctionPtr),
 }
 
-/// Extract the final value (or reference to such, in the case of non-`Copy` value types)
-/// from an `LpcValue`. It's simply wrapping sugar to get the final value out of an [`LpcValue`].
-/// This macro is only for use in functions returning `Result<T, LpcError>`.
+/// Extract the final value (or reference to such, in the case of non-`Copy`
+/// value types) from an `LpcValue`. It's simply wrapping sugar to get the final
+/// value out of an [`LpcValue`]. This macro is only for use in functions
+/// returning `Result<T, LpcError>`.
 ///
 /// This
 /// # Arguments
@@ -32,7 +35,9 @@ pub enum LpcValue {
 /// `path`: The expected LpcValue subtype of value.
 ///
 /// # Errors
-/// Will immediately return an `Err` with an [`LpcError`](lpc_rs_errors::LpcError) if `path` does not match `expr`'s type.
+/// Will immediately return an `Err` with an
+/// [`LpcError`](lpc_rs_errors::LpcError) if `path` does not match `expr`'s
+/// type.
 #[macro_export]
 macro_rules! try_extract_value {
     ( $x:expr, $y:path ) => {

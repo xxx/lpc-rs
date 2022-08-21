@@ -1,14 +1,14 @@
-use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
 
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_errors::span::Span;
 
 /// A node representing the use of a variable.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
@@ -23,10 +23,12 @@ pub struct VarNode {
     /// then subsequently defined.
     pub global: bool,
 
-    /// Is this variable actually the name of a function? Function pointers create this ambiguity.
-    /// The only time this ends up true is in the case of a bareword function var init, e.g.:
-    /// `function f = dump;` as `dump` in this case would otherwise be seen as a variable.
-    /// The alternate `&name()` syntax is parsed as a function pointer from the start.
+    /// Is this variable actually the name of a function? Function pointers
+    /// create this ambiguity. The only time this ends up true is in the
+    /// case of a bareword function var init, e.g.: `function f = dump;` as
+    /// `dump` in this case would otherwise be seen as a variable.
+    /// The alternate `&name()` syntax is parsed as a function pointer from the
+    /// start.
     pub function_name: bool,
 }
 
@@ -45,7 +47,8 @@ impl VarNode {
         self.global = val;
     }
 
-    /// Set whether this node is actually a known function name, rather than a variable.
+    /// Set whether this node is actually a known function name, rather than a
+    /// variable.
     pub fn set_function_name(&mut self, val: bool) {
         self.function_name = val;
     }

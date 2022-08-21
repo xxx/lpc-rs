@@ -1,8 +1,10 @@
-use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
+use std::ops::{Index, IndexMut};
+
 use arrayvec::ArrayVec;
 use delegate::delegate;
 use lpc_rs_errors::{LpcError, Result};
-use std::ops::{Index, IndexMut};
+
+use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
@@ -53,12 +55,14 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         }
     }
 
-    /// Remove the top item from the call stack, and return a mutable reference to it.
+    /// Remove the top item from the call stack, and return a mutable reference
+    /// to it.
     pub fn pop(&mut self) -> Option<CallFrame> {
         self.stack.pop()
     }
 
-    /// Convenience helper to copy a return value from a given stack frame, back to the current one.
+    /// Convenience helper to copy a return value from a given stack frame, back
+    /// to the current one.
     pub fn set_result(&mut self, result: LpcRef) -> Result<()> {
         if !self.stack.is_empty() {
             self.current_frame_mut()?.registers[0] = result;
@@ -67,7 +71,8 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         Ok(())
     }
 
-    /// Convenience helper to copy a return value from a given stack frame, back to the current one.
+    /// Convenience helper to copy a return value from a given stack frame, back
+    /// to the current one.
     pub fn copy_result(&mut self, from: &CallFrame) -> Result<()> {
         self.set_result(from.registers[0].clone())
     }

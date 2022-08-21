@@ -1,3 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
+
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, INIT_PROGRAM};
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
@@ -7,9 +12,6 @@ use crate::{
     },
     try_extract_value,
 };
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, INIT_PROGRAM};
-use lpc_rs_errors::{LpcError, Result};
-use std::{cell::RefCell, rc::Rc};
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
@@ -108,6 +110,9 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+    use lpc_rs_utils::config::Config;
+
     use super::*;
     use crate::{
         assert_regex,
@@ -116,8 +121,6 @@ mod tests {
         },
         test_support::compile_prog,
     };
-    use indoc::indoc;
-    use lpc_rs_utils::config::Config;
 
     fn task_context_fixture(program: Program, config: Rc<Config>) -> TaskContext {
         let process = Process::new(program);

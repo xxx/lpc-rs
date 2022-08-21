@@ -1,15 +1,16 @@
-use crate::interpreter::{lpc_ref::LpcRef, process::Process, register_bank::RegisterBank};
-use lpc_rs_asm::instruction::{Address, Instruction};
-
-use lpc_rs_errors::{span::Span, LpcError, Result};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use std::{
     cell::{Cell, RefCell},
     fmt,
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
+
+use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
+
+use crate::interpreter::{lpc_ref::LpcRef, process::Process, register_bank::RegisterBank};
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -18,13 +19,14 @@ pub struct CallFrame {
     pub process: Rc<RefCell<Process>>,
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,
-    /// Our registers. By convention, `registers[0]` is for the return value of the call.
+    /// Our registers. By convention, `registers[0]` is for the return value of
+    /// the call.
     pub registers: RegisterBank,
     /// Track where the pc is pointing in this frame's function's instructions.
     pc: Cell<usize>,
-    /// How many explicit arguments were passed to the call that created this frame?
-    /// This will include partially-applied arguments in the case that
-    /// the CallFrame is for a call to a function pointer.
+    /// How many explicit arguments were passed to the call that created this
+    /// frame? This will include partially-applied arguments in the case
+    /// that the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
 }
 
@@ -35,8 +37,8 @@ impl CallFrame {
     ///
     /// * `process` - The process that owns the function being called
     /// * `function` - The function being called
-    /// * `called_with_num_args` - how many arguments were explicitly passed in the
-    ///      call to this function?
+    /// * `called_with_num_args` - how many arguments were explicitly passed in
+    ///   the call to this function?
     pub fn new<P>(process: P, function: Rc<ProgramFunction>, called_with_num_args: usize) -> Self
     where
         P: Into<Rc<RefCell<Process>>>,
@@ -53,16 +55,17 @@ impl CallFrame {
         }
     }
 
-    /// Create a new [`CallFrame`] instance with space for at least `arg_capacity` registers.
+    /// Create a new [`CallFrame`] instance with space for at least
+    /// `arg_capacity` registers.
     ///
     /// # Arguments
     ///
     /// * `process` - The process that owns the function being called
     /// * `function` - The function being called
-    /// * `called_with_num_args` - how many arguments were explicitly passed in the
-    ///      call to this function?
-    /// * `arg_capacity` - Reserve space for at least this many registers
-    ///     (this is used for ellipsis args and `call_other`)
+    /// * `called_with_num_args` - how many arguments were explicitly passed in
+    ///   the call to this function?
+    /// * `arg_capacity` - Reserve space for at least this many registers (this
+    ///   is used for ellipsis args and `call_other`)
     pub fn with_minimum_arg_capacity<P>(
         process: P,
         function: Rc<ProgramFunction>,
@@ -169,11 +172,12 @@ impl Display for CallFrame {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_core::{
         function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
     };
     use lpc_rs_function_support::function_prototype::FunctionPrototype;
+
+    use super::*;
 
     #[test]
     fn new_sets_up_registers() {

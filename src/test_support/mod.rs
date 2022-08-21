@@ -1,3 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
+
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_utils::config::Config;
+
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
@@ -6,9 +11,6 @@ use crate::{
         task_context::TaskContext,
     },
 };
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_utils::config::Config;
-use std::{cell::RefCell, rc::Rc};
 
 pub mod factories;
 

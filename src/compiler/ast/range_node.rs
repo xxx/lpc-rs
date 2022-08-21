@@ -1,8 +1,9 @@
-use lpc_rs_errors::Result;
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+
+use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
     ast::{
@@ -11,7 +12,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use lpc_rs_errors::span::Span;
 
 /// Representation of a Range, with optional ends.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
@@ -22,7 +22,8 @@ pub struct RangeNode {
     /// Right-hand side
     pub r: Box<Option<ExpressionNode>>,
 
-    /// The text span in the original file that this node represents. Used for error messages.
+    /// The text span in the original file that this node represents. Used for
+    /// error messages.
     pub span: Option<Span>,
 }
 

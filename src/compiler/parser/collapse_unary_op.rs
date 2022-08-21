@@ -38,9 +38,10 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use decorum::Total;
     use lpc_rs_errors::span::Span;
+
+    use super::*;
 
     #[test]
     fn collapses_negate_int() {

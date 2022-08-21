@@ -1,3 +1,18 @@
+use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
+
+use define::{Define, ObjectMacro};
+use lalrpop_util::ParseError as LalrpopParseError;
+use lpc_rs_core::{
+    convert_escapes,
+    lpc_path::LpcPath,
+    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    read_lpc_file, LpcInt,
+};
+use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result};
+use once_cell::sync::Lazy;
+use regex::Regex;
+use tracing::{instrument, trace};
+
 use crate::{
     compiler::{
         ast::binary_op_node::BinaryOperation,
@@ -10,19 +25,6 @@ use crate::{
     },
     preprocessor_parser,
 };
-use define::{Define, ObjectMacro};
-use lalrpop_util::ParseError as LalrpopParseError;
-use lpc_rs_core::{
-    convert_escapes,
-    lpc_path::LpcPath,
-    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
-    read_lpc_file, LpcInt,
-};
-use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result};
-use once_cell::sync::Lazy;
-use regex::Regex;
-use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
-use tracing::{instrument, trace};
 
 pub mod define;
 pub mod preprocessor_node;
@@ -54,8 +56,9 @@ static COMMA_SEPARATOR: Lazy<Regex> = regex!(r"\s*,\s*");
 struct IfDef {
     pub span: Span,
 
-    /// This field on the top IfDef in the stack indicates if we're currently in a
-    /// section that's conditionally compiled out. We mutate this field when we see #else.
+    /// This field on the top IfDef in the stack indicates if we're currently in
+    /// a section that's conditionally compiled out. We mutate this field
+    /// when we see #else.
     pub skipping_lines: bool,
 
     /// Is this `#ifdef` itself conditionally compiled out?
@@ -76,7 +79,8 @@ pub struct Preprocessor {
     /// Have we seen an `#else` clause for the current `#if`?
     current_else: Option<Span>,
 
-    /// We Track the last slice, because things like preprocessor directives need to check it.
+    /// We Track the last slice, because things like preprocessor directives
+    /// need to check it.
     last_slice: String,
 }
 
@@ -84,16 +88,19 @@ impl Preprocessor {
     /// Create a new `Preprocessor`
     ///
     /// # Arguments
-    /// `context` - A context object to store data, errors, etc., generated during the compile
+    /// `context` - A context object to store data, errors, etc., generated
+    /// during the compile
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::compiler::preprocessor::Preprocessor;
-    /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs_utils::config::Config;
     /// use std::rc::Rc;
     ///
-    /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
+    /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
+    /// use lpc_rs_utils::config::Config;
+    ///
+    /// let config = Config::default()
+    ///     .with_lib_dir("/home/mud/lib")
+    ///     .with_system_include_dirs(vec!["/include", "/sys"]);
     /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let preprocessor = Preprocessor::new(context);
     /// ```
@@ -114,8 +121,9 @@ impl Preprocessor {
         self.context
     }
 
-    /// Scan a file's contents, transforming as necessary according to the preprocessing rules.
-    /// This is the standard way to use the preprocessor
+    /// Scan a file's contents, transforming as necessary according to the
+    /// preprocessing rules. This is the standard way to use the
+    /// preprocessor
     ///
     /// # Arguments
     /// `path` - The in-game [`Path`]like representing the file.
@@ -123,12 +131,14 @@ impl Preprocessor {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::compiler::preprocessor::Preprocessor;
-    /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs_utils::config::Config;
     /// use std::rc::Rc;
     ///
-    /// let config = Config::default().with_lib_dir("/home/mud/lib").with_system_include_dirs(vec!["/include", "/sys"]);
+    /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
+    /// use lpc_rs_utils::config::Config;
+    ///
+    /// let config = Config::default()
+    ///     .with_lib_dir("/home/mud/lib")
+    ///     .with_system_include_dirs(vec!["/include", "/sys"]);
     /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let mut preprocessor = Preprocessor::new(context);
     ///
@@ -352,10 +362,10 @@ impl Preprocessor {
         }
     }
 
-    /// Consume tokens until the end of the arguments list, then collect them into
-    /// a vector-per-argument.
-    /// Assumes the next token in the iterator is the opening left parenthesis, and has already
-    /// been checked for its presence.
+    /// Consume tokens until the end of the arguments list, then collect them
+    /// into a vector-per-argument.
+    /// Assumes the next token in the iterator is the opening left parenthesis,
+    /// and has already been checked for its presence.
     #[instrument]
     fn consume_macro_arguments<T>(
         iter: &mut Peekable<T>,
@@ -525,8 +535,8 @@ impl Preprocessor {
 
     /// # Arguments
     /// `token` - The matched lexer token
-    /// `cwd` - an in-game directory, to use as the reference for relative paths.
-    /// `output` - The vector to append included tokens to
+    /// `cwd` - an in-game directory, to use as the reference for relative
+    /// paths. `output` - The vector to append included tokens to
     #[instrument(skip(self, output))]
     fn handle_sys_include<U>(
         &mut self,
@@ -586,8 +596,8 @@ impl Preprocessor {
 
     /// # Arguments
     /// `token` - The matched lexer token
-    /// `cwd` - an in-game directory, to use as the reference for relative paths.
-    /// `output` - The vector to append included tokens to
+    /// `cwd` - an in-game directory, to use as the reference for relative
+    /// paths. `output` - The vector to append included tokens to
     #[instrument(skip(self, output))]
     fn handle_local_include<U>(
         &mut self,
@@ -676,7 +686,8 @@ impl Preprocessor {
     }
 
     /// Determine if a particular node will enable line skipping or not.
-    /// Returns `true` if we should print lines, and `false` if they should be skipped.
+    /// Returns `true` if we should print lines, and `false` if they should be
+    /// skipped.
     #[instrument(skip(self, expr))]
     fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
         match expr {
@@ -871,10 +882,10 @@ impl Preprocessor {
     /// Read in a local file, and scan it through this preprocessor.
     ///
     /// # Arguments
-    /// `path` - The path of the file we're going to scan. This is intended to be the file from
-    ///     the `#include` directive.
-    /// `cwd` - The current working directory. Used for resolving relative pathnames.
-    /// `span` - The [`Span`] of the `#include` token.
+    /// `path` - The path of the file we're going to scan. This is intended to
+    /// be the file from     the `#include` directive.
+    /// `cwd` - The current working directory. Used for resolving relative
+    /// pathnames. `span` - The [`Span`] of the `#include` token.
     #[instrument(skip(self))]
     fn include_local_file(
         &mut self,
@@ -947,7 +958,8 @@ impl Preprocessor {
         }
     }
 
-    /// A convenience function for checking if preprocessor directives follow a newline.
+    /// A convenience function for checking if preprocessor directives follow a
+    /// newline.
     #[instrument(skip(self))]
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
         if !self.last_slice.ends_with('\n') {
@@ -976,12 +988,13 @@ impl Default for Preprocessor {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use indoc::indoc;
+    use lpc_rs_utils::config::Config;
 
     use super::*;
     use crate::assert_regex;
-    use lpc_rs_utils::config::Config;
-    use std::rc::Rc;
 
     fn fixture() -> Preprocessor {
         let config = Config::default()
@@ -1246,8 +1259,9 @@ mod tests {
     }
 
     mod test_defines {
-        use super::*;
         use claim::assert_matches;
+
+        use super::*;
 
         #[test]
         fn test_object_define() {

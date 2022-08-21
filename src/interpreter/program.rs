@@ -1,7 +1,3 @@
-use crate::{compiler::semantic::symbol::Symbol, interpreter::efun::EFUN_PROTOTYPES};
-use lpc_rs_core::EFUN;
-use lpc_rs_function_support::program_function::ProgramFunction;
-use rmp_serde::Serializer;
 use std::{
     borrow::Cow,
     cmp::Ordering,
@@ -12,15 +8,19 @@ use std::{
 };
 
 use itertools::Itertools;
-use lpc_rs_core::{call_namespace::CallNamespace, INIT_PROGRAM};
-
-use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags};
+use lpc_rs_core::{
+    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN, INIT_PROGRAM,
+};
+use lpc_rs_function_support::program_function::ProgramFunction;
+use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
+
+use crate::{compiler::semantic::symbol::Symbol, interpreter::efun::EFUN_PROTOTYPES};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
-    /// The path to the file that this program was compiled from. Used for error messaging.
-    /// This is intended to be the fully-expanded, in-game path.
+    /// The path to the file that this program was compiled from. Used for error
+    /// messaging. This is intended to be the fully-expanded, in-game path.
     pub filename: LpcPath,
 
     /// function mapping of name to Symbol
@@ -33,7 +33,8 @@ pub struct Program {
     /// How many globals does this program need storage for?
     pub num_globals: usize,
 
-    /// How many [`Register`](lpc_rs_core::register::Register)s are needed to initialize this program?
+    /// How many [`Register`](lpc_rs_core::register::Register)s are needed to
+    /// initialize this program?
     pub num_init_registers: usize,
 
     /// Which pragmas have been set for this program?
@@ -66,7 +67,8 @@ impl<'a> Program {
     }
 
     /// Look up a function by its name, starting from this program,
-    /// and searching all of its inherited-from programs, last-declared-inherit first.
+    /// and searching all of its inherited-from programs, last-declared-inherit
+    /// first.
     pub fn lookup_function<T>(
         &self,
         name: T,
@@ -140,13 +142,16 @@ impl<'a> Program {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
-    /// use lpc_rs::compiler::ast::int_node::IntNode;
-    /// use lpc_rs::compiler::ast::expression_node::ExpressionNode;
-    /// use lpc_rs::compiler::codegen::codegen_walker::CodegenWalker;
-    /// use lpc_rs::compiler::codegen::tree_walker::TreeWalker;
-    /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs::compiler::Compiler;
+    /// use lpc_rs::compiler::{
+    ///     ast::{
+    ///         binary_op_node::{BinaryOpNode, BinaryOperation},
+    ///         expression_node::ExpressionNode,
+    ///         int_node::IntNode,
+    ///     },
+    ///     codegen::{codegen_walker::CodegenWalker, tree_walker::TreeWalker},
+    ///     compilation_context::CompilationContext,
+    ///     Compiler,
+    /// };
     ///
     /// let code = r#"
     ///     void foo() {

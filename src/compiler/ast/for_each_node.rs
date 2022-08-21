@@ -3,6 +3,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use indextree::NodeId;
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNode, AstNodeTrait},
@@ -11,12 +14,11 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use indextree::NodeId;
-use lpc_rs_errors::{span::Span, Result};
 
 /// A constant to track the implicit variable we reserve space for,
 /// for `foreach` loops.
-/// Note the name of this is not parsable, so the user cannot refer to it or manipulate it.
+/// Note the name of this is not parsable, so the user cannot refer to it or
+/// manipulate it.
 pub const FOREACH_INDEX: &str = "foreach-index";
 
 /// A constant to cache the length of the collection we're `foreach`ing over

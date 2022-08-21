@@ -3,6 +3,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use indextree::NodeId;
+use lpc_rs_errors::{span::Span, Result};
+
 use crate::compiler::{
     ast::{
         ast_node::{AstNode, AstNodeTrait},
@@ -10,8 +13,6 @@ use crate::compiler::{
     },
     codegen::tree_walker::TreeWalker,
 };
-use indextree::NodeId;
-use lpc_rs_errors::{span::Span, Result};
 
 /// A node representing an `if` statement
 #[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]

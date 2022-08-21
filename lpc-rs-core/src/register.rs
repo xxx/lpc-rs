@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+
+use serde::{Deserialize, Serialize};
 
 /// A struct to handle the split between normal, in-function registers,
 /// and previously-closed-over local variables
@@ -28,7 +29,8 @@ impl Display for RegisterVariant {
     }
 }
 
-/// A newtype around a usize representing a Register numbered with its value, `x.0`.
+/// A newtype around a usize representing a Register numbered with its value,
+/// `x.0`.
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Register(pub usize);
 

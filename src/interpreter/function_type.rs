@@ -1,26 +1,30 @@
-use crate::interpreter::process::Process;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    fmt::{Display, Formatter},
+    rc::Rc,
+};
 
-use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef};
 use delegate::delegate;
-use lpc_rs_core::function_arity::FunctionArity;
-
-use lpc_rs_core::function_flags::FunctionFlags;
+use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use std::fmt::{Display, Formatter};
 
-/// used for local Debug implementations, to avoid stack overflow when dumping function pointers
+use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process};
+
+/// used for local Debug implementations, to avoid stack overflow when dumping
+/// function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
     f.write_str(&*owner.filename())
 }
 
-/// used for local Debug implementations, to avoid stack overflow when dumping function pointers
+/// used for local Debug implementations, to avoid stack overflow when dumping
+/// function pointers
 fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
     f.write_str(&*owner.borrow().filename())
 }
 
 /// Different ways to store a function address, for handling at runtime.
-/// This is the run-time equivalent of [`FunctionTarget`](lpc_rs_core::function::FunctionTarget).
+/// This is the run-time equivalent of
+/// [`FunctionTarget`](lpc_rs_core::function::FunctionTarget).
 #[derive(Educe, Clone, PartialEq, Eq)]
 #[educe(Debug)]
 pub enum FunctionAddress {

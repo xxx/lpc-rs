@@ -1,11 +1,12 @@
+use lpc_rs_core::{lpc_path::LpcPath, EFUN};
+use lpc_rs_errors::{LpcError, Result};
+
 use crate::compiler::{
     ast::inherit_node::InheritNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
     Compiler,
 };
-use lpc_rs_core::{lpc_path::LpcPath, EFUN};
-use lpc_rs_errors::{LpcError, Result};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -119,8 +120,9 @@ impl TreeWalker for InheritanceWalker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lpc_rs_utils::config::Config;
+
+    use super::*;
 
     fn walker() -> InheritanceWalker {
         let config = Config::default().with_lib_dir("./tests/fixtures/code/");
@@ -131,8 +133,9 @@ mod tests {
     }
 
     mod test_visit_inherit {
-        use super::*;
         use claim::assert_ok;
+
+        use super::*;
 
         #[test]
         fn test_sets_up_the_data() {

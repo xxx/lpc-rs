@@ -1,11 +1,5 @@
-use lpc_rs_errors::{LpcError, LpcErrorSeverity, Result};
-use std::collections::VecDeque;
+use std::{cell::RefCell, collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 
-use crate::{
-    compiler::ast::inherit_node::InheritNode,
-    interpreter::{process::Process, program::Program},
-    lpc_parser,
-};
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use codegen::{
     codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
@@ -16,11 +10,16 @@ use codegen::{
 use compilation_context::CompilationContext;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::{lpc_path::LpcPath, read_lpc_file};
-use lpc_rs_errors::span::Span;
+use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
 use lpc_rs_utils::config::Config;
 use preprocessor::Preprocessor;
-use std::{cell::RefCell, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
 use tracing::instrument;
+
+use crate::{
+    compiler::ast::inherit_node::InheritNode,
+    interpreter::{process::Process, program::Program},
+    lpc_parser,
+};
 
 pub mod ast;
 pub mod codegen;
@@ -103,16 +102,18 @@ impl Compiler {
     /// Fully compile a file into a Program struct
     ///
     /// # Arguments
-    /// `path` - The full, on-server path of the file to compile. Also used for error messaging.
-    ///          If the file in question ends in `.c`, the extension can be left off, per
-    ///          common LPC usage.
+    /// `path` - The full, on-server path of the file to compile. Also used for
+    /// error messaging.          If the file in question ends in `.c`, the
+    /// extension can be left off, per          common LPC usage.
     ///
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let compiler = Compiler::default();
-    /// let prog = compiler.compile_file("tests/fixtures/code/example.c").expect("Unable to compile.");
+    /// let prog = compiler
+    ///     .compile_file("tests/fixtures/code/example.c")
+    ///     .expect("Unable to compile.");
     /// ```
     #[instrument(skip(self))]
     pub fn compile_file<T>(&self, path: T) -> Result<Program>
@@ -150,7 +151,8 @@ impl Compiler {
         self.compile_string(lpc_path, file_content)
     }
 
-    /// Intended for in-game use to be able to compile a file with relative pathname handling
+    /// Intended for in-game use to be able to compile a file with relative
+    /// pathname handling
     #[instrument(skip(self))]
     pub fn compile_in_game_file(&self, path: &LpcPath, span: Option<Span>) -> Result<Program> {
         let true_path = path.as_server(self.config.lib_dir());
@@ -167,8 +169,8 @@ impl Compiler {
         self.compile_file(path)
     }
 
-    /// Take a str and preprocess it into a vector of Span tuples, and also returns the Preprocessor
-    /// used.
+    /// Take a str and preprocess it into a vector of Span tuples, and also
+    /// returns the Preprocessor used.
     ///
     /// # Arguments
     /// `path` - The absolute on-server path to the file represented by `code`
@@ -188,7 +190,8 @@ impl Compiler {
     /// "#;
     ///
     /// let compiler = Compiler::default();
-    /// let (tokens, preprocessor) = compiler.preprocess_string("~/my_file.c", code)
+    /// let (tokens, preprocessor) = compiler
+    ///     .preprocess_string("~/my_file.c", code)
     ///     .expect("Failed to preprocess.");
     /// ```
     #[instrument(skip(self, code))]
@@ -216,8 +219,8 @@ impl Compiler {
     /// Compile a string containing an LPC program into a Program struct
     ///
     /// # Arguments
-    /// `path` - The absolute on-server path to the file being represented by `code`
-    /// `code` - The actual code to be compiled.
+    /// `path` - The absolute on-server path to the file being represented by
+    /// `code` `code` - The actual code to be compiled.
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
@@ -231,7 +234,9 @@ impl Compiler {
     /// "#;
     ///
     /// let compiler = Compiler::default();
-    /// let prog = compiler.compile_string("~/my_file.c", code).expect("Failed to compile.");
+    /// let prog = compiler
+    ///     .compile_string("~/my_file.c", code)
+    ///     .expect("Failed to compile.");
     /// ```
     #[instrument(skip(self, code))]
     pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>

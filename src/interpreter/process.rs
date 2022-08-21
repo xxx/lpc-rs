@@ -1,5 +1,3 @@
-use crate::interpreter::{lpc_ref::LpcRef, program::Program, register_bank::RegisterBank};
-use delegate::delegate;
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -9,6 +7,10 @@ use std::{
     path::Path,
     rc::Rc,
 };
+
+use delegate::delegate;
+
+use crate::interpreter::{lpc_ref::LpcRef, program::Program, register_bank::RegisterBank};
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -78,7 +80,8 @@ impl Process {
             .collect()
     }
 
-    /// Get the filename of this process, including the clone ID suffix if present.
+    /// Get the filename of this process, including the clone ID suffix if
+    /// present.
     #[inline]
     pub fn filename(&self) -> Cow<str> {
         let filename: &str = self.program.filename.as_ref();
@@ -89,8 +92,8 @@ impl Process {
         }
     }
 
-    /// Get the filename with the passed prefix stripped off, defaulting to the `program` filename
-    /// if that fails.
+    /// Get the filename with the passed prefix stripped off, defaulting to the
+    /// `program` filename if that fails.
     #[inline]
     pub fn localized_filename(&self, prefix: &str) -> String {
         let filename: &str = &*self.filename();

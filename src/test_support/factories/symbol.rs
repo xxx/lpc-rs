@@ -1,7 +1,8 @@
-use crate::compiler::semantic::symbol::Symbol;
 use factori::factori;
 use fake::Fake;
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
+
+use crate::compiler::semantic::symbol::Symbol;
 
 factori!(Symbol, {
     default {
