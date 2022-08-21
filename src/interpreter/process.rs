@@ -11,6 +11,7 @@ use std::{
 use delegate::delegate;
 
 use crate::interpreter::{lpc_ref::LpcRef, program::Program, register_bank::RegisterBank};
+use crate::interpreter::lpc_ref::NULL;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -42,9 +43,9 @@ impl Process {
 
         Self {
             program,
-            globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
+            globals: vec![RefCell::new(NULL); num_globals],
             clone_id: None,
-            upvalues: RegisterBank::new(vec![LpcRef::Int(0); num_upvalues]),
+            upvalues: RegisterBank::new(vec![NULL; num_upvalues]),
         }
     }
 
@@ -54,9 +55,9 @@ impl Process {
 
         Self {
             program,
-            globals: vec![RefCell::new(LpcRef::Int(0)); num_globals],
+            globals: vec![RefCell::new(NULL); num_globals],
             clone_id: Some(clone_id),
-            upvalues: RegisterBank::new(vec![LpcRef::Int(0); num_upvalues]),
+            upvalues: RegisterBank::new(vec![NULL; num_upvalues]),
         }
     }
 

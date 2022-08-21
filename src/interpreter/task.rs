@@ -39,6 +39,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::interpreter::lpc_ref::NULL;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -685,7 +686,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                 if real_start <= real_end {
                                     let slice = &vec[real_start..=real_end];
-                                    let mut new_vec = vec![LpcRef::Int(0); slice.len()];
+                                    let mut new_vec = vec![NULL; slice.len()];
                                     new_vec.clone_from_slice(slice);
                                     Ok(LpcValue::from(new_vec))
                                 } else {
@@ -954,7 +955,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public() && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver)) {
-                return set_loc!(self, Register(0).as_local(), LpcRef::Int(0));
+                return set_loc!(self, Register(0).as_local(), NULL);
             }
         }
 
@@ -1028,7 +1029,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         if !arg_types.is_empty() {
             for (i, lpc_ref) in new_registers[1..].iter().enumerate() {
                 if_chain! {
-                    if !matches!(lpc_ref, &LpcRef::Int(0)); // 0 is always allowed
+                    if lpc_ref != &NULL; // 0 is always allowed
                     if let Some(arg_type) = arg_types.get(i);
                     let ref_type = lpc_ref.as_lpc_type();
                     if !ref_type.matches_type(*arg_type);
@@ -1141,7 +1142,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         .clone();
 
                                     if !function.public() {
-                                        LpcRef::Int(0)
+                                        NULL
                                     } else {
                                         let eval_context =
                                             task.eval(function, args, new_context)?;
@@ -1152,7 +1153,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         eval_context.into_result()
                                     }
                                 }
-                                _ => LpcRef::Int(0),
+                                _ => NULL,
                             };
 
                             Ok(result)
@@ -1189,7 +1190,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         task_context,
                                         &*self.memory,
                                     )
-                                    .unwrap_or(LpcRef::Int(0))
+                                    .unwrap_or(NULL)
                                 })
                                 .collect::<Vec<_>>()
                                 .into();
@@ -1213,7 +1214,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             task_context,
                                             &*self.memory,
                                         )
-                                        .unwrap_or(LpcRef::Int(0)),
+                                        .unwrap_or(NULL),
                                     )
                                 })
                                 .collect::<IndexMap<_, _>>()
@@ -1306,7 +1307,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let var = if let Some(v) = map.get(&lpc_ref) {
                             v.clone()
                         } else {
-                            LpcRef::Int(0)
+                            NULL
                         };
 
                         set_loc!(self, *r3, var)?;
@@ -1346,7 +1347,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             if let Some((key, _)) = map.get_index(index as usize) {
                                 key.clone()
                             } else {
-                                LpcRef::Int(0)
+                                NULL
                             }
                         }
                         x => {

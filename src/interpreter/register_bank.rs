@@ -7,7 +7,7 @@ use delegate::delegate;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
-use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
 /// A type to handle data movement (the arena itself stores the actual data)
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -46,7 +46,7 @@ impl RegisterBank {
         let dynamic_length = runtime_arg_count + function.num_locals + 1;
         let reservation = std::cmp::max(static_length, dynamic_length);
 
-        RegisterBank::new(vec![LpcRef::Int(0); reservation])
+        RegisterBank::new(vec![NULL; reservation])
     }
 }
 

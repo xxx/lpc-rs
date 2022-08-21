@@ -10,7 +10,8 @@ use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
 
-use crate::interpreter::{lpc_ref::LpcRef, process::Process, register_bank::RegisterBank};
+use crate::interpreter::{process::Process, register_bank::RegisterBank};
+use crate::interpreter::lpc_ref::NULL;
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -49,7 +50,7 @@ impl CallFrame {
         Self {
             process: process.into(),
             function,
-            registers: RegisterBank::new(vec![LpcRef::Int(0); reg_len]),
+            registers: RegisterBank::new(vec![NULL; reg_len]),
             pc: 0.into(),
             called_with_num_args,
         }
@@ -218,7 +219,7 @@ mod tests {
         let frame = CallFrame::new(process, Rc::new(fs), 4);
 
         assert_eq!(frame.registers.len(), 12);
-        assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
+        assert!(frame.registers.iter().all(|r| r == &NULL));
     }
 
     mod test_with_minimum_arg_capacity {
@@ -243,7 +244,7 @@ mod tests {
             let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
 
             assert_eq!(frame.registers.len(), 38);
-            assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
+            assert!(frame.registers.iter().all(|r| r == &NULL));
         }
 
         #[test]
@@ -265,7 +266,7 @@ mod tests {
             let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
 
             assert_eq!(frame.registers.len(), 12);
-            assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
+            assert!(frame.registers.iter().all(|r| r == &NULL));
         }
     }
 
@@ -288,12 +289,12 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let registers = RegisterBank::new(vec![LpcRef::Int(0); 21]);
+            let registers = RegisterBank::new(vec![NULL; 21]);
 
             let frame = CallFrame::with_registers(process, Rc::new(fs), 4, registers);
 
             assert_eq!(frame.registers.len(), 21);
-            assert!(frame.registers.iter().all(|r| r == &LpcRef::Int(0)));
+            assert!(frame.registers.iter().all(|r| r == &NULL));
         }
     }
 }

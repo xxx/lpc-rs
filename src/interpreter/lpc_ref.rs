@@ -19,6 +19,8 @@ use crate::{
     try_extract_value,
 };
 
+pub const NULL: LpcRef = LpcRef::Int(0);
+
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
 /// # Arguments
@@ -502,7 +504,7 @@ impl Not for &LpcRef {
 
 impl Default for LpcRef {
     fn default() -> Self {
-        LpcRef::Int(0)
+        NULL
     }
 }
 
@@ -939,9 +941,8 @@ mod tests {
         #[test]
         fn div_by_zero() {
             let int = LpcRef::Int(123);
-            let zero = LpcRef::Int(0);
 
-            assert!((&int / &zero).is_err());
+            assert!((&int / &NULL).is_err());
         }
     }
 
@@ -1004,9 +1005,8 @@ mod tests {
         #[test]
         fn div_by_zero() {
             let int = LpcRef::Int(123);
-            let zero = LpcRef::Int(0);
 
-            assert!((&int % &zero).is_err());
+            assert!((&int % &NULL).is_err());
         }
     }
 
