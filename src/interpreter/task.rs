@@ -981,14 +981,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let mut new_frame = match &ptr.address {
+        let (proc, function)  = match &ptr.address {
             FunctionAddress::Local(proc, function) => {
-                CallFrame::with_minimum_arg_capacity(
-                    proc.clone(),
-                    function.clone(),
-                    passed_args_count,
-                    max_arg_length
-                )
+                (proc.clone(), function.clone())
             }
             FunctionAddress::Dynamic(name) => {
                 let lpc_ref = get_loc!(self, *initial_arg)?;
@@ -1000,12 +995,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let func = proc.lookup_function(name, &CallNamespace::Local);
 
                     if let Some(func) = func {
-                        CallFrame::with_minimum_arg_capacity(
-                            cell.clone(),
-                            func.clone(),
-                            passed_args_count,
-                            max_arg_length
-                        )
+                        (cell.clone(), func.clone())
                     } else {
                         return Err(self.runtime_error(format!("call to unknown function `{}", name)));
                     }
@@ -1020,15 +1010,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 let frame = self.stack.current_frame()?;
 
-                CallFrame::with_minimum_arg_capacity(
-                    frame.process.clone(),
-                    Rc::new(pf),
-                    passed_args_count,
-                    max_arg_length
-                )
+                (frame.process.clone(), Rc::new(pf))
             }
         };
 
+        let mut new_registers = RegisterBank::initialized_for_function(&*function, max_arg_length);
+
+        // negotiate the passed & partially-applied arguments
         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
             let frame = self.stack.current_frame()?;
             let registers = &frame.registers;
@@ -1037,9 +1025,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let mut from_index = 0;
 
                 let from_slice = &registers[index..(index + adjusted_num_args)];
-                let to_slice = &mut new_frame.registers[1..=max_arg_length];
+                let to_slice = &mut new_registers[1..=max_arg_length];
 
-                for (i, item) in to_slice.iter_mut().enumerate().take(max_arg_length) {
+                for (i, item) in to_slice.into_iter().enumerate().take(max_arg_length) {
                     if let Some(Some(x)) = partial_args.get(i) {
                         // if a partially-appliable arg is present, use it
                         let _ = std::mem::replace(item, x.clone());
@@ -1052,10 +1040,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             } else {
                 // just copy argument registers from old frame to new
-                new_frame.registers[1..=adjusted_num_args]
+                new_registers[1..=adjusted_num_args]
                     .clone_from_slice(&registers[index..(index + adjusted_num_args)]);
             }
         }
+
+        let new_frame = CallFrame::with_registers(
+            proc,
+            function,
+            passed_args_count,
+            new_registers
+        );
 
         let fc = new_frame.function.clone();
         let name = fc.name();

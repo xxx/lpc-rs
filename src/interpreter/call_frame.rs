@@ -76,7 +76,7 @@ impl CallFrame {
         P: Into<Rc<RefCell<Process>>>,
     {
         Self {
-            registers: RegisterBank::initialized_for_function(function.clone(), arg_capacity),
+            registers: RegisterBank::initialized_for_function(&*function, arg_capacity),
             ..Self::new(process, function, called_with_num_args)
         }
     }
