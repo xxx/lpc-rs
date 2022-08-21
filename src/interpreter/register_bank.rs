@@ -1,8 +1,7 @@
 use std::{
-    ops::{Index, IndexMut, Range, RangeInclusive},
+    ops::{Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
 };
-use std::ops::RangeFrom;
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;
@@ -36,8 +35,12 @@ impl RegisterBank {
         Self { registers }
     }
 
-    /// Get a proper-sized [`RegisterBank`] for the passed function and runtime arg count
-    pub fn initialized_for_function(function: &ProgramFunction, runtime_arg_count: usize) -> RegisterBank {
+    /// Get a proper-sized [`RegisterBank`] for the passed function and runtime
+    /// arg count
+    pub fn initialized_for_function(
+        function: &ProgramFunction,
+        runtime_arg_count: usize,
+    ) -> RegisterBank {
         // add +1 for r0 (where return value is stored)
         let static_length = function.arity().num_args + function.num_locals + 1;
         let dynamic_length = runtime_arg_count + function.num_locals + 1;

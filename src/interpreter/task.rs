@@ -290,7 +290,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call { .. } => {
                 self.handle_call(&instruction, task_context)?;
             }
-            Instruction::CallFp { location, num_args, initial_arg } => {
+            Instruction::CallFp {
+                location,
+                num_args,
+                initial_arg,
+            } => {
                 self.handle_call_fp(task_context, &location, &num_args, &initial_arg)?;
             }
             Instruction::CallOther { .. } => {
@@ -946,7 +950,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         task_context: &TaskContext,
         location: &RegisterVariant,
         num_args: &usize,
-        initial_arg: &RegisterVariant
+        initial_arg: &RegisterVariant,
     ) -> Result<()> {
         let func = {
             let lpc_ref = get_loc!(self, *location)?;
@@ -955,7 +959,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 func.clone() // this is a cheap clone
             } else {
                 return Err(self.runtime_error("callfp instruction on non-function"));
-
             }
         };
 
@@ -965,12 +968,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let arity = ptr.arity;
         let partial_args = &ptr.partial_args;
-        let passed_args_count = *num_args + partial_args
-            .iter()
-            .fold(0, |sum, arg| sum + arg.is_some() as usize);
+        let passed_args_count = *num_args
+            + partial_args
+                .iter()
+                .fold(0, |sum, arg| sum + arg.is_some() as usize);
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
         let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
-        // for dynamic receivers, skip the first arg register, which contains the receiver
+        // for dynamic receivers, skip the first arg register, which contains the
+        // receiver
         let index = initial_arg.index() + (dynamic_receiver as usize);
         let adjusted_num_args = *num_args - (dynamic_receiver as usize);
         let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
@@ -981,10 +986,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let (proc, function)  = match &ptr.address {
-            FunctionAddress::Local(proc, function) => {
-                (proc.clone(), function.clone())
-            }
+        let (proc, function) = match &ptr.address {
+            FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
                 let lpc_ref = get_loc!(self, *initial_arg)?;
 
@@ -997,7 +1000,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     if let Some(func) = func {
                         (cell.clone(), func.clone())
                     } else {
-                        return Err(self.runtime_error(format!("call to unknown function `{}", name)));
+                        return Err(
+                            self.runtime_error(format!("call to unknown function `{}", name))
+                        );
                     }
                 } else {
                     return Err(self.runtime_error("non-object receiver to function pointer call"));
@@ -1067,12 +1072,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let new_frame = CallFrame::with_registers(
-            proc,
-            function,
-            passed_args_count,
-            new_registers
-        );
+        let new_frame = CallFrame::with_registers(proc, function, passed_args_count, new_registers);
 
         let fc = new_frame.function.clone();
         let name = fc.name();
@@ -2282,8 +2282,7 @@ mod tests {
                 let (program, config, process) = compile_prog(code);
                 object_space.insert_process(process);
 
-                let result = task
-                    .initialize_program(program, config, object_space);
+                let result = task.initialize_program(program, config, object_space);
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2304,8 +2303,7 @@ mod tests {
                 let mut object_space = ObjectSpace::default();
                 object_space.insert_process(process);
 
-                let result = task
-                    .initialize_program(program, config, object_space);
+                let result = task.initialize_program(program, config, object_space);
 
                 assert_eq!(
                     result.unwrap_err().to_string(),

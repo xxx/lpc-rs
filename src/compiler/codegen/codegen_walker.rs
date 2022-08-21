@@ -559,7 +559,11 @@ impl CodegenWalker {
         &self.context
     }
 
-    fn setup_populate_defaults(&mut self, span: Option<Span>, num_default_args: usize) -> Option<usize> {
+    fn setup_populate_defaults(
+        &mut self,
+        span: Option<Span>,
+        num_default_args: usize,
+    ) -> Option<usize> {
         if num_default_args > 0 {
             let address = Some(self.current_address());
 
@@ -573,7 +577,12 @@ impl CodegenWalker {
         }
     }
 
-    fn setup_populate_argv(&mut self, ellipsis: bool, span: Option<Span>, passed_param_count: usize) -> Option<usize> {
+    fn setup_populate_argv(
+        &mut self,
+        ellipsis: bool,
+        span: Option<Span>,
+        passed_param_count: usize,
+    ) -> Option<usize> {
         if ellipsis {
             let argv_location = self.assign_sym_location(ARGV);
 
@@ -586,11 +595,7 @@ impl CodegenWalker {
 
             // The number of locals isn't known yet, so just set it to zero for now.
             // This gets backpatched after the function body is generated.
-            let instruction = Instruction::PopulateArgv(
-                argv_location,
-                passed_param_count,
-                0,
-            );
+            let instruction = Instruction::PopulateArgv(argv_location, passed_param_count, 0);
             push_instruction!(self, instruction, span);
 
             result
@@ -629,9 +634,7 @@ impl CodegenWalker {
                 let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
                 sym.instructions[idx] = new_instruction;
             } else {
-                return Err(
-                    LpcError::new("Invalid populate_defaults_index").with_span(span)
-                );
+                return Err(LpcError::new("Invalid populate_defaults_index").with_span(span));
             }
         }
 
@@ -642,7 +645,11 @@ impl CodegenWalker {
         Ok(())
     }
 
-    fn backpatch_populate_argv(func: &mut ProgramFunction, populate_argv_index: usize, span: Option<Span>) -> Result<()> {
+    fn backpatch_populate_argv(
+        func: &mut ProgramFunction,
+        populate_argv_index: usize,
+        span: Option<Span>,
+    ) -> Result<()> {
         let instruction = &func.instructions[populate_argv_index];
 
         if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
@@ -1084,7 +1091,8 @@ impl TreeWalker for CodegenWalker {
             self.current_result = Register(num_args).as_register();
         }
 
-        let populate_argv_index = self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
+        let populate_argv_index =
+            self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
 
         let start_label = self.new_label("closure-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1103,10 +1111,7 @@ impl TreeWalker for CodegenWalker {
                 let target = RegisterVariant::Local(Register(0));
 
                 if self.current_result != target {
-                    sym.push_instruction(
-                        RegCopy(self.current_result, target),
-                        node.span,
-                    );
+                    sym.push_instruction(RegCopy(self.current_result, target), node.span);
                 }
 
                 sym.push_instruction(Instruction::Ret, node.span);
@@ -1122,7 +1127,7 @@ impl TreeWalker for CodegenWalker {
                     passed_param_locations,
                     node.span,
                     populate_defaults_index,
-                    start_label
+                    start_label,
                 )?;
             }
         }
@@ -1393,7 +1398,8 @@ impl TreeWalker for CodegenWalker {
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        let populate_argv_index = self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
+        let populate_argv_index =
+            self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
 
         let start_label = self.new_label("function-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1422,7 +1428,7 @@ impl TreeWalker for CodegenWalker {
                 &passed_param_locations,
                 node.span,
                 populate_defaults_index,
-                start_label
+                start_label,
             )?;
         }
 
@@ -3557,7 +3563,8 @@ mod tests {
 
         #[test]
         fn populates_the_default_arguments() {
-            let mut walker = compile("function f = (: [int i, int j = 666, float d = 3.14] i * j :);");
+            let mut walker =
+                compile("function f = (: [int i, int j = 666, float d = 3.14] i * j :);");
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),

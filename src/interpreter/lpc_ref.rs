@@ -8,11 +8,10 @@ use std::{
     ptr,
 };
 
-use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
+use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use refpool::PoolRef;
-use lpc_rs_core::lpc_type::LpcType;
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
@@ -156,7 +155,7 @@ impl LpcRef {
             LpcRef::Array(_) => LpcType::Mixed(true), // TODO: this could be better
             LpcRef::Mapping(_) => LpcType::Mapping(false),
             LpcRef::Object(_) => LpcType::Object(false),
-            LpcRef::Function(_) => LpcType::Function(false)
+            LpcRef::Function(_) => LpcType::Function(false),
         }
     }
 }
