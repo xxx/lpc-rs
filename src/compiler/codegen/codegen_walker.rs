@@ -389,7 +389,7 @@ impl CodegenWalker {
     /// A helper to assign the next free [`Register`] to a [`Symbol`]
     /// of the given name, within the current scope.
     fn assign_sym_location(&mut self, name: &str) -> RegisterVariant {
-        let current_register = self.register_counter.next().unwrap().as_register();
+        let current_register = self.register_counter.next().unwrap().as_local();
 
         let symbol = self.context.lookup_var_mut(name);
         if let Some(sym) = symbol {
@@ -411,7 +411,7 @@ impl CodegenWalker {
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
             // 0.
-            self.register_counter.next().unwrap().as_register()
+            self.register_counter.next().unwrap().as_local()
         };
 
         let second_index = if let Some(expr) = &mut *node.r {
@@ -419,13 +419,13 @@ impl CodegenWalker {
             self.current_result
         } else {
             // A missing range end means just go to the end of the array.
-            let register = self.register_counter.next().unwrap().as_register();
+            let register = self.register_counter.next().unwrap().as_local();
             let instruction = Instruction::IConst(register, -1);
             push_instruction!(self, instruction, node.span);
             register
         };
 
-        let result = self.register_counter.next().unwrap().as_register();
+        let result = self.register_counter.next().unwrap().as_local();
         self.current_result = result;
         push_instruction!(
             self,
@@ -448,7 +448,7 @@ impl CodegenWalker {
 
     // special case for `catch()`
     fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
-        let result_register = self.register_counter.next().unwrap().as_register();
+        let result_register = self.register_counter.next().unwrap().as_local();
         let label = self.new_label("catch_end");
 
         push_instruction!(
@@ -687,7 +687,7 @@ impl TreeWalker for CodegenWalker {
             items.push(self.current_result);
         }
 
-        let register = self.register_counter.next().unwrap().as_register();
+        let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         push_instruction!(self, Instruction::AConst(register, items), node.span);
 
@@ -781,7 +781,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::Jz(reg_right, end_label.clone());
                 push_instruction!(self, instruction, node.span);
 
-                let reg_result = self.register_counter.next().unwrap().as_register();
+                let reg_result = self.register_counter.next().unwrap().as_local();
                 self.current_result = reg_result;
 
                 let instruction = Instruction::RegCopy(reg_right, reg_result);
@@ -795,7 +795,7 @@ impl TreeWalker for CodegenWalker {
                 // Handle short-circuit behavior
                 let end_label = self.new_label("oror-end");
 
-                let reg_result = self.register_counter.next().unwrap().as_register();
+                let reg_result = self.register_counter.next().unwrap().as_local();
                 let instruction = Instruction::RegCopy(reg_left, reg_result);
                 push_instruction!(self, instruction, node.span);
 
@@ -818,7 +818,7 @@ impl TreeWalker for CodegenWalker {
         node.r.visit(self)?;
         let reg_right = self.current_result;
 
-        let reg_result = self.register_counter.next().unwrap().as_register();
+        let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
 
         let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
@@ -869,7 +869,7 @@ impl TreeWalker for CodegenWalker {
             if let Some(rcvr) = &mut node.receiver {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
-                let name_register = self.register_counter.next().unwrap().as_register();
+                let name_register = self.register_counter.next().unwrap().as_local();
                 push_instruction!(
                     self,
                     Instruction::SConst(name_register, node.name.clone()),
@@ -883,7 +883,7 @@ impl TreeWalker for CodegenWalker {
                     initial_arg: arg_results[0],
                 }
             } else if node.name == SIZEOF {
-                let result = self.register_counter.next().unwrap().as_register();
+                let result = self.register_counter.next().unwrap().as_local();
 
                 let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
                 push_instruction!(self, instruction, node.span);
@@ -897,7 +897,7 @@ impl TreeWalker for CodegenWalker {
                         // if there's a function pointer with this name in scope, call that.
                         let location = if x.is_global() {
                             let global_loc = x.location.unwrap();
-                            let result = self.register_counter.next().unwrap().as_register();
+                            let result = self.register_counter.next().unwrap().as_local();
                             self.current_result = result;
                             let instruction = Instruction::GLoad(global_loc, result);
                             push_instruction!(self, instruction, node.span);
@@ -921,13 +921,13 @@ impl TreeWalker for CodegenWalker {
                 }
             }
         } else {
-            let start_register = self.register_counter.next().unwrap().as_register();
+            let start_register = self.register_counter.next().unwrap().as_local();
             let mut register = start_register;
 
             // copy each result to the start of the arg register
             for result in &arg_results {
                 push_instruction!(self, Instruction::RegCopy(*result, register), node.span);
-                register = self.register_counter.next().unwrap().as_register();
+                register = self.register_counter.next().unwrap().as_local();
             }
 
             // Undo the final call to .next() in the above for-loop to avoid wasting a
@@ -938,7 +938,7 @@ impl TreeWalker for CodegenWalker {
                 rcvr.visit(self)?;
                 let receiver_result = self.current_result;
 
-                let name_register = self.register_counter.next().unwrap().as_register();
+                let name_register = self.register_counter.next().unwrap().as_local();
                 push_instruction!(
                     self,
                     Instruction::SConst(name_register, node.name.clone()),
@@ -973,7 +973,7 @@ impl TreeWalker for CodegenWalker {
                         // if there's a function pointer with this name in scope, call that.
                         let location = if x.is_global() {
                             let global_loc = x.location.unwrap();
-                            let result = self.register_counter.next().unwrap().as_register();
+                            let result = self.register_counter.next().unwrap().as_local();
                             self.current_result = result;
                             let instruction = Instruction::GLoad(global_loc, result);
                             push_instruction!(self, instruction, node.span);
@@ -1002,11 +1002,11 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         let push_copy = |walker: &mut CodegenWalker| {
-            let next_register = walker.register_counter.next().unwrap().as_register();
+            let next_register = walker.register_counter.next().unwrap().as_local();
 
             push_instruction!(
                 walker,
-                Instruction::RegCopy(Register(0).as_register(), next_register),
+                Instruction::RegCopy(Register(0).as_local(), next_register),
                 node.span()
             );
 
@@ -1019,7 +1019,7 @@ impl TreeWalker for CodegenWalker {
             .lookup_function_complete(&node.name, &node.namespace)
         {
             if func.as_ref().return_type == LpcType::Void {
-                self.current_result = Register(0).as_register();
+                self.current_result = Register(0).as_local();
             } else {
                 push_copy(self);
             }
@@ -1090,7 +1090,7 @@ impl TreeWalker for CodegenWalker {
         let current_index = self.register_counter.as_usize();
         if num_args > current_index {
             self.register_counter.set(num_args);
-            self.current_result = Register(num_args).as_register();
+            self.current_result = Register(num_args).as_local();
         }
 
         let populate_argv_index =
@@ -1150,7 +1150,7 @@ impl TreeWalker for CodegenWalker {
         // We just need to store a reference to it in the current result.
         self.context.scopes.goto(parent_scope_id);
 
-        let location = self.register_counter.next().unwrap().as_register();
+        let location = self.register_counter.next().unwrap().as_local();
         self.current_result = location;
 
         // closures are just local functions, with a pointer to them stored in a
@@ -1229,7 +1229,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
-        let register = self.register_counter.next().unwrap().as_register();
+        let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         let instruction = Instruction::FConst(self.current_result, node.value);
         push_instruction!(self, instruction, node.span);
@@ -1319,7 +1319,7 @@ impl TreeWalker for CodegenWalker {
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        let eqeq_result = self.register_counter.next().unwrap().as_register();
+        let eqeq_result = self.register_counter.next().unwrap().as_local();
         let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
         push_instruction!(self, instruction, node.span);
 
@@ -1548,7 +1548,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        let location = self.register_counter.next().unwrap().as_register();
+        let location = self.register_counter.next().unwrap().as_local();
         self.current_result = location;
 
         let instruction = Instruction::FunctionPtrConst {
@@ -1603,7 +1603,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
-        let register = self.register_counter.next().unwrap().as_register();
+        let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         let instruction = match node.value {
             0 => Instruction::IConst0(register),
@@ -1643,7 +1643,7 @@ impl TreeWalker for CodegenWalker {
             map.insert(key_result, self.current_result);
         }
 
-        let register = self.register_counter.next().unwrap().as_register();
+        let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         push_instruction!(self, Instruction::MapConst(register, map), node.span);
 
@@ -1725,7 +1725,7 @@ impl TreeWalker for CodegenWalker {
     fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
             expression.visit(self)?;
-            let copy = Instruction::RegCopy(self.current_result, Register(0).as_register());
+            let copy = Instruction::RegCopy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
         }
 
@@ -1736,7 +1736,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
-        let register = self.register_counter.next().unwrap().as_register();
+        let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
 
         push_instruction!(
@@ -1796,13 +1796,13 @@ impl TreeWalker for CodegenWalker {
                 Some(mut case_expr) => {
                     case_expr.visit(self)?;
                     let case_result = self.current_result;
-                    let test_result = self.register_counter.next().unwrap().as_register();
+                    let test_result = self.register_counter.next().unwrap().as_local();
 
                     if let ExpressionNode::Range(range_node) = case_expr {
                         let (range_left, range_right) = self.visit_range_results.unwrap();
 
                         // check if >= start of range
-                        let gte_result = self.register_counter.next().unwrap().as_register();
+                        let gte_result = self.register_counter.next().unwrap().as_local();
                         let instruction = if let Some(left_reg) = range_left {
                             Instruction::Gte(case_result, left_reg, gte_result)
                         } else {
@@ -1811,7 +1811,7 @@ impl TreeWalker for CodegenWalker {
                         push_instruction!(self, instruction, range_node.span);
 
                         // check if <= end of range
-                        let lte_result = self.register_counter.next().unwrap().as_register();
+                        let lte_result = self.register_counter.next().unwrap().as_local();
                         let instruction = if let Some(right_reg) = range_right {
                             Instruction::Lte(case_result, right_reg, lte_result)
                         } else {
@@ -1852,7 +1852,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        let result_reg = self.register_counter.next().unwrap().as_register();
+        let result_reg = self.register_counter.next().unwrap().as_local();
         let else_label = self.new_label("ternary-else");
         let end_label = self.new_label("ternary-end");
 
@@ -1896,11 +1896,11 @@ impl TreeWalker for CodegenWalker {
         self.current_result = match node.op {
             UnaryOperation::Negate => {
                 // multiply by -1
-                let reg = self.register_counter.next().unwrap().as_register();
+                let reg = self.register_counter.next().unwrap().as_local();
                 let instruction = Instruction::IConst(reg, -1);
                 push_instruction!(self, instruction, node.span);
 
-                let reg_result = self.register_counter.next().unwrap().as_register();
+                let reg_result = self.register_counter.next().unwrap().as_local();
 
                 let instruction = Instruction::MMul(location, reg, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -1916,7 +1916,7 @@ impl TreeWalker for CodegenWalker {
 
                 if node.is_post {
                     // TODO: only copy if pre-operation value is needed elsewhere
-                    let temp = self.register_counter.next().unwrap().as_register();
+                    let temp = self.register_counter.next().unwrap().as_local();
                     let copy = Instruction::RegCopy(location, temp);
                     push_instruction!(self, copy, node.span);
                     push_instruction!(self, instruction, node.span);
@@ -1927,7 +1927,7 @@ impl TreeWalker for CodegenWalker {
                 }
             }
             UnaryOperation::Bang => {
-                let reg_result = self.register_counter.next().unwrap().as_register();
+                let reg_result = self.register_counter.next().unwrap().as_local();
 
                 let instruction = Instruction::Not(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -1935,7 +1935,7 @@ impl TreeWalker for CodegenWalker {
                 reg_result
             }
             UnaryOperation::BitwiseNot => {
-                let reg_result = self.register_counter.next().unwrap().as_register();
+                let reg_result = self.register_counter.next().unwrap().as_local();
 
                 let instruction = Instruction::BitwiseNot(location, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -1951,7 +1951,7 @@ impl TreeWalker for CodegenWalker {
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
             let idx = closure_arg_number(&node.name)?;
-            self.current_result = Register(idx).as_register();
+            self.current_result = Register(idx).as_local();
 
             return Ok(());
         }
@@ -1988,7 +1988,7 @@ impl TreeWalker for CodegenWalker {
         };
 
         if sym.is_global() {
-            let result_register = self.register_counter.next().unwrap().as_register();
+            let result_register = self.register_counter.next().unwrap().as_local();
             let instruction = Instruction::GLoad(sym_loc, result_register);
             push_instruction!(self, instruction, node.span);
 
@@ -2023,7 +2023,7 @@ impl TreeWalker for CodegenWalker {
             if matches!(expression, ExpressionNode::Var(_)) {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
-                let next_register = self.register_counter.next().unwrap().as_register();
+                let next_register = self.register_counter.next().unwrap().as_local();
                 push_instruction!(
                     self,
                     Instruction::RegCopy(self.current_result, next_register),
@@ -2035,7 +2035,7 @@ impl TreeWalker for CodegenWalker {
             }
         } else {
             // Default value to 0 when uninitialized.
-            self.register_counter.next().unwrap().as_register()
+            self.register_counter.next().unwrap().as_local()
         };
 
         self.current_result = current_register;
@@ -2043,13 +2043,13 @@ impl TreeWalker for CodegenWalker {
         if global {
             // Store the reference in the globals register.
             // Using next() skips r0, just like functions.
-            let dest_register = self.global_counter.next().unwrap().as_register();
+            let dest_register = self.global_counter.next().unwrap().as_local();
             let instruction = Instruction::GStore(current_register, dest_register);
             self.global_init_registers = current_register.index();
             push_instruction!(self, instruction, node.span);
         }
 
-        let current_global_register = self.global_counter.current().as_register();
+        let current_global_register = self.global_counter.current().as_local();
         let symbol = self.context.lookup_var_mut(&node.name);
 
         if let Some(sym) = symbol {
@@ -4743,7 +4743,7 @@ mod tests {
 
         fn setup_var(type_: LpcType, walker: &mut CodegenWalker) {
             let sym = Symbol {
-                location: Some(Register(1).as_register()),
+                location: Some(Register(1).as_local()),
                 ..Symbol::new("marf", type_)
             };
             walker.register_counter.next(); // force-increment to mimic the scope walker

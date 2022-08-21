@@ -954,7 +954,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public() && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver)) {
-                return set_loc!(self, Register(0).as_register(), LpcRef::Int(0));
+                return set_loc!(self, Register(0).as_local(), LpcRef::Int(0));
             }
         }
 
@@ -1499,7 +1499,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // set up the catch point's return value
         let value = LpcValue::from(error.to_string());
         let lpc_ref = self.memory.value_to_ref(value);
-        set_loc!(self, Register(result_index).as_register(), lpc_ref)?;
+        set_loc!(self, Register(result_index).as_local(), lpc_ref)?;
         let frame = self.stack.current_frame_mut()?;
 
         // jump to the corresponding catchend instruction
@@ -3682,8 +3682,8 @@ mod tests {
                         ),
                         num_locals: 2,
                         instructions: vec![
-                            SConst(Register(1).as_register(), "Hello, world!".into()),
-                            Sizeof(Register(1).as_register(), Register(2).as_register()),
+                            SConst(Register(1).as_local(), "Hello, world!".into()),
+                            Sizeof(Register(1).as_local(), Register(2).as_local()),
                         ],
                         debug_spans: vec![None, None],
                         labels: Default::default(),

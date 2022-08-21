@@ -42,7 +42,7 @@ impl Register {
     }
 
     /// convenience method
-    pub fn as_register(&self) -> RegisterVariant {
+    pub fn as_local(&self) -> RegisterVariant {
         RegisterVariant::Local(*self)
     }
 
