@@ -537,12 +537,16 @@ impl TreeWalker for SemanticCheckWalker {
             expression.visit(self)?;
         }
 
+        // closure return types are not type-checked
+        if self.context.closure_depth > 0 {
+            return Ok(())
+        }
+
         if let Some(function_def) = &self.current_function {
             if let Some(expression) = &node.value {
-                if let ExpressionNode::Int(IntNode { value: 0, .. }) = expression {
-                    // returning a literal 0 is allowable for any type,
-                    // including void.
-                } else {
+                // returning a literal 0 is allowable for any type,
+                // including void.
+                if !matches!(expression, ExpressionNode::Int(IntNode { value: 0, .. })) {
                     let return_type = node_type(expression, &self.context)?;
 
                     if function_def.return_type == LpcType::Void
@@ -552,8 +556,8 @@ impl TreeWalker for SemanticCheckWalker {
                             "invalid return type {}. Expected {}.",
                             return_type, function_def.return_type
                         ))
-                        .with_span(node.span)
-                        .with_label("defined here", function_def.span);
+                            .with_span(node.span)
+                            .with_label("defined here", function_def.span);
 
                         self.context.errors.push(error);
                     }
@@ -2356,8 +2360,6 @@ mod tests {
     }
 
     mod test_visit_return {
-        use lpc_rs_core::function_flags::FunctionFlags;
-
         use super::*;
 
         #[test]
@@ -2372,23 +2374,17 @@ mod tests {
                 span: None,
             };
 
-            let void_function_def = FunctionDefNode {
+            let void_function_def = create!(
+                FunctionDefNode,
                 return_type: LpcType::Void,
-                name: "foo".to_string(),
-                parameters: vec![],
-                flags: FunctionFlags::default(),
-                body: vec![],
-                span: None,
-            };
+                name: "foo".to_string()
+            );
 
-            let int_function_def = FunctionDefNode {
+            let int_function_def = create!(
+                FunctionDefNode,
                 return_type: LpcType::Int(false),
-                name: "snuh".to_string(),
-                parameters: vec![],
-                flags: FunctionFlags::default(),
-                body: vec![],
-                span: None,
-            };
+                name: "snuh".to_string()
+            );
 
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
@@ -2430,14 +2426,11 @@ mod tests {
                 span: None,
             };
 
-            let void_function_def = FunctionDefNode {
+            let void_function_def = create!(
+                FunctionDefNode,
                 return_type: LpcType::Void,
-                name: "foo".to_string(),
-                parameters: vec![],
-                flags: FunctionFlags::default(),
-                body: vec![],
-                span: None,
-            };
+                name: "foo".to_string()
+            );
 
             let function_prototypes = HashMap::new();
             let mut scopes = ScopeTree::default();
@@ -2462,28 +2455,46 @@ mod tests {
                 span: None,
             };
 
-            let function_def = FunctionDefNode {
+            let function_def = create!(
+                FunctionDefNode,
                 return_type: LpcType::Mixed(false),
                 name: "foo".to_string(),
-                parameters: vec![],
-                flags: FunctionFlags::default(),
-                body: vec![],
-                span: None,
-            };
+            );
 
-            let function_prototypes = HashMap::new();
-            let mut scopes = ScopeTree::default();
-            scopes.push_new();
-            let context = CompilationContext {
-                scopes,
-                function_prototypes,
-                ..CompilationContext::default()
-            };
+            let context = CompilationContext::default();
 
             let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(function_def);
             let _ = node.visit(&mut walker);
 
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn allows_return_of_differing_type_within_closure() {
+            let function_def = create!(
+                FunctionDefNode,
+                return_type: LpcType::Float(false),
+                name: "foo".to_string(),
+            );
+
+            let mut node = ReturnNode {
+                value: Some(ExpressionNode::from("blargh")),
+                span: None,
+            };
+
+            let mut walker = SemanticCheckWalker::new(CompilationContext::default());
+
+            walker.current_function = Some(function_def);
+
+            let _ = node.visit(&mut walker);
+            assert!(!walker.context.errors.is_empty());
+
+            walker.context.errors = vec![];
+
+            walker.context.closure_depth += 1;
+
+            let _ = node.visit(&mut walker);
             assert!(walker.context.errors.is_empty());
         }
     }
