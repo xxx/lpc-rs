@@ -75,13 +75,8 @@ impl CallFrame {
     where
         P: Into<Rc<RefCell<Process>>>,
     {
-        // add +1 for r0 (where return value is stored)
-        let reg_len = function.arity().num_args + function.num_locals + 1;
-        let arg_len = arg_capacity + function.num_locals + 1;
-        let reservation = std::cmp::max(reg_len, arg_len);
-
         Self {
-            registers: RegisterBank::new(vec![LpcRef::Int(0); reservation]),
+            registers: RegisterBank::initialized_for_function(function.clone(), arg_capacity),
             ..Self::new(process, function, called_with_num_args)
         }
     }

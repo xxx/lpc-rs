@@ -2,9 +2,11 @@ use std::{
     ops::{Index, IndexMut, Range, RangeInclusive},
     slice::Iter,
 };
+use std::rc::Rc;
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;
+use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::lpc_ref::LpcRef;
 
@@ -32,6 +34,16 @@ impl RegisterBank {
 
     pub fn new(registers: Vec<LpcRef>) -> Self {
         Self { registers }
+    }
+
+    /// Get a proper-sized [`RegisterBank`] for the passed function and runtime arg count
+    pub fn initialized_for_function(function: Rc<ProgramFunction>, runtime_arg_count: usize) -> RegisterBank {
+        // add +1 for r0 (where return value is stored)
+        let static_length = function.arity().num_args + function.num_locals + 1;
+        let dynamic_length = runtime_arg_count + function.num_locals + 1;
+        let reservation = std::cmp::max(static_length, dynamic_length);
+
+        RegisterBank::new(vec![LpcRef::Int(0); reservation])
     }
 }
 
