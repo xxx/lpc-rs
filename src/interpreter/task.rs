@@ -873,8 +873,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     num_args,
                                 )
                             } else {
-                                // println!("proc {:#?}", process);
-                                // println!("functions {:#?}", borrowed.functions);
                                 let msg = format!("Call to unknown function `{}`", name);
                                 return Err(self.runtime_error(msg));
                             }
@@ -882,31 +880,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 };
 
-                // let mut new_frame = if let Some(func) = function {
-                //     CallFrame::with_minimum_arg_capacity(
-                //         process.clone(),
-                //         func.clone(),
-                //         num_args,
-                //         num_args,
-                //     )
-                // } else if let Some(func) = task_context.simul_efuns() {
-                //     task_context.simul_efuns()
-                // } else if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                //     let func = ProgramFunction::new(prototype.clone(), 0);
-                //
-                //     CallFrame::with_minimum_arg_capacity(
-                //         process.clone(),
-                //         Rc::new(func),
-                //         num_args,
-                //         num_args,
-                //     )
-                // } else {
-                //     // println!("proc {:#?}", process);
-                //     // println!("functions {:#?}", borrowed.functions);
-                //     let msg = format!("Call to unknown function `{}`", name);
-                //     return Err(self.runtime_error(msg));
-                // };
-                //
                 // copy argument registers from old frame to new
                 if num_args > 0_usize {
                     let index = initial_arg.index();
@@ -919,7 +892,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     && (!frame.process.borrow().contains_function(name, namespace)
                         || namespace.as_str() == EFUN);
 
-                // println!("pushing frame in Call: {:?}", new_frame);
                 self.stack.push(new_frame)?;
 
                 if function_is_efun {
