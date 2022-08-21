@@ -56,9 +56,6 @@ pub struct SemanticCheckWalker {
     /// Are `case` and `default` statements currently allowed?
     valid_labels: Vec<LabelAllowed>,
 
-    /// How deep are we in a stack of closures
-    closure_depth: usize,
-
     context: CompilationContext,
 }
 
@@ -69,7 +66,6 @@ impl SemanticCheckWalker {
             current_function: None,
             valid_jumps: vec![],
             valid_labels: vec![],
-            closure_depth: 0,
         }
     }
 
@@ -275,7 +271,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
-        self.closure_depth += 1;
+        self.context.closure_depth += 1;
 
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
@@ -288,7 +284,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.context.scopes.pop();
-        self.closure_depth -= 1;
+        self.context.closure_depth -= 1;
 
         Ok(())
     }
@@ -636,7 +632,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
-            if self.closure_depth == 0 {
+            if self.context.closure_depth == 0 {
                 let e = LpcError::new(
                     "positional argument variables can only be used within a closure",
                 )
@@ -2619,7 +2615,7 @@ mod tests {
             );
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
-            walker.closure_depth = 1;
+            walker.context.closure_depth = 1;
             let _ = node.visit(&mut walker);
 
             assert!(walker.context.errors.is_empty());
@@ -2630,7 +2626,7 @@ mod tests {
             let mut node = create!(VarNode,name: "$65".to_string());
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
-            walker.closure_depth = 1;
+            walker.context.closure_depth = 1;
 
             let _ = node.visit(&mut walker);
 

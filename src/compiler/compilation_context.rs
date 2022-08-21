@@ -72,6 +72,9 @@ pub struct CompilationContext {
     /// The count of closures that have been defined, so we can give them unique
     /// names.
     pub closure_count: usize,
+
+    /// How deep are we in a stack of closures
+    pub closure_depth: usize,
 }
 
 impl CompilationContext {
@@ -320,6 +323,7 @@ impl Default for CompilationContext {
             num_init_registers: 0,
             simul_efuns: None,
             closure_count: 0,
+            closure_depth: 0,
         }
     }
 }
