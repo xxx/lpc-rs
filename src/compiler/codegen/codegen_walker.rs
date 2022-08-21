@@ -664,7 +664,7 @@ impl CodegenWalker {
         }
     }
 
-    fn visit_parameters(&mut self, nodes: &Vec<VarInitNode>) -> Vec<RegisterVariant> {
+    fn visit_parameters(&mut self, nodes: &[VarInitNode]) -> Vec<RegisterVariant> {
         nodes
             .iter()
             .map(|parameter| self.visit_parameter(parameter))
@@ -1080,7 +1080,7 @@ impl TreeWalker for CodegenWalker {
         let passed_param_locations = &node
             .parameters
             .as_ref()
-            .map(|nodes| self.visit_parameters(&nodes))
+            .map(|nodes| self.visit_parameters(nodes))
             .unwrap_or_default();
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);

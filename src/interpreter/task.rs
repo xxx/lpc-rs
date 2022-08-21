@@ -1004,7 +1004,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let from_slice = &registers[index..(index + adjusted_num_args)];
                 let to_slice = &mut new_registers[1..=max_arg_length];
 
-                for (i, item) in to_slice.into_iter().enumerate().take(max_arg_length) {
+                for (i, item) in to_slice.iter_mut().enumerate().take(max_arg_length) {
                     if let Some(Some(x)) = partial_args.get(i) {
                         // if a partially-appliable arg is present, use it
                         let _ = std::mem::replace(item, x.clone());
@@ -1025,14 +1025,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // Type-check the args.
         // TODO: Maybe make this optional somehow?
         let arg_types = &function.prototype.arg_types;
-        for (i, lpc_ref) in new_registers[1..].into_iter().enumerate() {
+        for (i, lpc_ref) in new_registers[1..].iter().enumerate() {
             if_chain! {
                 if let Some(arg_type) = arg_types.get(i);
                 let ref_type = lpc_ref.as_lpc_type();
                 if !ref_type.matches_type(*arg_type);
                 then {
                     let arg_spans = &function.prototype.arg_spans;
-                    let arg_def_span = arg_spans.get(i).map(|s| *s);
+                    let arg_def_span = arg_spans.get(i).copied();
                     let error = self.runtime_error(format!(
                         "unexpected argument type to `{}`: {}. expected {}.",
                         function.prototype.name, ref_type, arg_type
