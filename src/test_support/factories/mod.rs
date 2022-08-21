@@ -4,8 +4,10 @@ mod call_node;
 mod closure_node;
 mod symbol;
 mod var_node;
+mod var_init_node;
 
 pub use call_node::*;
 pub use closure_node::*;
 pub use symbol::*;
 pub use var_node::*;
+pub use var_init_node::*;
