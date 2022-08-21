@@ -1028,6 +1028,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         if !arg_types.is_empty() {
             for (i, lpc_ref) in new_registers[1..].iter().enumerate() {
                 if_chain! {
+                    if !matches!(lpc_ref, &LpcRef::Int(0)); // 0 is always allowed
                     if let Some(arg_type) = arg_types.get(i);
                     let ref_type = lpc_ref.as_lpc_type();
                     if !ref_type.matches_type(*arg_type);
@@ -1940,6 +1941,7 @@ mod tests {
         }
 
         mod test_call_fp {
+            use claim::assert_ok;
             use itertools::Itertools;
 
             use super::*;
@@ -2283,6 +2285,24 @@ mod tests {
                     result.unwrap_err().to_string(),
                     "runtime error: unexpected argument type to `tacos`: float. expected string."
                 );
+
+                let code = indoc! { r##"
+                    function f = taco_maker();
+
+                    string name = f("carne asada");
+
+                    private function taco_maker() {
+                        return (: [string name, float price = 1.00] name :);
+                    }
+                "##};
+
+                let (program, config, process) = compile_prog(code);
+                let mut object_space = ObjectSpace::default();
+                object_space.insert_process(process);
+
+                let result = task.initialize_program(program, config, object_space);
+
+                assert_ok!(result);
             }
         }
 
