@@ -776,10 +776,10 @@ mod tests {
         context.inherits.push(earlier_inherit);
         context.inherits.push(inherited);
 
-        let mut global = Symbol::new("my_global", LpcType::Int(false));
-        context.scopes.current_mut().unwrap().insert(global.clone());
+        let global = Symbol::new("my_global", LpcType::Function(true));
+        context.scopes.current_mut().unwrap().insert(global);
 
-        let mut overriding_local = Symbol::new("overridden", LpcType::String(false));
+        let overriding_local = Symbol::new("overridden", LpcType::String(false));
         context
             .scopes
             .current_mut()
@@ -794,11 +794,11 @@ mod tests {
 
         assert_eq!(
             // gets the more local overridden version
-            context.lookup_var("overridden"),
-            Some(&overriding_local)
+            context.lookup_var("overridden").unwrap().type_,
+            overriding_local.type_
         );
 
-        assert_eq!(context.lookup_var("my_global"), Some(&global));
+        assert_eq!(context.lookup_var("my_global").unwrap().type_, LpcType::Function(true));
 
         assert_eq!(
             // gets from the inherited parent
@@ -808,10 +808,10 @@ mod tests {
 
         assert_eq!(
             // gets the more local overridden version
-            context.lookup_var_mut("overridden"),
-            Some(&mut overriding_local)
+            context.lookup_var_mut("overridden").unwrap().type_,
+            overriding_local.type_
         );
 
-        assert_eq!(context.lookup_var_mut("my_global"), Some(&mut global));
+        assert_eq!(context.lookup_var_mut("my_global").unwrap().type_, LpcType::Function(true));
     }
 }

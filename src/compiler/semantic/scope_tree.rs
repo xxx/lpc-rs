@@ -47,18 +47,24 @@ impl ScopeTree {
         let id = self.scopes.count();
 
         let scope = LocalScope {
-            id,
+            id: None,
             symbols: HashMap::new(),
         };
 
-        self.current_id = match self.current_id {
-            Some(parent) => {
-                let kid = self.scopes.new_node(scope);
-                parent.append(kid, &mut self.scopes);
-                Some(kid)
-            }
-            None => Some(self.scopes.new_node(scope)),
-        };
+        let new_id = self.scopes.new_node(scope);
+
+        // now that we have the scope's final node ID,
+        // we need to set it on the scope itself
+        {
+            let mut_scope = self.scopes.get_mut(new_id).unwrap();
+            (*mut_scope.get_mut()).id = Some(new_id);
+        }
+
+        if let Some(parent) = self.current_id {
+            parent.append(new_id, &mut self.scopes);
+        }
+
+        self.current_id = Some(new_id);
 
         if id == 0 {
             self.root_id = self.current_id;

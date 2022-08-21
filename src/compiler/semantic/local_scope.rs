@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use delegate::delegate;
+use indextree::NodeId;
 
 use crate::compiler::semantic::symbol::Symbol;
 
@@ -8,7 +9,7 @@ use crate::compiler::semantic::symbol::Symbol;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalScope {
     /// My ID
-    pub id: usize,
+    pub id: Option<NodeId>,
 
     /// Map of symbol names to the symbol itself
     pub symbols: HashMap<String, Symbol>,
@@ -16,7 +17,7 @@ pub struct LocalScope {
 
 impl LocalScope {
     /// Create a new [`LocalScope`] with the passed `id`
-    pub fn new(id: usize) -> Self {
+    pub fn new(id: Option<NodeId>) -> Self {
         Self {
             id,
             symbols: HashMap::new(),
@@ -52,7 +53,7 @@ impl LocalScope {
 
 impl Default for LocalScope {
     fn default() -> Self {
-        Self::new(0)
+        Self::new(None)
     }
 }
 
@@ -65,7 +66,7 @@ mod tests {
     #[test]
     fn test_lookup_looks_up_the_symbols() {
         let mut scope = LocalScope {
-            id: 0,
+            id: None,
             symbols: HashMap::new(),
         };
 

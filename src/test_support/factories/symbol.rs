@@ -9,7 +9,7 @@ factori!(Symbol, {
         name = format!("sym_{}", (0..100000).fake::<usize>()),
         type_ = LpcType::Int(false),
         location = None,
-        scope_id = 0,
+        scope_id = None,
         span = None,
         flags = GlobalVarFlags::default(),
         upvalue = false

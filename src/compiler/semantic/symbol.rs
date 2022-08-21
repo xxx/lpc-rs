@@ -1,3 +1,4 @@
+use indextree::NodeId;
 use lpc_rs_core::{
     global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
     visibility::Visibility,
@@ -18,7 +19,7 @@ pub struct Symbol {
     /// Which register is tracking this variable?
     pub location: Option<RegisterVariant>,
     /// to which scope do i belong?
-    pub scope_id: usize,
+    pub scope_id: Option<NodeId>,
     /// The text span that first defined this symbol.
     pub span: Option<Span>,
     /// The flags, used for global variables
@@ -36,7 +37,7 @@ impl Symbol {
             name: String::from(name),
             type_,
             location: None,
-            scope_id: 0,
+            scope_id: None,
             span: None,
             flags: GlobalVarFlags::default(),
             upvalue: false,
@@ -46,7 +47,8 @@ impl Symbol {
     /// We're global if we're in the top-level scope.
     #[inline]
     pub fn is_global(&self) -> bool {
-        self.scope_id == 0
+        // NodeId uses a 1-based usize for its index
+        self.scope_id.is_none() || Into::<usize>::into(self.scope_id.unwrap()) == 1_usize
     }
 
     /// Visibility only matters for globals.
@@ -74,7 +76,7 @@ impl From<&FunctionPrototype> for Symbol {
             name: proto.name.clone().into_owned(),
             type_: LpcType::Function(false),
             location: None,
-            scope_id: 0,
+            scope_id: None,
             span: proto.span,
             flags: GlobalVarFlags::default(),
             upvalue: false,
@@ -94,7 +96,7 @@ impl Default for Symbol {
             name: "".to_string(),
             type_: LpcType::Int(false),
             location: None,
-            scope_id: 0,
+            scope_id: None,
             span: None,
             flags: GlobalVarFlags::default(),
             upvalue: false,

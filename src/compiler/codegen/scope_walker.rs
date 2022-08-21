@@ -1,4 +1,3 @@
-use if_chain::if_chain;
 use indextree::NodeId;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
@@ -439,7 +438,7 @@ mod tests {
                 name: "foo".to_string(),
                 type_: LpcType::String(false),
                 location: None,
-                scope_id: 0,
+                scope_id: None,
                 span: None,
                 flags: GlobalVarFlags::default(),
                 upvalue: false,
@@ -512,7 +511,7 @@ mod tests {
                 name: "foo".to_string(),
                 type_: LpcType::Int(false),
                 location: None,
-                scope_id: 0, // denotes a global symbol
+                scope_id: None, // denotes a global symbol
                 span: None,
                 flags: GlobalVarFlags::default(),
                 upvalue: false,
@@ -556,7 +555,7 @@ mod tests {
                 name: "foo".to_string(),
                 type_: LpcType::Int(false),
                 location: None,
-                scope_id: 0,
+                scope_id: None,
                 span: None,
                 flags: GlobalVarFlags::from(vec!["private"]),
                 upvalue: false,
@@ -582,7 +581,7 @@ mod tests {
                 name: "foo".to_string(),
                 type_: LpcType::Int(false),
                 location: None,
-                scope_id: 0,
+                scope_id: None,
                 span: None,
                 flags: GlobalVarFlags::from(vec!["private"]),
                 upvalue: false,

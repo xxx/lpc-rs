@@ -713,14 +713,12 @@ impl TreeWalker for CodegenWalker {
                 push_instruction!(self, assign, node.span);
 
                 // Copy over globals if necessary
-                if *global {
-                    if let Some(Symbol {
-                        scope_id: 0,
-                        location: Some(register),
-                        ..
-                    }) = self.lookup_global(name)
-                    {
-                        let store = Instruction::GStore(lhs_result, *register);
+                if_chain! {
+                    if *global;
+                    if let Some(sym) = self.lookup_global(name);
+                    if let Some(register) = sym.location;
+                    then{
+                        let store = Instruction::GStore(lhs_result, register);
                         push_instruction!(self, store, node.span);
                     }
                 }
@@ -2120,6 +2118,7 @@ impl Default for CodegenWalker {
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
+    use claim::assert_some;
 
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
@@ -2310,14 +2309,14 @@ mod tests {
         fn test_populates_the_instructions_for_locals() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
-            context.scopes.push_new();
+            let local_id = context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
 
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
                 location: Some(RegisterVariant::Local(Register(666))),
-                scope_id: 1,
+                scope_id: Some(local_id),
                 ..Default::default()
             };
 
@@ -2346,14 +2345,14 @@ mod tests {
         fn test_populates_the_instructions_for_array_items() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
-            context.scopes.push_new();
+            let local_id = context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
 
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(true),
                 location: Some(RegisterVariant::Local(Register(666))),
-                scope_id: 1,
+                scope_id: Some(local_id),
                 ..Default::default()
             };
 
@@ -3854,36 +3853,28 @@ mod tests {
         assert_eq!(walker_init_instructions(&mut walker), expected);
 
         let scope = walker.context.scopes.current().unwrap();
-        assert_eq!(
-            scope.lookup("foo").unwrap(),
-            Symbol {
-                name: String::from("foo"),
-                type_: LpcType::Int(false),
-                location: Some(RegisterVariant::Local(Register(0))),
-                scope_id: 0,
-                span: Some(Span {
-                    file_id: 0,
-                    l: 4,
-                    r: 11
-                }),
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            scope.lookup("bar").unwrap(),
-            Symbol {
-                name: String::from("bar"),
-                type_: LpcType::Int(true),
-                location: Some(RegisterVariant::Local(Register(1))),
-                scope_id: 0,
-                span: Some(Span {
-                    file_id: 0,
-                    l: 13,
-                    r: 25
-                }),
-                ..Default::default()
-            }
-        );
+        
+        let foo = scope.lookup("foo").unwrap();
+        assert_eq!(&foo.name, "foo");
+        assert_eq!(foo.type_, LpcType::Int(false));
+        assert_eq!(foo.location, Some(RegisterVariant::Local(Register(0))));
+        assert_some!(foo.scope_id);
+        assert_eq!(foo.span, Some(Span {
+            file_id: 0,
+            l: 4,
+            r: 11
+        }));
+        
+        let bar = scope.lookup("bar").unwrap();
+        assert_eq!(&bar.name, "bar");
+        assert_eq!(bar.type_, LpcType::Int(true));
+        assert_eq!(bar.location, Some(RegisterVariant::Local(Register(1))));
+        assert_some!(bar.scope_id);
+        assert_eq!(bar.span, Some(Span {
+            file_id: 0,
+            l: 13,
+            r: 25
+        }));
     }
 
     mod test_visit_do_while {
@@ -4704,14 +4695,14 @@ mod tests {
                     ..Default::default()
                 },
             );
-            walker.context.scopes.push_new(); // push a local scope
+            let local_id = walker.context.scopes.push_new(); // push a local scope
             insert_symbol(
                 &mut walker,
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
                     location: Some(RegisterVariant::Local(Register(666))),
-                    scope_id: 1,
+                    scope_id: Some(local_id),
                     ..Default::default()
                 },
             );
