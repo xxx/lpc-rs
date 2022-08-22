@@ -60,6 +60,9 @@ pub struct CompilationContext {
     /// allocate for global variables.
     pub num_globals: usize,
 
+    /// How many variables need to be upvalued?
+    pub num_upvalues: usize,
+
     /// How many [`Register`](lpc_rs_core::register::Register)s were required
     /// for initializing global variables, in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
@@ -72,9 +75,6 @@ pub struct CompilationContext {
     /// The count of closures that have been defined, so we can give them unique
     /// names.
     pub closure_count: usize,
-
-    /// How deep are we in a stack of closures
-    pub closure_depth: usize,
 }
 
 impl CompilationContext {
@@ -320,10 +320,10 @@ impl Default for CompilationContext {
             inherit_names: HashMap::new(),
             inherit_depth: 0,
             num_globals: 0,
+            num_upvalues: 0,
             num_init_registers: 0,
             simul_efuns: None,
             closure_count: 0,
-            closure_depth: 0,
         }
     }
 }

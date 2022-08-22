@@ -1,4 +1,7 @@
+use if_chain::if_chain;
 use indextree::NodeId;
+use itertools::Itertools;
+use tracing::trace;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
 };
@@ -74,7 +77,6 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        self.context.closure_depth += 1;
         self.closure_scope_stack.push(scope_id);
 
         if let Some(parameters) = &mut node.parameters {
@@ -102,7 +104,6 @@ impl TreeWalker for ScopeWalker {
         }
 
         self.closure_scope_stack.pop();
-        self.context.closure_depth -= 1;
 
         self.context.scopes.pop();
         Ok(())
@@ -249,53 +250,64 @@ impl TreeWalker for ScopeWalker {
             return Ok(());
         }
 
-        let sym = self.context.lookup_var(&node.name);
+        let is_local = self.context.scopes.lookup(&node.name).is_some();
 
-        // check for functions (i.e. declaring function pointers with no arguments)
-        if sym.is_none() &&
-            self.context
-                .contains_function_complete(&node.name, &CallNamespace::default())
-        {
-            node.set_function_name(true);
-            return Ok(());
+        let symbol = match self.context.lookup_var(&node.name) {
+            Some(sym) => sym,
+            None => {
+                // check for functions (i.e. declaring function pointers with no arguments)
+                if self.context
+                       .contains_function_complete(&node.name, &CallNamespace::default())
+                {
+                    node.set_function_name(true);
+                    return Ok(());
+                };
+
+                // We check for undefined vars here, in case a symbol is subsequently defined.
+                let e =
+                    LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
+
+                self.context.errors.push(e);
+
+                return Ok(());
+            }
         };
 
-        let mut errors = vec![];
-
-        if let Some(symbol) = sym {
-            if !symbol.public() && self.context.scopes.lookup(&node.name).is_none() {
-                let e = LpcError::new(format!(
-                    "private variable `{}` accessed outside of its file",
-                    node.name
-                ))
+        if !symbol.public() && !is_local {
+            let e = LpcError::new(format!(
+                "{} variable `{}` accessed outside of its file",
+                symbol.flags.visibility(),
+                node.name
+            ))
                 .with_span(node.span)
                 .with_label("defined here", symbol.span);
 
-                errors.push(e);
-            }
+            self.context.errors.push(e);
 
-            // if_chain! {
-            //     if let Some(closure_scope_id) = self.closure_scope_stack.last();
-            //     if self.context.closure_depth > 0 && symbol.scope_id != *closure_scope_id;
-            //     then {
-            //         symbol.upvalue = true;
-            //     }
-            // }
-
-            if symbol.is_global() {
-                // Set the node to global, so we know whether to look at the program registers,
-                // or the global registers, during codegen.
-                node.set_global(true);
-            }
-        } else {
-            // We check for undefined vars here, in case a symbol is subsequently defined.
-            let e =
-                LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
-
-            errors.push(e);
+            return Ok(());
         }
 
-        self.context.errors.extend(errors.into_iter());
+        if symbol.is_global() {
+            // Set the node to global, so we know whether to look at the program registers,
+            // or the global registers, during codegen.
+            node.set_global(true);
+        }
+
+        // check for, and handle upvalues
+        if_chain! {
+            if !symbol.is_global();
+            if let Some(closure_scope_id) = self.closure_scope_stack.last().copied();
+            if let Some(symbol_scope_id) = symbol.scope_id;
+            if symbol_scope_id != closure_scope_id;
+            let mut ancestors = symbol_scope_id.ancestors(&self.context.scopes.scopes);
+            if !ancestors.contains(&closure_scope_id);
+            then {
+                let symbol = self.context.lookup_var_mut(&node.name).unwrap();
+                trace!("upvaluing {}", &symbol.name);
+                symbol.upvalue = true;
+
+            }
+        }
 
         Ok(())
     }
@@ -592,6 +604,33 @@ mod tests {
             let _ = walker.visit_var(&mut node);
 
             assert!(walker.context.errors.is_empty());
+        }
+
+        #[test]
+        fn upvalues_variables() {
+            let mut walker = ScopeWalker::default();
+            let _local_scope = walker.context.scopes.push_new(); // push a non-global scope
+
+            let mut node = create!(VarNode, name: "foo".to_string());
+
+            let sym = create!(
+                Symbol,
+                name: "foo".to_string(),
+                type_: LpcType::Int(false),
+                upvalue: false
+            );
+
+            walker.insert_symbol(sym);
+
+            let new_scope_id = walker.context.scopes.push_new();
+            walker.closure_scope_stack.push(new_scope_id);
+
+            let _ = walker.visit_var(&mut node);
+
+            assert!(walker.context.errors.is_empty());
+
+            let v = walker.context.lookup_var("foo").unwrap();
+            assert!(v.upvalue);
         }
     }
 }

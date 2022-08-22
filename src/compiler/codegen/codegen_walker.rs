@@ -223,7 +223,7 @@ impl CodegenWalker {
             // add +1 because return values for calls used to initialize
             // globals are stored in r0
             num_globals: self.global_counter.as_usize() + 1,
-            num_upvalues: 0, // TODO: update for upvalues
+            num_upvalues: self.context.num_upvalues,
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,

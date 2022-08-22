@@ -57,6 +57,8 @@ pub struct SemanticCheckWalker {
     valid_labels: Vec<LabelAllowed>,
 
     context: CompilationContext,
+    
+    closure_depth: usize,
 }
 
 impl SemanticCheckWalker {
@@ -66,6 +68,7 @@ impl SemanticCheckWalker {
             current_function: None,
             valid_jumps: vec![],
             valid_labels: vec![],
+            closure_depth: 0,
         }
     }
 
@@ -271,7 +274,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
-        self.context.closure_depth += 1;
+        self.closure_depth += 1;
 
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
@@ -284,7 +287,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.context.scopes.pop();
-        self.context.closure_depth -= 1;
+        self.closure_depth -= 1;
 
         Ok(())
     }
@@ -538,7 +541,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         // closure return types are not type-checked
-        if self.context.closure_depth > 0 {
+        if self.closure_depth > 0 {
             return Ok(())
         }
 
@@ -636,7 +639,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
-            if self.context.closure_depth == 0 {
+            if self.closure_depth == 0 {
                 let e = LpcError::new(
                     "positional argument variables can only be used within a closure",
                 )
@@ -2492,7 +2495,7 @@ mod tests {
 
             walker.context.errors = vec![];
 
-            walker.context.closure_depth += 1;
+            walker.closure_depth += 1;
 
             let _ = node.visit(&mut walker);
             assert!(walker.context.errors.is_empty());
@@ -2626,7 +2629,7 @@ mod tests {
             );
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
-            walker.context.closure_depth = 1;
+            walker.closure_depth = 1;
             let _ = node.visit(&mut walker);
 
             assert!(walker.context.errors.is_empty());
@@ -2637,7 +2640,7 @@ mod tests {
             let mut node = create!(VarNode,name: "$65".to_string());
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
-            walker.context.closure_depth = 1;
+            walker.closure_depth = 1;
 
             let _ = node.visit(&mut walker);
 
