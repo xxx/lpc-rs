@@ -526,7 +526,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             },
             Instruction::Jmp(label) => {
-                let frame = self.stack.current_frame_mut()?;
+                let frame = self.stack.current_frame()?;
                 let address = match frame.lookup_label(&label) {
                     Some(x) => *x,
                     None => {
