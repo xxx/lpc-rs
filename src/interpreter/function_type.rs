@@ -66,7 +66,6 @@ impl FunctionAddress {
 }
 
 /// A pointer to a function, created with the `&` syntax.
-/// Partially-applied functions
 #[derive(Educe, Clone, PartialEq, Eq)]
 #[educe(Debug)]
 pub struct FunctionPtr {
