@@ -21,8 +21,8 @@ pub struct ProgramFunction {
     /// My prototype from compilation
     pub prototype: FunctionPrototype,
 
-    /// The number of non-argument, non-return-value locals. Used for register
-    /// allocation.
+    /// The number of non-argument, non-return-value locals.
+    /// Used for register allocation.
     pub num_locals: usize,
 
     /// The actual instructions of this function
