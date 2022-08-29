@@ -29,7 +29,6 @@ pub enum LpcValue {
 /// value out of an [`LpcValue`]. This macro is only for use in functions
 /// returning `Result<T, LpcError>`.
 ///
-/// This
 /// # Arguments
 /// `expr`: An LpcValue
 /// `path`: The expected LpcValue subtype of value.
