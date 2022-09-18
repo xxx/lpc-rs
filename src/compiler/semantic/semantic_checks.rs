@@ -1918,6 +1918,7 @@ mod tests {
                     span: None,
                     global: true,
                     function_name: false,
+                    external_capture: false,
                 });
                 let r = ExpressionNode::from(1);
 
@@ -1952,6 +1953,7 @@ mod tests {
                     span: None,
                     global: true,
                     function_name: false,
+                    external_capture: false,
                 });
                 let r = ExpressionNode::from(1);
 

@@ -9,5 +9,6 @@ factori!(VarNode, {
         span = None,
         global = false,
         function_name = false,
+        external_capture = false,
     }
 });

@@ -97,6 +97,7 @@ fn program_global_vars() {
                             }),
                             global: false,
                             function_name: false,
+                            external_capture: false,
                         })),
                         r: Box::new(ExpressionNode::Int(IntNode {
                             value: 8,
@@ -301,6 +302,7 @@ fn compound_assignment_decompose() {
             }),
             global: false,
             function_name: false,
+            external_capture: false,
         })),
         rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(ExpressionNode::Var(VarNode {
@@ -312,6 +314,7 @@ fn compound_assignment_decompose() {
                 }),
                 global: false,
                 function_name: false,
+                external_capture: false,
             })),
             r: Box::new(ExpressionNode::Int(IntNode {
                 value: 2,
