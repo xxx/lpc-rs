@@ -16,6 +16,12 @@ impl RegisterVariant {
             RegisterVariant::Local(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
         }
     }
+
+    pub fn as_register(&self) -> Register {
+        match self {
+            RegisterVariant::Local(reg) | RegisterVariant::Upvalue(reg) => *reg,
+        }
+    }
 }
 
 impl Display for RegisterVariant {
