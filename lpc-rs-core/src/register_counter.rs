@@ -4,7 +4,7 @@ use crate::register::Register;
 #[derive(Debug, Clone, Default)]
 pub struct RegisterCounter {
     count: usize,
-    stack: Vec<usize>,
+    stack: Vec<(usize, bool)>,
     // hacky, but beats allowing isize, enums, etc.
     start_at_zero: bool,
     emitted_zero: bool,
@@ -45,9 +45,9 @@ impl RegisterCounter {
     /// # Returns
     /// The previous value
     pub fn push(&mut self, new_val: usize) -> usize {
-        self.stack.push(self.count);
+        self.stack.push((self.count, self.emitted_zero));
         let ret = self.count;
-        self.count = new_val;
+        self.set(new_val);
         ret
     }
 
@@ -56,9 +56,9 @@ impl RegisterCounter {
     /// The popped value if there is one, else the current `count`
     pub fn pop(&mut self) -> usize {
         if let Some(x) = self.stack.pop() {
-            self.count = x;
+            (self.count, self.emitted_zero) = x;
 
-            return x;
+            return x.0;
         }
 
         self.count
@@ -175,5 +175,16 @@ mod tests {
         counter.set(0);
 
         assert_eq!(counter.next(), Some(Register(0)));
+
+        assert_eq!(counter.next(), Some(Register(1)));
+
+        counter.push(0);
+        assert_eq!(counter.next(), Some(Register(0)));
+
+        counter.pop();
+        assert_eq!(counter.next(), Some(Register(2)));
+
+        counter.push(4);
+        assert_eq!(counter.next(), Some(Register(5)));
     }
 }
