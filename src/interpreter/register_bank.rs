@@ -28,6 +28,12 @@ impl RegisterBank {
 
             /// Get an iterator over the registers
             pub fn iter(&self) -> Iter<LpcRef>;
+
+            /// Push a new LpcRef onto the end of the registers.
+            pub fn push(&mut self, value: LpcRef);
+
+            /// Reserve additional space in the underlying Vec
+            pub fn reserve(&mut self, additional: usize);
         }
     }
 
