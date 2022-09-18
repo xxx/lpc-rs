@@ -18,7 +18,7 @@ use lpc_rs_function_support::{
     function_prototype::FunctionPrototype, program_function::ProgramFunction,
 };
 use lpc_rs_utils::string::closure_arg_number;
-use tracing::instrument;
+use tracing::{instrument, trace};
 use tree_walker::TreeWalker;
 
 use crate::{
@@ -132,6 +132,9 @@ pub struct CodegenWalker {
     /// Counter for tracking globals
     global_counter: RegisterCounter,
 
+    /// Counter for tracking upvalues
+    upvalue_counter: RegisterCounter,
+
     /// Number of [`Register`]s needed for global initialization
     global_init_registers: usize,
 
@@ -223,7 +226,7 @@ impl CodegenWalker {
             // add +1 because return values for calls used to initialize
             // globals are stored in r0
             num_globals: self.global_counter.as_usize() + 1,
-            num_upvalues: self.context.num_upvalues,
+            num_upvalues: self.upvalue_counter.as_usize(),
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
@@ -1072,8 +1075,10 @@ impl TreeWalker for CodegenWalker {
         let len = self.current_address();
 
         let parent_scope_id = self.context.scopes.current_id;
+
         self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
         self.register_counter.push(0);
+        self.upvalue_counter.push(0);
 
         let passed_param_locations = &node
             .parameters
@@ -1140,8 +1145,11 @@ impl TreeWalker for CodegenWalker {
             Self::backpatch_populate_argv(&mut sym, idx, node.span)?;
         }
 
+        sym.num_upvalues = self.upvalue_counter.as_usize() + 1; // +1 for u0
+
         self.functions.insert(node.name.clone(), sym.into());
 
+        self.upvalue_counter.pop();
         self.register_counter.pop();
 
         // At this point, the closure has been generated and stored.
@@ -1151,9 +1159,9 @@ impl TreeWalker for CodegenWalker {
         let location = self.register_counter.next().unwrap().as_local();
         self.current_result = location;
 
-        // closures are just local functions, with a pointer to them stored in a
-        // register at runtime. TODO: Ensure this still works when calling a
-        // returned closure in another object
+        // closures are just pointers to functions
+        // TODO: Ensure this still works when calling a
+        //       returned closure in another object
         let target = FunctionTarget::Local(
             FunctionName::Literal(node.name.clone()),
             FunctionReceiver::Local,
@@ -1393,6 +1401,7 @@ impl TreeWalker for CodegenWalker {
         let len = self.current_address();
         self.context.scopes.goto_function(&node.name)?;
         self.register_counter.push(0);
+        self.upvalue_counter.push(0);
 
         let passed_param_locations = self.visit_parameters(&node.parameters);
 
@@ -1433,15 +1442,20 @@ impl TreeWalker for CodegenWalker {
         }
 
         self.context.scopes.pop();
-        let mut sym = self.function_stack.pop().unwrap();
-        sym.num_locals = self.register_counter.as_usize() - num_args;
+        let mut func = self.function_stack.pop().unwrap();
+        func.num_locals = self.register_counter.as_usize() - num_args;
+        func.num_upvalues = func.local_variables
+            .iter()
+            .filter(|(_, v)| matches!(v, RegisterVariant::Upvalue(..)))
+            .count();
 
         if let Some(idx) = populate_argv_index {
-            Self::backpatch_populate_argv(&mut sym, idx, node.span)?;
+            Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
 
-        self.functions.insert(node.name.clone(), sym.into());
+        self.functions.insert(node.name.clone(), func.into());
 
+        self.upvalue_counter.pop();
         self.register_counter.pop();
 
         Ok(())
@@ -1986,6 +2000,8 @@ impl TreeWalker for CodegenWalker {
         };
 
         if sym.is_global() {
+            debug_assert!(!sym.upvalue);
+
             let result_register = self.register_counter.next().unwrap().as_local();
             let instruction = Instruction::GLoad(sym_loc, result_register);
             push_instruction!(self, instruction, node.span);
@@ -1993,6 +2009,26 @@ impl TreeWalker for CodegenWalker {
             self.current_result = result_register;
         } else {
             self.current_result = sym_loc;
+        }
+
+        // make space for captured variables
+        if node.external_capture && sym.scope_id != self.context.scopes.current_id {
+            debug_assert!(sym.upvalue);
+            debug_assert!(!sym.is_global());
+
+            // Create a new symbol with a local upvalue index
+            let mut new_sym = sym.clone();
+            new_sym.scope_id = self.context.scopes.current_id;
+            let upvalue_register = self.upvalue_counter.next().unwrap().as_upvalue();
+            new_sym.location = Some(upvalue_register);
+
+            self.context.scopes.current_mut().map(|scope| scope.insert(new_sym));
+
+            self.function_stack.last_mut().map(|func| {
+                func.captured_variables.insert(
+                    (sym_loc.as_register(), upvalue_register.as_register())
+                );
+            });
         }
 
         Ok(())
@@ -2047,16 +2083,23 @@ impl TreeWalker for CodegenWalker {
             push_instruction!(self, instruction, node.span);
         }
 
-        let current_global_register = self.global_counter.current().as_local();
-        let symbol = self.context.lookup_var_mut(&node.name);
-
-        if let Some(sym) = symbol {
+        self.context.lookup_var_mut(&node.name).map(|sym| {
+            trace!("found sym {:?}", &sym);
             if global {
+                let current_global_register = self.global_counter.current().as_local();
                 sym.location = Some(current_global_register);
+            } else if sym.upvalue {
+                let upvalue_register = self.upvalue_counter.next().unwrap().as_upvalue();
+                trace!("upvalue location: {:?}", upvalue_register);
+                sym.location = Some(upvalue_register);
             } else {
                 sym.location = Some(current_register);
             }
-        }
+
+            self.function_stack.last_mut().map(|func| {
+                func.local_variables.insert(node.name.clone(), sym.location.unwrap());
+            });
+        });
 
         Ok(())
     }
@@ -2097,7 +2140,10 @@ impl TreeWalker for CodegenWalker {
 impl Default for CodegenWalker {
     fn default() -> Self {
         let mut global_counter = RegisterCounter::new();
-        global_counter.start_at_zero(true); // do not skip r0 for global registers
+        let mut upvalue_counter = RegisterCounter::new();
+        // do not skip r0 for these
+        global_counter.start_at_zero(true);
+        upvalue_counter.start_at_zero(true);
 
         Self {
             function_stack: vec![],
@@ -2106,6 +2152,7 @@ impl Default for CodegenWalker {
             current_result: RegisterVariant::Local(Register(0)),
             register_counter: Default::default(),
             global_counter,
+            upvalue_counter,
             global_init_registers: 0,
             context: Default::default(),
             jump_targets: vec![],
@@ -2279,6 +2326,7 @@ mod tests {
                     span: None,
                     global: true,
                     function_name: false,
+                    external_capture: false,
                 })),
                 rhs: Box::new(ExpressionNode::Int(IntNode::new(-12))),
                 span: None,
@@ -2447,6 +2495,7 @@ mod tests {
                         span: None,
                         global: false,
                         function_name: false,
+                        external_capture: false,
                     })),
                     r: Box::new(ExpressionNode::Int(IntNode::new(456))),
                     op: BinaryOperation::Mul,
@@ -3472,6 +3521,7 @@ mod tests {
     }
 
     mod test_visit_closure {
+        use indoc::indoc;
         use super::*;
 
         fn get_closure_node(code: &str, context: &mut CompilationContext) -> ClosureNode {
@@ -3586,6 +3636,37 @@ mod tests {
                     Jmp("closure-body-start_0".into()),
                 ],
             );
+        }
+
+        #[test]
+        fn sets_the_correct_upvalue_information() {
+            let code = indoc! {r##"
+                int g = 42;
+
+                void create() {
+                    int i = 666;
+                    function f = (:
+                        int s = 123;
+                        g + i + s
+                    :);
+                }
+            "##};
+            let walker = walk_prog(code);
+
+            let closure = walker.functions.get("closure-0").expect("where's the closure?");
+            assert_eq!(closure.num_upvalues, 1);
+            assert_eq!(closure.local_variables.len(), 1);
+            assert_eq!(closure.local_variables.first().unwrap().0, "s");
+            assert_eq!(closure.local_variables.first().unwrap().1, &RegisterVariant::Local(Register(1)));
+            assert_eq!(closure.captured_variables.len(), 1);
+            assert_eq!(closure.captured_variables.first().unwrap(), &(Register(0), Register(0)));
+
+            let func = walker.functions.get("create").expect("where's create()?");
+            assert_eq!(func.num_upvalues, 1);
+            assert_eq!(func.captured_variables.len(), 0);
+            assert_eq!(func.local_variables.len(), 2);
+            assert_eq!(func.local_variables.first().unwrap().0, "i");
+            assert_eq!(func.local_variables.last().unwrap().0, "f");
         }
     }
 
@@ -3853,7 +3934,7 @@ mod tests {
         assert_eq!(walker_init_instructions(&mut walker), expected);
 
         let scope = walker.context.scopes.current().unwrap();
-        
+
         let foo = scope.lookup("foo").unwrap();
         assert_eq!(&foo.name, "foo");
         assert_eq!(foo.type_, LpcType::Int(false));
@@ -3864,7 +3945,7 @@ mod tests {
             l: 4,
             r: 11
         }));
-        
+
         let bar = scope.lookup("bar").unwrap();
         assert_eq!(&bar.name, "bar");
         assert_eq!(bar.type_, LpcType::Int(true));
@@ -3945,6 +4026,7 @@ mod tests {
                 span: None,
                 global: false,
                 function_name: false,
+                external_capture: false,
             };
 
             let mut node = ForNode {
@@ -4667,6 +4749,7 @@ mod tests {
                 span: None,
                 global: true,
                 function_name: false,
+                external_capture: false,
             };
 
             let _ = walker.visit_var(&mut node);

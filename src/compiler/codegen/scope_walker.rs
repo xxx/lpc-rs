@@ -302,10 +302,12 @@ impl TreeWalker for ScopeWalker {
             let mut ancestors = symbol_scope_id.ancestors(&self.context.scopes.scopes);
             if !ancestors.contains(&closure_scope_id);
             then {
-                let symbol = self.context.lookup_var_mut(&node.name).unwrap();
-                trace!("upvaluing {}", &symbol.name);
+                trace!("upvaluing {}", &node.name);
+                let mut symbol = self.context.lookup_var_mut(&node.name).unwrap();
+                // *any* capture requires the symbol to be upvalued
                 symbol.upvalue = true;
-
+                // we also mark this specific reference as a non-local capture
+                node.external_capture = true;
             }
         }
 
@@ -510,6 +512,7 @@ mod tests {
                 span: None,
                 global: false,
                 function_name: false,
+                external_capture: false,
             };
 
             (walker, node)
@@ -631,6 +634,7 @@ mod tests {
 
             let v = walker.context.lookup_var("foo").unwrap();
             assert!(v.upvalue);
+            assert!(node.external_capture);
         }
     }
 }
