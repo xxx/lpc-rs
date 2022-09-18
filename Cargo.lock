@@ -771,6 +771,7 @@ dependencies = [
 name = "lpc-rs-function-support"
 version = "0.1.0"
 dependencies = [
+ "indexmap",
  "itertools",
  "lazy_format",
  "lpc-rs-asm",

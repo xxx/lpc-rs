@@ -11,6 +11,7 @@ lpc-rs-asm = { path = "../lpc-rs-asm" }
 lpc-rs-core = { path = "../lpc-rs-core" }
 lpc-rs-errors = { path = "../lpc-rs-errors" }
 
+indexmap = { version = "1.8.2", features = ["serde"] }
 itertools = "0.10.0"
 lazy_format = "1.8.4"
 multimap = "0.8.2"

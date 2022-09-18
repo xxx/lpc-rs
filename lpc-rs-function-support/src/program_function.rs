@@ -6,6 +6,8 @@ use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
+use lpc_rs_core::register::{Register, RegisterVariant};
+use indexmap::{IndexMap, IndexSet};
 
 use crate::function_prototype::FunctionPrototype;
 
@@ -25,6 +27,9 @@ pub struct ProgramFunction {
     /// Used for register allocation.
     pub num_locals: usize,
 
+    /// How many of my locals are actually upvalues?
+    pub num_upvalues: usize,
+
     /// The actual instructions of this function
     pub instructions: Vec<Instruction>,
 
@@ -33,6 +38,12 @@ pub struct ProgramFunction {
 
     /// Map of labels, to their respective addresses
     pub labels: HashMap<String, Address>,
+
+    /// Map of captured variables - (local frame register, upvalue register)
+    pub captured_variables: IndexSet<(Register, Register)>,
+
+    /// map of my local variables, with their location
+    pub local_variables: IndexMap<String, RegisterVariant>,
 }
 
 impl ProgramFunction {
@@ -61,9 +72,12 @@ impl ProgramFunction {
         Self {
             prototype,
             num_locals,
+            num_upvalues: 0,
             instructions: vec![],
             debug_spans: vec![],
             labels: HashMap::new(),
+            captured_variables: IndexSet::new(),
+            local_variables: IndexMap::new(),
         }
     }
 
