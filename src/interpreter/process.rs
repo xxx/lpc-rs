@@ -29,7 +29,7 @@ pub struct Process {
     /// Local variables that are referred to by closures, which need to be
     /// stored beyond the scope of their original invocation.
     /// TODO: This needs to be garbage-collected
-    upvalues: RegisterBank,
+    pub upvalues: RegisterBank,
 }
 
 impl Process {
