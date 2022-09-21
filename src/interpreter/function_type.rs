@@ -7,6 +7,7 @@ use std::{
 use delegate::delegate;
 use educe::Educe;
 use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
+use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process};
@@ -65,6 +66,14 @@ impl FunctionAddress {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpvalueMapping {
+    // when this function is called, which of the CallFrame's upvalues does this get stored in?
+    pub frame_location: Register,
+    // What is the index in the [`Process`]-level `upvalues` array (which contains the actual data)?
+    pub upvalue_location: Register
+}
+
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone, PartialEq, Eq)]
 #[educe(Debug)]
@@ -86,6 +95,10 @@ pub struct FunctionPtr {
 
     /// Does this pointer use `call_other`?
     pub call_other: bool,
+
+    /// Track the (runtime) indexes for both the function, and into the
+    /// Process-level upvalued data, for closed-over variables in this function
+    pub captured_upvalues: Vec<UpvalueMapping>,
 }
 
 impl FunctionPtr {
