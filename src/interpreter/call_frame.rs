@@ -9,6 +9,7 @@ use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
+use lpc_rs_core::register::{Register, RegisterVariant};
 
 use crate::interpreter::{process::Process, register_bank::RegisterBank};
 use crate::interpreter::lpc_ref::NULL;
@@ -29,6 +30,8 @@ pub struct CallFrame {
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
+    /// The upvalue indexes for this specific call
+    pub upvalues: Vec<Register>
 }
 
 impl CallFrame {
@@ -46,13 +49,16 @@ impl CallFrame {
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = function.arity().num_args + function.num_locals + 1;
+        let process = process.into();
+        let upvalues = Self::populate_upvalues(&function, &process);
 
         Self {
-            process: process.into(),
+            process,
             function,
             registers: RegisterBank::new(vec![NULL; reg_len]),
             pc: 0.into(),
             called_with_num_args,
+            upvalues,
         }
     }
 
@@ -105,6 +111,48 @@ impl CallFrame {
             registers,
             ..Self::new(process, function, called_with_num_args)
         }
+    }
+
+    /// Reserve space in the process for this call's needed upvalues, and
+    /// set my upvalue indexes to the correct values
+    fn populate_upvalues(function: &Rc<ProgramFunction>, process: &Rc<RefCell<Process>>) -> Vec<Register> {
+        // TODO: This should be calculated at compile-time
+        let upvalue_locations = function.local_variables.values().filter_map(|i| {
+            if let RegisterVariant::Upvalue(r) = i {
+                Some(*r)
+            } else {
+                None
+            }
+        }).collect::<Vec<Register>>();
+
+        debug_assert!(
+            upvalue_locations.len() <= function.num_upvalues,
+            "expected {} to be <= {}", upvalue_locations.len(), function.num_upvalues
+        );
+
+        let mut upvalues = vec![Register(0); function.num_upvalues];
+
+        if function.num_upvalues == 0 {
+            return upvalues;
+        }
+
+        let mut upvalue_idx = {
+            let mut proc = process.borrow_mut();
+            let idx = proc.upvalues.len();
+            proc.upvalues.reserve(upvalue_locations.len());
+            for _ in 0..upvalue_locations.len() {
+                proc.upvalues.push(NULL);
+            }
+            idx
+        };
+
+        for upvalue_location in upvalue_locations {
+            upvalues[upvalue_location.index()] = Register(upvalue_idx);
+
+            upvalue_idx += 1;
+        }
+
+        upvalues
     }
 
     /// get the debug span for the current instruction
@@ -295,6 +343,55 @@ mod tests {
 
             assert_eq!(frame.registers.len(), 21);
             assert!(frame.registers.iter().all(|r| r == &NULL));
+        }
+    }
+
+    mod test_populate_upvalues {
+        use super::*;
+
+        #[test]
+        fn populates_upvalues() {
+            let process = Process::default();
+
+            let prototype = FunctionPrototype::new(
+                "foo",
+                LpcType::Void,
+                Default::default(),
+                Default::default(),
+                None,
+                vec![],
+                vec![]
+            );
+
+            let mut pf = ProgramFunction::new(prototype, 0);
+            pf.local_variables.insert("a".to_string(), Register(0).as_upvalue());
+            pf.local_variables.insert("b".to_string(), Register(1).as_upvalue());
+            pf.num_upvalues = 2;
+
+            let frame = CallFrame::new(process, Rc::new(pf), 0);
+
+            assert_eq!(frame.upvalues, vec![Register(0), Register(1)]);
+            assert_eq!(frame.process.borrow().upvalues.len(), 2);
+
+            let prototype = FunctionPrototype::new(
+                "foo",
+                LpcType::Void,
+                Default::default(),
+                Default::default(),
+                None,
+                vec![],
+                vec![]
+            );
+
+            let mut pf = ProgramFunction::new(prototype, 0);
+            pf.local_variables.insert("a".to_string(), Register(0).as_upvalue());
+            pf.local_variables.insert("b".to_string(), Register(1).as_upvalue());
+            pf.local_variables.insert("c".to_string(), Register(2).as_upvalue());
+            pf.num_upvalues = 3;
+
+            let frame = CallFrame::new(frame.process.clone(), Rc::new(pf), 0);
+            assert_eq!(frame.upvalues, vec![Register(2), Register(3), Register(4)]);
+            assert_eq!(frame.process.borrow().upvalues.len(), 5);
         }
     }
 }
