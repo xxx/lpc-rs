@@ -30,13 +30,15 @@ fn load_master<const N: usize>(
                 let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
                 let process: Rc<RefCell<Process>> = Process::new(prog).into();
                 context.insert_process(process.clone());
-                let borrowed = process.borrow();
-                let function = borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
+                let function = {
+                    let borrowed = process.borrow();
+                    borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local).cloned()
+                };
                 match function {
                     Some(prog_function) => {
                         let new_context =
                             context.clone_task_context().with_process(process.clone());
-                        let eval_context = task.eval(prog_function.clone(), &[], new_context)?;
+                        let eval_context = task.eval(prog_function, &[], new_context)?;
 
                         context.increment_instruction_count(eval_context.instruction_count())?;
 
@@ -80,13 +82,15 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
 
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
         {
-            let borrowed = new_clone.borrow();
-            let function = borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
+            let function = {
+                let borrowed = new_clone.borrow();
+                borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local).cloned()
+            };
 
             match function {
                 Some(prog_function) => {
                     let new_context = context.clone_task_context().with_process(new_clone.clone());
-                    let eval_context = task.eval(prog_function.clone(), &[], new_context)?;
+                    let eval_context = task.eval(prog_function, &[], new_context)?;
                     context.increment_instruction_count(eval_context.instruction_count())?;
                 }
                 None => return Err(LpcError::new("Init function not found in clone?")),
