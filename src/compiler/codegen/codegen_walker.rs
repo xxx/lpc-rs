@@ -226,7 +226,7 @@ impl CodegenWalker {
             // add +1 because return values for calls used to initialize
             // globals are stored in r0
             num_globals: self.global_counter.as_usize() + 1,
-            num_upvalues: self.upvalue_counter.as_usize(),
+            num_upvalues: self.upvalue_counter.as_usize() + 1,
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
@@ -2016,7 +2016,9 @@ impl TreeWalker for CodegenWalker {
             debug_assert!(sym.upvalue);
             debug_assert!(!sym.is_global());
 
-            // Create a new symbol with a local upvalue index
+            // Create a new symbol with a local upvalue index, so that later
+            // references refer to the local upvalue, instead of the location from
+            // an outer function
             let mut new_sym = sym.clone();
             new_sym.scope_id = self.context.scopes.current_id;
             let upvalue_register = self.upvalue_counter.next().unwrap().as_upvalue();
@@ -2050,14 +2052,27 @@ impl TreeWalker for CodegenWalker {
         };
 
         let global = sym.is_global();
+        let upvalue = sym.upvalue;
 
         let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self)?;
 
-            if matches!(expression, ExpressionNode::Var(_)) {
+            // TODO: This whole thing sucks. We'd rather have the `expression.visit()` call
+            //       above put the result into the correct location directly.
+            if upvalue {
+                let next_upvalue = self.upvalue_counter.next().unwrap().as_upvalue();
+                trace!("Copying upvalue to {:?}", next_upvalue);
+                push_instruction!(
+                    self,
+                    Instruction::RegCopy(self.current_result, next_upvalue),
+                    node.span()
+                );
+                next_upvalue
+            } else if matches!(expression, ExpressionNode::Var(_)) {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
                 let next_register = self.register_counter.next().unwrap().as_local();
+                trace!("Copying var to {:?}", next_register);
                 push_instruction!(
                     self,
                     Instruction::RegCopy(self.current_result, next_register),
@@ -2065,9 +2080,11 @@ impl TreeWalker for CodegenWalker {
                 );
                 next_register
             } else {
+                trace!("Not copying the result");
                 self.current_result
             }
         } else {
+            trace!("No value, defaulting to NULL");
             // Default value to 0 when uninitialized.
             self.register_counter.next().unwrap().as_local()
         };
@@ -2084,14 +2101,9 @@ impl TreeWalker for CodegenWalker {
         }
 
         self.context.lookup_var_mut(&node.name).map(|sym| {
-            trace!("found sym {:?}", &sym);
             if global {
                 let current_global_register = self.global_counter.current().as_local();
                 sym.location = Some(current_global_register);
-            } else if sym.upvalue {
-                let upvalue_register = self.upvalue_counter.next().unwrap().as_upvalue();
-                trace!("upvalue location: {:?}", upvalue_register);
-                sym.location = Some(upvalue_register);
             } else {
                 sym.location = Some(current_register);
             }
@@ -2171,6 +2183,8 @@ mod tests {
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::Config;
+    use factori::create;
+    use crate::test_support::factories::*;
 
     use super::*;
     use crate::{
@@ -4814,8 +4828,14 @@ mod tests {
         }
 
         fn setup_var(type_: LpcType, walker: &mut CodegenWalker) {
+            let scope_id = walker
+                    .context
+                    .scopes
+                    .current().unwrap().id;
+
             let sym = Symbol {
                 location: Some(Register(1).as_local()),
+                scope_id,
                 ..Symbol::new("marf", type_)
             };
             walker.register_counter.next(); // force-increment to mimic the scope walker
@@ -4831,7 +4851,9 @@ mod tests {
                 flags: None,
             };
 
-            insert_symbol(walker, Symbol::from(&mut node.clone()));
+            let mut new_sym = Symbol::from(&mut node.clone());
+            new_sym.scope_id = scope_id;
+            insert_symbol(walker, new_sym);
 
             let _ = walker.visit_var_init(&mut node);
         }
@@ -5145,6 +5167,60 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
             assert_eq!(walker.global_counter.as_usize(), 1);
             assert_eq!(walker.global_init_registers, 9);
+        }
+
+        #[test]
+        fn sets_up_upvalues_when_initialized_to_upvalued_var() {
+            let mut context = CompilationContext::default();
+            context.scopes.push_new(); // push a global scope
+            context.scopes.push_new(); // push a local scope
+            let mut walker = CodegenWalker::new(context);
+
+            let existing_name = "existing";
+
+            let mut node = create!(
+                VarInitNode,
+                name: "a".to_string(),
+                value: Some(ExpressionNode::from(create!(VarNode, name: existing_name.to_string()))),
+            );
+
+            let mut sym = Symbol::from(&mut node.clone());
+            sym.upvalue = true;
+
+            let mut existing = create!(Symbol, name: existing_name.to_string());
+            existing.location = Some(RegisterVariant::Local(Register(1)));
+
+            insert_symbol(&mut walker, existing);
+            insert_symbol(&mut walker, sym);
+
+            let _ = walker.visit_var_init(&mut node);
+
+            let sym = walker.context.lookup_var("a").unwrap();
+            assert_eq!(sym.location.unwrap(), RegisterVariant::Upvalue(Register(0)));
+        }
+
+        #[test]
+        fn sets_up_upvalues_when_initialized_to_upvalued_value() {
+            let mut context = CompilationContext::default();
+            context.scopes.push_new(); // push a global scope
+            context.scopes.push_new(); // push a local scope
+            let mut walker = CodegenWalker::new(context);
+
+            let mut node = create!(
+                VarInitNode,
+                name: "a".to_string(),
+                value: Some(ExpressionNode::from(666))
+            );
+
+            let mut sym = Symbol::from(&mut node.clone());
+            sym.upvalue = true;
+
+            insert_symbol(&mut walker, sym);
+
+            let _ = walker.visit_var_init(&mut node);
+
+            let sym = walker.context.lookup_var("a").unwrap();
+            assert_eq!(sym.location.unwrap(), RegisterVariant::Upvalue(Register(0)));
         }
     }
 
