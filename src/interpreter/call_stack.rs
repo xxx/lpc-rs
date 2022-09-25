@@ -29,6 +29,9 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
             /// get a mutable reference to the top frame in the stack
             pub fn last_mut(&mut self) -> Option<&mut CallFrame>;
+
+            /// Get an Iterator over the stack
+            pub fn iter(&self) -> std::slice::Iter<'_, CallFrame>;
         }
     }
 

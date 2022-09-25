@@ -21,10 +21,6 @@ fn default_compiler() -> Compiler {
     Compiler::new(config.clone())
 }
 
-// fn lookup_global_variable(prog: &Program, name: &str) -> LpcRef {
-//     prog.globals.iter().find(|(n, _)| n == name).unwrap().1.clone()
-// }
-
 #[test]
 fn errors_on_max_inherit_depth() {
     let code = r#"inherit "/std/inherit_loop1";"#;
@@ -52,13 +48,9 @@ fn test_inheritance() {
     let (_task, ctx) = run_prog(code);
     let proc = ctx.process();
     let prog = &proc.borrow().program;
-    println!(
-        "task: {}, {}, {:?}",
-        prog.num_globals, prog.num_init_registers, prog.global_variables
-    );
 
     assert_eq!(prog.num_globals, 5);
-    assert_eq!(prog.num_init_registers, 7);
+    assert_eq!(prog.num_init_registers, 6);
 }
 
 #[test]
@@ -78,10 +70,9 @@ fn test_dynamic_receiver() {
     let (_task, ctx) = run_prog(code);
     let proc = ctx.process();
     let prog = &proc.borrow().program;
-    println!(
-        "task: {}, {}, {:?}",
-        prog.num_globals, prog.num_init_registers, prog.global_variables
-    );
+
+    assert_eq!(prog.num_globals, 1);
+    assert_eq!(prog.num_init_registers, 1);
 }
 
 #[test]
@@ -113,7 +104,7 @@ fn test_duffs_device() {
     let (_task, ctx) = run_prog(code);
     let proc = ctx.process();
     let borrowed = proc.borrow();
-    let b = borrowed.globals[1].borrow();
+    let b = &borrowed.globals[1];
 
     if_chain! {
         if let LpcRef::Array(pool_ref) = &*b;

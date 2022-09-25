@@ -256,10 +256,10 @@ impl CodegenWalker {
         Ok(())
     }
 
-    /// Check for a symbol in the global scope
-    fn lookup_global(&self, name: &str) -> Option<&Symbol> {
-        self.context.scopes.lookup_global(name)
-    }
+    // /// Check for a symbol in the global scope
+    // fn lookup_global(&self, name: &str) -> Option<&Symbol> {
+    //     self.context.scopes.lookup_global(name)
+    // }
 
     /// helper to choose operation instructions
     fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
@@ -703,28 +703,14 @@ impl TreeWalker for CodegenWalker {
         let rhs_result = self.current_result;
         let lhs = &mut *node.lhs;
 
-        if matches!(lhs, ExpressionNode::Var(_)) {
-            lhs.visit(self)?;
-        }
-
         match lhs {
-            ExpressionNode::Var(VarNode { name, global, .. }) => {
+            ExpressionNode::Var(_) => {
+                lhs.visit(self)?;
                 let lhs_result = self.current_result;
 
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
                 push_instruction!(self, assign, node.span);
-
-                // Copy over globals if necessary
-                if_chain! {
-                    if *global;
-                    if let Some(sym) = self.lookup_global(name);
-                    if let Some(register) = sym.location;
-                    then{
-                        let store = Instruction::GStore(lhs_result, register);
-                        push_instruction!(self, store, node.span);
-                    }
-                }
 
                 self.current_result = lhs_result;
             }
@@ -896,18 +882,8 @@ impl TreeWalker for CodegenWalker {
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
                         // if there's a function pointer with this name in scope, call that.
-                        let location = if x.is_global() {
-                            let global_loc = x.location.unwrap();
-                            let result = self.register_counter.next().unwrap().as_local();
-                            self.current_result = result;
-                            let instruction = Instruction::GLoad(global_loc, result);
-                            push_instruction!(self, instruction, node.span);
-                            result
-                        } else {
-                            x.location.unwrap()
-                        };
                         Instruction::CallFp {
-                            location,
+                            location: x.location.unwrap(),
                             num_args: arg_results.len(),
                             initial_arg: arg_results[0],
                         }
@@ -931,8 +907,8 @@ impl TreeWalker for CodegenWalker {
                 register = self.register_counter.next().unwrap().as_local();
             }
 
-            // Undo the final call to .next() in the above for-loop to avoid wasting a
-            // register
+            // Undo the final call to .next() in the above for-loop,
+            // to avoid wasting a register
             self.register_counter.go_back();
 
             if let Some(rcvr) = &mut node.receiver {
@@ -971,20 +947,8 @@ impl TreeWalker for CodegenWalker {
                     if let Some(x) = self.context.lookup_var(&node.name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
-                        // if there's a function pointer with this name in scope, call that.
-                        let location = if x.is_global() {
-                            let global_loc = x.location.unwrap();
-                            let result = self.register_counter.next().unwrap().as_local();
-                            self.current_result = result;
-                            let instruction = Instruction::GLoad(global_loc, result);
-                            push_instruction!(self, instruction, node.span);
-                            result
-                        } else {
-                            x.location.unwrap()
-                        };
-
                         Instruction::CallFp {
-                            location,
+                            location: x.location.unwrap(),
                             num_args: arg_results.len(),
                             initial_arg: start_register,
                         }
@@ -1002,7 +966,7 @@ impl TreeWalker for CodegenWalker {
 
         push_instruction!(self, instruction, node.span);
 
-        let push_copy = |walker: &mut CodegenWalker| {
+        let push_copy = |walker: &mut Self| {
             let next_register = walker.register_counter.next().unwrap().as_local();
 
             push_instruction!(
@@ -1999,17 +1963,18 @@ impl TreeWalker for CodegenWalker {
             }
         };
 
-        if sym.is_global() {
-            debug_assert!(!sym.upvalue);
-
-            let result_register = self.register_counter.next().unwrap().as_local();
-            let instruction = Instruction::GLoad(sym_loc, result_register);
-            push_instruction!(self, instruction, node.span);
-
-            self.current_result = result_register;
-        } else {
-            self.current_result = sym_loc;
-        }
+        // if sym.is_global() {
+        //     debug_assert!(!sym.upvalue);
+        //
+        //     let result_register = self.register_counter.next().unwrap().as_local();
+        //     let instruction = Instruction::GLoad(sym_loc, result_register);
+        //     push_instruction!(self, instruction, node.span);
+        //
+        //     self.current_result = result_register;
+        // } else {
+        //     self.current_result = sym_loc;
+        // }
+        self.current_result = sym_loc;
 
         // make space for captured variables
         if node.external_capture && sym.scope_id != self.context.scopes.current_id {
@@ -2059,15 +2024,28 @@ impl TreeWalker for CodegenWalker {
 
             // TODO: This whole thing sucks. We'd rather have the `expression.visit()` call
             //       above put the result into the correct location directly.
-            if upvalue {
-                let next_upvalue = self.upvalue_counter.next().unwrap().as_upvalue();
-                trace!("Copying upvalue to {:?}", next_upvalue);
+            if global {
+                let next_register = self.global_counter.next().unwrap().as_global();
+
+                trace!("Copying global to {:?}", next_register);
                 push_instruction!(
                     self,
-                    Instruction::RegCopy(self.current_result, next_upvalue),
+                    Instruction::RegCopy(self.current_result, next_register),
                     node.span()
                 );
-                next_upvalue
+
+                self.global_init_registers = next_register.index();
+
+                next_register
+            } else if upvalue {
+                let next_register = self.upvalue_counter.next().unwrap().as_upvalue();
+                trace!("Copying upvalue to {:?}", next_register);
+                push_instruction!(
+                    self,
+                    Instruction::RegCopy(self.current_result, next_register),
+                    node.span()
+                );
+                next_register
             } else if matches!(expression, ExpressionNode::Var(_)) {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
@@ -2091,22 +2069,8 @@ impl TreeWalker for CodegenWalker {
 
         self.current_result = current_register;
 
-        if global {
-            // Store the reference in the globals register.
-            // Using next() skips r0, just like functions.
-            let dest_register = self.global_counter.next().unwrap().as_local();
-            let instruction = Instruction::GStore(current_register, dest_register);
-            self.global_init_registers = current_register.index();
-            push_instruction!(self, instruction, node.span);
-        }
-
         self.context.lookup_var_mut(&node.name).map(|sym| {
-            if global {
-                let current_global_register = self.global_counter.current().as_local();
-                sym.location = Some(current_global_register);
-            } else {
-                sym.location = Some(current_register);
-            }
+            sym.location = Some(current_register);
 
             self.function_stack.last_mut().map(|func| {
                 func.local_variables.insert(node.name.clone(), sym.location.unwrap());
@@ -2329,7 +2293,7 @@ mod tests {
             let sym = Symbol {
                 name: "marf".to_string(),
                 type_: LpcType::Int(false),
-                location: Some(RegisterVariant::Local(Register(666))),
+                location: Some(RegisterVariant::Global(Register(666))),
                 ..Default::default()
             };
             insert_symbol(&mut walker, sym);
@@ -2351,18 +2315,10 @@ mod tests {
                 walker_init_instructions(&mut walker),
                 [
                     IConst(RegisterVariant::Local(Register(1)), -12),
-                    GLoad(
-                        RegisterVariant::Local(Register(666)),
-                        RegisterVariant::Local(Register(2))
-                    ),
                     RegCopy(
                         RegisterVariant::Local(Register(1)),
-                        RegisterVariant::Local(Register(2))
+                        RegisterVariant::Global(Register(666))
                     ),
-                    GStore(
-                        RegisterVariant::Local(Register(2)),
-                        RegisterVariant::Local(Register(666))
-                    )
                 ]
             );
         }
@@ -2523,20 +2479,16 @@ mod tests {
 
             let expected = vec![
                 FConst(RegisterVariant::Local(Register(1)), LpcFloat::from(123.45)),
-                GLoad(
+                IConst(RegisterVariant::Local(Register(2)), 456),
+                IMul(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
-                ),
-                IConst(RegisterVariant::Local(Register(3)), 456),
-                IMul(
-                    RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
-                    RegisterVariant::Local(Register(4)),
                 ),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(4)),
-                    RegisterVariant::Local(Register(5)),
                 ),
             ];
 
@@ -3267,7 +3219,7 @@ mod tests {
 
             context.scopes.push_new(); // push a global scope
             let mut sym = Symbol::new("my_func", LpcType::Function(false));
-            sym.location = Some(RegisterVariant::Local(Register(1)));
+            sym.location = Some(RegisterVariant::Global(Register(0)));
             context.scopes.current_mut().unwrap().insert(sym);
 
             let call = "my_func(666)";
@@ -3280,18 +3232,14 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                GLoad(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(2)),
-                ),
                 CallFp {
-                    location: RegisterVariant::Local(Register(2)),
+                    location: RegisterVariant::Global(Register(0)),
                     num_args: 1,
                     initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(2)),
                 ),
             ];
 
@@ -3930,18 +3878,18 @@ mod tests {
 
         let expected = vec![
             IConst1(RegisterVariant::Local(Register(1))),
-            GStore(
+            RegCopy(
                 RegisterVariant::Local(Register(1)),
-                RegisterVariant::Local(Register(0)),
+                RegisterVariant::Global(Register(0)),
             ),
             IConst(RegisterVariant::Local(Register(2)), 56),
             AConst(
                 RegisterVariant::Local(Register(3)),
                 vec![RegisterVariant::Local(Register(2))],
             ),
-            GStore(
+            RegCopy(
                 RegisterVariant::Local(Register(3)),
-                RegisterVariant::Local(Register(1)),
+                RegisterVariant::Global(Register(1)),
             ),
         ];
 
@@ -3952,7 +3900,7 @@ mod tests {
         let foo = scope.lookup("foo").unwrap();
         assert_eq!(&foo.name, "foo");
         assert_eq!(foo.type_, LpcType::Int(false));
-        assert_eq!(foo.location, Some(RegisterVariant::Local(Register(0))));
+        assert_eq!(foo.location, Some(RegisterVariant::Global(Register(0))));
         assert_some!(foo.scope_id);
         assert_eq!(foo.span, Some(Span {
             file_id: 0,
@@ -3963,7 +3911,7 @@ mod tests {
         let bar = scope.lookup("bar").unwrap();
         assert_eq!(&bar.name, "bar");
         assert_eq!(bar.type_, LpcType::Int(true));
-        assert_eq!(bar.location, Some(RegisterVariant::Local(Register(1))));
+        assert_eq!(bar.location, Some(RegisterVariant::Global(Register(1))));
         assert_some!(bar.scope_id);
         assert_eq!(bar.span, Some(Span {
             file_id: 0,
@@ -4422,14 +4370,14 @@ mod tests {
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 123),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Global(Register(0)),
                 ),
                 SConst(RegisterVariant::Local(Register(2)), String::from("cool")),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Global(Register(1)),
                 ),
                 Ret,
             ];
@@ -4453,9 +4401,9 @@ mod tests {
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Global(Register(0)),
                 ),
                 Call {
                     name: String::from("create"),
@@ -4483,14 +4431,14 @@ mod tests {
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Global(Register(0)),
                 ),
                 IConst(RegisterVariant::Local(Register(2)), 777),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Global(Register(1)),
                 ),
                 Ret,
             ];
@@ -4753,7 +4701,7 @@ mod tests {
                 Symbol {
                     name: "marf".to_string(),
                     type_: LpcType::Int(false),
-                    location: Some(RegisterVariant::Local(Register(666))),
+                    location: Some(RegisterVariant::Global(Register(666))),
                     ..Default::default()
                 },
             );
@@ -4767,12 +4715,9 @@ mod tests {
             };
 
             let _ = walker.visit_var(&mut node);
-            assert_eq!(walker.current_result, RegisterVariant::Local(Register(1))); // global loaded into r1
+            assert_eq!(walker.current_result, RegisterVariant::Global(Register(666)));
 
-            let expected = vec![GLoad(
-                RegisterVariant::Local(Register(666)),
-                RegisterVariant::Local(Register(1)),
-            )];
+            let expected = vec![];
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
@@ -5153,20 +5098,20 @@ mod tests {
                         RegisterVariant::Local(Register(7)),
                     ],
                 ),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(8)),
-                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Global(Register(0))
                 ),
                 SConst(RegisterVariant::Local(Register(9)), "sup".into()),
-                GStore(
+                RegCopy(
                     RegisterVariant::Local(Register(9)),
-                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Global(Register(1))
                 ),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
             assert_eq!(walker.global_counter.as_usize(), 1);
-            assert_eq!(walker.global_init_registers, 9);
+            assert_eq!(walker.global_init_registers, 1);
         }
 
         #[test]
@@ -5289,7 +5234,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_globals, 5)
+            assert_eq!(program.num_globals, 3)
         }
 
         #[test]
@@ -5302,7 +5247,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 12)
+            assert_eq!(program.num_init_registers, 3) // TODO: this used to be 12.
         }
 
         #[test]
@@ -5332,8 +5277,8 @@ mod tests {
         let program = walk_prog(code).into_program().expect("failed to compile");
         let init = program.functions.get(INIT_PROGRAM).unwrap();
 
-        assert_eq!(program.num_globals, 9);
-        assert_eq!(init.num_locals, 9);
+        assert_eq!(program.num_globals, 7);
+        assert_eq!(init.num_locals, 8);
     }
 
     #[test]

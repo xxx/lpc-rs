@@ -7,19 +7,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RegisterVariant {
     Local(Register),
+    Global(Register),
     Upvalue(Register),
 }
 
 impl RegisterVariant {
     pub fn index(&self) -> usize {
         match self {
-            RegisterVariant::Local(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
+            RegisterVariant::Local(reg) | RegisterVariant::Global(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
         }
     }
 
     pub fn as_register(&self) -> Register {
         match self {
-            RegisterVariant::Local(reg) | RegisterVariant::Upvalue(reg) => *reg,
+            RegisterVariant::Local(reg) | RegisterVariant::Global(reg) | RegisterVariant::Upvalue(reg) => *reg,
         }
     }
 }
@@ -28,6 +29,7 @@ impl Display for RegisterVariant {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             RegisterVariant::Local(r) => r.to_string(),
+            RegisterVariant::Global(r) => format!("g{}", r.index()),
             RegisterVariant::Upvalue(r) => format!("u{}", r.index()),
         };
 
@@ -50,6 +52,11 @@ impl Register {
     /// convenience method
     pub fn as_local(&self) -> RegisterVariant {
         RegisterVariant::Local(*self)
+    }
+
+    /// convenience method
+    pub fn as_global(&self) -> RegisterVariant {
+        RegisterVariant::Global(*self)
     }
 
     /// convenience method

@@ -21,7 +21,7 @@ pub struct Process {
     pub program: Rc<Program>,
 
     /// The stored global variable data for this instance
-    pub globals: Vec<RefCell<LpcRef>>,
+    pub globals: RegisterBank,
 
     /// What is the clone ID of this process? If `None`, this is a master object
     clone_id: Option<usize>,
@@ -39,25 +39,23 @@ impl Process {
     {
         let program = prog.into();
         let num_globals = program.num_globals;
-        let num_upvalues = program.num_upvalues;
 
         Self {
             program,
-            globals: vec![RefCell::new(NULL); num_globals],
+            globals: RegisterBank::new(vec![NULL; num_globals]),
             clone_id: None,
-            upvalues: RegisterBank::new(vec![NULL; num_upvalues]),
+            upvalues: RegisterBank::default(),
         }
     }
 
     pub fn new_clone(program: Rc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
-        let num_upvalues = program.num_upvalues;
 
         Self {
             program,
-            globals: vec![RefCell::new(NULL); num_globals],
+            globals: RegisterBank::new(vec![NULL; num_globals]),
             clone_id: Some(clone_id),
-            upvalues: RegisterBank::new(vec![NULL; num_upvalues]),
+            upvalues: RegisterBank::default(),
         }
     }
 
@@ -69,15 +67,12 @@ impl Process {
     }
 
     /// Get a HashMap of global variable names to their current values
-    pub fn global_variable_values(&self) -> HashMap<&str, &RefCell<LpcRef>> {
+    pub fn global_variable_values(&self) -> HashMap<&str, &LpcRef> {
         self.program
             .global_variables
             .iter()
             .filter_map(|(k, v)| {
-                v.location?;
-
-                let idx = v.location.unwrap().index();
-                let value = &self.globals[idx];
+                let value = &self.globals[v.location?.index()];
                 Some((k.as_str(), value))
             })
             .collect()

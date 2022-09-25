@@ -10,7 +10,7 @@ const SNAPSHOT_STACK: &str = "snapshot_stack";
 /// `debug`, the kitchen sink efun to do things around getting
 /// information from, or debugging the vm itself.
 pub fn debug<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
-    let lpc_ref = context.resolve_lpc_ref(1_usize);
+    let lpc_ref = context.resolve_local_register(1_usize);
     if let LpcRef::String(x) = lpc_ref {
         let b = x.borrow();
         let string = try_extract_value!(*b, LpcValue::String);

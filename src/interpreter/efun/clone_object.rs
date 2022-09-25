@@ -58,7 +58,7 @@ fn load_master<const N: usize>(
 
 /// `clone_object`, the efun for creating new object instances.
 pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
-    let arg = context.resolve_lpc_ref(1_usize);
+    let arg = context.resolve_local_register(1_usize);
 
     if let LpcRef::String(s) = arg {
         let r = s.borrow();

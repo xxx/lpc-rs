@@ -1,6 +1,8 @@
 use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
+use std::borrow::Cow;
 
 use delegate::delegate;
+use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
 
@@ -8,9 +10,10 @@ use crate::interpreter::{
     call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
     memory::Memory, process::Process, program::Program, task_context::TaskContext,
 };
+use crate::interpreter::task::{get_location};
 
 /// A structure to hold various pieces of interpreter state, to be passed to
-/// Efuns
+/// Efuns when they're called
 #[derive(Debug)]
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
@@ -88,14 +91,19 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.frame().runtime_error(msg)
     }
 
-    /// Resolve a register
+    /// Resolve a local register
     #[inline]
-    pub fn resolve_lpc_ref<I>(&self, register: I) -> LpcRef
+    pub fn resolve_local_register<I>(&self, register: I) -> LpcRef
     where
         I: Into<usize>,
     {
-        // TODO: update for upvalues
         self.frame().registers[register.into()].clone()
+    }
+
+    /// Resolve any RegisterVariant
+    #[inline]
+    pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<LpcRef>> {
+        get_location(&self.stack, variant)
     }
 
     /// Lookup the process with the passed path.
