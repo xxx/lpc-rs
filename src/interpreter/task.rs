@@ -947,11 +947,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
             let frame = self.stack.current_frame()?;
             let registers = &frame.registers;
+            let from_slice = &registers[index..(index + adjusted_num_args)];
 
             if !partial_args.is_empty() {
                 let mut from_index = 0;
 
-                let from_slice = &registers[index..(index + adjusted_num_args)];
                 let to_slice = &mut new_registers[1..=max_arg_length];
 
                 for (i, item) in to_slice.iter_mut().enumerate().take(max_arg_length) {
@@ -967,8 +967,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             } else {
                 // just copy argument registers from old frame to new
-                new_registers[1..=adjusted_num_args]
-                    .clone_from_slice(&registers[index..(index + adjusted_num_args)]);
+                new_registers[1..=adjusted_num_args].clone_from_slice(from_slice);
             }
         }
 
