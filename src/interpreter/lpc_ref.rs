@@ -4,7 +4,6 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Not, Rem, Shl, Shr, Sub},
     ptr,
 };
 
@@ -160,6 +159,232 @@ impl LpcRef {
             LpcRef::Function(_) => LpcType::Function(false),
         }
     }
+
+    pub fn add(&self, rhs: &Self) -> Result<LpcValue> {
+        match self {
+            LpcRef::Float(f) => match rhs {
+                LpcRef::Float(f2) => Ok(LpcValue::Float(*f + *f2)),
+                LpcRef::Int(i) => Ok(LpcValue::Float(*f + *i as BaseFloat)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
+            },
+            LpcRef::Int(i) => match rhs {
+                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
+                LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
+                LpcRef::String(s) => Ok(LpcValue::String(concatenate_strings(
+                    i.to_string(),
+                    try_extract_value!(*s.borrow(), LpcValue::String),
+                )?)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
+            },
+            LpcRef::String(s) => match rhs {
+                LpcRef::String(s2) => Ok(LpcValue::String(concatenate_strings(
+                    try_extract_value!(*s.borrow(), LpcValue::String),
+                    try_extract_value!(*s2.borrow(), LpcValue::String),
+                )?)),
+                LpcRef::Int(i) => Ok(LpcValue::String(concatenate_strings(
+                    try_extract_value!(*s.borrow(), LpcValue::String),
+                    &i.to_string(),
+                )?)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
+            },
+            LpcRef::Array(vec) => match rhs {
+                LpcRef::Array(vec2) => {
+                    let mut new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
+                    let added_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
+                    new_vec.extend(added_vec.into_iter());
+                    Ok(LpcValue::Array(new_vec))
+                }
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
+            },
+            LpcRef::Mapping(map) => match rhs {
+                LpcRef::Mapping(map2) => {
+                    let mut new_map = try_extract_value!(*map.borrow(), LpcValue::Mapping).clone();
+                    let added_map = try_extract_value!(*map2.borrow(), LpcValue::Mapping).clone();
+                    new_map.extend(added_map.into_iter());
+                    Ok(LpcValue::Mapping(new_map))
+                }
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
+            },
+            LpcRef::Object(_) | LpcRef::Function(_) => {
+                Err(self.to_error(BinaryOperation::Add, rhs))
+            }
+        }
+    }
+
+    pub fn sub(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(*y))),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as BaseFloat)),
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) - *y))
+            }
+            (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
+                let new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
+                let removed_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
+
+                let result = new_vec
+                    .into_iter()
+                    .filter(|x| !removed_vec.contains(x))
+                    .collect();
+                Ok(LpcValue::Array(result))
+            }
+            _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
+        }
+    }
+
+    pub fn mul(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_mul(*y))),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as BaseFloat)),
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) * *y))
+            }
+            (LpcRef::String(x), LpcRef::Int(y)) => {
+                let b = x.borrow();
+                let string = try_extract_value!(*b, LpcValue::String);
+                Ok(LpcValue::String(string::repeat_string(string, *y)?))
+            }
+            (LpcRef::Int(x), LpcRef::String(y)) => {
+                let b = y.borrow();
+                let string = try_extract_value!(*b, LpcValue::String);
+                Ok(LpcValue::String(string::repeat_string(string, *x)?))
+            }
+            _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
+        }
+    }
+
+    pub fn div(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                if y == &0 {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Int(x.wrapping_div(*y)))
+                }
+            }
+            (LpcRef::Float(x), LpcRef::Float(y)) => {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(*x / *y))
+                }
+            }
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                if y == &0 {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(*x / *y as BaseFloat))
+                }
+            }
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
+                }
+            }
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+        }
+    }
+
+    pub fn rem(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                if y == &0 {
+                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
+                } else {
+                    Ok(LpcValue::Int(x.wrapping_rem(*y)))
+                }
+            }
+            (LpcRef::Float(x), LpcRef::Float(y)) => {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(*x % *y))
+                }
+            }
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                if y == &0 {
+                    Err(LpcError::new("Runtime Error: Division by zero"))
+                } else {
+                    Ok(LpcValue::Float(*x % *y as BaseFloat))
+                }
+            }
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
+                } else {
+                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) % *y))
+                }
+            }
+            _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
+        }
+    }
+
+    pub fn bitand(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x & *y)),
+            _ => Err(self.to_error(BinaryOperation::And, rhs)),
+        }
+    }
+
+    pub fn bitor(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x | *y)),
+            _ => Err(self.to_error(BinaryOperation::Or, rhs)),
+        }
+    }
+
+    pub fn bitxor(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
+            _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
+        }
+    }
+
+    pub fn shl(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
+
+                let shift_by: u32 = if modulo < 0 {
+                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
+                } else {
+                    modulo as u32
+                };
+
+                Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
+            }
+            _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
+        }
+    }
+
+    pub fn shr(&self, rhs: &Self) -> Result<LpcValue> {
+        match (&self, &rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => {
+                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
+
+                let shift_by: u32 = if modulo < 0 {
+                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
+                } else {
+                    modulo as u32
+                };
+
+                Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
+            }
+            _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
+        }
+    }
+
+    /// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
+    pub fn bitnot(&self) -> Result<LpcValue> {
+        match &self {
+            LpcRef::Int(x) => Ok(LpcValue::Int(!*x)),
+            _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
+        }
+    }
 }
 
 impl From<BaseFloat> for LpcRef {
@@ -232,276 +457,6 @@ impl Display for LpcRef {
     }
 }
 
-impl Add for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match self {
-            LpcRef::Float(f) => match rhs {
-                LpcRef::Float(f2) => Ok(LpcValue::Float(*f + *f2)),
-                LpcRef::Int(i) => Ok(LpcValue::Float(*f + *i as BaseFloat)),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Int(i) => match rhs {
-                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
-                LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
-                LpcRef::String(s) => Ok(LpcValue::String(concatenate_strings(
-                    i.to_string(),
-                    try_extract_value!(*s.borrow(), LpcValue::String),
-                )?)),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::String(s) => match rhs {
-                LpcRef::String(s2) => Ok(LpcValue::String(concatenate_strings(
-                    try_extract_value!(*s.borrow(), LpcValue::String),
-                    try_extract_value!(*s2.borrow(), LpcValue::String),
-                )?)),
-                LpcRef::Int(i) => Ok(LpcValue::String(concatenate_strings(
-                    try_extract_value!(*s.borrow(), LpcValue::String),
-                    &i.to_string(),
-                )?)),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Array(vec) => match rhs {
-                LpcRef::Array(vec2) => {
-                    let mut new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
-                    let added_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
-                    new_vec.extend(added_vec.into_iter());
-                    Ok(LpcValue::Array(new_vec))
-                }
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Mapping(map) => match rhs {
-                LpcRef::Mapping(map2) => {
-                    let mut new_map = try_extract_value!(*map.borrow(), LpcValue::Mapping).clone();
-                    let added_map = try_extract_value!(*map2.borrow(), LpcValue::Mapping).clone();
-                    new_map.extend(added_map.into_iter());
-                    Ok(LpcValue::Mapping(new_map))
-                }
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Object(_) | LpcRef::Function(_) => {
-                Err(self.to_error(BinaryOperation::Add, rhs))
-            }
-        }
-    }
-}
-
-impl Sub for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(*y))),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as BaseFloat)),
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) - *y))
-            }
-            (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
-                let new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
-                let removed_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
-
-                let result = new_vec
-                    .into_iter()
-                    .filter(|x| !removed_vec.contains(x))
-                    .collect();
-                Ok(LpcValue::Array(result))
-            }
-            _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
-        }
-    }
-}
-
-impl Mul for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_mul(*y))),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as BaseFloat)),
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) * *y))
-            }
-            (LpcRef::String(x), LpcRef::Int(y)) => {
-                let b = x.borrow();
-                let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(string::repeat_string(string, *y)?))
-            }
-            (LpcRef::Int(x), LpcRef::String(y)) => {
-                let b = y.borrow();
-                let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(string::repeat_string(string, *x)?))
-            }
-            _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
-        }
-    }
-}
-
-impl Div for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                if y == &0 {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
-                } else {
-                    Ok(LpcValue::Int(x.wrapping_div(*y)))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
-                } else {
-                    Ok(LpcValue::Float(*x / *y))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                if y == &0 {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
-                } else {
-                    Ok(LpcValue::Float(*x / *y as BaseFloat))
-                }
-            }
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
-                } else {
-                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
-                }
-            }
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
-        }
-    }
-}
-
-impl Rem for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn rem(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                if y == &0 {
-                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
-                } else {
-                    Ok(LpcValue::Int(x.wrapping_rem(*y)))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
-                } else {
-                    Ok(LpcValue::Float(*x % *y))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                if y == &0 {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
-                } else {
-                    Ok(LpcValue::Float(*x % *y as BaseFloat))
-                }
-            }
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
-                } else {
-                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) % *y))
-                }
-            }
-            _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
-        }
-    }
-}
-
-impl BitAnd for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn bitand(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x & *y)),
-            _ => Err(self.to_error(BinaryOperation::And, rhs)),
-        }
-    }
-}
-
-impl BitOr for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x | *y)),
-            _ => Err(self.to_error(BinaryOperation::Or, rhs)),
-        }
-    }
-}
-
-impl BitXor for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn bitxor(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
-            _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
-        }
-    }
-}
-
-impl Shl for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn shl(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
-
-                let shift_by: u32 = if modulo < 0 {
-                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
-                } else {
-                    modulo as u32
-                };
-
-                Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
-            }
-            _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
-        }
-    }
-}
-
-impl Shr for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn shr(self, rhs: Self) -> Self::Output {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
-
-                let shift_by: u32 = if modulo < 0 {
-                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
-                } else {
-                    modulo as u32
-                };
-
-                Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
-            }
-            _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
-        }
-    }
-}
-
-/// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
-impl Not for &LpcRef {
-    type Output = Result<LpcValue>;
-
-    fn not(self) -> Self::Output {
-        match &self {
-            LpcRef::Int(x) => Ok(LpcValue::Int(!*x)),
-            _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
-        }
-    }
-}
-
 impl Default for LpcRef {
     fn default() -> Self {
         NULL
@@ -526,7 +481,7 @@ mod tests {
         fn int_int() {
             let int1 = LpcRef::Int(123);
             let int2 = LpcRef::Int(456);
-            let result = &int1 + &int2;
+            let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
@@ -538,7 +493,7 @@ mod tests {
         fn int_int_overflow_wraps() {
             let int1 = LpcRef::Int(LpcInt::MAX);
             let int2 = LpcRef::Int(1);
-            let result = &int1 + &int2;
+            let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, LpcInt::MIN)
             } else {
@@ -551,7 +506,7 @@ mod tests {
             let pool = Pool::new(20);
             let string1 = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let string2 = value_to_ref!(LpcValue::String("bar".to_string()), pool);
-            let result = &string1 + &string2;
+            let result = string1.add(&string2);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foobar"))
             } else {
@@ -564,7 +519,7 @@ mod tests {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(123);
-            let result = &string + &int;
+            let result = string.add(&int);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foo123"))
             } else {
@@ -577,7 +532,7 @@ mod tests {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(123);
-            let result = &int + &string;
+            let result = int.add(&string);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("123foo"))
             } else {
@@ -589,7 +544,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &float + &int;
+            let result = float.add(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -601,14 +556,14 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::Int(1);
-            assert!((&float + &int).is_ok());
+            assert!((float.add(&int)).is_ok());
         }
 
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &int + &float;
+            let result = int.add(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -620,7 +575,7 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(1.0);
-            assert!((&int + &float).is_ok());
+            assert!((int.add(&float)).is_ok());
         }
 
         #[test]
@@ -628,7 +583,7 @@ mod tests {
             let pool = Pool::new(20);
             let array = LpcValue::from(vec![LpcRef::Int(123)]);
             let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
-            let result = &value_to_ref!(array.clone(), pool) + &value_to_ref!(array2, pool);
+            let result = value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool));
 
             match &result {
                 Ok(v) => {
@@ -664,7 +619,7 @@ mod tests {
             let map = value_to_ref!(LpcValue::from(hash1), pool);
             let map2 = value_to_ref!(LpcValue::from(hash2), pool);
 
-            let result = &map + &map2;
+            let result = map.add(&map2);
 
             let mut expected = IndexMap::new();
             expected.insert(key1, value1);
@@ -694,7 +649,7 @@ mod tests {
             let map = value_to_ref!(LpcValue::from(hash1), pool);
             let map2 = value_to_ref!(LpcValue::from(hash2), pool);
 
-            let result = &map + &map2;
+            let result = map.add(&map2);
 
             let mut expected = IndexMap::new();
             expected.insert(key2, value2);
@@ -711,7 +666,7 @@ mod tests {
             let pool = Pool::new(5);
             let int = LpcRef::Int(123);
             let array = value_to_ref!(LpcValue::Array(vec![]), pool);
-            let result = &int + &array;
+            let result = int.add(&array);
 
             assert!(result.is_err());
         }
@@ -724,7 +679,7 @@ mod tests {
         fn int_int_underflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MIN);
             let int2 = LpcRef::Int(1);
-            let result = &int - &int2;
+            let result = int.sub(&int2);
             assert!(result.is_ok());
         }
 
@@ -732,7 +687,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &float - &int;
+            let result = float.sub(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 543.66)
             } else {
@@ -744,7 +699,7 @@ mod tests {
         fn float_int_underflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MIN);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = &float - &int;
+            let result = float.sub(&int);
             assert!(result.is_ok());
         }
 
@@ -752,7 +707,7 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &int - &float;
+            let result = int.sub(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, -543.66)
             } else {
@@ -764,7 +719,7 @@ mod tests {
         fn int_float_underflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MIN);
             let float = LpcRef::from(1.0);
-            let result = &int - &float;
+            let result = int.sub(&float);
             assert!(result.is_ok());
         }
 
@@ -780,7 +735,7 @@ mod tests {
             let a1 = value_to_ref!(LpcValue::from(v1), pool);
             let a2 = value_to_ref!(LpcValue::from(v2), pool);
 
-            let result = &a1 - &a2;
+            let result = a1.sub(&a2);
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
 
             if let Ok(LpcValue::Array(x)) = result {
@@ -798,7 +753,7 @@ mod tests {
         fn int_int_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MAX);
             let int2 = LpcRef::Int(2);
-            let result = &int * &int2;
+            let result = int.mul(&int2);
             assert!(result.is_ok());
         }
 
@@ -807,7 +762,7 @@ mod tests {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(4);
-            let result = &string * &int;
+            let result = string.mul(&int);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
@@ -820,7 +775,7 @@ mod tests {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
             let int = LpcRef::Int(4);
-            let result = &int * &string;
+            let result = int.mul(&string);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
@@ -833,7 +788,7 @@ mod tests {
             let pool = Pool::new(5);
             let string = value_to_ref!(LpcValue::String("1234567890abcdef".to_string()), pool);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = &string * &int;
+            let result = string.mul(&int);
             assert_err!(result.clone());
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
@@ -845,7 +800,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &float * &int;
+            let result = float.mul(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -857,7 +812,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::Int(2);
-            let result = &float * &int;
+            let result = float.mul(&int);
             assert!(result.is_ok());
         }
 
@@ -865,7 +820,7 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &int * &float;
+            let result = int.mul(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -877,7 +832,7 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(200.0);
-            let result = &int * &float;
+            let result = int.mul(&float);
             assert!(result.is_ok());
         }
     }
@@ -889,7 +844,7 @@ mod tests {
         fn int_int_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
             let int2 = LpcRef::Int(LpcInt::MAX);
-            let result = &int / &int2;
+            let result = int.div(&int2);
             assert!(result.is_ok());
         }
 
@@ -897,7 +852,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &float / &int;
+            let result = float.div(&int);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 5.42)
@@ -911,7 +866,7 @@ mod tests {
             // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = &float / &int;
+            let result = float.div(&int);
 
             assert!(result.is_ok());
         }
@@ -920,7 +875,7 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &int / &float;
+            let result = int.div(&float);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 0.18450184501845018)
@@ -933,7 +888,7 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
             let float = LpcRef::from(BaseFloat::MAX);
-            let result = &int / &float;
+            let result = int.div(&float);
 
             assert!(result.is_ok());
         }
@@ -942,7 +897,7 @@ mod tests {
         fn div_by_zero() {
             let int = LpcRef::Int(123);
 
-            assert!((&int / &NULL).is_err());
+            assert!((int.div(&NULL)).is_err());
         }
     }
 
@@ -953,7 +908,7 @@ mod tests {
         fn int_int_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
             let int2 = LpcRef::Int(LpcInt::MAX);
-            let result = &int % &int2;
+            let result = int.rem(&int2);
             assert!(result.is_ok());
         }
 
@@ -961,7 +916,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &float % &int;
+            let result = float.rem(&int);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 51.65999999999997)
@@ -975,7 +930,7 @@ mod tests {
             // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = &float % &int;
+            let result = float.rem(&int);
 
             assert!(result.is_ok());
         }
@@ -984,7 +939,7 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = &int % &float;
+            let result = int.rem(&float);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 123.0)
@@ -997,7 +952,7 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
             let float = LpcRef::from(BaseFloat::MAX);
-            let result = &int % &float;
+            let result = int.rem(&float);
 
             assert!(result.is_ok());
         }
@@ -1006,7 +961,7 @@ mod tests {
         fn div_by_zero() {
             let int = LpcRef::Int(123);
 
-            assert!((&int % &NULL).is_err());
+            assert!((int.div(&NULL)).is_err());
         }
     }
 
@@ -1017,7 +972,7 @@ mod tests {
         fn int_int() {
             let int = LpcRef::Int(8);
             let int2 = LpcRef::Int(15);
-            let result = &int & &int2;
+            let result = int.bitand(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
@@ -1033,7 +988,7 @@ mod tests {
         fn int_int() {
             let int = LpcRef::Int(7);
             let int2 = LpcRef::Int(16);
-            let result = &int | &int2;
+            let result = int.bitor(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 23)
             } else {
@@ -1049,7 +1004,7 @@ mod tests {
         fn int_int() {
             let int = LpcRef::Int(7);
             let int2 = LpcRef::Int(15);
-            let result = &int ^ &int2;
+            let result = int.bitxor(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
@@ -1065,7 +1020,7 @@ mod tests {
         fn int_int() {
             let int = LpcRef::Int(12345);
             let int2 = LpcRef::Int(6);
-            let result = &int << &int2;
+            let result = int.shl(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 790_080)
             } else {
@@ -1081,7 +1036,7 @@ mod tests {
         fn int_int() {
             let int = LpcRef::Int(12345);
             let int2 = LpcRef::Int(6);
-            let result = &int >> &int2;
+            let result = int.shr(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 192)
             } else {
@@ -1096,7 +1051,7 @@ mod tests {
         #[test]
         fn int_int() {
             let int = LpcRef::Int(12345);
-            let result = !&int;
+            let result = int.bitnot();
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, -12346) // one's complement
             } else {

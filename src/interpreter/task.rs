@@ -342,13 +342,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.handle_aconst(&instruction)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x & y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
                 let lpc_ref = &*get_loc!(self, r1)?;
-                match !lpc_ref {
+                match lpc_ref.bitnot() {
                     Ok(result) => {
                         let var = self.memory.value_to_ref(result);
 
@@ -419,7 +419,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
-            Instruction::IAdd(r1, r2, r3) => match &*get_loc!(self, r1)? + &*get_loc!(self, r2)? {
+            Instruction::IAdd(r1, r2, r3) => match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
                 Ok(result) => {
                     let out = self.memory.value_to_ref(result);
 
@@ -439,21 +439,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::IConst1(r) => {
                 set_loc!(self, r, LpcRef::Int(1))?;
             }
-            Instruction::IDiv(r1, r2, r3) => match &*get_loc!(self, r1)? / &*get_loc!(self, r2)? {
+            Instruction::IDiv(r1, r2, r3) => match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result))?,
                 Err(e) => {
                     let frame = self.stack.current_frame()?;
                     return Err(e.with_span(frame.current_debug_span()));
                 }
             },
-            Instruction::IMod(r1, r2, r3) => match &*get_loc!(self, r1)? % &*get_loc!(self, r2)? {
+            Instruction::IMod(r1, r2, r3) => match get_loc!(self, r1)?.rem(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result))?,
                 Err(e) => {
                     let frame = self.stack.current_frame()?;
                     return Err(e.with_span(frame.current_debug_span()));
                 }
             },
-            Instruction::IMul(r1, r2, r3) => match &*get_loc!(self, r1)? * &*get_loc!(self, r2)? {
+            Instruction::IMul(r1, r2, r3) => match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result))?,
                 Err(e) => {
                     let frame = self.stack.current_frame()?;
@@ -463,7 +463,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Inc(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
-            Instruction::ISub(r1, r2, r3) => match &*get_loc!(self, r1)? - &*get_loc!(self, r2)? {
+            Instruction::ISub(r1, r2, r3) => match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result))?,
                 Err(e) => {
                     let frame = self.stack.current_frame()?;
@@ -519,7 +519,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x + y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.add(y))?;
             }
             Instruction::MapConst(r, map) => {
                 let mut register_map = IndexMap::new();
@@ -534,10 +534,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 set_loc!(self, r, new_ref)?;
             }
             Instruction::MMul(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x * y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.mul(y))?;
             }
             Instruction::MSub(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x - y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.sub(y))?;
             }
             Instruction::Not(r1, r2) => {
                 let matched = match &*get_loc!(self, r1)? {
@@ -556,7 +556,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 set_loc!(self, r2, matched)?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x | y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitor(y))?;
             }
             Instruction::PopulateArgv(r, num_args, num_locals) => {
                 // note that argv population has no interaction with upvalues
@@ -745,13 +745,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.handle_sconst(&instruction)?;
             }
             Instruction::Shl(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x << y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.shl(y))?;
             }
             Instruction::Shr(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x >> y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.shr(y))?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x ^ y)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitxor(y))?;
             }
         }
 
