@@ -612,7 +612,7 @@ impl CodegenWalker {
     fn init_default_params(
         &mut self,
         parameters: &mut [VarInitNode],
-        passed_param_locations: &[RegisterVariant],
+        declared_arg_locations: &[RegisterVariant],
         span: Option<Span>,
         populate_defaults_index: Option<usize>,
         start_label: Label,
@@ -626,7 +626,7 @@ impl CodegenWalker {
                 // generate code for only the value, then assign by hand, because we
                 // pre-generated locations of the parameters above.
                 value.visit(self)?;
-                let instruction = RegCopy(self.current_result, passed_param_locations[idx]);
+                let instruction = RegCopy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
             }
         }
@@ -1026,7 +1026,7 @@ impl TreeWalker for CodegenWalker {
         let arity = prototype.arity;
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
-        let passed_param_count = node
+        let declared_arg_count = node
             .parameters
             .as_ref()
             .map(|nodes| nodes.len())
@@ -1044,7 +1044,7 @@ impl TreeWalker for CodegenWalker {
         self.register_counter.push(0);
         self.upvalue_counter.push(0);
 
-        let passed_param_locations = &node
+        let declared_arg_locations = node
             .parameters
             .as_ref()
             .map(|nodes| self.visit_parameters(nodes))
@@ -1061,7 +1061,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         let populate_argv_index =
-            self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
+            self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count);
 
         let start_label = self.new_label("closure-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1087,13 +1087,13 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        debug_assert_eq!(passed_param_count, passed_param_locations.len());
+        debug_assert_eq!(declared_arg_count, declared_arg_locations.len());
 
         if num_default_args > 0 {
             if let Some(parameters) = &mut node.parameters {
                 self.init_default_params(
                     parameters,
-                    passed_param_locations,
+                    &declared_arg_locations,
                     node.span,
                     populate_defaults_index,
                     start_label,
@@ -1102,16 +1102,17 @@ impl TreeWalker for CodegenWalker {
         }
 
         self.context.scopes.pop();
-        let mut sym = self.function_stack.pop().unwrap();
-        sym.num_locals = self.register_counter.as_usize() - num_args;
+        let mut func = self.function_stack.pop().unwrap();
+        func.num_locals = self.register_counter.as_usize() - num_args;
 
         if let Some(idx) = populate_argv_index {
-            Self::backpatch_populate_argv(&mut sym, idx, node.span)?;
+            Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
 
-        sym.num_upvalues = self.upvalue_counter.as_usize() + 1; // +1 for u0
+        func.num_upvalues = self.upvalue_counter.as_usize() + 1; // +1 for u0
+        func.arg_locations = declared_arg_locations;
 
-        self.functions.insert(node.name.clone(), sym.into());
+        self.functions.insert(node.name.clone(), func.into());
 
         self.upvalue_counter.pop();
         self.register_counter.pop();
@@ -1356,7 +1357,7 @@ impl TreeWalker for CodegenWalker {
         let arity = prototype.arity;
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
-        let passed_param_count = node.parameters.len();
+        let declared_arg_count = node.parameters.len();
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
 
@@ -1367,12 +1368,12 @@ impl TreeWalker for CodegenWalker {
         self.register_counter.push(0);
         self.upvalue_counter.push(0);
 
-        let passed_param_locations = self.visit_parameters(&node.parameters);
+        let declared_arg_locations = self.visit_parameters(&node.parameters);
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
         let populate_argv_index =
-            self.setup_populate_argv(node.flags.ellipsis(), node.span, passed_param_count);
+            self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count);
 
         let start_label = self.new_label("function-body-start");
         self.insert_label(&start_label, self.current_address());
@@ -1393,12 +1394,12 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        debug_assert_eq!(passed_param_count, passed_param_locations.len());
+        debug_assert_eq!(declared_arg_count, declared_arg_locations.len());
 
         if num_default_args > 0 {
             self.init_default_params(
                 &mut node.parameters,
-                &passed_param_locations,
+                &declared_arg_locations,
                 node.span,
                 populate_defaults_index,
                 start_label,
@@ -1412,6 +1413,7 @@ impl TreeWalker for CodegenWalker {
             .iter()
             .filter(|(_, v)| matches!(v, RegisterVariant::Upvalue(..)))
             .count();
+        func.arg_locations = declared_arg_locations;
 
         if let Some(idx) = populate_argv_index {
             Self::backpatch_populate_argv(&mut func, idx, node.span)?;

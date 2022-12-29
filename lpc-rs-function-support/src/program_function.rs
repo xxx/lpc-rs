@@ -44,6 +44,9 @@ pub struct ProgramFunction {
 
     /// map of my local variables, with their location
     pub local_variables: IndexMap<String, RegisterVariant>,
+
+    /// track the location of where my arguments are expected.
+    pub arg_locations: Vec<RegisterVariant>,
 }
 
 impl ProgramFunction {
@@ -78,6 +81,7 @@ impl ProgramFunction {
             labels: HashMap::new(),
             captured_variables: IndexSet::new(),
             local_variables: IndexMap::new(),
+            arg_locations: vec![],
         }
     }
 

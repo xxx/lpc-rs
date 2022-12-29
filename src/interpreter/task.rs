@@ -3772,6 +3772,7 @@ mod tests {
                         labels: Default::default(),
                         local_variables: Default::default(),
                         captured_variables: Default::default(),
+                        arg_locations: Default::default(),
                     }
                     .into(),
                 );
