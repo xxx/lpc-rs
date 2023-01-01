@@ -386,18 +386,29 @@ impl CodegenWalker {
     /// generate code for default arguments - we just want to have it on
     /// hand to refer to when we generate code for calls.
     fn visit_parameter(&mut self, node: &VarInitNode) -> RegisterVariant {
-        self.assign_sym_location(&node.name)
+        let loc = self.assign_sym_location(&node.name);
+
+        let func = self.function_stack.last_mut().unwrap();
+        func.local_variables.insert(node.name.clone(), loc);
+        loc
     }
 
     /// A helper to assign the next free [`Register`] to a [`Symbol`]
     /// of the given name, within the current scope.
     fn assign_sym_location(&mut self, name: &str) -> RegisterVariant {
-        let current_register = self.register_counter.next().unwrap().as_local();
+        let Some(sym) = self.context.lookup_var_mut(name) else {
+            return RegisterVariant::Local(Register(0));
+        };
 
-        let symbol = self.context.lookup_var_mut(name);
-        if let Some(sym) = symbol {
-            sym.location = Some(current_register);
-        }
+        let current_register = if sym.upvalue {
+            self.upvalue_counter.next().unwrap().as_upvalue()
+        } else if sym.is_global() {
+            self.global_counter.next().unwrap().as_global()
+        } else {
+            self.register_counter.next().unwrap().as_local()
+        };
+
+        sym.location = Some(current_register);
 
         current_register
     }

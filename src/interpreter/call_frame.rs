@@ -4,6 +4,7 @@ use std::{
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
+use indexmap::IndexMap;
 
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_errors::{span::Span, LpcError, Result};
@@ -12,7 +13,7 @@ use tracing::instrument;
 use lpc_rs_core::register::{Register, RegisterVariant};
 
 use crate::interpreter::{process::Process, register_bank::RegisterBank};
-use crate::interpreter::lpc_ref::NULL;
+use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -153,6 +154,45 @@ impl CallFrame {
         }
 
         upvalues
+    }
+
+    /// Assign an [`LpcRef`] to a specific location, based on the variant
+    pub fn set_location(&mut self, location: &RegisterVariant, lpc_ref: LpcRef) {
+        match location {
+            RegisterVariant::Local(reg) => {
+                self.registers[*reg] = lpc_ref;
+            }
+            RegisterVariant::Global(reg) => {
+                let mut proc = self.process.borrow_mut();
+                proc.globals[*reg] = lpc_ref;
+            },
+            RegisterVariant::Upvalue(reg) => {
+                let upvalues = &self.upvalues;
+                let idx = upvalues[reg.index()];
+
+                let mut proc = self.process.borrow_mut();
+                proc.upvalues[idx] = lpc_ref;
+            }
+        }
+    }
+
+    /// Convenience to return a mapping of the local variables in this frame.
+    /// Intended for debugging and testing.
+    pub fn local_variables(&self) -> IndexMap<String, LpcRef> {
+        self.function.local_variables.iter().map(|(k, v)| {
+            let lpc_ref = match v {
+                RegisterVariant::Local(reg) => self.registers[*reg].clone(),
+                RegisterVariant::Global(reg) => self.process.borrow().globals[*reg].clone(),
+                RegisterVariant::Upvalue(reg) => {
+                    let upvalues = &self.upvalues;
+                    let idx = upvalues[reg.index()];
+
+                    self.process.borrow().upvalues[idx].clone()
+                }
+            };
+
+            (k.clone(), lpc_ref)
+        }).collect()
     }
 
     /// get the debug span for the current instruction

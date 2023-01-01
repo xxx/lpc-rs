@@ -133,6 +133,14 @@ impl<'a> Program {
         }
     }
 
+    /// Call the passed callback, passing the function reference if found.
+    pub fn with_function<F, T>(&self, name: &str, namespace: &CallNamespace, callback: F) -> Option<T>
+    where
+        F: FnOnce(&Rc<ProgramFunction>) -> T,
+    {
+        self.lookup_function(name, namespace).map(callback)
+    }
+
     /// Get the directory of this program. Used for clone_object, etc.
     pub fn cwd(&'a self) -> Cow<'a, Path> {
         match self.filename.parent() {

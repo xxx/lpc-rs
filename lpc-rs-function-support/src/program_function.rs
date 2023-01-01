@@ -42,10 +42,10 @@ pub struct ProgramFunction {
     /// Map of captured variables - (local frame register, upvalue register)
     pub captured_variables: IndexSet<(Register, Register)>,
 
-    /// map of my local variables, with their location
+    /// Map of my local variables, with their location
     pub local_variables: IndexMap<String, RegisterVariant>,
 
-    /// track the location of where my arguments are expected.
+    /// Track the location of where my arguments are expected
     pub arg_locations: Vec<RegisterVariant>,
 }
 

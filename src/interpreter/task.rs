@@ -204,7 +204,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
     /// Store a snapshot of a specific state, for testing
     #[cfg(test)]
-    pub snapshot: Option<CallStack<STACKSIZE>>,
+    pub snapshots: Vec<CallStack<STACKSIZE>>,
 }
 
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
@@ -222,7 +222,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             popped_frame: None,
 
             #[cfg(test)]
-            snapshot: None,
+            snapshots: vec![],
         }
     }
 
@@ -794,12 +794,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         func.clone()
                     } else {
                         if_chain! {
+                            // See if there is a simul efun with this name
                             if let Some(func) = task_context.simul_efuns();
                             let b = func.borrow();
                             if let Some(func) = b.lookup_function(name, &CallNamespace::Local);
                             then {
                                 func.clone()
                             } else {
+                                // See if there is a normal efun with this name
                                 if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
                                     let func = ProgramFunction::new(prototype.clone(), 0);
 
@@ -814,7 +816,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 };
 
                 let mut new_frame = CallFrame::with_minimum_arg_capacity(
-                    process.clone(),
+                    process,
                     func.clone(),
                     num_args,
                     num_args,
@@ -822,12 +824,36 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 // copy argument registers from old frame to new
                 if num_args == 1 {
-                    new_frame.registers[1] = get_location_in_frame(current_frame, *initial_arg)?.into_owned();
+                    new_frame.set_location(
+                        &func.arg_locations.get(0).unwrap_or(&RegisterVariant::Local(Register(1))),
+                        get_location_in_frame(current_frame, *initial_arg)?.into_owned()
+                    );
                 } else if num_args > 0_usize {
-                    let index = initial_arg.index();
+                    let start_index = initial_arg.index();
+                    let mut next_index = 1;
                     let registers = &current_frame.registers;
-                    new_frame.registers[1..=num_args]
-                        .clone_from_slice(&registers[index..(index + num_args)]);
+                    for i in 0..num_args {
+                        let target_location = func
+                            .arg_locations
+                            .get(i)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                // This should only be reached by variables that will go
+                                // into an ellipsis function's argv.
+                                RegisterVariant::Local(Register(next_index))
+                            });
+
+                        if let RegisterVariant::Local(r) = target_location {
+                            next_index = r.index() + 1;
+                        }
+
+                        new_frame.set_location(
+                            &target_location,
+                            // for a call with multiple arguments, the refs are copied into
+                            // local registers prior to the call, so we can assume their locations here.
+                            registers[start_index + i].clone()
+                        )
+                    }
                 }
 
                 let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
@@ -848,7 +874,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     #[cfg(test)]
                     {
                         if ctx.snapshot.is_some() {
-                            self.snapshot = ctx.snapshot;
+                            self.snapshots.push(ctx.snapshot.unwrap());
                         }
                     }
 
@@ -956,7 +982,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 for (i, item) in to_slice.iter_mut().enumerate().take(max_arg_length) {
                     if let Some(Some(x)) = partial_args.get(i) {
-                        // if a partially-appliable arg is present, use it
+                        // if a partially-applied arg is present, use it
                         let _ = std::mem::replace(item, x.clone());
                     } else if let Some(x) = from_slice.get(from_index) {
                         // check if the user passed an argument to
@@ -1016,7 +1042,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             #[cfg(test)]
             {
                 if ctx.snapshot.is_some() {
-                    self.snapshot = ctx.snapshot;
+                    self.snapshots.push(ctx.snapshot.unwrap());
                 }
             }
 
@@ -1273,18 +1299,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                     None => {
                         if_chain! {
-                                    // check simul efuns, which use the `Local` FunctionTarget
-                                    if let Some(rc) = task_context.simul_efuns();
-                                    let b = rc.borrow();
-                                    if let Some(func) = b.lookup_function(&*s, &CallNamespace::Local);
-                                    then {
-                                        FunctionAddress::Local(proc, func.clone())
-                                    } else {
-                                        return Err(
-                                            self.runtime_error(format!("unknown local target `{}`", s))
-                                        );
-                                    }
-                                }
+                            // check simul efuns, which use the `Local` FunctionTarget
+                            if let Some(rc) = task_context.simul_efuns();
+                            let b = rc.borrow();
+                            if let Some(func) = b.lookup_function(&*s, &CallNamespace::Local);
+                            then {
+                                FunctionAddress::Local(proc, func.clone())
+                            } else {
+                                return Err(
+                                    self.runtime_error(format!("unknown local target `{}`", s))
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -1824,8 +1850,8 @@ mod tests {
         use crate::interpreter::task::tests::BareVal::*;
 
         fn snapshot_registers(code: &str) -> RegisterBank {
-            let (task, _) = run_prog(code);
-            let mut stack = task.snapshot.unwrap();
+            let (mut task, _) = run_prog(code);
+            let mut stack = task.snapshots.pop().unwrap();
 
             // The top of the stack in the snapshot is the object initialization frame,
             // which is not what we care about here, so we get the second-to-top frame
@@ -3964,7 +3990,7 @@ mod tests {
                 }
             "##};
 
-            let (task, ctx) = run_prog(code);
+            let (mut task, ctx) = run_prog(code);
 
             let proc = ctx.process();
             let proc = proc.borrow();
@@ -3972,7 +3998,7 @@ mod tests {
             let expected = vec![Int(2)];
             assert_eq!(&expected, &proc.upvalues);
 
-            let snapshot = &mut task.snapshot.unwrap();
+            let snapshot = task.snapshots.last_mut().unwrap();
             snapshot.pop(); // pop off the init frame
 
             let closure_frame = snapshot.pop().unwrap();
@@ -3991,14 +4017,15 @@ mod tests {
                     int k = add(-20);
                     function add2 = make_adder(666);
                     int l = add2(1);
+                    debug("snapshot_stack");
                 }
 
                 function make_adder(int i) {
-                    return (: debug("snapshot_stack"); i + $1 :);
+                    return (: [int j = i] debug("snapshot_stack"); j + $1 :);
                 }
             "##};
 
-            let (task, ctx) = run_prog(code);
+            let (mut task, ctx) = run_prog(code);
 
             let proc = ctx.process();
             let proc = proc.borrow();
@@ -4006,14 +4033,43 @@ mod tests {
             let expected = vec![Int(10), Int(666)];
             assert_eq!(&expected, &proc.upvalues);
 
-            // let snapshot = &mut task.snapshot.unwrap();
-            // snapshot.pop(); // pop off the init frame
-            //
-            // let closure_frame = snapshot.pop().unwrap();
-            // assert_eq!(&vec![Register(0)], &closure_frame.upvalues);
-            //
-            // let declaring_frame = snapshot.pop().unwrap();
-            // assert_eq!(&vec![Register(0)], &declaring_frame.upvalues);
+            // test final snapshot at the end of create()
+            {
+                let snapshot = &mut task.snapshots.pop().unwrap();
+                snapshot.pop(); // pop off the init frame
+
+                let create_frame = snapshot.pop().unwrap();
+
+                let create_frame_vars = create_frame.local_variables();
+
+                println!("create_frame_vars: {:?}", create_frame_vars);
+
+                assert_eq!(&Int(15), create_frame_vars.get("j").unwrap());
+                assert_eq!(&Int(-10), create_frame_vars.get("k").unwrap());
+
+                // the snapshot was taken after l is assigned
+                assert_eq!(&Int(667), create_frame_vars.get("l").unwrap());
+            }
+
+            // test penultimate snapshot, taken during `int l = add2(1);`
+            {
+                let snapshot = &mut task.snapshots.pop().unwrap();
+                snapshot.pop(); // pop off the init frame
+
+                let closure_frame = snapshot.pop().unwrap();
+                assert_eq!(&vec![Register(1)], &closure_frame.upvalues);
+
+                let declaring_frame = snapshot.pop().unwrap();
+                assert_eq!(&Vec::<Register>::new(), &declaring_frame.upvalues);
+
+                let declaring_frame_vars = declaring_frame.local_variables();
+
+                assert_eq!(&Int(15), declaring_frame_vars.get("j").unwrap());
+                assert_eq!(&Int(-10), declaring_frame_vars.get("k").unwrap());
+
+                // the snapshot was taken before l is assigned
+                assert_eq!(&Int(0), declaring_frame_vars.get("l").unwrap());
+            }
         }
     }
 }
