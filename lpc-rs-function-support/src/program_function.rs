@@ -120,7 +120,7 @@ impl ProgramFunction {
         for (counter, instruction) in self.instructions.iter().enumerate() {
             if let Some(vec) = labels_by_pc.get_vec(&counter) {
                 for label in vec {
-                    v.push(format!("{}:", label));
+                    v.push(format!("  {}:", label));
                 }
             }
 
