@@ -183,11 +183,11 @@ impl CallFrame {
             let lpc_ref = match v {
                 RegisterVariant::Local(reg) => self.registers[*reg].clone(),
                 RegisterVariant::Global(reg) => self.process.borrow().globals[*reg].clone(),
-                RegisterVariant::Upvalue(reg) => {
+                RegisterVariant::Upvalue(ptr_reg) => {
                     let upvalues = &self.upvalues;
-                    let idx = upvalues[reg.index()];
+                    let data_reg = upvalues[ptr_reg.index()];
 
-                    self.process.borrow().upvalues[idx].clone()
+                    self.process.borrow().upvalues[data_reg].clone()
                 }
             };
 
