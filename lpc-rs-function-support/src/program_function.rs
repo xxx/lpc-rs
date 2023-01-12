@@ -1,4 +1,5 @@
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
+use std::fmt::{Display, Formatter};
 
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
@@ -106,8 +107,8 @@ impl ProgramFunction {
         let mut v = vec![];
 
         v.push(format!(
-            "fn {} num_args={} num_locals={}:",
-            self.prototype.name, self.prototype.arity.num_args, self.num_locals
+            "fn {} num_args={} num_locals={} num_upvalues={}:",
+            self.prototype.name, self.prototype.arity.num_args, self.num_locals, self.num_upvalues
         ));
 
         // use MultiMap as multiple labels can be at the same address
@@ -128,6 +129,12 @@ impl ProgramFunction {
         }
 
         v
+    }
+}
+
+impl Display for ProgramFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.prototype.name)
     }
 }
 

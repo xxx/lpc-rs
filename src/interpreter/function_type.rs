@@ -6,6 +6,7 @@ use std::{
 
 use delegate::delegate;
 use educe::Educe;
+use itertools::Itertools;
 use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -66,12 +67,30 @@ impl FunctionAddress {
     }
 }
 
+impl Display for FunctionAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionAddress::Local(owner, x) => {
+                write!(f, "{}::{}", owner.borrow(), &*x)
+            }
+            FunctionAddress::Dynamic(x) => write!(f, "dynamic::{}", x),
+            FunctionAddress::Efun(x) => write!(f, "efun::{}", x),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpvalueMapping {
     // when this function is called, which of the CallFrame's upvalues does this get stored in?
     pub frame_location: Register,
     // What is the index in the [`Process`]-level `upvalues` array (which contains the actual data)?
     pub upvalue_location: Register
+}
+
+impl Display for UpvalueMapping {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} -> {}", self.frame_location, self.upvalue_location)
+    }
 }
 
 /// A pointer to a function, created with the `&` syntax.
@@ -123,7 +142,28 @@ impl FunctionPtr {
 
 impl Display for FunctionPtr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        let mut s = String::new();
+
+        s.push_str("FunctionPtr { ");
+        s.push_str(&format!("owner: {}, ", self.owner));
+        s.push_str(&format!("address: {}, ", self.address));
+
+        let partial_args = &self.partial_args.iter().map(|arg| {
+            match arg {
+                Some(a) => format!("{}", a),
+                None => "<None>".to_string(),
+            }
+        }).join(", ");
+        s.push_str(&format!("partial_args: [{}], ", partial_args));
+        s.push_str(
+            &format!(
+                "captured_upvalues: [{}]",
+                self.captured_upvalues.iter().map(|x| format!("{}", x)).join(", ")
+            )
+        );
+        s.push_str("}");
+
+        write!(f, "{}", s)
     }
 }
 
