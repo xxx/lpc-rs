@@ -72,9 +72,15 @@ impl Display for LpcValue {
                 let inner = x.iter().map(|x| format!("{}", x)).join(", ");
                 write!(f, "({{ {} }})", inner)
             }
-            LpcValue::Mapping(x) => write!(f, "([ {:?} ])", x),
-            LpcValue::Object(x) => write!(f, "< {:?} >", x),
-            LpcValue::Function(x) => write!(f, "{:?}", x),
+            LpcValue::Mapping(x) => {
+                let inner = x
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .join(", ");
+                write!(f, "([ {} ])", inner)
+            },
+            LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),
+            LpcValue::Function(x) => write!(f, "{}", x),
         }
     }
 }
