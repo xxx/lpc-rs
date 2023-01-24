@@ -12,12 +12,14 @@ pub enum RegisterVariant {
 }
 
 impl RegisterVariant {
+    #[inline]
     pub fn index(&self) -> usize {
         match self {
             RegisterVariant::Local(reg) | RegisterVariant::Global(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
         }
     }
 
+    #[inline]
     pub fn as_register(&self) -> Register {
         match self {
             RegisterVariant::Local(reg) | RegisterVariant::Global(reg) | RegisterVariant::Upvalue(reg) => *reg,
@@ -43,41 +45,47 @@ impl Display for RegisterVariant {
 pub struct Register(pub usize);
 
 impl Register {
-    #[inline]
     /// An alias to get the number.
+    #[inline]
     pub fn index(self) -> usize {
         self.0
     }
 
     /// convenience method
+    #[inline]
     pub fn as_local(&self) -> RegisterVariant {
         RegisterVariant::Local(*self)
     }
 
     /// convenience method
+    #[inline]
     pub fn as_global(&self) -> RegisterVariant {
         RegisterVariant::Global(*self)
     }
 
     /// convenience method
+    #[inline]
     pub fn as_upvalue(&self) -> RegisterVariant {
         RegisterVariant::Upvalue(*self)
     }
 }
 
 impl Display for Register {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "r{}", self.0)
     }
 }
 
 impl From<Register> for usize {
+    #[inline]
     fn from(f: Register) -> Self {
         f.0
     }
 }
 
 impl From<&Register> for usize {
+    #[inline]
     fn from(f: &Register) -> Self {
         f.0
     }
