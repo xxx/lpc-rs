@@ -2,6 +2,7 @@ use std::{
     ops::{Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
 };
+use std::vec::IntoIter;
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;
@@ -59,6 +60,7 @@ impl RegisterBank {
 impl Index<Register> for RegisterBank {
     type Output = LpcRef;
 
+    #[inline]
     fn index(&self, register: Register) -> &LpcRef {
         &self.registers[register.index()]
     }
@@ -67,18 +69,21 @@ impl Index<Register> for RegisterBank {
 impl Index<&Register> for RegisterBank {
     type Output = LpcRef;
 
+    #[inline]
     fn index(&self, register: &Register) -> &LpcRef {
         &self.registers[register.index()]
     }
 }
 
 impl IndexMut<Register> for RegisterBank {
+    #[inline]
     fn index_mut(&mut self, register: Register) -> &mut LpcRef {
         &mut self.registers[register.index()]
     }
 }
 
 impl IndexMut<&Register> for RegisterBank {
+    #[inline]
     fn index_mut(&mut self, register: &Register) -> &mut LpcRef {
         &mut self.registers[register.index()]
     }
@@ -87,12 +92,14 @@ impl IndexMut<&Register> for RegisterBank {
 impl Index<usize> for RegisterBank {
     type Output = LpcRef;
 
+    #[inline]
     fn index(&self, index: usize) -> &LpcRef {
         &self.registers[index]
     }
 }
 
 impl IndexMut<usize> for RegisterBank {
+    #[inline]
     fn index_mut(&mut self, index: usize) -> &mut LpcRef {
         &mut self.registers[index]
     }
@@ -101,12 +108,14 @@ impl IndexMut<usize> for RegisterBank {
 impl Index<Range<usize>> for RegisterBank {
     type Output = [LpcRef];
 
+    #[inline]
     fn index(&self, index: Range<usize>) -> &Self::Output {
         &self.registers[index]
     }
 }
 
 impl IndexMut<Range<usize>> for RegisterBank {
+    #[inline]
     fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
@@ -115,12 +124,14 @@ impl IndexMut<Range<usize>> for RegisterBank {
 impl Index<RangeInclusive<usize>> for RegisterBank {
     type Output = [LpcRef];
 
+    #[inline]
     fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
         &self.registers[index]
     }
 }
 
 impl IndexMut<RangeInclusive<usize>> for RegisterBank {
+    #[inline]
     fn index_mut(&mut self, index: RangeInclusive<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
@@ -129,13 +140,35 @@ impl IndexMut<RangeInclusive<usize>> for RegisterBank {
 impl Index<RangeFrom<usize>> for RegisterBank {
     type Output = [LpcRef];
 
+    #[inline]
     fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
         &self.registers[index]
     }
 }
 
 impl IndexMut<RangeFrom<usize>> for RegisterBank {
+    #[inline]
     fn index_mut(&mut self, index: RangeFrom<usize>) -> &mut Self::Output {
         &mut self.registers[index]
+    }
+}
+
+impl IntoIterator for RegisterBank {
+    type Item = LpcRef;
+    type IntoIter = IntoIter<Self::Item>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.registers.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a RegisterBank {
+    type Item = &'a LpcRef;
+    type IntoIter = Iter<'a, LpcRef>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.registers.iter()
     }
 }
