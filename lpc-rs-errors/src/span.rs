@@ -81,6 +81,7 @@ impl Span {
     /// let file_id = FileCache::insert("tests/fixtures/code/example.c");
     /// let span = Span::new(file_id, 1..8);
     /// ```
+    #[inline]
     pub fn new(file_id: FileId, range: Range<usize>) -> Self {
         Self {
             file_id,
@@ -107,15 +108,31 @@ impl Span {
 
         Some(span)
     }
+
+    /// Return the string of the actual source code that this span represents.
+    /// Formatting will be as it appears in the source file.
+    pub fn code(&self) -> Option<String> {
+        let files = FILE_CACHE.read();
+
+        files.get(self.file_id)
+            .ok()
+            .and_then(|f| {
+                f.source()
+                    .get(self.l..self.r)
+                    .map(|code| code.to_string())
+            })
+    }
 }
 
 impl From<&Span> for Range<usize> {
+    #[inline]
     fn from(span: &Span) -> Self {
         span.l..span.r
     }
 }
 
 impl From<Span> for Range<usize> {
+    #[inline]
     fn from(span: Span) -> Self {
         Self::from(&span)
     }
