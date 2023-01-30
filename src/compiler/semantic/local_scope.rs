@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use delegate::delegate;
 use indextree::NodeId;
+use lpc_rs_function_support::symbol::Symbol;
 
-use crate::compiler::semantic::symbol::Symbol;
 
 /// A representation of a local scope / symbol table
 #[derive(Debug, Clone, Eq, PartialEq)]

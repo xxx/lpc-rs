@@ -6,12 +6,13 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::LpcError;
 use lpc_rs_function_support::{function_like::FunctionLike, function_prototype::FunctionPrototype};
+use lpc_rs_function_support::symbol::Symbol;
 use lpc_rs_utils::config::Config;
 
 use crate::{
     compiler::{
         ast::expression_node::ExpressionNode,
-        semantic::{scope_tree::ScopeTree, symbol::Symbol},
+        semantic::{scope_tree::ScopeTree},
     },
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
 };

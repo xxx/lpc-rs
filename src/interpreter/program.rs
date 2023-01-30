@@ -14,8 +14,9 @@ use lpc_rs_core::{
 use lpc_rs_function_support::program_function::ProgramFunction;
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
+use lpc_rs_function_support::symbol::Symbol;
 
-use crate::{compiler::semantic::symbol::Symbol, interpreter::efun::EFUN_PROTOTYPES};
+use crate::{interpreter::efun::EFUN_PROTOTYPES};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {

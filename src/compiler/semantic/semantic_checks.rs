@@ -401,17 +401,19 @@ where
 mod tests {
     use factori::create;
     use lpc_rs_core::call_namespace::CallNamespace;
+    use lpc_rs_function_support::symbol::Symbol;
 
     use super::*;
     use crate::test_support::factories::*;
 
     mod check_binary_operation_tests {
         use indexmap::IndexMap;
+        use lpc_rs_function_support::symbol::Symbol;
 
         use super::*;
         use crate::compiler::{
             ast::range_node::RangeNode,
-            semantic::{scope_tree::ScopeTree, symbol::Symbol},
+            semantic::{scope_tree::ScopeTree},
         };
 
         fn setup() -> CompilationContext {
@@ -1510,7 +1512,7 @@ mod tests {
         use indexmap::IndexMap;
 
         use super::*;
-        use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
+        use crate::compiler::semantic::{scope_tree::ScopeTree};
 
         fn setup() -> CompilationContext {
             let int1 = Symbol {
@@ -1898,9 +1900,8 @@ mod tests {
         }
 
         mod binary_ops {
-
             use super::*;
-            use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
+            use crate::compiler::semantic::{scope_tree::ScopeTree};
 
             #[test]
             fn test_index_array_returns_singular_of_left_type() {
@@ -1976,7 +1977,7 @@ mod tests {
         mod calls {
 
             use super::*;
-            use crate::compiler::semantic::{scope_tree::ScopeTree, symbol::Symbol};
+            use crate::compiler::semantic::{scope_tree::ScopeTree};
 
             #[test]
             fn is_return_type_for_normal_functions() {

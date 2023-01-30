@@ -1,17 +1,15 @@
-use factori::factori;
-use fake::Fake;
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
 
-use crate::compiler::semantic::symbol::Symbol;
+use lpc_rs_function_support::symbol::Symbol;
 
-factori!(Symbol, {
-    default {
-        name = format!("sym_{}", (0..100000).fake::<usize>()),
-        type_ = LpcType::Int(false),
-        location = None,
-        scope_id = None,
-        span = None,
-        flags = GlobalVarFlags::default(),
-        upvalue = false
+beaver::define! {
+    pub SymbolFactory (Symbol) {
+        name -> |n| format!("sym_{}", n),
+        type_ -> |_| LpcType::Int(false),
+        location -> |_| None,
+        scope_id -> |_| None,
+        span -> |_| None,
+        flags -> |_| GlobalVarFlags::default(),
+        upvalue -> |_| false
     }
-});
+}

@@ -19,6 +19,7 @@ use lpc_rs_function_support::{
 };
 use lpc_rs_utils::string::closure_arg_number;
 use tracing::{instrument, trace};
+use lpc_rs_function_support::symbol::Symbol;
 use tree_walker::TreeWalker;
 
 use crate::{
@@ -58,7 +59,6 @@ use crate::{
         },
         codegen::{tree_walker, tree_walker::ContextHolder},
         compilation_context::CompilationContext,
-        semantic::symbol::Symbol,
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
@@ -5154,7 +5154,9 @@ mod tests {
             let mut sym = Symbol::from(&mut node.clone());
             sym.upvalue = true;
 
-            let mut existing = create!(Symbol, name: existing_name.to_string());
+            let symbol_factory = SymbolFactory::new();
+            let mut existing = symbol_factory.build(|sym| sym.name = existing_name.to_string());
+            // let mut existing = create!(Symbol, name: existing_name.to_string());
             existing.location = Some(RegisterVariant::Local(Register(1)));
 
             insert_symbol(&mut walker, existing);

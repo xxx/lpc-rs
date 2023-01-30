@@ -7,6 +7,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_errors::span::Span;
+use lpc_rs_function_support::symbol::Symbol;
 
 use crate::compiler::{
     ast::{
@@ -25,7 +26,7 @@ use crate::compiler::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
+    semantic::{semantic_checks::check_var_redefinition},
 };
 use crate::compiler::ast::ast_node::SpannedNode;
 
@@ -617,12 +618,12 @@ mod tests {
 
             let mut node = create!(VarNode, name: "foo".to_string());
 
-            let sym = create!(
-                Symbol,
-                name: "foo".to_string(),
-                type_: LpcType::Int(false),
-                upvalue: false
-            );
+            let symbol_factory = SymbolFactory::new();
+            let sym = symbol_factory.build(|sym| {
+                sym.name = "foo".to_string();
+                sym.type_ = LpcType::Int(false);
+                sym.upvalue = false;
+            });
 
             walker.insert_symbol(sym);
 

@@ -36,6 +36,7 @@ serde = { version = "1.0.123", features = ["derive", "rc"] }
 tracing = "0.1"
 
 [dev-dependencies]
+beaver = "1.0.0"
 claim = "0.5.0"
 factori = "1.1.0"
 fake = "2.5.0"

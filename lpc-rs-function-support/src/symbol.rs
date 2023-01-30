@@ -1,13 +1,8 @@
-use indextree::NodeId;
-use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
-    visibility::Visibility,
-};
+use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant, ScopeId, visibility::Visibility};
 use lpc_rs_errors::span::Span;
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
 use serde::{Deserialize, Serialize};
 
-use crate::compiler::ast::var_init_node::VarInitNode;
+use crate::function_prototype::FunctionPrototype;
 
 /// Representation of a Symbol, to be stored in the Scopes
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -19,7 +14,7 @@ pub struct Symbol {
     /// Which register is tracking this variable?
     pub location: Option<RegisterVariant>,
     /// to which scope do i belong?
-    pub scope_id: Option<NodeId>,
+    pub scope_id: Option<ScopeId>,
     /// The text span that first defined this symbol.
     pub span: Option<Span>,
     /// The flags, used for global variables
@@ -55,18 +50,6 @@ impl Symbol {
     #[inline]
     pub fn public(&self) -> bool {
         self.flags.visibility() == Visibility::Public
-    }
-}
-
-impl From<&mut VarInitNode> for Symbol {
-    fn from(node: &mut VarInitNode) -> Self {
-        let s = Self::new(&node.name, node.type_);
-
-        Self {
-            span: node.span,
-            flags: node.flags.unwrap_or_default(),
-            ..s
-        }
     }
 }
 

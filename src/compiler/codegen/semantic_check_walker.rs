@@ -734,6 +734,7 @@ mod tests {
     };
     use lpc_rs_errors::LpcErrorSeverity;
     use lpc_rs_function_support::function_prototype::FunctionPrototype;
+    use lpc_rs_function_support::symbol::Symbol;
 
     use super::*;
     use crate::{
@@ -744,7 +745,7 @@ mod tests {
                 default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
-            semantic::{scope_tree::ScopeTree, symbol::Symbol},
+            semantic::{scope_tree::ScopeTree},
             Compiler,
         },
         test_support::factories::*,
