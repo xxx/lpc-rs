@@ -55,6 +55,13 @@ pub trait AstNodeTrait {
 pub trait SpannedNode {
     /// Return the implementing node's span.
     fn span(&self) -> Option<Span>;
+
+    /// Return the source code represented by the Span
+    fn to_code(&self) -> String {
+        self.span()
+            .and_then(|s| s.code())
+            .unwrap_or_else(|| String::from("<No data>"))
+    }
 }
 
 impl AstNodeTrait for AstNode {
