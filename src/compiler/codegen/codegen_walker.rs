@@ -210,7 +210,7 @@ impl CodegenWalker {
         self.function_stack.push(func);
     }
 
-    /// Convert this walker into a [`Program`]
+    /// Consume this walker and convert it into a [`Program`]
     pub fn into_program(mut self) -> Result<Program> {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         self.ensure_sync()?;
@@ -1037,11 +1037,6 @@ impl TreeWalker for CodegenWalker {
         let arity = prototype.arity;
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
-        let declared_arg_count = node
-            .parameters
-            .as_ref()
-            .map(|nodes| nodes.len())
-            .unwrap_or_default();
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
 
@@ -1051,11 +1046,17 @@ impl TreeWalker for CodegenWalker {
 
         let parent_scope_id = self.context.scopes.current_id;
 
-        self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
         self.register_counter.push(0);
         self.upvalue_counter.push(0);
 
-        let declared_arg_locations = node
+        self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
+        let declared_arg_count = node // XXX difference btwn closures & functions
+            .parameters
+            .as_ref()
+            .map(|nodes| nodes.len())
+            .unwrap_or_default();
+        // TODO: $ variables need to be able to refer to upvalues, and not assume local
+        let declared_arg_locations = node // XXX
             .parameters
             .as_ref()
             .map(|nodes| self.visit_parameters(nodes))
@@ -1065,6 +1066,7 @@ impl TreeWalker for CodegenWalker {
 
         // bump the register counter if they have used `$\d` vars that go beyond
         // declared parameters, so that the positional params point to the correct slot.
+        // TODO: fix this for upvalues / default parameters
         let current_index = self.register_counter.as_usize();
         if num_args > current_index {
             self.register_counter.set(num_args);
@@ -1116,12 +1118,17 @@ impl TreeWalker for CodegenWalker {
         let mut func = self.function_stack.pop().unwrap();
         func.num_locals = self.register_counter.as_usize() - num_args;
 
+        // func.num_upvalues = func.local_variables
+        //     .iter()
+        //     .filter(|(_, v)| matches!(v, RegisterVariant::Upvalue(..)))
+        //     .count();
+        func.num_upvalues = self.upvalue_counter.number_emitted();
+
+        func.arg_locations = declared_arg_locations;
+
         if let Some(idx) = populate_argv_index {
             Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
-
-        func.num_upvalues = self.upvalue_counter.as_usize() + 1; // +1 for u0
-        func.arg_locations = declared_arg_locations;
 
         self.functions.insert(node.name.clone(), func.into());
 
@@ -1368,17 +1375,17 @@ impl TreeWalker for CodegenWalker {
         let arity = prototype.arity;
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
-        let declared_arg_count = node.parameters.len();
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
 
         self.function_stack.push(sym);
 
         let len = self.current_address();
-        self.context.scopes.goto_function(&node.name)?;
         self.register_counter.push(0);
         self.upvalue_counter.push(0);
 
+        self.context.scopes.goto_function(&node.name)?;
+        let declared_arg_count = node.parameters.len();
         let declared_arg_locations = self.visit_parameters(&node.parameters);
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
@@ -1420,10 +1427,12 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
         func.num_locals = self.register_counter.as_usize() - num_args;
-        func.num_upvalues = func.local_variables
-            .iter()
-            .filter(|(_, v)| matches!(v, RegisterVariant::Upvalue(..)))
-            .count();
+        // func.num_upvalues = func.local_variables
+        //     .iter()
+        //     .filter(|(_, v)| matches!(v, RegisterVariant::Upvalue(..)))
+        //     .count();
+        func.num_upvalues = self.upvalue_counter.number_emitted();
+
         func.arg_locations = declared_arg_locations;
 
         if let Some(idx) = populate_argv_index {
