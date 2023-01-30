@@ -5,40 +5,56 @@ use crate::register::Register;
 pub struct RegisterCounter {
     count: usize,
     stack: Vec<(usize, bool)>,
-    // hacky, but beats allowing isize, enums, etc.
+    // hacky, but beats allowing isize
     start_at_zero: bool,
     emitted_zero: bool,
 }
 
 impl RegisterCounter {
     // create a new counter
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Reset the counter to 0.
+    #[inline]
     pub fn reset(&mut self) {
         self.count = 0;
     }
 
+    /// Set whether the first register emitted via `next()` is Register(0) or Register(1).
+    #[inline]
     pub fn start_at_zero(&mut self, value: bool) {
         self.start_at_zero = value;
     }
 
     /// Return the current register.
+    #[inline]
     pub fn current(&self) -> Register {
         Register(self.count)
     }
 
     /// Move the counter back by one, for use after loops where next()
     /// is called., but the result is not used.
+    #[inline]
     pub fn go_back(&mut self) {
         self.count -= 1;
     }
 
     /// Get the current counter value
+    #[inline]
     pub fn as_usize(&self) -> usize {
         self.count
+    }
+
+    /// Return the number of registers that have been emitted, taking start_at_zero into account.
+    pub fn number_emitted(&self) -> usize {
+        if self.start_at_zero && self.emitted_zero {
+            return self.count + 1;
+        }
+
+        return self.count;
     }
 
     /// Set a new value, and store the old one for `pop`ping.
@@ -82,6 +98,7 @@ impl Iterator for RegisterCounter {
             return Some(Register(0));
         }
 
+        // TODO: rewrite this so the count is incremented after the register is captured
         self.count += 1;
         Some(Register(self.count))
     }
@@ -186,5 +203,24 @@ mod tests {
 
         counter.push(4);
         assert_eq!(counter.next(), Some(Register(5)));
+    }
+
+    #[test]
+    fn test_number_emitted() {
+        let mut counter = RegisterCounter::default();
+        counter.start_at_zero(true);
+        assert_eq!(counter.number_emitted(), 0);
+        assert_eq!(counter.next().unwrap(), Register(0));
+        assert_eq!(counter.number_emitted(), 1);
+        assert_eq!(counter.next().unwrap(), Register(1));
+        assert_eq!(counter.number_emitted(), 2);
+
+        let mut counter = RegisterCounter::default();
+        counter.start_at_zero(false);
+        assert_eq!(counter.number_emitted(), 0);
+        assert_eq!(counter.next().unwrap(), Register(1));
+        assert_eq!(counter.number_emitted(), 1);
+        assert_eq!(counter.next().unwrap(), Register(2));
+        assert_eq!(counter.number_emitted(), 2);
     }
 }
