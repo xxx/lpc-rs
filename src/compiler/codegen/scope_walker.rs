@@ -6,6 +6,7 @@ use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
 };
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::span::Span;
 
 use crate::compiler::{
     ast::{
@@ -26,6 +27,7 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::{semantic_checks::check_var_redefinition, symbol::Symbol},
 };
+use crate::compiler::ast::ast_node::SpannedNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -50,6 +52,20 @@ impl ScopeWalker {
         if let Some(scope) = self.context.scopes.current_mut() {
             scope.insert(symbol)
         }
+    }
+
+    fn define_argv(&mut self, scope_id: NodeId, span: Option<Span>) {
+        let sym = Symbol {
+            name: ARGV.to_string(),
+            type_: LpcType::Mixed(true),
+            location: None,
+            scope_id: scope_id.into(),
+            span,
+            flags: GlobalVarFlags::default(),
+            upvalue: false,
+        };
+
+        self.insert_symbol(sym);
     }
 }
 
@@ -86,17 +102,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         if node.flags.ellipsis() {
-            let sym = Symbol {
-                name: ARGV.to_string(),
-                type_: LpcType::Mixed(true),
-                location: None,
-                scope_id: scope_id.into(),
-                span: node.span,
-                flags: GlobalVarFlags::default(),
-                upvalue: false,
-            };
-
-            self.insert_symbol(sym);
+            self.define_argv(scope_id, node.span);
         }
 
         for statement in &mut node.body {
@@ -195,17 +201,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         if node.flags.ellipsis() {
-            let sym = Symbol {
-                name: ARGV.to_string(),
-                type_: LpcType::Mixed(true),
-                location: None,
-                scope_id: scope_id.into(),
-                span: node.span,
-                flags: GlobalVarFlags::default(),
-                upvalue: false,
-            };
-
-            self.insert_symbol(sym);
+            self.define_argv(scope_id, node.span);
         }
 
         for expression in &mut node.body {
@@ -243,9 +239,12 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
-        // positional closure arg references are 1) always allowed (at this point),
-        // 2) never global, 3) never upvalued, and 4) will point to the same
-        // location regardless of what's in it.
+        println!("visit var {:?} : {}", node.name, node.to_code());
+        // positional closure arg references are
+        // 1) always allowed (at this point)
+        // 2) never global
+        // 3) never upvalued TODO: really?
+        // 4) will point to the same location regardless of what's in it.
         if node.is_closure_arg_var() {
             return Ok(());
         }
@@ -315,6 +314,8 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+        // println!("visit var init {:?} : {}", node.name, node.to_code());
+
         let scope = self.context.scopes.current();
 
         if scope.is_none() {
