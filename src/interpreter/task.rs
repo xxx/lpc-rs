@@ -918,8 +918,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 .fold(0, |sum, arg| sum + arg.is_some() as usize);
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
         let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
-        // for dynamic receivers, skip the first arg register, which contains the
-        // receiver
+        // for dynamic receivers, skip the first register of the passed args,
+        // which contains the receiver itself
         let index = initial_arg.index() + (dynamic_receiver as usize);
         let adjusted_num_args = *num_args - (dynamic_receiver as usize);
         let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
@@ -1026,6 +1026,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         ptr.captured_upvalues.iter().for_each(|upvalue_mapping| {
             new_frame.upvalues[upvalue_mapping.frame_location.index()] = upvalue_mapping.upvalue_location;
         });
+
+        println!("mappings for {}: {:?}", ptr.name(), ptr.captured_upvalues);
+        println!("new frame upvalues for {}: {:?}", ptr.name(), new_frame.upvalues);
 
         let pf = new_frame.function.clone();
         self.stack.push(new_frame)?;
@@ -1340,6 +1343,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         };
 
         let fp = FunctionPtr {
+            // TODO: set this owner correctly
             owner: Rc::new(Default::default()),
             address,
             partial_args,
@@ -1756,6 +1760,42 @@ mod tests {
         test_support::{compile_prog, run_prog},
     };
 
+    #[allow(dead_code)]
+    fn format_slice<S, I>(slice: S) -> String
+        where
+            S: IntoIterator<Item = I>,
+            I: Display,
+    {
+        let mut ret = String::new();
+        ret.push_str("[\n");
+
+        for i in slice {
+            ret.push_str(&format!("  {},\n", i));
+        }
+
+        ret.push_str("]");
+
+        ret
+    }
+
+    #[allow(dead_code)]
+    fn format_map<'a, M, K, V>(map: M) -> String
+        where
+            M: IntoIterator<Item = (&'a K, &'a V)>,
+            K: Display + 'a,
+            V: Display + 'a
+    {
+        let mut ret = String::new();
+        ret.push_str("{\n");
+
+        for (k, v) in map {
+            ret.push_str(&format!("  {}: {},\n", k, v));
+        }
+
+        ret.push_str("}");
+
+        ret
+    }
 
     /// A type to make it easier to set up test expectations for register
     /// contents
@@ -3979,33 +4019,113 @@ mod tests {
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 
+        fn check_local_vars<T>(code: &str, vars: &IndexMap<&str, T>)
+        where
+            T: Into<BareVal> + Clone
+        {
+            let (mut task, _ctx) = run_prog(code);
+
+            let snapshot = &mut task.snapshots.pop().unwrap();
+            snapshot.pop(); // pop off the init frame
+
+            let frame = snapshot.pop().unwrap();
+
+            let frame_vars = frame.local_variables();
+
+            println!("frame_vars: {}", format_map(&frame_vars));
+
+            assert_eq!(vars.len(), frame_vars.len());
+
+            for (k, v) in vars {
+                let v: BareVal = v.clone().into();
+                assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
+            }
+        }
+
+        fn check_proc_upvalues<T>(code: &str, upvalues: &[T])
+        where
+            T: Into<BareVal> + Clone
+        {
+            let (mut task, _ctx) = run_prog(code);
+
+            let snapshot = &mut task.snapshots.pop().unwrap();
+            snapshot.pop(); // pop off the init frame
+
+            let frame = snapshot.pop().unwrap();
+            let proc = frame.process.borrow();
+
+            println!("proc upvalues: {}", format_slice(&proc.upvalues));
+
+            assert_eq!(upvalues.len(), proc.upvalues.len());
+
+            for (i, v) in upvalues.iter().enumerate() {
+                let v: BareVal = v.clone().into();
+                assert_eq!(v, proc.upvalues[i], "index: {}", i);
+            }
+        }
+
+        fn check_frame_upvalues<T>(code: &str, upvalues: &[T])
+        where
+            T: Into<Register> + Copy
+        {
+            let (mut task, _ctx) = run_prog(code);
+
+            let snapshot = &mut task.snapshots.pop().unwrap();
+            snapshot.pop(); // pop off the init frame
+
+            let frame = snapshot.pop().unwrap();
+
+            println!("frame upvalues: {}", format_slice(&frame.upvalues));
+
+            assert_eq!(upvalues.len(), frame.upvalues.len());
+
+            for (i, v) in upvalues.iter().enumerate() {
+                let v: Register = (*v).into();
+                assert_eq!(v, frame.upvalues[i], "index: {}", i);
+            }
+        }
+
         #[test]
         fn test_local_captures() {
             let code = indoc! { r##"
                 void create() {
                     int i = 0;
-                    function inc = (: debug("snapshot_stack"); i++ :);
+                    function inc = (: i++; debug("snapshot_stack"); i :);
                     int j = inc();
                     int k = inc();
                 }
             "##};
 
-            let (mut task, ctx) = run_prog(code);
-
-            let proc = ctx.process();
-            let proc = proc.borrow();
-
             let expected = vec![Int(2)];
-            assert_eq!(&expected, &proc.upvalues);
+            check_proc_upvalues(code, &expected);
 
-            let snapshot = task.snapshots.last_mut().unwrap();
-            snapshot.pop(); // pop off the init frame
+            let expected = vec![Register(0)];
+            check_frame_upvalues(code, &expected);
 
-            let closure_frame = snapshot.pop().unwrap();
-            assert_eq!(&vec![Register(0)], &closure_frame.upvalues);
+            let expected: IndexMap<&str, BareVal> = IndexMap::new();
+            check_local_vars(code, &expected);
+        }
 
-            let declaring_frame = snapshot.pop().unwrap();
-            assert_eq!(&vec![Register(0)], &declaring_frame.upvalues);
+        #[test]
+        fn test_shared_captures() {
+            let code = indoc! { r##"
+                void create() {
+                    int i = 0;
+                    function inc = (: i++ :);
+                    int j = inc();
+                    int k = inc();
+                    debug("snapshot_stack");
+                }
+            "##};
+
+            let expected = IndexMap::from([
+                ("i", Int(2)),
+                ("j", Int(0)),
+                ("k", Int(1)),
+                ("inc", Function("closure-0".to_string(), vec![]))
+            ]);
+
+            check_local_vars(code, &expected);
         }
 
         #[test]
@@ -4015,61 +4135,77 @@ mod tests {
                     function add = make_adder(10);
                     int j = add(5);
                     int k = add(-20);
+                    int l = add();
                     function add2 = make_adder(666);
-                    int l = add2(1);
+                    int m = add2(1);
+                    int n = add2();
                     debug("snapshot_stack");
                 }
 
                 function make_adder(int i) {
-                    return (: [int j = i] debug("snapshot_stack"); j + $1 :);
+                    return (: [int j = i] j + $1 :);
                 }
             "##};
 
-            let (mut task, ctx) = run_prog(code);
-
-            let proc = ctx.process();
-            let proc = proc.borrow();
-
             let expected = vec![Int(10), Int(666)];
-            assert_eq!(&expected, &proc.upvalues);
+            check_proc_upvalues(code, &expected);
 
-            // test final snapshot at the end of create()
-            {
-                let snapshot = &mut task.snapshots.pop().unwrap();
-                snapshot.pop(); // pop off the init frame
+            let expected = IndexMap::from([
+                ("j", Int(10)),
+                ("k", Int(-40)),
+                ("l", Int(20)),
+                ("m", Int(2)),
+                ("n", Int(1332)),
+                ("add", Function("closure-0".into(), vec![])),
+                ("add2", Function("closure-0".into(), vec![]))
+            ]);
+            check_local_vars(code, &expected);
+        }
 
-                let create_frame = snapshot.pop().unwrap();
+        #[test]
+        fn test_higher_order() {
+            let code = indoc! { r##"
+                void create() {
+                    function make_counter = make_make_counter(0);
 
-                let create_frame_vars = create_frame.local_variables();
+                    function counter1 = make_counter();
+                    function counter2 = make_counter();
+                    function counter3 = make_counter(100);
 
-                println!("create_frame_vars: {:?}", create_frame_vars);
+                    int c1 = counter1();
+                    int c2 = counter2(4);
+                    int c3 = counter3();
 
-                assert_eq!(&Int(15), create_frame_vars.get("j").unwrap());
-                assert_eq!(&Int(-10), create_frame_vars.get("k").unwrap());
+                    debug("snapshot_stack");
+                }
 
-                // the snapshot was taken after l is assigned
-                assert_eq!(&Int(667), create_frame_vars.get("l").unwrap());
-            }
+                function make_make_counter(int default_value) {
+                    int counter = default_value;
+                    return (: [int count_by = 1]
+                        return (: [int j = count_by] counter += j; counter :);
+                    :);
+                }
+            "##};
 
-            // test penultimate snapshot, taken during `int l = add2(1);`
-            {
-                let snapshot = &mut task.snapshots.pop().unwrap();
-                snapshot.pop(); // pop off the init frame
+            let expected = vec![
+                Int(105),
+                Int(1),
+                Int(4),
+                Int(1)
+            ];
+            check_proc_upvalues(code, &expected);
 
-                let closure_frame = snapshot.pop().unwrap();
-                assert_eq!(&vec![Register(1)], &closure_frame.upvalues);
+            let expected = IndexMap::from([
+                ("c1", Int(1)),
+                ("c2", Int(5)),
+                ("c3", Int(105)),
+                ("make_counter", Function("closure-0".into(), vec![])),
+                ("counter1", Function("closure-1".into(), vec![])),
+                ("counter2", Function("closure-1".into(), vec![])),
+                ("counter3", Function("closure-1".into(), vec![]))
+            ]);
 
-                let declaring_frame = snapshot.pop().unwrap();
-                assert_eq!(&Vec::<Register>::new(), &declaring_frame.upvalues);
-
-                let declaring_frame_vars = declaring_frame.local_variables();
-
-                assert_eq!(&Int(15), declaring_frame_vars.get("j").unwrap());
-                assert_eq!(&Int(-10), declaring_frame_vars.get("k").unwrap());
-
-                // the snapshot was taken before l is assigned
-                assert_eq!(&Int(0), declaring_frame_vars.get("l").unwrap());
-            }
+            check_local_vars(code, &expected);
         }
     }
 }
