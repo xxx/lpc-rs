@@ -2,6 +2,7 @@ use std::path::Path;
 
 use decorum::Total;
 use fs_err as fs;
+use indextree::NodeId;
 
 pub mod call_namespace;
 pub mod function;
@@ -39,6 +40,8 @@ pub type BaseFloat = f64;
 /// Abstracted type for in-game `float`s. The wrapper is to handle hashing,
 /// ordering, etc.
 pub type LpcFloat = Total<BaseFloat>;
+
+pub type ScopeId = NodeId;
 
 /// Convert various literal escapes to actual escape characters
 ///
