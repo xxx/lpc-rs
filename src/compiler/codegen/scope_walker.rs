@@ -1,10 +1,7 @@
 use if_chain::if_chain;
-use indextree::NodeId;
 use itertools::Itertools;
 use tracing::trace;
-use lpc_rs_core::{
-    call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
-};
+use lpc_rs_core::{call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_errors::span::Span;
 use lpc_rs_function_support::symbol::Symbol;
@@ -39,7 +36,7 @@ pub struct ScopeWalker {
 
     /// track the scope IDs of each closure, to help determine if
     /// a variable needs to be upvalued or not.
-    closure_scope_stack: Vec<NodeId>
+    closure_scope_stack: Vec<ScopeId>
 }
 
 impl ScopeWalker {
@@ -55,7 +52,7 @@ impl ScopeWalker {
         }
     }
 
-    fn define_argv(&mut self, scope_id: NodeId, span: Option<Span>) {
+    fn define_argv(&mut self, scope_id: ScopeId, span: Option<Span>) {
         let sym = Symbol {
             name: ARGV.to_string(),
             type_: LpcType::Mixed(true),
