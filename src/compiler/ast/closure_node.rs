@@ -3,9 +3,8 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use indextree::NodeId;
 use itertools::Itertools;
-use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType, ScopeId};
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -25,7 +24,7 @@ pub struct ClosureNode {
     pub flags: FunctionFlags,
     pub body: Vec<AstNode>,
     pub span: Option<Span>,
-    pub scope_id: Option<NodeId>,
+    pub scope_id: Option<ScopeId>,
 }
 
 impl SpannedNode for ClosureNode {
