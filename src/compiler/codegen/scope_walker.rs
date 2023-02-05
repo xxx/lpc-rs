@@ -237,7 +237,7 @@ impl TreeWalker for ScopeWalker {
         // positional closure arg references are
         // 1) always allowed (if we've made it this far)
         // 2) never global
-        // 3) never upvalued TODO: really?
+        // 3) never upvalued
         // 4) will point to the same location regardless of what's in it.
         if node.is_closure_arg_var() {
             return Ok(());

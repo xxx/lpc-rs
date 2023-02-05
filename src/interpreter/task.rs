@@ -4140,10 +4140,10 @@ mod tests {
                     debug("snapshot_stack");
                 }
 
-                function make_make_counter(int default_value) { // 1, u0
-                    int counter = default_value; // u0
-                    return (: [int count_by = 1] // 1, u1
-                        return (: [int j = count_by] counter += j; counter :); // 0
+                function make_make_counter(int default_value) {
+                    int counter = default_value;
+                    return (: [int count_by = 1]
+                        return (: [int j = count_by] counter += j :);
                     :);
                 }
             "##};
@@ -4159,6 +4159,42 @@ mod tests {
                 ("counter1", Function("closure-0".into(), vec![])),
                 ("counter2", Function("closure-0".into(), vec![])),
                 ("counter3", Function("closure-0".into(), vec![])),
+            ]);
+
+            check_local_vars(code, &expected);
+        }
+
+        #[test]
+        fn test_higher_order_with_implicit_vars() {
+            let code = indoc! { r##"
+                void create() {
+                    function make = make_maker();
+
+                    function made1 = make(1);
+                    function made2 = make(2);
+
+                    int c1 = made1();
+                    int c2 = made2(69);
+
+                    debug("snapshot_stack");
+                }
+
+                function make_maker() {
+                    return (: [int i]
+                        return (: $1 :); // This should *not* capture `i`
+                    :);
+                }
+            "##};
+
+            let expected: Vec<BareVal> = vec![];
+            check_proc_upvalues(code, &expected);
+
+            let expected = IndexMap::from([
+                ("c1", Int(0)),
+                ("c2", Int(69)),
+                ("make", Function("closure-1".into(), vec![])),
+                ("made1", Function("closure-0".into(), vec![])),
+                ("made2", Function("closure-0".into(), vec![])),
             ]);
 
             check_local_vars(code, &expected);
