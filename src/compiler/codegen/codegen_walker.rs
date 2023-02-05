@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
+use lpc_rs_asm::instruction::{Address, Instruction, Label};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
@@ -654,7 +654,7 @@ impl CodegenWalker {
                 // generate code for only the value, then assign by hand, because we
                 // pre-generated locations of the parameters above.
                 value.visit(self)?;
-                let instruction = RegCopy(self.current_result, declared_arg_locations[idx]);
+                let instruction = Instruction::RegCopy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
             }
         }
@@ -1118,7 +1118,7 @@ impl TreeWalker for CodegenWalker {
                 let target = RegisterVariant::Local(Register(0));
 
                 if self.current_result != target {
-                    sym.push_instruction(RegCopy(self.current_result, target), node.span);
+                    sym.push_instruction(Instruction::RegCopy(self.current_result, target), node.span);
                 }
 
                 sym.push_instruction(Instruction::Ret, node.span);
@@ -3994,8 +3994,6 @@ mod tests {
     }
 
     mod test_visit_for {
-        use lpc_rs_asm::instruction::Instruction::{ISub, Jmp, Jz};
-
         use super::*;
         use crate::compiler::ast::for_node::ForNode;
 
@@ -5361,17 +5359,17 @@ mod tests {
 
         let mut parent_init = ProgramFunction::new(prototype, 0);
         let parent_init_instructions = vec![
-            Instruction::IConst1(RegisterVariant::Local(Register(0))),
-            Instruction::IConst(RegisterVariant::Local(Register(0)), 666),
-            Instruction::SConst(RegisterVariant::Local(Register(1)), "moop".to_string()),
-            Instruction::IConst(RegisterVariant::Local(Register(5)), 4321),
+            IConst1(RegisterVariant::Local(Register(0))),
+            IConst(RegisterVariant::Local(Register(0)), 666),
+            SConst(RegisterVariant::Local(Register(1)), "moop".to_string()),
+            IConst(RegisterVariant::Local(Register(5)), 4321),
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
                 num_args: 0,
                 initial_arg: RegisterVariant::Local(Register(0)),
             },
-            Instruction::Ret,
+            Ret,
         ];
         let parent_spans = vec![
             Some(Span {
