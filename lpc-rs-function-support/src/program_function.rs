@@ -7,10 +7,10 @@ use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
-use lpc_rs_core::register::{Register, RegisterVariant};
-use indexmap::{IndexMap, IndexSet};
+use lpc_rs_core::register::RegisterVariant;
 
 use crate::function_prototype::FunctionPrototype;
+use crate::symbol::Symbol;
 
 /// A `Program` function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -29,6 +29,8 @@ pub struct ProgramFunction {
     pub num_locals: usize,
 
     /// How many of my locals are actually upvalues?
+    /// Note that this is just the count of captured variables, not
+    /// vars that are captured from elsewhere.
     pub num_upvalues: usize,
 
     /// The actual instructions of this function
@@ -40,11 +42,8 @@ pub struct ProgramFunction {
     /// Map of labels, to their respective addresses
     pub labels: HashMap<String, Address>,
 
-    /// Map of captured variables - (local frame register, upvalue register)
-    pub captured_variables: IndexSet<(Register, Register)>,
-
-    /// Map of my local variables, with their location
-    pub local_variables: IndexMap<String, RegisterVariant>,
+    /// List of local variables declared within this function
+    pub local_variables: Vec<Symbol>,
 
     /// Track the location of where my arguments are expected
     pub arg_locations: Vec<RegisterVariant>,
@@ -80,8 +79,7 @@ impl ProgramFunction {
             instructions: vec![],
             debug_spans: vec![],
             labels: HashMap::new(),
-            captured_variables: IndexSet::new(),
-            local_variables: IndexMap::new(),
+            local_variables: vec![],
             arg_locations: vec![],
         }
     }

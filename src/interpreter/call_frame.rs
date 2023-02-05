@@ -4,7 +4,6 @@ use std::{
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
-use indexmap::IndexMap;
 
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_errors::{span::Span, LpcError, Result};
@@ -14,6 +13,27 @@ use lpc_rs_core::register::{Register, RegisterVariant};
 
 use crate::interpreter::{process::Process, register_bank::RegisterBank};
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
+
+/// A representation of a local variable name and value.
+/// This exists only so we can stick a Display impl on it for
+/// testing and debugging.
+#[derive(Debug, Clone)]
+pub struct LocalVariable {
+    pub name: String,
+    pub value: LpcRef
+}
+
+impl LocalVariable {
+    fn new(name: String, value: LpcRef) -> Self {
+        Self { name, value }
+    }
+}
+
+impl Display for LocalVariable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.name, self.value)
+    }
+}
 
 /// A representation of a function call's context.
 #[derive(Debug, Clone)]
@@ -44,23 +64,33 @@ impl CallFrame {
     /// * `function` - The function being called
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
-    pub fn new<P>(process: P, function: Rc<ProgramFunction>, called_with_num_args: usize) -> Self
+    /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
+    pub fn new<P>(process: P, function: Rc<ProgramFunction>, called_with_num_args: usize, upvalues: Option<&Vec<Register>>) -> Self
     where
         P: Into<Rc<RefCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = function.arity().num_args + function.num_locals + 1;
         let process = process.into();
-        let upvalues = Self::populate_upvalues(&function, &process);
+        let ups = upvalues.cloned().unwrap_or_default();
 
-        Self {
+        {
+            let pr = process.borrow();
+            println!("calling: {} - new frame upvalues: {:?} || process upvalues: {:?}", &function.name(), upvalues, pr.upvalues);
+        }
+
+        let mut instance = Self {
             process,
             function,
             registers: RegisterBank::new(vec![NULL; reg_len]),
             pc: 0.into(),
             called_with_num_args,
-            upvalues,
-        }
+            upvalues: ups,
+        };
+
+        instance.populate_upvalues();
+
+        instance
     }
 
     /// Create a new [`CallFrame`] instance with space for at least
@@ -74,18 +104,20 @@ impl CallFrame {
     ///   the call to this function?
     /// * `arg_capacity` - Reserve space for at least this many registers (this
     ///   is used for ellipsis args and `call_other`)
+    /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
     pub fn with_minimum_arg_capacity<P>(
         process: P,
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         arg_capacity: usize,
+        upvalues: Option<&Vec<Register>>,
     ) -> Self
     where
         P: Into<Rc<RefCell<Process>>>,
     {
         Self {
             registers: RegisterBank::initialized_for_function(&*function, arg_capacity),
-            ..Self::new(process, function, called_with_num_args)
+            ..Self::new(process, function, called_with_num_args, upvalues)
         }
     }
 
@@ -99,61 +131,46 @@ impl CallFrame {
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
     /// * `registers` - The registers that the CallFrame will use
+    /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
     pub fn with_registers<P>(
         process: P,
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         registers: RegisterBank,
+        upvalues: Option<&Vec<Register>>,
     ) -> Self
     where
         P: Into<Rc<RefCell<Process>>>,
     {
         Self {
             registers,
-            ..Self::new(process, function, called_with_num_args)
+            ..Self::new(process, function, called_with_num_args, upvalues)
         }
     }
 
-    /// Reserve space in the process for this call's needed upvalues, and
-    /// set my upvalue indexes to the correct values
-    fn populate_upvalues(function: &Rc<ProgramFunction>, process: &Rc<RefCell<Process>>) -> Vec<Register> {
-        // TODO: This should be calculated at compile-time
-        let upvalue_locations = function.local_variables.values().filter_map(|i| {
-            if let RegisterVariant::Upvalue(r) = i {
-                Some(*r)
-            } else {
-                None
+    /// Reserve space for the upvalues that this call will initialize
+    fn populate_upvalues(&mut self) -> usize {
+        let num_upvalues = self.function.num_upvalues;
+
+        let start_idx = {
+            let mut proc = self.process.borrow_mut();
+            let upvalues = &mut proc.upvalues;
+            let idx = upvalues.len();
+
+            upvalues.reserve(num_upvalues);
+            for _ in 0..num_upvalues {
+                upvalues.push(NULL);
             }
-        }).collect::<Vec<Register>>();
 
-        debug_assert!(
-            upvalue_locations.len() <= function.num_upvalues,
-            "expected {} to be <= {}", upvalue_locations.len(), function.num_upvalues
-        );
-
-        let mut upvalues = vec![Register(0); function.num_upvalues];
-
-        if function.num_upvalues == 0 {
-            return upvalues;
-        }
-
-        let mut upvalue_idx = {
-            let mut proc = process.borrow_mut();
-            let idx = proc.upvalues.len();
-            proc.upvalues.reserve(upvalue_locations.len());
-            for _ in 0..upvalue_locations.len() {
-                proc.upvalues.push(NULL);
-            }
             idx
         };
 
-        for upvalue_location in upvalue_locations {
-            upvalues[upvalue_location.index()] = Register(upvalue_idx);
-
-            upvalue_idx += 1;
+        self.upvalues.reserve(num_upvalues);
+        for i in 0..num_upvalues {
+            self.upvalues.push(Register(start_idx + i));
         }
 
-        upvalues
+        start_idx
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the variant
@@ -176,13 +193,18 @@ impl CallFrame {
         }
     }
 
-    /// Convenience to return a mapping of the local variables in this frame.
+    /// Convenience to return a list of the local variables in this frame.
     /// Intended for debugging and testing.
-    pub fn local_variables(&self) -> IndexMap<String, LpcRef> {
-        self.function.local_variables.iter().map(|(k, v)| {
-            let lpc_ref = match v {
-                RegisterVariant::Local(reg) => self.registers[*reg].clone(),
-                RegisterVariant::Global(reg) => self.process.borrow().globals[*reg].clone(),
+    pub fn local_variables(&self) -> Vec<LocalVariable> {
+        self.function.local_variables.iter().map(|var| {
+            let Some(loc) = var.location else {
+                // This should be unreachable.
+                return LocalVariable::new(var.name.clone(), NULL);
+            };
+
+            let lpc_ref = match loc {
+                RegisterVariant::Local(reg) => self.registers[reg].clone(),
+                RegisterVariant::Global(reg) => self.process.borrow().globals[reg].clone(),
                 RegisterVariant::Upvalue(ptr_reg) => {
                     let upvalues = &self.upvalues;
                     let data_reg = upvalues[ptr_reg.index()];
@@ -191,7 +213,7 @@ impl CallFrame {
                 }
             };
 
-            (k.clone(), lpc_ref)
+            LocalVariable::new(var.name.clone(), lpc_ref)
         }).collect()
     }
 
@@ -304,7 +326,7 @@ mod tests {
 
         let fs = ProgramFunction::new(prototype, 7);
 
-        let frame = CallFrame::new(process, Rc::new(fs), 4);
+        let frame = CallFrame::new(process, Rc::new(fs), 4, None);
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -329,7 +351,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30);
+            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30, None);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -351,7 +373,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2);
+            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2, None);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -379,7 +401,7 @@ mod tests {
 
             let registers = RegisterBank::new(vec![NULL; 21]);
 
-            let frame = CallFrame::with_registers(process, Rc::new(fs), 4, registers);
+            let frame = CallFrame::with_registers(process, Rc::new(fs), 4, registers, None);
 
             assert_eq!(frame.registers.len(), 21);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -387,6 +409,7 @@ mod tests {
     }
 
     mod test_populate_upvalues {
+        use crate::test_support::factories::SymbolFactory;
         use super::*;
 
         #[test]
@@ -404,11 +427,19 @@ mod tests {
             );
 
             let mut pf = ProgramFunction::new(prototype, 0);
-            pf.local_variables.insert("a".to_string(), Register(0).as_upvalue());
-            pf.local_variables.insert("b".to_string(), Register(1).as_upvalue());
+            let symbol_factory = SymbolFactory::new();
+            let a = symbol_factory.build(|s| {
+                s.name = "a".to_string();
+                s.location = Some(Register(0).as_upvalue())
+            });
+            let b = symbol_factory.build(|s| {
+                s.name = "b".to_string();
+                s.location = Some(Register(1).as_upvalue())
+            });
+            pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
 
-            let frame = CallFrame::new(process, Rc::new(pf), 0);
+            let frame = CallFrame::new(process, Rc::new(pf), 0, None);
 
             assert_eq!(frame.upvalues, vec![Register(0), Register(1)]);
             assert_eq!(frame.process.borrow().upvalues.len(), 2);
@@ -424,12 +455,23 @@ mod tests {
             );
 
             let mut pf = ProgramFunction::new(prototype, 0);
-            pf.local_variables.insert("a".to_string(), Register(0).as_upvalue());
-            pf.local_variables.insert("b".to_string(), Register(1).as_upvalue());
-            pf.local_variables.insert("c".to_string(), Register(2).as_upvalue());
+            let symbol_factory = SymbolFactory::new();
+            let a = symbol_factory.build(|s| {
+                s.name = "a".to_string();
+                s.location = Some(Register(0).as_upvalue())
+            });
+            let b = symbol_factory.build(|s| {
+                s.name = "b".to_string();
+                s.location = Some(Register(1).as_upvalue())
+            });
+            let c = symbol_factory.build(|s| {
+                s.name = "c".to_string();
+                s.location = Some(Register(2).as_upvalue())
+            });
+            pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process.clone(), Rc::new(pf), 0);
+            let frame = CallFrame::new(frame.process.clone(), Rc::new(pf), 0, None);
             assert_eq!(frame.upvalues, vec![Register(2), Register(3), Register(4)]);
             assert_eq!(frame.process.borrow().upvalues.len(), 5);
         }

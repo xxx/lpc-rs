@@ -79,20 +79,6 @@ impl Display for FunctionAddress {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UpvalueMapping {
-    // when this function is called, which of the CallFrame's upvalues does this get stored in?
-    pub frame_location: Register,
-    // What is the index in the [`Process`]-level `upvalues` array (which contains the actual data)?
-    pub upvalue_location: Register
-}
-
-impl Display for UpvalueMapping {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {}", self.frame_location, self.upvalue_location)
-    }
-}
-
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone, PartialEq, Eq)]
 #[educe(Debug)]
@@ -115,9 +101,8 @@ pub struct FunctionPtr {
     /// Does this pointer use `call_other`?
     pub call_other: bool,
 
-    /// Track the (runtime) indexes for both the function, and into the
-    /// Process-level upvalued data, for closed-over variables in this function
-    pub captured_upvalues: Vec<UpvalueMapping>,
+    /// Store the captured variables as upvalues
+    pub upvalues: Vec<Register>,
 }
 
 impl FunctionPtr {
@@ -157,8 +142,8 @@ impl Display for FunctionPtr {
         s.push_str(&format!("partial_args: [{}], ", partial_args));
         s.push_str(
             &format!(
-                "captured_upvalues: [{}]",
-                self.captured_upvalues.iter().map(|x| format!("{}", x)).join(", ")
+                "upvalues: [{}]",
+                self.upvalues.iter().map(|x| format!("{}", x)).join(", ")
             )
         );
         s.push_str("}");

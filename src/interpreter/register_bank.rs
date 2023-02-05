@@ -2,6 +2,7 @@ use std::{
     ops::{Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
 };
+use std::ops::Deref;
 use std::vec::IntoIter;
 
 use delegate::delegate;
@@ -170,5 +171,14 @@ impl<'a> IntoIterator for &'a RegisterBank {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.registers.iter()
+    }
+}
+
+impl Deref for RegisterBank {
+    type Target = [LpcRef];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.registers
     }
 }

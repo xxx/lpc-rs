@@ -42,7 +42,11 @@ macro_rules! try_extract_value {
     ( $x:expr, $y:path ) => {
         match &$x {
             $y(s) => s,
-            x => return Err(LpcError::new(format!("Invalid LpcValue - received `{}`. This indicates a serious bug in the interpreter.", x)))
+            x => {
+                let msg = format!("Invalid LpcValue - received `{}`. This indicates a serious bug in the interpreter.", x);
+                debug_assert!(false, "{}", msg);
+                return Err(LpcError::new(msg))
+            }
         }
     };
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use delegate::delegate;
-use indextree::NodeId;
+use lpc_rs_core::ScopeId;
 use lpc_rs_function_support::symbol::Symbol;
 
 
@@ -9,7 +9,7 @@ use lpc_rs_function_support::symbol::Symbol;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalScope {
     /// My ID
-    pub id: Option<NodeId>,
+    pub id: Option<ScopeId>,
 
     /// Map of symbol names to the symbol itself
     pub symbols: HashMap<String, Symbol>,
@@ -17,7 +17,7 @@ pub struct LocalScope {
 
 impl LocalScope {
     /// Create a new [`LocalScope`] with the passed `id`
-    pub fn new(id: Option<NodeId>) -> Self {
+    pub fn new(id: Option<ScopeId>) -> Self {
         Self {
             id,
             symbols: HashMap::new(),
@@ -45,6 +45,7 @@ impl LocalScope {
             pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol>;
 
             /// Get whether or not a symbol is defined in this scope.
+            /// This returns results for this LocalScope only, not any parent scopes.
             #[call(contains_key)]
             pub fn contains(&self, name: &str) -> bool;
         }

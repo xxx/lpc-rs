@@ -85,6 +85,11 @@ impl RegisterCounter {
         if self.start_at_zero {
             self.emitted_zero = new_val != 0;
         }
+        self.set_count(new_val);
+    }
+
+    #[inline]
+    pub fn set_count(&mut self, new_val: usize) {
         self.count = new_val;
     }
 }

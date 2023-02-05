@@ -10,6 +10,6 @@ beaver::define! {
         scope_id -> |_| None,
         span -> |_| None,
         flags -> |_| GlobalVarFlags::default(),
-        upvalue -> |_| false
+        upvalue -> |_| false,
     }
 }
