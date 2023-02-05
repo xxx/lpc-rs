@@ -82,15 +82,15 @@ impl CallFrame {
         let process = process.into();
         let ups = upvalues.cloned().unwrap_or_default();
 
-        {
-            let pr = process.borrow();
-            println!(
-                "calling: {} - new frame upvalues: {:?} || process upvalues: {:?}",
-                &function.name(),
-                upvalues,
-                pr.upvalues
-            );
-        }
+        // {
+        //     let pr = process.borrow();
+        //     trace!(
+        //         "calling: {} - new frame upvalues: {:?} || process upvalues: {:?}",
+        //         &function.name(),
+        //         upvalues,
+        //         pr.upvalues
+        //     );
+        // }
 
         let mut instance = Self {
             process,

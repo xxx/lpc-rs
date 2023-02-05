@@ -9,7 +9,7 @@ use tracing::trace;
 
 use crate::compiler::{
     ast::{
-        ast_node::{AstNodeTrait, SpannedNode},
+        ast_node::AstNodeTrait,
         block_node::BlockNode,
         closure_node::ClosureNode,
         do_while_node::DoWhileNode,
@@ -152,27 +152,20 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let sym = Symbol {
-            name: FOREACH_INDEX.to_string(),
-            type_: LpcType::Int(false),
-            location: None,
-            scope_id: scope_id.into(),
-            span: node.span,
-            flags: GlobalVarFlags::default(),
-            upvalue: false,
+        let make_sym = |name: &str| {
+            Symbol {
+                name: name.to_string(),
+                type_: LpcType::Int(false),
+                location: None,
+                scope_id: scope_id.into(),
+                span: node.span,
+                flags: GlobalVarFlags::default(),
+                upvalue: false,
+            }
         };
-        self.insert_symbol(sym);
 
-        let sym = Symbol {
-            name: FOREACH_LENGTH.to_string(),
-            type_: LpcType::Int(false),
-            location: None,
-            scope_id: scope_id.into(),
-            span: node.span,
-            flags: GlobalVarFlags::default(),
-            upvalue: false,
-        };
-        self.insert_symbol(sym);
+        self.insert_symbol( make_sym(FOREACH_INDEX));
+        self.insert_symbol(make_sym(FOREACH_LENGTH));
 
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
@@ -240,9 +233,9 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
-        println!("visit var {:?} : {}", node.name, node.to_code());
+        // println!("visit var {:?} : {}", node.name, node.to_code());
         // positional closure arg references are
-        // 1) always allowed (at this point)
+        // 1) always allowed (if we've made it this far)
         // 2) never global
         // 3) never upvalued TODO: really?
         // 4) will point to the same location regardless of what's in it.
