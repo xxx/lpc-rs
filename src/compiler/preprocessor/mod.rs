@@ -867,8 +867,9 @@ impl Preprocessor {
                     RESIDENT => self.context.pragmas.set_resident(true),
                     STRICT_TYPES => self.context.pragmas.set_strict_types(true),
                     x => {
-                        return Err(LpcError::new(format!("unknown pragma `{x}`"))
-                            .with_span(Some(token.0)));
+                        return Err(
+                            LpcError::new(format!("unknown pragma `{x}`")).with_span(Some(token.0))
+                        );
                     }
                 }
             }
@@ -915,10 +916,10 @@ impl Preprocessor {
         let file_content = match read_lpc_file(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                return Err(LpcError::new(format!(
-                    "unable to read include file `{path}`: {e:?}"
-                ))
-                .with_span(span));
+                return Err(
+                    LpcError::new(format!("unable to read include file `{path}`: {e:?}"))
+                        .with_span(span),
+                );
             }
         };
 
@@ -1050,7 +1051,8 @@ mod tests {
 
         test_valid(
             input,
-            &["string",
+            &[
+                "string",
                 "marf",
                 "=",
                 "file_name",
@@ -1061,7 +1063,8 @@ mod tests {
                 "(",
                 ")",
                 ")",
-                ";"],
+                ";",
+            ],
         );
     }
 

@@ -756,16 +756,14 @@ mod tests {
 
         // this one should not be found
         let early_inherited_global = Symbol::new("my_inherited_global", LpcType::Float(false));
-        earlier_inherit.global_variables.insert(
-            "my_inherited_global".into(),
-            early_inherited_global,
-        );
+        earlier_inherit
+            .global_variables
+            .insert("my_inherited_global".into(), early_inherited_global);
 
         let mut inherited_global = Symbol::new("my_inherited_global", LpcType::Int(false));
-        inherited.global_variables.insert(
-            "my_inherited_global".into(),
-            inherited_global.clone(),
-        );
+        inherited
+            .global_variables
+            .insert("my_inherited_global".into(), inherited_global.clone());
 
         let overridden_global = Symbol::new("overridden", LpcType::Int(false));
         inherited

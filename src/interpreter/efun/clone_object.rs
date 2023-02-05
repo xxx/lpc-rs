@@ -107,9 +107,9 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
 
         context.return_efun_result(result);
     } else {
-        return Err(context.runtime_error(format!(
-            "invalid argument passed to `clone_object`: {arg}"
-        )));
+        return Err(
+            context.runtime_error(format!("invalid argument passed to `clone_object`: {arg}"))
+        );
     }
 
     Ok(())

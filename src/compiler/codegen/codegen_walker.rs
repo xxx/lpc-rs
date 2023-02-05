@@ -398,14 +398,14 @@ impl CodegenWalker {
     fn visit_parameter(&mut self, node: &VarInitNode) -> RegisterVariant {
         let loc = self.assign_sym_location(&node.name);
 
-        self.context.lookup_var(&node.name).map(|sym| {
+        if let Some(sym) = self.context.lookup_var(&node.name) {
             if matches!(loc, RegisterVariant::Upvalue(_)) {
                 // increment the counter for parameters that are captured by closures
                 self.function_upvalue_counter.next().unwrap();
             }
             let func = self.function_stack.last_mut().unwrap();
             func.local_variables.push(sym.clone())
-        });
+        }
 
         loc
     }
@@ -760,10 +760,10 @@ impl TreeWalker for CodegenWalker {
                 self.current_result = rhs_result;
             }
             x => {
-                return Err(LpcError::new(format!(
-                    "Attempt to assign to an invalid lvalue: `{x}`"
-                ))
-                .with_span(node.span))
+                return Err(
+                    LpcError::new(format!("Attempt to assign to an invalid lvalue: `{x}`"))
+                        .with_span(node.span),
+                )
             }
         }
 
@@ -2074,12 +2074,13 @@ impl TreeWalker for CodegenWalker {
 
         self.current_result = current_register;
 
-        self.context.lookup_var_mut(&node.name).map(|sym| {
+        if let Some(sym) = self.context.lookup_var_mut(&node.name) {
             sym.location = Some(current_register);
 
-            if let Some(func) = self.function_stack
-                .last_mut() { func.local_variables.push(sym.clone()) }
-        });
+            if let Some(func) = self.function_stack.last_mut() {
+                func.local_variables.push(sym.clone())
+            }
+        }
 
         Ok(())
     }
@@ -3433,8 +3434,7 @@ mod tests {
         let mut prog_node = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(block))
             .unwrap();
-        let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap()
-        {
+        let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap() {
             if let AstNode::Block(n) = n.body.first_mut().unwrap() {
                 n
             } else {
@@ -3872,7 +3872,7 @@ mod tests {
     #[test]
     fn test_decl_sets_scope_and_instructions() {
         let call = "int foo = 1, *bar = ({ 56 });";
-        let mut prog_node = lpc_parser::ProgramParser::new()
+        let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
         let node = if let AstNode::Decl(node) = prog_node.body.first_mut().unwrap() {
@@ -4084,7 +4084,7 @@ mod tests {
         fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
             let mut prototype_walker = FunctionPrototypeWalker::default();
 
-            let mut prog_node = lpc_parser::ProgramParser::new()
+            let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                 .unwrap();
             let ast_node = prog_node.body.first_mut().unwrap();

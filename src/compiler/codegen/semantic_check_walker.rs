@@ -188,8 +188,8 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let CallNamespace::Named(namespace) = &node.namespace {
             if !self.context.inherit_names.contains_key(namespace) && namespace != EFUN {
-                let e = LpcError::new(format!("unknown namespace `{namespace}`"))
-                    .with_span(node.span);
+                let e =
+                    LpcError::new(format!("unknown namespace `{namespace}`")).with_span(node.span);
                 self.context.errors.push(e);
             }
         }

@@ -253,10 +253,7 @@ impl Display for Instruction {
                 num_args,
                 initial_arg,
             } => {
-                write!(
-                    f,
-                    "call {name}, {namespace}, {num_args}, {initial_arg}"
-                )
+                write!(f, "call {name}, {namespace}, {num_args}, {initial_arg}")
             }
             Instruction::CallFp {
                 location,
@@ -271,10 +268,7 @@ impl Display for Instruction {
                 num_args,
                 initial_arg,
             } => {
-                write!(
-                    f,
-                    "callother {receiver}, {name}, {num_args}, {initial_arg}"
-                )
+                write!(f, "callother {receiver}, {name}, {num_args}, {initial_arg}")
             }
             Instruction::Dec(r) => {
                 write!(f, "dec {r}")

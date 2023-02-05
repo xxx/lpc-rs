@@ -490,8 +490,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let address = match frame.lookup_label(&label) {
                         Some(x) => *x,
                         None => {
-                            return Err(self
-                                .runtime_error(format!("Missing address for label `{label}`")))
+                            return Err(
+                                self.runtime_error(format!("Missing address for label `{label}`"))
+                            )
                         }
                     };
                     let frame = self.stack.current_frame()?;
@@ -829,8 +830,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 // copy argument registers from old frame to new
                 if num_args == 1 {
                     new_frame.set_location(
-                        func
-                            .arg_locations
+                        func.arg_locations
                             .get(0)
                             .unwrap_or(&RegisterVariant::Local(Register(1))),
                         get_location_in_frame(current_frame, *initial_arg)?.into_owned(),
@@ -840,12 +840,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let mut next_index = 1;
                     let registers = &current_frame.registers;
                     for i in 0..num_args {
-                        let target_location =
-                            func.arg_locations.get(i).copied().unwrap_or({
-                                // This should only be reached by variables that will go
-                                // into an ellipsis function's argv.
-                                RegisterVariant::Local(Register(next_index))
-                            });
+                        let target_location = func.arg_locations.get(i).copied().unwrap_or({
+                            // This should only be reached by variables that will go
+                            // into an ellipsis function's argv.
+                            RegisterVariant::Local(Register(next_index))
+                        });
 
                         if let RegisterVariant::Local(r) = target_location {
                             next_index = r.index() + 1;
@@ -937,9 +936,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     if let Some(func) = func {
                         (cell.clone(), func.clone())
                     } else {
-                        return Err(
-                            self.runtime_error(format!("call to unknown function `{name}"))
-                        );
+                        return Err(self.runtime_error(format!("call to unknown function `{name}")));
                     }
                 } else {
                     return Err(self.runtime_error("non-object receiver to function pointer call"));
@@ -1476,9 +1473,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         Ok(())
                     }
-                    x => {
-                        Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`")))
-                    }
+                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`"))),
                 }
             }
             _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
@@ -1513,9 +1508,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             }
                         }
                         x => {
-                            return Err(self.runtime_error(format!(
-                                "Invalid attempt to take index of `{x}`"
-                            )))
+                            return Err(self
+                                .runtime_error(format!("Invalid attempt to take index of `{x}`")))
                         }
                     }
                 };
@@ -1586,9 +1580,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         Ok(())
                     }
-                    x => {
-                        Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`")))
-                    }
+                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`"))),
                 }
             }
             _ => Err(self.runtime_error("non-Store instruction passed to `handle_store`")),
@@ -1988,14 +1980,12 @@ mod tests {
                     Int(2),
                     Int(3),
                     Array(vec![Int(1), Int(2), Int(3)]),
-                    Array(
-                        vec![
-                            Int(12),
-                            Float(LpcFloat::from(4.3)),
-                            String("hello".into()),
-                            Array(vec![Int(1), Int(2), Int(3)]),
-                        ],
-                    ),
+                    Array(vec![
+                        Int(12),
+                        Float(LpcFloat::from(4.3)),
+                        String("hello".into()),
+                        Array(vec![Int(1), Int(2), Int(3)]),
+                    ]),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -3591,18 +3581,16 @@ mod tests {
                     Int(0),
                     Int(1),
                     Int(2),
-                    Array(
-                        vec![
-                            Int(3),
-                            String("foo".into()),
-                            Array(vec![
-                                String("bar".into()),
-                                String("baz".into()),
-                                Float(3.14.into()),
-                            ]),
-                            Mapping(mapping.clone()),
-                        ],
-                    ),
+                    Array(vec![
+                        Int(3),
+                        String("foo".into()),
+                        Array(vec![
+                            String("bar".into()),
+                            String("baz".into()),
+                            Float(3.14.into()),
+                        ]),
+                        Mapping(mapping.clone()),
+                    ]),
                     String("snapshot_stack".into()),
                     Array(vec![
                         String("bar".into()),

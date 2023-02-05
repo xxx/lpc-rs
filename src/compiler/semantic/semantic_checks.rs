@@ -342,8 +342,9 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                         {
                             Ok(LpcType::Function(false))
                         } else {
-                            return Err(LpcError::new(format!("undefined symbol {name}"))
-                                .with_span(*span));
+                            return Err(
+                                LpcError::new(format!("undefined symbol {name}")).with_span(*span)
+                            );
                         }
                     }
                 }

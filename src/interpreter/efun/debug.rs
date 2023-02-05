@@ -28,8 +28,7 @@ pub fn debug<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
                 }
             }
             x => {
-                Err(context
-                    .runtime_error(format!("Unknown operation `{x}` passed to `debug()`.")))
+                Err(context.runtime_error(format!("Unknown operation `{x}` passed to `debug()`.")))
             }
         }
     } else {
