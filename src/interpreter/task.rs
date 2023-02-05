@@ -779,105 +779,103 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     #[instrument(skip_all)]
     fn handle_call(&mut self, instruction: &Instruction, task_context: &TaskContext) -> Result<()> {
-        match instruction {
-            Instruction::Call {
-                name,
-                namespace,
-                num_args,
-                initial_arg,
-            } => {
-                let current_frame = self.stack.current_frame()?;
-                let process = current_frame.process.clone();
-                let num_args = *num_args;
-                let func = {
-                    let borrowed = process.borrow();
+        let Instruction::Call {
+            name,
+            namespace,
+            num_args,
+            initial_arg,
+        } = instruction else {
+            return Err(self.runtime_error("non-Call instruction passed to `handle_call`"));
+        };
 
-                    let function = borrowed.lookup_function(name, namespace);
-                    if let Some(func) = function {
+        let current_frame = self.stack.current_frame()?;
+        let process = current_frame.process.clone();
+        let num_args = *num_args;
+        let func = {
+            let borrowed = process.borrow();
+
+            let function = borrowed.lookup_function(name, namespace);
+            if let Some(func) = function {
+                func.clone()
+            } else {
+                if_chain! {
+                    // See if there is a simul efun with this name
+                    if let Some(func) = task_context.simul_efuns();
+                    let b = func.borrow();
+                    if let Some(func) = b.lookup_function(name, &CallNamespace::Local);
+                    then {
                         func.clone()
                     } else {
-                        if_chain! {
-                            // See if there is a simul efun with this name
-                            if let Some(func) = task_context.simul_efuns();
-                            let b = func.borrow();
-                            if let Some(func) = b.lookup_function(name, &CallNamespace::Local);
-                            then {
-                                func.clone()
-                            } else {
-                                // See if there is a normal efun with this name
-                                if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
-                                    let func = ProgramFunction::new(prototype.clone(), 0);
+                        // See if there is a normal efun with this name
+                        if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                            let func = ProgramFunction::new(prototype.clone(), 0);
 
-                                    Rc::new(func)
-                                } else {
-                                    let msg = format!("Call to unknown function `{name}`");
-                                    return Err(self.runtime_error(msg));
-                                }
-                            }
+                            Rc::new(func)
+                        } else {
+                            let msg = format!("Call to unknown function `{name}`");
+                            return Err(self.runtime_error(msg));
                         }
                     }
-                };
-
-                let mut new_frame = CallFrame::with_minimum_arg_capacity(
-                    process,
-                    func.clone(),
-                    num_args,
-                    num_args,
-                    None, /* static functions do not inherit upvalues from the calling function
-                           * Some(&current_frame.upvalues), */
-                );
-
-                // copy argument registers from old frame to new
-                if num_args == 1 {
-                    new_frame.set_location(
-                        func.arg_locations
-                            .get(0)
-                            .unwrap_or(&RegisterVariant::Local(Register(1))),
-                        get_location_in_frame(current_frame, *initial_arg)?.into_owned(),
-                    );
-                } else if num_args > 0_usize {
-                    let start_index = initial_arg.index();
-                    let mut next_index = 1;
-                    let registers = &current_frame.registers;
-                    for i in 0..num_args {
-                        let target_location = func.arg_locations.get(i).copied().unwrap_or({
-                            // This should only be reached by variables that will go
-                            // into an ellipsis function's argv.
-                            RegisterVariant::Local(Register(next_index))
-                        });
-
-                        if let RegisterVariant::Local(r) = target_location {
-                            next_index = r.index() + 1;
-                        }
-
-                        new_frame.set_location(
-                            &target_location,
-                            // for a call with multiple arguments, the refs are copied into
-                            // local registers prior to the call, so we can assume their locations
-                            // here.
-                            registers[start_index + i].clone(),
-                        )
-                    }
                 }
-
-                let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
-                    && (!current_frame
-                        .process
-                        .borrow()
-                        .contains_function(name, namespace)
-                        || namespace.as_str() == EFUN);
-
-                self.stack.push(new_frame)?;
-
-                if function_is_efun {
-                    return self.prepare_and_call_efun(name.as_str(), task_context);
-                }
-
-                Ok(())
             }
+        };
 
-            _ => Err(self.runtime_error("non-Call instruction passed to `handle_call`")),
+        let mut new_frame = CallFrame::with_minimum_arg_capacity(
+            process,
+            func.clone(),
+            num_args,
+            num_args,
+            None, /* static functions do not inherit upvalues from the calling function
+                           * Some(&current_frame.upvalues), */
+        );
+
+        // copy argument registers from old frame to new
+        if num_args == 1 {
+            new_frame.set_location(
+                func.arg_locations
+                    .get(0)
+                    .unwrap_or(&RegisterVariant::Local(Register(1))),
+                get_location_in_frame(current_frame, *initial_arg)?.into_owned(),
+            );
+        } else if num_args > 0_usize {
+            let start_index = initial_arg.index();
+            let mut next_index = 1;
+            let registers = &current_frame.registers;
+            for i in 0..num_args {
+                let target_location = func.arg_locations.get(i).copied().unwrap_or({
+                    // This should only be reached by variables that will go
+                    // into an ellipsis function's argv.
+                    Register(next_index).as_local()
+                });
+
+                if let RegisterVariant::Local(r) = target_location {
+                    next_index = r.index() + 1;
+                }
+
+                new_frame.set_location(
+                    &target_location,
+                    // for a call with multiple arguments, the refs are copied into
+                    // local registers prior to the call, so we can assume their locations
+                    // here.
+                    registers[start_index + i].clone(),
+                )
+            }
         }
+
+        let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
+            && (!current_frame
+            .process
+            .borrow()
+            .contains_function(name, namespace)
+            || namespace.as_str() == EFUN);
+
+        self.stack.push(new_frame)?;
+
+        if function_is_efun {
+            return self.prepare_and_call_efun(name.as_str(), task_context);
+        }
+
+        Ok(())
     }
 
     #[instrument(skip_all)]
@@ -969,99 +967,51 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             let registers = &current_frame.registers;
             let from_slice = &registers[index..(index + adjusted_num_args)];
 
-            if !partial_args.is_empty() {
-                let mut from_index = 0;
+            let mut type_check_and_assign_location = |loc, r, i| -> Result<()> {
+                let prototype = &new_frame.function.prototype;
+                self.type_check_call_arg(
+                    r,
+                    prototype.arg_types.get(i),
+                    prototype.arg_spans.get(i),
+                    &prototype.name,
+                )?;
 
-                let mut next_index = 1;
-                let b = func.borrow();
-                let ptr = try_extract_value!(&*b, LpcValue::Function);
-                let arg_locations = match &ptr.address {
-                    FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-                    FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
-                };
+                new_frame.set_location(
+                    &loc,
+                    r.clone(),
+                );
 
-                for i in 0..max_arg_length {
-                    let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
-                        // This should only be reached by variables that will go
-                        // into an ellipsis function's argv.
-                        Register(next_index).as_local()
-                    });
+                Ok(())
+            };
 
-                    if let RegisterVariant::Local(r) = target_location {
-                        next_index = r.index() + 1;
-                    }
+            let mut from_slice_index = 0;
+            let mut next_index = 1;
+            let b = func.borrow();
+            let ptr = try_extract_value!(&*b, LpcValue::Function);
+            let arg_locations = match &ptr.address {
+                FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
+                FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
+            };
 
-                    if let Some(Some(x)) = partial_args.get(i) {
-                        // if a partially-applied arg is present, use it
-                        {
-                            let function = &new_frame.function;
-                            self.type_check_call_arg(
-                                x,
-                                i,
-                                &function.prototype.arg_types,
-                                function.prototype.arg_spans.get(i).copied(),
-                                &function.prototype.name,
-                            )?;
-                        }
+            for i in 0..max_arg_length {
+                let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
+                    // This should only be reached by variables that will go
+                    // into an ellipsis function's argv.
+                    Register(next_index).as_local()
+                });
 
-                        new_frame.set_location(
-                            &target_location,
-                            // for a call with multiple arguments, the refs are copied into
-                            // local registers prior to the call, so we can assume their locations
-                            // here.
-                            x.clone(),
-                        );
-                    } else if let Some(x) = from_slice.get(from_index) {
-                        // check if the user passed an argument to
-                        // fill in a hole in the partial arguments
-                        {
-                            let function = &new_frame.function;
-                            self.type_check_call_arg(
-                                x,
-                                i,
-                                &function.prototype.arg_types,
-                                function.prototype.arg_spans.get(i).copied(),
-                                &function.prototype.name,
-                            )?;
-                        }
-
-                        new_frame.set_location(
-                            &target_location,
-                            // for a call with multiple arguments, the refs are copied into
-                            // local registers prior to the call, so we can assume their locations
-                            // here.
-                            x.clone(),
-                        );
-                        from_index += 1;
-                    }
+                if let RegisterVariant::Local(r) = target_location {
+                    next_index = r.index() + 1;
                 }
-            } else {
-                let start_index = initial_arg.index();
-                let mut next_index = 1;
-                let b = func.borrow();
-                let ptr = try_extract_value!(&*b, LpcValue::Function);
-                let arg_locations = match &ptr.address {
-                    FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-                    FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
-                };
-                for i in 0..*num_args {
-                    let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
-                        // This should only be reached by variables that will go
-                        // into an ellipsis function's argv.
-                        Register(next_index).as_local()
-                    });
 
-                    if let RegisterVariant::Local(r) = target_location {
-                        next_index = r.index() + 1;
-                    }
-
-                    new_frame.set_location(
-                        &target_location,
-                        // for a call with multiple arguments, the refs are copied into
-                        // local registers prior to the call, so we can assume their locations
-                        // here.
-                        registers[start_index + i].clone(),
-                    )
+                if let Some(Some(x)) = partial_args.get(i) {
+                    // if a partially-applied arg is present, use it
+                    type_check_and_assign_location(target_location, x, i)?;
+                } else if let Some(x) = from_slice.get(from_slice_index) {
+                    // check if the user passed an argument to
+                    // fill in a hole in the partial arguments
+                    type_check_and_assign_location(target_location, x, i)?;
+                    from_slice_index += 1;
                 }
             }
         }
@@ -1080,21 +1030,20 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     fn type_check_call_arg(
         &self,
         lpc_ref: &LpcRef,
-        arg_index: usize,
-        arg_types: &[LpcType],
-        arg_def_span: Option<Span>,
+        arg_type: Option<&LpcType>,
+        arg_def_span: Option<&Span>,
         function_name: &str,
     ) -> Result<()> {
         if_chain! {
             if lpc_ref != &NULL; // 0 is always allowed
-            if let Some(arg_type) = arg_types.get(arg_index);
+            if let Some(arg_type) = arg_type;
             let ref_type = lpc_ref.as_lpc_type();
             if !ref_type.matches_type(*arg_type);
             then {
                 let error = self.runtime_error(format!(
                     "unexpected argument type to `{function_name}`: {ref_type}. expected {arg_type}."
                 ))
-                .with_label("defined here", arg_def_span);
+                .with_label("defined here", arg_def_span.copied());
 
                 return Err(error);
             }
