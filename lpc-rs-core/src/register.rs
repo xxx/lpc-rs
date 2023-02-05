@@ -15,14 +15,18 @@ impl RegisterVariant {
     #[inline]
     pub fn index(&self) -> usize {
         match self {
-            RegisterVariant::Local(reg) | RegisterVariant::Global(reg) | RegisterVariant::Upvalue(reg) => reg.index(),
+            RegisterVariant::Local(reg)
+            | RegisterVariant::Global(reg)
+            | RegisterVariant::Upvalue(reg) => reg.index(),
         }
     }
 
     #[inline]
     pub fn as_register(&self) -> Register {
         match self {
-            RegisterVariant::Local(reg) | RegisterVariant::Global(reg) | RegisterVariant::Upvalue(reg) => *reg,
+            RegisterVariant::Local(reg)
+            | RegisterVariant::Global(reg)
+            | RegisterVariant::Upvalue(reg) => *reg,
         }
     }
 }

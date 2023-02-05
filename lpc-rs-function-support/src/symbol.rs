@@ -1,4 +1,7 @@
-use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant, ScopeId, visibility::Visibility};
+use lpc_rs_core::{
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
+    visibility::Visibility, ScopeId,
+};
 use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
 

@@ -4,7 +4,6 @@ use delegate::delegate;
 use lpc_rs_core::ScopeId;
 use lpc_rs_function_support::symbol::Symbol;
 
-
 /// A representation of a local scope / symbol table
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalScope {

@@ -1,14 +1,15 @@
 use if_chain::if_chain;
 use itertools::Itertools;
-use tracing::trace;
-use lpc_rs_core::{call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId};
-use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_errors::span::Span;
+use lpc_rs_core::{
+    call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId,
+};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::symbol::Symbol;
+use tracing::trace;
 
 use crate::compiler::{
     ast::{
-        ast_node::AstNodeTrait,
+        ast_node::{AstNodeTrait, SpannedNode},
         block_node::BlockNode,
         closure_node::ClosureNode,
         do_while_node::DoWhileNode,
@@ -23,9 +24,8 @@ use crate::compiler::{
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    semantic::{semantic_checks::check_var_redefinition},
+    semantic::semantic_checks::check_var_redefinition,
 };
-use crate::compiler::ast::ast_node::SpannedNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -36,13 +36,16 @@ pub struct ScopeWalker {
 
     /// track the scope IDs of each closure, to help determine if
     /// a variable needs to be upvalued or not.
-    closure_scope_stack: Vec<ScopeId>
+    closure_scope_stack: Vec<ScopeId>,
 }
 
 impl ScopeWalker {
     /// Create a new `ScopeWalker`, with `context` as the context.
     pub fn new(context: CompilationContext) -> Self {
-        Self { context, closure_scope_stack: vec![] }
+        Self {
+            context,
+            closure_scope_stack: vec![],
+        }
     }
 
     /// Insert a new symbol into the current scope
@@ -253,16 +256,17 @@ impl TreeWalker for ScopeWalker {
             Some(sym) => sym,
             None => {
                 // check for functions (i.e. declaring function pointers with no arguments)
-                if self.context
-                       .contains_function_complete(&node.name, &CallNamespace::default())
+                if self
+                    .context
+                    .contains_function_complete(&node.name, &CallNamespace::default())
                 {
                     node.set_function_name(true);
                     return Ok(());
                 };
 
                 // We check for undefined vars here, in case a symbol is subsequently defined.
-                let e =
-                    LpcError::new(format!("undefined variable `{}`", node.name)).with_span(node.span);
+                let e = LpcError::new(format!("undefined variable `{}`", node.name))
+                    .with_span(node.span);
 
                 self.context.errors.push(e);
 
@@ -276,8 +280,8 @@ impl TreeWalker for ScopeWalker {
                 symbol.flags.visibility(),
                 node.name
             ))
-                .with_span(node.span)
-                .with_label("defined here", symbol.span);
+            .with_span(node.span)
+            .with_label("defined here", symbol.span);
 
             self.context.errors.push(e);
 
@@ -353,7 +357,10 @@ impl Default for ScopeWalker {
         // Push a default global scope.
         context.scopes.push_new();
 
-        Self { context, closure_scope_stack: vec![] }
+        Self {
+            context,
+            closure_scope_stack: vec![],
+        }
     }
 }
 

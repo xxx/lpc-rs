@@ -57,7 +57,7 @@ pub struct SemanticCheckWalker {
     valid_labels: Vec<LabelAllowed>,
 
     context: CompilationContext,
-    
+
     closure_depth: usize,
 }
 
@@ -542,7 +542,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         // closure return types are not type-checked
         if self.closure_depth > 0 {
-            return Ok(())
+            return Ok(());
         }
 
         if let Some(function_def) = &self.current_function {
@@ -559,8 +559,8 @@ impl TreeWalker for SemanticCheckWalker {
                             "invalid return type {}. Expected {}.",
                             return_type, function_def.return_type
                         ))
-                            .with_span(node.span)
-                            .with_label("defined here", function_def.span);
+                        .with_span(node.span)
+                        .with_label("defined here", function_def.span);
 
                         self.context.errors.push(error);
                     }
@@ -733,8 +733,7 @@ mod tests {
         lpc_type::LpcType,
     };
     use lpc_rs_errors::LpcErrorSeverity;
-    use lpc_rs_function_support::function_prototype::FunctionPrototype;
-    use lpc_rs_function_support::symbol::Symbol;
+    use lpc_rs_function_support::{function_prototype::FunctionPrototype, symbol::Symbol};
 
     use super::*;
     use crate::{
@@ -745,7 +744,7 @@ mod tests {
                 default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
-            semantic::{scope_tree::ScopeTree},
+            semantic::scope_tree::ScopeTree,
             Compiler,
         },
         test_support::factories::*,

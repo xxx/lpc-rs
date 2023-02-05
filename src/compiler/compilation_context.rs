@@ -5,15 +5,13 @@ use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
 use lpc_rs_errors::LpcError;
-use lpc_rs_function_support::{function_like::FunctionLike, function_prototype::FunctionPrototype};
-use lpc_rs_function_support::symbol::Symbol;
+use lpc_rs_function_support::{
+    function_like::FunctionLike, function_prototype::FunctionPrototype, symbol::Symbol,
+};
 use lpc_rs_utils::config::Config;
 
 use crate::{
-    compiler::{
-        ast::expression_node::ExpressionNode,
-        semantic::{scope_tree::ScopeTree},
-    },
+    compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
 };
 
@@ -799,7 +797,10 @@ mod tests {
             overriding_local.type_
         );
 
-        assert_eq!(context.lookup_var("my_global").unwrap().type_, LpcType::Function(true));
+        assert_eq!(
+            context.lookup_var("my_global").unwrap().type_,
+            LpcType::Function(true)
+        );
 
         assert_eq!(
             // gets from the inherited parent
@@ -813,6 +814,9 @@ mod tests {
             overriding_local.type_
         );
 
-        assert_eq!(context.lookup_var_mut("my_global").unwrap().type_, LpcType::Function(true));
+        assert_eq!(
+            context.lookup_var_mut("my_global").unwrap().type_,
+            LpcType::Function(true)
+        );
     }
 }

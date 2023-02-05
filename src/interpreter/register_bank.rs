@@ -1,9 +1,8 @@
 use std::{
-    ops::{Index, IndexMut, Range, RangeFrom, RangeInclusive},
+    ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
+    vec::IntoIter,
 };
-use std::ops::Deref;
-use std::vec::IntoIter;
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;

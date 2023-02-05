@@ -4,10 +4,7 @@ use indextree::{Arena, Node, NodeId};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::symbol::Symbol;
 
-use crate::compiler::{
-    compilation_context::CompilationContext,
-    semantic::{local_scope::LocalScope},
-};
+use crate::compiler::{compilation_context::CompilationContext, semantic::local_scope::LocalScope};
 
 #[derive(Debug, Clone)]
 /// Represent a tree of scopes
@@ -213,7 +210,8 @@ impl ScopeTree {
 }
 
 impl Default for ScopeTree {
-    // TODO: This should probably push a new scope on by default to act as the global scope
+    // TODO: This should probably push a new scope on by default to act as the
+    // global scope
     fn default() -> Self {
         Self {
             scopes: Arena::new(),

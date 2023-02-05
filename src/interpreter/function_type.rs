@@ -7,8 +7,9 @@ use std::{
 use delegate::delegate;
 use educe::Educe;
 use itertools::Itertools;
-use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
-use lpc_rs_core::register::Register;
+use lpc_rs_core::{
+    function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
+};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process};
@@ -133,19 +134,19 @@ impl Display for FunctionPtr {
         s.push_str(&format!("owner: {}, ", self.owner));
         s.push_str(&format!("address: {}, ", self.address));
 
-        let partial_args = &self.partial_args.iter().map(|arg| {
-            match arg {
+        let partial_args = &self
+            .partial_args
+            .iter()
+            .map(|arg| match arg {
                 Some(a) => format!("{}", a),
                 None => "<None>".to_string(),
-            }
-        }).join(", ");
+            })
+            .join(", ");
         s.push_str(&format!("partial_args: [{}], ", partial_args));
-        s.push_str(
-            &format!(
-                "upvalues: [{}]",
-                self.upvalues.iter().map(|x| format!("{}", x)).join(", ")
-            )
-        );
+        s.push_str(&format!(
+            "upvalues: [{}]",
+            self.upvalues.iter().map(|x| format!("{}", x)).join(", ")
+        ));
         s.push_str("}");
 
         write!(f, "{}", s)

@@ -32,7 +32,9 @@ fn load_master<const N: usize>(
                 context.insert_process(process.clone());
                 let function = {
                     let borrowed = process.borrow();
-                    borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local).cloned()
+                    borrowed
+                        .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
+                        .cloned()
                 };
                 match function {
                     Some(prog_function) => {
@@ -84,7 +86,9 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
         {
             let function = {
                 let borrowed = new_clone.borrow();
-                borrowed.lookup_function(INIT_PROGRAM, &CallNamespace::Local).cloned()
+                borrowed
+                    .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
+                    .cloned()
             };
 
             match function {

@@ -11,12 +11,11 @@ use itertools::Itertools;
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN, INIT_PROGRAM,
 };
-use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
-use lpc_rs_function_support::symbol::Symbol;
 
-use crate::{interpreter::efun::EFUN_PROTOTYPES};
+use crate::interpreter::efun::EFUN_PROTOTYPES;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Program {
@@ -135,7 +134,12 @@ impl<'a> Program {
     }
 
     /// Call the passed callback, passing the function reference if found.
-    pub fn with_function<F, T>(&self, name: &str, namespace: &CallNamespace, callback: F) -> Option<T>
+    pub fn with_function<F, T>(
+        &self,
+        name: &str,
+        namespace: &CallNamespace,
+        callback: F,
+    ) -> Option<T>
     where
         F: FnOnce(&Rc<ProgramFunction>) -> T,
     {

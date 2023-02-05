@@ -23,7 +23,8 @@ impl RegisterCounter {
         self.count = 0;
     }
 
-    /// Set whether the first register emitted via `next()` is Register(0) or Register(1).
+    /// Set whether the first register emitted via `next()` is Register(0) or
+    /// Register(1).
     #[inline]
     pub fn start_at_zero(&mut self, value: bool) {
         self.start_at_zero = value;
@@ -48,7 +49,8 @@ impl RegisterCounter {
         self.count
     }
 
-    /// Return the number of registers that have been emitted, taking start_at_zero into account.
+    /// Return the number of registers that have been emitted, taking
+    /// start_at_zero into account.
     pub fn number_emitted(&self) -> usize {
         if self.start_at_zero && self.emitted_zero {
             return self.count + 1;

@@ -1,5 +1,4 @@
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
-
 use lpc_rs_function_support::symbol::Symbol;
 
 beaver::define! {

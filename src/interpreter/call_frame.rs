@@ -6,13 +6,16 @@ use std::{
 };
 
 use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
-use lpc_rs_core::register::{Register, RegisterVariant};
 
-use crate::interpreter::{process::Process, register_bank::RegisterBank};
-use crate::interpreter::lpc_ref::{LpcRef, NULL};
+use crate::interpreter::{
+    lpc_ref::{LpcRef, NULL},
+    process::Process,
+    register_bank::RegisterBank,
+};
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a Display impl on it for
@@ -20,7 +23,7 @@ use crate::interpreter::lpc_ref::{LpcRef, NULL};
 #[derive(Debug, Clone)]
 pub struct LocalVariable {
     pub name: String,
-    pub value: LpcRef
+    pub value: LpcRef,
 }
 
 impl LocalVariable {
@@ -52,7 +55,7 @@ pub struct CallFrame {
     /// that the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
     /// The upvalue indexes for this specific call
-    pub upvalues: Vec<Register>
+    pub upvalues: Vec<Register>,
 }
 
 impl CallFrame {
@@ -65,7 +68,12 @@ impl CallFrame {
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
     /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
-    pub fn new<P>(process: P, function: Rc<ProgramFunction>, called_with_num_args: usize, upvalues: Option<&Vec<Register>>) -> Self
+    pub fn new<P>(
+        process: P,
+        function: Rc<ProgramFunction>,
+        called_with_num_args: usize,
+        upvalues: Option<&Vec<Register>>,
+    ) -> Self
     where
         P: Into<Rc<RefCell<Process>>>,
     {
@@ -76,7 +84,12 @@ impl CallFrame {
 
         {
             let pr = process.borrow();
-            println!("calling: {} - new frame upvalues: {:?} || process upvalues: {:?}", &function.name(), upvalues, pr.upvalues);
+            println!(
+                "calling: {} - new frame upvalues: {:?} || process upvalues: {:?}",
+                &function.name(),
+                upvalues,
+                pr.upvalues
+            );
         }
 
         let mut instance = Self {
@@ -182,7 +195,7 @@ impl CallFrame {
             RegisterVariant::Global(reg) => {
                 let mut proc = self.process.borrow_mut();
                 proc.globals[*reg] = lpc_ref;
-            },
+            }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalues;
                 let idx = upvalues[reg.index()];
@@ -196,25 +209,29 @@ impl CallFrame {
     /// Convenience to return a list of the local variables in this frame.
     /// Intended for debugging and testing.
     pub fn local_variables(&self) -> Vec<LocalVariable> {
-        self.function.local_variables.iter().map(|var| {
-            let Some(loc) = var.location else {
+        self.function
+            .local_variables
+            .iter()
+            .map(|var| {
+                let Some(loc) = var.location else {
                 // This should be unreachable.
                 return LocalVariable::new(var.name.clone(), NULL);
             };
 
-            let lpc_ref = match loc {
-                RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                RegisterVariant::Global(reg) => self.process.borrow().globals[reg].clone(),
-                RegisterVariant::Upvalue(ptr_reg) => {
-                    let upvalues = &self.upvalues;
-                    let data_reg = upvalues[ptr_reg.index()];
+                let lpc_ref = match loc {
+                    RegisterVariant::Local(reg) => self.registers[reg].clone(),
+                    RegisterVariant::Global(reg) => self.process.borrow().globals[reg].clone(),
+                    RegisterVariant::Upvalue(ptr_reg) => {
+                        let upvalues = &self.upvalues;
+                        let data_reg = upvalues[ptr_reg.index()];
 
-                    self.process.borrow().upvalues[data_reg].clone()
-                }
-            };
+                        self.process.borrow().upvalues[data_reg].clone()
+                    }
+                };
 
-            LocalVariable::new(var.name.clone(), lpc_ref)
-        }).collect()
+                LocalVariable::new(var.name.clone(), lpc_ref)
+            })
+            .collect()
     }
 
     /// get the debug span for the current instruction
@@ -409,8 +426,8 @@ mod tests {
     }
 
     mod test_populate_upvalues {
-        use crate::test_support::factories::SymbolFactory;
         use super::*;
+        use crate::test_support::factories::SymbolFactory;
 
         #[test]
         fn populates_upvalues() {
@@ -423,7 +440,7 @@ mod tests {
                 Default::default(),
                 None,
                 vec![],
-                vec![]
+                vec![],
             );
 
             let mut pf = ProgramFunction::new(prototype, 0);
@@ -451,7 +468,7 @@ mod tests {
                 Default::default(),
                 None,
                 vec![],
-                vec![]
+                vec![],
             );
 
             let mut pf = ProgramFunction::new(prototype, 0);

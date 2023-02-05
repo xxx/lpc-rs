@@ -10,8 +10,11 @@ use std::{
 
 use delegate::delegate;
 
-use crate::interpreter::{lpc_ref::LpcRef, program::Program, register_bank::RegisterBank};
-use crate::interpreter::lpc_ref::NULL;
+use crate::interpreter::{
+    lpc_ref::{LpcRef, NULL},
+    program::Program,
+    register_bank::RegisterBank,
+};
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.

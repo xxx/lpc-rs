@@ -13,15 +13,14 @@ use lpc_rs_core::{
     call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
+    lpc_type::LpcType,
     register::{Register, RegisterVariant},
     LpcInt, EFUN, INIT_PROGRAM,
 };
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use tracing::{instrument, trace};
-use lpc_rs_core::lpc_type::LpcType;
-use lpc_rs_errors::span::Span;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -30,7 +29,7 @@ use crate::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{FunctionAddress, FunctionPtr},
-        lpc_ref::LpcRef,
+        lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
         memory::Memory,
         object_space::ObjectSpace,
@@ -41,7 +40,6 @@ use crate::{
     },
     try_extract_value,
 };
-use crate::interpreter::lpc_ref::NULL;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -71,10 +69,7 @@ pub fn get_location<const N: usize>(
 
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[inline]
-pub fn get_location_in_frame(
-    frame: &CallFrame,
-    location: RegisterVariant,
-) -> Result<Cow<LpcRef>> {
+pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Result<Cow<LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -90,7 +85,7 @@ pub fn get_location_in_frame(
 
             let proc = frame.process.borrow();
             Ok(Cow::Owned(proc.upvalues[idx].clone()))
-        },
+        }
     }
 }
 
@@ -100,7 +95,6 @@ fn set_location<const N: usize>(
     location: RegisterVariant,
     lpc_ref: LpcRef,
 ) -> Result<()> {
-
     match location {
         RegisterVariant::Local(reg) => {
             let frame = stack.current_frame_mut()?;
@@ -114,7 +108,7 @@ fn set_location<const N: usize>(
             let mut proc = frame.process.borrow_mut();
             proc.globals[reg] = lpc_ref;
             Ok(())
-        },
+        }
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;
             let upvalues = &frame.upvalues;
@@ -136,7 +130,6 @@ fn apply_in_location<F, const N: usize>(
 where
     F: FnOnce(&mut LpcRef) -> Result<()>,
 {
-
     match location {
         RegisterVariant::Local(reg) => {
             let frame = stack.current_frame_mut()?;
@@ -148,7 +141,7 @@ where
 
             let mut proc = frame.process.borrow_mut();
             func(&mut proc.globals[reg])
-        },
+        }
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;
             let upvalues = &frame.upvalues;
@@ -412,7 +405,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 applied_arguments,
                 arity,
             } => {
-                self.handle_functionptrconst(task_context, location, target, applied_arguments, arity)?;
+                self.handle_functionptrconst(
+                    task_context,
+                    location,
+                    target,
+                    applied_arguments,
+                    arity,
+                )?;
             }
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x > y)?;
@@ -526,8 +525,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let mut register_map = IndexMap::new();
 
                 for (key, value) in map {
-                    register_map
-                        .insert(get_loc!(self, key)?.into_owned(), get_loc!(self, value)?.into_owned());
+                    register_map.insert(
+                        get_loc!(self, key)?.into_owned(),
+                        get_loc!(self, value)?.into_owned(),
+                    );
                 }
 
                 let new_ref = self.memory.value_to_ref(LpcValue::from(register_map));
@@ -821,26 +822,26 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     func.clone(),
                     num_args,
                     num_args,
-                    None, // static functions do not inherit upvalues from the calling function
-                    // Some(&current_frame.upvalues),
+                    None, /* static functions do not inherit upvalues from the calling function
+                           * Some(&current_frame.upvalues), */
                 );
 
                 // copy argument registers from old frame to new
                 if num_args == 1 {
                     new_frame.set_location(
-                        &func.arg_locations.get(0).unwrap_or(&RegisterVariant::Local(Register(1))),
-                        get_location_in_frame(current_frame, *initial_arg)?.into_owned()
+                        &func
+                            .arg_locations
+                            .get(0)
+                            .unwrap_or(&RegisterVariant::Local(Register(1))),
+                        get_location_in_frame(current_frame, *initial_arg)?.into_owned(),
                     );
                 } else if num_args > 0_usize {
                     let start_index = initial_arg.index();
                     let mut next_index = 1;
                     let registers = &current_frame.registers;
                     for i in 0..num_args {
-                        let target_location = func
-                            .arg_locations
-                            .get(i)
-                            .copied()
-                            .unwrap_or_else(|| {
+                        let target_location =
+                            func.arg_locations.get(i).copied().unwrap_or_else(|| {
                                 // This should only be reached by variables that will go
                                 // into an ellipsis function's argv.
                                 RegisterVariant::Local(Register(next_index))
@@ -853,14 +854,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         new_frame.set_location(
                             &target_location,
                             // for a call with multiple arguments, the refs are copied into
-                            // local registers prior to the call, so we can assume their locations here.
-                            registers[start_index + i].clone()
+                            // local registers prior to the call, so we can assume their locations
+                            // here.
+                            registers[start_index + i].clone(),
                         )
                     }
                 }
 
                 let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
-                    && (!current_frame.process.borrow().contains_function(name, namespace)
+                    && (!current_frame
+                        .process
+                        .borrow()
+                        .contains_function(name, namespace)
                         || namespace.as_str() == EFUN);
 
                 self.stack.push(new_frame)?;
@@ -975,20 +980,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let ptr = try_extract_value!(&*b, LpcValue::Function);
                 let arg_locations = match &ptr.address {
                     FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-                    FunctionAddress::Dynamic(_)
-                    | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
+                    FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
                 };
 
-
                 for i in 0..max_arg_length {
-                    let target_location = arg_locations
-                        .get(i)
-                        .copied()
-                        .unwrap_or_else(|| {
-                            // This should only be reached by variables that will go
-                            // into an ellipsis function's argv.
-                            Register(next_index).as_local()
-                        });
+                    let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
+                        // This should only be reached by variables that will go
+                        // into an ellipsis function's argv.
+                        Register(next_index).as_local()
+                    });
 
                     if let RegisterVariant::Local(r) = target_location {
                         next_index = r.index() + 1;
@@ -1003,15 +1003,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 i,
                                 &function.prototype.arg_types,
                                 function.prototype.arg_spans.get(i).copied(),
-                                &function.prototype.name
+                                &function.prototype.name,
                             )?;
                         }
 
                         new_frame.set_location(
                             &target_location,
                             // for a call with multiple arguments, the refs are copied into
-                            // local registers prior to the call, so we can assume their locations here.
-                            x.clone()
+                            // local registers prior to the call, so we can assume their locations
+                            // here.
+                            x.clone(),
                         );
                     } else if let Some(x) = from_slice.get(from_index) {
                         // check if the user passed an argument to
@@ -1023,15 +1024,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 i,
                                 &function.prototype.arg_types,
                                 function.prototype.arg_spans.get(i).copied(),
-                                &function.prototype.name
+                                &function.prototype.name,
                             )?;
                         }
 
                         new_frame.set_location(
                             &target_location,
                             // for a call with multiple arguments, the refs are copied into
-                            // local registers prior to the call, so we can assume their locations here.
-                            x.clone()
+                            // local registers prior to the call, so we can assume their locations
+                            // here.
+                            x.clone(),
                         );
                         from_index += 1;
                     }
@@ -1043,18 +1045,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let ptr = try_extract_value!(&*b, LpcValue::Function);
                 let arg_locations = match &ptr.address {
                     FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-                    FunctionAddress::Dynamic(_)
-                    | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
+                    FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
                 };
                 for i in 0..*num_args {
-                    let target_location = arg_locations
-                        .get(i)
-                        .copied()
-                        .unwrap_or_else(|| {
-                            // This should only be reached by variables that will go
-                            // into an ellipsis function's argv.
-                            Register(next_index).as_local()
-                        });
+                    let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
+                        // This should only be reached by variables that will go
+                        // into an ellipsis function's argv.
+                        Register(next_index).as_local()
+                    });
 
                     if let RegisterVariant::Local(r) = target_location {
                         next_index = r.index() + 1;
@@ -1063,8 +1061,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     new_frame.set_location(
                         &target_location,
                         // for a call with multiple arguments, the refs are copied into
-                        // local registers prior to the call, so we can assume their locations here.
-                        registers[start_index + i].clone()
+                        // local registers prior to the call, so we can assume their locations
+                        // here.
+                        registers[start_index + i].clone(),
                     )
                 }
             }
@@ -1109,11 +1108,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     fn prepare_and_call_efun(&mut self, name: &str, task_context: &TaskContext) -> Result<()> {
-        let mut ctx = EfunContext::new(
-            &mut self.stack,
-            task_context,
-            &self.memory
-        );
+        let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
 
         call_efun(name, &mut ctx)?;
 
@@ -1304,7 +1299,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         location: RegisterVariant,
         target: FunctionTarget,
         applied_arguments: Vec<Option<RegisterVariant>>,
-        arity: FunctionArity
+        arity: FunctionArity,
     ) -> Result<()> {
         let call_other = if let FunctionTarget::Local(_, ref rcvr) = target {
             !matches!(rcvr, FunctionReceiver::Local)
@@ -1314,18 +1309,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let address = match target {
             FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
-            FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name
-            {
+            FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name {
                 FunctionName::Var(_) => {
-                    return Err(
-                        self.runtime_error(
-                            concat!(
-                            "A function pointer with `&` as the receiver receiver somehow has a ",
-                            "var function name. This should not be reachable if ",
-                            "semantic checks have passed."
-                            )
-                        )
-                    );
+                    return Err(self.runtime_error(concat!(
+                        "A function pointer with `&` as the receiver receiver somehow has a ",
+                        "var function name. This should not be reachable if ",
+                        "semantic checks have passed."
+                    )));
                 }
                 FunctionName::Literal(name) => FunctionAddress::Dynamic(name),
             },
@@ -1345,9 +1335,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             | LpcRef::Float(_)
                             | LpcRef::Int(_)
                             | LpcRef::Function(_) => {
-                                return Err(
-                                    self.runtime_error("Receiver was not object or string")
-                                );
+                                return Err(self.runtime_error("Receiver was not object or string"));
                             }
                         }
                     }
@@ -1358,9 +1346,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         proc.clone()
                     }
                     FunctionReceiver::Argument => {
-                        unreachable!(
-                            "This is specified in an earlier arm of the parent `match`"
-                        );
+                        unreachable!("This is specified in an earlier arm of the parent `match`");
                     }
                 };
 
@@ -1809,9 +1795,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 mod tests {
     use std::{
         collections::HashMap,
+        fmt::Formatter,
         hash::{Hash, Hasher},
     };
-    use std::fmt::Formatter;
 
     use indoc::indoc;
     use lpc_rs_core::{LpcFloat, LpcInt};
@@ -1824,8 +1810,8 @@ mod tests {
 
     #[allow(dead_code)]
     fn format_slice<I>(slice: &[I]) -> String
-        where
-            I: Display,
+    where
+        I: Display,
     {
         let mut ret = String::new();
         ret.push_str("[\n");
@@ -1841,10 +1827,10 @@ mod tests {
 
     #[allow(dead_code)]
     fn format_map<'a, M, K, V>(map: M) -> String
-        where
-            M: IntoIterator<Item = (&'a K, &'a V)>,
-            K: Display + 'a,
-            V: Display + 'a
+    where
+        M: IntoIterator<Item = (&'a K, &'a V)>,
+        K: Display + 'a,
+        V: Display + 'a,
     {
         let mut ret = String::new();
         ret.push_str("{\n");
@@ -2054,14 +2040,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(123),
-                    Int(333),
-                    Int(333),
-                    Int(0),
-                    Int(0),
-                ];
+                let expected = vec![Int(0), Int(123), Int(333), Int(333), Int(0), Int(0)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2416,12 +2395,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(4),
-                    Function("tacos".into(), vec![]),
-                    Int(4),
-                    Int(4),
-                ];
+                let expected = vec![Int(4), Function("tacos".into(), vec![]), Int(4), Int(4)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2663,10 +2637,7 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.borrow();
 
-                assert_eq!(
-                    &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>()
-                );
+                assert_eq!(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>());
             }
 
             #[test]
@@ -2707,10 +2678,7 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.borrow();
 
-                assert_eq!(
-                    &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>()
-                );
+                assert_eq!(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>());
             }
         }
 
@@ -2762,10 +2730,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Function("dump".to_string(), vec![]),
-                ];
+                let expected = vec![Int(0), Function("dump".to_string(), vec![])];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2779,10 +2744,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Function("simul_efun".to_string(), vec![]),
-                ];
+                let expected = vec![Int(0), Function("simul_efun".to_string(), vec![])];
 
                 assert_eq!(&expected, &registers);
             }
@@ -2873,14 +2835,8 @@ mod tests {
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
-                    Function(
-                        "closure-0".to_string(),
-                        vec![],
-                    ),
-                    Function(
-                        "closure-0".to_string(),
-                        vec![],
-                    ),
+                    Function("closure-0".to_string(), vec![]),
+                    Function("closure-0".to_string(), vec![]),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -3172,10 +3128,7 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.borrow();
 
-                assert_eq!(
-                    &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>()
-                );
+                assert_eq!(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>());
             }
 
             #[test]
@@ -3216,10 +3169,7 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.borrow();
 
-                assert_eq!(
-                    &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>()
-                );
+                assert_eq!(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>());
             }
         }
 
@@ -3615,14 +3565,7 @@ mod tests {
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![
-                    Int(0),
-                    Int(123),
-                    Int(123),
-                    Int(0),
-                    Int(0),
-                    Int(123),
-                ];
+                let expected = vec![Int(0), Int(123), Int(123), Int(0), Int(0), Int(123)];
 
                 assert_eq!(&expected, &registers);
             }
@@ -4078,7 +4021,7 @@ mod tests {
                 Int(0),
                 Function("closure-0".to_string(), vec![]),
                 Int(0),
-                Int(1)
+                Int(1),
             ];
 
             assert_eq!(&expected, &registers);
@@ -4090,7 +4033,7 @@ mod tests {
                 Int(2),
                 Function("closure-0".to_string(), vec![]),
                 Int(0),
-                Int(1)
+                Int(1),
             ];
             assert_eq!(&expected, &proc.globals);
         }
@@ -4102,7 +4045,7 @@ mod tests {
 
         fn check_local_vars<T>(code: &str, vars: &IndexMap<&str, T>)
         where
-            T: Into<BareVal> + Clone
+            T: Into<BareVal> + Clone,
         {
             let (mut task, _ctx) = run_prog(code);
 
@@ -4117,15 +4060,24 @@ mod tests {
 
             for (k, v) in vars {
                 let v: BareVal = v.clone().into();
-                let found = frame_vars.iter().filter(|v| &v.name == k).collect::<Vec<_>>();
-                assert!(found.iter().any(|local| v == local.value), "key: {}, value: {}, found: {:?}", k, v, found);
+                let found = frame_vars
+                    .iter()
+                    .filter(|v| &v.name == k)
+                    .collect::<Vec<_>>();
+                assert!(
+                    found.iter().any(|local| v == local.value),
+                    "key: {}, value: {}, found: {:?}",
+                    k,
+                    v,
+                    found
+                );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
             }
         }
 
         fn check_proc_upvalues<T>(code: &str, upvalues: &[T])
         where
-            T: Into<BareVal> + Clone
+            T: Into<BareVal> + Clone,
         {
             let (mut task, _ctx) = run_prog(code);
 
@@ -4147,7 +4099,7 @@ mod tests {
 
         fn check_frame_upvalues<T>(code: &str, upvalues: &[T])
         where
-            T: Into<Register> + Copy
+            T: Into<Register> + Copy,
         {
             let (mut task, _ctx) = run_prog(code);
 
@@ -4203,7 +4155,7 @@ mod tests {
                 ("i", Int(2)),
                 ("j", Int(0)),
                 ("k", Int(1)),
-                ("inc", Function("closure-0".to_string(), vec![]))
+                ("inc", Function("closure-0".to_string(), vec![])),
             ]);
 
             check_local_vars(code, &expected);
@@ -4238,7 +4190,7 @@ mod tests {
                 ("m", Int(2)),
                 ("n", Int(1332)),
                 ("add", Function("closure-0".into(), vec![])),
-                ("add2", Function("closure-0".into(), vec![]))
+                ("add2", Function("closure-0".into(), vec![])),
             ]);
             check_local_vars(code, &expected);
         }
@@ -4268,12 +4220,7 @@ mod tests {
                 }
             "##};
 
-            let expected = vec![
-                Int(105),
-                Int(1),
-                Int(1),
-                Int(100)
-            ];
+            let expected = vec![Int(105), Int(1), Int(1), Int(100)];
             check_proc_upvalues(code, &expected);
 
             let expected = IndexMap::from([
@@ -4283,7 +4230,7 @@ mod tests {
                 ("make_counter", Function("closure-1".into(), vec![])),
                 ("counter1", Function("closure-0".into(), vec![])),
                 ("counter2", Function("closure-0".into(), vec![])),
-                ("counter3", Function("closure-0".into(), vec![]))
+                ("counter3", Function("closure-0".into(), vec![])),
             ]);
 
             check_local_vars(code, &expected);

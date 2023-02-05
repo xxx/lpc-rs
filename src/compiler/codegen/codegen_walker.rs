@@ -3,14 +3,22 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction, Instruction::RegCopy, Label};
-use lpc_rs_core::{call_namespace::CallNamespace, function::{FunctionName, FunctionReceiver, FunctionTarget}, function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType, register::{Register, RegisterVariant}, register_counter::RegisterCounter, CREATE_FUNCTION, INIT_PROGRAM, ScopeId};
+use lpc_rs_core::{
+    call_namespace::CallNamespace,
+    function::{FunctionName, FunctionReceiver, FunctionTarget},
+    function_arity::FunctionArity,
+    function_flags::FunctionFlags,
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    register_counter::RegisterCounter,
+    ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
+};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::{
-    function_prototype::FunctionPrototype, program_function::ProgramFunction,
+    function_prototype::FunctionPrototype, program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::string::closure_arg_number;
 use tracing::{instrument, trace};
-use lpc_rs_function_support::symbol::Symbol;
 use tree_walker::TreeWalker;
 
 use crate::{
@@ -128,8 +136,8 @@ pub struct CodegenWalker {
     global_counter: RegisterCounter,
 
     /// Counter for tracking upvalues.
-    /// This counter is used to track the count of upvalues from within the entirety
-    /// of a static function, including all nested closures.
+    /// This counter is used to track the count of upvalues from within the
+    /// entirety of a static function, including all nested closures.
     upvalue_counter: RegisterCounter,
 
     /// Counter for tracking upvalues.
@@ -1051,11 +1059,10 @@ impl TreeWalker for CodegenWalker {
         if let Some(scope_id) = node.scope_id {
             self.closure_scope_stack.push(scope_id);
         } else {
-            return Err(LpcError::new(format!(
-                "closure scope for {} not found",
-                node.name
-            ))
-                .with_span(node.span));
+            return Err(
+                LpcError::new(format!("closure scope for {} not found", node.name))
+                    .with_span(node.span),
+            );
         }
 
         let len = self.current_address();
@@ -2071,9 +2078,9 @@ impl TreeWalker for CodegenWalker {
         self.context.lookup_var_mut(&node.name).map(|sym| {
             sym.location = Some(current_register);
 
-            self.function_stack.last_mut().map(|func| {
-                func.local_variables.push(sym.clone())
-            });
+            self.function_stack
+                .last_mut()
+                .map(|func| func.local_variables.push(sym.clone()));
         });
 
         Ok(())
@@ -2144,14 +2151,13 @@ impl Default for CodegenWalker {
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
-    use claim::assert_some;
 
+    use claim::assert_some;
+    use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::Config;
-    use factori::create;
-    use crate::test_support::factories::*;
 
     use super::*;
     use crate::{
@@ -2172,6 +2178,7 @@ mod tests {
         },
         interpreter::{process::Process, program::Program},
         lpc_parser,
+        test_support::factories::*,
     };
 
     const LIB_DIR: &str = "./tests/fixtures/code";
@@ -3487,6 +3494,7 @@ mod tests {
 
     mod test_visit_closure {
         use indoc::indoc;
+
         use super::*;
 
         fn get_closure_node(code: &str, context: &mut CompilationContext) -> ClosureNode {
@@ -3618,11 +3626,17 @@ mod tests {
             "##};
             let walker = walk_prog(code);
 
-            let closure = walker.functions.get("closure-0").expect("where's the closure?");
+            let closure = walker
+                .functions
+                .get("closure-0")
+                .expect("where's the closure?");
             assert_eq!(closure.num_upvalues, 0);
             assert_eq!(closure.local_variables.len(), 1);
             assert_eq!(&closure.local_variables.first().unwrap().name, "s");
-            assert_eq!(&closure.local_variables.first().unwrap().location.unwrap(), &RegisterVariant::Local(Register(1)));
+            assert_eq!(
+                &closure.local_variables.first().unwrap().location.unwrap(),
+                &RegisterVariant::Local(Register(1))
+            );
 
             let func = walker.functions.get("create").expect("where's create()?");
             assert_eq!(func.num_upvalues, 1);
@@ -3902,22 +3916,28 @@ mod tests {
         assert_eq!(foo.type_, LpcType::Int(false));
         assert_eq!(foo.location, Some(RegisterVariant::Global(Register(0))));
         assert_some!(foo.scope_id);
-        assert_eq!(foo.span, Some(Span {
-            file_id: 0,
-            l: 4,
-            r: 11
-        }));
+        assert_eq!(
+            foo.span,
+            Some(Span {
+                file_id: 0,
+                l: 4,
+                r: 11
+            })
+        );
 
         let bar = scope.lookup("bar").unwrap();
         assert_eq!(&bar.name, "bar");
         assert_eq!(bar.type_, LpcType::Int(true));
         assert_eq!(bar.location, Some(RegisterVariant::Global(Register(1))));
         assert_some!(bar.scope_id);
-        assert_eq!(bar.span, Some(Span {
-            file_id: 0,
-            l: 13,
-            r: 25
-        }));
+        assert_eq!(
+            bar.span,
+            Some(Span {
+                file_id: 0,
+                l: 13,
+                r: 25
+            })
+        );
     }
 
     mod test_visit_do_while {
@@ -4715,7 +4735,10 @@ mod tests {
             };
 
             let _ = walker.visit_var(&mut node);
-            assert_eq!(walker.current_result, RegisterVariant::Global(Register(666)));
+            assert_eq!(
+                walker.current_result,
+                RegisterVariant::Global(Register(666))
+            );
 
             let expected = vec![];
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4773,10 +4796,7 @@ mod tests {
         }
 
         fn setup_var(type_: LpcType, walker: &mut CodegenWalker) {
-            let scope_id = walker
-                    .context
-                    .scopes
-                    .current().unwrap().id;
+            let scope_id = walker.context.scopes.current().unwrap().id;
 
             let sym = Symbol {
                 location: Some(Register(1).as_local()),
@@ -5100,12 +5120,12 @@ mod tests {
                 ),
                 RegCopy(
                     RegisterVariant::Local(Register(8)),
-                    RegisterVariant::Global(Register(0))
+                    RegisterVariant::Global(Register(0)),
                 ),
                 SConst(RegisterVariant::Local(Register(9)), "sup".into()),
                 RegCopy(
                     RegisterVariant::Local(Register(9)),
-                    RegisterVariant::Global(Register(1))
+                    RegisterVariant::Global(Register(1)),
                 ),
             ];
 
@@ -5249,7 +5269,8 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 3) // TODO: this used to be 12.
+            assert_eq!(program.num_init_registers, 3) // TODO: this used to be
+                                                      // 12.
         }
 
         #[test]

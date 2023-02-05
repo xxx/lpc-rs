@@ -1,5 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
@@ -8,9 +7,9 @@ use lpc_rs_utils::config::Config;
 
 use crate::interpreter::{
     call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
-    memory::Memory, process::Process, program::Program, task_context::TaskContext,
+    memory::Memory, process::Process, program::Program, task::get_location,
+    task_context::TaskContext,
 };
-use crate::interpreter::task::{get_location};
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called

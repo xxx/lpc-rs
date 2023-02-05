@@ -114,13 +114,10 @@ impl Span {
     pub fn code(&self) -> Option<String> {
         let files = FILE_CACHE.read();
 
-        files.get(self.file_id)
+        files
+            .get(self.file_id)
             .ok()
-            .and_then(|f| {
-                f.source()
-                    .get(self.l..self.r)
-                    .map(|code| code.to_string())
-            })
+            .and_then(|f| f.source().get(self.l..self.r).map(|code| code.to_string()))
     }
 }
 

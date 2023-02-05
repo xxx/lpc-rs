@@ -1,16 +1,18 @@
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
-use std::fmt::{Display, Formatter};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    fmt::{Display, Formatter},
+    rc::Rc,
+};
 
 use lpc_rs_asm::instruction::{Address, Instruction};
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType, register::RegisterVariant};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
-use lpc_rs_core::register::RegisterVariant;
 
-use crate::function_prototype::FunctionPrototype;
-use crate::symbol::Symbol;
+use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 
 /// A `Program` function, which stores its actual code, along with
 /// metadata for type checking, etc.
