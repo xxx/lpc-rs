@@ -78,7 +78,7 @@ impl Display for AssignmentOperation {
             AssignmentOperation::XorEq => "^=",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

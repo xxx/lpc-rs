@@ -230,22 +230,22 @@ impl Display for Instruction {
             Instruction::AConst(r1, vec) => {
                 let s = vec
                     .iter()
-                    .map(|i| format!("{}", i))
+                    .map(|i| format!("{i}"))
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "aconst {}, {}", r1, s)
+                write!(f, "aconst {r1}, {s}")
             }
             Instruction::And(r1, r2, r3) => {
-                write!(f, "and {}, {}, {}", r1, r2, r3)
+                write!(f, "and {r1}, {r2}, {r3}")
             }
             Instruction::BitwiseNot(r1, r2) => {
-                write!(f, "bitwisenot {}, {}", r1, r2)
+                write!(f, "bitwisenot {r1}, {r2}")
             }
             Instruction::CatchEnd => {
                 write!(f, "catchend")
             }
             Instruction::CatchStart(r1, label) => {
-                write!(f, "catchstart {}, {}", r1, label)
+                write!(f, "catchstart {r1}, {label}")
             }
             Instruction::Call {
                 name,
@@ -255,8 +255,7 @@ impl Display for Instruction {
             } => {
                 write!(
                     f,
-                    "call {}, {}, {}, {}",
-                    name, namespace, num_args, initial_arg
+                    "call {name}, {namespace}, {num_args}, {initial_arg}"
                 )
             }
             Instruction::CallFp {
@@ -264,7 +263,7 @@ impl Display for Instruction {
                 num_args,
                 initial_arg,
             } => {
-                write!(f, "callfp {}, {}, {}", location, num_args, initial_arg)
+                write!(f, "callfp {location}, {num_args}, {initial_arg}")
             }
             Instruction::CallOther {
                 receiver,
@@ -274,18 +273,17 @@ impl Display for Instruction {
             } => {
                 write!(
                     f,
-                    "callother {}, {}, {}, {}",
-                    receiver, name, num_args, initial_arg
+                    "callother {receiver}, {name}, {num_args}, {initial_arg}"
                 )
             }
             Instruction::Dec(r) => {
-                write!(f, "dec {}", r)
+                write!(f, "dec {r}")
             }
             Instruction::EqEq(r1, r2, r3) => {
-                write!(f, "eqeq {}, {}, {}", r1, r2, r3)
+                write!(f, "eqeq {r1}, {r2}, {r3}")
             }
             Instruction::FConst(r, fl) => {
-                write!(f, "fconst {}, {}", r, fl)
+                write!(f, "fconst {r}, {fl}")
             }
             Instruction::FunctionPtrConst {
                 location,
@@ -297,126 +295,126 @@ impl Display for Instruction {
                     .iter()
                     .map(|i| {
                         if let Some(reg) = i {
-                            format!("{}", reg)
+                            format!("{reg}")
                         } else {
                             "None".into()
                         }
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "functionptrconst {}, {}, {}", location, target, args)
+                write!(f, "functionptrconst {location}, {target}, {args}")
             }
             Instruction::Gt(r1, r2, r3) => {
-                write!(f, "gt {}, {}, {}", r1, r2, r3)
+                write!(f, "gt {r1}, {r2}, {r3}")
             }
             Instruction::Gte(r1, r2, r3) => {
-                write!(f, "gte {}, {}, {}", r1, r2, r3)
+                write!(f, "gte {r1}, {r2}, {r3}")
             }
             Instruction::IAdd(r1, r2, r3) => {
-                write!(f, "iadd {}, {}, {}", r1, r2, r3)
+                write!(f, "iadd {r1}, {r2}, {r3}")
             }
             Instruction::IConst(r, i) => {
-                write!(f, "iconst {}, {}", r, i)
+                write!(f, "iconst {r}, {i}")
             }
             Instruction::IConst0(r) => {
-                write!(f, "iconst0 {}", r)
+                write!(f, "iconst0 {r}")
             }
             Instruction::IConst1(r) => {
-                write!(f, "iconst1 {}", r)
+                write!(f, "iconst1 {r}")
             }
             Instruction::IDiv(r1, r2, r3) => {
-                write!(f, "idiv {}, {}, {}", r1, r2, r3)
+                write!(f, "idiv {r1}, {r2}, {r3}")
             }
             Instruction::IMod(r1, r2, r3) => {
-                write!(f, "imod {}, {}, {}", r1, r2, r3)
+                write!(f, "imod {r1}, {r2}, {r3}")
             }
             Instruction::Inc(r) => {
-                write!(f, "inc {}", r)
+                write!(f, "inc {r}")
             }
             Instruction::IMul(r1, r2, r3) => {
-                write!(f, "imul {}, {}, {}", r1, r2, r3)
+                write!(f, "imul {r1}, {r2}, {r3}")
             }
             Instruction::ISub(r1, r2, r3) => {
-                write!(f, "isub {}, {}, {}", r1, r2, r3)
+                write!(f, "isub {r1}, {r2}, {r3}")
             }
             Instruction::Jmp(address) => {
-                write!(f, "jmp {}", address)
+                write!(f, "jmp {address}")
             }
             Instruction::Jnz(r1, address) => {
-                write!(f, "jnz {}, {}", r1, address)
+                write!(f, "jnz {r1}, {address}")
             }
             Instruction::Jz(r1, address) => {
-                write!(f, "jz {}, {}", r1, address)
+                write!(f, "jz {r1}, {address}")
             }
             Instruction::Load(r1, r2, r3) => {
-                write!(f, "load {}, {}, {}", r1, r2, r3)
+                write!(f, "load {r1}, {r2}, {r3}")
             }
             Instruction::LoadMappingKey(r1, r2, r3) => {
-                write!(f, "loadmappingkey {}, {}, {}", r1, r2, r3)
+                write!(f, "loadmappingkey {r1}, {r2}, {r3}")
             }
             Instruction::Lt(r1, r2, r3) => {
-                write!(f, "lt {}, {}, {}", r1, r2, r3)
+                write!(f, "lt {r1}, {r2}, {r3}")
             }
             Instruction::Lte(r1, r2, r3) => {
-                write!(f, "lte {}, {}, {}", r1, r2, r3)
+                write!(f, "lte {r1}, {r2}, {r3}")
             }
             Instruction::MapConst(r, i) => {
                 let str = i
                     .iter()
-                    .map(|(key, value)| format!("{}: {}", key, value))
+                    .map(|(key, value)| format!("{key}: {value}"))
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "mapconst {}, {}", r, str)
+                write!(f, "mapconst {r}, {str}")
             }
             Instruction::MAdd(r1, r2, r3) => {
-                write!(f, "madd {}, {}, {}", r1, r2, r3)
+                write!(f, "madd {r1}, {r2}, {r3}")
             }
             Instruction::MMul(r1, r2, r3) => {
-                write!(f, "mmul {}, {}, {}", r1, r2, r3)
+                write!(f, "mmul {r1}, {r2}, {r3}")
             }
             Instruction::MSub(r1, r2, r3) => {
-                write!(f, "msub {}, {}, {}", r1, r2, r3)
+                write!(f, "msub {r1}, {r2}, {r3}")
             }
             Instruction::Not(r1, r2) => {
-                write!(f, "not {}, {}", r1, r2)
+                write!(f, "not {r1}, {r2}")
             }
             Instruction::Or(r1, r2, r3) => {
-                write!(f, "or {}, {}, {}", r1, r2, r3)
+                write!(f, "or {r1}, {r2}, {r3}")
             }
             Instruction::PopulateArgv(r, num_args, num_locals) => {
-                write!(f, "populateargv {}, {}, {}", r, num_args, num_locals)
+                write!(f, "populateargv {r}, {num_args}, {num_locals}")
             }
             Instruction::PopulateDefaults(default_inits) => {
-                let s = default_inits.iter().map(|i| format!("{}", i)).join(", ");
+                let s = default_inits.iter().map(|i| format!("{i}")).join(", ");
 
-                write!(f, "populatedefaults {}", s)
+                write!(f, "populatedefaults {s}")
             }
             Instruction::Range(r1, r2, r3, r4) => {
-                write!(f, "range {}, {}, {}, {}", r1, r2, r3, r4)
+                write!(f, "range {r1}, {r2}, {r3}, {r4}")
             }
             Instruction::RegCopy(r1, r2) => {
-                write!(f, "regcopy {}, {}", r1, r2)
+                write!(f, "regcopy {r1}, {r2}")
             }
             Instruction::Ret => {
                 write!(f, "ret")
             }
             Instruction::Shl(r1, r2, r3) => {
-                write!(f, "shl {}, {}, {}", r1, r2, r3)
+                write!(f, "shl {r1}, {r2}, {r3}")
             }
             Instruction::Shr(r1, r2, r3) => {
-                write!(f, "shr {}, {}, {}", r1, r2, r3)
+                write!(f, "shr {r1}, {r2}, {r3}")
             }
             Instruction::Sizeof(r1, r2) => {
-                write!(f, "sizeof {}, {}", r1, r2)
+                write!(f, "sizeof {r1}, {r2}")
             }
             Instruction::Store(r1, r2, r3) => {
-                write!(f, "store {}, {}, {}", r1, r2, r3)
+                write!(f, "store {r1}, {r2}, {r3}")
             }
             Instruction::SConst(r, s) => {
-                write!(f, "sconst {}, \"{}\"", r, s)
+                write!(f, "sconst {r}, \"{s}\"")
             }
             Instruction::Xor(r1, r2, r3) => {
-                write!(f, "xor {}, {}, {}", r1, r2, r3)
+                write!(f, "xor {r1}, {r2}, {r3}")
             }
         }
     }

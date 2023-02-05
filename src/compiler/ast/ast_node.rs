@@ -91,7 +91,7 @@ impl AstNodeTrait for AstNode {
 
 impl Display for AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

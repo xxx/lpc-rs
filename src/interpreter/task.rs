@@ -375,7 +375,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     Some(x) => *x,
                     None => {
                         return Err(
-                            self.runtime_error(format!("Missing address for label `{}`", label))
+                            self.runtime_error(format!("Missing address for label `{label}`"))
                         )
                     }
                 };
@@ -476,7 +476,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     Some(x) => *x,
                     None => {
                         return Err(
-                            self.runtime_error(format!("Missing address for label `{}`", label))
+                            self.runtime_error(format!("Missing address for label `{label}`"))
                         )
                     }
                 };
@@ -491,7 +491,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         Some(x) => *x,
                         None => {
                             return Err(self
-                                .runtime_error(format!("Missing address for label `{}`", label)))
+                                .runtime_error(format!("Missing address for label `{label}`")))
                         }
                     };
                     let frame = self.stack.current_frame()?;
@@ -809,7 +809,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                                     Rc::new(func)
                                 } else {
-                                    let msg = format!("Call to unknown function `{}`", name);
+                                    let msg = format!("Call to unknown function `{name}`");
                                     return Err(self.runtime_error(msg));
                                 }
                             }
@@ -829,7 +829,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 // copy argument registers from old frame to new
                 if num_args == 1 {
                     new_frame.set_location(
-                        &func
+                        func
                             .arg_locations
                             .get(0)
                             .unwrap_or(&RegisterVariant::Local(Register(1))),
@@ -841,7 +841,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let registers = &current_frame.registers;
                     for i in 0..num_args {
                         let target_location =
-                            func.arg_locations.get(i).copied().unwrap_or_else(|| {
+                            func.arg_locations.get(i).copied().unwrap_or({
                                 // This should only be reached by variables that will go
                                 // into an ellipsis function's argv.
                                 RegisterVariant::Local(Register(next_index))
@@ -938,7 +938,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         (cell.clone(), func.clone())
                     } else {
                         return Err(
-                            self.runtime_error(format!("call to unknown function `{}", name))
+                            self.runtime_error(format!("call to unknown function `{name}"))
                         );
                     }
                 } else {
@@ -956,7 +956,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
-        let new_registers = RegisterBank::initialized_for_function(&*function, max_arg_length);
+        let new_registers = RegisterBank::initialized_for_function(&function, max_arg_length);
 
         let mut new_frame = CallFrame::with_registers(
             proc,
@@ -1095,8 +1095,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             if !ref_type.matches_type(*arg_type);
             then {
                 let error = self.runtime_error(format!(
-                    "unexpected argument type to `{}`: {}. expected {}.",
-                    function_name, ref_type, arg_type
+                    "unexpected argument type to `{function_name}`: {ref_type}. expected {arg_type}."
                 ))
                 .with_label("defined here", arg_def_span);
 
@@ -1146,7 +1145,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let pool_ref = if let LpcRef::String(r) = name_ref {
                         r
                     } else {
-                        let str = format!("Invalid name passed to `call_other`: {}", name_ref);
+                        let str = format!("Invalid name passed to `call_other`: {name_ref}");
                         return Err(self.runtime_error(str));
                     };
                     let borrowed = pool_ref.borrow();
@@ -1218,13 +1217,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                     match &receiver_ref {
                         LpcRef::String(_) | LpcRef::Object(_) => resolve_result(
-                            &*receiver_ref,
+                            receiver_ref,
                             function_name,
                             registers,
                             initial_index,
                             *num_args,
                             task_context,
-                            &*self.memory,
+                            &self.memory,
                         )?,
                         LpcRef::Array(r) => {
                             let b = r.borrow();
@@ -1240,7 +1239,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         initial_index,
                                         *num_args,
                                         task_context,
-                                        &*self.memory,
+                                        &self.memory,
                                     )
                                     .unwrap_or(NULL)
                                 })
@@ -1264,7 +1263,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             initial_index,
                                             *num_args,
                                             task_context,
-                                            &*self.memory,
+                                            &self.memory,
                                         )
                                         .unwrap_or(NULL),
                                     )
@@ -1276,8 +1275,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         }
                         _ => {
                             return Err(self.runtime_error(format!(
-                                "What are you trying to call `{}` on?",
-                                function_name
+                                "What are you trying to call `{function_name}` on?"
                             )))
                         }
                     }
@@ -1370,7 +1368,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 FunctionAddress::Local(proc, func.clone())
                             } else {
                                 return Err(
-                                    self.runtime_error(format!("unknown local target `{}`", s))
+                                    self.runtime_error(format!("unknown local target `{s}`"))
                                 );
                             }
                         }
@@ -1479,7 +1477,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         Ok(())
                     }
                     x => {
-                        Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x)))
+                        Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`")))
                     }
                 }
             }
@@ -1504,7 +1502,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 LpcRef::Int(i) => *i,
                                 _ => {
                                     return Err(self
-                                        .runtime_error(format!("Invalid index type: {}", lpc_ref)))
+                                        .runtime_error(format!("Invalid index type: {lpc_ref}")))
                                 }
                             };
 
@@ -1516,8 +1514,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         }
                         x => {
                             return Err(self.runtime_error(format!(
-                                "Invalid attempt to take index of `{}`",
-                                x
+                                "Invalid attempt to take index of `{x}`"
                             )))
                         }
                     }
@@ -1569,7 +1566,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         };
 
                         if idx >= 0 && (idx as usize) < len {
-                            vec[idx as usize] = (&*get_loc!(self, *r1)?).clone();
+                            vec[idx as usize] = (*get_loc!(self, *r1)?).clone();
                         } else {
                             return Err(self.array_index_error(idx, len));
                         }
@@ -1590,7 +1587,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         Ok(())
                     }
                     x => {
-                        Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x)))
+                        Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`")))
                     }
                 }
             }
@@ -1761,8 +1758,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         T: Display,
     {
         self.runtime_error(format!(
-            "Attempting to access index {} in an array of length {}",
-            index, length
+            "Attempting to access index {index} in an array of length {length}"
         ))
     }
     /// Pop the top frame from the stack, and return it.
@@ -1817,10 +1813,10 @@ mod tests {
         ret.push_str("[\n");
 
         for i in slice {
-            ret.push_str(&format!("  {},\n", i));
+            ret.push_str(&format!("  {i},\n"));
         }
 
-        ret.push_str("]");
+        ret.push(']');
 
         ret
     }
@@ -1836,10 +1832,10 @@ mod tests {
         ret.push_str("{\n");
 
         for (k, v) in map {
-            ret.push_str(&format!("  {}: {},\n", k, v));
+            ret.push_str(&format!("  {k}: {v},\n"));
         }
 
-        ret.push_str("}");
+        ret.push('}');
 
         ret
     }
@@ -1870,7 +1866,7 @@ mod tests {
                 LpcRef::Array(x) => {
                     let xb = x.borrow();
                     let a = extract_value!(&*xb, LpcValue::Array);
-                    let array = a.into_iter().map(|item| item.into()).collect::<Vec<_>>();
+                    let array = a.iter().map(|item| item.into()).collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
@@ -1922,8 +1918,8 @@ mod tests {
                 BareVal::Int(x) => x.hash(state),
                 BareVal::String(x) => x.hash(state),
                 BareVal::Array(x) => std::ptr::hash(&**x, state),
-                BareVal::Mapping(x) => std::ptr::hash(&*x, state),
-                BareVal::Object(x) => std::ptr::hash(&*x, state),
+                BareVal::Mapping(x) => std::ptr::hash(x, state),
+                BareVal::Object(x) => std::ptr::hash(x, state),
                 BareVal::Function(x, y) => {
                     x.hash(state);
                     y.hash(state);
@@ -1935,17 +1931,17 @@ mod tests {
     impl Display for BareVal {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             match self {
-                BareVal::Float(x) => write!(f, "{}", x),
-                BareVal::Int(x) => write!(f, "{}", x),
-                BareVal::String(x) => write!(f, "\"{}\"", x),
+                BareVal::Float(x) => write!(f, "{x}"),
+                BareVal::Int(x) => write!(f, "{x}"),
+                BareVal::String(x) => write!(f, "\"{x}\""),
                 BareVal::Array(x) => write!(f, "{}", format_slice(x)),
                 BareVal::Mapping(x) => write!(f, "{}", format_map(x)),
-                BareVal::Object(x) => write!(f, "object({})", x),
+                BareVal::Object(x) => write!(f, "object({x})"),
                 BareVal::Function(x, y) => {
-                    write!(f, "function({}", x)?;
+                    write!(f, "function({x}")?;
                     for arg in y {
                         match arg {
-                            Some(x) => write!(f, ", {}", x)?,
+                            Some(x) => write!(f, ", {x}")?,
                             None => write!(f, ", <partial>")?,
                         }
                     }
@@ -1991,15 +1987,14 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(vec![Int(1), Int(2), Int(3)].into()),
+                    Array(vec![Int(1), Int(2), Int(3)]),
                     Array(
                         vec![
                             Int(12),
                             Float(LpcFloat::from(4.3)),
                             String("hello".into()),
-                            Array(vec![Int(1), Int(2), Int(3)].into()),
-                        ]
-                        .into(),
+                            Array(vec![Int(1), Int(2), Int(3)]),
+                        ],
                     ),
                 ];
 
@@ -3312,7 +3307,7 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(vec![Int(1), Int(2), Int(3)].into()),
+                    Array(vec![Int(1), Int(2), Int(3)]),
                     Int(1),
                     Int(2),
                 ];
@@ -3484,10 +3479,10 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(vec![Int(1), Int(1), Int(2), Int(3)].into()),
+                    Array(vec![Int(1), Int(1), Int(2), Int(3)]),
                     Int(1),
-                    Array(vec![Int(1)].into()),
-                    Array(vec![Int(2), Int(3)].into()),
+                    Array(vec![Int(1)]),
+                    Array(vec![Int(2), Int(3)]),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -3606,8 +3601,7 @@ mod tests {
                                 Float(3.14.into()),
                             ]),
                             Mapping(mapping.clone()),
-                        ]
-                        .into(),
+                        ],
                     ),
                     String("snapshot_stack".into()),
                     Array(vec![
@@ -3651,7 +3645,7 @@ mod tests {
                     Int(34),
                     Float(7.77.into()),
                     String("snuh".into()),
-                    Array(vec![String("a string".into()), Int(3), Float(2.44.into())].into()),
+                    Array(vec![String("a string".into()), Int(3), Float(2.44.into())]),
                     String("snapshot_stack".into()),
                     Int(0),
                     Int(0),
@@ -3659,7 +3653,7 @@ mod tests {
                     String("a string".into()),
                     Int(3),
                     Float(2.44.into()),
-                    Array(vec![String("a string".into()), Int(3), Float(2.44.into())].into()),
+                    Array(vec![String("a string".into()), Int(3), Float(2.44.into())]),
                 ];
 
                 assert_eq!(expected, registers);
@@ -3683,10 +3677,10 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(vec![Int(1), Int(2), Int(3)].into()),
+                    Array(vec![Int(1), Int(2), Int(3)]),
                     Int(1),
                     Int(-1),
-                    Array(vec![Int(2), Int(3)].into()),
+                    Array(vec![Int(2), Int(3)]),
                 ];
 
                 assert_eq!(&expected, &registers);
@@ -3911,7 +3905,7 @@ mod tests {
                     Int(1),
                     Int(2),
                     Int(3),
-                    Array(vec![Int(1), Int(2), Int(678)].into()),
+                    Array(vec![Int(1), Int(2), Int(678)]),
                     Int(678),
                     Int(2),
                     String("snapshot_stack".into()),
@@ -4066,10 +4060,7 @@ mod tests {
                     .collect::<Vec<_>>();
                 assert!(
                     found.iter().any(|local| v == local.value),
-                    "key: {}, value: {}, found: {:?}",
-                    k,
-                    v,
-                    found
+                    "key: {k}, value: {v}, found: {found:?}"
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
             }
@@ -4093,7 +4084,7 @@ mod tests {
 
             for (i, v) in upvalues.iter().enumerate() {
                 let v: BareVal = v.clone().into();
-                assert_eq!(v, proc.upvalues[i], "index: {}", i);
+                assert_eq!(v, proc.upvalues[i], "index: {i}");
             }
         }
 
@@ -4114,7 +4105,7 @@ mod tests {
 
             for (i, v) in upvalues.iter().enumerate() {
                 let v: Register = (*v).into();
-                assert_eq!(v, frame.upvalues[i], "index: {}", i);
+                assert_eq!(v, frame.upvalues[i], "index: {i}");
             }
         }
 

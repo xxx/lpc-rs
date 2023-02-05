@@ -60,7 +60,7 @@ impl Vm {
         let compiler = {
             let borrowed = self.object_space.borrow();
             Compiler::new(self.config.clone())
-                .with_simul_efuns(get_simul_efuns(&self.config, &*borrowed))
+                .with_simul_efuns(get_simul_efuns(&self.config, &borrowed))
         };
 
         compiler

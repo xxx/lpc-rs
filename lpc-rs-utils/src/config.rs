@@ -105,8 +105,7 @@ impl Config {
                     .collect(),
                 None => {
                     return Err(LpcError::new(format!(
-                        "Expected array for system_include_dirs, found {}",
-                        v
+                        "Expected array for system_include_dirs, found {v}"
                     )))
                 }
             },
@@ -209,8 +208,7 @@ impl Config {
             Err(e) => {
                 let path = canonicalized_path(".").unwrap();
                 eprintln!(
-                    "Unable to get canonical path for `lib_dir`: {}. Using `{}` instead.",
-                    e, path
+                    "Unable to get canonical path for `lib_dir`: {e}. Using `{path}` instead."
                 );
                 path
             }

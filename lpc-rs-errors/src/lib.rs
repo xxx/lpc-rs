@@ -161,7 +161,7 @@ impl LpcError {
                 output_diagnostics(&self.to_diagnostics(), &mut file_stream);
             }
             Err(e) => {
-                eprintln!("Error opening file `{}`: {}", path, e);
+                eprintln!("Error opening file `{path}`: {e}");
             }
         }
     }
@@ -195,12 +195,12 @@ where
             LalrpopParseError::UnrecognizedToken {
                 token: (_start, ref token, _end),
                 ref expected,
-            } => LpcError::new(format!("Unrecognized Token: {}", token))
+            } => LpcError::new(format!("Unrecognized Token: {token}"))
                 .with_span(Some(token.span()))
                 .with_note(format_expected(expected)),
             LalrpopParseError::ExtraToken {
                 token: (_start, ref token, _end),
-            } => LpcError::new(format!("Extra Token: `{}`", token)).with_span(Some(token.span())),
+            } => LpcError::new(format!("Extra Token: `{token}`")).with_span(Some(token.span())),
             LalrpopParseError::User { error } => error,
         }
     }
@@ -219,7 +219,7 @@ impl From<&LpcError> for Diagnostic<usize> {
             LpcErrorSeverity::Error => Diagnostic::error(),
         };
 
-        diagnostic = diagnostic.with_message(format!("{}", error));
+        diagnostic = diagnostic.with_message(format!("{error}"));
 
         let mut labels = vec![];
 
@@ -258,8 +258,7 @@ fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteC
     for diagnostic in diagnostics {
         if let Err(e) = codespan_reporting::term::emit(writer, &config, &*files, diagnostic) {
             eprintln!(
-                "error attempting to emit diagnostic: {:?} ::: {:?} ::: {:?}",
-                e, diagnostic, files
+                "error attempting to emit diagnostic: {e:?} ::: {diagnostic:?} ::: {files:?}"
             );
         };
     }

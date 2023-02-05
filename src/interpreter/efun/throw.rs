@@ -6,5 +6,5 @@ use crate::interpreter::efun::efun_context::EfunContext;
 pub fn throw<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
-    return Err(LpcError::new(format!("{}", arg)).with_span(context.frame().current_debug_span()));
+    return Err(LpcError::new(format!("{arg}")).with_span(context.frame().current_debug_span()));
 }

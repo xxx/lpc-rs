@@ -61,7 +61,7 @@ impl Display for BinaryOperation {
             BinaryOperation::Xor => "^",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -71,8 +71,7 @@ impl TryFrom<AssignmentOperation> for BinaryOperation {
     fn try_from(value: AssignmentOperation) -> Result<Self> {
         match value {
             AssignmentOperation::Simple => Err(LpcError::new(format!(
-                "Failure to convert `{}` into a BinaryOperation",
-                value
+                "Failure to convert `{value}` into a BinaryOperation"
             ))),
             AssignmentOperation::AddEq => Ok(Self::Add),
             AssignmentOperation::AndAndEq => Ok(Self::AndAnd),

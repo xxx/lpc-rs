@@ -33,7 +33,7 @@ impl Display for UnaryOperation {
             UnaryOperation::BitwiseNot => "~",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

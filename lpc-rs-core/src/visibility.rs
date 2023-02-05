@@ -21,7 +21,7 @@ impl Display for Visibility {
             Visibility::Protected => "protected",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

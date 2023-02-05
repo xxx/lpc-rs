@@ -251,11 +251,11 @@ impl Display for LpcTypeUnion {
 
         let s = vec
             .iter()
-            .map(|i| format!("{}", i))
+            .map(|i| format!("{i}"))
             .collect::<Vec<_>>()
             .join(" | ");
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

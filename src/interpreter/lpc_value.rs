@@ -69,19 +69,19 @@ impl LpcValue {
 impl Display for LpcValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LpcValue::Float(x) => write!(f, "{}", x),
-            LpcValue::Int(x) => write!(f, "{}", x),
-            LpcValue::String(x) => write!(f, "\"{}\"", x),
+            LpcValue::Float(x) => write!(f, "{x}"),
+            LpcValue::Int(x) => write!(f, "{x}"),
+            LpcValue::String(x) => write!(f, "\"{x}\""),
             LpcValue::Array(x) => {
-                let inner = x.iter().map(|x| format!("{}", x)).join(", ");
-                write!(f, "({{ {} }})", inner)
+                let inner = x.iter().map(|x| format!("{x}")).join(", ");
+                write!(f, "({{ {inner} }})")
             }
             LpcValue::Mapping(x) => {
-                let inner = x.iter().map(|(k, v)| format!("{}: {}", k, v)).join(", ");
-                write!(f, "([ {} ])", inner)
+                let inner = x.iter().map(|(k, v)| format!("{k}: {v}")).join(", ");
+                write!(f, "([ {inner} ])")
             }
             LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),
-            LpcValue::Function(x) => write!(f, "{}", x),
+            LpcValue::Function(x) => write!(f, "{x}"),
         }
     }
 }

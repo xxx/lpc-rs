@@ -55,7 +55,7 @@ impl ScopeTree {
         // we need to set it on the scope itself
         {
             let mut_scope = self.scopes.get_mut(new_id).unwrap();
-            (*mut_scope.get_mut()).id = Some(new_id);
+            mut_scope.get_mut().id = Some(new_id);
         }
 
         if let Some(parent) = self.current_id {
@@ -138,8 +138,7 @@ impl ScopeTree {
         } else {
             Err(LpcError::new(
                 format!(
-                    "Unknown function passed to goto_function `{}`. This likely indicates a driver bug.",
-                    name
+                    "Unknown function passed to goto_function `{name}`. This likely indicates a driver bug."
                 )
             ))
         }

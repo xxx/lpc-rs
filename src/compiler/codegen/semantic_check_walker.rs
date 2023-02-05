@@ -188,7 +188,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let CallNamespace::Named(namespace) = &node.namespace {
             if !self.context.inherit_names.contains_key(namespace) && namespace != EFUN {
-                let e = LpcError::new(format!("unknown namespace `{}`", namespace))
+                let e = LpcError::new(format!("unknown namespace `{namespace}`"))
                     .with_span(node.span);
                 self.context.errors.push(e);
             }
@@ -344,8 +344,7 @@ impl TreeWalker for SemanticCheckWalker {
             && !collection_type.matches_type(LpcType::String(false))
         {
             let e = LpcError::new(format!(
-                "`foreach` must iterate over an array or mapping, found {}",
-                collection_type
+                "`foreach` must iterate over an array or mapping, found {collection_type}"
             ))
             .with_span(node.collection.span());
             self.context.errors.push(e);
@@ -512,20 +511,19 @@ impl TreeWalker for SemanticCheckWalker {
             Ok(())
         } else {
             let left_val = if let Some(node) = &*node.l {
-                format!("{}", node)
+                format!("{node}")
             } else {
                 String::from("0")
             };
 
             let right_val = if let Some(node) = &*node.r {
-                format!("{}", node)
+                format!("{node}")
             } else {
                 String::from("-1")
             };
 
             let e = LpcError::new(format!(
-                "invalid range types: `{}` ({}) .. `{}` ({})",
-                left_val, left_type, right_val, right_type
+                "invalid range types: `{left_val}` ({left_type}) .. `{right_val}` ({right_type})"
             ))
             .with_span(node.span);
 
@@ -599,13 +597,12 @@ impl TreeWalker for SemanticCheckWalker {
         let _ = node.body.visit(self);
         let _ = node.else_clause.visit(self);
 
-        let body_type = node_type(&*node.body, &self.context)?;
-        let else_type = node_type(&*node.else_clause, &self.context)?;
+        let body_type = node_type(&node.body, &self.context)?;
+        let else_type = node_type(&node.else_clause, &self.context)?;
 
         if body_type != else_type {
             let e = LpcError::new(format!(
-                "differing types in ternary expression: `{}` and `{}`",
-                body_type, else_type
+                "differing types in ternary expression: `{body_type}` and `{else_type}`"
             ))
             .with_span(node.span);
             self.context.errors.push(e);
@@ -649,8 +646,7 @@ impl TreeWalker for SemanticCheckWalker {
 
             if closure_arg_number(&node.name)? > MAX_CLOSURE_ARG_REFERENCE {
                 let e = LpcError::new(format!(
-                    "positional argument variables can only be used up to `${}`",
-                    MAX_CLOSURE_ARG_REFERENCE
+                    "positional argument variables can only be used up to `${MAX_CLOSURE_ARG_REFERENCE}`"
                 ))
                 .with_span(node.span);
                 self.context.errors.push(e);
@@ -1321,7 +1317,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                &walker.context.errors[0].to_string(),
+                walker.context.errors[0].as_ref(),
                 "call to private function `known`"
             );
         }
@@ -1427,7 +1423,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                &walker.context.errors[0].to_string(),
+                walker.context.errors[0].as_ref(),
                 "call to private function `known`"
             );
         }
@@ -1470,7 +1466,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                &walker.context.errors[0].to_string(),
+                walker.context.errors[0].as_ref(),
                 "unknown namespace `unknown_namespace`"
             );
         }
@@ -1513,7 +1509,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                &walker.context.errors[0].to_string(),
+                walker.context.errors[0].as_ref(),
                 "call to private function `known`"
             );
         }
@@ -1868,7 +1864,7 @@ mod tests {
             let _ = node.visit(&mut walker);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                &walker.context.errors[0].to_string(),
+                walker.context.errors[0].as_ref(),
                 "namespaced `call_other` is not allowed"
             );
         }
@@ -2088,7 +2084,7 @@ mod tests {
 
             if let Err(e) = result {
                 assert_regex!(
-                    &e.to_string(),
+                    e.as_ref(),
                     "attempt to redefine nomask function `duplicate`"
                 );
             } else {
@@ -2180,7 +2176,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                &walker.context.errors[0].to_string(),
+                walker.context.errors[0].as_ref(),
                 "attempt to point to private function `known`"
             );
         }

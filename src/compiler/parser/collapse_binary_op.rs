@@ -61,7 +61,7 @@ fn collapse_add(
                 span: Some(span),
             }),
             ExpressionNode::String(node2) => ExpressionNode::String(StringNode {
-                value: concatenate_strings(node.value.to_string(), &node2.value)
+                value: concatenate_strings(node.value.to_string(), node2.value)
                     .map_err(|e| e.with_span(Some(span)))?,
                 span: Some(span),
             }),
@@ -71,13 +71,13 @@ fn collapse_add(
             match r {
                 // "string" + 123 == "string123"
                 ExpressionNode::Int(node2) => ExpressionNode::String(StringNode {
-                    value: concatenate_strings(&node.value, &node2.value.to_string())
+                    value: concatenate_strings(&node.value, node2.value.to_string())
                         .map_err(|e| e.with_span(Some(span)))?,
                     span: Some(span),
                 }),
                 // concat string literals
                 ExpressionNode::String(node2) => ExpressionNode::String(StringNode {
-                    value: concatenate_strings(&node.value, &node2.value)
+                    value: concatenate_strings(&node.value, node2.value)
                         .map_err(|e| e.with_span(Some(span)))?,
                     span: Some(span),
                 }),

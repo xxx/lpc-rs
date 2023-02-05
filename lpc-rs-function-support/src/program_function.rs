@@ -121,11 +121,11 @@ impl ProgramFunction {
         for (counter, instruction) in self.instructions.iter().enumerate() {
             if let Some(vec) = labels_by_pc.get_vec(&counter) {
                 for label in vec {
-                    v.push(format!("  {}:", label));
+                    v.push(format!("  {label}:"));
                 }
             }
 
-            v.push(format!("    {}", instruction));
+            v.push(format!("    {instruction}"));
         }
 
         v
@@ -146,6 +146,6 @@ impl AsRef<FunctionPrototype> for ProgramFunction {
 
 impl AsRef<FunctionPrototype> for Rc<ProgramFunction> {
     fn as_ref(&self) -> &FunctionPrototype {
-        &(*self).prototype
+        &self.prototype
     }
 }

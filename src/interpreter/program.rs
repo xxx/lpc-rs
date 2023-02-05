@@ -248,14 +248,14 @@ mod tests {
 
         let full_path = Path::new(".").canonicalize().unwrap().display().to_string();
         assert_eq!(
-            &*program.cwd().to_str().unwrap(),
-            format!("{}/foo/bar", full_path)
+            program.cwd().to_str().unwrap(),
+            format!("{full_path}/foo/bar")
         );
 
         program.filename = "marf.c".into();
-        assert_eq!(&*program.cwd().to_str().unwrap(), full_path);
+        assert_eq!(program.cwd().to_str().unwrap(), full_path);
 
         program.filename = LpcPath::Server(Path::new("").to_path_buf());
-        assert_eq!(&*program.cwd().to_str().unwrap(), "");
+        assert_eq!(program.cwd().to_str().unwrap(), "");
     }
 }

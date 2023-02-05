@@ -107,7 +107,7 @@ impl TreeWalker for TreePrinter {
         if let Some(rcvr) = &node.receiver {
             self.println_indented("Call Other");
             self.indent += 2;
-            self.println_indented(&format!("receiver: {}", rcvr));
+            self.println_indented(&format!("receiver: {rcvr}"));
         } else {
             self.println_indented("Call");
             self.indent += 2;
@@ -248,7 +248,7 @@ impl TreeWalker for TreePrinter {
         self.indent += 2;
 
         if let Some(rcvr) = &mut node.receiver {
-            self.println_indented(&format!("receiver: {}", rcvr));
+            self.println_indented(&format!("receiver: {rcvr}"));
         } else {
             self.println_indented("receiver: None");
         }

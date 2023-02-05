@@ -158,7 +158,7 @@ impl Compiler {
         let true_path = path.as_server(self.config.lib_dir());
 
         if path.as_os_str().is_empty() || !true_path.starts_with(self.config.lib_dir()) {
-            return Err(LpcError::new(&format!(
+            return Err(LpcError::new(format!(
                 "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 true_path.display(),
@@ -273,10 +273,7 @@ impl Compiler {
 
         let mut asm_walker = CodegenWalker::new(context);
 
-        if let Err(e) = program_node.visit(&mut asm_walker) {
-            // e.emit_diagnostics();
-            return Err(e);
-        }
+        program_node.visit(&mut asm_walker)?;
 
         // emit warnings
         asm_walker
@@ -299,7 +296,7 @@ impl Compiler {
 
         println!("{}", program.filename);
         for s in program.listing() {
-            println!("{}", s);
+            println!("{s}");
         }
         println!();
 
@@ -332,7 +329,7 @@ impl Compiler {
             .parse(&mut context, wrapper)
             .map(|p| (p, context))
             .map_err(|e| {
-                println!("{:?}", e);
+                println!("{e:?}");
                 LpcError::from(e)
             })
     }

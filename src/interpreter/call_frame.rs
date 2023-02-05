@@ -129,7 +129,7 @@ impl CallFrame {
         P: Into<Rc<RefCell<Process>>>,
     {
         Self {
-            registers: RegisterBank::initialized_for_function(&*function, arg_capacity),
+            registers: RegisterBank::initialized_for_function(&function, arg_capacity),
             ..Self::new(process, function, called_with_num_args, upvalues)
         }
     }
@@ -258,7 +258,7 @@ impl CallFrame {
                 self.pc.replace(*a);
                 Ok(())
             }
-            None => Err(self.runtime_error(format!("Unable to find address for {}", label))),
+            None => Err(self.runtime_error(format!("Unable to find address for {label}"))),
         }
     }
 
@@ -488,7 +488,7 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process.clone(), Rc::new(pf), 0, None);
+            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None);
             assert_eq!(frame.upvalues, vec![Register(2), Register(3), Register(4)]);
             assert_eq!(frame.process.borrow().upvalues.len(), 5);
         }

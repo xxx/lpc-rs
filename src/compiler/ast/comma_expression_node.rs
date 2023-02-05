@@ -59,7 +59,7 @@ impl AstNodeTrait for CommaExpressionNode {
 
 impl Display for CommaExpressionNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let s = self.value.iter().map(|item| format!("{}", item)).join(", ");
-        write!(f, "{}", s)
+        let s = self.value.iter().map(|item| format!("{item}")).join(", ");
+        write!(f, "{s}")
     }
 }

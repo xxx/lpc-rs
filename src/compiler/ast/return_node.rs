@@ -49,6 +49,6 @@ impl Display for ReturnNode {
             String::from("")
         };
 
-        write!(f, "return {}", s)
+        write!(f, "return {s}")
     }
 }

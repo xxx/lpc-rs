@@ -39,7 +39,7 @@ impl Display for RegisterVariant {
             RegisterVariant::Upvalue(r) => format!("u{}", r.index()),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

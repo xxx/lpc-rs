@@ -125,10 +125,10 @@ impl Display for LpcType {
             LpcType::Mapping(array) => format!("mapping{}", to_star(array)),
             LpcType::Mixed(array) => format!("mixed{}", to_star(array)),
             LpcType::Function(array) => format!("function{}", to_star(array)),
-            LpcType::Union(union) => format!("{}", union),
+            LpcType::Union(union) => format!("{union}"),
         };
 
-        write!(f, "{}", type_)
+        write!(f, "{type_}")
     }
 }
 

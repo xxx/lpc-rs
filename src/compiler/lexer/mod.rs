@@ -779,7 +779,7 @@ impl Display for Token {
             Token::Error => "Error token",
         };
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

@@ -38,9 +38,9 @@ impl Display for BlockNode {
         let s = self
             .body
             .iter()
-            .map(|item| format!("{}", item))
+            .map(|item| format!("{item}"))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "{{ {} }}", s)
+        write!(f, "{{ {s} }}")
     }
 }

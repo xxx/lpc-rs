@@ -58,7 +58,7 @@ impl AstNodeTrait for LabelNode {
 impl Display for LabelNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(expr) = &self.case {
-            write!(f, "{}", expr)
+            write!(f, "{expr}")
         } else {
             write!(f, "default")
         }

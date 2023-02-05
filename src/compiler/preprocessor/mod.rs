@@ -199,7 +199,7 @@ impl Preprocessor {
         let file_id = {
             let server_path = lpc_path.as_server(self.context.config.lib_dir());
             let mut cache = FILE_CACHE.write();
-            if Path::exists(&*server_path) {
+            if Path::exists(&server_path) {
                 cache.add(server_path.to_string_lossy())
             } else {
                 cache.add_eager(server_path.to_string_lossy(), code.as_ref())
@@ -443,7 +443,7 @@ impl Preprocessor {
 
         let check_duplicate = |key, error_span| {
             if !self.skipping_lines() && self.defines.contains_key(key) {
-                return Err(LpcError::new(format!("duplicate `#define`: `{}`", key))
+                return Err(LpcError::new(format!("duplicate `#define`: `{key}`"))
                     .with_span(Some(error_span)));
             }
 
@@ -579,7 +579,7 @@ impl Preprocessor {
                 };
             }
 
-            let to_include = LpcPath::new_in_game(matched.as_str(), &cwd, config.lib_dir());
+            let to_include = LpcPath::new_in_game(matched.as_str(), cwd, config.lib_dir());
 
             // Fall back to trying the path directly
             let included = self.include_local_file(&to_include, Some(token.0))?;
@@ -671,7 +671,7 @@ impl Preprocessor {
                                 .with_span(Some(token.0))
                         }
                         LalrpopParseError::User { error } => {
-                            LpcError::new(format!("error: {}", error))
+                            LpcError::new(format!("error: {error}"))
                         }
                     };
 
@@ -711,15 +711,15 @@ impl Preprocessor {
             }
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 BinaryOperation::Add => {
-                    Ok(self.resolve_int(&*l, span)? + self.resolve_int(&*r, span)? != 0)
+                    Ok(self.resolve_int(l, span)? + self.resolve_int(r, span)? != 0)
                 }
                 BinaryOperation::Sub => {
-                    Ok(self.resolve_int(&*l, span)? - self.resolve_int(&*r, span)? != 0)
+                    Ok(self.resolve_int(l, span)? - self.resolve_int(r, span)? != 0)
                 }
-                BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(&*l, span)?
-                    && self.eval_expr_for_skipping(&*r, span)?),
-                BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(&*l, span)?
-                    || self.eval_expr_for_skipping(&*r, span)?),
+                BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(l, span)?
+                    && self.eval_expr_for_skipping(r, span)?),
+                BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(l, span)?
+                    || self.eval_expr_for_skipping(r, span)?),
                 _ => unimplemented!(),
             },
         }
@@ -737,15 +737,15 @@ impl Preprocessor {
                     }
                 } else {
                     Err(
-                        LpcError::new(format!("unable to resolve into an int: `{}`", x))
+                        LpcError::new(format!("unable to resolve into an int: `{x}`"))
                             .with_span(span),
                     )
                 }
             }
             PreprocessorNode::Int(i) => Ok(*i),
             PreprocessorNode::BinaryOp(op, l, r) => {
-                let li = self.resolve_int(&*l, span)?;
-                let ri = self.resolve_int(&*r, span)?;
+                let li = self.resolve_int(l, span)?;
+                let ri = self.resolve_int(r, span)?;
 
                 match op {
                     BinaryOperation::Add => Ok(li + ri),
@@ -754,15 +754,13 @@ impl Preprocessor {
                     BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcInt),
 
                     operation => Err(LpcError::new(format!(
-                        "unknown binary operation `{}` in expression `{}`",
-                        operation, expr
+                        "unknown binary operation `{operation}` in expression `{expr}`"
                     ))
                     .with_span(span)),
                 }
             }
             _ => Err(LpcError::new(format!(
-                "attempt to convert unknown node type to int: `{}`",
-                expr
+                "attempt to convert unknown node type to int: `{expr}`"
             ))
             .with_span(span)),
         }
@@ -869,7 +867,7 @@ impl Preprocessor {
                     RESIDENT => self.context.pragmas.set_resident(true),
                     STRICT_TYPES => self.context.pragmas.set_strict_types(true),
                     x => {
-                        return Err(LpcError::new(format!("unknown pragma `{}`", x))
+                        return Err(LpcError::new(format!("unknown pragma `{x}`"))
                             .with_span(Some(token.0)));
                     }
                 }
@@ -895,7 +893,7 @@ impl Preprocessor {
         let canon_include_path = path.as_server(self.context.lib_dir());
 
         if !path.is_within_root(self.context.lib_dir()) {
-            return Err(LpcError::new(&format!(
+            return Err(LpcError::new(format!(
                 "attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 canon_include_path.display(),
@@ -905,7 +903,7 @@ impl Preprocessor {
         }
 
         if canon_include_path.is_dir() {
-            return Err(LpcError::new(&format!(
+            return Err(LpcError::new(format!(
                 "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 canon_include_path.display(),
@@ -917,9 +915,8 @@ impl Preprocessor {
         let file_content = match read_lpc_file(&canon_include_path) {
             Ok(content) => content,
             Err(e) => {
-                return Err(LpcError::new(&format!(
-                    "unable to read include file `{}`: {:?}",
-                    path, e
+                return Err(LpcError::new(format!(
+                    "unable to read include file `{path}`: {e:?}"
                 ))
                 .with_span(span));
             }
@@ -1015,7 +1012,7 @@ mod tests {
                 assert_eq!(mapped, expected)
             }
             Err(e) => {
-                panic!("{:?}", e)
+                panic!("{e:?}")
             }
         }
     }
@@ -1025,10 +1022,10 @@ mod tests {
         let mut preprocessor = fixture();
         match preprocessor.scan("/test.c", input) {
             Ok(result) => {
-                panic!("Expected to fail, but passed with {:?}", result);
+                panic!("Expected to fail, but passed with {result:?}");
             }
             Err(e) => {
-                assert_regex!(&e.to_string(), expected);
+                assert_regex!(e.as_ref(), expected);
             }
         }
     }
@@ -1053,8 +1050,7 @@ mod tests {
 
         test_valid(
             input,
-            &vec![
-                "string",
+            &["string",
                 "marf",
                 "=",
                 "file_name",
@@ -1065,8 +1061,7 @@ mod tests {
                 "(",
                 ")",
                 ")",
-                ";",
-            ],
+                ";"],
         );
     }
 
@@ -1320,7 +1315,7 @@ mod tests {
                     );
                 }
                 Err(e) => {
-                    panic!("{:?}", e)
+                    panic!("{e:?}")
                 }
             }
         }
@@ -1363,7 +1358,7 @@ mod tests {
                     ));
                 }
                 Err(e) => {
-                    panic!("{:?}", e)
+                    panic!("{e:?}")
                 }
             }
         }
@@ -1389,7 +1384,7 @@ mod tests {
                     ));
                 }
                 Err(e) => {
-                    panic!("{:?}", e)
+                    panic!("{e:?}")
                 }
             }
         }
@@ -1918,7 +1913,7 @@ mod tests {
                     assert!(!preprocessor.context.pragmas.no_inherit());
                 }
                 Err(e) => {
-                    panic!("{:?}", e)
+                    panic!("{e:?}")
                 }
             }
         }

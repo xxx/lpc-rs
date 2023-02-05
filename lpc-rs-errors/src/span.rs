@@ -31,9 +31,9 @@ impl Display for Span {
             if let Ok(line_num) = files.line_number(self.file_id, idx);
             if let Ok(column_num) = files.column_number(self.file_id, idx, line_num);
             then {
-                write!(f, "{}:{}:{}", name, line_num, column_num)
+                write!(f, "{name}:{line_num}:{column_num}")
             } else {
-                write!(f, "{:?}", self)
+                write!(f, "{self:?}")
             }
         }
     }

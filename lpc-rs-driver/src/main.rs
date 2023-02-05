@@ -59,7 +59,7 @@ fn main() {
     let mut vm = Vm::new(config);
 
     vm.initialize().unwrap_or_else(|e| {
-        eprintln!("unable to initialize VM: {:?}", e);
+        eprintln!("unable to initialize VM: {e:?}");
         std::process::exit(1);
     });
 }

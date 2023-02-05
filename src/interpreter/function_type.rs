@@ -17,13 +17,13 @@ use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Proces
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
 fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
-    f.write_str(&*owner.filename())
+    f.write_str(&owner.filename())
 }
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
 fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
-    f.write_str(&*owner.borrow().filename())
+    f.write_str(&owner.borrow().filename())
 }
 
 /// Different ways to store a function address, for handling at runtime.
@@ -72,10 +72,10 @@ impl Display for FunctionAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FunctionAddress::Local(owner, x) => {
-                write!(f, "{}::{}", owner.borrow(), &*x)
+                write!(f, "{}::{}", owner.borrow(), x)
             }
-            FunctionAddress::Dynamic(x) => write!(f, "dynamic::{}", x),
-            FunctionAddress::Efun(x) => write!(f, "efun::{}", x),
+            FunctionAddress::Dynamic(x) => write!(f, "dynamic::{x}"),
+            FunctionAddress::Efun(x) => write!(f, "efun::{x}"),
         }
     }
 }
@@ -138,18 +138,18 @@ impl Display for FunctionPtr {
             .partial_args
             .iter()
             .map(|arg| match arg {
-                Some(a) => format!("{}", a),
+                Some(a) => format!("{a}"),
                 None => "<None>".to_string(),
             })
             .join(", ");
-        s.push_str(&format!("partial_args: [{}], ", partial_args));
+        s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(
             "upvalues: [{}]",
-            self.upvalues.iter().map(|x| format!("{}", x)).join(", ")
+            self.upvalues.iter().map(|x| format!("{x}")).join(", ")
         ));
-        s.push_str("}");
+        s.push('}');
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

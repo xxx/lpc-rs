@@ -32,7 +32,7 @@ impl Display for DeclNode {
         let s = self
             .initializations
             .iter()
-            .map(|item| format!("{}", item))
+            .map(|item| format!("{item}"))
             .join(", ");
 
         write!(f, "{} {}", self.type_, s)

@@ -22,15 +22,15 @@ pub enum PreprocessorNode {
 impl Display for PreprocessorNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PreprocessorNode::Var(x) => write!(f, "{}", x),
-            PreprocessorNode::Int(x) => write!(f, "{}", x),
-            PreprocessorNode::String(x) => write!(f, "{}", x),
+            PreprocessorNode::Var(x) => write!(f, "{x}"),
+            PreprocessorNode::Int(x) => write!(f, "{x}"),
+            PreprocessorNode::String(x) => write!(f, "{x}"),
             PreprocessorNode::Defined(x, negated) => {
                 let not = if *negated { "not " } else { "" };
 
-                write!(f, "{}defined({})", not, x)
+                write!(f, "{not}defined({x})")
             }
-            PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{} {} {}", l, op, r),
+            PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{l} {op} {r}"),
         }
     }
 }

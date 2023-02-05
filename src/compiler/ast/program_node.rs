@@ -34,6 +34,6 @@ impl Display for ProgramNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = self.body.iter().map(|a| a.to_string()).join(", ");
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

@@ -25,7 +25,7 @@ pub enum FunctionPtrReceiver {
 impl Display for FunctionPtrReceiver {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FunctionPtrReceiver::Static(x) => write!(f, "({})", x),
+            FunctionPtrReceiver::Static(x) => write!(f, "({x})"),
             FunctionPtrReceiver::Dynamic => write!(f, "&"),
         }
     }
@@ -74,6 +74,6 @@ impl Display for FunctionPtrNode {
             if let Some(e) = &self.receiver => ("{}->{}{}", e, self.name, arg_fmt)
             else ("{}{}", self.name, arg_fmt)
         );
-        write!(f, "&{}", fmt)
+        write!(f, "&{fmt}")
     }
 }

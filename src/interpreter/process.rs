@@ -88,7 +88,7 @@ impl Process {
         let filename: &str = self.program.filename.as_ref();
         let name = filename.strip_suffix(".c").unwrap_or(filename);
         match self.clone_id {
-            Some(x) => Cow::Owned(format!("{}#{}", name, x)),
+            Some(x) => Cow::Owned(format!("{name}#{x}")),
             None => Cow::Borrowed(name),
         }
     }
@@ -97,7 +97,7 @@ impl Process {
     /// `program` filename if that fails.
     #[inline]
     pub fn localized_filename(&self, prefix: &str) -> String {
-        let filename: &str = &*self.filename();
+        let filename: &str = &self.filename();
 
         filename.strip_prefix(prefix).unwrap_or(filename).into()
     }

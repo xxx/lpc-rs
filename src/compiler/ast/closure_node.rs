@@ -42,6 +42,6 @@ impl AstNodeTrait for ClosureNode {
 impl Display for ClosureNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let b = self.body.iter().map(|a| a.to_string()).join(", ");
-        write!(f, "{{: {} :}}", b)
+        write!(f, "{{: {b} :}}")
     }
 }

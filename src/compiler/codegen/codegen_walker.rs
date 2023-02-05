@@ -761,8 +761,7 @@ impl TreeWalker for CodegenWalker {
             }
             x => {
                 return Err(LpcError::new(format!(
-                    "Attempt to assign to an invalid lvalue: `{}`",
-                    x
+                    "Attempt to assign to an invalid lvalue: `{x}`"
                 ))
                 .with_span(node.span))
             }
@@ -2078,9 +2077,8 @@ impl TreeWalker for CodegenWalker {
         self.context.lookup_var_mut(&node.name).map(|sym| {
             sym.location = Some(current_register);
 
-            self.function_stack
-                .last_mut()
-                .map(|func| func.local_variables.push(sym.clone()));
+            if let Some(func) = self.function_stack
+                .last_mut() { func.local_variables.push(sym.clone()) }
         });
 
         Ok(())
@@ -3435,7 +3433,7 @@ mod tests {
         let mut prog_node = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(block))
             .unwrap();
-        let mut node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap()
+        let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap()
         {
             if let AstNode::Block(n) = n.body.first_mut().unwrap() {
                 n
@@ -3447,11 +3445,11 @@ mod tests {
         };
 
         let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_block(&mut node);
+        let _ = scope_walker.visit_block(node);
 
         let context = scope_walker.into_context();
         let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_block(&mut node);
+        let _ = walker.visit_block(node);
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 127983),
@@ -3877,18 +3875,18 @@ mod tests {
         let mut prog_node = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(call))
             .unwrap();
-        let mut node = if let AstNode::Decl(node) = prog_node.body.first_mut().unwrap() {
+        let node = if let AstNode::Decl(node) = prog_node.body.first_mut().unwrap() {
             node
         } else {
             panic!("Expected decl node");
         };
 
         let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_decl(&mut node);
+        let _ = scope_walker.visit_decl(node);
 
         let context = scope_walker.into_context();
         let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_decl(&mut node);
+        let _ = walker.visit_decl(node);
 
         let expected = vec![
             IConst1(RegisterVariant::Local(Register(1))),
@@ -4052,7 +4050,7 @@ mod tests {
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
 
-            let _ = walker.visit_for(&mut node).unwrap();
+            walker.visit_for(&mut node).unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 10),
@@ -4090,25 +4088,25 @@ mod tests {
                 .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                 .unwrap();
             let ast_node = prog_node.body.first_mut().unwrap();
-            let mut node = if let AstNode::FunctionDef(node) = ast_node {
+            let node = if let AstNode::FunctionDef(node) = ast_node {
                 node
             } else {
                 panic!("Didn't receive a function def?");
             };
 
-            let _ = prototype_walker.visit_function_def(&mut node);
+            let _ = prototype_walker.visit_function_def(node);
             let mut context = prototype_walker.into_context();
 
             context.scopes.push_new(); // global scope
 
             let mut scope_walker = ScopeWalker::new(context);
-            let _ = scope_walker.visit_function_def(&mut node);
+            let _ = scope_walker.visit_function_def(node);
 
             let mut context = scope_walker.into_context();
             context.scopes.goto_root();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_function_def(&mut node);
+            let _ = walker.visit_function_def(node);
 
             assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
         }
@@ -4538,7 +4536,7 @@ mod tests {
 
             let mut walker = CodegenWalker::new(CompilationContext::default());
 
-            let _ = walker.visit_ternary(&mut node).unwrap();
+            walker.visit_ternary(&mut node).unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 2),
@@ -5361,7 +5359,7 @@ mod tests {
             .functions
             .insert(CREATE_FUNCTION.to_string(), grandparent_create.into());
 
-        let mut parent_init = ProgramFunction::new(prototype.clone(), 0);
+        let mut parent_init = ProgramFunction::new(prototype, 0);
         let parent_init_instructions = vec![
             Instruction::IConst1(RegisterVariant::Local(Register(0))),
             Instruction::IConst(RegisterVariant::Local(Register(0)), 666),

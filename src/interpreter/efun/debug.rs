@@ -29,13 +29,12 @@ pub fn debug<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
             }
             x => {
                 Err(context
-                    .runtime_error(format!("Unknown operation `{}` passed to `debug()`.", x)))
+                    .runtime_error(format!("Unknown operation `{x}` passed to `debug()`.")))
             }
         }
     } else {
         Err(context.runtime_error(format!(
-            "Unexpected argument `{}` passed to `debug()`.",
-            lpc_ref
+            "Unexpected argument `{lpc_ref}` passed to `debug()`."
         )))
     }
 }
@@ -43,7 +42,7 @@ pub fn debug<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
 #[cfg(test)]
 fn snapshot_stack<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
     let klone = context.clone_stack();
-    context.snapshot = Some(klone.into());
+    context.snapshot = Some(klone);
 
     Ok(())
 }

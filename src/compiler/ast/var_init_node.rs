@@ -87,7 +87,7 @@ impl AstNodeTrait for VarInitNode {
 impl Display for VarInitNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let v = if let Some(x) = &self.value {
-            format!(" = {}", x)
+            format!(" = {x}")
         } else {
             String::from("")
         };

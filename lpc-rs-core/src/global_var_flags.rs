@@ -21,7 +21,7 @@ impl Display for GlobalVarFlags {
         if self.is_static() {
             s.push_str(" static");
         }
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

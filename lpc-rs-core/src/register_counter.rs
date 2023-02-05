@@ -56,7 +56,7 @@ impl RegisterCounter {
             return self.count + 1;
         }
 
-        return self.count;
+        self.count
     }
 
     /// Set a new value, and store the old one for `pop`ping.

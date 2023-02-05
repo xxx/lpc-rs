@@ -18,7 +18,7 @@ fn default_compiler() -> Compiler {
         .unwrap()
         .with_lib_dir("tests/fixtures/code")
         .into();
-    Compiler::new(config.clone())
+    Compiler::new(config)
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_duffs_device() {
     let b = &borrowed.globals[1];
 
     if_chain! {
-        if let LpcRef::Array(pool_ref) = &*b;
+        if let LpcRef::Array(pool_ref) = b;
         let b = pool_ref.borrow();
         if let LpcValue::Array(arr) = &*b;
         then {

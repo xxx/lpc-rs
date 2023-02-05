@@ -44,7 +44,7 @@ fn load_master<const N: usize>(
 
                         context.increment_instruction_count(eval_context.instruction_count())?;
 
-                        Ok(process.clone())
+                        Ok(process)
                     }
                     None => Err(LpcError::new("Init function not found on master?")),
                 }
@@ -108,8 +108,7 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>) -> Result<()> 
         context.return_efun_result(result);
     } else {
         return Err(context.runtime_error(format!(
-            "invalid argument passed to `clone_object`: {}",
-            arg
+            "invalid argument passed to `clone_object`: {arg}"
         )));
     }
 
@@ -152,7 +151,7 @@ mod tests {
             .get(INIT_PROGRAM)
             .expect("no init found?")
             .clone();
-        let context = task_context_fixture(program, config.clone());
+        let context = task_context_fixture(program, config);
         let mut task = fixture();
 
         let _result1 = task.eval(func.clone(), &[], context.clone());
@@ -177,10 +176,10 @@ mod tests {
         let context = task_context_fixture(program, config);
         let mut task = fixture();
 
-        let result = task.eval(func.clone(), &[], context.clone());
+        let result = task.eval(func, &[], context);
 
         assert_regex!(
-            &result.as_ref().unwrap_err().to_string(),
+            result.as_ref().unwrap_err().as_ref(),
             r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\."
         );
     }

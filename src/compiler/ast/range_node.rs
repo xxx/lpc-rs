@@ -62,6 +62,6 @@ impl Display for RangeNode {
         let ls = stringify(&self.l);
         let rs = stringify(&self.r);
 
-        write!(f, "{}..{}", ls, rs)
+        write!(f, "{ls}..{rs}")
     }
 }

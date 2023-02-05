@@ -144,7 +144,7 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
         .collect::<Result<Vec<_>>>()?
         .join(" ");
 
-    println!("{}", s);
+    println!("{s}");
 
     Ok(())
 }

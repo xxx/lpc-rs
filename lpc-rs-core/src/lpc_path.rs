@@ -265,7 +265,7 @@ where
     }
 
     lib_string.push(&os_sep);
-    lib_string.push(&path_ref);
+    lib_string.push(path_ref);
 
     Path::new(
         &lib_string
@@ -304,7 +304,7 @@ where
         .replace("//", "/")
         .replace("/./", "/");
     if !result.is_empty() && !result.starts_with('/') {
-        result = format!("/{}", result);
+        result = format!("/{result}");
     }
 
     PathBuf::from(result)

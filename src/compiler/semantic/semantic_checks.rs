@@ -308,8 +308,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                         Ok(LpcType::Mixed(false))
                     } else {
                         Err(LpcError::new(format!(
-                            "invalid call: `{}` is not a function",
-                            name
+                            "invalid call: `{name}` is not a function"
                         )))
                     }
                 },
@@ -343,7 +342,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                         {
                             Ok(LpcType::Function(false))
                         } else {
-                            return Err(LpcError::new(format!("undefined symbol {}", name))
+                            return Err(LpcError::new(format!("undefined symbol {name}"))
                                 .with_span(*span));
                         }
                     }
@@ -504,7 +503,7 @@ mod tests {
                 span: None,
             };
 
-            check_binary_operation_types(&node, &context)
+            check_binary_operation_types(&node, context)
         }
 
         fn int_int_literals(op: BinaryOperation, context: &CompilationContext) -> Result<()> {
@@ -1564,7 +1563,7 @@ mod tests {
                 is_post: false,
                 span: None,
             };
-            check_unary_operation_types(&node, &context)
+            check_unary_operation_types(&node, context)
         }
 
         fn int_literal(op: UnaryOperation, context: &CompilationContext) -> Result<()> {

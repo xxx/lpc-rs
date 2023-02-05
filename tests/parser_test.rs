@@ -346,7 +346,7 @@ fn typeless_functions_are_mixed() {
     let prog = r#"marfin() {
             return "hello, we're marfin'!";
         }"#
-    .replace("\n", "");
+    .replace('\n', "");
     let lexer = LexWrapper::new(&prog);
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
@@ -411,7 +411,7 @@ fn ellipsis_sets_the_flag_when_only_arg() {
         }
     "#
     }
-    .replace("\n", "");
+    .replace('\n', "");
 
     let lexer = LexWrapper::new(&prog);
     let prog_node = lpc_parser::ProgramParser::new()
@@ -434,7 +434,7 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
         }
     "#
     }
-    .replace("\n", "");
+    .replace('\n', "");
 
     let lexer = LexWrapper::new(&prog);
     let prog_node = lpc_parser::ProgramParser::new()
@@ -490,7 +490,7 @@ fn partial_application_argument_lists<'a>() {
                     }).collect()
                 })
             } else {
-                panic!("panic? {:?}", node)
+                panic!("panic? {node:?}")
             }
         }
     };

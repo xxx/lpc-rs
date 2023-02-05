@@ -136,7 +136,7 @@ mod tests {
 
         space.insert_clone(prog.clone());
         space.insert_clone(prog.clone());
-        space.insert_clone(prog2.clone().into());
+        space.insert_clone(prog2.into());
         space.insert_clone(prog.clone());
 
         assert_eq!(space.len(), 4);
@@ -157,7 +157,7 @@ mod tests {
 
         let mut prog: Program = Program::default();
         let filename: LpcPath = "./tests/fixtures/code/foo/bar/baz.c".into();
-        prog.filename = filename.clone();
+        prog.filename = filename;
 
         let process = Process::new(prog);
         space.insert_process(Rc::new(RefCell::new(process)));

@@ -62,9 +62,9 @@ impl Display for ArrayNode {
         let s = self
             .value
             .iter()
-            .map(|item| format!("{}", item))
+            .map(|item| format!("{item}"))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "({{ {} }})", s)
+        write!(f, "({{ {s} }})")
     }
 }

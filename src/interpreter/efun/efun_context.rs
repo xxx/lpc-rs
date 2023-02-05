@@ -102,7 +102,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// Resolve any RegisterVariant
     #[inline]
     pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<LpcRef>> {
-        get_location(&self.stack, variant)
+        get_location(self.stack, variant)
     }
 
     /// Lookup the process with the passed path.

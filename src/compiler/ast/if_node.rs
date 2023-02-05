@@ -50,7 +50,7 @@ impl AstNodeTrait for IfNode {
 impl Display for IfNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let e = if let Some(clause) = &*self.else_clause {
-            format!(" else {{ {} }}", clause)
+            format!(" else {{ {clause} }}")
         } else {
             String::from("")
         };

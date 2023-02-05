@@ -38,8 +38,7 @@ impl InheritanceWalker {
 
             if self.context.inherit_names.contains_key(namespace) {
                 return Err(LpcError::new(format!(
-                    "inheritance namespace `{}` is already defined",
-                    namespace
+                    "inheritance namespace `{namespace}` is already defined"
                 ))
                 .with_span(node.span));
             }

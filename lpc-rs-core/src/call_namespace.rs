@@ -30,7 +30,7 @@ impl Display for CallNamespace {
         match self {
             CallNamespace::Local => write!(f, ""),
             CallNamespace::Parent => write!(f, "::"),
-            CallNamespace::Named(name) => write!(f, "{}::", name),
+            CallNamespace::Named(name) => write!(f, "{name}::"),
         }
     }
 }

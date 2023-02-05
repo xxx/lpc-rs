@@ -758,19 +758,19 @@ mod tests {
         let early_inherited_global = Symbol::new("my_inherited_global", LpcType::Float(false));
         earlier_inherit.global_variables.insert(
             "my_inherited_global".into(),
-            early_inherited_global.clone().into(),
+            early_inherited_global,
         );
 
         let mut inherited_global = Symbol::new("my_inherited_global", LpcType::Int(false));
         inherited.global_variables.insert(
             "my_inherited_global".into(),
-            inherited_global.clone().into(),
+            inherited_global.clone(),
         );
 
         let overridden_global = Symbol::new("overridden", LpcType::Int(false));
         inherited
             .global_variables
-            .insert("overridden".into(), overridden_global.clone().into());
+            .insert("overridden".into(), overridden_global);
 
         context.inherits.push(earlier_inherit);
         context.inherits.push(inherited);

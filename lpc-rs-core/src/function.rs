@@ -16,8 +16,8 @@ pub enum FunctionName {
 impl Display for FunctionName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FunctionName::Var(reg) => write!(f, "var({})", reg),
-            FunctionName::Literal(name) => write!(f, "{}", name),
+            FunctionName::Var(reg) => write!(f, "var({reg})"),
+            FunctionName::Literal(name) => write!(f, "{name}"),
         }
     }
 }
@@ -49,11 +49,11 @@ pub enum FunctionTarget {
 impl Display for FunctionTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FunctionTarget::Efun(name) => write!(f, "{}", name),
+            FunctionTarget::Efun(name) => write!(f, "{name}"),
             FunctionTarget::Local(name, receiver) => match receiver {
-                FunctionReceiver::Local => write!(f, "{}", name),
-                FunctionReceiver::Var(reg) => write!(f, "var({})->{}", reg, name),
-                FunctionReceiver::Argument => write!(f, "&->{}", name),
+                FunctionReceiver::Local => write!(f, "{name}"),
+                FunctionReceiver::Var(reg) => write!(f, "var({reg})->{name}"),
+                FunctionReceiver::Argument => write!(f, "&->{name}"),
             },
         }
     }

@@ -3,7 +3,7 @@ use lpc_rs_function_support::symbol::Symbol;
 
 beaver::define! {
     pub SymbolFactory (Symbol) {
-        name -> |n| format!("sym_{}", n),
+        name -> |n| format!("sym_{n}"),
         type_ -> |_| LpcType::Int(false),
         location -> |_| None,
         scope_id -> |_| None,

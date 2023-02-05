@@ -50,8 +50,8 @@ impl Display for MappingNode {
         let s = self
             .value
             .iter()
-            .map(|(key, value)| format!("{}: {}", key, value))
+            .map(|(key, value)| format!("{key}: {value}"))
             .join(", ");
-        write!(f, "([ {} ])", s)
+        write!(f, "([ {s} ])")
     }
 }

@@ -53,10 +53,10 @@ impl TaskContext {
     {
         let config = config.into();
         let object_space = object_space.into();
-        let instruction_counter = InstructionCounter::new_from_config(&*config);
+        let instruction_counter = InstructionCounter::new_from_config(&config);
         let simul_efuns = {
             let space = object_space.borrow();
-            get_simul_efuns(&*config, &*space)
+            get_simul_efuns(&config, &space)
         };
 
         Self {

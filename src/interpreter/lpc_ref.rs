@@ -183,7 +183,7 @@ impl LpcRef {
                 )?)),
                 LpcRef::Int(i) => Ok(LpcValue::String(concatenate_strings(
                     try_extract_value!(*s.borrow(), LpcValue::String),
-                    &i.to_string(),
+                    i.to_string(),
                 )?)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -444,8 +444,8 @@ impl PartialOrd for LpcRef {
 impl Display for LpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LpcRef::Float(x) => write!(f, "{}", x),
-            LpcRef::Int(x) => write!(f, "{}", x),
+            LpcRef::Float(x) => write!(f, "{x}"),
+            LpcRef::Int(x) => write!(f, "{x}"),
             LpcRef::String(x)
             | LpcRef::Array(x)
             | LpcRef::Mapping(x)
@@ -628,7 +628,7 @@ mod tests {
             if let Ok(LpcValue::Mapping(m)) = result {
                 assert_eq!(m, expected)
             } else {
-                panic!("no match. received: {:?}", result)
+                panic!("no match. received: {result:?}")
             }
         }
 
@@ -657,7 +657,7 @@ mod tests {
             if let Ok(LpcValue::Mapping(m)) = result {
                 assert_eq!(m, expected)
             } else {
-                panic!("no match. received: {:?}", result)
+                panic!("no match. received: {result:?}")
             }
         }
 
@@ -726,7 +726,7 @@ mod tests {
         #[test]
         fn array_array() {
             let pool = Pool::new(10);
-            let to_ref = |x| LpcRef::Int(x);
+            let to_ref = LpcRef::Int;
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
                 .map(to_ref)

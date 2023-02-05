@@ -197,8 +197,7 @@ pub fn call_efun<const N: usize>(name: &str, context: &mut EfunContext<N>) -> Re
         THIS_OBJECT => this_object(context),
         THROW => throw(context),
         _ => Err(LpcError::new(format!(
-            "runtime error: call to unknown function (that had a valid prototype?) `{}`",
-            name
+            "runtime error: call to unknown function (that had a valid prototype?) `{name}`"
         ))),
     }
 }

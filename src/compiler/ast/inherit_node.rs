@@ -36,7 +36,7 @@ impl AstNodeTrait for InheritNode {
 impl Display for InheritNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let ns = match &self.namespace {
-            Some(ns) => format!(" {}", ns),
+            Some(ns) => format!(" {ns}"),
             None => String::new(),
         };
 
