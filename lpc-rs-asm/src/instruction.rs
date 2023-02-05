@@ -82,15 +82,6 @@ pub enum Instruction {
         applied_arguments: Vec<Option<RegisterVariant>>, // TODO: should this be RegisterVariant?
     },
 
-    // /// Copy a global from the global registers, into the current stack frame.
-    // /// Copies *global* register x.0 to *local* register x.1.
-    // GLoad(RegisterVariant, RegisterVariant),
-    //
-    // /// Copy a variable from the current stack frame, to the global registers.
-    // /// Copies a variable from *local* register x.0, into the *global* register
-    // /// x.1.
-    // GStore(RegisterVariant, RegisterVariant),
-
     /// Greater than
     /// x.2 = x.0 > x.1
     Gt(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -315,12 +306,6 @@ impl Display for Instruction {
                     .join(", ");
                 write!(f, "functionptrconst {}, {}, {}", location, target, args)
             }
-            // Instruction::GLoad(r1, r2) => {
-            //     write!(f, "gload {}, {}", r1, r2)
-            // }
-            // Instruction::GStore(r1, r2) => {
-            //     write!(f, "gstore {}, {}", r1, r2)
-            // }
             Instruction::Gt(r1, r2, r3) => {
                 write!(f, "gt {}, {}, {}", r1, r2, r3)
             }
