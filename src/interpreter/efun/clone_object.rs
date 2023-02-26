@@ -154,8 +154,8 @@ mod tests {
         let context = task_context_fixture(program, config);
         let mut task = fixture();
 
-        let _result1 = task.eval(func.clone(), &[], context.clone());
-        let _result2 = task.eval(func, &[], context.clone());
+        task.eval(func.clone(), &[], context.clone()).expect("first task failed");
+        task.eval(func, &[], context.clone()).expect("second task failed");
 
         // procs are /example, /example#0, /example#1
         assert_eq!(context.object_space().borrow().len(), 3);

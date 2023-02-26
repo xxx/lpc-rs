@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 use delegate::delegate;
 use lpc_rs_core::ScopeId;
@@ -54,6 +55,20 @@ impl LocalScope {
 impl Default for LocalScope {
     fn default() -> Self {
         Self::new(None)
+    }
+}
+
+impl Display for LocalScope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let id = self.id.map(|id| id.into()).unwrap_or(0);
+        write!(f, "LocalScope {{ id: {}, symbols: [", id)?;
+
+        for (name, symbol) in self.symbols.iter() {
+            let loc = symbol.location.map(|loc| loc.to_string()).unwrap_or_else(|| "<none>".to_string());
+            write!(f, "{{ name: {}, type: {}, location: {} }}", name, symbol.type_, loc)?;
+        }
+
+        write!(f, "] }}")
     }
 }
 

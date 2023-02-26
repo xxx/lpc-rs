@@ -1139,6 +1139,8 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
+        // println!("closure {} scope: {}", node.name, self.context.scopes.current().unwrap());
+
         self.context.scopes.pop();
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
@@ -1447,9 +1449,11 @@ impl TreeWalker for CodegenWalker {
             )?;
         }
 
+        // println!("function {} scope: {}", node.name, self.context.scopes.current().unwrap());
+
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
-        func.num_locals = self.register_counter.as_usize() - num_args;
+        func.num_locals = self.register_counter.as_usize().saturating_sub(num_args);
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
 
         func.arg_locations = declared_arg_locations;

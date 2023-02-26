@@ -95,30 +95,38 @@ fn set_location<const N: usize>(
     location: RegisterVariant,
     lpc_ref: LpcRef,
 ) -> Result<()> {
-    match location {
-        RegisterVariant::Local(reg) => {
-            let frame = stack.current_frame_mut()?;
-            let registers = &mut frame.registers;
-            registers[reg] = lpc_ref;
-            Ok(())
-        }
-        RegisterVariant::Global(reg) => {
-            let frame = stack.current_frame()?;
-
-            let mut proc = frame.process.borrow_mut();
-            proc.globals[reg] = lpc_ref;
-            Ok(())
-        }
-        RegisterVariant::Upvalue(reg) => {
-            let frame = stack.current_frame()?;
-            let upvalues = &frame.upvalues;
-            let idx = upvalues[reg.index()];
-
-            let mut proc = frame.process.borrow_mut();
-            proc.upvalues[idx] = lpc_ref;
-            Ok(())
-        }
-    }
+    let frame = stack.current_frame_mut()?;
+    frame.set_location(location, lpc_ref);
+    // let registers = &mut frame.registers;
+    // registers[reg] = lpc_ref;
+    Ok(())
+    // match location {
+    //     RegisterVariant::Local(reg) | RegisterVariant::Global(reg) => {
+    //         let frame = stack.current_frame_mut()?;
+    //         frame.set_location(location, lpc_ref);
+    //         // let registers = &mut frame.registers;
+    //         // registers[reg] = lpc_ref;
+    //         Ok(())
+    //     }
+    //     // RegisterVariant::Global(reg) => {
+    //     //     // let frame = stack.current_frame()?;
+    //     //
+    //     //     // let mut proc = frame.process.borrow_mut();
+    //     //     // proc.globals[reg] = lpc_ref;
+    //     //     Ok(())
+    //     // }
+    //     RegisterVariant::Upvalue(reg) => {
+    //         let frame = stack.current_frame()?;
+    //         let upvalues = &frame.upvalues;
+    //         let idx = upvalues[reg.index()];
+    //
+    //         println!("setting upvalue {} to {:?}", location, lpc_ref);
+    //
+    //         let mut proc = frame.process.borrow_mut();
+    //         proc.upvalues[idx] = lpc_ref;
+    //         Ok(())
+    //     }
+    // }
 }
 
 #[inline]
@@ -265,7 +273,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         task_context: TaskContext,
     ) -> Result<TaskContext>
     where
-        F: Into<Rc<ProgramFunction>> + Debug,
+        F: Into<Rc<ProgramFunction>>,
     {
         let function = f.into();
         let process = task_context.process();
@@ -327,6 +335,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             };
 
             frame.inc_pc();
+
+            // println!("instruction: {:?} : {:?}", instruction, self.stack.current_frame().ok().and_then(|f| f.current_debug_span()).and_then(|s| s.code()).unwrap_or_else(|| "none".to_string()));
 
             instruction
         };
@@ -520,6 +530,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
+                // println!("MAdd: {:?} {:?} {:?}", r1, r2, r3);
+                // println!("frame upvalues: {:?}", self.stack.current_frame()?.upvalues);
+                // println!("proc upvalues: {:?}", task_context.process().borrow().upvalues);
                 self.binary_operation(r1, r2, r3, |x, y| x.add(y))?;
             }
             Instruction::MapConst(r, map) => {
@@ -825,24 +838,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             func.clone(),
             num_args,
             num_args,
-            None, /* static functions do not inherit upvalues from the calling function
-                           * Some(&current_frame.upvalues), */
+            None, // static functions do not inherit upvalues from the calling function
         );
 
         // copy argument registers from old frame to new
-        if num_args == 1 {
-            new_frame.set_location(
-                func.arg_locations
-                    .get(0)
-                    .unwrap_or(&RegisterVariant::Local(Register(1))),
-                get_location_in_frame(current_frame, *initial_arg)?.into_owned(),
-            );
-        } else if num_args > 0_usize {
+        if num_args > 0_usize {
             let start_index = initial_arg.index();
             let mut next_index = 1;
             let registers = &current_frame.registers;
             for i in 0..num_args {
-                let target_location = func.arg_locations.get(i).copied().unwrap_or({
+                let target_location = func.arg_locations.get(i).copied().unwrap_or_else(|| {
                     // This should only be reached by variables that will go
                     // into an ellipsis function's argv.
                     Register(next_index).as_local()
@@ -853,10 +858,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
 
                 new_frame.set_location(
-                    &target_location,
-                    // for a call with multiple arguments, the refs are copied into
-                    // local registers prior to the call, so we can assume their locations
-                    // here.
+                    target_location,
                     registers[start_index + i].clone(),
                 )
             }
@@ -892,7 +894,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
             } else {
-                return Err(self.runtime_error("callfp instruction on non-function"));
+                return Err(self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref)));
             }
         };
 
@@ -953,13 +955,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let new_registers = RegisterBank::initialized_for_function(&function, max_arg_length);
 
+        let upvalues = if function.name().starts_with("closure-") {
+            Some(&ptr.upvalues)
+        } else {
+            None
+        };
+
         let mut new_frame = CallFrame::with_registers(
             proc,
             function,
             passed_args_count,
             new_registers,
-            Some(&ptr.upvalues),
+            upvalues,
         );
+
+        // println!("new frame upvalues: {:?}", new_frame.upvalues);
 
         // negotiate the passed & partially-applied arguments
         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
@@ -977,7 +987,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 )?;
 
                 new_frame.set_location(
-                    &loc,
+                    loc,
                     r.clone(),
                 );
 
@@ -1005,11 +1015,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
 
                 if let Some(Some(x)) = partial_args.get(i) {
+                    // println!("partial arg: {:?} -> {}", x, target_location);
                     // if a partially-applied arg is present, use it
                     type_check_and_assign_location(target_location, x, i)?;
                 } else if let Some(x) = from_slice.get(from_slice_index) {
-                    // check if the user passed an argument to
-                    // fill in a hole in the partial arguments
+                    // println!("from slice: {:?} -> {}", x, target_location);
+                    // check if the user passed an argument, which will
+                    // fill in the next hole in the partial arguments, or
+                    // append to the end
                     type_check_and_assign_location(target_location, x, i)?;
                     from_slice_index += 1;
                 }
@@ -1232,7 +1245,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 Ok(())
             }
-            _ => Err(self.runtime_error("non-Call instruction passed to `handle_call`")),
+            _ => Err(self.runtime_error("non-CallOther instruction passed to `handle_call_other`")),
         }
     }
 
@@ -1256,7 +1269,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name {
                 FunctionName::Var(_) => {
                     return Err(self.runtime_error(concat!(
-                        "A function pointer with `&` as the receiver receiver somehow has a ",
+                        "A function pointer with `&` as the receiver somehow has a ",
                         "var function name. This should not be reachable if ",
                         "semantic checks have passed."
                     )));
@@ -1342,6 +1355,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             // Function pointers inherit the creating function's upvalues
             upvalues: frame.upvalues.clone(),
         };
+
+        // panic!("search here");
 
         let new_ref = self.memory.value_to_ref(LpcValue::from(fp));
 
@@ -3987,7 +4002,7 @@ mod tests {
 
             let frame_vars = frame.local_variables();
 
-            println!("frame_vars: {}", format_slice(&frame_vars));
+            // println!("frame_vars: {}", format_slice(&frame_vars));
 
             for (k, v) in vars {
                 let v: BareVal = v.clone().into();
@@ -4015,7 +4030,7 @@ mod tests {
             let frame = snapshot.pop().unwrap();
             let proc = frame.process.borrow();
 
-            println!("proc upvalues: {}", format_slice(&proc.upvalues));
+            // println!("proc upvalues: {}", format_slice(&proc.upvalues));
 
             assert_eq!(upvalues.len(), proc.upvalues.len());
 
@@ -4036,7 +4051,7 @@ mod tests {
 
             let frame = snapshot.pop().unwrap();
 
-            println!("frame upvalues: {}", format_slice(&frame.upvalues));
+            // println!("frame upvalues: {}", format_slice(&frame.upvalues));
 
             assert_eq!(upvalues.len(), frame.upvalues.len());
 
@@ -4195,6 +4210,54 @@ mod tests {
                 ("make", Function("closure-1".into(), vec![])),
                 ("made1", Function("closure-0".into(), vec![])),
                 ("made2", Function("closure-0".into(), vec![])),
+            ]);
+
+            check_local_vars(code, &expected);
+        }
+
+        #[test]
+        fn test_higher_order_with_partial_application() {
+            let code = indoc! { r##"
+                void create() {
+                    function partial = &make_maker(,666);
+
+                    function maker = partial("hello");
+
+                    function made1 = maker(1, 2);
+                    function made2 = (: maker(3, $1) :); // closure-0
+                    made2 = made2(77);
+
+                    int c1 = made1(-4);
+                    int c2 = made2(69);
+
+                    debug("snapshot_stack");
+                }
+
+                function make_maker(string str, int i) {
+                    return (: [int j, int k] // closure-2
+                        return (: [int l] str + i + " " + j + " " + k + " " + l :); // closure-1
+                    :);
+                }
+            "##};
+
+            let expected: Vec<BareVal> = vec![
+                Function("closure-2".into(), vec![]),
+                String("hello".into()),
+                Int(666),
+                Int(1),
+                Int(2),
+                Int(3),
+                Int(77),
+            ];
+            check_proc_upvalues(code, &expected);
+
+            let expected = IndexMap::from([
+                ("c1", String("hello666 1 2 -4".into())),
+                ("c2", String("hello666 3 77 69".into())),
+                ("partial", Function("make_maker".into(), vec![None, Some(Int(666))])),
+                ("maker", Function("closure-2".into(), vec![])),
+                ("made1", Function("closure-1".into(), vec![])),
+                ("made2", Function("closure-1".into(), vec![])),
             ]);
 
             check_local_vars(code, &expected);

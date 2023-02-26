@@ -26,6 +26,7 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::semantic_checks::check_var_redefinition,
 };
+use crate::compiler::ast::call_node::CallNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -68,6 +69,22 @@ impl ScopeWalker {
 
         self.insert_symbol(sym);
     }
+
+    fn should_upvalue_symbol(&self, symbol: &Symbol) -> bool {
+        if_chain! {
+            if !symbol.is_global();
+            if let Some(closure_scope_id) = self.closure_scope_stack.last().copied();
+            if let Some(symbol_scope_id) = symbol.scope_id;
+            if symbol_scope_id != closure_scope_id;
+            let mut ancestors = symbol_scope_id.ancestors(&self.context.scopes.scopes);
+            if !ancestors.contains(&closure_scope_id);
+            then {
+                true
+            } else {
+                false
+            }
+        }
+    }
 }
 
 impl ContextHolder for ScopeWalker {
@@ -87,6 +104,29 @@ impl TreeWalker for ScopeWalker {
         }
 
         self.context.scopes.pop();
+        Ok(())
+    }
+
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+        if let Some(rcvr) = &mut node.receiver {
+            rcvr.visit(self)?;
+        }
+
+        for argument in &mut node.arguments {
+            argument.visit(self)?;
+        }
+
+        if_chain! {
+            if let Some(symbol) = self.context.lookup_var(&node.name);
+            if symbol.type_.matches_type(LpcType::Function(false));
+            if self.should_upvalue_symbol(symbol);
+            then {
+                trace!("upvaluing called function var {}", &node.name);
+                let mut symbol = self.context.lookup_var_mut(&node.name).unwrap();
+                symbol.upvalue = true;
+            }
+        }
+
         Ok(())
     }
 
@@ -287,22 +327,15 @@ impl TreeWalker for ScopeWalker {
             node.set_global(true);
         }
 
+
         // check for, and handle upvalues
-        if_chain! {
-            if !symbol.is_global();
-            if let Some(closure_scope_id) = self.closure_scope_stack.last().copied();
-            if let Some(symbol_scope_id) = symbol.scope_id;
-            if symbol_scope_id != closure_scope_id;
-            let mut ancestors = symbol_scope_id.ancestors(&self.context.scopes.scopes);
-            if !ancestors.contains(&closure_scope_id);
-            then {
-                trace!("upvaluing {}", &node.name);
-                let mut symbol = self.context.lookup_var_mut(&node.name).unwrap();
-                // *any* capture requires the symbol to be upvalued
-                symbol.upvalue = true;
-                // we also mark this specific reference as a non-local capture
-                node.external_capture = true;
-            }
+        if self.should_upvalue_symbol(symbol) {
+            trace!("upvaluing {}", &node.name);
+            let mut symbol = self.context.lookup_var_mut(&node.name).unwrap();
+            // *any* capture requires the symbol to be upvalued
+            symbol.upvalue = true;
+            // we also mark this specific reference as a non-local capture
+            node.external_capture = true;
         }
 
         Ok(())

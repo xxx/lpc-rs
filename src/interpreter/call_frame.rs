@@ -18,7 +18,7 @@ use crate::interpreter::{
 };
 
 /// A representation of a local variable name and value.
-/// This exists only so we can stick a Display impl on it for
+/// This exists only so we can stick a `Display` impl on it for
 /// testing and debugging.
 #[derive(Debug, Clone)]
 pub struct LocalVariable {
@@ -81,16 +81,6 @@ impl CallFrame {
         let reg_len = function.arity().num_args + function.num_locals + 1;
         let process = process.into();
         let ups = upvalues.cloned().unwrap_or_default();
-
-        // {
-        //     let pr = process.borrow();
-        //     trace!(
-        //         "calling: {} - new frame upvalues: {:?} || process upvalues: {:?}",
-        //         &function.name(),
-        //         upvalues,
-        //         pr.upvalues
-        //     );
-        // }
 
         let mut instance = Self {
             process,
@@ -162,6 +152,8 @@ impl CallFrame {
     }
 
     /// Reserve space for the upvalues that this call will initialize
+    /// Returns the index in the Process' `upvalues` array where the
+    ///   newly-populated upvalues will be stored
     fn populate_upvalues(&mut self) -> usize {
         let num_upvalues = self.function.num_upvalues;
 
@@ -169,6 +161,8 @@ impl CallFrame {
             let mut proc = self.process.borrow_mut();
             let upvalues = &mut proc.upvalues;
             let idx = upvalues.len();
+
+            // println!("populating upvalues: {:?}", upvalues);
 
             upvalues.reserve(num_upvalues);
             for _ in 0..num_upvalues {
@@ -180,6 +174,7 @@ impl CallFrame {
 
         self.upvalues.reserve(num_upvalues);
         for i in 0..num_upvalues {
+            println!("pushing frame upvalue {}", start_idx + i);
             self.upvalues.push(Register(start_idx + i));
         }
 
@@ -187,18 +182,20 @@ impl CallFrame {
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the variant
-    pub fn set_location(&mut self, location: &RegisterVariant, lpc_ref: LpcRef) {
+    pub fn set_location(&mut self, location: RegisterVariant, lpc_ref: LpcRef) {
         match location {
             RegisterVariant::Local(reg) => {
-                self.registers[*reg] = lpc_ref;
+                self.registers[reg] = lpc_ref;
             }
             RegisterVariant::Global(reg) => {
                 let mut proc = self.process.borrow_mut();
-                proc.globals[*reg] = lpc_ref;
+                proc.globals[reg] = lpc_ref;
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalues;
                 let idx = upvalues[reg.index()];
+
+                println!("setting upvalue {} to {:?}", location, lpc_ref);
 
                 let mut proc = self.process.borrow_mut();
                 proc.upvalues[idx] = lpc_ref;

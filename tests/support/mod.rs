@@ -38,7 +38,10 @@ pub fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
     let program = compile_prog(code);
     let ctx = task
         .initialize_program(program, test_config(), ObjectSpace::default())
-        .expect("failed to initialize");
+        .unwrap_or_else(|e| {
+            e.emit_diagnostics();
+            panic!("failed to initialize");
+        });
 
     (task, ctx)
 }

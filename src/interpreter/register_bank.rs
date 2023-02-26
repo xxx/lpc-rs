@@ -3,6 +3,7 @@ use std::{
     slice::Iter,
     vec::IntoIter,
 };
+use std::fmt::{Display, Formatter};
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;
@@ -54,6 +55,20 @@ impl RegisterBank {
         let reservation = std::cmp::max(static_length, dynamic_length);
 
         RegisterBank::new(vec![NULL; reservation])
+    }
+}
+
+impl Display for RegisterBank {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = "[".to_string();
+        for (i, register) in self.registers.iter().enumerate() {
+            if i != 0 {
+                s.push_str(", ");
+            }
+            s.push_str(&format!("{}", register));
+        }
+        s.push(']');
+        write!(f, "{}", s)
     }
 }
 

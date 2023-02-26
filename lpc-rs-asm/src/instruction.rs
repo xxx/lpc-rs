@@ -55,8 +55,7 @@ pub enum Instruction {
     },
 
     /// Finish a block of instructions that can catch errors and continue
-    /// execution. Store the error in x.0, and jump to x.1 to continue
-    /// execution
+    /// execution.
     CatchEnd,
 
     /// Start a block of instructions that can catch errors and continue
