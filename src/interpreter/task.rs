@@ -3702,7 +3702,7 @@ mod tests {
         mod test_sizeof {
             use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
             use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
-            use lpc_rs_function_support::function_prototype::FunctionPrototype;
+            use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
             use super::*;
             use crate::test_support::test_config;
@@ -3772,15 +3772,11 @@ mod tests {
                 functions.insert(
                     INIT_PROGRAM.to_string(),
                     ProgramFunction {
-                        prototype: FunctionPrototype::new(
-                            INIT_PROGRAM,
-                            LpcType::Void,
-                            Default::default(),
-                            Default::default(),
-                            None,
-                            vec![],
-                            vec![],
-                        ),
+                        prototype: FunctionPrototypeBuilder::default()
+                            .name(INIT_PROGRAM)
+                            .return_type(LpcType::Void)
+                            .build()
+                            .unwrap(),
                         num_locals: 2,
                         num_upvalues: 0,
                         instructions: vec![

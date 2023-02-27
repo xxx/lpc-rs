@@ -1751,8 +1751,8 @@ mod tests {
         use super::*;
 
         mod arrays {
-            use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags, EFUN};
-            use lpc_rs_function_support::function_prototype::FunctionPrototype;
+            use lpc_rs_core::EFUN;
+            use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
             use super::*;
             use crate::compiler::ast::array_node::ArrayNode;
@@ -1854,15 +1854,11 @@ mod tests {
             fn call_uses_namespace_to_get_correct_function() {
                 let mut context = CompilationContext::default();
 
-                let proto = FunctionPrototype::new(
-                    "clone_object",
-                    LpcType::Int(true),
-                    FunctionArity::default(),
-                    FunctionFlags::default(),
-                    None,
-                    vec![],
-                    vec![],
-                );
+                let proto = FunctionPrototypeBuilder::default()
+                    .name("clone_object")
+                    .return_type(LpcType::Int(true))
+                    .build()
+                    .unwrap();
                 context
                     .function_prototypes
                     .insert("clone_object".into(), proto);

@@ -17,7 +17,7 @@ use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
 };
 use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_function_support::function_prototype::{FunctionPrototype, FunctionPrototypeBuilder};
 use once_cell::sync::Lazy;
 use this_object::this_object;
 use throw::throw;
@@ -43,27 +43,47 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
 
     m.insert(
         CALL_OTHER,
-        FunctionPrototype {
-            name: CALL_OTHER.into(),
-            return_type: LpcType::Mixed(false),
-            arity: FunctionArity {
+        FunctionPrototypeBuilder::default()
+            .name(CALL_OTHER)
+            .return_type(LpcType::Mixed(false))
+            .arity(FunctionArity {
                 num_args: 2,
                 num_default_args: 0,
                 varargs: false,
                 ellipsis: true,
-            },
-            arg_types: vec![
+            })
+            .arg_types(vec![
                 LpcType::Object(false)
                     | LpcType::Object(true)
                     | LpcType::String(false)
                     | LpcType::String(true)
                     | LpcType::Mapping(false),
                 LpcType::String(false),
-            ],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(true),
-        },
+            ])
+            .flags(FunctionFlags::default().with_ellipsis(true))
+            .build()
+            .expect("failed to build call_other"),
+        // FunctionPrototype {
+        //     name: CALL_OTHER.into(),
+        //     return_type: LpcType::Mixed(false),
+        //     arity: FunctionArity {
+        //         num_args: 2,
+        //         num_default_args: 0,
+        //         varargs: false,
+        //         ellipsis: true,
+        //     },
+        //     arg_types: vec![
+        //         LpcType::Object(false)
+        //             | LpcType::Object(true)
+        //             | LpcType::String(false)
+        //             | LpcType::String(true)
+        //             | LpcType::Mapping(false),
+        //         LpcType::String(false),
+        //     ],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(true),
+        // },
     );
 
     // "catch" is a special form of the language, implemented with custom
@@ -71,117 +91,173 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
     //   as `catch` looks and acts like a function call.
     m.insert(
         CATCH,
-        FunctionPrototype {
-            name: CATCH.into(),
-            return_type: LpcType::Mixed(false),
-            arity: FunctionArity::new(1),
-            arg_types: vec![LpcType::Mixed(false) | LpcType::Void],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+        FunctionPrototypeBuilder::default()
+            .name(CATCH)
+            .return_type(LpcType::Mixed(false))
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false) | LpcType::Void])
+            .build()
+            .expect("failed to build catch"),
+        // FunctionPrototype {
+        //     name: CATCH.into(),
+        //     return_type: LpcType::Mixed(false),
+        //     arity: FunctionArity::new(1),
+        //     arg_types: vec![LpcType::Mixed(false) | LpcType::Void],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(false),
+        // },
     );
 
     m.insert(
         CLONE_OBJECT,
-        FunctionPrototype {
-            name: CLONE_OBJECT.into(),
-            return_type: LpcType::Object(false),
-            arity: FunctionArity::new(1),
-            arg_types: vec![LpcType::String(false)],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+        FunctionPrototypeBuilder::default()
+            .name(CLONE_OBJECT)
+            .return_type(LpcType::Object(false))
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::String(false)])
+            .build()
+            .expect("failed to build clone_object"),
+        // FunctionPrototype {
+        //     name: CLONE_OBJECT.into(),
+        //     return_type: LpcType::Object(false),
+        //     arity: FunctionArity::new(1),
+        //     arg_types: vec![LpcType::String(false)],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(false),
+        // },
     );
 
     m.insert(
         DEBUG,
-        FunctionPrototype {
-            name: DEBUG.into(),
-            return_type: LpcType::Mixed(false),
-            arity: FunctionArity {
+        FunctionPrototypeBuilder::default()
+            .name(DEBUG)
+            .return_type(LpcType::Mixed(false))
+            .arity(FunctionArity {
                 num_args: 2,
                 num_default_args: 1,
-                ellipsis: false,
                 varargs: false,
-            },
-            arg_types: vec![LpcType::String(false), LpcType::Mixed(false)],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+                ellipsis: false,
+            })
+            .arg_types(vec![LpcType::String(false), LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build debug"),
+        // FunctionPrototype {
+        //     name: DEBUG.into(),
+        //     return_type: LpcType::Mixed(false),
+        //     arity: FunctionArity {
+        //         num_args: 2,
+        //         num_default_args: 1,
+        //         ellipsis: false,
+        //         varargs: false,
+        //     },
+        //     arg_types: vec![LpcType::String(false), LpcType::Mixed(false)],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(false),
+        // },
     );
 
     m.insert(
         DUMP,
-        FunctionPrototype {
-            name: DUMP.into(),
-            return_type: LpcType::Void,
-            arity: FunctionArity {
+        FunctionPrototypeBuilder::default()
+            .name(DUMP)
+            .return_type(LpcType::Void)
+            .arity(FunctionArity {
                 num_args: 1,
-                ellipsis: true,
                 num_default_args: 0,
                 varargs: false,
-            },
-            arg_types: vec![LpcType::Mixed(false)],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(true),
-        },
+                ellipsis: true,
+            })
+            .arg_types(vec![LpcType::Mixed(false)])
+            .flags(FunctionFlags::default().with_ellipsis(true))
+            .build()
+            .expect("failed to build dump"),
+        // FunctionPrototype {
+        //     name: DUMP.into(),
+        //     return_type: LpcType::Void,
+        //     arity: FunctionArity {
+        //         num_args: 1,
+        //         ellipsis: true,
+        //         num_default_args: 0,
+        //         varargs: false,
+        //     },
+        //     arg_types: vec![LpcType::Mixed(false)],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(true),
+        // },
     );
 
     m.insert(
         FILE_NAME,
-        FunctionPrototype {
-            name: FILE_NAME.into(),
-            return_type: LpcType::String(false),
-            arity: FunctionArity::new(1),
-            arg_types: vec![LpcType::Object(false)],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+        FunctionPrototypeBuilder::default()
+            .name(FILE_NAME)
+            .return_type(LpcType::String(false))
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Object(false)])
+            .build()
+            .expect("failed to build file_name"),
+        // FunctionPrototype {
+        //     name: FILE_NAME.into(),
+        //     return_type: LpcType::String(false),
+        //     arity: FunctionArity::new(1),
+        //     arg_types: vec![LpcType::Object(false)],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(false),
+        // },
     );
 
     // sizeof is handled with its own instruction, but is typechecked as normal
     m.insert(
         SIZEOF,
-        FunctionPrototype {
-            name: SIZEOF.into(),
-            return_type: LpcType::Int(false),
-            arity: FunctionArity::new(1),
-            arg_types: vec![LpcType::Mixed(true) | LpcType::Mapping(false)],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+        FunctionPrototypeBuilder::default()
+            .name(SIZEOF)
+            .return_type(LpcType::Int(false))
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(true) | LpcType::Mapping(false)])
+            .build()
+            .expect("failed to build sizeof"),
+        // FunctionPrototype {
+        //     name: SIZEOF.into(),
+        //     return_type: LpcType::Int(false),
+        //     arity: FunctionArity::new(1),
+        //     arg_types: vec![LpcType::Mixed(true) | LpcType::Mapping(false)],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(false),
+        // },
     );
 
     m.insert(
         THIS_OBJECT,
-        FunctionPrototype {
-            name: THIS_OBJECT.into(),
-            return_type: LpcType::Object(false),
-            arity: FunctionArity::default(),
-            arg_types: vec![],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+        FunctionPrototypeBuilder::default()
+            .name(THIS_OBJECT)
+            .return_type(LpcType::Object(false))
+            .build()
+            .expect("failed to build this_object"),
+        // FunctionPrototype {
+        //     name: THIS_OBJECT.into(),
+        //     return_type: LpcType::Object(false),
+        //     arity: FunctionArity::default(),
+        //     arg_types: vec![],
+        //     span: None,
+        //     arg_spans: vec![],
+        //     flags: FunctionFlags::default().with_ellipsis(false),
+        // },
     );
 
     m.insert(
         THROW,
-        FunctionPrototype {
-            name: THROW.into(),
-            return_type: LpcType::Void,
-            arity: FunctionArity::new(1),
-            arg_types: vec![LpcType::Mixed(false)],
-            span: None,
-            arg_spans: vec![],
-            flags: FunctionFlags::default().with_ellipsis(false),
-        },
+        FunctionPrototypeBuilder::default()
+            .name(THROW)
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build throw"),
     );
 
     m

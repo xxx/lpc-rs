@@ -39,23 +39,18 @@ impl<'a> From<Rc<ProgramFunction>> for FunctionLike<'a> {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{
-        function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
-    };
+    use lpc_rs_core::lpc_type::LpcType;
 
     use super::*;
+    use crate::function_prototype::FunctionPrototypeBuilder;
 
     #[test]
     fn test_prototype() {
-        let prototype = FunctionPrototype::new(
-            "foo",
-            LpcType::Int(false),
-            FunctionArity::default(),
-            FunctionFlags::default(),
-            None,
-            vec![],
-            vec![],
-        );
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("foo")
+            .return_type(LpcType::Int(false))
+            .build()
+            .unwrap();
         let function_like = FunctionLike::from(&prototype);
         assert_eq!(function_like.prototype(), &prototype);
 

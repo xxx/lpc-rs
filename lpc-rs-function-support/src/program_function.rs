@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
 };
 
+use derive_builder::Builder;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType, register::RegisterVariant};
 use lpc_rs_errors::span::Span;
@@ -21,33 +22,41 @@ use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 /// `closure-<id>`, which is unparsable, and cannot conflict with user-defined
 /// functions They otherwise act as normal functions, with the exception of
 /// upvalue access.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
+#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct ProgramFunction {
     /// My prototype from compilation
     pub prototype: FunctionPrototype,
 
     /// The number of non-argument, non-return-value locals.
     /// Used for register allocation.
+    #[builder(default)]
     pub num_locals: usize,
 
     /// How many of my locals are actually upvalues?
     /// Note that this is just the count of captured variables, not
     /// vars that are captured from elsewhere.
+    #[builder(default)]
     pub num_upvalues: usize,
 
     /// The actual instructions of this function
+    #[builder(default)]
     pub instructions: Vec<Instruction>,
 
     /// Code spans corresponding to instructions, for use in error messages
+    #[builder(default)]
     pub debug_spans: Vec<Option<Span>>,
 
     /// Map of labels, to their respective addresses
+    #[builder(default)]
     pub labels: HashMap<String, Address>,
 
     /// List of local variables declared within this function
+    #[builder(default)]
     pub local_variables: Vec<Symbol>,
 
     /// Track the location of where my arguments are expected
+    #[builder(default)]
     pub arg_locations: Vec<RegisterVariant>,
 }
 

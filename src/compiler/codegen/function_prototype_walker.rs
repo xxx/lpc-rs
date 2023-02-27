@@ -1,6 +1,6 @@
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
-use lpc_rs_function_support::function_prototype::FunctionPrototype;
+use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 use lpc_rs_utils::string::closure_arg_number;
 
 use crate::compiler::{
@@ -80,20 +80,21 @@ impl TreeWalker for FunctionPrototypeWalker {
 
         self.context.function_prototypes.insert(
             node.name.clone(),
-            FunctionPrototype {
-                name: node.name.clone().into(),
-                return_type: node.return_type,
-                arity: FunctionArity {
+            FunctionPrototypeBuilder::default()
+                .name(node.name.clone())
+                .return_type(node.return_type)
+                .arity(FunctionArity {
                     num_args,
                     num_default_args,
                     ellipsis: node.flags.ellipsis(),
                     varargs: node.flags.varargs(),
-                },
-                arg_types,
-                span: node.span,
-                arg_spans,
-                flags: node.flags,
-            },
+                })
+                .arg_types(arg_types)
+                .span(node.span)
+                .arg_spans(arg_spans)
+                .flags(node.flags)
+                .build()
+                .expect("Failed to build function prototype"),
         );
 
         Ok(())
@@ -111,25 +112,26 @@ impl TreeWalker for FunctionPrototypeWalker {
             .collect::<Vec<_>>();
         self.context.function_prototypes.insert(
             node.name.clone(),
-            FunctionPrototype {
-                name: node.name.clone().into(),
-                return_type: node.return_type,
-                arity: FunctionArity {
+            FunctionPrototypeBuilder::default()
+                .name(node.name.clone())
+                .return_type(node.return_type)
+                .arity(FunctionArity {
                     num_args,
                     num_default_args,
                     ellipsis: node.flags.ellipsis(),
                     varargs: node.flags.varargs(),
-                },
-                arg_types,
-                span: node.span,
-                arg_spans: {
+                })
+                .arg_types(arg_types)
+                .span(node.span)
+                .arg_spans({
                     node.parameters
                         .iter()
                         .flat_map(|n| n.span)
                         .collect::<Vec<_>>()
-                },
-                flags: node.flags,
-            },
+                })
+                .flags(node.flags)
+                .build()
+                .expect("Failed to build function prototype"),
         );
 
         // walk the contents of the function, in case any closures are defined.
@@ -191,20 +193,13 @@ mod tests {
 
         assert_eq!(
             *proto,
-            FunctionPrototype {
-                name: "marf".into(),
-                return_type: LpcType::Mixed(false),
-                arity: FunctionArity {
-                    num_args: 2,
-                    num_default_args: 0,
-                    ellipsis: false,
-                    varargs: false
-                },
-                arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            }
+            FunctionPrototypeBuilder::default()
+                .name("marf")
+                .return_type(LpcType::Mixed(false))
+                .arity(FunctionArity::new(2))
+                .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])
+                .build()
+                .expect("Failed to build function prototype"),
         )
     }
 
@@ -234,21 +229,13 @@ mod tests {
 
         assert_eq!(
             *proto,
-            FunctionPrototype {
-                name: "closure-123".into(),
-                return_type: LpcType::Mixed(false),
-                arity: FunctionArity {
-                    num_args: 4, /* $4 implies 4, which is more than the declared params `foo`
-                                  * and `bar`. */
-                    num_default_args: 0,
-                    ellipsis: false,
-                    varargs: false
-                },
-                arg_types: vec![LpcType::Int(false), LpcType::Mapping(true)],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            }
+            FunctionPrototypeBuilder::default()
+                .name("closure-123")
+                .return_type(LpcType::Mixed(false))
+                .arity(FunctionArity::new(4))
+                .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])
+                .build()
+                .expect("Failed to build function prototype"),
         )
     }
 }

@@ -7,7 +7,6 @@ use lpc_rs_core::{
     call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
-    function_flags::FunctionFlags,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
     register_counter::RegisterCounter,
@@ -15,7 +14,9 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::{
-    function_prototype::FunctionPrototype, program_function::ProgramFunction, symbol::Symbol,
+    function_prototype::FunctionPrototypeBuilder,
+    program_function::{ProgramFunction, ProgramFunctionBuilder},
+    symbol::Symbol,
 };
 use lpc_rs_utils::string::closure_arg_number;
 use tracing::{instrument, trace};
@@ -198,24 +199,22 @@ impl CodegenWalker {
     /// of our inherited-from parents.
     #[instrument(skip_all)]
     pub fn setup_init(&mut self) {
-        let prototype = FunctionPrototype::new(
-            INIT_PROGRAM,
-            LpcType::Void,
-            FunctionArity::default(),
-            FunctionFlags::default(),
-            None,
-            vec![],
-            vec![],
-        );
-
-        let mut func = ProgramFunction::new(prototype, 0);
+        let prototype = FunctionPrototypeBuilder::default()
+            .name(INIT_PROGRAM)
+            .return_type(LpcType::Void)
+            .build()
+            .expect("Failed to build init prototype");
 
         let mut new_init_instructions = vec![];
         let mut new_init_debug_spans = vec![];
         self.combine_inits(&mut new_init_instructions, &mut new_init_debug_spans);
 
-        func.instructions = new_init_instructions;
-        func.debug_spans = new_init_debug_spans;
+        let func = ProgramFunctionBuilder::default()
+            .prototype(prototype)
+            .instructions(new_init_instructions)
+            .debug_spans(new_init_debug_spans)
+            .build()
+            .expect("Failed to build init function");
 
         self.function_stack.push(func);
     }
@@ -265,11 +264,6 @@ impl CodegenWalker {
 
         Ok(())
     }
-
-    // /// Check for a symbol in the global scope
-    // fn lookup_global(&self, name: &str) -> Option<&Symbol> {
-    //     self.context.scopes.lookup_global(name)
-    // }
 
     /// helper to choose operation instructions
     fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
@@ -2210,15 +2204,11 @@ mod tests {
         prog.functions.insert(
             "simul_efun".into(),
             ProgramFunction::new(
-                FunctionPrototype::new(
-                    "simul_efun",
-                    LpcType::Void,
-                    Default::default(),
-                    Default::default(),
-                    None,
-                    vec![],
-                    vec![],
-                ),
+                FunctionPrototypeBuilder::default()
+                    .name("simul_efun")
+                    .return_type(LpcType::Void)
+                    .build()
+                    .unwrap(),
                 0,
             )
             .into(),
@@ -3031,7 +3021,6 @@ mod tests {
     mod test_visit_call {
         use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
-        use lpc_rs_function_support::function_prototype::FunctionPrototype;
 
         use super::*;
 
@@ -3198,15 +3187,12 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_function_pointers() {
             let mut context = CompilationContext::default();
-            let prototype = FunctionPrototype {
-                name: "marfin".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::new(1),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("marfin")
+                .return_type(LpcType::Int(false))
+                .arity(FunctionArity::new(1))
+                .build()
+                .unwrap();
 
             context
                 .function_prototypes
@@ -3246,15 +3232,12 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_global_function_pointers() {
             let mut context = CompilationContext::default();
-            let prototype = FunctionPrototype {
-                name: "marfin".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::new(1),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("marfin")
+                .return_type(LpcType::Int(false))
+                .arity(FunctionArity::new(1))
+                .build()
+                .unwrap();
 
             context
                 .function_prototypes
@@ -3293,15 +3276,12 @@ mod tests {
         #[test]
         fn copies_non_void_call_results() {
             let mut context = CompilationContext::default();
-            let prototype = FunctionPrototype {
-                name: "marfin".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::new(1),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("marfin")
+                .return_type(LpcType::Int(false))
+                .arity(FunctionArity::new(1))
+                .build()
+                .unwrap();
 
             context
                 .function_prototypes
@@ -3333,15 +3313,12 @@ mod tests {
         #[test]
         fn does_not_copy_void_call_results() {
             let mut context = CompilationContext::default();
-            let prototype = FunctionPrototype {
-                name: "void_thing".into(),
-                return_type: LpcType::Void,
-                arity: FunctionArity::new(1),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("void_thing")
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(1))
+                .build()
+                .unwrap();
 
             context
                 .function_prototypes
@@ -3420,15 +3397,14 @@ mod tests {
         #[test]
         fn handles_ellipsis_functions() {
             let mut context = CompilationContext::default();
-            let prototype = FunctionPrototype {
-                name: "my_func".into(),
-                return_type: LpcType::Void,
-                arity: FunctionArity::new(1),
-                arg_types: vec![LpcType::String(false)],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default().with_ellipsis(true),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_func")
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(1))
+                .arg_types(vec![LpcType::String(false)])
+                .flags(FunctionFlags::default().with_ellipsis(true))
+                .build()
+                .unwrap();
 
             context
                 .function_prototypes
@@ -5352,24 +5328,16 @@ mod tests {
 
     #[test]
     fn test_combine_inits() {
-        let prototype = FunctionPrototype::new(
-            INIT_PROGRAM,
-            LpcType::Void,
-            Default::default(),
-            Default::default(),
-            None,
-            vec![],
-            vec![],
-        );
-        let create_prototype = FunctionPrototype::new(
-            CREATE_FUNCTION,
-            LpcType::Void,
-            Default::default(),
-            Default::default(),
-            None,
-            vec![],
-            vec![],
-        );
+        let prototype = FunctionPrototypeBuilder::default()
+            .name(INIT_PROGRAM)
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let create_prototype = FunctionPrototypeBuilder::default()
+            .name(CREATE_FUNCTION)
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
 
         let mut grandparent_init = ProgramFunction::new(prototype.clone(), 0);
         let grandparent_init_instructions = vec![

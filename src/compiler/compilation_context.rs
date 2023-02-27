@@ -329,23 +329,19 @@ impl Default for CompilationContext {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{
-        function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
+    use lpc_rs_core::lpc_type::LpcType;
+    use lpc_rs_function_support::{
+        function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
     };
-    use lpc_rs_function_support::program_function::ProgramFunction;
 
     use super::*;
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
-        FunctionPrototype::new(
-            name,
-            LpcType::Int(false),
-            FunctionArity::new(0),
-            FunctionFlags::default(),
-            None,
-            vec![],
-            vec![],
-        )
+        FunctionPrototypeBuilder::default()
+            .name(name)
+            .return_type(LpcType::Int(false))
+            .build()
+            .unwrap()
     }
 
     fn make_program_function(name: &'static str) -> ProgramFunction {

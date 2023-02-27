@@ -9,6 +9,7 @@ use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
+use derive_builder::UninitializedFieldError;
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
 use span::HasSpan;
@@ -208,6 +209,12 @@ where
 
 impl From<std::io::Error> for LpcError {
     fn from(e: std::io::Error) -> Self {
+        Self::new(e.to_string())
+    }
+}
+
+impl From<UninitializedFieldError> for LpcError {
+    fn from(e: UninitializedFieldError) -> Self {
         Self::new(e.to_string())
     }
 }

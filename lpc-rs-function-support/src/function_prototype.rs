@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use derive_builder::Builder;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs_core::{
@@ -12,55 +13,37 @@ use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
 
 /// A representation of a function prototype, used to allow forward references.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
+#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
+#[readonly::make]
 pub struct FunctionPrototype {
     /// The name of the function
+    #[builder(setter(into))]
     pub name: Cow<'static, str>,
 
     /// The return type
     pub return_type: LpcType,
 
     /// The arity of the this function
+    #[builder(default)]
     pub arity: FunctionArity,
 
     /// Vector of argument types, used for type checking calls.
+    #[builder(default)]
     pub arg_types: Vec<LpcType>,
 
     /// The span of the definition of this function, for use in error messaging.
     /// When None, we assume this is an Efun prototype.
+    #[builder(default)]
     pub span: Option<Span>,
 
     /// Spans for my arguments
+    #[builder(default)]
     pub arg_spans: Vec<Span>,
 
     /// The flags that are set when the function was declared
+    #[builder(default)]
     pub flags: FunctionFlags,
-}
-
-impl FunctionPrototype {
-    /// Create a new FunctionPrototype
-    pub fn new<T>(
-        name: T,
-        return_type: LpcType,
-        arity: FunctionArity,
-        flags: FunctionFlags,
-        span: Option<Span>,
-        arg_types: Vec<LpcType>,
-        arg_spans: Vec<Span>,
-    ) -> Self
-    where
-        T: Into<Cow<'static, str>>,
-    {
-        Self {
-            name: name.into(),
-            return_type,
-            arity,
-            arg_types,
-            span,
-            arg_spans,
-            flags,
-        }
-    }
 }
 
 impl Display for FunctionPrototype {

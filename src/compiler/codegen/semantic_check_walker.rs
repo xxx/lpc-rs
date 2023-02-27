@@ -729,7 +729,7 @@ mod tests {
         lpc_type::LpcType,
     };
     use lpc_rs_errors::LpcErrorSeverity;
-    use lpc_rs_function_support::{function_prototype::FunctionPrototype, symbol::Symbol};
+    use lpc_rs_function_support::symbol::Symbol;
 
     use super::*;
     use crate::{
@@ -1118,7 +1118,9 @@ mod tests {
 
     mod test_visit_call {
         use lpc_rs_core::{function_flags::FunctionFlags, visibility::Visibility};
-        use lpc_rs_function_support::program_function::ProgramFunction;
+        use lpc_rs_function_support::{
+            function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
+        };
 
         use super::*;
         use crate::{assert_regex, interpreter::program::Program};
@@ -1136,15 +1138,11 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("known"),
-                FunctionPrototype {
-                    name: "known".into(),
-                    return_type: LpcType::Int(false),
-                    arity: FunctionArity::default(),
-                    arg_types: vec![],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default().with_ellipsis(false),
-                },
+                FunctionPrototypeBuilder::default()
+                    .name("known")
+                    .return_type(LpcType::Int(false))
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -1174,17 +1172,12 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("known"),
-                FunctionPrototype {
-                    name: "known".into(),
-                    return_type: LpcType::Int(false),
-                    arity: FunctionArity::default(),
-                    arg_types: vec![],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default()
-                        .with_ellipsis(false)
-                        .with_visibility(Visibility::Private),
-                },
+                FunctionPrototypeBuilder::default()
+                    .name("known")
+                    .return_type(LpcType::Int(false))
+                    .flags(FunctionFlags::default().with_visibility(Visibility::Private))
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -1211,15 +1204,11 @@ mod tests {
                 namespace: CallNamespace::default(),
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1250,15 +1239,11 @@ mod tests {
                 namespace: CallNamespace::Parent,
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1289,15 +1274,12 @@ mod tests {
                 namespace: CallNamespace::Parent,
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::from(&["private"][..]),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .flags(FunctionFlags::from(&["private"][..]))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1332,15 +1314,11 @@ mod tests {
                 namespace: CallNamespace::Named("parent".to_string()),
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1392,15 +1370,12 @@ mod tests {
                 namespace: CallNamespace::Named("parent".to_string()),
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::from(&["private"][..]),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .flags(FunctionFlags::from(&["private"][..]))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1438,15 +1413,11 @@ mod tests {
                 namespace: CallNamespace::Named("unknown_namespace".to_string()),
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default(),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1481,15 +1452,12 @@ mod tests {
                 namespace: CallNamespace::default(),
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default().with_visibility(Visibility::Private),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .flags(FunctionFlags::default().with_visibility(Visibility::Private))
+                .build()
+                .unwrap();
 
             let program_function = ProgramFunction::new(prototype, 0);
 
@@ -1677,25 +1645,24 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("my_function"),
-                FunctionPrototype {
-                    name: "my_function".into(),
-                    return_type: LpcType::Int(false),
-                    arity: FunctionArity {
+                FunctionPrototypeBuilder::default()
+                    .name("my_function")
+                    .return_type(LpcType::Int(false))
+                    .arity(FunctionArity {
                         num_args: 5,
                         varargs: true,
                         ..FunctionArity::default()
-                    },
-                    arg_types: vec![
+                    })
+                    .arg_types(vec![
                         LpcType::Int(false),
                         LpcType::Float(false),
                         LpcType::Int(false),
                         LpcType::String(false),
                         LpcType::Int(false),
-                    ],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default().with_varargs(true),
-                },
+                    ])
+                    .flags(FunctionFlags::default().with_varargs(true))
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -1725,19 +1692,18 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("my_func"),
-                FunctionPrototype {
-                    name: "my_func".into(),
-                    return_type: LpcType::Int(false),
-                    arity: FunctionArity {
+                FunctionPrototypeBuilder::default()
+                    .name("my_func")
+                    .return_type(LpcType::Int(false))
+                    .arity(FunctionArity {
                         num_args: 1,
                         num_default_args: 1,
                         ..FunctionArity::default()
-                    },
-                    arg_types: vec![LpcType::String(false)],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default(),
-                },
+                    })
+                    .arg_types(vec![LpcType::String(false)])
+                    .flags(FunctionFlags::default())
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -1766,18 +1732,13 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("my_func"),
-                FunctionPrototype {
-                    name: "my_func".into(),
-                    return_type: LpcType::Int(false),
-                    arity: FunctionArity {
-                        num_args: 1,
-                        ..FunctionArity::default()
-                    },
-                    arg_types: vec![LpcType::String(false)],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default(),
-                },
+                FunctionPrototypeBuilder::default()
+                    .name("my_func")
+                    .return_type(LpcType::Int(false))
+                    .arity(FunctionArity::new(1))
+                    .arg_types(vec![LpcType::String(false)])
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -1806,18 +1767,13 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("my_func"),
-                FunctionPrototype {
-                    name: "my_func".into(),
-                    return_type: LpcType::String(false),
-                    arity: FunctionArity {
-                        num_args: 1,
-                        ..FunctionArity::default()
-                    },
-                    arg_types: vec![LpcType::String(false)],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default(),
-                },
+                FunctionPrototypeBuilder::default()
+                    .name("my_func")
+                    .return_type(LpcType::String(false))
+                    .arity(FunctionArity::new(1))
+                    .arg_types(vec![LpcType::String(false)])
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -1939,7 +1895,9 @@ mod tests {
 
     mod test_visit_function_def {
         use lpc_rs_core::function_flags::FunctionFlags;
-        use lpc_rs_function_support::program_function::ProgramFunction;
+        use lpc_rs_function_support::{
+            function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
+        };
 
         use super::*;
         use crate::{
@@ -2061,15 +2019,13 @@ mod tests {
             let mut context = empty_context();
             let mut program = Program::default();
 
-            let prototype = FunctionPrototype::new(
-                "duplicate",
-                LpcType::Void,
-                FunctionArity::new(4),
-                FunctionFlags::default().with_nomask(true),
-                None,
-                vec![],
-                vec![],
-            );
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("duplicate")
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(4))
+                .flags(FunctionFlags::default().with_nomask(true))
+                .build()
+                .unwrap();
 
             let func = ProgramFunction::new(prototype, 7);
 
@@ -2095,7 +2051,9 @@ mod tests {
 
     mod test_visit_function_ptr {
         use lpc_rs_core::{function_flags::FunctionFlags, visibility::Visibility};
-        use lpc_rs_function_support::program_function::ProgramFunction;
+        use lpc_rs_function_support::{
+            function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
+        };
 
         use super::*;
         use crate::{assert_regex, interpreter::program::Program};
@@ -2112,17 +2070,12 @@ mod tests {
             let mut function_prototypes = HashMap::new();
             function_prototypes.insert(
                 String::from("known"),
-                FunctionPrototype {
-                    name: "known".into(),
-                    return_type: LpcType::Int(false),
-                    arity: FunctionArity::default(),
-                    arg_types: vec![],
-                    span: None,
-                    arg_spans: vec![],
-                    flags: FunctionFlags::default()
-                        .with_ellipsis(false)
-                        .with_visibility(Visibility::Private),
-                },
+                FunctionPrototypeBuilder::default()
+                    .name("known")
+                    .return_type(LpcType::Int(false))
+                    .flags(FunctionFlags::default().with_visibility(Visibility::Private))
+                    .build()
+                    .unwrap(),
             );
 
             let mut scopes = ScopeTree::default();
@@ -2148,15 +2101,12 @@ mod tests {
                 span: None,
             });
 
-            let prototype = FunctionPrototype {
-                name: "known".into(),
-                return_type: LpcType::Int(false),
-                arity: FunctionArity::default(),
-                arg_types: vec![],
-                span: None,
-                arg_spans: vec![],
-                flags: FunctionFlags::default().with_visibility(Visibility::Private),
-            };
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("known")
+                .return_type(LpcType::Int(false))
+                .flags(FunctionFlags::default().with_visibility(Visibility::Private))
+                .build()
+                .expect("failed to build prototype");
 
             let program_function = ProgramFunction::new(prototype, 0);
 

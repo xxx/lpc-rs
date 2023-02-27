@@ -317,10 +317,8 @@ impl Display for CallFrame {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{
-        function_arity::FunctionArity, function_flags::FunctionFlags, lpc_type::LpcType,
-    };
-    use lpc_rs_function_support::function_prototype::FunctionPrototype;
+    use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
+    use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
     use super::*;
 
@@ -328,15 +326,12 @@ mod tests {
     fn new_sets_up_registers() {
         let process = Process::default();
 
-        let prototype = FunctionPrototype::new(
-            "my_function",
-            LpcType::Void,
-            FunctionArity::new(4),
-            FunctionFlags::default(),
-            None,
-            vec![],
-            vec![],
-        );
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("my_function")
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(4))
+            .build()
+            .unwrap();
 
         let fs = ProgramFunction::new(prototype, 7);
 
@@ -353,15 +348,12 @@ mod tests {
         fn sets_up_registers_if_greater_max_is_passed() {
             let process = Process::default();
 
-            let prototype = FunctionPrototype::new(
-                "my_function",
-                LpcType::Void,
-                FunctionArity::new(4),
-                FunctionFlags::default(),
-                None,
-                vec![],
-                vec![],
-            );
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_function")
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(4))
+                .build()
+                .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
 
@@ -375,15 +367,12 @@ mod tests {
         fn sets_up_registers_if_lesser_max_is_passed() {
             let process = Process::default();
 
-            let prototype = FunctionPrototype::new(
-                "my_function",
-                LpcType::Void,
-                FunctionArity::new(4),
-                FunctionFlags::default(),
-                None,
-                vec![],
-                vec![],
-            );
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_function")
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(4))
+                .build()
+                .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
 
@@ -401,15 +390,12 @@ mod tests {
         fn uses_the_passed_registers() {
             let process = Process::default();
 
-            let prototype = FunctionPrototype::new(
-                "my_function",
-                LpcType::Void,
-                FunctionArity::new(4),
-                FunctionFlags::default(),
-                None,
-                vec![],
-                vec![],
-            );
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_function")
+                .return_type(LpcType::Void)
+                .arity(FunctionArity::new(4))
+                .build()
+                .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
 
@@ -430,15 +416,11 @@ mod tests {
         fn populates_upvalues() {
             let process = Process::default();
 
-            let prototype = FunctionPrototype::new(
-                "foo",
-                LpcType::Void,
-                Default::default(),
-                Default::default(),
-                None,
-                vec![],
-                vec![],
-            );
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_function")
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap();
 
             let mut pf = ProgramFunction::new(prototype, 0);
             let symbol_factory = SymbolFactory::new();
@@ -458,15 +440,11 @@ mod tests {
             assert_eq!(frame.upvalues, vec![Register(0), Register(1)]);
             assert_eq!(frame.process.borrow().upvalues.len(), 2);
 
-            let prototype = FunctionPrototype::new(
-                "foo",
-                LpcType::Void,
-                Default::default(),
-                Default::default(),
-                None,
-                vec![],
-                vec![],
-            );
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_function")
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap();
 
             let mut pf = ProgramFunction::new(prototype, 0);
             let symbol_factory = SymbolFactory::new();
