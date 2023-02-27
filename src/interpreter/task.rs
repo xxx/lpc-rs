@@ -19,7 +19,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use lpc_rs_utils::config::{Config};
+use lpc_rs_utils::config::Config;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -1745,10 +1745,10 @@ mod tests {
         fmt::Formatter,
         hash::{Hash, Hasher},
     };
-    use lpc_rs_utils::config::ConfigBuilder;
 
     use indoc::indoc;
     use lpc_rs_core::{LpcFloat, LpcInt};
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::{

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use delegate::delegate;
-use lpc_rs_utils::config::{Config};
+use lpc_rs_utils::config::Config;
 
 use crate::interpreter::{process::Process, program::Program};
 
