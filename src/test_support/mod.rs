@@ -39,7 +39,7 @@ pub fn test_config() -> Config {
 
 fn compile_simul_efuns(config: &Rc<Config>) -> Program {
     let compiler = Compiler::new(config.clone());
-    let path = LpcPath::new_in_game(config.simul_efun_file().unwrap(), "/", config.lib_dir());
+    let path = LpcPath::new_in_game(config.simul_efun_file().unwrap(), "/", &config.lib_dir);
     compiler.compile_in_game_file(&path, None).unwrap()
 }
 
@@ -49,7 +49,7 @@ pub fn compile_prog(code: &str) -> (Program, Rc<Config>, Rc<RefCell<Process>>) {
     let se_proc = Rc::new(RefCell::new(Process::new(simul_efuns)));
 
     let compiler = Compiler::new(config.clone()).with_simul_efuns(Some(se_proc.clone()));
-    let path = LpcPath::new_in_game("/my_file.c", "/", config.lib_dir());
+    let path = LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir);
     let program = compiler
         .compile_string(path, code)
         .expect("Failed to compile.");

@@ -19,7 +19,7 @@ fn load_master<const N: usize>(
 ) -> Result<Rc<RefCell<Process>>> {
     let compiler = Compiler::new(context.config());
 
-    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), context.config().lib_dir());
+    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &context.config().lib_dir);
     // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 

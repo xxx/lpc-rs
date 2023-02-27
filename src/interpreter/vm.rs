@@ -41,7 +41,7 @@ impl Vm {
     /// The main initialization method for the VM.
     pub fn initialize(&mut self) -> Result<()> {
         if let Some(path) = self.config.simul_efun_file() {
-            let simul_efun_path = LpcPath::new_in_game(path, "/", self.config.lib_dir());
+            let simul_efun_path = LpcPath::new_in_game(path, "/", &self.config.lib_dir);
             if let Err(e) = self.initialize_file(&simul_efun_path) {
                 e.emit_diagnostics();
                 return Err(e);
@@ -49,7 +49,7 @@ impl Vm {
         }
 
         let master_path =
-            LpcPath::new_in_game(self.config.master_object(), "/", self.config.lib_dir());
+            LpcPath::new_in_game(&self.config.master_object, "/", &self.config.lib_dir);
         self.initialize_file(&master_path).map(|_| ()).map_err(|e| {
             e.emit_diagnostics();
             e

@@ -121,7 +121,7 @@ impl Compiler {
         T: Into<LpcPath> + Debug,
     {
         let lpc_path = path.into();
-        let absolute = lpc_path.as_server(self.config.lib_dir());
+        let absolute = lpc_path.as_server(&self.config.lib_dir);
 
         let file_content = match read_lpc_file(&*absolute) {
             Ok(s) => s,
@@ -155,14 +155,14 @@ impl Compiler {
     /// pathname handling
     #[instrument(skip(self))]
     pub fn compile_in_game_file(&self, path: &LpcPath, span: Option<Span>) -> Result<Program> {
-        let true_path = path.as_server(self.config.lib_dir());
+        let true_path = path.as_server(&self.config.lib_dir);
 
-        if path.as_os_str().is_empty() || !true_path.starts_with(self.config.lib_dir()) {
+        if path.as_os_str().is_empty() || !true_path.starts_with(&self.config.lib_dir) {
             return Err(LpcError::new(format!(
                 "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 true_path.display(),
-                self.config.lib_dir()
+                &self.config.lib_dir
             )).with_span(span));
         }
 
@@ -249,7 +249,7 @@ impl Compiler {
 
         // inject the auto-inherit if it's to be used.
         if let Some(dir) = self.config.auto_inherit_file() {
-            let lpc_dir = LpcPath::new_in_game(dir, "/", self.config.lib_dir());
+            let lpc_dir = LpcPath::new_in_game(dir, "/", &self.config.lib_dir);
             if lpc_dir != lpc_path {
                 let node = InheritNode {
                     path: dir.to_string(),
@@ -363,7 +363,7 @@ mod tests {
                 .into();
             let compiler = Compiler::new(config.clone());
             let server_path = LpcPath::new_server("../../secure.c");
-            let in_game_path = LpcPath::new_in_game("../../secure.c", "/", config.lib_dir());
+            let in_game_path = LpcPath::new_in_game("../../secure.c", "/", &config.lib_dir);
 
             assert!(compiler
                 .compile_in_game_file(&server_path, None)

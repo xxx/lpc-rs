@@ -35,7 +35,7 @@ mod tests {
             .filename(LpcPath::new_in_game(
                 "/secure/simul_efuns",
                 "/",
-                config.lib_dir(),
+                &config.lib_dir,
             ))
             .build()
             .unwrap();

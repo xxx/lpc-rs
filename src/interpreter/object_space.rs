@@ -71,7 +71,7 @@ impl ObjectSpace {
         P: Into<Rc<RefCell<Process>>>,
     {
         let process = process.into();
-        let name = process.borrow().localized_filename(self.config.lib_dir());
+        let name = process.borrow().localized_filename(&self.config.lib_dir);
         let name = match name.strip_suffix(".c") {
             Some(x) => x.to_string(),
             None => name,

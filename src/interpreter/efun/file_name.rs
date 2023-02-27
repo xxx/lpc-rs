@@ -23,7 +23,7 @@ pub fn file_name<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
             let path = LpcPath::new_server(&*proc.borrow().filename());
 
             LpcValue::from(String::from(
-                path.as_in_game(context.config().lib_dir())
+                path.as_in_game(&context.config().lib_dir)
                     .to_string_lossy(),
             ))
         }

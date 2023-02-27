@@ -172,7 +172,7 @@ impl Preprocessor {
         if let Some(auto_include) = self.context.config.auto_include_file() {
             let auto_include_path = LpcPath::new_server(format!(
                 "{}/{}",
-                self.context.config.lib_dir(),
+                &self.context.config.lib_dir,
                 auto_include
             ));
 
@@ -201,7 +201,7 @@ impl Preprocessor {
         let mut output = existing_output.unwrap_or_default();
 
         let file_id = {
-            let server_path = lpc_path.as_server(self.context.config.lib_dir());
+            let server_path = lpc_path.as_server(&self.context.config.lib_dir);
             let mut cache = FILE_CACHE.write();
             if Path::exists(&server_path) {
                 cache.add(server_path.to_string_lossy())
@@ -225,7 +225,7 @@ impl Preprocessor {
                     match token {
                         Token::LocalInclude(t) => {
                             let cwd = lpc_path
-                                .as_in_game(self.context.config.lib_dir())
+                                .as_in_game(&self.context.config.lib_dir)
                                 .parent()
                                 .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();
@@ -233,7 +233,7 @@ impl Preprocessor {
                         }
                         Token::SysInclude(t) => {
                             let cwd = lpc_path
-                                .as_in_game(self.context.config.lib_dir())
+                                .as_in_game(&self.context.config.lib_dir)
                                 .parent()
                                 .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();
@@ -561,8 +561,8 @@ impl Preprocessor {
             let matched = captures.get(1).unwrap();
 
             let config = self.context.config.clone();
-            for dir in config.system_include_dirs() {
-                let to_include = LpcPath::new_in_game(matched.as_str(), dir, config.lib_dir());
+            for dir in &config.system_include_dirs {
+                let to_include = LpcPath::new_in_game(matched.as_str(), dir, &config.lib_dir);
                 return match self.include_local_file(&to_include, Some(token.0)) {
                     Ok(included) => {
                         for spanned in included {
@@ -583,7 +583,7 @@ impl Preprocessor {
                 };
             }
 
-            let to_include = LpcPath::new_in_game(matched.as_str(), cwd, config.lib_dir());
+            let to_include = LpcPath::new_in_game(matched.as_str(), cwd, &config.lib_dir);
 
             // Fall back to trying the path directly
             let included = self.include_local_file(&to_include, Some(token.0))?;
@@ -621,7 +621,7 @@ impl Preprocessor {
         if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
             let matched = captures.get(1).unwrap();
             let to_include =
-                LpcPath::new_in_game(matched.as_str(), cwd, self.context.config.lib_dir());
+                LpcPath::new_in_game(matched.as_str(), cwd, &self.context.config.lib_dir);
 
             let included = self.include_local_file(&to_include, Some(token.0))?;
 

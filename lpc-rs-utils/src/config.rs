@@ -24,6 +24,7 @@ const DRIVER_LOG_FILE: &[&str] = &["driver", "log_file"];
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
 #[builder(build_fn(name = "real_build", error = "lpc_rs_errors::LpcError"))]
+#[readonly::make]
 pub struct Config {
     #[builder(default = "None")]
     #[allow(dead_code)]
@@ -31,37 +32,37 @@ pub struct Config {
 
     #[builder(setter(into), default = "None")]
     #[allow(dead_code)]
-    path: Option<String>,
+    pub path: Option<String>,
 
     #[builder(setter(into, strip_option), default = "self.get_auto_include_file()")]
-    auto_include_file: Option<String>,
+    pub auto_include_file: Option<String>,
 
     #[builder(setter(into, strip_option), default = "self.get_auto_inherit_file()")]
-    auto_inherit_file: Option<String>,
+    pub auto_inherit_file: Option<String>,
 
     #[builder(setter(into, strip_option), default = "self.get_driver_log_file()")]
-    driver_log_file: Option<String>,
+    pub driver_log_file: Option<String>,
 
     #[builder(setter(strip_option), default = "self.get_driver_log_level()")]
-    driver_log_level: Option<tracing::Level>,
+    pub driver_log_level: Option<tracing::Level>,
 
     #[builder(setter(custom), default = "self.get_lib_dir()?")]
-    lib_dir: String,
+    pub lib_dir: String,
 
     #[builder(default = "self.get_master_object()?")]
-    master_object: String,
+    pub master_object: String,
 
     #[builder(default = "self.get_max_inherit_depth()?")]
-    max_inherit_depth: usize,
+    pub max_inherit_depth: usize,
 
     #[builder(setter(into, strip_option), default = "self.get_max_task_instructions()")]
-    max_task_instructions: Option<usize>,
+    pub max_task_instructions: Option<usize>,
 
     #[builder(setter(into, strip_option), default = "self.get_simul_efun_file()")]
-    simul_efun_file: Option<String>,
+    pub simul_efun_file: Option<String>,
 
     #[builder(setter(custom), default = "self.get_system_include_dirs()?")]
-    system_include_dirs: Vec<String>,
+    pub system_include_dirs: Vec<String>,
 }
 
 impl ConfigBuilder {
@@ -277,36 +278,6 @@ impl ConfigBuilder {
 }
 
 impl Config {
-    #[inline]
-    pub fn lib_dir(&self) -> &str {
-        &self.lib_dir
-    }
-
-    #[inline]
-    pub fn master_object(&self) -> &str {
-        &self.master_object
-    }
-
-    #[inline]
-    pub fn max_inherit_depth(&self) -> usize {
-        self.max_inherit_depth
-    }
-
-    #[inline]
-    pub fn max_task_instructions(&self) -> Option<usize> {
-        self.max_task_instructions
-    }
-
-    #[inline]
-    pub fn system_include_dirs(&self) -> &Vec<String> {
-        &self.system_include_dirs
-    }
-
-    #[inline]
-    pub fn driver_log_level(&self) -> Option<tracing::Level> {
-        self.driver_log_level
-    }
-
     #[inline]
     pub fn driver_log_file(&self) -> Option<&str> {
         self.driver_log_file.as_deref()

@@ -3781,7 +3781,7 @@ mod tests {
             #[test]
             fn stores_the_value_for_strings() {
                 let config = Rc::new(test_config());
-                let path = LpcPath::new_in_game("/my_file.c", "/", config.lib_dir());
+                let path = LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir);
 
                 let mut functions = HashMap::new();
                 functions.insert(

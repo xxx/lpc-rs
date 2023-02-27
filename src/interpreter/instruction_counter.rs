@@ -16,7 +16,7 @@ impl InstructionCounter {
     pub fn new_from_config(config: &Config) -> Self {
         Self {
             count: Cell::new(0),
-            max_instructions: config.max_task_instructions().unwrap_or(0),
+            max_instructions: config.max_task_instructions.unwrap_or(0),
         }
     }
 

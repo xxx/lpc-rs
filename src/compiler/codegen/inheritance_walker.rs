@@ -23,7 +23,7 @@ impl InheritanceWalker {
     fn valid_inherit(&self, node: &InheritNode) -> Result<()> {
         let depth = self.context.inherit_depth;
 
-        if depth >= self.context.config.max_inherit_depth() {
+        if depth >= self.context.config.max_inherit_depth {
             let err = LpcError::new("maximum inheritance depth reached").with_span(node.span);
 
             return Err(err);
@@ -62,12 +62,12 @@ impl TreeWalker for InheritanceWalker {
             LpcPath::Server(_) => self
                 .context
                 .filename
-                .as_in_game(self.context.config.lib_dir())
+                .as_in_game(&self.context.config.lib_dir)
                 .into_owned(),
             LpcPath::InGame(x) => x,
         };
 
-        let full_path = LpcPath::new_in_game(&node.path, cwd, self.context.config.lib_dir());
+        let full_path = LpcPath::new_in_game(&node.path, cwd, &self.context.config.lib_dir);
 
         let depth = self.context.inherit_depth;
         let compiler = Compiler::new(self.context.config.clone()).with_inherit_depth(depth + 1);

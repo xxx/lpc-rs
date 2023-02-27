@@ -77,17 +77,7 @@ pub struct CompilationContext {
 }
 
 impl CompilationContext {
-    delegate! {
-        to self.config {
-            /// config's lib_dir (a.k.a. LIB_DIR)
-            pub fn lib_dir(&self) -> &str;
-
-            /// config's system include directories
-            pub fn system_include_dirs(&self) -> &Vec<String>;
-        }
-    }
-
-    /// Create a new `Context`
+    /// Create a new `CompilationContext`
     ///
     /// # Arguments
     ///
@@ -137,6 +127,16 @@ impl CompilationContext {
     pub fn with_simul_efuns(mut self, simul_efuns: Option<Rc<RefCell<Process>>>) -> Self {
         self.simul_efuns = simul_efuns;
         self
+    }
+
+    /// config's lib_dir (a.k.a. LIB_DIR)
+    pub fn lib_dir(&self) -> &str {
+        &self.config.lib_dir
+    }
+
+    /// config's system include directories
+    pub fn system_include_dirs(&self) -> &Vec<String> {
+        &self.config.system_include_dirs
     }
 
     /// Look-up a function by name, then check inherited parents if not found
