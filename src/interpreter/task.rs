@@ -200,6 +200,9 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// A pointer to a memory pool to allocate new values from
     memory: Cow<'pool, Memory>,
 
+    /// The arg vector, populated prior to any of the `Call`-family instructions
+    pub args: Vec<RegisterVariant>,
+
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
     pub popped_frame: Option<CallFrame>,
@@ -219,6 +222,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             memory: memory.into(),
             stack: CallStack::default(),
             catch_points: vec![],
+            args: Vec::with_capacity(10),
 
             #[cfg(test)]
             popped_frame: None,
@@ -348,6 +352,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x.bitand(y))?;
             }
+            Instruction::Arg(r) => {
+                self.args.push(r)
+            }
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
@@ -369,9 +376,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CallFp {
                 location,
                 num_args,
-                initial_arg,
             } => {
-                self.handle_call_fp(task_context, &location, &num_args, &initial_arg)?;
+                self.handle_call_fp(task_context, &location, &num_args)?;
             }
             Instruction::CallOther { .. } => {
                 self.handle_call_other(&instruction, task_context)?;
@@ -397,6 +403,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 };
 
                 self.catch_points.push(catch_point);
+            }
+            Instruction::ClearArgs => {
+                self.args.clear();
             }
             Instruction::Dec(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.dec())?;
@@ -796,7 +805,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             name,
             namespace,
             num_args,
-            initial_arg,
         } = instruction else {
             return Err(self.runtime_error("non-Call instruction passed to `handle_call`"));
         };
@@ -843,23 +851,20 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         // copy argument registers from old frame to new
         if num_args > 0_usize {
-            let start_index = initial_arg.index();
             let mut next_index = 1;
-            let registers = &current_frame.registers;
-            for i in 0..num_args {
+            for (i, arg) in self.args.iter().enumerate() {
                 let target_location = func.arg_locations.get(i).copied().unwrap_or_else(|| {
                     // This should only be reached by variables that will go
                     // into an ellipsis function's argv.
                     Register(next_index).as_local()
                 });
-
                 if let RegisterVariant::Local(r) = target_location {
                     next_index = r.index() + 1;
                 }
 
                 new_frame.set_location(
                     target_location,
-                    registers[start_index + i].clone(),
+                    get_loc!(self, *arg).map(|i| i.into_owned())?,
                 )
             }
         }
@@ -885,8 +890,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         task_context: &TaskContext,
         location: &RegisterVariant,
-        num_args: &usize,
-        initial_arg: &RegisterVariant,
+        num_args: &usize
     ) -> Result<()> {
         let func = {
             let lpc_ref = &*get_loc!(self, *location)?;
@@ -912,7 +916,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
         // for dynamic receivers, skip the first register of the passed args,
         // which contains the receiver itself
-        let index = initial_arg.index() + (dynamic_receiver as usize);
+        let index = dynamic_receiver as usize;
         let adjusted_num_args = *num_args - (dynamic_receiver as usize);
         let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
 
@@ -925,7 +929,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
-                let lpc_ref = &*get_loc!(self, *initial_arg)?;
+                let lpc_ref = &*get_loc!(self, self.args[0])?;
 
                 if let LpcRef::Object(lpc_ref) = lpc_ref {
                     let b = lpc_ref.borrow();
@@ -973,14 +977,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         // negotiate the passed & partially-applied arguments
         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
-            let current_frame = self.stack.current_frame()?;
-            let registers = &current_frame.registers;
-            let from_slice = &registers[index..(index + adjusted_num_args)];
+            let from_slice = &self.args[index..(index + adjusted_num_args)];
 
             let mut type_check_and_assign_location = |loc, r, i| -> Result<()> {
                 let prototype = &new_frame.function.prototype;
                 self.type_check_call_arg(
-                    r,
+                    &r,
                     prototype.arg_types.get(i),
                     prototype.arg_spans.get(i),
                     &prototype.name,
@@ -988,7 +990,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 new_frame.set_location(
                     loc,
-                    r.clone(),
+                    r,
                 );
 
                 Ok(())
@@ -1014,16 +1016,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
-                if let Some(Some(x)) = partial_args.get(i) {
+                if let Some(Some(lpc_ref)) = partial_args.get(i) {
                     // println!("partial arg: {:?} -> {}", x, target_location);
                     // if a partially-applied arg is present, use it
-                    type_check_and_assign_location(target_location, x, i)?;
-                } else if let Some(x) = from_slice.get(from_slice_index) {
+                    type_check_and_assign_location(target_location, lpc_ref.clone(), i)?;
+                } else if let Some(location) = from_slice.get(from_slice_index) {
                     // println!("from slice: {:?} -> {}", x, target_location);
                     // check if the user passed an argument, which will
                     // fill in the next hole in the partial arguments, or
                     // append to the end
-                    type_check_and_assign_location(target_location, x, i)?;
+
+                    if target_location != *location {
+                        let lpc_ref = get_loc!(self, *location)?;
+                        type_check_and_assign_location(target_location, lpc_ref.into_owned(), i)?;
+                    }
+
                     from_slice_index += 1;
                 }
             }
@@ -1093,7 +1100,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 receiver,
                 name,
                 num_args,
-                initial_arg,
             } => {
                 // set up result_ref in a block, as `registers` is a long-lived reference that
                 // doesn't work as mutable, but needs to be written to at the very end.
@@ -1110,16 +1116,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let borrowed = pool_ref.borrow();
                     let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
-                    let initial_index = initial_arg.index();
-
                     // An inner helper function to actually calculate the result, for easy re-use
                     // when using `call_other` with arrays and mappings.
                     fn resolve_result(
                         receiver_ref: &LpcRef,
                         function_name: &str,
-                        registers: &RegisterBank,
-                        initial_index: usize,
-                        num_args: usize,
+                        args: &Vec<LpcRef>,
                         task_context: &TaskContext,
                         memory: &Memory,
                     ) -> Result<LpcRef> {
@@ -1134,8 +1136,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let value = LpcValue::from(pr);
                             let result = match value {
                                 LpcValue::Object(receiver) => {
-                                    let args =
-                                        &registers[initial_index..(initial_index + num_args)];
+                                    // let args = &self.args;
 
                                     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(memory);
 
@@ -1172,15 +1173,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         }
                     }
 
-                    let registers = &self.stack.current_frame()?.registers;
+                    // let registers = &self.stack.current_frame()?.registers;
+
+                    let args = self.args.iter().map(|i| get_loc!(self, *i).map(|r| r.into_owned())).collect::<Result<Vec<_>>>()?;
 
                     match &receiver_ref {
                         LpcRef::String(_) | LpcRef::Object(_) => resolve_result(
                             receiver_ref,
                             function_name,
-                            registers,
-                            initial_index,
-                            *num_args,
+                            &args,
                             task_context,
                             &self.memory,
                         )?,
@@ -1194,9 +1195,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     resolve_result(
                                         lpc_ref,
                                         function_name,
-                                        registers,
-                                        initial_index,
-                                        *num_args,
+                                        &args,
                                         task_context,
                                         &self.memory,
                                     )
@@ -1218,9 +1217,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         resolve_result(
                                             value_ref,
                                             function_name,
-                                            registers,
-                                            initial_index,
-                                            *num_args,
+                                            &args,
                                             task_context,
                                             &self.memory,
                                         )
@@ -2153,8 +2150,6 @@ mod tests {
                     ),
                     Int(666),
                     Int(4),
-                    Int(666),
-                    Int(4),
                     String("adding some! 670".into()),
                 ];
 
@@ -2207,8 +2202,6 @@ mod tests {
                     ),
                     Int(666),
                     Int(4),
-                    Int(666),
-                    Int(4),
                     String("adding some! 670".into()),
                     Int(123),
                     String("adding some! 223".into()),
@@ -2251,9 +2244,6 @@ mod tests {
                     Int(42),
                     Int(4),
                     String("should be in argv".into()),
-                    Int(42),
-                    Int(4),
-                    String("should be in argv".into()),
                     Int(46),
                     Int(69),
                     Int(69),
@@ -2283,12 +2273,8 @@ mod tests {
                     Function("name".into(), vec![None, Some(String("awesome!".into()))]),
                     Object("/my_file".into()),
                     Int(666),
-                    Object("/my_file".into()),
-                    Int(666),
                     String("me: 666. awesome!".into()),
                     String("/std/widget".into()),
-                    Object("/std/widget#0".into()),
-                    Int(42),
                     Object("/std/widget#0".into()),
                     Int(42),
                     String("widget: 42. awesome!".into()),
@@ -2319,8 +2305,6 @@ mod tests {
                         "tacos".into(),
                         vec![None, Some(String("adding some!".into()))],
                     ),
-                    Int(666),
-                    Int(4),
                     Int(666),
                     Int(4),
                     Int(0),

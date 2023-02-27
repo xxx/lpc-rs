@@ -28,6 +28,9 @@ pub enum Instruction {
     /// x.2 = x.0 & x.1
     And(RegisterVariant, RegisterVariant, RegisterVariant),
 
+    /// Push the location into the Task's `args` vector
+    Arg(RegisterVariant),
+
     /// x.1 = ~x.0
     BitwiseNot(RegisterVariant, RegisterVariant),
 
@@ -35,23 +38,20 @@ pub enum Instruction {
     Call {
         name: String,
         namespace: CallNamespace,
-        num_args: usize,
-        initial_arg: RegisterVariant,
+        num_args: usize
     },
 
     /// Call a function pointer, located in `location`
     CallFp {
         location: RegisterVariant,
-        num_args: usize,
-        initial_arg: RegisterVariant,
+        num_args: usize
     },
 
     /// Call a function in another object
     CallOther {
         receiver: RegisterVariant,
         name: RegisterVariant,
-        num_args: usize,
-        initial_arg: RegisterVariant,
+        num_args: usize
     },
 
     /// Finish a block of instructions that can catch errors and continue
@@ -62,6 +62,9 @@ pub enum Instruction {
     /// execution. Store the error in x.0, and jump to x.1 to continue
     /// execution
     CatchStart(RegisterVariant, Label),
+
+    /// Clear the Task's `args` vector, in preparation for a new call
+    ClearArgs,
 
     /// Decrement the value in x.0 by 1
     Dec(RegisterVariant),
@@ -237,6 +240,9 @@ impl Display for Instruction {
             Instruction::And(r1, r2, r3) => {
                 write!(f, "and {r1}, {r2}, {r3}")
             }
+            Instruction::Arg(r) => {
+                write!(f, "arg {r}")
+            }
             Instruction::BitwiseNot(r1, r2) => {
                 write!(f, "bitwisenot {r1}, {r2}")
             }
@@ -250,24 +256,24 @@ impl Display for Instruction {
                 name,
                 namespace,
                 num_args,
-                initial_arg,
             } => {
-                write!(f, "call {name}, {namespace}, {num_args}, {initial_arg}")
+                write!(f, "call {name}, {namespace}, {num_args}")
             }
             Instruction::CallFp {
                 location,
                 num_args,
-                initial_arg,
             } => {
-                write!(f, "callfp {location}, {num_args}, {initial_arg}")
+                write!(f, "callfp {location}, {num_args}")
             }
             Instruction::CallOther {
                 receiver,
                 name,
                 num_args,
-                initial_arg,
             } => {
-                write!(f, "callother {receiver}, {name}, {num_args}, {initial_arg}")
+                write!(f, "callother {receiver}, {name}, {num_args}")
+            }
+            Instruction::ClearArgs => {
+                write!(f, "clearargs")
             }
             Instruction::Dec(r) => {
                 write!(f, "dec {r}")

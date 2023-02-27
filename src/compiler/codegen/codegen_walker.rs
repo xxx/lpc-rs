@@ -878,65 +878,77 @@ impl TreeWalker for CodegenWalker {
             arg_results.push(self.current_result);
         }
 
-        let instruction = if arg_results.len() == 1 {
-            // no need to serialize args for the `Call` instruction if there's only one.
-            if let Some(rcvr) = &mut node.receiver {
-                rcvr.visit(self)?;
-                let receiver_result = self.current_result;
-                let name_register = self.register_counter.next().unwrap().as_local();
-                push_instruction!(
-                    self,
-                    Instruction::SConst(name_register, node.name.clone()),
-                    node.span
-                );
+        // let instruction = if arg_results.len() == 1 {
+        //     // no need to serialize args for the `Call` instruction if there's only one.
+        //     if let Some(rcvr) = &mut node.receiver {
+        //         rcvr.visit(self)?;
+        //         let receiver_result = self.current_result;
+        //         let name_register = self.register_counter.next().unwrap().as_local();
+        //         push_instruction!(
+        //             self,
+        //             Instruction::SConst(name_register, node.name.clone()),
+        //             node.span
+        //         );
+        //
+        //         Instruction::CallOther {
+        //             receiver: receiver_result,
+        //             name: name_register,
+        //             num_args: arg_results.len(),
+        //             initial_arg: arg_results[0],
+        //         }
+        //     } else if node.name == SIZEOF {
+        //         let result = self.register_counter.next().unwrap().as_local();
+        //
+        //         let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
+        //         push_instruction!(self, instruction, node.span);
+        //
+        //         return Ok(());
+        //     } else {
+        //         if_chain! {
+        //             if let Some(x) = self.context.lookup_var(&node.name);
+        //             if x.type_.matches_type(LpcType::Function(false));
+        //             then {
+        //                 // if there's a function pointer with this name in scope, call that.
+        //                 Instruction::CallFp {
+        //                     location: x.location.unwrap(),
+        //                     num_args: arg_results.len(),
+        //                     initial_arg: arg_results[0],
+        //                 }
+        //             } else {
+        //                 Instruction::Call {
+        //                     name: node.name.clone(),
+        //                     namespace: node.namespace.clone(),
+        //                     num_args: arg_results.len(),
+        //                     initial_arg: arg_results[0],
+        //                 }
+        //             }
+        //         }
+        //     }
+        // } else {
+        if node.name == SIZEOF {
+            let result = self.register_counter.next().unwrap().as_local();
+            let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
+            push_instruction!(self, instruction, node.span);
 
-                Instruction::CallOther {
-                    receiver: receiver_result,
-                    name: name_register,
-                    num_args: arg_results.len(),
-                    initial_arg: arg_results[0],
-                }
-            } else if node.name == SIZEOF {
-                let result = self.register_counter.next().unwrap().as_local();
+            return Ok(());
+        }
 
-                let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
-                push_instruction!(self, instruction, node.span);
+        let instruction = {
+            // let start_register = self.register_counter.next().unwrap().as_local();
+            // let mut register = start_register;
 
-                return Ok(());
-            } else {
-                if_chain! {
-                    if let Some(x) = self.context.lookup_var(&node.name);
-                    if x.type_.matches_type(LpcType::Function(false));
-                    then {
-                        // if there's a function pointer with this name in scope, call that.
-                        Instruction::CallFp {
-                            location: x.location.unwrap(),
-                            num_args: arg_results.len(),
-                            initial_arg: arg_results[0],
-                        }
-                    } else {
-                        Instruction::Call {
-                            name: node.name.clone(),
-                            namespace: node.namespace.clone(),
-                            num_args: arg_results.len(),
-                            initial_arg: arg_results[0],
-                        }
-                    }
-                }
-            }
-        } else {
-            let start_register = self.register_counter.next().unwrap().as_local();
-            let mut register = start_register;
+            push_instruction!(self, Instruction::ClearArgs, node.span);
 
-            // copy each result to the start of the arg register
+            // populate the args vector
             for result in &arg_results {
-                push_instruction!(self, Instruction::RegCopy(*result, register), node.span);
-                register = self.register_counter.next().unwrap().as_local();
+                push_instruction!(self, Instruction::Arg(*result), node.span);
+                // push_instruction!(self, Instruction::RegCopy(*result, register), node.span);
+                // register = self.register_counter.next().unwrap().as_local();
             }
 
-            // Undo the final call to .next() in the above for-loop,
-            // to avoid wasting a register
-            self.register_counter.go_back();
+            // // Undo the final call to .next() in the above for-loop,
+            // // to avoid wasting a register
+            // self.register_counter.go_back();
 
             if let Some(rcvr) = &mut node.receiver {
                 rcvr.visit(self)?;
@@ -953,9 +965,12 @@ impl TreeWalker for CodegenWalker {
                     receiver: receiver_result,
                     name: name_register,
                     num_args: arg_results.len(),
-                    initial_arg: start_register,
                 }
             } else if node.name == CALL_OTHER {
+                debug_assert!(
+                    arg_results.len() >= 2,
+                    "CallOther requires at least 2 arguments, for the receiver and function name"
+                );
                 let receiver = arg_results[0];
                 let name = arg_results[1];
 
@@ -963,11 +978,6 @@ impl TreeWalker for CodegenWalker {
                     receiver,
                     name,
                     num_args: arg_results.len() - 2,
-                    initial_arg: if arg_results.len() > 2 {
-                        arg_results[2]
-                    } else {
-                        arg_results[0] // i.e. no args used in the function
-                    },
                 }
             } else {
                 if_chain! {
@@ -977,14 +987,12 @@ impl TreeWalker for CodegenWalker {
                         Instruction::CallFp {
                             location: x.location.unwrap(),
                             num_args: arg_results.len(),
-                            initial_arg: start_register,
                         }
                     } else {
                         Instruction::Call {
                             name: node.name.clone(),
                             namespace: node.namespace.clone(),
                             num_args: arg_results.len(),
-                            initial_arg: start_register,
                         }
                     }
                 }
@@ -2738,11 +2746,12 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -2752,11 +2761,12 @@ mod tests {
                 ),
                 Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
                 SConst(RegisterVariant::Local(Register(6)), "breaking".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(6))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -2804,11 +2814,12 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -2818,11 +2829,12 @@ mod tests {
                 ),
                 Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
                 SConst(RegisterVariant::Local(Register(6)), "breaking".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(6))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("for-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -2873,11 +2885,12 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
@@ -2887,11 +2900,12 @@ mod tests {
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
                 SConst(RegisterVariant::Local(Register(4)), "breaking".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(4))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("do-while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
@@ -2946,26 +2960,29 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 Jmp("switch-test_1".into()),
                 SConst(RegisterVariant::Local(Register(2)), "YEAH BABY".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(2))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(2)),
                 },
                 Jmp("switch-end_2".into()),
                 SConst(RegisterVariant::Local(Register(3)), "very".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(3))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(3)),
                 },
                 SConst(RegisterVariant::Local(Register(4)), "weak".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(4))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("switch-end_2".into()),
                 IConst(RegisterVariant::Local(Register(5)), 666),
@@ -3037,11 +3054,12 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
             ];
 
@@ -3063,13 +3081,14 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 SConst(RegisterVariant::Local(Register(2)), String::from("foo")),
                 SConst(RegisterVariant::Local(Register(3)), String::from("print")),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(2)),
                     name: RegisterVariant::Local(Register(3)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3082,27 +3101,30 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), String::from("foo")),
                 SConst(RegisterVariant::Local(Register(2)), String::from("print")),
                 IConst(RegisterVariant::Local(Register(3)), -1),
-                RegCopy(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(4)),
-                ),
-                RegCopy(
-                    RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Local(Register(5)),
-                ),
-                RegCopy(
-                    RegisterVariant::Local(Register(3)),
-                    RegisterVariant::Local(Register(6)),
-                ),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
+                Arg(RegisterVariant::Local(Register(2))),
+                Arg(RegisterVariant::Local(Register(3))),
+                // RegCopy(
+                //     RegisterVariant::Local(Register(1)),
+                //     RegisterVariant::Local(Register(4)),
+                // ),
+                // RegCopy(
+                //     RegisterVariant::Local(Register(2)),
+                //     RegisterVariant::Local(Register(5)),
+                // ),
+                // RegCopy(
+                //     RegisterVariant::Local(Register(3)),
+                //     RegisterVariant::Local(Register(6)),
+                // ),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(1)),
                     name: RegisterVariant::Local(Register(2)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(3)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(4)),
                 ),
             ];
             check(r#"call_other("foo", "print", 4 - 5)"#, &expected);
@@ -3199,10 +3221,11 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 CallFp {
                     location: RegisterVariant::Local(Register(1)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3245,10 +3268,11 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 CallFp {
                     location: RegisterVariant::Global(Register(0)),
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3283,11 +3307,12 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("marfin"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3322,11 +3347,12 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("void_thing"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
             ];
 
@@ -3343,11 +3369,12 @@ mod tests {
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), String::from("/foo.c")),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("clone_object"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3371,11 +3398,12 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     String::from("lkajsdflkajsdf"),
                 ),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
             ];
 
@@ -3408,23 +3436,14 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), "hello!".into()),
                 IConst(RegisterVariant::Local(Register(2)), 42),
                 SConst(RegisterVariant::Local(Register(3)), "cool beans".into()),
-                RegCopy(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(4)),
-                ),
-                RegCopy(
-                    RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Local(Register(5)),
-                ),
-                RegCopy(
-                    RegisterVariant::Local(Register(3)),
-                    RegisterVariant::Local(Register(6)),
-                ),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
+                Arg(RegisterVariant::Local(Register(2))),
+                Arg(RegisterVariant::Local(Register(3))),
                 Call {
                     name: "my_func".into(),
                     namespace: CallNamespace::Local,
                     num_args: 3,
-                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
             ];
 
@@ -3432,40 +3451,45 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_visit_block_populates_instructions() {
-        let block = "void marf() { { int a = '🏯'; dump(a); } }";
-        let mut prog_node = lpc_parser::ProgramParser::new()
-            .parse(&mut CompilationContext::default(), LexWrapper::new(block))
-            .unwrap();
-        let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap() {
-            if let AstNode::Block(n) = n.body.first_mut().unwrap() {
-                n
+    mod test_visit_block {
+        use super::*;
+
+        #[test]
+        fn test_visit_block_populates_instructions() {
+            let block = "void marf() { { int a = '🏯'; dump(a); } }";
+            let mut prog_node = lpc_parser::ProgramParser::new()
+                .parse(&mut CompilationContext::default(), LexWrapper::new(block))
+                .unwrap();
+            let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap() {
+                if let AstNode::Block(n) = n.body.first_mut().unwrap() {
+                    n
+                } else {
+                    panic!("Expected a block node");
+                }
             } else {
-                panic!("Expected a block node");
-            }
-        } else {
-            panic!("Expected a function def node");
-        };
+                panic!("Expected a function def node");
+            };
 
-        let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_block(node);
+            let mut scope_walker = ScopeWalker::default();
+            let _ = scope_walker.visit_block(node);
 
-        let context = scope_walker.into_context();
-        let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_block(node);
+            let context = scope_walker.into_context();
+            let mut walker = CodegenWalker::new(context);
+            let _ = walker.visit_block(node);
 
-        let expected = vec![
-            IConst(RegisterVariant::Local(Register(1)), 127983),
-            Call {
-                name: String::from("dump"),
-                namespace: CallNamespace::Local,
-                num_args: 1,
-                initial_arg: RegisterVariant::Local(Register(1)),
-            },
-        ];
+            let expected = vec![
+                IConst(RegisterVariant::Local(Register(1)), 127983),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
+                Call {
+                    name: String::from("dump"),
+                    namespace: CallNamespace::Local,
+                    num_args: 1,
+                },
+            ];
 
-        assert_eq!(walker_init_instructions(&mut walker), expected);
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
     }
 
     #[test]
@@ -3551,11 +3575,12 @@ mod tests {
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(3))
                     ),
+                    ClearArgs,
+                    Arg(RegisterVariant::Local(Register(3))),
                     Call {
                         name: "dump".into(),
                         namespace: CallNamespace::Local,
                         num_args: 1,
-                        initial_arg: RegisterVariant::Local(Register(3))
                     },
                     Ret
                 ]
@@ -3678,11 +3703,12 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -3695,11 +3721,12 @@ mod tests {
                     RegisterVariant::Local(Register(6)),
                     "goin' infinite!".into(),
                 ),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(6))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("while-start_1".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -3747,11 +3774,12 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -3764,11 +3792,12 @@ mod tests {
                     RegisterVariant::Local(Register(6)),
                     "goin' infinite!".into(),
                 ),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(6))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(6)),
                 },
                 Jmp("for-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -3819,11 +3848,12 @@ mod tests {
 
             let mut walker = walk_prog(code);
             let expected = vec![
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
@@ -3836,11 +3866,12 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                     "goin' infinite!".into(),
                 ),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(4))),
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("do-while-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
@@ -3974,11 +4005,12 @@ mod tests {
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), String::from("body")),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 IConst(RegisterVariant::Local(Register(3)), 777),
@@ -4057,11 +4089,12 @@ mod tests {
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 10),
                 Jz(RegisterVariant::Local(Register(1)), "for-end_1".into()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 IConst1(RegisterVariant::Local(Register(2))),
                 ISub(
@@ -4288,19 +4321,21 @@ mod tests {
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "if-else_0".into()),
                 SConst(RegisterVariant::Local(Register(4)), String::from("true")),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(4))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("if-end_1".into()),
                 SConst(RegisterVariant::Local(Register(5)), String::from("false")),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(5))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(5)),
                 },
             ];
 
@@ -4344,11 +4379,11 @@ mod tests {
             let walker = walk_prog(prog);
 
             let expected = vec![
+                ClearArgs,
                 Call {
                     name: String::from("create"),
                     namespace: CallNamespace::Local,
                     num_args: 0,
-                    initial_arg: RegisterVariant::Local(Register(1)),
                 },
                 Ret,
             ];
@@ -4361,11 +4396,12 @@ mod tests {
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
                 IConst(RegisterVariant::Local(Register(2)), 9),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(2))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(2)),
                 },
                 Ret, // Automatically added due to no explicit return
             ];
@@ -4425,11 +4461,11 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Global(Register(0)),
                 ),
+                ClearArgs,
                 Call {
                     name: String::from("create"),
                     namespace: CallNamespace::Local,
                     num_args: 0,
-                    initial_arg: RegisterVariant::Local(Register(2)),
                 },
                 Ret, // end of initialization
             ];
@@ -5037,11 +5073,12 @@ mod tests {
                         RegisterVariant::Local(Register(1)),
                         String::from("/foo/bar.c")
                     ),
+                    ClearArgs,
+                    Arg(RegisterVariant::Local(Register(1))),
                     Call {
                         name: String::from("clone_object"),
                         namespace: CallNamespace::Local,
                         num_args: 1,
-                        initial_arg: RegisterVariant::Local(Register(1))
                     },
                     RegCopy(
                         RegisterVariant::Local(Register(0)),
@@ -5230,11 +5267,12 @@ mod tests {
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "while-end_1".into()),
                 SConst(RegisterVariant::Local(Register(4)), String::from("body")),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(4))),
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
                     num_args: 1,
-                    initial_arg: RegisterVariant::Local(Register(4)),
                 },
                 Jmp("while-start_0".into()),
             ];
@@ -5333,7 +5371,6 @@ mod tests {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
                 num_args: 0,
-                initial_arg: RegisterVariant::Local(Register(0)),
             },
             Ret,
         ];
@@ -5371,7 +5408,6 @@ mod tests {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
                 num_args: 0,
-                initial_arg: RegisterVariant::Local(Register(0)),
             },
             Ret,
         ];
