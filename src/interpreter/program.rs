@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
 };
 
+use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN, INIT_PROGRAM,
@@ -14,7 +15,6 @@ use lpc_rs_core::{
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
-use derive_builder::Builder;
 
 use crate::interpreter::efun::EFUN_PROTOTYPES;
 

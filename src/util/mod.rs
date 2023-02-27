@@ -31,7 +31,11 @@ mod tests {
 
         let config = Config::default().with_simul_efun_file(Some("/secure/simul_efuns"));
         let prog = ProgramBuilder::default()
-            .filename(LpcPath::new_in_game("/secure/simul_efuns", "/", config.lib_dir()))
+            .filename(LpcPath::new_in_game(
+                "/secure/simul_efuns",
+                "/",
+                config.lib_dir(),
+            ))
             .build()
             .unwrap();
         let proc = Process::new(prog);

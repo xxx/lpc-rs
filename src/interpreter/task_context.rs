@@ -7,7 +7,7 @@ use lpc_rs_utils::config::Config;
 use crate::{
     interpreter::{
         instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
-        process::Process, program::{Program},
+        process::Process, program::Program,
     },
     util::get_simul_efuns,
 };
