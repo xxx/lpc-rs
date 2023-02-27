@@ -169,7 +169,7 @@ impl Preprocessor {
         let lpc_path = path.into();
 
         // handle auto-include
-        if let Some(auto_include) = self.context.config.auto_include_file() {
+        if let Some(auto_include) = &self.context.config.auto_include_file {
             let auto_include_path = LpcPath::new_server(format!(
                 "{}/{}",
                 &self.context.config.lib_dir,

@@ -40,7 +40,7 @@ impl Vm {
 
     /// The main initialization method for the VM.
     pub fn initialize(&mut self) -> Result<()> {
-        if let Some(path) = self.config.simul_efun_file() {
+        if let Some(path) = &self.config.simul_efun_file {
             let simul_efun_path = LpcPath::new_in_game(path, "/", &self.config.lib_dir);
             if let Err(e) = self.initialize_file(&simul_efun_path) {
                 e.emit_diagnostics();

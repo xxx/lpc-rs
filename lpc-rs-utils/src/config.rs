@@ -277,28 +277,6 @@ impl ConfigBuilder {
     }
 }
 
-impl Config {
-    #[inline]
-    pub fn driver_log_file(&self) -> Option<&str> {
-        self.driver_log_file.as_deref()
-    }
-
-    #[inline]
-    pub fn simul_efun_file(&self) -> Option<&str> {
-        self.simul_efun_file.as_deref()
-    }
-
-    #[inline]
-    pub fn auto_include_file(&self) -> Option<&str> {
-        self.auto_include_file.as_deref()
-    }
-
-    #[inline]
-    pub fn auto_inherit_file(&self) -> Option<&str> {
-        self.auto_inherit_file.as_deref()
-    }
-}
-
 impl Default for Config {
     // The bare-bones default Config, used if there is no config file at all found.
     fn default() -> Self {

@@ -35,9 +35,9 @@ fn main() {
 
     if_chain! {
         if let Some(level) = config.driver_log_level;
-        if let Some(file) = config.driver_log_file();
+        if let Some(file) = &config.driver_log_file;
         then {
-            match file {
+            match file.as_str() {
                 "STDOUT" => {
                     tracing::subscriber::set_global_default(
                         tracing_subscriber::fmt()

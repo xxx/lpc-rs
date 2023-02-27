@@ -248,7 +248,7 @@ impl Compiler {
         let (mut program_node, context) = self.parse_string(&lpc_path, code)?;
 
         // inject the auto-inherit if it's to be used.
-        if let Some(dir) = self.config.auto_inherit_file() {
+        if let Some(dir) = &self.config.auto_inherit_file {
             let lpc_dir = LpcPath::new_in_game(dir, "/", &self.config.lib_dir);
             if lpc_dir != lpc_path {
                 let node = InheritNode {

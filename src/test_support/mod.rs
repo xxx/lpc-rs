@@ -39,7 +39,7 @@ pub fn test_config() -> Config {
 
 fn compile_simul_efuns(config: &Rc<Config>) -> Program {
     let compiler = Compiler::new(config.clone());
-    let path = LpcPath::new_in_game(config.simul_efun_file().unwrap(), "/", &config.lib_dir);
+    let path = LpcPath::new_in_game(config.simul_efun_file.as_ref().unwrap(), "/", &config.lib_dir);
     compiler.compile_in_game_file(&path, None).unwrap()
 }
 

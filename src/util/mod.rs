@@ -8,7 +8,7 @@ pub fn get_simul_efuns(
     config: &Config,
     object_space: &ObjectSpace,
 ) -> Option<Rc<RefCell<Process>>> {
-    config.simul_efun_file().and_then(|f| {
+    config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
         object_space.lookup(file).cloned()
     })
