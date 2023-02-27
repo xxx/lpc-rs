@@ -897,7 +897,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 func.clone() // this is a cheap clone
             } else {
                 return Err(
-                    self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref))
+                    self.runtime_error(format!("callfp instruction on non-function: {lpc_ref}"))
                 );
             }
         };
@@ -1091,7 +1091,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CallOther {
                 receiver,
                 name,
-                num_args,
+                num_args: _,
             } => {
                 // set up result_ref in a block, as `registers` is a long-lived reference that
                 // doesn't work as mutable, but needs to be written to at the very end.
@@ -1113,7 +1113,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     fn resolve_result(
                         receiver_ref: &LpcRef,
                         function_name: &str,
-                        args: &Vec<LpcRef>,
+                        args: &[LpcRef],
                         task_context: &TaskContext,
                         memory: &Memory,
                     ) -> Result<LpcRef> {

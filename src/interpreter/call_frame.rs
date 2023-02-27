@@ -195,7 +195,7 @@ impl CallFrame {
                 let upvalues = &self.upvalues;
                 let idx = upvalues[reg.index()];
 
-                println!("setting upvalue {} to {:?}", location, lpc_ref);
+                println!("setting upvalue {location} to {lpc_ref:?}");
 
                 let mut proc = self.process.borrow_mut();
                 proc.upvalues[idx] = lpc_ref;

@@ -63,7 +63,7 @@ impl Default for LocalScope {
 impl Display for LocalScope {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let id = self.id.map(|id| id.into()).unwrap_or(0);
-        write!(f, "LocalScope {{ id: {}, symbols: [", id)?;
+        write!(f, "LocalScope {{ id: {id}, symbols: [")?;
 
         for (name, symbol) in self.symbols.iter() {
             let loc = symbol

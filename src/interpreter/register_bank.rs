@@ -65,10 +65,10 @@ impl Display for RegisterBank {
             if i != 0 {
                 s.push_str(", ");
             }
-            s.push_str(&format!("{}", register));
+            s.push_str(&format!("{register}"));
         }
         s.push(']');
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
