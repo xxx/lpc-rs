@@ -76,18 +76,17 @@ impl ConfigBuilder {
             _ => "".into(),
         };
 
-        if config_str.is_empty() {
-            // if no config file at all, fall back to the Default impl
-            self.real_build()
-        } else {
+        // If there's no config at all, we'll fall back to the fields populated by Config::default()
+        if !config_str.is_empty() {
             match config_str.parse::<Value>() {
                 Ok(config) => {
                     self.config(Some(config));
-                    self.real_build()
                 }
-                Err(e) => Err(LpcError::new(e.to_string())),
+                Err(e) => return Err(LpcError::new(e.to_string())),
             }
         }
+
+        self.real_build()
     }
 
     pub fn lib_dir<S>(&mut self, lib_dir: S) -> &mut Self
