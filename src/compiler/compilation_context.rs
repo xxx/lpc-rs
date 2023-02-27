@@ -351,6 +351,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::bool_assert_comparison)]
     fn test_lookups() {
         let mut context = CompilationContext::default();
         let mut inherited = Program::default();

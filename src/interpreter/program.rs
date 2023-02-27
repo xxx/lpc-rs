@@ -14,10 +14,12 @@ use lpc_rs_core::{
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
+use derive_builder::Builder;
 
 use crate::interpreter::efun::EFUN_PROTOTYPES;
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Builder)]
+#[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
     /// The path to the file that this program was compiled from. Used for error
     /// messaging. This is intended to be the fully-expanded, in-game path.

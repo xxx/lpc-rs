@@ -1793,7 +1793,7 @@ mod tests {
 
     /// A type to make it easier to set up test expectations for register
     /// contents
-    #[derive(Debug, PartialEq, Eq, Clone)]
+    #[derive(Debug, Eq, Clone)]
     enum BareVal {
         String(String),
         Int(LpcInt),
@@ -1875,6 +1875,21 @@ mod tests {
                     x.hash(state);
                     y.hash(state);
                 }
+            }
+        }
+    }
+
+    impl PartialEq for BareVal {
+        fn eq(&self, other: &Self) -> bool {
+            match (self, other) {
+                (BareVal::Float(x), BareVal::Float(y)) => x == y,
+                (BareVal::Int(x), BareVal::Int(y)) => x == y,
+                (BareVal::String(x), BareVal::String(y)) => x == y,
+                (BareVal::Array(x), BareVal::Array(y)) => x == y,
+                (BareVal::Mapping(x), BareVal::Mapping(y)) => x == y,
+                (BareVal::Object(x), BareVal::Object(y)) => x == y,
+                (BareVal::Function(x, y), BareVal::Function(a, b)) => x == a && y == b,
+                _ => false,
             }
         }
     }
@@ -2637,13 +2652,13 @@ mod tests {
             #[test]
             fn stores_the_value() {
                 let code = indoc! { r##"
-                    float π = 3.14;
+                    float π = 4.13;
                 "##};
 
                 let (task, _) = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
-                let expected = vec![Int(0), Float(3.14.into())];
+                let expected = vec![Int(0), Float(4.13.into())];
 
                 assert_eq!(&expected, &registers);
             }
@@ -3322,7 +3337,7 @@ mod tests {
                 let code = indoc! { r##"
                     mixed q = ([
                         "asdf": 123,
-                        456: 3.14
+                        456: 4.13
                     ]);
                 "##};
 
@@ -3331,14 +3346,14 @@ mod tests {
 
                 let mut hashmap = HashMap::new();
                 hashmap.insert(String("asdf".into()), Int(123));
-                hashmap.insert(Int(456), Float(3.14.into()));
+                hashmap.insert(Int(456), Float(4.13.into()));
 
                 let expected = vec![
                     Int(0),
                     String("asdf".into()),
                     Int(123),
                     Int(456),
-                    Float(3.14.into()),
+                    Float(4.13.into()),
                     Mapping(hashmap),
                 ];
 
@@ -3509,7 +3524,7 @@ mod tests {
             fn stores_the_value() {
                 let code = indoc! { r##"
                     void create() {
-                        do_thing(1, 2, 3, "foo", ({ "bar", "baz", 3.14 }), ([ "a": 123 ]));
+                        do_thing(1, 2, 3, "foo", ({ "bar", "baz", 4.13 }), ([ "a": 123 ]));
                     }
 
                     void do_thing(int a, int b, ...) {
@@ -3533,7 +3548,7 @@ mod tests {
                         Array(vec![
                             String("bar".into()),
                             String("baz".into()),
-                            Float(3.14.into()),
+                            Float(4.13.into()),
                         ]),
                         Mapping(mapping.clone()),
                     ]),
@@ -3541,7 +3556,7 @@ mod tests {
                     Array(vec![
                         String("bar".into()),
                         String("baz".into()),
-                        Float(3.14.into()),
+                        Float(4.13.into()),
                     ]),
                     Mapping(mapping),
                     Int(0),

@@ -450,7 +450,7 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
 }
 
 #[test]
-fn partial_application_argument_lists<'a>() {
+fn partial_application_argument_lists() {
     let prog = indoc! { r#"
         function a = &foo();
         function b = &foo(1);
@@ -466,8 +466,6 @@ fn partial_application_argument_lists<'a>() {
     let program = parse_prog(prog).expect("Failed to parse");
 
     let get_args = |node: &AstNode| -> Option<Vec<Option<LpcInt>>> {
-        // println!("node {:?}", node);
-        // panic!()
         if_chain! {
             if let AstNode::Decl(
                 DeclNode {

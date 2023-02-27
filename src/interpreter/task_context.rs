@@ -7,7 +7,7 @@ use lpc_rs_utils::config::Config;
 use crate::{
     interpreter::{
         instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
-        process::Process, program::Program,
+        process::Process, program::{Program},
     },
     util::get_simul_efuns,
 };
@@ -171,6 +171,7 @@ mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
 
     use super::*;
+    use crate::interpreter::program::ProgramBuilder;
 
     #[test]
     fn test_in_game_cwd() {
@@ -178,8 +179,10 @@ mod tests {
             .unwrap()
             .with_lib_dir("./tests/fixtures/code/");
         let space = ObjectSpace::default();
-        let mut program = Program::default();
-        program.filename = LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c");
+        let program = ProgramBuilder::default()
+            .filename(LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c"))
+            .build()
+            .unwrap();
         let process = Process::new(program);
         let context = TaskContext::new(config, process, space);
 

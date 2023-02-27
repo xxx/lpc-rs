@@ -20,7 +20,7 @@ mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
 
     use super::*;
-    use crate::interpreter::program::Program;
+    use crate::interpreter::program::ProgramBuilder;
 
     #[test]
     fn test_get_simul_efuns() {
@@ -30,8 +30,10 @@ mod tests {
         assert_none!(simul_efuns);
 
         let config = Config::default().with_simul_efun_file(Some("/secure/simul_efuns"));
-        let mut prog = Program::default();
-        prog.filename = LpcPath::new_in_game("/secure/simul_efuns", "/", config.lib_dir());
+        let prog = ProgramBuilder::default()
+            .filename(LpcPath::new_in_game("/secure/simul_efuns", "/", config.lib_dir()))
+            .build()
+            .unwrap();
         let proc = Process::new(prog);
         object_space.insert_process(proc);
 

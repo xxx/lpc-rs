@@ -61,7 +61,7 @@ mod tests {
     fn collapses_negate_float() {
         let span = Some(Span::new(0, 0..1));
         let node = UnaryOpNode {
-            expr: Box::new(ExpressionNode::from(3.14)),
+            expr: Box::new(ExpressionNode::from(4.13)),
             is_post: false,
             op: UnaryOperation::Negate,
             span,
@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(
             result,
             ExpressionNode::Float(FloatNode {
-                value: Total::from(-3.14),
+                value: Total::from(-4.13),
                 span
             })
         );
@@ -81,7 +81,7 @@ mod tests {
     fn collapses_bang() {
         let span = Some(Span::new(0, 0..1));
         let node = UnaryOpNode {
-            expr: Box::new(ExpressionNode::from(3.14)),
+            expr: Box::new(ExpressionNode::from(4.13)),
             is_post: false,
             op: UnaryOperation::Bang,
             span,

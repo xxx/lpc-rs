@@ -770,6 +770,7 @@ dependencies = [
  "claim",
  "decorum",
  "delegate",
+ "derive_builder",
  "educe",
  "factori",
  "fake",

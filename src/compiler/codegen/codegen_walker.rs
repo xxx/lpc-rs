@@ -3591,7 +3591,7 @@ mod tests {
         #[test]
         fn populates_the_default_arguments() {
             let mut walker =
-                compile("function f = (: [int i, int j = 666, float d = 3.14] i * j :);");
+                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);");
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3612,7 +3612,7 @@ mod tests {
                         RegisterVariant::Local(Register(5)),
                         RegisterVariant::Local(Register(2)),
                     ),
-                    FConst(RegisterVariant::Local(Register(6)), 3.14.into()),
+                    FConst(RegisterVariant::Local(Register(6)), 3.54.into()),
                     RegCopy(
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
@@ -4168,7 +4168,7 @@ mod tests {
         #[test]
         fn populates_the_default_arguments() {
             assert_compiles_to(
-                "int main(int i, int j = 666, float d = 3.14) { return i * j; }",
+                "int main(int i, int j = 666, float d = 3.54) { return i * j; }",
                 vec![
                     PopulateDefaults(vec![4, 6]),
                     IMul(
@@ -4186,7 +4186,7 @@ mod tests {
                         RegisterVariant::Local(Register(5)),
                         RegisterVariant::Local(Register(2)),
                     ),
-                    FConst(RegisterVariant::Local(Register(6)), 3.14.into()),
+                    FConst(RegisterVariant::Local(Register(6)), 3.54.into()),
                     RegCopy(
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
