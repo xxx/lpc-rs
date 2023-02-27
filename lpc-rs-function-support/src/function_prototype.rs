@@ -69,12 +69,12 @@ impl Display for FunctionPrototype {
 
         let nomask = lazy_format!(
             if flags.nomask() => ("{}", "nomask ")
-            else ("")
+            else => ""
         );
 
         let varargs = lazy_format!(
             if flags.varargs() => ("{}", "varargs ")
-            else ("")
+            else => ""
         );
 
         let visibility = lazy_format!("{} ", self.flags.visibility());

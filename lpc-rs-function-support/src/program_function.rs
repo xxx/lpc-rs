@@ -130,6 +130,12 @@ impl ProgramFunction {
 
         v
     }
+
+    /// Is this function a closure?
+    #[inline]
+    pub fn is_closure(&self) -> bool {
+        self.prototype.name.starts_with("closure-")
+    }
 }
 
 impl Display for ProgramFunction {

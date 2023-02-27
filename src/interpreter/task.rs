@@ -959,9 +959,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let new_registers = RegisterBank::initialized_for_function(&function, max_arg_length);
 
-        let upvalues = if function.name().starts_with("closure-") {
+        let upvalues = if function.is_closure() {
             Some(&ptr.upvalues)
         } else {
+            // Calls to pointers to static functions do not inherit upvalues,
+            // same as normal direct calls to them.
             None
         };
 

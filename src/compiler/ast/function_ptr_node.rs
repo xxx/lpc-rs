@@ -68,11 +68,11 @@ impl Display for FunctionPtrNode {
         };
         let arg_fmt = lazy_format!(
             if args.is_empty() => ("")
-            else ("({})", args)
+            else => ("({})", args)
         );
         let fmt = lazy_format!(
             if let Some(e) = &self.receiver => ("{}->{}{}", e, self.name, arg_fmt)
-            else ("{}{}", self.name, arg_fmt)
+            else => ("{}{}", self.name, arg_fmt)
         );
         write!(f, "&{fmt}")
     }
