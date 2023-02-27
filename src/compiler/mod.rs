@@ -352,6 +352,7 @@ mod tests {
 
     mod test_compile_in_game_file {
         use lpc_rs_utils::config::ConfigBuilder;
+
         use super::*;
 
         #[test]
@@ -381,6 +382,7 @@ mod tests {
 
     mod test_compile_string {
         use lpc_rs_utils::config::ConfigBuilder;
+
         use super::*;
 
         #[test]

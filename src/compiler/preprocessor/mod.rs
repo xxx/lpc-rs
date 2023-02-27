@@ -170,11 +170,8 @@ impl Preprocessor {
 
         // handle auto-include
         if let Some(auto_include) = &self.context.config.auto_include_file {
-            let auto_include_path = LpcPath::new_server(format!(
-                "{}/{}",
-                &self.context.config.lib_dir,
-                auto_include
-            ));
+            let auto_include_path =
+                LpcPath::new_server(format!("{}/{}", &self.context.config.lib_dir, auto_include));
 
             if auto_include_path != lpc_path {
                 let included = self.include_local_file(&auto_include_path, None)?;

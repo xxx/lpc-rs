@@ -3927,7 +3927,10 @@ mod tests {
                 }
             "##};
 
-            let config = ConfigBuilder::default().max_task_instructions(10_usize).build().unwrap();
+            let config = ConfigBuilder::default()
+                .max_task_instructions(10_usize)
+                .build()
+                .unwrap();
             let (program, _, _) = compile_prog(code);
             let mut task: Task<5> = Task::new(Memory::default());
             let r = task.initialize_program(program, config, ObjectSpace::default());

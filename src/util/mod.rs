@@ -30,7 +30,10 @@ mod tests {
         let simul_efuns = get_simul_efuns(&config, &object_space);
         assert_none!(simul_efuns);
 
-        let config = ConfigBuilder::default().simul_efun_file("/secure/simul_efuns").build().unwrap();
+        let config = ConfigBuilder::default()
+            .simul_efun_file("/secure/simul_efuns")
+            .build()
+            .unwrap();
         let prog = ProgramBuilder::default()
             .filename(LpcPath::new_in_game(
                 "/secure/simul_efuns",

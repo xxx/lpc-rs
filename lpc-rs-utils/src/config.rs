@@ -1,10 +1,10 @@
 use std::{path::Path, str::FromStr};
 
+use derive_builder::Builder;
 use fs_err as fs;
 use if_chain::if_chain;
 use lpc_rs_errors::{LpcError, Result};
 use toml::{value::Index, Value};
-use derive_builder::Builder;
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -55,7 +55,10 @@ pub struct Config {
     #[builder(default = "self.get_max_inherit_depth()?")]
     pub max_inherit_depth: usize,
 
-    #[builder(setter(into, strip_option), default = "self.get_max_task_instructions()")]
+    #[builder(
+        setter(into, strip_option),
+        default = "self.get_max_task_instructions()"
+    )]
     pub max_task_instructions: Option<usize>,
 
     #[builder(setter(into, strip_option), default = "self.get_simul_efun_file()")]
@@ -70,7 +73,7 @@ impl ConfigBuilder {
         let config_str = match &self.path {
             Some(Some(path)) => fs::read_to_string(path)?,
             Some(None) => fs::read_to_string(DEFAULT_CONFIG_FILE)?,
-            _ => "".into()
+            _ => "".into(),
         };
 
         if config_str.is_empty() {
@@ -81,15 +84,15 @@ impl ConfigBuilder {
                 Ok(config) => {
                     self.config(Some(config));
                     self.real_build()
-                },
+                }
                 Err(e) => Err(LpcError::new(e.to_string())),
             }
         }
     }
 
     pub fn lib_dir<S>(&mut self, lib_dir: S) -> &mut Self
-        where
-            S: Into<String>,
+    where
+        S: Into<String>,
     {
         let mut new = self;
         let dir = match canonicalized_path(lib_dir.into()) {

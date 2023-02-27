@@ -22,7 +22,10 @@ macro_rules! assert_regex {
 }
 
 pub fn test_config() -> Config {
-    ConfigBuilder::default().lib_dir("./tests/fixtures/code").build().unwrap()
+    ConfigBuilder::default()
+        .lib_dir("./tests/fixtures/code")
+        .build()
+        .unwrap()
 }
 
 pub fn compile_prog(code: &str) -> Program {

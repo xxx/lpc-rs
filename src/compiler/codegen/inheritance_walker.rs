@@ -124,7 +124,10 @@ mod tests {
     use super::*;
 
     fn walker() -> InheritanceWalker {
-        let config = ConfigBuilder::default().lib_dir("./tests/fixtures/code/").build().unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code/")
+            .build()
+            .unwrap();
 
         let context = CompilationContext::new("test.c", config.into());
 

@@ -21,9 +21,7 @@ fn main() {
 
     let config_override = args.config;
 
-    let built = ConfigBuilder::default()
-        .path(config_override)
-        .build();
+    let built = ConfigBuilder::default().path(config_override).build();
 
     let config = match built {
         Ok(c) => c,
