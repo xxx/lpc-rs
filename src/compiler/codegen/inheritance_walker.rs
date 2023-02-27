@@ -119,12 +119,12 @@ impl TreeWalker for InheritanceWalker {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_utils::config::Config;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
 
     fn walker() -> InheritanceWalker {
-        let config = Config::default().with_lib_dir("./tests/fixtures/code/");
+        let config = ConfigBuilder::default().lib_dir("./tests/fixtures/code/").build().unwrap();
 
         let context = CompilationContext::new("test.c", config.into());
 

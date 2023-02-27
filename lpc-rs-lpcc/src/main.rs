@@ -7,7 +7,7 @@ use lpc_rs::{
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -30,9 +30,11 @@ fn main() {
 
     let config_override = args.config;
 
-    let config = Config::new(config_override)
-        .unwrap()
-        .with_lib_dir(args.lib_dir);
+    let config = ConfigBuilder::default()
+        .path(config_override)
+        .lib_dir(args.lib_dir)
+        .build()
+        .unwrap();
 
     let config = Rc::new(config);
 

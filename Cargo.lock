@@ -881,6 +881,7 @@ name = "lpc-rs-utils"
 version = "0.1.0"
 dependencies = [
  "claim",
+ "derive_builder",
  "fs-err",
  "if_chain",
  "lpc-rs-core",

@@ -6,7 +6,7 @@ use lpc_rs::{
         task_context::TaskContext,
     },
 };
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -22,7 +22,7 @@ macro_rules! assert_regex {
 }
 
 pub fn test_config() -> Config {
-    Config::default().with_lib_dir("./tests/fixtures/code")
+    ConfigBuilder::default().lib_dir("./tests/fixtures/code").build().unwrap()
 }
 
 pub fn compile_prog(code: &str) -> Program {

@@ -169,15 +169,17 @@ impl TaskContext {
 #[cfg(test)]
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::interpreter::program::ProgramBuilder;
 
     #[test]
     fn test_in_game_cwd() {
-        let config = Config::new(None::<&str>)
-            .unwrap()
-            .with_lib_dir("./tests/fixtures/code/");
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code/")
+            .build()
+            .unwrap();
         let space = ObjectSpace::default();
         let program = ProgramBuilder::default()
             .filename(LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c"))

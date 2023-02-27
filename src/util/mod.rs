@@ -18,6 +18,7 @@ pub fn get_simul_efuns(
 mod tests {
     use claim::assert_none;
     use lpc_rs_core::lpc_path::LpcPath;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::interpreter::program::ProgramBuilder;
@@ -29,7 +30,7 @@ mod tests {
         let simul_efuns = get_simul_efuns(&config, &object_space);
         assert_none!(simul_efuns);
 
-        let config = Config::default().with_simul_efun_file(Some("/secure/simul_efuns"));
+        let config = ConfigBuilder::default().simul_efun_file("/secure/simul_efuns").build().unwrap();
         let prog = ProgramBuilder::default()
             .filename(LpcPath::new_in_game(
                 "/secure/simul_efuns",

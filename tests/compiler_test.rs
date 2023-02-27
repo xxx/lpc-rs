@@ -9,14 +9,16 @@ use lpc_rs::{
     compiler::Compiler,
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
 };
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::run_prog;
 
 fn default_compiler() -> Compiler {
-    let config: Rc<Config> = Config::new(None::<&str>)
+    let config: Rc<Config> = ConfigBuilder::default()
+        .path(None)
+        .lib_dir("tests/fixtures/code")
+        .build()
         .unwrap()
-        .with_lib_dir("tests/fixtures/code")
         .into();
     Compiler::new(config)
 }

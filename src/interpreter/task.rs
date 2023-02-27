@@ -19,7 +19,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -3927,7 +3927,7 @@ mod tests {
                 }
             "##};
 
-            let config = Config::default().with_max_task_instructions(Some(10));
+            let config = ConfigBuilder::default().max_task_instructions(10_usize).build().unwrap();
             let (program, _, _) = compile_prog(code);
             let mut task: Task<5> = Task::new(Memory::default());
             let r = task.initialize_program(program, config, ObjectSpace::default());

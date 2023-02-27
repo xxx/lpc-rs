@@ -96,11 +96,13 @@ impl Preprocessor {
     /// use std::rc::Rc;
     ///
     /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
-    /// use lpc_rs_utils::config::Config;
+    /// use lpc_rs_utils::config::ConfigBuilder;
     ///
-    /// let config = Config::default()
-    ///     .with_lib_dir("/home/mud/lib")
-    ///     .with_system_include_dirs(vec!["/include", "/sys"]);
+    /// let config = ConfigBuilder::default()
+    ///     .lib_dir("/home/mud/lib")
+    ///     .system_include_dirs(vec!["/include", "/sys"])
+    ///     .build()
+    ///     .unwrap();
     /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let preprocessor = Preprocessor::new(context);
     /// ```
@@ -134,11 +136,13 @@ impl Preprocessor {
     /// use std::rc::Rc;
     ///
     /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
-    /// use lpc_rs_utils::config::Config;
+    /// use lpc_rs_utils::config::ConfigBuilder;
     ///
-    /// let config = Config::default()
-    ///     .with_lib_dir("/home/mud/lib")
-    ///     .with_system_include_dirs(vec!["/include", "/sys"]);
+    /// let config = ConfigBuilder::default()
+    ///     .lib_dir("/home/mud/lib")
+    ///     .system_include_dirs(vec!["/include", "/sys"])
+    ///     .build()
+    ///     .unwrap();
     /// let context = CompilationContext::new("test.c", Rc::new(config));
     /// let mut preprocessor = Preprocessor::new(context);
     ///
@@ -989,16 +993,18 @@ mod tests {
     use std::rc::Rc;
 
     use indoc::indoc;
-    use lpc_rs_utils::config::Config;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::assert_regex;
 
     fn fixture() -> Preprocessor {
-        let config = Config::default()
-            .with_lib_dir("./tests/fixtures/code")
-            .with_system_include_dirs(vec!["/sys", "sys2"])
-            .with_auto_include_file(Some("/include/auto.h"));
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .system_include_dirs(vec!["/sys", "sys2"])
+            .auto_include_file("/include/auto.h")
+            .build()
+            .unwrap();
 
         let context = CompilationContext::new("test.c", Rc::new(config));
         Preprocessor::new(context)

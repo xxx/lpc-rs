@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use delegate::delegate;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::interpreter::{process::Process, program::Program};
 
@@ -150,9 +150,10 @@ mod tests {
 
     #[test]
     fn test_insert_process() {
-        let config = Config::new(None::<&str>)
-            .unwrap()
-            .with_lib_dir("./tests/fixtures/code/");
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code/")
+            .build()
+            .unwrap();
         let mut space = ObjectSpace::new(config);
 
         let mut prog: Program = Program::default();

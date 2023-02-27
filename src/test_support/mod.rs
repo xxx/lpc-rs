@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -30,9 +30,11 @@ macro_rules! assert_regex {
 }
 
 pub fn test_config() -> Config {
-    Config::default()
-        .with_lib_dir("./tests/fixtures/code")
-        .with_simul_efun_file(Some("/secure/simul_efuns"))
+    ConfigBuilder::default()
+        .lib_dir("./tests/fixtures/code")
+        .simul_efun_file("/secure/simul_efuns")
+        .build()
+        .unwrap()
 }
 
 fn compile_simul_efuns(config: &Rc<Config>) -> Program {

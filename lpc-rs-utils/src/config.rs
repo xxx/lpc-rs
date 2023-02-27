@@ -4,6 +4,7 @@ use fs_err as fs;
 use if_chain::if_chain;
 use lpc_rs_errors::{LpcError, Result};
 use toml::{value::Index, Value};
+use derive_builder::Builder;
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -21,82 +22,134 @@ const DRIVER_LOG_LEVEL: &[&str] = &["driver", "log_level"];
 const DRIVER_LOG_FILE: &[&str] = &["driver", "log_file"];
 
 /// The main struct that handles runtime use configurations.
-#[derive(Debug)]
+#[derive(Debug, Builder)]
+#[builder(build_fn(name = "real_build", error = "lpc_rs_errors::LpcError"))]
 pub struct Config {
-    lib_dir: String,
-    system_include_dirs: Vec<String>,
-    master_object: String,
-    max_task_instructions: Option<usize>,
-    max_inherit_depth: usize,
-    driver_log_level: Option<tracing::Level>,
-    driver_log_file: Option<String>,
-    simul_efun_file: Option<String>,
+    #[builder(default = "None")]
+    #[allow(dead_code)]
+    config: Option<Value>,
+
+    #[builder(setter(into), default = "None")]
+    #[allow(dead_code)]
+    path: Option<String>,
+
+    #[builder(setter(into, strip_option), default = "self.get_auto_include_file()")]
     auto_include_file: Option<String>,
+
+    #[builder(setter(into, strip_option), default = "self.get_auto_inherit_file()")]
     auto_inherit_file: Option<String>,
+
+    #[builder(setter(into, strip_option), default = "self.get_driver_log_file()")]
+    driver_log_file: Option<String>,
+
+    #[builder(setter(strip_option), default = "self.get_driver_log_level()")]
+    driver_log_level: Option<tracing::Level>,
+
+    #[builder(setter(custom), default = "self.get_lib_dir()?")]
+    lib_dir: String,
+
+    #[builder(default = "self.get_master_object()?")]
+    master_object: String,
+
+    #[builder(default = "self.get_max_inherit_depth()?")]
+    max_inherit_depth: usize,
+
+    #[builder(setter(into, strip_option), default = "self.get_max_task_instructions()")]
+    max_task_instructions: Option<usize>,
+
+    #[builder(setter(into, strip_option), default = "self.get_simul_efun_file()")]
+    simul_efun_file: Option<String>,
+
+    #[builder(setter(custom), default = "self.get_system_include_dirs()?")]
+    system_include_dirs: Vec<String>,
 }
 
-impl Config {
-    pub fn new<P>(config_override: Option<P>) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
-        let config_str = match config_override {
-            Some(path) => fs::read_to_string(path)?,
-            None => fs::read_to_string(DEFAULT_CONFIG_FILE).unwrap_or_else(|_| "".into()),
+impl ConfigBuilder {
+    pub fn build(&mut self) -> Result<Config> {
+        let config_str = match &self.path {
+            Some(Some(path)) => fs::read_to_string(path)?,
+            Some(None) => fs::read_to_string(DEFAULT_CONFIG_FILE)?,
+            _ => "".into()
         };
 
-        let config = if config_str.is_empty() {
-            return Ok(Self::default());
+        if config_str.is_empty() {
+            // if no config file at all, fall back to the Default impl
+            self.real_build()
         } else {
             match config_str.parse::<Value>() {
-                Ok(x) => x,
-                Err(e) => return Err(LpcError::new(e.to_string())),
+                Ok(config) => {
+                    self.config(Some(config));
+                    self.real_build()
+                },
+                Err(e) => Err(LpcError::new(e.to_string())),
+            }
+        }
+    }
+
+    pub fn lib_dir<S>(&mut self, lib_dir: S) -> &mut Self
+        where
+            S: Into<String>,
+    {
+        let mut new = self;
+        let dir = match canonicalized_path(lib_dir.into()) {
+            Ok(x) => x,
+            Err(e) => {
+                let path = canonicalized_path(".").unwrap();
+                eprintln!(
+                    "Unable to get canonical path for `lib_dir`: {e}. Using `{path}` instead."
+                );
+                path
             }
         };
 
-        let driver_log_file = Self::get_driver_log_file(&config);
-        let driver_log_level = Self::get_driver_log_level(&config);
-        let lib_dir = Self::get_lib_dir(&config)?;
-        let master_object = Self::get_master_object(&config)?;
-        let max_inherit_depth = Self::get_max_inherit_depth(&config)?;
-        let max_task_instructions = Self::get_max_task_instructions(&config);
-        let simul_efun_file = Self::get_simul_efun_file(&config);
-        let system_include_dirs = Self::get_system_include_dirs(&config)?;
-        let auto_include_file = Self::get_auto_include_file(&config);
-        let auto_inherit_file = Self::get_auto_inherit_file(&config);
+        new.lib_dir = Some(dir);
 
-        Ok(Self {
-            driver_log_file,
-            driver_log_level,
-            lib_dir,
-            master_object,
-            max_inherit_depth,
-            max_task_instructions,
-            simul_efun_file,
-            system_include_dirs,
-            auto_include_file,
-            auto_inherit_file,
-        })
+        new
     }
 
-    fn get_simul_efun_file(config: &Value) -> Option<String> {
-        let dug = dig(config, SIMUL_EFUN_FILE);
+    pub fn system_include_dirs<T>(&mut self, dirs: Vec<T>) -> &mut Self
+    where
+        T: Into<String>,
+    {
+        let mut new = self;
+        new.system_include_dirs = Some(dirs.into_iter().map(Into::into).collect());
+        new
+    }
+
+    fn get_simul_efun_file(&self) -> Option<String> {
+        let Some(Some(binding)) = &self.config else {
+            return Config::default().simul_efun_file;
+        };
+
+        let dug = dig(binding, SIMUL_EFUN_FILE);
         dug.and_then(|x| x.as_str()).map(String::from)
     }
 
-    fn get_driver_log_file(config: &Value) -> Option<String> {
-        let dug = dig(config, DRIVER_LOG_FILE);
+    fn get_driver_log_file(&self) -> Option<String> {
+        let Some(Some(binding)) = &self.config else {
+            return Config::default().driver_log_file;
+        };
+
+        let dug = dig(binding, DRIVER_LOG_FILE);
         dug.and_then(|x| x.as_str()).map(String::from)
     }
 
-    fn get_driver_log_level(config: &Value) -> Option<tracing::Level> {
-        let dug = dig(config, DRIVER_LOG_LEVEL);
+    fn get_driver_log_level(&self) -> Option<tracing::Level> {
+        let Some(Some(binding)) = &self.config else {
+            return Config::default().driver_log_level;
+        };
+
+        let dug = dig(binding, DRIVER_LOG_LEVEL);
         dug.and_then(|x| x.as_str())
             .and_then(|x| tracing::Level::from_str(x).ok())
     }
 
-    fn get_system_include_dirs(config: &Value) -> Result<Vec<String>> {
-        let system_include_dirs = match dig(config, SYSTEM_INCLUDE_DIRS) {
+    fn get_system_include_dirs(&self) -> Result<Vec<String>> {
+        let Some(Some(binding)) = &self.config else {
+            return Ok(Config::default().system_include_dirs);
+        };
+
+        let system_include_dirs = match dig(binding, SYSTEM_INCLUDE_DIRS) {
             Some(v) => match v.as_array() {
                 Some(arr) => arr
                     .iter()
@@ -115,8 +168,12 @@ impl Config {
         Ok(system_include_dirs)
     }
 
-    fn get_lib_dir(config: &Value) -> Result<String> {
-        let dug = dig(config, LIB_DIR);
+    fn get_lib_dir(&self) -> Result<String> {
+        let Some(Some(binding)) = &self.config else {
+            return Ok(Config::default().lib_dir);
+        };
+
+        let dug = dig(binding, LIB_DIR);
         let non_canon = match dug {
             Some(x) => String::from(x.as_str().unwrap_or(".")),
             None => {
@@ -129,8 +186,12 @@ impl Config {
         Ok(lib_dir)
     }
 
-    fn get_master_object(config: &Value) -> Result<String> {
-        let dug = dig(config, MASTER_OBJECT);
+    fn get_master_object(&self) -> Result<String> {
+        let Some(Some(binding)) = &self.config else {
+            return Ok(Config::default().master_object);
+        };
+
+        let dug = dig(binding, MASTER_OBJECT);
         let master_object = match dug {
             Some(x) => match x.as_str() {
                 Some(s) => String::from(s),
@@ -150,8 +211,12 @@ impl Config {
         Ok(master_object)
     }
 
-    fn get_max_inherit_depth(config: &Value) -> Result<usize> {
-        let dug = dig(config, MAX_INHERIT_DEPTH);
+    fn get_max_inherit_depth(&self) -> Result<usize> {
+        let Some(Some(binding)) = &self.config else {
+            return Ok(Config::default().max_inherit_depth);
+        };
+
+        let dug = dig(binding, MAX_INHERIT_DEPTH);
         let max_inherit_depth = match dug {
             Some(x) => match x.as_integer() {
                 Some(0) => DEFAULT_MAX_INHERIT_DEPTH,
@@ -174,9 +239,13 @@ impl Config {
         Ok(max_inherit_depth)
     }
 
-    fn get_max_task_instructions(config: &Value) -> Option<usize> {
-        let dug = dig(config, MAX_TASK_INSTRUCTIONS);
-        let max_task_instructions = if_chain! {
+    fn get_max_task_instructions(&self) -> Option<usize> {
+        let Some(Some(binding)) = &self.config else {
+            return Config::default().max_task_instructions;
+        };
+
+        let dug = dig(&binding, MAX_TASK_INSTRUCTIONS);
+        if_chain! {
             if let Some(x) = dug;
             if let Some(y) = x.as_integer();
             if y >= 0;
@@ -185,80 +254,29 @@ impl Config {
             } else {
                 None
             }
-        };
-        max_task_instructions
+        }
     }
 
-    fn get_auto_include_file(config: &Value) -> Option<String> {
-        let dug = dig(config, AUTO_INCLUDE_FILE);
+    fn get_auto_include_file(&self) -> Option<String> {
+        let Some(Some(binding)) = &self.config else {
+            return Config::default().auto_include_file;
+        };
+
+        let dug = dig(&binding, AUTO_INCLUDE_FILE);
         dug.and_then(|x| x.as_str()).map(String::from)
     }
 
-    fn get_auto_inherit_file(config: &Value) -> Option<String> {
-        let dug = dig(config, AUTO_INHERIT_FILE);
-        dug.and_then(|x| x.as_str()).map(String::from)
-    }
-
-    pub fn with_lib_dir<S>(mut self, lib_dir: S) -> Self
-    where
-        S: Into<String>,
-    {
-        self.lib_dir = match canonicalized_path(lib_dir.into()) {
-            Ok(x) => x,
-            Err(e) => {
-                let path = canonicalized_path(".").unwrap();
-                eprintln!(
-                    "Unable to get canonical path for `lib_dir`: {e}. Using `{path}` instead."
-                );
-                path
-            }
+    fn get_auto_inherit_file(&self) -> Option<String> {
+        let Some(Some(binding)) = &self.config else {
+            return Config::default().auto_inherit_file;
         };
 
-        self
+        let dug = dig(&binding, AUTO_INHERIT_FILE);
+        dug.and_then(|x| x.as_str()).map(String::from)
     }
+}
 
-    pub fn with_system_include_dirs<S>(mut self, system_include_dirs: Vec<S>) -> Self
-    where
-        S: Into<String>,
-    {
-        self.system_include_dirs = system_include_dirs.into_iter().map(Into::into).collect();
-
-        self
-    }
-
-    pub fn with_max_task_instructions(mut self, max_task_instructions: Option<usize>) -> Self {
-        self.max_task_instructions = max_task_instructions;
-
-        self
-    }
-
-    pub fn with_simul_efun_file<T>(mut self, file: Option<T>) -> Self
-    where
-        T: Into<String>,
-    {
-        self.simul_efun_file = file.map(|t| t.into());
-
-        self
-    }
-
-    pub fn with_auto_include_file<T>(mut self, file: Option<T>) -> Self
-    where
-        T: Into<String>,
-    {
-        self.auto_include_file = file.map(|t| t.into());
-
-        self
-    }
-
-    pub fn with_auto_inherit_file<T>(mut self, file: Option<T>) -> Self
-    where
-        T: Into<String>,
-    {
-        self.auto_inherit_file = file.map(|t| t.into());
-
-        self
-    }
-
+impl Config {
     #[inline]
     pub fn lib_dir(&self) -> &str {
         &self.lib_dir
@@ -311,8 +329,11 @@ impl Config {
 }
 
 impl Default for Config {
+    // The bare-bones default Config, used if there is no config file at all found.
     fn default() -> Self {
         Self {
+            config: None,
+            path: None,
             lib_dir: "".to_string(),
             system_include_dirs: vec!["/sys".into()],
             master_object: "/secure/master.c".to_string(),

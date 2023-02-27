@@ -1,7 +1,7 @@
 use clap::Parser;
 use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -21,7 +21,11 @@ fn main() {
 
     let config_override = args.config;
 
-    let config = match Config::new(config_override) {
+    let built = ConfigBuilder::default()
+        .path(config_override)
+        .build();
+
+    let config = match built {
         Ok(c) => c,
         Err(e) => {
             e.emit_diagnostics();

@@ -2169,7 +2169,7 @@ mod tests {
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
-    use lpc_rs_utils::config::Config;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::{
@@ -2224,9 +2224,13 @@ mod tests {
     }
 
     fn walk_code(code: &str) -> Result<CodegenWalker> {
-        let config = Config::default()
-            .with_lib_dir(LIB_DIR)
-            .with_simul_efun_file(Some("/secure/simul_efuns"));
+        let config = ConfigBuilder::default()
+            .lib_dir(LIB_DIR)
+            .simul_efun_file("/secure/simul_efuns")
+            .build()
+            .unwrap();
+
+        println!("walk code config: {:?}", config);
         let compiler = Compiler::new(config.into());
         let (mut program, context) = compiler
             .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)

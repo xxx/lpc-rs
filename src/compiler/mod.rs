@@ -351,13 +351,15 @@ mod tests {
     }
 
     mod test_compile_in_game_file {
+        use lpc_rs_utils::config::ConfigBuilder;
         use super::*;
 
         #[test]
         fn disallows_going_outside_the_root() {
-            let config: Rc<Config> = Config::new(None::<&str>)
+            let config: Rc<Config> = ConfigBuilder::default()
+                .lib_dir("tests")
+                .build()
                 .unwrap()
-                .with_lib_dir("tests")
                 .into();
             let compiler = Compiler::new(config.clone());
             let server_path = LpcPath::new_server("../../secure.c");
@@ -378,14 +380,16 @@ mod tests {
     }
 
     mod test_compile_string {
+        use lpc_rs_utils::config::ConfigBuilder;
         use super::*;
 
         #[test]
         fn uses_auto_inherit_if_specified() {
-            let config: Rc<Config> = Config::new(None::<&str>)
+            let config: Rc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .auto_inherit_file("/std/auto.c")
+                .build()
                 .unwrap()
-                .with_lib_dir("tests/fixtures/code")
-                .with_auto_inherit_file(Some("/std/auto.c"))
                 .into();
             let compiler = Compiler::new(config);
             let code = r#"
@@ -400,10 +404,10 @@ mod tests {
 
         #[test]
         fn skips_auto_inherit_if_not_specified() {
-            let config: Rc<Config> = Config::new(None::<&str>)
+            let config: Rc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .build()
                 .unwrap()
-                .with_lib_dir("tests/fixtures/code")
-                .with_auto_inherit_file(None::<String>)
                 .into();
             let compiler = Compiler::new(config);
             let code = r#"
