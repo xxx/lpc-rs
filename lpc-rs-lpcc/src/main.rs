@@ -7,7 +7,7 @@ use lpc_rs::{
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_utils::config::{Config, ConfigBuilder};
+use lpc_rs_utils::config::{ConfigBuilder};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

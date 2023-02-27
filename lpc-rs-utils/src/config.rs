@@ -248,7 +248,7 @@ impl ConfigBuilder {
             return Config::default().max_task_instructions;
         };
 
-        let dug = dig(&binding, MAX_TASK_INSTRUCTIONS);
+        let dug = dig(binding, MAX_TASK_INSTRUCTIONS);
         if_chain! {
             if let Some(x) = dug;
             if let Some(y) = x.as_integer();
@@ -266,7 +266,7 @@ impl ConfigBuilder {
             return Config::default().auto_include_file;
         };
 
-        let dug = dig(&binding, AUTO_INCLUDE_FILE);
+        let dug = dig(binding, AUTO_INCLUDE_FILE);
         dug.and_then(|x| x.as_str()).map(String::from)
     }
 
@@ -275,7 +275,7 @@ impl ConfigBuilder {
             return Config::default().auto_inherit_file;
         };
 
-        let dug = dig(&binding, AUTO_INHERIT_FILE);
+        let dug = dig(binding, AUTO_INHERIT_FILE);
         dug.and_then(|x| x.as_str()).map(String::from)
     }
 }

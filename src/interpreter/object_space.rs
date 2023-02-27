@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use delegate::delegate;
-use lpc_rs_utils::config::{Config, ConfigBuilder};
+use lpc_rs_utils::config::{Config};
 
 use crate::interpreter::{process::Process, program::Program};
 
@@ -110,6 +110,7 @@ impl From<ObjectSpace> for Rc<RefCell<ObjectSpace>> {
 #[cfg(test)]
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
+    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
 
