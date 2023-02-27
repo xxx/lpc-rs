@@ -1,5 +1,7 @@
-use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 use delegate::delegate;
 use lpc_rs_core::ScopeId;
@@ -64,8 +66,15 @@ impl Display for LocalScope {
         write!(f, "LocalScope {{ id: {}, symbols: [", id)?;
 
         for (name, symbol) in self.symbols.iter() {
-            let loc = symbol.location.map(|loc| loc.to_string()).unwrap_or_else(|| "<none>".to_string());
-            write!(f, "{{ name: {}, type: {}, location: {} }}", name, symbol.type_, loc)?;
+            let loc = symbol
+                .location
+                .map(|loc| loc.to_string())
+                .unwrap_or_else(|| "<none>".to_string());
+            write!(
+                f,
+                "{{ name: {}, type: {}, location: {} }}",
+                name, symbol.type_, loc
+            )?;
         }
 
         write!(f, "] }}")

@@ -1,9 +1,9 @@
 use std::{
+    fmt::{Display, Formatter},
     ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
     vec::IntoIter,
 };
-use std::fmt::{Display, Formatter};
 
 use delegate::delegate;
 use lpc_rs_core::register::Register;

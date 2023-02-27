@@ -11,6 +11,7 @@ use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
         block_node::BlockNode,
+        call_node::CallNode,
         closure_node::ClosureNode,
         do_while_node::DoWhileNode,
         for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
@@ -26,7 +27,6 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::semantic_checks::check_var_redefinition,
 };
-use crate::compiler::ast::call_node::CallNode;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -192,19 +192,17 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let make_sym = |name: &str| {
-            Symbol {
-                name: name.to_string(),
-                type_: LpcType::Int(false),
-                location: None,
-                scope_id: scope_id.into(),
-                span: node.span,
-                flags: GlobalVarFlags::default(),
-                upvalue: false,
-            }
+        let make_sym = |name: &str| Symbol {
+            name: name.to_string(),
+            type_: LpcType::Int(false),
+            location: None,
+            scope_id: scope_id.into(),
+            span: node.span,
+            flags: GlobalVarFlags::default(),
+            upvalue: false,
         };
 
-        self.insert_symbol( make_sym(FOREACH_INDEX));
+        self.insert_symbol(make_sym(FOREACH_INDEX));
         self.insert_symbol(make_sym(FOREACH_LENGTH));
 
         match &mut node.initializer {
@@ -326,7 +324,6 @@ impl TreeWalker for ScopeWalker {
             // or the global registers, during codegen.
             node.set_global(true);
         }
-
 
         // check for, and handle upvalues
         if self.should_upvalue_symbol(symbol) {

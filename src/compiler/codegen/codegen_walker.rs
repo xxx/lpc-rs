@@ -654,7 +654,8 @@ impl CodegenWalker {
                 // generate code for only the value, then assign by hand, because we
                 // pre-generated locations of the parameters above.
                 value.visit(self)?;
-                let instruction = Instruction::RegCopy(self.current_result, declared_arg_locations[idx]);
+                let instruction =
+                    Instruction::RegCopy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
             }
         }
@@ -879,8 +880,8 @@ impl TreeWalker for CodegenWalker {
         }
 
         // let instruction = if arg_results.len() == 1 {
-        //     // no need to serialize args for the `Call` instruction if there's only one.
-        //     if let Some(rcvr) = &mut node.receiver {
+        //     // no need to serialize args for the `Call` instruction if there's only
+        // one.     if let Some(rcvr) = &mut node.receiver {
         //         rcvr.visit(self)?;
         //         let receiver_result = self.current_result;
         //         let name_register = self.register_counter.next().unwrap().as_local();
@@ -899,8 +900,8 @@ impl TreeWalker for CodegenWalker {
         //     } else if node.name == SIZEOF {
         //         let result = self.register_counter.next().unwrap().as_local();
         //
-        //         let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
-        //         push_instruction!(self, instruction, node.span);
+        //         let instruction = Instruction::Sizeof(*arg_results.first().unwrap(),
+        // result);         push_instruction!(self, instruction, node.span);
         //
         //         return Ok(());
         //     } else {
@@ -908,8 +909,8 @@ impl TreeWalker for CodegenWalker {
         //             if let Some(x) = self.context.lookup_var(&node.name);
         //             if x.type_.matches_type(LpcType::Function(false));
         //             then {
-        //                 // if there's a function pointer with this name in scope, call that.
-        //                 Instruction::CallFp {
+        //                 // if there's a function pointer with this name in scope,
+        // call that.                 Instruction::CallFp {
         //                     location: x.location.unwrap(),
         //                     num_args: arg_results.len(),
         //                     initial_arg: arg_results[0],
@@ -942,8 +943,9 @@ impl TreeWalker for CodegenWalker {
             // populate the args vector
             for result in &arg_results {
                 push_instruction!(self, Instruction::Arg(*result), node.span);
-                // push_instruction!(self, Instruction::RegCopy(*result, register), node.span);
-                // register = self.register_counter.next().unwrap().as_local();
+                // push_instruction!(self, Instruction::RegCopy(*result,
+                // register), node.span); register =
+                // self.register_counter.next().unwrap().as_local();
             }
 
             // // Undo the final call to .next() in the above for-loop,
@@ -1126,7 +1128,10 @@ impl TreeWalker for CodegenWalker {
                 let target = RegisterVariant::Local(Register(0));
 
                 if self.current_result != target {
-                    sym.push_instruction(Instruction::RegCopy(self.current_result, target), node.span);
+                    sym.push_instruction(
+                        Instruction::RegCopy(self.current_result, target),
+                        node.span,
+                    );
                 }
 
                 sym.push_instruction(Instruction::Ret, node.span);
@@ -1147,7 +1152,8 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        // println!("closure {} scope: {}", node.name, self.context.scopes.current().unwrap());
+        // println!("closure {} scope: {}", node.name,
+        // self.context.scopes.current().unwrap());
 
         self.context.scopes.pop();
         self.closure_scope_stack.pop();
@@ -1457,7 +1463,8 @@ impl TreeWalker for CodegenWalker {
             )?;
         }
 
-        // println!("function {} scope: {}", node.name, self.context.scopes.current().unwrap());
+        // println!("function {} scope: {}", node.name,
+        // self.context.scopes.current().unwrap());
 
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
@@ -3460,7 +3467,8 @@ mod tests {
             let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(block))
                 .unwrap();
-            let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap() {
+            let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap()
+            {
                 if let AstNode::Block(n) = n.body.first_mut().unwrap() {
                     n
                 } else {

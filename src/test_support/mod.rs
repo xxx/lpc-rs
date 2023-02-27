@@ -69,6 +69,5 @@ pub fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
             panic!("failed to initialize");
         });
 
-
     (task, ctx)
 }

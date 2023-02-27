@@ -38,20 +38,20 @@ pub enum Instruction {
     Call {
         name: String,
         namespace: CallNamespace,
-        num_args: usize
+        num_args: usize,
     },
 
     /// Call a function pointer, located in `location`
     CallFp {
         location: RegisterVariant,
-        num_args: usize
+        num_args: usize,
     },
 
     /// Call a function in another object
     CallOther {
         receiver: RegisterVariant,
         name: RegisterVariant,
-        num_args: usize
+        num_args: usize,
     },
 
     /// Finish a block of instructions that can catch errors and continue
@@ -259,10 +259,7 @@ impl Display for Instruction {
             } => {
                 write!(f, "call {name}, {namespace}, {num_args}")
             }
-            Instruction::CallFp {
-                location,
-                num_args,
-            } => {
+            Instruction::CallFp { location, num_args } => {
                 write!(f, "callfp {location}, {num_args}")
             }
             Instruction::CallOther {

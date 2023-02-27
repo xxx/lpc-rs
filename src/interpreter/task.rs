@@ -340,7 +340,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
             frame.inc_pc();
 
-            // println!("instruction: {:?} : {:?}", instruction, self.stack.current_frame().ok().and_then(|f| f.current_debug_span()).and_then(|s| s.code()).unwrap_or_else(|| "none".to_string()));
+            // println!("instruction: {:?} : {:?}", instruction,
+            // self.stack.current_frame().ok().and_then(|f|
+            // f.current_debug_span()).and_then(|s| s.code()).unwrap_or_else(||
+            // "none".to_string()));
 
             instruction
         };
@@ -352,9 +355,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x.bitand(y))?;
             }
-            Instruction::Arg(r) => {
-                self.args.push(r)
-            }
+            Instruction::Arg(r) => self.args.push(r),
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
@@ -373,10 +374,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call { .. } => {
                 self.handle_call(&instruction, task_context)?;
             }
-            Instruction::CallFp {
-                location,
-                num_args,
-            } => {
+            Instruction::CallFp { location, num_args } => {
                 self.handle_call_fp(task_context, &location, &num_args)?;
             }
             Instruction::CallOther { .. } => {
@@ -871,10 +869,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
             && (!current_frame
-            .process
-            .borrow()
-            .contains_function(name, namespace)
-            || namespace.as_str() == EFUN);
+                .process
+                .borrow()
+                .contains_function(name, namespace)
+                || namespace.as_str() == EFUN);
 
         self.stack.push(new_frame)?;
 
@@ -890,7 +888,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         task_context: &TaskContext,
         location: &RegisterVariant,
-        num_args: &usize
+        num_args: &usize,
     ) -> Result<()> {
         let func = {
             let lpc_ref = &*get_loc!(self, *location)?;
@@ -898,7 +896,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
             } else {
-                return Err(self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref)));
+                return Err(
+                    self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref))
+                );
             }
         };
 
@@ -965,13 +965,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             None
         };
 
-        let mut new_frame = CallFrame::with_registers(
-            proc,
-            function,
-            passed_args_count,
-            new_registers,
-            upvalues,
-        );
+        let mut new_frame =
+            CallFrame::with_registers(proc, function, passed_args_count, new_registers, upvalues);
 
         // println!("new frame upvalues: {:?}", new_frame.upvalues);
 
@@ -988,10 +983,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     &prototype.name,
                 )?;
 
-                new_frame.set_location(
-                    loc,
-                    r,
-                );
+                new_frame.set_location(loc, r);
 
                 Ok(())
             };
@@ -1175,7 +1167,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                     // let registers = &self.stack.current_frame()?.registers;
 
-                    let args = self.args.iter().map(|i| get_loc!(self, *i).map(|r| r.into_owned())).collect::<Result<Vec<_>>>()?;
+                    let args = self
+                        .args
+                        .iter()
+                        .map(|i| get_loc!(self, *i).map(|r| r.into_owned()))
+                        .collect::<Result<Vec<_>>>()?;
 
                     match &receiver_ref {
                         LpcRef::String(_) | LpcRef::Object(_) => resolve_result(
@@ -4238,7 +4234,10 @@ mod tests {
             let expected = IndexMap::from([
                 ("c1", String("hello666 1 2 -4".into())),
                 ("c2", String("hello666 3 77 69".into())),
-                ("partial", Function("make_maker".into(), vec![None, Some(Int(666))])),
+                (
+                    "partial",
+                    Function("make_maker".into(), vec![None, Some(Int(666))]),
+                ),
                 ("maker", Function("closure-2".into(), vec![])),
                 ("made1", Function("closure-1".into(), vec![])),
                 ("made2", Function("closure-1".into(), vec![])),
