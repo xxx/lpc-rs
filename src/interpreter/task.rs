@@ -1463,7 +1463,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let mut r = vec_ref.borrow_mut();
                         let vec = match *r {
                             LpcValue::Array(ref mut v) => v,
-                            _ => return Err(self.runtime_error(
+                            _ => return Err(self.runtime_bug(
                                 "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
                             )
                         };
@@ -1489,7 +1489,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let mut r = map_ref.borrow_mut();
                         let map = match *r {
                             LpcValue::Mapping(ref mut m) => m,
-                            _ => return Err(self.runtime_error(
+                            _ => return Err(self.runtime_bug(
                                 "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
                             )
                         };
@@ -1660,6 +1660,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[inline]
     fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         self.stack.runtime_error(msg)
+    }
+
+    /// convenience helper to generate runtime bugs
+    #[inline]
+    fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        self.stack.runtime_bug(msg)
     }
 
     #[inline]

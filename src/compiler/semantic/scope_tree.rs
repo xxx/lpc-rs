@@ -136,7 +136,7 @@ impl ScopeTree {
             self.current_id = Some(*id);
             Ok(())
         } else {
-            Err(LpcError::new(
+            Err(LpcError::new_bug(
                 format!(
                     "Unknown function passed to goto_function `{name}`. This likely indicates a driver bug."
                 )

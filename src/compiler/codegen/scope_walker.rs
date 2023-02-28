@@ -341,7 +341,7 @@ impl TreeWalker for ScopeWalker {
         let scope = self.context.scopes.current();
 
         if scope.is_none() {
-            return Err(LpcError::new(
+            return Err(LpcError::new_bug(
                 "There's no current scope for some reason? This is a pretty bad compiler bug.",
             ));
         }

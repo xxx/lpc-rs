@@ -3,6 +3,7 @@ use std::ops::{Index, IndexMut};
 use arrayvec::ArrayVec;
 use delegate::delegate;
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::span::Span;
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
@@ -82,15 +83,29 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
     /// Create a runtime error, with stack trace, based on the current state.
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        let span = self
-            .current_frame()
-            .map(|f| f.current_debug_span())
-            .unwrap_or(None);
+        let span = self.current_frame_debug_span();
 
         LpcError::new(format!("runtime error: {}", msg.as_ref())).with_span(span)
     }
 
+    /// Create a runtime bug, with stack trace, based on the current state.
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        let span = self.current_frame_debug_span();
+
+        LpcError::new_bug(format!("runtime error: {}", msg.as_ref())).with_span(span)
+    }
+
+    /// Convenience helper to get the current frame's debug span
+    #[inline]
+    fn current_frame_debug_span(&self) -> Option<Span> {
+        self
+            .current_frame()
+            .map(|f| f.current_debug_span())
+            .unwrap_or(None)
+    }
+
     /// Get the stack trace information for the stack
+    #[inline]
     pub fn stack_trace(&self) -> Vec<String> {
         self.stack
             .iter()

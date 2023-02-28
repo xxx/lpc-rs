@@ -24,6 +24,7 @@ pub mod span;
 pub enum LpcErrorSeverity {
     Warning,
     Error,
+    Bug,
 }
 
 #[derive(Debug, Clone)]
@@ -81,12 +82,33 @@ impl LpcError {
         }
     }
 
+    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Bug`], and
+    /// a message
+    pub fn new_bug<T>(message: T) -> Self
+    where
+        T: Into<String>,
+    {
+        Self {
+            message: message.into(),
+            span: None,
+            labels: vec![],
+            notes: vec![],
+            additional_errors: None,
+            stack_trace: None,
+            severity: LpcErrorSeverity::Bug,
+        }
+    }
+
     pub fn is_warning(&self) -> bool {
         self.severity == LpcErrorSeverity::Warning
     }
 
     pub fn is_error(&self) -> bool {
         self.severity == LpcErrorSeverity::Error
+    }
+
+    pub fn is_bug(&self) -> bool {
+        self.severity == LpcErrorSeverity::Bug
     }
 
     /// Set the primary span for this error
@@ -224,6 +246,7 @@ impl From<&LpcError> for Diagnostic<usize> {
         let mut diagnostic = match error.severity {
             LpcErrorSeverity::Warning => Diagnostic::warning(),
             LpcErrorSeverity::Error => Diagnostic::error(),
+            LpcErrorSeverity::Bug => Diagnostic::bug(),
         };
 
         diagnostic = diagnostic.with_message(format!("{error}"));
