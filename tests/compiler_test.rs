@@ -9,6 +9,7 @@ use lpc_rs::{
     compiler::Compiler,
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
 };
+use lpc_rs::compiler::CompilerBuilder;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::run_prog;
@@ -20,7 +21,7 @@ fn default_compiler() -> Compiler {
         .build()
         .unwrap()
         .into();
-    Compiler::new(config)
+    CompilerBuilder::default().config(config).build().unwrap()
 }
 
 #[test]

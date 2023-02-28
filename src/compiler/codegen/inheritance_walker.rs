@@ -1,12 +1,7 @@
 use lpc_rs_core::{lpc_path::LpcPath, EFUN};
 use lpc_rs_errors::{LpcError, Result};
 
-use crate::compiler::{
-    ast::inherit_node::InheritNode,
-    codegen::tree_walker::{ContextHolder, TreeWalker},
-    compilation_context::CompilationContext,
-    Compiler,
-};
+use crate::compiler::{ast::inherit_node::InheritNode, codegen::tree_walker::{ContextHolder, TreeWalker}, compilation_context::CompilationContext, Compiler, CompilerBuilder};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -70,7 +65,10 @@ impl TreeWalker for InheritanceWalker {
         let full_path = LpcPath::new_in_game(&node.path, cwd, &self.context.config.lib_dir);
 
         let depth = self.context.inherit_depth;
-        let compiler = Compiler::new(self.context.config.clone()).with_inherit_depth(depth + 1);
+        let compiler = CompilerBuilder::default()
+            .config(self.context.config.clone())
+            .inherit_depth(depth + 1)
+            .build()?;
 
         match compiler.compile_in_game_file(&full_path, node.span) {
             Ok(program) => {

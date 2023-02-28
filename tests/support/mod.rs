@@ -6,6 +6,7 @@ use lpc_rs::{
         task_context::TaskContext,
     },
 };
+use lpc_rs::compiler::CompilerBuilder;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 #[macro_export]
@@ -30,7 +31,10 @@ pub fn test_config() -> Config {
 
 pub fn compile_prog(code: &str) -> Program {
     let config = test_config();
-    let compiler = Compiler::new(config.into());
+    let compiler = CompilerBuilder::default()
+        .config(config)
+        .build()
+        .unwrap();
     compiler
         .compile_string("/my_file.c", code)
         .expect("Failed to compile.")

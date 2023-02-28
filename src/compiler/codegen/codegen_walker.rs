@@ -2192,6 +2192,7 @@ mod tests {
         lpc_parser,
         test_support::factories::*,
     };
+    use crate::compiler::CompilerBuilder;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
@@ -2231,7 +2232,7 @@ mod tests {
             .unwrap();
 
         println!("walk code config: {:?}", config);
-        let compiler = Compiler::new(config.into());
+        let compiler = CompilerBuilder::default().config(config).build()?;
         let (mut program, context) = compiler
             .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)
             .expect("failed to parse");

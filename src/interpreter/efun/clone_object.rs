@@ -12,12 +12,13 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::compiler::CompilerBuilder;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
     path: &str,
 ) -> Result<Rc<RefCell<Process>>> {
-    let compiler = Compiler::new(context.config());
+    let compiler = CompilerBuilder::default().config(context.config()).build()?;
 
     let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &context.config().lib_dir);
     // TODO: non-UTF8 filesystems could have problems here

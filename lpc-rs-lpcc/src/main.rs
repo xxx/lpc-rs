@@ -6,6 +6,7 @@ use lpc_rs::{
     compiler::Compiler,
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
+use lpc_rs::compiler::CompilerBuilder;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 
@@ -38,7 +39,7 @@ fn main() {
 
     let config = Rc::new(config);
 
-    let compiler = Compiler::new(config.clone());
+    let compiler = CompilerBuilder::default().config(config.clone()).build().unwrap();
 
     let lpc_path = LpcPath::new_server(&args.filename);
 

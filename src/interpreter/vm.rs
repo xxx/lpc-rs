@@ -12,6 +12,7 @@ use crate::{
     },
     util::get_simul_efuns,
 };
+use crate::compiler::CompilerBuilder;
 
 #[derive(Debug)]
 pub struct Vm {
@@ -59,8 +60,10 @@ impl Vm {
     fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         let compiler = {
             let borrowed = self.object_space.borrow();
-            Compiler::new(self.config.clone())
-                .with_simul_efuns(get_simul_efuns(&self.config, &borrowed))
+            CompilerBuilder::default()
+                .config(self.config.clone())
+                .simul_efuns(get_simul_efuns(&self.config, &borrowed))
+                .build()?
         };
 
         compiler

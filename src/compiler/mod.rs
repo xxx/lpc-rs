@@ -1,4 +1,5 @@
 use std::{cell::RefCell, collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use derive_builder::Builder;
 
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use codegen::{
@@ -66,40 +67,23 @@ macro_rules! apply_walker {
     }};
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Builder)]
+#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Compiler {
     /// The configuration to be used for this instance of the compiler
+    #[builder(setter(into))]
     config: Rc<Config>,
 
     /// The current depth in the inheritance chain of this compiler
+    #[builder(default)]
     inherit_depth: usize,
 
     /// Pointer to the simul_efuns to be used for this compilation
+    #[builder(default)]
     simul_efuns: Option<Rc<RefCell<Process>>>,
 }
 
 impl Compiler {
-    /// Create a new `Compiler` with the passed [`Config`]
-    #[instrument]
-    pub fn new(config: Rc<Config>) -> Self {
-        Self {
-            config,
-            inherit_depth: 0,
-            simul_efuns: None,
-        }
-    }
-
-    /// Set the inherit_depth of a compiler
-    pub fn with_inherit_depth(mut self, depth: usize) -> Self {
-        self.inherit_depth = depth;
-        self
-    }
-
-    pub fn with_simul_efuns(mut self, simul_efuns: Option<Rc<RefCell<Process>>>) -> Self {
-        self.simul_efuns = simul_efuns;
-        self
-    }
-
     /// Fully compile a file into a Program struct
     ///
     /// # Arguments
@@ -367,7 +351,7 @@ mod tests {
                 .build()
                 .unwrap()
                 .into();
-            let compiler = Compiler::new(config.clone());
+            let compiler = CompilerBuilder::default().config(config.clone()).build().unwrap();
             let server_path = LpcPath::new_server("../../secure.c");
             let in_game_path = LpcPath::new_in_game("../../secure.c", "/", &config.lib_dir);
 
@@ -398,7 +382,7 @@ mod tests {
                 .build()
                 .unwrap()
                 .into();
-            let compiler = Compiler::new(config);
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
             let code = r#"
                 inherit "/std/object";
 
@@ -416,7 +400,7 @@ mod tests {
                 .build()
                 .unwrap()
                 .into();
-            let compiler = Compiler::new(config);
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
             let code = r#"
                 inherit "/std/object";
 
