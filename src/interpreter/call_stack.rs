@@ -2,8 +2,7 @@ use std::ops::{Index, IndexMut};
 
 use arrayvec::ArrayVec;
 use delegate::delegate;
-use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_errors::span::Span;
+use lpc_rs_errors::{span::Span, LpcError, Result};
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
@@ -98,8 +97,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// Convenience helper to get the current frame's debug span
     #[inline]
     fn current_frame_debug_span(&self) -> Option<Span> {
-        self
-            .current_frame()
+        self.current_frame()
             .map(|f| f.current_debug_span())
             .unwrap_or(None)
     }

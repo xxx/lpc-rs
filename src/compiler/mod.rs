@@ -316,9 +316,7 @@ impl Compiler {
         lpc_parser::ProgramParser::new()
             .parse(&mut context, wrapper)
             .map(|p| (p, context))
-            .map_err(|e| {
-                LpcError::from(e)
-            })
+            .map_err(|e| LpcError::from(e))
     }
 }
 
