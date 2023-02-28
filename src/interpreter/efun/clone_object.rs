@@ -5,7 +5,7 @@ use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::{Compiler, CompilerBuilder},
+    compiler::CompilerBuilder,
     interpreter::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         task::Task,

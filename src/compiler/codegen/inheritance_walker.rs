@@ -5,7 +5,7 @@ use crate::compiler::{
     ast::inherit_node::InheritNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    Compiler, CompilerBuilder,
+    CompilerBuilder,
 };
 
 /// A walker to handle compiling and linking inherited files.

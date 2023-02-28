@@ -2186,7 +2186,7 @@ mod tests {
                 semantic_check_walker::SemanticCheckWalker,
             },
             lexer::LexWrapper,
-            Compiler, CompilerBuilder,
+            CompilerBuilder,
         },
         interpreter::{process::Process, program::Program},
         lpc_parser,

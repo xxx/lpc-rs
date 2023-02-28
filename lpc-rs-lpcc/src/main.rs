@@ -3,7 +3,7 @@ use std::rc::Rc;
 use clap::Parser;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::{Compiler, CompilerBuilder},
+    compiler::CompilerBuilder,
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
 use lpc_rs_core::lpc_path::LpcPath;

@@ -1,6 +1,6 @@
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::{Compiler, CompilerBuilder},
+    compiler::CompilerBuilder,
     interpreter::{
         memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
         task_context::TaskContext,

@@ -6,7 +6,7 @@ use lpc_rs_utils::config::Config;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::{Compiler, CompilerBuilder},
+    compiler::CompilerBuilder,
     interpreter::{
         memory::Memory, object_space::ObjectSpace, task::Task, task_context::TaskContext,
     },
