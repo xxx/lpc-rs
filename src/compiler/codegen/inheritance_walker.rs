@@ -120,6 +120,7 @@ impl TreeWalker for InheritanceWalker {
 #[cfg(test)]
 mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
+    use crate::compiler::compilation_context::CompilationContextBuilder;
 
     use super::*;
 
@@ -129,7 +130,11 @@ mod tests {
             .build()
             .unwrap();
 
-        let context = CompilationContext::new("test.c", config.into());
+        let context = CompilationContextBuilder::default()
+            .filename("test.c")
+            .config(config)
+            .build()
+            .unwrap();
 
         InheritanceWalker::new(context)
     }

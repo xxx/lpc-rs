@@ -96,6 +96,7 @@ impl Preprocessor {
     /// use std::rc::Rc;
     ///
     /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
+    /// use lpc_rs::compiler::compilation_context::CompilationContextBuilder;
     /// use lpc_rs_utils::config::ConfigBuilder;
     ///
     /// let config = ConfigBuilder::default()
@@ -103,7 +104,11 @@ impl Preprocessor {
     ///     .system_include_dirs(vec!["/include", "/sys"])
     ///     .build()
     ///     .unwrap();
-    /// let context = CompilationContext::new("test.c", Rc::new(config));
+    /// let context = CompilationContextBuilder::default()
+    ///     .filename("test.c")
+    ///     .config(config)
+    ///     .build()
+    ///     .unwrap();
     /// let preprocessor = Preprocessor::new(context);
     /// ```
     #[instrument]
@@ -136,6 +141,7 @@ impl Preprocessor {
     /// use std::rc::Rc;
     ///
     /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
+    /// use lpc_rs::compiler::compilation_context::CompilationContextBuilder;
     /// use lpc_rs_utils::config::ConfigBuilder;
     ///
     /// let config = ConfigBuilder::default()
@@ -143,7 +149,11 @@ impl Preprocessor {
     ///     .system_include_dirs(vec!["/include", "/sys"])
     ///     .build()
     ///     .unwrap();
-    /// let context = CompilationContext::new("test.c", Rc::new(config));
+    /// let context = CompilationContextBuilder::default()
+    ///     .filename("test.c")
+    ///     .config(config)
+    ///     .build()
+    ///     .unwrap();
     /// let mut preprocessor = Preprocessor::new(context);
     ///
     /// let code = r#"
@@ -987,13 +997,12 @@ impl Default for Preprocessor {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use indoc::indoc;
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::assert_regex;
+    use crate::compiler::compilation_context::CompilationContextBuilder;
 
     fn fixture() -> Preprocessor {
         let config = ConfigBuilder::default()
@@ -1003,7 +1012,11 @@ mod tests {
             .build()
             .unwrap();
 
-        let context = CompilationContext::new("test.c", Rc::new(config));
+        let context = CompilationContextBuilder::default()
+            .filename("test.c")
+            .config(config)
+            .build()
+            .unwrap();
         Preprocessor::new(context)
     }
 

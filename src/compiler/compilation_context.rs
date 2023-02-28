@@ -1,4 +1,5 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use derive_builder::Builder;
 
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
@@ -18,12 +19,15 @@ use crate::{
 /// compilation. A single one of these will be used for loading/compiling a
 /// single file (files `#include`d in that file will share this state object
 /// when they are compiled, as well.) Inherited files will have their own.
-#[derive(Debug)]
+#[derive(Debug, Builder)]
+#[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct CompilationContext {
     /// The name of the main file being compiled.
+    #[builder(setter(into))]
     pub filename: LpcPath,
 
     /// The configuration being used for this compilation.
+    #[builder(setter(into))]
     pub config: Rc<Config>,
 
     /// Our collection of scopes
@@ -76,58 +80,6 @@ pub struct CompilationContext {
 }
 
 impl CompilationContext {
-    /// Create a new `CompilationContext`
-    ///
-    /// # Arguments
-    ///
-    /// `filename` - The path to the file (relative to config's `root_dir`) this
-    /// context will be collected for. `config` - The [`Config`] from
-    /// `config.toml` or the command line
-    ///
-    /// # Examples
-    /// ```
-    /// use std::rc::Rc;
-    ///
-    /// use lpc_rs::compiler::compilation_context::CompilationContext;
-    /// use lpc_rs_utils::config::Config;
-    ///
-    /// let context = CompilationContext::new("./test.c", Rc::new(Config::default()));
-    /// ```
-    pub fn new<T>(filename: T, config: Rc<Config>) -> Self
-    where
-        T: Into<LpcPath>,
-    {
-        Self {
-            filename: filename.into(),
-            config,
-            ..Self::default()
-        }
-    }
-
-    /// Set the `inherit_depth` of the context
-    pub fn with_inherit_depth(mut self, depth: usize) -> Self {
-        self.inherit_depth = depth;
-        self
-    }
-
-    /// Set the `global_variable_count` of the context
-    pub fn with_global_variable_count(mut self, count: usize) -> Self {
-        self.num_globals = count;
-        self
-    }
-
-    /// Set the `global_register_count` of the context
-    pub fn with_global_register_count(mut self, count: usize) -> Self {
-        self.num_init_registers = count;
-        self
-    }
-
-    /// Set the `simul_efuns` object of the context
-    pub fn with_simul_efuns(mut self, simul_efuns: Option<Rc<RefCell<Process>>>) -> Self {
-        self.simul_efuns = simul_efuns;
-        self
-    }
-
     /// config's lib_dir (a.k.a. LIB_DIR)
     pub fn lib_dir(&self) -> &str {
         &self.config.lib_dir

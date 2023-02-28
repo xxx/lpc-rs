@@ -20,6 +20,7 @@ use crate::{
     interpreter::{process::Process, program::Program},
     lpc_parser,
 };
+use crate::compiler::compilation_context::CompilationContextBuilder;
 
 pub mod ast;
 pub mod codegen;
@@ -195,19 +196,23 @@ impl Compiler {
     ///     .expect("Failed to preprocess.");
     /// ```
     #[instrument(skip(self, code))]
-    pub fn preprocess_string<T, U>(
+    pub fn preprocess_string<P, S>(
         &self,
-        path: T,
-        code: U,
+        path: P,
+        code: S,
     ) -> Result<(Vec<Spanned<Token>>, Preprocessor)>
     where
-        T: Into<LpcPath> + Debug,
-        U: AsRef<str> + Debug,
+        P: Into<LpcPath> + Debug,
+        S: AsRef<str> + Debug,
     {
         let lpc_path = path.into();
-        let context = CompilationContext::new(&lpc_path, self.config.clone())
-            .with_inherit_depth(self.inherit_depth)
-            .with_simul_efuns(self.simul_efuns.clone());
+
+        let context = CompilationContextBuilder::default()
+            .filename(&lpc_path)
+            .config(self.config.clone())
+            .inherit_depth(self.inherit_depth)
+            .simul_efuns(self.simul_efuns.clone())
+            .build()?;
 
         let mut preprocessor = Preprocessor::new(context);
 
