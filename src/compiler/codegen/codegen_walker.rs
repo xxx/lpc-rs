@@ -1146,9 +1146,6 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        // println!("closure {} scope: {}", node.name,
-        // self.context.scopes.current().unwrap());
-
         self.context.scopes.pop();
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
@@ -1456,9 +1453,6 @@ impl TreeWalker for CodegenWalker {
                 start_label,
             )?;
         }
-
-        // println!("function {} scope: {}", node.name,
-        // self.context.scopes.current().unwrap());
 
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
@@ -2230,7 +2224,6 @@ mod tests {
             .build()
             .unwrap();
 
-        println!("walk code config: {:?}", config);
         let compiler = CompilerBuilder::default().config(config).build()?;
         let (mut program, context) = compiler
             .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)

@@ -97,36 +97,7 @@ fn set_location<const N: usize>(
 ) -> Result<()> {
     let frame = stack.current_frame_mut()?;
     frame.set_location(location, lpc_ref);
-    // let registers = &mut frame.registers;
-    // registers[reg] = lpc_ref;
     Ok(())
-    // match location {
-    //     RegisterVariant::Local(reg) | RegisterVariant::Global(reg) => {
-    //         let frame = stack.current_frame_mut()?;
-    //         frame.set_location(location, lpc_ref);
-    //         // let registers = &mut frame.registers;
-    //         // registers[reg] = lpc_ref;
-    //         Ok(())
-    //     }
-    //     // RegisterVariant::Global(reg) => {
-    //     //     // let frame = stack.current_frame()?;
-    //     //
-    //     //     // let mut proc = frame.process.borrow_mut();
-    //     //     // proc.globals[reg] = lpc_ref;
-    //     //     Ok(())
-    //     // }
-    //     RegisterVariant::Upvalue(reg) => {
-    //         let frame = stack.current_frame()?;
-    //         let upvalues = &frame.upvalues;
-    //         let idx = upvalues[reg.index()];
-    //
-    //         println!("setting upvalue {} to {:?}", location, lpc_ref);
-    //
-    //         let mut proc = frame.process.borrow_mut();
-    //         proc.upvalues[idx] = lpc_ref;
-    //         Ok(())
-    //     }
-    // }
 }
 
 #[inline]
@@ -340,11 +311,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
             frame.inc_pc();
 
-            // println!("instruction: {:?} : {:?}", instruction,
-            // self.stack.current_frame().ok().and_then(|f|
-            // f.current_debug_span()).and_then(|s| s.code()).unwrap_or_else(||
-            // "none".to_string()));
-
             instruction
         };
 
@@ -537,9 +503,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
-                // println!("MAdd: {:?} {:?} {:?}", r1, r2, r3);
-                // println!("frame upvalues: {:?}", self.stack.current_frame()?.upvalues);
-                // println!("proc upvalues: {:?}", task_context.process().borrow().upvalues);
                 self.binary_operation(r1, r2, r3, |x, y| x.add(y))?;
             }
             Instruction::MapConst(r, map) => {
@@ -970,8 +933,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let mut new_frame =
             CallFrame::with_registers(proc, function, passed_args_count, new_registers, upvalues);
 
-        // println!("new frame upvalues: {:?}", new_frame.upvalues);
-
         // negotiate the passed & partially-applied arguments
         if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
             let from_slice = &self.args[index..(index + adjusted_num_args)];
@@ -1011,11 +972,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
 
                 if let Some(Some(lpc_ref)) = partial_args.get(i) {
-                    // println!("partial arg: {:?} -> {}", x, target_location);
                     // if a partially-applied arg is present, use it
                     type_check_and_assign_location(target_location, lpc_ref.clone(), i)?;
                 } else if let Some(location) = from_slice.get(from_slice_index) {
-                    // println!("from slice: {:?} -> {}", x, target_location);
                     // check if the user passed an argument, which will
                     // fill in the next hole in the partial arguments, or
                     // append to the end
@@ -3999,8 +3958,6 @@ mod tests {
 
             let frame_vars = frame.local_variables();
 
-            // println!("frame_vars: {}", format_slice(&frame_vars));
-
             for (k, v) in vars {
                 let v: BareVal = v.clone().into();
                 let found = frame_vars
@@ -4027,8 +3984,6 @@ mod tests {
             let frame = snapshot.pop().unwrap();
             let proc = frame.process.borrow();
 
-            // println!("proc upvalues: {}", format_slice(&proc.upvalues));
-
             assert_eq!(upvalues.len(), proc.upvalues.len());
 
             for (i, v) in upvalues.iter().enumerate() {
@@ -4047,8 +4002,6 @@ mod tests {
             snapshot.pop(); // pop off the init frame
 
             let frame = snapshot.pop().unwrap();
-
-            // println!("frame upvalues: {}", format_slice(&frame.upvalues));
 
             assert_eq!(upvalues.len(), frame.upvalues.len());
 

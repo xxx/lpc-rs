@@ -317,7 +317,6 @@ impl Compiler {
             .parse(&mut context, wrapper)
             .map(|p| (p, context))
             .map_err(|e| {
-                println!("{e:?}");
                 LpcError::from(e)
             })
     }

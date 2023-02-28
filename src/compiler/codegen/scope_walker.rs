@@ -271,7 +271,6 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
-        // println!("visit var {:?} : {}", node.name, node.to_code());
         // positional closure arg references are
         // 1) always allowed (if we've made it this far)
         // 2) never global
@@ -339,8 +338,6 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
-        // println!("visit var init {:?} : {}", node.name, node.to_code());
-
         let scope = self.context.scopes.current();
 
         if scope.is_none() {

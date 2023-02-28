@@ -174,7 +174,6 @@ impl CallFrame {
 
         self.upvalues.reserve(num_upvalues);
         for i in 0..num_upvalues {
-            println!("pushing frame upvalue {}", start_idx + i);
             self.upvalues.push(Register(start_idx + i));
         }
 
@@ -194,8 +193,6 @@ impl CallFrame {
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalues;
                 let idx = upvalues[reg.index()];
-
-                println!("setting upvalue {location} to {lpc_ref:?}");
 
                 let mut proc = self.process.borrow_mut();
                 proc.upvalues[idx] = lpc_ref;
