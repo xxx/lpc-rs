@@ -1,7 +1,12 @@
 use lpc_rs_core::{lpc_path::LpcPath, EFUN};
 use lpc_rs_errors::{LpcError, Result};
 
-use crate::compiler::{ast::inherit_node::InheritNode, codegen::tree_walker::{ContextHolder, TreeWalker}, compilation_context::CompilationContext, Compiler, CompilerBuilder};
+use crate::compiler::{
+    ast::inherit_node::InheritNode,
+    codegen::tree_walker::{ContextHolder, TreeWalker},
+    compilation_context::CompilationContext,
+    Compiler, CompilerBuilder,
+};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -118,9 +123,9 @@ impl TreeWalker for InheritanceWalker {
 #[cfg(test)]
 mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
-    use crate::compiler::compilation_context::CompilationContextBuilder;
 
     use super::*;
+    use crate::compiler::compilation_context::CompilationContextBuilder;
 
     fn walker() -> InheritanceWalker {
         let config = ConfigBuilder::default()

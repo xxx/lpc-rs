@@ -6,10 +6,9 @@ use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
-    compiler::Compiler,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
 };
-use lpc_rs::compiler::CompilerBuilder;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::run_prog;

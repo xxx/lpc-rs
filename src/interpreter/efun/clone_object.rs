@@ -5,20 +5,21 @@ use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::Compiler,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         task::Task,
     },
     try_extract_value,
 };
-use crate::compiler::CompilerBuilder;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
     path: &str,
 ) -> Result<Rc<RefCell<Process>>> {
-    let compiler = CompilerBuilder::default().config(context.config()).build()?;
+    let compiler = CompilerBuilder::default()
+        .config(context.config())
+        .build()?;
 
     let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &context.config().lib_dir);
     // TODO: non-UTF8 filesystems could have problems here

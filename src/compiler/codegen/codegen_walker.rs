@@ -2186,13 +2186,12 @@ mod tests {
                 semantic_check_walker::SemanticCheckWalker,
             },
             lexer::LexWrapper,
-            Compiler,
+            Compiler, CompilerBuilder,
         },
         interpreter::{process::Process, program::Program},
         lpc_parser,
         test_support::factories::*,
     };
-    use crate::compiler::CompilerBuilder;
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 

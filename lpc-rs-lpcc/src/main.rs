@@ -3,10 +3,9 @@ use std::rc::Rc;
 use clap::Parser;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::Compiler,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
 };
-use lpc_rs::compiler::CompilerBuilder;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 
@@ -39,7 +38,10 @@ fn main() {
 
     let config = Rc::new(config);
 
-    let compiler = CompilerBuilder::default().config(config.clone()).build().unwrap();
+    let compiler = CompilerBuilder::default()
+        .config(config.clone())
+        .build()
+        .unwrap();
 
     let lpc_path = LpcPath::new_server(&args.filename);
 

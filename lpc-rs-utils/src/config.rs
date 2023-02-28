@@ -76,7 +76,8 @@ impl ConfigBuilder {
             _ => "".into(),
         };
 
-        // If there's no config at all, we'll fall back to the fields populated by Config::default()
+        // If there's no config at all, we'll fall back to the fields populated by
+        // Config::default()
         if !config_str.is_empty() {
             match config_str.parse::<Value>() {
                 Ok(config) => {

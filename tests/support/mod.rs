@@ -1,12 +1,11 @@
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::Compiler,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{
         memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
         task_context::TaskContext,
     },
 };
-use lpc_rs::compiler::CompilerBuilder;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 #[macro_export]
@@ -31,10 +30,7 @@ pub fn test_config() -> Config {
 
 pub fn compile_prog(code: &str) -> Program {
     let config = test_config();
-    let compiler = CompilerBuilder::default()
-        .config(config)
-        .build()
-        .unwrap();
+    let compiler = CompilerBuilder::default().config(config).build().unwrap();
     compiler
         .compile_string("/my_file.c", code)
         .expect("Failed to compile.")

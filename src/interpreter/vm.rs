@@ -6,13 +6,12 @@ use lpc_rs_utils::config::Config;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::Compiler,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{
         memory::Memory, object_space::ObjectSpace, task::Task, task_context::TaskContext,
     },
     util::get_simul_efuns,
 };
-use crate::compiler::CompilerBuilder;
 
 #[derive(Debug)]
 pub struct Vm {

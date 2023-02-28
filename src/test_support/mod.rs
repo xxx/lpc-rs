@@ -5,13 +5,12 @@ use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::Compiler,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{
         memory::Memory, object_space::ObjectSpace, process::Process, program::Program, task::Task,
         task_context::TaskContext,
     },
 };
-use crate::compiler::CompilerBuilder;
 
 pub mod factories;
 
@@ -39,7 +38,10 @@ pub fn test_config() -> Config {
 }
 
 fn compile_simul_efuns(config: &Rc<Config>) -> Program {
-    let compiler = CompilerBuilder::default().config(config.clone()).build().unwrap();
+    let compiler = CompilerBuilder::default()
+        .config(config.clone())
+        .build()
+        .unwrap();
     let path = LpcPath::new_in_game(
         config.simul_efun_file.as_ref().unwrap(),
         "/",

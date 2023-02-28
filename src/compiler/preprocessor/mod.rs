@@ -95,8 +95,10 @@ impl Preprocessor {
     /// ```
     /// use std::rc::Rc;
     ///
-    /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
-    /// use lpc_rs::compiler::compilation_context::CompilationContextBuilder;
+    /// use lpc_rs::compiler::{
+    ///     compilation_context::{CompilationContext, CompilationContextBuilder},
+    ///     preprocessor::Preprocessor,
+    /// };
     /// use lpc_rs_utils::config::ConfigBuilder;
     ///
     /// let config = ConfigBuilder::default()
@@ -140,8 +142,10 @@ impl Preprocessor {
     /// ```
     /// use std::rc::Rc;
     ///
-    /// use lpc_rs::compiler::{compilation_context::CompilationContext, preprocessor::Preprocessor};
-    /// use lpc_rs::compiler::compilation_context::CompilationContextBuilder;
+    /// use lpc_rs::compiler::{
+    ///     compilation_context::{CompilationContext, CompilationContextBuilder},
+    ///     preprocessor::Preprocessor,
+    /// };
     /// use lpc_rs_utils::config::ConfigBuilder;
     ///
     /// let config = ConfigBuilder::default()
@@ -1001,8 +1005,7 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-    use crate::assert_regex;
-    use crate::compiler::compilation_context::CompilationContextBuilder;
+    use crate::{assert_regex, compiler::compilation_context::CompilationContextBuilder};
 
     fn fixture() -> Preprocessor {
         let config = ConfigBuilder::default()

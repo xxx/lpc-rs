@@ -1,5 +1,4 @@
 use std::{cell::RefCell, collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
-use derive_builder::Builder;
 
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use codegen::{
@@ -9,6 +8,7 @@ use codegen::{
     tree_walker::ContextHolder,
 };
 use compilation_context::CompilationContext;
+use derive_builder::Builder;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::{lpc_path::LpcPath, read_lpc_file};
 use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
@@ -17,11 +17,10 @@ use preprocessor::Preprocessor;
 use tracing::instrument;
 
 use crate::{
-    compiler::ast::inherit_node::InheritNode,
+    compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
     interpreter::{process::Process, program::Program},
     lpc_parser,
 };
-use crate::compiler::compilation_context::CompilationContextBuilder;
 
 pub mod ast;
 pub mod codegen;
@@ -351,7 +350,10 @@ mod tests {
                 .build()
                 .unwrap()
                 .into();
-            let compiler = CompilerBuilder::default().config(config.clone()).build().unwrap();
+            let compiler = CompilerBuilder::default()
+                .config(config.clone())
+                .build()
+                .unwrap();
             let server_path = LpcPath::new_server("../../secure.c");
             let in_game_path = LpcPath::new_in_game("../../secure.c", "/", &config.lib_dir);
 
