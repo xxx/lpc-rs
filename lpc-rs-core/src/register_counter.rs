@@ -11,19 +11,13 @@ pub struct RegisterCounter {
 impl RegisterCounter {
     /// create a new counter
     #[inline]
-    pub fn new(count: usize) -> Self
+    pub fn new(base_count: usize) -> Self
     {
         Self {
-            base_count: count,
-            count,
+            base_count,
+            count: base_count,
             stack: vec![],
         }
-    }
-
-    /// Return the current register.
-    #[inline]
-    pub fn current(&self) -> Register {
-        Register(self.count)
     }
 
     /// Return the number of registers that have been emitted.
@@ -96,26 +90,16 @@ mod tests {
     }
 
     #[test]
-    fn current_returns_without_increment() {
-        let mut counter = RegisterCounter::default();
-
-        assert_eq!(counter.current(), Register(0));
-        counter.next();
-        counter.next();
-        counter.next();
-        assert_eq!(counter.current(), Register(3));
-    }
-
-    #[test]
     fn set_updates_the_count() {
         let mut counter = RegisterCounter::default();
 
-        assert_eq!(counter.current(), Register(0));
+        assert_eq!(counter.count, 0);
         assert_eq!(counter.next(), Some(Register(0)));
 
         counter.set(5);
 
-        assert_eq!(counter.current(), Register(5));
+        assert_eq!(counter.count, 5);
+        assert_eq!(counter.next(), Some(Register(5)));
     }
 
     #[test]
