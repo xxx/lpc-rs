@@ -181,14 +181,10 @@ impl CodegenWalker {
             ..Self::default()
         };
 
-        // subtract 1 because globals are stored in global r0 as well.
-        result.global_counter.set(num_globals.saturating_sub(1));
+        result.global_counter.set(num_globals);
 
         result.global_init_registers = num_init_registers;
-        // subtract 1, so the next() call gives us the correct next register.
-        result
-            .register_counter
-            .set(num_init_registers.saturating_sub(1));
+        result.register_counter.set(num_init_registers);
 
         result.setup_init();
 
@@ -232,10 +228,9 @@ impl CodegenWalker {
             filename: self.context.filename,
             functions: self.functions,
             global_variables,
-            // add +1 because return values for calls used to initialize
-            // globals are stored in r0
-            num_globals: self.global_counter.as_usize() + 1,
-            num_upvalues: self.upvalue_counter.as_usize() + 1,
+            // add +1, because r0 is also used
+            num_globals: self.global_counter.number_emitted(),
+            num_upvalues: self.upvalue_counter.number_emitted(),
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
@@ -1072,11 +1067,11 @@ impl TreeWalker for CodegenWalker {
 
         let parent_scope_id = self.context.scopes.current_id;
 
-        self.register_counter.push(0);
+        self.register_counter.push();
         // Note that `upvalue_counter` is *not* pushed here.
         // We want to keep a consistent count of upvalues across all closures
         // that are declared somewhere within this function
-        self.function_upvalue_counter.push(0);
+        self.function_upvalue_counter.push();
 
         self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
         let declared_arg_count = node // XXX difference btwn closures & functions
@@ -1096,10 +1091,10 @@ impl TreeWalker for CodegenWalker {
         // bump the register counter if they have used `$\d` vars that go beyond
         // declared parameters, so that the positional params point to the correct slot.
         // TODO: fix this for upvalues / default parameters
-        let current_index = self.register_counter.as_usize();
-        if num_args > current_index {
-            self.register_counter.set(num_args);
-            self.current_result = Register(num_args).as_local();
+        let current_count = self.register_counter.number_emitted();
+        if num_args > current_count {
+            self.register_counter.set(num_args + 1);
+            self.current_result = Register(num_args + 1).as_local();
         }
 
         let populate_argv_index =
@@ -1149,7 +1144,7 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.pop();
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
-        func.num_locals = self.register_counter.as_usize() - num_args;
+        func.num_locals = self.register_counter.number_emitted() - num_args;
 
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
 
@@ -1410,9 +1405,9 @@ impl TreeWalker for CodegenWalker {
         self.function_stack.push(sym);
 
         let len = self.current_address();
-        self.register_counter.push(0);
-        self.upvalue_counter.push(0);
-        self.function_upvalue_counter.push(0);
+        self.register_counter.push();
+        self.upvalue_counter.push();
+        self.function_upvalue_counter.push();
 
         self.context.scopes.goto_function(&node.name)?;
         let declared_arg_count = node.parameters.len();
@@ -1456,7 +1451,7 @@ impl TreeWalker for CodegenWalker {
 
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
-        func.num_locals = self.register_counter.as_usize().saturating_sub(num_args);
+        func.num_locals = self.register_counter.number_emitted().saturating_sub(num_args);
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
 
         func.arg_locations = declared_arg_locations;
@@ -1718,7 +1713,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         let mut sym = self.function_stack.pop().unwrap();
-        sym.num_locals = self.register_counter.as_usize();
+        sym.num_locals = self.register_counter.number_emitted();
 
         self.functions.insert(sym.name().to_string(), sym.into());
 
@@ -2127,20 +2122,17 @@ impl TreeWalker for CodegenWalker {
 
 impl Default for CodegenWalker {
     fn default() -> Self {
-        let mut global_counter = RegisterCounter::new();
-        let mut upvalue_counter = RegisterCounter::new();
-        let mut function_upvalue_counter = RegisterCounter::new();
-        // do not skip r0 for these
-        global_counter.start_at_zero(true);
-        upvalue_counter.start_at_zero(true);
-        function_upvalue_counter.start_at_zero(true);
+        let register_counter = RegisterCounter::new(1);
+        let global_counter = RegisterCounter::new(0);
+        let upvalue_counter = RegisterCounter::new(0);
+        let function_upvalue_counter = RegisterCounter::new(0);
 
         Self {
             function_stack: vec![],
             label_count: 0,
             functions: Default::default(),
             current_result: RegisterVariant::Local(Register(0)),
-            register_counter: Default::default(),
+            register_counter,
             global_counter,
             upvalue_counter,
             function_upvalue_counter,
@@ -5148,7 +5140,7 @@ mod tests {
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
-            assert_eq!(walker.global_counter.as_usize(), 1);
+            assert_eq!(walker.global_counter.number_emitted(), 2);
             assert_eq!(walker.global_init_registers, 1);
         }
 

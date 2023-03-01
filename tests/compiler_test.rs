@@ -73,7 +73,7 @@ fn test_dynamic_receiver() {
     let proc = ctx.process();
     let prog = &proc.borrow().program;
 
-    assert_eq!(prog.num_globals, 1);
+    assert_eq!(prog.num_globals, 0);
     assert_eq!(prog.num_init_registers, 1);
 }
 
