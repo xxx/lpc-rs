@@ -26,8 +26,7 @@ impl RegisterCounter {
         Register(self.count)
     }
 
-    /// Return the number of registers that have been emitted, taking
-    /// start_at_zero into account.
+    /// Return the number of registers that have been emitted.
     pub fn number_emitted(&self) -> usize {
         self.count - self.base_count
     }
@@ -54,7 +53,8 @@ impl RegisterCounter {
     }
 
     #[inline]
-    /// Set a new value on the counter
+    /// Set a new value on the counter.
+    /// Will use the original base_value if the new value is less than it.
     pub fn set(&mut self, new_val: usize) {
         let new = if new_val < self.base_count {
             self.base_count
