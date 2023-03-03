@@ -15,7 +15,6 @@ use crate::support::run_prog;
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = ConfigBuilder::default()
-        .path(None)
         .lib_dir("tests/fixtures/code")
         .build()
         .unwrap()
