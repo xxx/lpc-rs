@@ -16,12 +16,6 @@ use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Proces
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
-fn owner_name(owner: &Rc<Process>, f: &mut Formatter) -> std::fmt::Result {
-    f.write_str(&owner.filename())
-}
-
-/// used for local Debug implementations, to avoid stack overflow when dumping
-/// function pointers
 fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
     f.write_str(&owner.borrow().filename())
 }
@@ -85,8 +79,8 @@ impl Display for FunctionAddress {
 #[educe(Debug)]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
-    #[educe(Debug(method = "owner_name"))]
-    pub owner: Rc<Process>,
+    #[educe(Debug(method = "borrowed_owner_name"))]
+    pub owner: Rc<RefCell<Process>>,
 
     /// Address of the function, in either the receiver or owner
     pub address: FunctionAddress,
@@ -131,7 +125,7 @@ impl Display for FunctionPtr {
         let mut s = String::new();
 
         s.push_str("FunctionPtr { ");
-        s.push_str(&format!("owner: {}, ", self.owner));
+        s.push_str(&format!("owner: {}, ", self.owner.borrow()));
         s.push_str(&format!("address: {}, ", self.address));
 
         let partial_args = &self

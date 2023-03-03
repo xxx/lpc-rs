@@ -50,8 +50,8 @@ macro_rules! apply_walker {
             let mut errors = std::mem::take(&mut context.errors);
             // put all warnings first, but otherwise keep them in the original order
             errors.sort_by(|a, b| match (a.severity, b.severity) {
-                (LpcErrorSeverity::Warning, LpcErrorSeverity::Error) => std::cmp::Ordering::Less,
-                (LpcErrorSeverity::Error, LpcErrorSeverity::Warning) => std::cmp::Ordering::Greater,
+                (LpcErrorSeverity::Warning, _) => std::cmp::Ordering::Less,
+                (_, LpcErrorSeverity::Warning) => std::cmp::Ordering::Greater,
                 _ => std::cmp::Ordering::Equal,
             });
 

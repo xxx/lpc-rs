@@ -293,26 +293,26 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         }) => {
             // first check to see if we're calling a function pointer that's
             // overridden the function with this name
-            context.lookup_var(name.as_str()).map_or_else(
-                || {
-                    context
-                        .lookup_function_complete(name.as_str(), namespace)
-                        // TODO: This `or` clause is where call_other checks end up
-                        .map_or(Ok(LpcType::Mixed(false)), |function_like| {
-                            Ok(function_like.as_ref().return_type)
-                        })
-                },
-                |var| {
+            let or_else = || {
+                context
+                    .lookup_function_complete(name.as_str(), namespace)
+                    // This `or` clause is where call_other checks end up
+                    .map_or(Ok(LpcType::Mixed(false)), |function_like| {
+                        Ok(function_like.as_ref().return_type)
+                    })
+            };
+
+            context
+                .lookup_var(name.as_str())
+                .map_or_else(or_else, |var| {
                     if var.type_.matches_type(LpcType::Function(false)) {
-                        // TODO: Get the real return type here somehow
-                        Ok(LpcType::Mixed(false))
+                        or_else()
                     } else {
                         Err(LpcError::new(format!(
                             "invalid call: `{name}` is not a function"
                         )))
                     }
-                },
-            )
+                })
         }
         ExpressionNode::Closure(ClosureNode { return_type, .. }) => Ok(*return_type),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {

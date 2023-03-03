@@ -110,8 +110,6 @@ impl TaskContext {
         let process = self.process.borrow();
         let current_cwd = process.cwd();
 
-        // TODO: If process / program cwd is intended to be the absolute in-game path,
-        //       then why are we stripping the prefix here?
         match current_cwd.strip_prefix(&self.config.lib_dir) {
             Ok(x) => {
                 let buf = if x.as_os_str().is_empty() {

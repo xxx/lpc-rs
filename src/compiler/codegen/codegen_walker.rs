@@ -1959,15 +1959,12 @@ impl TreeWalker for CodegenWalker {
     fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let symbol = self.context.lookup_var(&node.name);
 
-        let sym = match symbol {
-            Some(s) => s,
-            None => {
-                return Err(LpcError::new(format!(
-                    "Missing symbol, that somehow passed semantic checks?: {}",
-                    node.name
-                ))
-                .with_span(node.span))
-            }
+        let Some(sym) = symbol else {
+            return Err(LpcError::new(format!(
+                "Missing symbol, that somehow passed semantic checks?: {}",
+                node.name
+            ))
+            .with_span(node.span))
         };
 
         let global = sym.is_global();
@@ -5218,8 +5215,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 3) // TODO: this used to be
-                                                      // 12.
+            assert_eq!(program.num_init_registers, 3)
         }
 
         #[test]

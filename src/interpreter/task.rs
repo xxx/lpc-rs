@@ -1299,8 +1299,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let frame = self.stack.current_frame()?;
         let fp = FunctionPtr {
-            // TODO: set this owner correctly
-            owner: Rc::new(Default::default()),
+            owner: frame.process.clone(),
             address,
             partial_args,
             arity,

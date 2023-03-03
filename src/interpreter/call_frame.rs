@@ -297,7 +297,6 @@ impl CallFrame {
     }
 
     /// get a string representation of the frame's current current location
-    // TODO: make this the Display implementation
     pub fn to_stack_trace_format(&self) -> String {
         self.current_debug_span()
             .map(|span| format!("{} in {}()", span, self.function.name()))
@@ -307,12 +306,7 @@ impl CallFrame {
 
 impl Display for CallFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Calling {}; Process {}\n\n",
-            self.function.name(),
-            self.process.borrow().filename
-        )
+        write!(f, "{}", self.to_stack_trace_format())
     }
 }
 

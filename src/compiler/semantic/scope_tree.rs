@@ -209,8 +209,6 @@ impl ScopeTree {
 }
 
 impl Default for ScopeTree {
-    // TODO: This should probably push a new scope on by default to act as the
-    // global scope
     fn default() -> Self {
         Self {
             scopes: Arena::new(),
