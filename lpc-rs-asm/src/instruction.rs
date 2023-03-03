@@ -38,12 +38,14 @@ pub enum Instruction {
     Call {
         name: String,
         namespace: CallNamespace,
+        /// Number of args that were actually passed in the call
         num_args: usize,
     },
 
     /// Call a function pointer, located in `location`
     CallFp {
         location: RegisterVariant,
+        /// Number of args that were actually passed in the call
         num_args: usize,
     },
 
@@ -51,6 +53,9 @@ pub enum Instruction {
     CallOther {
         receiver: RegisterVariant,
         name: RegisterVariant,
+        /// Number of args that were actually passed in the call,
+        /// not including the receiver and function name
+        /// (which are passed along with the args as an implementation detail)
         num_args: usize,
     },
 
@@ -168,14 +173,14 @@ pub enum Instruction {
 
     /// Special case instruction to dynamically populate the `argv` variable
     ///   that is created for ellipsis functions.
-    /// `Register` is the location of `argv`.
+    /// `RegisterVariant` is the location of `argv`.
     /// The first `usize` is the number of formal parameters to the function
     ///   (whether they have default values or not, basically just the count
     ///   of non-ellipsis params).
     /// The second `usize` is the number of local variables used by the
     /// function. We know both of these numbers at compile time, and any
-    /// other register   present in the frame is an ellipsis argument, so
-    /// those are the ones we   populate.
+    /// other register present in the frame is an ellipsis argument, so
+    /// those are the ones we populate.
     PopulateArgv(RegisterVariant, usize, usize),
 
     /// Special case instruction to handle calls to functions that have default
@@ -183,7 +188,7 @@ pub enum Instruction {
     /// The first `usize` is the number of formal parameters to the function
     ///   (whether they have default values or not).
     /// The vector is the list of addresses to jump to, to initialize the
-    /// parameters   that have default values.
+    /// parameters that have default values.
     PopulateDefaults(Vec<Address>),
 
     /// Create a new value from some range of another value

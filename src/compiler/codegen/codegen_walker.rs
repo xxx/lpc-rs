@@ -607,6 +607,10 @@ impl CodegenWalker {
     ) -> Option<usize> {
         if ellipsis {
             let argv_location = self.assign_sym_location(ARGV);
+            // yep, argv can be upvalued
+            if matches!(argv_location, RegisterVariant::Upvalue(_)) {
+                self.function_upvalue_counter.next().unwrap();
+            }
 
             // We don't set `argv_location` as `self.current_result`, because it's
             // being assigned implicitly, and doesn't need to be made available
@@ -868,53 +872,6 @@ impl TreeWalker for CodegenWalker {
             arg_results.push(self.current_result);
         }
 
-        // let instruction = if arg_results.len() == 1 {
-        //     // no need to serialize args for the `Call` instruction if there's only
-        // one.     if let Some(rcvr) = &mut node.receiver {
-        //         rcvr.visit(self)?;
-        //         let receiver_result = self.current_result;
-        //         let name_register = self.register_counter.next().unwrap().as_local();
-        //         push_instruction!(
-        //             self,
-        //             Instruction::SConst(name_register, node.name.clone()),
-        //             node.span
-        //         );
-        //
-        //         Instruction::CallOther {
-        //             receiver: receiver_result,
-        //             name: name_register,
-        //             num_args: arg_results.len(),
-        //             initial_arg: arg_results[0],
-        //         }
-        //     } else if node.name == SIZEOF {
-        //         let result = self.register_counter.next().unwrap().as_local();
-        //
-        //         let instruction = Instruction::Sizeof(*arg_results.first().unwrap(),
-        // result);         push_instruction!(self, instruction, node.span);
-        //
-        //         return Ok(());
-        //     } else {
-        //         if_chain! {
-        //             if let Some(x) = self.context.lookup_var(&node.name);
-        //             if x.type_.matches_type(LpcType::Function(false));
-        //             then {
-        //                 // if there's a function pointer with this name in scope,
-        // call that.                 Instruction::CallFp {
-        //                     location: x.location.unwrap(),
-        //                     num_args: arg_results.len(),
-        //                     initial_arg: arg_results[0],
-        //                 }
-        //             } else {
-        //                 Instruction::Call {
-        //                     name: node.name.clone(),
-        //                     namespace: node.namespace.clone(),
-        //                     num_args: arg_results.len(),
-        //                     initial_arg: arg_results[0],
-        //                 }
-        //             }
-        //         }
-        //     }
-        // } else {
         if node.name == SIZEOF {
             let result = self.register_counter.next().unwrap().as_local();
             let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
@@ -924,22 +881,12 @@ impl TreeWalker for CodegenWalker {
         }
 
         let instruction = {
-            // let start_register = self.register_counter.next().unwrap().as_local();
-            // let mut register = start_register;
-
             push_instruction!(self, Instruction::ClearArgs, node.span);
 
             // populate the args vector
             for result in &arg_results {
                 push_instruction!(self, Instruction::Arg(*result), node.span);
-                // push_instruction!(self, Instruction::RegCopy(*result,
-                // register), node.span); register =
-                // self.register_counter.next().unwrap().as_local();
             }
-
-            // // Undo the final call to .next() in the above for-loop,
-            // // to avoid wasting a register
-            // self.register_counter.go_back();
 
             if let Some(rcvr) = &mut node.receiver {
                 rcvr.visit(self)?;
@@ -1025,7 +972,7 @@ impl TreeWalker for CodegenWalker {
         {
             push_copy(self);
         } else {
-            return Err(LpcError::new(format!(
+            return Err(LpcError::new_bug(format!(
                 "Unable to find return type for `{}`. This is a weird issue that indicates \
                 something very broken in the semantic checks.",
                 node.name
@@ -1050,9 +997,9 @@ impl TreeWalker for CodegenWalker {
         let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
 
-        let sym = ProgramFunction::new(prototype.clone(), 0);
+        let func = ProgramFunction::new(prototype.clone(), 0);
 
-        self.function_stack.push(sym);
+        self.function_stack.push(func);
 
         if let Some(scope_id) = node.scope_id {
             self.closure_scope_stack.push(scope_id);
@@ -1144,10 +1091,9 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.pop();
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
+
         func.num_locals = self.register_counter.number_emitted() - num_args;
-
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
-
         func.arg_locations = declared_arg_locations;
 
         if let Some(idx) = populate_argv_index {
@@ -1159,10 +1105,10 @@ impl TreeWalker for CodegenWalker {
         self.function_upvalue_counter.pop();
         self.register_counter.pop();
 
-        // At this point, the closure has been generated and stored.
-        // We just need to store a reference to it in the current result.
         self.context.scopes.goto(parent_scope_id);
 
+        // At this point, the closure has been generated and stored.
+        // We just need to store a reference to it in the current result.
         let location = self.register_counter.next().unwrap().as_local();
         self.current_result = location;
 
@@ -1451,7 +1397,10 @@ impl TreeWalker for CodegenWalker {
 
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
-        func.num_locals = self.register_counter.number_emitted().saturating_sub(num_args);
+        func.num_locals = self
+            .register_counter
+            .number_emitted()
+            .saturating_sub(num_args);
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
 
         func.arg_locations = declared_arg_locations;
@@ -2122,6 +2071,7 @@ impl TreeWalker for CodegenWalker {
 
 impl Default for CodegenWalker {
     fn default() -> Self {
+        // The local counter starts at 1, as r0 is reserved for return values.
         let register_counter = RegisterCounter::new(1);
         let global_counter = RegisterCounter::new(0);
         let upvalue_counter = RegisterCounter::new(0);
@@ -3090,18 +3040,6 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 Arg(RegisterVariant::Local(Register(2))),
                 Arg(RegisterVariant::Local(Register(3))),
-                // RegCopy(
-                //     RegisterVariant::Local(Register(1)),
-                //     RegisterVariant::Local(Register(4)),
-                // ),
-                // RegCopy(
-                //     RegisterVariant::Local(Register(2)),
-                //     RegisterVariant::Local(Register(5)),
-                // ),
-                // RegCopy(
-                //     RegisterVariant::Local(Register(3)),
-                //     RegisterVariant::Local(Register(6)),
-                // ),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(1)),
                     name: RegisterVariant::Local(Register(2)),

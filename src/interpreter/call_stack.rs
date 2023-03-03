@@ -15,6 +15,9 @@ pub struct CallStack<const STACKSIZE: usize> {
 impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     delegate! {
         to self.stack {
+            /// Get a frame by index
+            pub fn get(&self, index: usize) -> Option<&CallFrame>;
+
             /// Get the number of objects in the space
             pub fn len(&self) -> usize;
 

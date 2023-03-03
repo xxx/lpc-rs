@@ -45,6 +45,9 @@ pub struct CallFrame {
     pub process: Rc<RefCell<Process>>,
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,
+    /// The actual locations of all arguments that were passed-in.
+    /// Necessary for populating `argv` in ellipsis functions, e.g.
+    pub arg_locations: Vec<RegisterVariant>,
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call.
     pub registers: RegisterBank,
@@ -85,6 +88,7 @@ impl CallFrame {
         let mut instance = Self {
             process,
             function,
+            arg_locations: Vec::with_capacity(called_with_num_args),
             registers: RegisterBank::new(vec![NULL; reg_len]),
             pc: 0.into(),
             called_with_num_args,

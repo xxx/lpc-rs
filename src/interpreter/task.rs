@@ -100,7 +100,6 @@ fn set_location<const N: usize>(
     Ok(())
 }
 
-#[inline]
 fn apply_in_location<F, const N: usize>(
     stack: &mut CallStack<N>,
     location: RegisterVariant,
@@ -154,7 +153,6 @@ struct CatchPoint {
     address: Address,
 
     /// The register to put the error in, within the above [`StackFrame`]
-    /// TODO: update this for closures
     register: RegisterVariant,
 }
 
@@ -544,15 +542,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x.bitor(y))?;
             }
-            Instruction::PopulateArgv(r, num_args, num_locals) => {
-                // note that argv population has no interaction with upvalues
-                let registers = &mut self.stack.current_frame_mut()?.registers;
-                let ellipsis_start_index = num_args + 1; // +1 is for the reserved r0
-                let ellipsis_end_index = registers.len() - num_locals;
-                let ellipsis_vars = &registers[ellipsis_start_index..ellipsis_end_index];
-                let new_ref = self.memory.value_to_ref(LpcValue::from(ellipsis_vars));
+            Instruction::PopulateArgv(r, num_args, _num_locals) => {
+                let frame = self.stack.current_frame()?;
+                let arg_locations = &frame.arg_locations;
+                let ellipsis_vars = &arg_locations[num_args..];
+                let refs = ellipsis_vars
+                    .iter()
+                    .map(|x| get_location_in_frame(frame, *x).map(|v| v.into_owned()))
+                    .collect::<Result<Vec<_>>>()?;
+                let new_ref = self.memory.value_to_ref(LpcValue::from(refs));
 
-                registers[r.index()] = new_ref;
+                set_location(&mut self.stack, r, new_ref)?;
             }
             Instruction::PopulateDefaults(default_addresses) => {
                 let frame = self.stack.current_frame()?;
@@ -823,6 +823,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
+                new_frame.arg_locations.push(target_location);
+
                 new_frame.set_location(
                     target_location,
                     get_loc!(self, *arg).map(|i| i.into_owned())?,
@@ -934,7 +936,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             CallFrame::with_registers(proc, function, passed_args_count, new_registers, upvalues);
 
         // negotiate the passed & partially-applied arguments
-        if arity.num_args > 0_usize || (dynamic_receiver && *num_args > 0) {
+        if arity.num_args > 0_usize || arity.ellipsis || (dynamic_receiver && *num_args > 0) {
             let from_slice = &self.args[index..(index + adjusted_num_args)];
 
             let mut type_check_and_assign_location = |loc, r, i| -> Result<()> {
@@ -946,6 +948,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     &prototype.name,
                 )?;
 
+                new_frame.arg_locations.push(loc);
                 new_frame.set_location(loc, r);
 
                 Ok(())
@@ -979,10 +982,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     // fill in the next hole in the partial arguments, or
                     // append to the end
 
-                    if target_location != *location {
-                        let lpc_ref = get_loc!(self, *location)?;
-                        type_check_and_assign_location(target_location, lpc_ref.into_owned(), i)?;
-                    }
+                    let lpc_ref = get_loc!(self, *location)?;
+                    type_check_and_assign_location(target_location, lpc_ref.into_owned(), i)?;
 
                     from_slice_index += 1;
                 }
@@ -1089,8 +1090,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let value = LpcValue::from(pr);
                             let result = match value {
                                 LpcValue::Object(receiver) => {
-                                    // let args = &self.args;
-
                                     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(memory);
 
                                     let new_context =
@@ -1105,9 +1104,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         .unwrap()
                                         .clone();
 
-                                    if !function.public() {
-                                        NULL
-                                    } else {
+                                    if function.public() {
                                         let eval_context =
                                             task.eval(function, args, new_context)?;
                                         task_context.increment_instruction_count(
@@ -1115,6 +1112,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                         )?;
 
                                         eval_context.into_result()
+                                    } else {
+                                        NULL
                                     }
                                 }
                                 _ => NULL,
@@ -3990,7 +3989,16 @@ mod tests {
             let frame = snapshot.pop().unwrap();
             let proc = frame.process.borrow();
 
-            assert_eq!(upvalues.len(), proc.upvalues.len());
+            assert_eq!(
+                upvalues.len(),
+                proc.upvalues.len(),
+                "upvalues: {:?}\nproc upvalues: {:?}",
+                upvalues
+                    .iter()
+                    .map(|i| i.clone().into())
+                    .collect::<Vec<BareVal>>(),
+                proc.upvalues
+            );
 
             for (i, v) in upvalues.iter().enumerate() {
                 let v: BareVal = v.clone().into();
@@ -4210,6 +4218,55 @@ mod tests {
             let expected = IndexMap::from([
                 ("c1", String("hello666 1 2 -4".into())),
                 ("c2", String("hello666 3 77 69".into())),
+                (
+                    "partial",
+                    Function("make_maker".into(), vec![None, Some(Int(666))]),
+                ),
+                ("maker", Function("closure-2".into(), vec![])),
+                ("made1", Function("closure-1".into(), vec![])),
+                ("made2", Function("closure-1".into(), vec![])),
+            ]);
+
+            check_local_vars(code, &expected);
+        }
+
+        #[test]
+        fn test_upvalued_ellipsis() {
+            let code = indoc! { r##"
+                void create() {
+                    function partial = &make_maker(,666);
+
+                    function maker = partial("hello");
+
+                    function made1 = maker(123, 456);
+                    function made2 = (: maker("world", $1) :); // closure-0
+                    made2 = made2(77);
+
+                    int c1 = made1(0);
+                    int c2 = made2(1);
+
+                    debug("snapshot_stack");
+                }
+
+                function make_maker(string str, int _i) {
+                    return (: [...] // closure-2
+                        dump("maker", argv);
+                        return (: [int i] dump(str, argv[i]); argv[i] :); // closure-1
+                    :);
+                }
+            "##};
+
+            let expected: Vec<BareVal> = vec![
+                Function("closure-2".into(), vec![]),
+                String("hello".into()),
+                Array(vec![Int(123), Int(456)]),
+                Array(vec![String("world".into()), Int(77)]),
+            ];
+            check_proc_upvalues(code, &expected);
+
+            let expected = IndexMap::from([
+                ("c1", Int(123)),
+                ("c2", Int(77)),
                 (
                     "partial",
                     Function("make_maker".into(), vec![None, Some(Int(666))]),

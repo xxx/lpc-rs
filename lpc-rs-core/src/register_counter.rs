@@ -11,8 +11,7 @@ pub struct RegisterCounter {
 impl RegisterCounter {
     /// create a new counter
     #[inline]
-    pub fn new(base_count: usize) -> Self
-    {
+    pub fn new(base_count: usize) -> Self {
         Self {
             base_count,
             count: base_count,
