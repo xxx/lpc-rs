@@ -158,7 +158,7 @@ Inherit: InheritNode = {
         let path = if let ExpressionNode::String(StringNode { value, .. }) = path_node {
             value
         } else {
-            let error = LpcError::new("Inherit path isn't a string? This should not have even parsed.")
+            let error = LpcError::new_bug("Inherit path isn't a string? This should not have even parsed.")
             .with_span(Some(span));
 
             return Err(ParseError::User { error });
@@ -179,8 +179,8 @@ Def: AstNode = {
     <proto:FunctionPrototype> <r:";"> => {
         let (flags, r_type, _, name, _) = proto;
         let left = flags.first().map_or_else(
-            || r_type.map_or(name.0, |ty| ty.1),
-            |flag| flag.1
+            || r_type.map_or(name.0, |ty| ty.0),
+            |flag| flag.0
         );
         let span = combine_spans(Some(left), Some(r));
 
@@ -190,10 +190,10 @@ Def: AstNode = {
         AstNode::NoOp
     },
     <flags:GlobalFlag*> <mut node:Decl> ";" =>? {
-        let flag_strs = flags.iter().map(|i| i.0).collect::<Vec<_>>();
+        let flag_strs = flags.iter().map(|i| i.1).collect::<Vec<_>>();
         let invalid = GlobalVarFlags::validate(&flag_strs);
         if let Some(field) = invalid.first() {
-            let span = combine_spans(Some(flags[0].1), Some(flags.last().unwrap().1));
+            let span = combine_spans(Some(flags[0].0), Some(flags.last().unwrap().0));
 
             let err = LpcError::new(format!("`{}` is intended for functions only", field))
                                       .with_span(Some(span));
@@ -212,8 +212,8 @@ Def: AstNode = {
 };
 
 FunctionPrototype: (
-    Vec<(&'static str, Span)>,
-    Option<(&'static str, Span)>,
+    Vec<(Span, &'static str)>,
+    Option<(Span, &'static str)>,
     Option<Span>,
     StringToken,
     (Vec<VarInitNode>, bool)
@@ -230,8 +230,8 @@ FunctionDef: FunctionDefNode = {
         let (parameters, ellipsis) = parameter_tuple;
 
         let l = if flags.len() > 0 {
-            flags.first().unwrap().1.l
-        } else if let Some((_, span)) = &r_type {
+            flags.first().unwrap().0.l
+        } else if let Some((span, _)) = &r_type {
             span.l
         } else if let Some(span) = &star {
             span.l
@@ -245,7 +245,7 @@ FunctionDef: FunctionDefNode = {
         let span = Span::new(file_id, l..r);
 
         let return_type = if let Some(this_type) = r_type {
-            LpcType::from(this_type.0).as_array(array)
+            LpcType::from(this_type.1).as_array(array)
         } else if context.pragmas.strict_types() {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
@@ -255,7 +255,7 @@ FunctionDef: FunctionDefNode = {
             LpcType::Mixed(array)
         };
 
-        let flag_strs = flags.into_iter().map(|f| f.0).collect::<Vec<_>>();
+        let flag_strs = flags.into_iter().map(|f| f.1).collect::<Vec<_>>();
         if flag_strs.iter().filter(|f| ["public", "private", "protected", "static"].contains(f)).count() > 1 {
             let err = LpcError::new("multiple visibilities specified")
             .with_note("Use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility.")
@@ -340,7 +340,7 @@ ParameterList: Vec<VarInitNode> = {
 
 ArgName: VarInitNode = {
     <var_type:Type> <mut init:VarInit> => {
-        let new_type = LpcType::from(var_type.0);
+        let new_type = LpcType::from(var_type.1);
 
         init.type_ = new_type.as_array(init.array);
 
@@ -348,26 +348,24 @@ ArgName: VarInitNode = {
     }
 };
 
-// TODO: flip the order of these so they match tokens
-Type: (&'static str, Span) = {
-    "int" => ("int", <>),
-    "float" => ("float", <>),
-    "string" => ("string", <>),
-    "mixed" => ("mixed", <>),
-    "mapping" => ("mapping", <>),
-    "object" => ("object", <>),
-    "function" => ("function", <>),
-    "void" => ("void", <>),
+Type: (Span, &'static str) = {
+    "int" => (<>, "int"),
+    "float" => (<>, "float"),
+    "string" => (<>, "string"),
+    "mixed" => (<>, "mixed"),
+    "mapping" => (<>, "mapping"),
+    "object" => (<>, "object"),
+    "function" => (<>, "function"),
+    "void" => (<>, "void"),
 };
 
-// TODO: flip the order of these so they match tokens
-GlobalFlag: (&'static str, Span) = {
-    "varargs" => ("varargs", <>),
-    "public" => ("public", <>),
-    "private" => ("private", <>),
-    "static" => ("static", <>),
-    "protected" => ("protected", <>),
-    "nomask" => ("nomask", <>),
+GlobalFlag: (Span, &'static str) = {
+    "varargs" => (<>, "varargs"),
+    "public" => (<>, "public"),
+    "private" => (<>, "private"),
+    "static" => (<>, "static"),
+    "protected" => (<>, "protected"),
+    "nomask" => (<>, "nomask"),
 };
 
 Statement: AstNode = {
@@ -550,7 +548,7 @@ VarInit: VarInitNode = {
 
 Decl: DeclNode = {
     <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> => {
-        let new_type = LpcType::from(var_type.0).as_array(init.array);
+        let new_type = LpcType::from(var_type.1).as_array(init.array);
         let mut initializations = vec![init];
 
         initializations.append(optional.to_vec().as_mut());
