@@ -86,7 +86,7 @@ pub enum Instruction {
         location: RegisterVariant,
         target: FunctionTarget,
         arity: FunctionArity,
-        applied_arguments: Vec<Option<RegisterVariant>>, // TODO: should this be RegisterVariant?
+        applied_arguments: Vec<Option<RegisterVariant>>,
     },
 
     /// Greater than
