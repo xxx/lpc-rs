@@ -1,3 +1,4 @@
+use qcell::QCellOwner;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
@@ -36,11 +37,12 @@ pub fn compile_prog(code: &str) -> Program {
         .expect("Failed to compile.")
 }
 
-pub fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog<'a>(code: &str) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+    let mut cell_key = QCellOwner::new();
     let mut task = Task::new(Memory::default());
     let program = compile_prog(code);
     let ctx = task
-        .initialize_program(program, test_config(), ObjectSpace::default())
+        .initialize_program(program, test_config(), cell_key.cell(ObjectSpace::default()), &mut cell_key)
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             panic!("failed to initialize");

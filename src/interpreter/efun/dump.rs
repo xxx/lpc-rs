@@ -151,6 +151,7 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use qcell::QCellOwner;
     use lpc_rs_utils::config::Config;
 
     use crate::{
@@ -178,7 +179,8 @@ mod tests {
 
         let program = compile_prog(code);
         let mut task: Task<5> = Task::new(Memory::new(10));
-        let result = task.initialize_program(program, Config::default(), ObjectSpace::default());
+        let mut cell_key = QCellOwner::new();
+        let result = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -196,7 +198,7 @@ mod tests {
 
         let program = compile_prog(code);
         let mut task: Task<5> = Task::new(Memory::new(10));
-        let result = task.initialize_program(program, Config::default(), ObjectSpace::default());
+        let result = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
 
         assert_eq!(
             result.unwrap_err().to_string(),

@@ -802,6 +802,7 @@ dependencies = [
  "lpc-rs-utils",
  "once_cell",
  "phf",
+ "qcell",
  "refpool",
  "regex",
  "rmp-serde",
@@ -841,6 +842,7 @@ dependencies = [
  "if_chain",
  "lpc-rs",
  "lpc-rs-utils",
+ "qcell",
  "tracing",
  "tracing-subscriber",
 ]
@@ -886,6 +888,7 @@ dependencies = [
  "lpc-rs",
  "lpc-rs-core",
  "lpc-rs-utils",
+ "qcell",
 ]
 
 [[package]]
@@ -1173,6 +1176,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d727cae5b39d21da60fa540906919ad737832fe0b1c165da3a34d6548c849d6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "qcell"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76babcf954d92eee717a7c9bfc4921d91dfbf2124d9bfb6ed1b0b3d0c47361e3"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]

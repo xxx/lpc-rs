@@ -1,5 +1,6 @@
 use clap::Parser;
 use if_chain::if_chain;
+use qcell::QCellOwner;
 use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::ConfigBuilder;
 
@@ -58,9 +59,11 @@ fn main() {
         }
     }
 
-    let mut vm = Vm::new(config);
+    let mut cell_key = QCellOwner::new();
 
-    vm.initialize().unwrap_or_else(|e| {
+    let mut vm = Vm::new(config, &mut cell_key);
+
+    vm.initialize(&mut cell_key).unwrap_or_else(|e| {
         eprintln!("unable to initialize VM: {e:?}");
         std::process::exit(1);
     });

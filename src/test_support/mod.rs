@@ -1,4 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
+use qcell::QCellOwner;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -68,7 +69,7 @@ pub fn compile_prog(code: &str) -> (Program, Rc<Config>, Rc<RefCell<Process>>) {
     (program, config, se_proc)
 }
 
-pub fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog<'a>(code: &str, cell_key: &'a mut QCellOwner) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
     let mut task = Task::new(Memory::default());
     let (program, config, se_proc) = compile_prog(code);
 
@@ -76,7 +77,7 @@ pub fn run_prog(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
     object_space.insert_process(se_proc);
 
     let ctx = task
-        .initialize_program(program, config, object_space)
+        .initialize_program(program, config, cell_key.cell(object_space), cell_key)
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             panic!("failed to initialize");
