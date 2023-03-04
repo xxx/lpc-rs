@@ -229,7 +229,6 @@ impl CodegenWalker {
             functions: self.functions,
             global_variables,
             num_globals: self.global_counter.number_emitted(),
-            num_upvalues: self.upvalue_counter.number_emitted(), // TODO: is this needed?
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,

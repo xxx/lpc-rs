@@ -36,9 +36,6 @@ pub struct Program {
     /// Note that this number includes inherited globals.
     pub num_globals: usize,
 
-    /// How many upvalues does this program need storage for?
-    pub num_upvalues: usize,
-
     /// How many [`Register`](lpc_rs_core::register::Register)s are needed to
     /// initialize this program?
     pub num_init_registers: usize,

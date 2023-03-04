@@ -12,7 +12,7 @@ use lpc_rs::{
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::run_prog;
-use tracing;
+// use tracing;
 
 // #[ctor::ctor]
 // fn init() {
