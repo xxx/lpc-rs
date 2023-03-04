@@ -1,4 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
+use qcell::QCell;
 
 use lpc_rs_utils::config::Config;
 
@@ -7,7 +8,7 @@ use crate::interpreter::{object_space::ObjectSpace, process::Process};
 pub fn get_simul_efuns(
     config: &Config,
     object_space: &ObjectSpace,
-) -> Option<Rc<RefCell<Process>>> {
+) -> Option<Rc<QCell<Process>>> {
     config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
         object_space.lookup(file).cloned()
@@ -16,7 +17,7 @@ pub fn get_simul_efuns(
 
 #[cfg(test)]
 mod tests {
-    use claim::assert_none;
+    use qcell::QCellOwner;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
 
@@ -25,10 +26,13 @@ mod tests {
 
     #[test]
     fn test_get_simul_efuns() {
+        let mut cell_key = QCellOwner::new();
         let config = Config::default();
         let mut object_space = ObjectSpace::default();
         let simul_efuns = get_simul_efuns(&config, &object_space);
-        assert_none!(simul_efuns);
+        if !simul_efuns.is_none() {
+            panic!("Expected None, got something");
+        }
 
         let config = ConfigBuilder::default()
             .simul_efun_file("/secure/simul_efuns")
@@ -43,10 +47,12 @@ mod tests {
             .build()
             .unwrap();
         let proc = Process::new(prog);
-        object_space.insert_process(proc);
+        let space_cell: Rc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
+        ObjectSpace::insert_process(&space_cell.clone(), cell_key.cell(proc), &mut cell_key);
 
+        let object_space = space_cell.ro(&cell_key);
         let simul_efuns = get_simul_efuns(&config, &object_space).unwrap();
-        let borrowed = simul_efuns.borrow();
+        let borrowed = simul_efuns.ro(&cell_key);
         assert_eq!(borrowed.filename.to_string(), "/secure/simul_efuns");
     }
 }

@@ -4,6 +4,7 @@ use std::{
 };
 
 use indextree::NodeId;
+use qcell::QCellOwner;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -42,8 +43,8 @@ impl IfNode {
 }
 
 impl AstNodeTrait for IfNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_if(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_if(self, cell_key)
     }
 }
 

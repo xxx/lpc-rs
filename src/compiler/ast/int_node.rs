@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_core::LpcInt;
 use lpc_rs_errors::{span::Span, Result};
@@ -33,8 +34,8 @@ impl SpannedNode for IntNode {
 }
 
 impl AstNodeTrait for IntNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_int(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_int(self, cell_key)
     }
 }
 

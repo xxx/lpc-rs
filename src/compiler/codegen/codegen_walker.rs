@@ -2,6 +2,7 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
+use qcell::QCellOwner;
 use lpc_rs_asm::instruction::{Address, Instruction, Label};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
@@ -425,9 +426,9 @@ impl CodegenWalker {
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
-    fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
+    fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode, cell_key: &mut QCellOwner) -> Result<()> {
         let first_index = if let Some(expr) = &mut *node.l {
-            expr.visit(self)?;
+            expr.visit(self, cell_key)?;
             self.current_result
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
@@ -436,7 +437,7 @@ impl CodegenWalker {
         };
 
         let second_index = if let Some(expr) = &mut *node.r {
-            expr.visit(self)?;
+            expr.visit(self, cell_key)?;
             self.current_result
         } else {
             // A missing range end means just go to the end of the array.
@@ -468,7 +469,7 @@ impl CodegenWalker {
     }
 
     // special case for `catch()`
-    fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
+    fn emit_catch(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
         let result_register = self.register_counter.next().unwrap().as_local();
         let label = self.new_label("catch_end");
 
@@ -479,7 +480,7 @@ impl CodegenWalker {
         );
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self, cell_key)?;
         }
 
         // get the address of the `catchend` pseudo-instruction, so we can jump to a
@@ -638,6 +639,7 @@ impl CodegenWalker {
         span: Option<Span>,
         populate_defaults_index: Option<usize>,
         start_label: Label,
+        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let mut default_init_addresses = vec![];
 
@@ -647,7 +649,7 @@ impl CodegenWalker {
 
                 // generate code for only the value, then assign by hand, because we
                 // pre-generated locations of the parameters above.
-                value.visit(self)?;
+                value.visit(self, cell_key)?;
                 let instruction =
                     Instruction::RegCopy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
@@ -706,10 +708,10 @@ impl ContextHolder for CodegenWalker {
 
 impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
-    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
+    fn visit_array(&mut self, node: &mut ArrayNode, cell_key: &mut QCellOwner) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len());
         for member in &mut node.value {
-            let _ = member.visit(self);
+            let _ = member.visit(self, cell_key);
             items.push(self.current_result);
         }
 
@@ -721,14 +723,14 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
-        node.rhs.visit(self)?;
+    fn visit_assignment(&mut self, node: &mut AssignmentNode, cell_key: &mut QCellOwner) -> Result<()> {
+        node.rhs.visit(self, cell_key)?;
         let rhs_result = self.current_result;
         let lhs = &mut *node.lhs;
 
         match lhs {
             ExpressionNode::Var(_) => {
-                lhs.visit(self)?;
+                lhs.visit(self, cell_key)?;
                 let lhs_result = self.current_result;
                 trace!("assignment: lhs: {}, rhs: {}", lhs_result, rhs_result);
 
@@ -744,9 +746,9 @@ impl TreeWalker for CodegenWalker {
                 ref mut r,
                 ..
             }) => {
-                l.visit(self)?;
+                l.visit(self, cell_key)?;
                 let var_result = self.current_result;
-                r.visit(self)?;
+                r.visit(self, cell_key)?;
                 let index_result = self.current_result;
 
                 let store = Instruction::Store(rhs_result, var_result, index_result);
@@ -767,8 +769,8 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
-        node.l.visit(self)?;
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode, cell_key: &mut QCellOwner) -> Result<()> {
+        node.l.visit(self, cell_key)?;
         let reg_left = self.current_result;
 
         match node.op {
@@ -776,7 +778,7 @@ impl TreeWalker for CodegenWalker {
                 // Ranges need special handling that complicates this function otherwise, due to
                 // the visit to node.r needing to handle multiple results.
                 if let ExpressionNode::Range(range_node) = &mut *node.r {
-                    self.emit_range(reg_left, range_node)?;
+                    self.emit_range(reg_left, range_node, cell_key)?;
                     return Ok(());
                 }
             }
@@ -786,7 +788,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::Jz(reg_left, end_label.clone());
                 push_instruction!(self, instruction, node.span);
 
-                node.r.visit(self)?;
+                node.r.visit(self, cell_key)?;
                 let reg_right = self.current_result;
                 let instruction = Instruction::Jz(reg_right, end_label.clone());
                 push_instruction!(self, instruction, node.span);
@@ -812,7 +814,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::Jnz(reg_result, end_label.clone());
                 push_instruction!(self, instruction, node.span);
 
-                node.r.visit(self)?;
+                node.r.visit(self, cell_key)?;
                 let reg_right = self.current_result;
                 let instruction = Instruction::RegCopy(reg_right, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -825,7 +827,7 @@ impl TreeWalker for CodegenWalker {
             _ => {}
         }
 
-        node.r.visit(self)?;
+        node.r.visit(self, cell_key)?;
         let reg_right = self.current_result;
 
         let reg_result = self.register_counter.next().unwrap().as_local();
@@ -838,11 +840,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+    fn visit_block(&mut self, node: &mut BlockNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         for stmt in &mut node.body {
-            stmt.visit(self)?;
+            stmt.visit(self, cell_key)?;
         }
 
         self.context.scopes.pop();
@@ -850,7 +852,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
+    fn visit_break(&mut self, node: &mut BreakNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
             let instruction = Instruction::Jmp(break_target.into());
             push_instruction!(self, instruction, node.span);
@@ -861,16 +863,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+    fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
         if node.name == CATCH {
-            return self.emit_catch(node);
+            return self.emit_catch(node, cell_key);
         }
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self, cell_key)?;
             arg_results.push(self.current_result);
         }
 
@@ -891,7 +893,7 @@ impl TreeWalker for CodegenWalker {
             }
 
             if let Some(rcvr) = &mut node.receiver {
-                rcvr.visit(self)?;
+                rcvr.visit(self, cell_key)?;
                 let receiver_result = self.current_result;
 
                 let name_register = self.register_counter.next().unwrap().as_local();
@@ -956,7 +958,7 @@ impl TreeWalker for CodegenWalker {
         // Take care of the result after the call returns.
         if let Some(func) = self
             .context
-            .lookup_function_complete(&node.name, &node.namespace)
+            .lookup_function_complete(&node.name, &node.namespace, cell_key)
         {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
@@ -986,7 +988,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    fn visit_closure(&mut self, node: &mut ClosureNode, cell_key: &mut QCellOwner) -> Result<()> {
         let Some(prototype) = self.context.function_prototypes.get(&node.name) else {
             return Err(LpcError::new(format!(
                 "closure prototype for {} not found",
@@ -1053,7 +1055,7 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(&start_label, self.current_address());
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
         }
 
         // return the current result if there is no explicit return.
@@ -1086,6 +1088,7 @@ impl TreeWalker for CodegenWalker {
                     node.span,
                     populate_defaults_index,
                     start_label,
+                    cell_key,
                 )?;
             }
         }
@@ -1135,7 +1138,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
+    fn visit_continue(&mut self, node: &mut ContinueNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(JumpTarget {
             continue_target, ..
         }) = self.jump_targets.last()
@@ -1149,16 +1152,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
+    fn visit_decl(&mut self, node: &mut DeclNode, cell_key: &mut QCellOwner) -> Result<()> {
         for init in &mut node.initializations {
-            self.visit_var_init(init)?;
+            self.visit_var_init(init, cell_key)?;
         }
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+    fn visit_do_while(&mut self, node: &mut DoWhileNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         let start_label = self.new_label("do-while-start");
@@ -1170,12 +1173,12 @@ impl TreeWalker for CodegenWalker {
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
 
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
 
-        node.condition.visit(self)?;
+        node.condition.visit(self, cell_key)?;
 
         // Go back to the start of the loop if the result isn't zero
         let instruction = Instruction::Jnz(self.current_result, start_label);
@@ -1189,7 +1192,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
+    fn visit_float(&mut self, node: &mut FloatNode, _cell_key: &mut QCellOwner) -> Result<()> {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         let instruction = Instruction::FConst(self.current_result, node.value);
@@ -1199,11 +1202,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+    fn visit_for(&mut self, node: &mut ForNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         if let Some(i) = &mut *node.initializer {
-            i.visit(self)?;
+            i.visit(self, cell_key)?;
         }
 
         let start_label = self.new_label("for-start");
@@ -1215,19 +1218,19 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(start_label.clone(), start_addr);
 
         if let Some(cond) = &mut node.condition {
-            cond.visit(self)?;
+            cond.visit(self, cell_key)?;
 
             let instruction = Instruction::Jz(self.current_result, end_label.clone());
             push_instruction!(self, instruction, cond.span());
         };
 
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
 
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
 
         if let Some(i) = &mut node.incrementer {
-            i.visit(self)?;
+            i.visit(self, cell_key)?;
         }
 
         // go back to the start of the loop
@@ -1243,10 +1246,10 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+    fn visit_foreach(&mut self, node: &mut ForEachNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
-        node.collection.visit(self)?;
+        node.collection.visit(self, cell_key)?;
         let collection_location = self.current_result;
 
         let index_location = self.assign_sym_location(FOREACH_INDEX);
@@ -1257,7 +1260,7 @@ impl TreeWalker for CodegenWalker {
 
         let locations = match &mut node.initializer {
             ForEachInit::Array(ref mut node) | ForEachInit::String(ref mut node) => {
-                node.visit(self)?;
+                node.visit(self, cell_key)?;
 
                 vec![self.current_result]
             }
@@ -1265,9 +1268,9 @@ impl TreeWalker for CodegenWalker {
                 ref mut key,
                 ref mut value,
             } => {
-                key.visit(self)?;
+                key.visit(self, cell_key)?;
                 let key_result = self.current_result;
-                value.visit(self)?;
+                value.visit(self, cell_key)?;
                 vec![key_result, self.current_result]
             }
         };
@@ -1309,7 +1312,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
 
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
@@ -1330,7 +1333,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
         // Note we don't look to inherited files at all for this -
         // We're generating code for a function defined _in this object_
         let prototype = match self.context.function_prototypes.get(&node.name) {
@@ -1370,7 +1373,7 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(&start_label, self.current_address());
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
         }
 
         // insert a final return if one isn't already there.
@@ -1394,6 +1397,7 @@ impl TreeWalker for CodegenWalker {
                 node.span,
                 populate_defaults_index,
                 start_label,
+                cell_key,
             )?;
         }
 
@@ -1421,12 +1425,12 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode, cell_key: &mut QCellOwner) -> Result<()> {
         let mut applied_arguments = vec![];
         if let Some(args) = &mut node.arguments {
             for argument in args {
                 if let Some(n) = argument {
-                    n.visit(self)?;
+                    n.visit(self, cell_key)?;
                     applied_arguments.push(Some(self.current_result));
                 } else {
                     applied_arguments.push(None);
@@ -1441,7 +1445,7 @@ impl TreeWalker for CodegenWalker {
             // remote receiver, i.e. `call_other`
             let receiver = match rcvr {
                 FunctionPtrReceiver::Static(rcvr_node) => {
-                    rcvr_node.visit(self)?;
+                    rcvr_node.visit(self, cell_key)?;
                     FunctionReceiver::Var(self.current_result)
                 }
 
@@ -1498,7 +1502,7 @@ impl TreeWalker for CodegenWalker {
         } else {
             if_chain! {
                 if let Some(se) = &self.context.simul_efuns;
-                let simul_efuns = se.borrow();
+                let simul_efuns = se.ro(cell_key);
                 if let Some(prototype) = simul_efuns.lookup_function(node.name.as_str(), &CallNamespace::Local);
                 then {
                     let name = FunctionName::Literal(node.name.clone());
@@ -1535,13 +1539,13 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+    fn visit_if(&mut self, node: &mut IfNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
         let else_label = self.new_label("if-else");
         let end_label = self.new_label("if-end");
 
         // Visit the condition
-        node.condition.visit(self)?;
+        node.condition.visit(self, cell_key)?;
 
         // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the
         // "then" body. Insert a placeholder address, which we correct below
@@ -1550,7 +1554,7 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         // Generate the main body of the statement
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
 
         if node.else_clause.is_some() {
             let instruction = Instruction::Jmp(end_label.clone());
@@ -1562,7 +1566,7 @@ impl TreeWalker for CodegenWalker {
 
         // Generate the else clause code if necessary
         if let Some(n) = &mut *node.else_clause {
-            n.visit(self)?;
+            n.visit(self, cell_key)?;
 
             let addr = self.current_address();
             self.insert_label(end_label, addr);
@@ -1573,7 +1577,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
+    fn visit_int(&mut self, node: &mut IntNode, _cell_key: &mut QCellOwner) -> Result<()> {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         let instruction = match node.value {
@@ -1587,7 +1591,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
+    fn visit_label(&mut self, node: &mut LabelNode, _cell_key: &mut QCellOwner) -> Result<()> {
         let address = self.current_address();
         match self.case_addresses.last_mut() {
             Some(x) => {
@@ -1604,12 +1608,12 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
+    fn visit_mapping(&mut self, node: &mut MappingNode, cell_key: &mut QCellOwner) -> Result<()> {
         let mut map = IndexMap::new();
         for (key, value) in &mut node.value {
-            key.visit(self)?;
+            key.visit(self, cell_key)?;
             let key_result = self.current_result;
-            value.visit(self)?;
+            value.visit(self, cell_key)?;
 
             map.insert(key_result, self.current_result);
         }
@@ -1622,7 +1626,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
+    fn visit_program(&mut self, program: &mut ProgramNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto_root();
         self.setup_init();
 
@@ -1635,7 +1639,7 @@ impl TreeWalker for CodegenWalker {
         // Hoist all global variables, and initialize them at the very start
         // of the program (i.e. at the time it's cloned)
         for node in global_init {
-            node.visit(self)?;
+            node.visit(self, cell_key)?;
         }
 
         if self
@@ -1650,17 +1654,17 @@ impl TreeWalker for CodegenWalker {
                 span: None,
                 namespace: CallNamespace::default(),
             };
-            call.visit(self)?;
+            call.visit(self, cell_key)?;
         }
 
         let mut ret = ReturnNode {
             value: None,
             span: None,
         };
-        ret.visit(self)?;
+        ret.visit(self, cell_key)?;
 
         for node in functions {
-            node.visit(self)?;
+            node.visit(self, cell_key)?;
         }
 
         let mut sym = self.function_stack.pop().unwrap();
@@ -1674,16 +1678,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
+    fn visit_range(&mut self, node: &mut RangeNode, cell_key: &mut QCellOwner) -> Result<()> {
         let mut result_left: Option<RegisterVariant> = None;
         let mut result_right: Option<RegisterVariant> = None;
         if let Some(expr) = &mut *node.l {
-            expr.visit(self)?;
+            expr.visit(self, cell_key)?;
             result_left = Some(self.current_result);
         }
 
         if let Some(expr) = &mut *node.r {
-            expr.visit(self)?;
+            expr.visit(self, cell_key)?;
             result_right = Some(self.current_result);
         }
 
@@ -1693,9 +1697,9 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
+    fn visit_return(&mut self, node: &mut ReturnNode, cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
             let copy = Instruction::RegCopy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
         }
@@ -1706,7 +1710,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
+    fn visit_string(&mut self, node: &mut StringNode, _cell_key: &mut QCellOwner) -> Result<()> {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
 
@@ -1720,8 +1724,8 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
-        node.expression.visit(self)?;
+    fn visit_switch(&mut self, node: &mut SwitchNode, cell_key: &mut QCellOwner) -> Result<()> {
+        node.expression.visit(self, cell_key)?;
         let expr_result = self.current_result;
 
         let test_label = self.new_label("switch-test");
@@ -1734,7 +1738,7 @@ impl TreeWalker for CodegenWalker {
         let addresses = vec![];
         self.case_addresses.push(addresses);
 
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
 
         // skip over the tests that we're about to generate.
         let instruction = Instruction::Jmp(end_label.clone());
@@ -1765,7 +1769,7 @@ impl TreeWalker for CodegenWalker {
         for case_address in case_addresses {
             match case_address.0 .0 {
                 Some(mut case_expr) => {
-                    case_expr.visit(self)?;
+                    case_expr.visit(self, cell_key)?;
                     let case_result = self.current_result;
                     let test_result = self.register_counter.next().unwrap().as_local();
 
@@ -1822,17 +1826,17 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
+    fn visit_ternary(&mut self, node: &mut TernaryNode, cell_key: &mut QCellOwner) -> Result<()> {
         let result_reg = self.register_counter.next().unwrap().as_local();
         let else_label = self.new_label("ternary-else");
         let end_label = self.new_label("ternary-end");
 
-        node.condition.visit(self)?;
+        node.condition.visit(self, cell_key)?;
 
         let instruction = Instruction::Jz(self.current_result, else_label.clone());
         push_instruction!(self, instruction, node.span);
 
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
         push_instruction!(
             self,
             Instruction::RegCopy(self.current_result, result_reg),
@@ -1845,7 +1849,7 @@ impl TreeWalker for CodegenWalker {
         let else_addr = self.current_address();
         self.insert_label(else_label, else_addr);
 
-        node.else_clause.visit(self)?;
+        node.else_clause.visit(self, cell_key)?;
         push_instruction!(
             self,
             Instruction::RegCopy(self.current_result, result_reg),
@@ -1860,8 +1864,8 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
-        node.expr.visit(self)?;
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode, cell_key: &mut QCellOwner) -> Result<()> {
+        node.expr.visit(self, cell_key)?;
         let location = self.current_result;
 
         self.current_result = match node.op {
@@ -1919,7 +1923,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+    fn visit_var(&mut self, node: &mut VarNode, cell_key: &mut QCellOwner) -> Result<()> {
         if node.is_closure_arg_var() {
             // TODO: positional closure arg vars are handled here.
             //       they need to work with non-local locations.
@@ -1937,7 +1941,7 @@ impl TreeWalker for CodegenWalker {
                 span: node.span,
             };
 
-            return self.visit_function_ptr(&mut fptr_node);
+            return self.visit_function_ptr(&mut fptr_node, cell_key);
         }
 
         let Some(sym) = self.context.lookup_var(&node.name) else {
@@ -1960,7 +1964,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode, cell_key: &mut QCellOwner) -> Result<()> {
         let symbol = self.context.lookup_var(&node.name);
 
         let Some(sym) = symbol else {
@@ -1975,7 +1979,7 @@ impl TreeWalker for CodegenWalker {
         let upvalue = sym.upvalue;
 
         let current_register = if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
 
             // TODO: This whole thing sucks. We'd rather have the `expression.visit()` call
             //       above put the result into the correct location directly.
@@ -2038,7 +2042,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
+    fn visit_while(&mut self, node: &mut WhileNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         let start_label = self.new_label("while-start");
@@ -2048,14 +2052,14 @@ impl TreeWalker for CodegenWalker {
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        node.condition.visit(self)?;
+        node.condition.visit(self, cell_key)?;
 
         let cond_result = self.current_result;
 
         let instruction = Instruction::Jz(cond_result, end_label.clone());
         push_instruction!(self, instruction, node.span);
 
-        node.body.visit(self)?;
+        node.body.visit(self, cell_key)?;
 
         // go back to the start of the loop
         let instruction = Instruction::Jmp(start_label);
@@ -2132,7 +2136,7 @@ mod tests {
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
-    fn default_walker() -> CodegenWalker {
+    fn default_walker(cell_key: &mut QCellOwner) -> CodegenWalker {
         let mut walker = CodegenWalker::default();
         walker.setup_init();
 
@@ -2150,17 +2154,17 @@ mod tests {
             )
             .into(),
         );
-        let process = Process::new(prog);
+        let process = cell_key.cell(Process::new(prog));
         walker.context.simul_efuns = Some(process.into());
 
         walker
     }
 
-    fn walk_prog(prog: &str) -> CodegenWalker {
-        walk_code(prog).expect("failed to walk.")
+    fn walk_prog(prog: &str, cell_key: &mut QCellOwner) -> CodegenWalker {
+        walk_code(prog, cell_key).expect("failed to walk.")
     }
 
-    fn walk_code(code: &str) -> Result<CodegenWalker> {
+    fn walk_code(code: &str, cell_key: &mut QCellOwner) -> Result<CodegenWalker> {
         let config = ConfigBuilder::default()
             .lib_dir(LIB_DIR)
             .simul_efun_file("/secure/simul_efuns")
@@ -2172,14 +2176,14 @@ mod tests {
             .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)
             .expect("failed to parse");
 
-        let context = apply_walker!(InheritanceWalker, program, context, false);
-        let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
-        let context = apply_walker!(ScopeWalker, program, context, false);
-        let context = apply_walker!(DefaultParamsWalker, program, context, false);
-        let context = apply_walker!(SemanticCheckWalker, program, context, false);
+        let context = apply_walker!(InheritanceWalker, program, context, cell_key, false);
+        let context = apply_walker!(FunctionPrototypeWalker, program, context, cell_key, false);
+        let context = apply_walker!(ScopeWalker, program, context, cell_key, false);
+        let context = apply_walker!(DefaultParamsWalker, program, context, cell_key, false);
+        let context = apply_walker!(SemanticCheckWalker, program, context, cell_key, false);
 
         let mut walker = CodegenWalker::new(context);
-        let _ = program.visit(&mut walker);
+        let _ = program.visit(&mut walker, cell_key);
 
         Ok(walker)
     }
@@ -2196,9 +2200,9 @@ mod tests {
         walker.function_stack.last().unwrap().instructions.clone()
     }
 
-    fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
+    fn generate_init_instructions(prog: &str, cell_key: &mut QCellOwner) -> Vec<Instruction> {
         // walker_init_instructions(&mut walk_prog(prog))
-        walk_prog(prog)
+        walk_prog(prog, cell_key)
             .functions
             .get_mut(INIT_PROGRAM)
             .unwrap()
@@ -2208,7 +2212,8 @@ mod tests {
 
     #[test]
     fn test_visit_array_populates_the_instructions() {
-        let mut walker = default_walker();
+        let mut cell_key = QCellOwner::new();
+        let mut walker = default_walker(&mut cell_key);
 
         let mut arr = ArrayNode::new(vec![
             ExpressionNode::from(123),
@@ -2216,7 +2221,7 @@ mod tests {
             ExpressionNode::from(vec![ExpressionNode::from(666)]),
         ]);
 
-        let _ = walker.visit_array(&mut arr);
+        let _ = walker.visit_array(&mut arr, &mut cell_key);
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2244,6 +2249,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_globals() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -2268,7 +2274,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_assignment(&mut node);
+            let _ = walker.visit_assignment(&mut node, &mut cell_key);
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
@@ -2283,6 +2289,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_locals() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let local_id = context.scopes.push_new();
@@ -2304,7 +2311,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_assignment(&mut node);
+            let _ = walker.visit_assignment(&mut node, &mut cell_key);
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
@@ -2319,6 +2326,7 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_array_items() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let local_id = context.scopes.push_new();
@@ -2345,7 +2353,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_assignment(&mut node);
+            let _ = walker.visit_assignment(&mut node, &mut cell_key);
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
@@ -2370,7 +2378,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_ints() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::Int(IntNode::new(666))),
@@ -2384,7 +2393,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -2407,6 +2416,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_floats() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
@@ -2433,7 +2443,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 FConst(RegisterVariant::Local(Register(1)), LpcFloat::from(123.45)),
@@ -2455,7 +2465,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_strings() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
@@ -2469,7 +2480,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), String::from("foo")),
@@ -2492,7 +2503,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_arrays() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -2501,7 +2513,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2526,6 +2538,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_indexes() {
+            let mut cell_key = QCellOwner::new();
             let context = CompilationContext::default();
             let mut walker = CodegenWalker::new(context);
 
@@ -2536,7 +2549,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2557,7 +2570,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_slices() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -2570,7 +2584,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2593,7 +2607,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_andand_expressions() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(123)),
@@ -2602,7 +2617,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2622,7 +2637,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_oror_expressions() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(123)),
@@ -2631,7 +2647,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2660,6 +2676,7 @@ mod tests {
 
         #[test]
         fn breaks_out_of_while_loops() {
+            let mut cell_key = QCellOwner::new();
             let code = r#"
                 void create() {
                     int i;
@@ -2674,7 +2691,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
@@ -2728,6 +2745,7 @@ mod tests {
 
         #[test]
         fn breaks_out_of_for_loops() {
+            let mut cell_key = QCellOwner::new();
             let code = r#"
                 void create() {
                     for (int i = 0; i < 10; i += 1) {
@@ -2741,7 +2759,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst0(RegisterVariant::Local(Register(1))),
                 IConst(RegisterVariant::Local(Register(2)), 10),
@@ -2806,6 +2824,8 @@ mod tests {
 
         #[test]
         fn breaks_out_of_do_while_loops() {
+            let mut cell_key = QCellOwner::new();
+
             let code = r#"
                 void create() {
                     int i;
@@ -2820,7 +2840,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
@@ -2876,6 +2896,7 @@ mod tests {
 
         #[test]
         fn breaks_out_of_switch_statements() {
+            let mut cell_key = QCellOwner::new();
             let code = r#"
                 void create() {
                     int i = 666;
@@ -2892,7 +2913,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 Jmp("switch-test_1".into()),
@@ -2982,11 +3003,12 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
             let call = "mixed m = dump(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
@@ -3004,13 +3026,14 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_call_other() {
-            let check = |code: &str, expected: &[Instruction]| {
-                let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut check = |code: &str, expected: &[Instruction]| {
+                let mut walker = default_walker(&mut cell_key);
                 let mut tree = lpc_parser::ExpressionParser::new()
                     .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                     .unwrap();
 
-                let _ = tree.visit(&mut walker);
+                let _ = tree.visit(&mut walker, &mut cell_key);
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             };
@@ -3056,13 +3079,14 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_sizeof() {
-            let check = |code: &str, expected: &[Instruction]| {
-                let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut check = |code: &str, expected: &[Instruction]| {
+                let mut walker = default_walker(&mut cell_key);
                 let mut tree = lpc_parser::ExpressionParser::new()
                     .parse(&mut CompilationContext::default(), LexWrapper::new(code))
                     .unwrap();
 
-                let _ = tree.visit(&mut walker);
+                let _ = tree.visit(&mut walker, &mut cell_key);
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             };
@@ -3089,13 +3113,14 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_catch() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
             let call = "catch(12 / 0)";
             let mut tree = lpc_parser::ExpressionParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(call))
                 .unwrap();
 
-            let _ = tree.visit(&mut walker);
+            let _ = tree.visit(&mut walker, &mut cell_key);
 
             let expected = vec![
                 CatchStart(RegisterVariant::Local(Register(1)), "catch_end_0".into()),
@@ -3114,6 +3139,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_function_pointers() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3138,7 +3164,7 @@ mod tests {
                 .unwrap();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = tree.visit(&mut walker);
+            let _ = tree.visit(&mut walker, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3159,6 +3185,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_global_function_pointers() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3182,7 +3209,7 @@ mod tests {
                 .unwrap();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = tree.visit(&mut walker);
+            let _ = tree.visit(&mut walker, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3203,6 +3230,7 @@ mod tests {
 
         #[test]
         fn copies_non_void_call_results() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3218,7 +3246,7 @@ mod tests {
             let call = "mixed m = marfin(666);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3240,6 +3268,7 @@ mod tests {
 
         #[test]
         fn does_not_copy_void_call_results() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("void_thing")
@@ -3255,7 +3284,7 @@ mod tests {
             let call = "mixed m = void_thing(666);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3273,11 +3302,12 @@ mod tests {
 
         #[test]
         fn copies_non_void_efun_results() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
             let call = r#"mixed m = clone_object("/foo.c");"#;
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node, &mut cell_key);
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), String::from("/foo.c")),
@@ -3299,11 +3329,12 @@ mod tests {
 
         #[test]
         fn does_not_copy_void_efun_results() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
             let call = r#"mixed m = dump("lkajsdflkajsdf");"#;
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node, &mut cell_key);
 
             let expected = vec![
                 SConst(
@@ -3324,6 +3355,7 @@ mod tests {
 
         #[test]
         fn handles_ellipsis_functions() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_func")
@@ -3341,7 +3373,7 @@ mod tests {
             let call = "mixed m = my_func(\"hello!\", 42, \"cool beans\");";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node, &mut cell_key);
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), "hello!".into()),
@@ -3367,6 +3399,7 @@ mod tests {
 
         #[test]
         fn test_visit_block_populates_instructions() {
+            let mut cell_key = QCellOwner::new();
             let block = "void marf() { { int a = '🏯'; dump(a); } }";
             let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(block))
@@ -3383,11 +3416,11 @@ mod tests {
             };
 
             let mut scope_walker = ScopeWalker::default();
-            let _ = scope_walker.visit_block(node);
+            let _ = scope_walker.visit_block(node, &mut cell_key);
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_block(node);
+            let _ = walker.visit_block(node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 127983),
@@ -3406,7 +3439,8 @@ mod tests {
 
     #[test]
     fn test_visit_comma_expression_populates_the_instructions() {
-        let mut walker = default_walker();
+        let mut cell_key = QCellOwner::new();
+        let mut walker = default_walker(&mut cell_key);
 
         let mut expr = CommaExpressionNode::new(vec![
             ExpressionNode::from(123),
@@ -3414,7 +3448,7 @@ mod tests {
             ExpressionNode::from(vec![ExpressionNode::from(666)]),
         ]);
 
-        let _ = walker.visit_comma_expression(&mut expr);
+        let _ = walker.visit_comma_expression(&mut expr, &mut cell_key);
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 123),
@@ -3451,32 +3485,33 @@ mod tests {
             }
         }
 
-        fn compile(code: &str) -> CodegenWalker {
+        fn compile(code: &str, cell_key: &mut QCellOwner) -> CodegenWalker {
             let mut context = CompilationContext::default();
 
             let mut node = get_closure_node(code, &mut context);
 
             let mut prototype_walker = FunctionPrototypeWalker::new(context);
-            let _ = prototype_walker.visit_closure(&mut node);
+            let _ = prototype_walker.visit_closure(&mut node, cell_key);
             let mut context = prototype_walker.into_context();
 
             context.scopes.push_new(); // global scope
 
             let mut scope_walker = ScopeWalker::new(context);
-            let _ = scope_walker.visit_closure(&mut node);
+            let _ = scope_walker.visit_closure(&mut node, cell_key);
 
             let mut context = scope_walker.into_context();
             context.scopes.goto_root();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_closure(&mut node);
+            let _ = walker.visit_closure(&mut node, cell_key);
 
             walker
         }
 
         #[test]
         fn populates_the_instructions() {
-            let mut walker = compile("function f = (: dump(4 + 5 + $1) :);");
+            let mut cell_key = QCellOwner::new();
+            let mut walker = compile("function f = (: dump(4 + 5 + $1) :);", &mut cell_key);
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3501,7 +3536,8 @@ mod tests {
 
         #[test]
         fn handles_ellipses() {
-            let mut walker = compile("function f = (: [int i, ...] argv :);");
+            let mut cell_key = QCellOwner::new();
+            let mut walker = compile("function f = (: [int i, ...] argv :);", &mut cell_key);
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3518,8 +3554,9 @@ mod tests {
 
         #[test]
         fn populates_the_default_arguments() {
+            let mut cell_key = QCellOwner::new();
             let mut walker =
-                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);");
+                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);", &mut cell_key);
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3552,6 +3589,7 @@ mod tests {
 
         #[test]
         fn sets_the_correct_upvalue_information() {
+            let mut cell_key = QCellOwner::new();
             let code = indoc! {r##"
                 int g = 42;
 
@@ -3563,7 +3601,7 @@ mod tests {
                     :);
                 }
             "##};
-            let walker = walk_prog(code);
+            let walker = walk_prog(code, &mut cell_key);
 
             let closure = walker
                 .functions
@@ -3592,6 +3630,7 @@ mod tests {
 
         #[test]
         fn continues_while_loops() {
+            let mut cell_key = QCellOwner::new();
             let code = r#"
                 void create() {
                     int i;
@@ -3606,7 +3645,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
@@ -3663,6 +3702,7 @@ mod tests {
 
         #[test]
         fn continues_for_loops() {
+            let mut cell_key = QCellOwner::new();
             let code = r#"
                 void create() {
                     for (int i = 0; i < 10; i += 1) {
@@ -3676,7 +3716,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst0(RegisterVariant::Local(Register(1))),
                 IConst(RegisterVariant::Local(Register(2)), 10),
@@ -3744,6 +3784,7 @@ mod tests {
 
         #[test]
         fn continues_do_while_loops() {
+            let mut cell_key = QCellOwner::new();
             let code = r#"
                 void create() {
                     int i;
@@ -3758,7 +3799,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
@@ -3818,6 +3859,7 @@ mod tests {
 
     #[test]
     fn test_decl_sets_scope_and_instructions() {
+        let mut cell_key = QCellOwner::new();
         let call = "int foo = 1, *bar = ({ 56 });";
         let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(call))
@@ -3829,11 +3871,11 @@ mod tests {
         };
 
         let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_decl(node);
+        let _ = scope_walker.visit_decl(node, &mut cell_key);
 
         let context = scope_walker.into_context();
         let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_decl(node);
+        let _ = walker.visit_decl(node, &mut cell_key);
 
         let expected = vec![
             IConst1(RegisterVariant::Local(Register(1))),
@@ -3893,7 +3935,8 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = DoWhileNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -3913,7 +3956,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_do_while(&mut node);
+            let _ = walker.visit_do_while(&mut node, &mut cell_key);
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), String::from("body")),
@@ -3947,6 +3990,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
+            let mut cell_key = QCellOwner::new();
+
             let var = VarNode {
                 name: "i".to_string(),
                 span: None,
@@ -3991,12 +4036,12 @@ mod tests {
             };
 
             let mut scope_walker = ScopeWalker::default();
-            let _ = scope_walker.visit_for(&mut node);
+            let _ = scope_walker.visit_for(&mut node, &mut cell_key);
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
 
-            walker.visit_for(&mut node).unwrap();
+            walker.visit_for(&mut node, &mut cell_key).unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 10),
@@ -4029,6 +4074,7 @@ mod tests {
         use super::*;
 
         fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
+            let mut cell_key = QCellOwner::new();
             let mut prototype_walker = FunctionPrototypeWalker::default();
 
             let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
@@ -4041,19 +4087,19 @@ mod tests {
                 panic!("Didn't receive a function def?");
             };
 
-            let _ = prototype_walker.visit_function_def(node);
+            let _ = prototype_walker.visit_function_def(node, &mut cell_key);
             let mut context = prototype_walker.into_context();
 
             context.scopes.push_new(); // global scope
 
             let mut scope_walker = ScopeWalker::new(context);
-            let _ = scope_walker.visit_function_def(node);
+            let _ = scope_walker.visit_function_def(node, &mut cell_key);
 
             let mut context = scope_walker.into_context();
             context.scopes.goto_root();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_function_def(node);
+            let _ = walker.visit_function_def(node, &mut cell_key);
 
             assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
         }
@@ -4131,6 +4177,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_efuns() {
+            let mut cell_key = QCellOwner::new();
+
             let mut node = FunctionPtrNode {
                 receiver: None,
                 name: "dump".to_string(),
@@ -4138,8 +4186,8 @@ mod tests {
                 span: None,
             };
 
-            let mut walker = default_walker();
-            walker.visit_function_ptr(&mut node).unwrap();
+            let mut walker = default_walker(&mut cell_key);
+            walker.visit_function_ptr(&mut node, &mut cell_key).unwrap();
 
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
@@ -4158,6 +4206,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_simul_efuns() {
+            let mut cell_key = QCellOwner::new();
+
             let mut node = FunctionPtrNode {
                 receiver: None,
                 name: "simul_efun".to_string(),
@@ -4165,8 +4215,8 @@ mod tests {
                 span: None,
             };
 
-            let mut walker = default_walker();
-            walker.visit_function_ptr(&mut node).unwrap();
+            let mut walker = default_walker(&mut cell_key);
+            walker.visit_function_ptr(&mut node, &mut cell_key).unwrap();
 
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
@@ -4194,7 +4244,9 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = IfNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -4221,7 +4273,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_if(&mut node);
+            let _ = walker.visit_if(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4257,15 +4309,16 @@ mod tests {
 
     #[test]
     fn test_visit_int_populates_the_instructions() {
-        let mut walker = default_walker();
+        let mut cell_key = QCellOwner::new();
+        let mut walker = default_walker(&mut cell_key);
 
         let mut tree = IntNode::new(666);
         let mut tree0 = IntNode::new(0);
         let mut tree1 = IntNode::new(1);
 
-        let _ = walker.visit_int(&mut tree);
-        let _ = walker.visit_int(&mut tree0);
-        let _ = walker.visit_int(&mut tree1);
+        let _ = walker.visit_int(&mut tree, &mut cell_key);
+        let _ = walker.visit_int(&mut tree0, &mut cell_key);
+        let _ = walker.visit_int(&mut tree1, &mut cell_key);
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4281,6 +4334,7 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
+            let mut cell_key = QCellOwner::new();
             let prog = "
                 void create() {
                     1 + 3 - 5;
@@ -4288,7 +4342,7 @@ mod tests {
                 }
             ";
 
-            let walker = walk_prog(prog);
+            let walker = walk_prog(prog, &mut cell_key);
 
             let expected = vec![
                 ClearArgs,
@@ -4326,6 +4380,7 @@ mod tests {
 
         #[test]
         fn initializes_the_globals() {
+            let mut cell_key = QCellOwner::new();
             let prog = r#"
                 int j = 123;
                 string q = "cool";
@@ -4334,7 +4389,7 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_init_instructions(prog);
+            let instructions = generate_init_instructions(prog, &mut cell_key);
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -4355,6 +4410,7 @@ mod tests {
 
         #[test]
         fn calls_create_if_create_is_defined() {
+            let mut cell_key = QCellOwner::new();
             let prog = r#"
                 int q = 666;
                 int marf() {
@@ -4365,7 +4421,7 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_init_instructions(prog);
+            let instructions = generate_init_instructions(prog, &mut cell_key);
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4387,6 +4443,7 @@ mod tests {
 
         #[test]
         fn tracks_global_registers_over_multiple_sections() {
+            let mut cell_key = QCellOwner::new();
             let prog = r#"
                 int q = 666;
                 int marf() {
@@ -4395,7 +4452,7 @@ mod tests {
                 int r = 777;
             "#;
 
-            let instructions = generate_init_instructions(prog);
+            let instructions = generate_init_instructions(prog, &mut cell_key);
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4417,10 +4474,11 @@ mod tests {
 
     #[test]
     fn visit_return_populates_the_instructions() {
-        let mut walker = default_walker();
+        let mut cell_key = QCellOwner::new();
+        let mut walker = default_walker(&mut cell_key);
 
         let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
-        let _ = walker.visit_return(&mut node);
+        let _ = walker.visit_return(&mut node, &mut cell_key);
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4435,9 +4493,9 @@ mod tests {
 
         /* === */
 
-        let mut walker = default_walker();
+        let mut walker = default_walker(&mut cell_key);
         let mut node = ReturnNode::new(None);
-        let _ = walker.visit_return(&mut node);
+        let _ = walker.visit_return(&mut node, &mut cell_key);
 
         let expected = vec![Ret];
 
@@ -4446,14 +4504,15 @@ mod tests {
 
     #[test]
     fn test_visit_string_populates_the_instructions() {
-        let mut walker = default_walker();
+        let mut cell_key = QCellOwner::new();
+        let mut walker = default_walker(&mut cell_key);
         let mut node = StringNode::new("marf");
         let mut node2 = StringNode::new("tacos");
         let mut node3 = StringNode::new("marf");
 
-        let _ = walker.visit_string(&mut node);
-        let _ = walker.visit_string(&mut node2);
-        let _ = walker.visit_string(&mut node3);
+        let _ = walker.visit_string(&mut node, &mut cell_key);
+        let _ = walker.visit_string(&mut node2, &mut cell_key);
+        let _ = walker.visit_string(&mut node3, &mut cell_key);
 
         let expected = vec![
             SConst(RegisterVariant::Local(Register(1)), String::from("marf")),
@@ -4472,6 +4531,8 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
+            let mut cell_key = QCellOwner::new();
+
             let mut node = TernaryNode {
                 condition: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(2)),
@@ -4486,7 +4547,7 @@ mod tests {
 
             let mut walker = CodegenWalker::new(CompilationContext::default());
 
-            walker.visit_ternary(&mut node).unwrap();
+            walker.visit_ternary(&mut node, &mut cell_key).unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 2),
@@ -4517,8 +4578,8 @@ mod tests {
     mod test_unary_op {
         use super::*;
 
-        fn setup(op: UnaryOperation, is_post: bool) -> CodegenWalker {
-            let mut walker = default_walker();
+        fn setup(op: UnaryOperation, is_post: bool, cell_key: &mut QCellOwner) -> CodegenWalker {
+            let mut walker = default_walker(cell_key);
             let mut node = UnaryOpNode {
                 op,
                 expr: Box::new(ExpressionNode::from(666)),
@@ -4526,7 +4587,7 @@ mod tests {
                 is_post,
             };
 
-            let _ = walker.visit_unary_op(&mut node);
+            let _ = walker.visit_unary_op(&mut node, cell_key);
             walker
         }
 
@@ -4535,7 +4596,8 @@ mod tests {
 
             #[test]
             fn populates_instructions() {
-                let mut walker = setup(UnaryOperation::Negate, false);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::Negate, false, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4556,7 +4618,8 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_pre() {
-                let mut walker = setup(UnaryOperation::Inc, false);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::Inc, false, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4568,7 +4631,8 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_post() {
-                let mut walker = setup(UnaryOperation::Inc, true);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::Inc, true, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4588,7 +4652,8 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_pre() {
-                let mut walker = setup(UnaryOperation::Dec, false);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::Dec, false, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4600,7 +4665,8 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_post() {
-                let mut walker = setup(UnaryOperation::Dec, true);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::Dec, true, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4620,7 +4686,8 @@ mod tests {
 
             #[test]
             fn populates_instructions() {
-                let mut walker = setup(UnaryOperation::Bang, false);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::Bang, false, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4639,7 +4706,8 @@ mod tests {
 
             #[test]
             fn populates_instructions() {
-                let mut walker = setup(UnaryOperation::BitwiseNot, false);
+                let mut cell_key = QCellOwner::new();
+                let mut walker = setup(UnaryOperation::BitwiseNot, false, &mut cell_key);
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4659,6 +4727,8 @@ mod tests {
 
         #[test]
         fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
+            let mut cell_key = QCellOwner::new();
+
             let mut context = CompilationContext::default();
             context.scopes.push_new();
 
@@ -4682,7 +4752,7 @@ mod tests {
                 external_capture: false,
             };
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
             assert_eq!(
                 walker.current_result,
                 RegisterVariant::Global(Register(666))
@@ -4694,6 +4764,7 @@ mod tests {
 
         #[test]
         fn test_visit_var_sets_the_result_for_locals() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -4722,7 +4793,7 @@ mod tests {
 
             let mut node = VarNode::new("marf");
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
             assert_eq!(walker.current_result, RegisterVariant::Local(Register(666)));
 
             let expected = vec![];
@@ -4743,7 +4814,7 @@ mod tests {
             CodegenWalker::new(context)
         }
 
-        fn setup_var(type_: LpcType, walker: &mut CodegenWalker) {
+        fn setup_var(type_: LpcType, walker: &mut CodegenWalker, cell_key: &mut QCellOwner) {
             let scope_id = walker.context.scopes.current().unwrap().id;
 
             let sym = Symbol {
@@ -4768,10 +4839,10 @@ mod tests {
             new_sym.scope_id = scope_id;
             insert_symbol(walker, new_sym);
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, cell_key);
         }
 
-        fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker) {
+        fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker, cell_key: &mut QCellOwner) {
             let mut node = VarInitNode {
                 type_,
                 name: "muffins".to_string(),
@@ -4784,17 +4855,19 @@ mod tests {
 
             insert_symbol(walker, Symbol::from(&mut node));
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, cell_key);
         }
 
         #[test]
         fn test_does_not_copy_mapping_literals() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
             let pairs = vec![(ExpressionNode::from("foo"), ExpressionNode::from("bar"))];
             setup_literal(
                 LpcType::Mapping(false),
                 ExpressionNode::Mapping(MappingNode::new(pairs, None)),
                 &mut walker,
+                &mut cell_key,
             );
 
             let mut map = IndexMap::new();
@@ -4814,8 +4887,9 @@ mod tests {
 
         #[test]
         fn test_copies_mapping_vars() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
-            setup_var(LpcType::Mapping(false), &mut walker);
+            setup_var(LpcType::Mapping(false), &mut walker, &mut cell_key);
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -4828,11 +4902,13 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_int_literals() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(false),
                 ExpressionNode::Int(IntNode::new(123)),
                 &mut walker,
+                &mut cell_key,
             );
 
             assert_eq!(
@@ -4843,8 +4919,9 @@ mod tests {
 
         #[test]
         fn test_copies_int_vars() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
-            setup_var(LpcType::Int(false), &mut walker);
+            setup_var(LpcType::Int(false), &mut walker, &mut cell_key);
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -4857,11 +4934,13 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_float_literals() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
             setup_literal(
                 LpcType::Float(false),
                 ExpressionNode::Float(FloatNode::new(123.0)),
                 &mut walker,
+                &mut cell_key,
             );
 
             assert_eq!(
@@ -4875,8 +4954,9 @@ mod tests {
 
         #[test]
         fn test_copies_float_vars() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
-            setup_var(LpcType::Float(false), &mut walker);
+            setup_var(LpcType::Float(false), &mut walker, &mut cell_key);
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -4889,11 +4969,13 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_string_literals() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(true),
                 ExpressionNode::String(StringNode::new("foo")),
                 &mut walker,
+                &mut cell_key,
             );
 
             assert_eq!(
@@ -4907,8 +4989,9 @@ mod tests {
 
         #[test]
         fn test_copies_string_vars() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
-            setup_var(LpcType::String(false), &mut walker);
+            setup_var(LpcType::String(false), &mut walker, &mut cell_key);
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -4921,11 +5004,13 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_array_literals() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(true),
                 ExpressionNode::Array(ArrayNode::new(vec![ExpressionNode::from(1234)])),
                 &mut walker,
+                &mut cell_key,
             );
 
             assert_eq!(
@@ -4942,8 +5027,9 @@ mod tests {
 
         #[test]
         fn test_copies_array_vars() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
-            setup_var(LpcType::Int(true), &mut walker);
+            setup_var(LpcType::Int(true), &mut walker, &mut cell_key);
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -4956,6 +5042,7 @@ mod tests {
 
         #[test]
         fn copies_calls() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = setup();
 
             let mut node = VarInitNode {
@@ -4976,7 +5063,7 @@ mod tests {
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5002,6 +5089,7 @@ mod tests {
 
         #[test]
         fn sets_up_globals() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -5040,8 +5128,8 @@ mod tests {
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
             insert_symbol(&mut walker, Symbol::from(&mut node2.clone()));
 
-            let _ = walker.visit_var_init(&mut node);
-            let _ = walker.visit_var_init(&mut node2);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
+            let _ = walker.visit_var_init(&mut node2, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 12),
@@ -5085,6 +5173,7 @@ mod tests {
 
         #[test]
         fn sets_up_upvalues_when_initialized_to_upvalued_var() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
@@ -5109,7 +5198,7 @@ mod tests {
             insert_symbol(&mut walker, existing);
             insert_symbol(&mut walker, sym);
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
 
             let sym = walker.context.lookup_var("a").unwrap();
             assert_eq!(sym.location.unwrap(), RegisterVariant::Upvalue(Register(0)));
@@ -5117,6 +5206,7 @@ mod tests {
 
         #[test]
         fn sets_up_upvalues_when_initialized_to_upvalued_value() {
+            let mut cell_key = QCellOwner::new();
             let mut context = CompilationContext::default();
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
@@ -5133,7 +5223,7 @@ mod tests {
 
             insert_symbol(&mut walker, sym);
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
 
             let sym = walker.context.lookup_var("a").unwrap();
             assert_eq!(sym.location.unwrap(), RegisterVariant::Upvalue(Register(0)));
@@ -5147,7 +5237,8 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-            let mut walker = default_walker();
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
 
             let mut node = WhileNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -5167,7 +5258,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_while(&mut node);
+            let _ = walker.visit_while(&mut node, &mut cell_key);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -5198,6 +5289,8 @@ mod tests {
 
         #[test]
         fn sets_num_globals() {
+            let mut cell_key = QCellOwner::new();
+
             let code = r##"
             int i = 123, j;
             mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5205,12 +5298,13 @@ mod tests {
             string b;
         "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
             assert_eq!(program.num_globals, 5)
         }
 
         #[test]
         fn sets_num_init_registers() {
+            let mut cell_key = QCellOwner::new();
             let code = r##"
             int i = 123, j;
             mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5218,12 +5312,13 @@ mod tests {
             string b;
         "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 4)
         }
 
         #[test]
         fn reserves_enough_global_registers_when_create_returns_non_void() {
+            let mut cell_key = QCellOwner::new();
             let code = r##"
                 int create() {
                     dump("sup dawg");
@@ -5232,13 +5327,14 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 1)
         }
     }
 
     #[test]
     fn tracks_inherited_globals_for_init() {
+        let mut cell_key = QCellOwner::new();
         let code = r##"
             inherit "/parent";
             int i = 123, j;
@@ -5246,7 +5342,7 @@ mod tests {
             string b;
         "##;
 
-        let program = walk_prog(code).into_program().expect("failed to compile");
+        let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
         let init = program.functions.get(INIT_PROGRAM).unwrap();
 
         assert_eq!(program.num_globals, 9);
@@ -5255,6 +5351,7 @@ mod tests {
 
     #[test]
     fn test_combine_inits() {
+        let mut cell_key = QCellOwner::new();
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
             .return_type(LpcType::Void)
@@ -5331,7 +5428,7 @@ mod tests {
             .insert(INIT_PROGRAM.to_string(), parent_init.into());
         parent.inherits.push(grandparent);
 
-        let mut walker = default_walker();
+        let mut walker = default_walker(&mut cell_key);
         walker.context.inherits.push(parent);
 
         let expected = vec![

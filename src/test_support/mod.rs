@@ -1,5 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
-use qcell::QCellOwner;
+use std::rc::Rc;
+use qcell::{QCell, QCellOwner};
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -38,7 +38,7 @@ pub fn test_config() -> Config {
         .unwrap()
 }
 
-fn compile_simul_efuns(config: &Rc<Config>) -> Program {
+fn compile_simul_efuns(config: &Rc<Config>, cell_key: &mut QCellOwner) -> Program {
     let compiler = CompilerBuilder::default()
         .config(config.clone())
         .build()
@@ -48,13 +48,13 @@ fn compile_simul_efuns(config: &Rc<Config>) -> Program {
         "/",
         &config.lib_dir,
     );
-    compiler.compile_in_game_file(&path, None).unwrap()
+    compiler.compile_in_game_file(&path, None, cell_key).unwrap()
 }
 
-pub fn compile_prog(code: &str) -> (Program, Rc<Config>, Rc<RefCell<Process>>) {
+pub fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> (Program, Rc<Config>, Rc<QCell<Process>>) {
     let config = Rc::new(test_config());
-    let simul_efuns = compile_simul_efuns(&config);
-    let se_proc = Rc::new(RefCell::new(Process::new(simul_efuns)));
+    let simul_efuns = compile_simul_efuns(&config, cell_key);
+    let se_proc = Rc::new(cell_key.cell(Process::new(simul_efuns)));
 
     let compiler = CompilerBuilder::default()
         .config(config.clone())
@@ -63,7 +63,7 @@ pub fn compile_prog(code: &str) -> (Program, Rc<Config>, Rc<RefCell<Process>>) {
         .unwrap();
     let path = LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir);
     let program = compiler
-        .compile_string(path, code)
+        .compile_string(path, code, cell_key)
         .expect("Failed to compile.");
 
     (program, config, se_proc)
@@ -71,13 +71,14 @@ pub fn compile_prog(code: &str) -> (Program, Rc<Config>, Rc<RefCell<Process>>) {
 
 pub fn run_prog<'a>(code: &str, cell_key: &'a mut QCellOwner) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
     let mut task = Task::new(Memory::default());
-    let (program, config, se_proc) = compile_prog(code);
+    let (program, config, se_proc) = compile_prog(code, cell_key);
 
     let mut object_space = ObjectSpace::default();
-    object_space.insert_process(se_proc);
+    let mut object_space: Rc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
+    ObjectSpace::insert_process(&object_space.clone(), se_proc.clone(), cell_key);
 
     let ctx = task
-        .initialize_program(program, config, cell_key.cell(object_space), cell_key)
+        .initialize_program(program, config, object_space, cell_key)
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             panic!("failed to initialize");

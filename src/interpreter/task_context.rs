@@ -23,7 +23,8 @@ pub struct TaskContext {
     config: Rc<Config>,
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
-    process: Rc<RefCell<Process>>,
+    #[educe(Debug(ignore))]
+    process: Rc<QCell<Process>>,
     /// The global [`ObjectSpace`]
     #[educe(Debug(ignore))]
     object_space: Rc<QCell<ObjectSpace>>,
@@ -32,7 +33,8 @@ pub struct TaskContext {
     /// The final result of the original function that was called
     result: RefCell<LpcRef>,
     /// Direct pointer to the simul efuns
-    simul_efuns: Option<Rc<RefCell<Process>>>,
+    #[educe(Debug(ignore))]
+    simul_efuns: Option<Rc<QCell<Process>>>,
 }
 
 impl TaskContext {
@@ -52,7 +54,7 @@ impl TaskContext {
     pub fn new<C, P, O>(config: C, process: P, object_space: O, cell_key: &QCellOwner) -> Self
     where
         C: Into<Rc<Config>>,
-        P: Into<Rc<RefCell<Process>>>,
+        P: Into<Rc<QCell<Process>>>,
         O: Into<Rc<QCell<ObjectSpace>>>,
     {
         let config = config.into();
@@ -76,7 +78,7 @@ impl TaskContext {
     /// Set the process for an existing TaskContext
     pub fn with_process<P>(mut self, process: P) -> Self
     where
-        P: Into<Rc<RefCell<Process>>>,
+        P: Into<Rc<QCell<Process>>>,
     {
         self.process = process.into();
 
@@ -85,7 +87,7 @@ impl TaskContext {
 
     /// Lookup the process with the passed path.
     #[inline]
-    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Rc<RefCell<Process>>>
+    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Rc<QCell<Process>>>
     where
         T: AsRef<str>,
     {
@@ -97,21 +99,35 @@ impl TaskContext {
     #[inline]
     pub fn insert_process<P>(&self, process: P, cell_key: &mut QCellOwner)
     where
-        P: Into<Rc<RefCell<Process>>>,
+        P: Into<Rc<QCell<Process>>>,
     {
-        self.object_space.rw(cell_key).insert_process(process);
+        ObjectSpace::insert_process(
+            &self.object_space,
+            process,
+            cell_key,
+        )
+        // let process = process.into();
+
+        // self.object_space.rw(cell_key).insert_process(process, &cell_key);
     }
 
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
     /// then insert it into the object space.
-    pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<RefCell<Process>> {
-        self.object_space.rw(cell_key).insert_clone(program)
+    #[inline]
+    pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>> {
+        ObjectSpace::insert_clone(
+            &self.object_space,
+            program,
+            // self.process.ro(cell_key).clone_id(),
+            cell_key,
+        )
+        // self.object_space.rw(cell_key).insert_clone(program, &cell_key)
     }
 
     /// Get the in-game directory of the current process.
     /// This assumes an already-dedotted path
-    pub fn in_game_cwd(&self) -> PathBuf {
-        let process = self.process.borrow();
+    pub fn in_game_cwd(&self, cell_key: &QCellOwner) -> PathBuf {
+        let process = self.process.ro(cell_key);
         let current_cwd = process.cwd();
 
         match current_cwd.strip_prefix(&self.config.lib_dir) {
@@ -150,14 +166,14 @@ impl TaskContext {
 
     /// Return the current pointer to the simul_efuns, if any
     #[inline]
-    pub fn simul_efuns(&self) -> Option<Rc<RefCell<Process>>> {
+    pub fn simul_efuns(&self) -> Option<Rc<QCell<Process>>> {
         self.simul_efuns.clone()
     }
 
     /// Return the [`Process`] that the task roots from.
     /// This *does not* change over the life of the task.
     #[inline]
-    pub fn process(&self) -> Rc<RefCell<Process>> {
+    pub fn process(&self) -> Rc<QCell<Process>> {
         self.process.clone()
     }
 
@@ -189,8 +205,8 @@ mod tests {
             .build()
             .unwrap();
         let process = Process::new(program);
-        let context = TaskContext::new(config, process, space, &cell_key);
+        let context = TaskContext::new(config, cell_key.cell(process), space, &cell_key);
 
-        assert_eq!(context.in_game_cwd().to_str().unwrap(), "/foo/bar");
+        assert_eq!(context.in_game_cwd(&cell_key).to_str().unwrap(), "/foo/bar");
     }
 }

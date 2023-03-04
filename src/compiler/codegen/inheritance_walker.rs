@@ -1,3 +1,4 @@
+use qcell::QCellOwner;
 use lpc_rs_core::{lpc_path::LpcPath, EFUN};
 use lpc_rs_errors::{LpcError, Result};
 
@@ -55,7 +56,7 @@ impl ContextHolder for InheritanceWalker {
 }
 
 impl TreeWalker for InheritanceWalker {
-    fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
+    fn visit_inherit(&mut self, node: &mut InheritNode, cell_key: &mut QCellOwner) -> Result<()> {
         self.valid_inherit(node)?;
 
         let cwd = match self.context.filename.cwd() {
@@ -75,7 +76,7 @@ impl TreeWalker for InheritanceWalker {
             .inherit_depth(depth + 1)
             .build()?;
 
-        match compiler.compile_in_game_file(&full_path, node.span) {
+        match compiler.compile_in_game_file(&full_path, node.span, cell_key) {
             Ok(program) => {
                 if program.pragmas.no_inherit() {
                     return Err(LpcError::new(format!(
@@ -149,6 +150,7 @@ mod tests {
 
         #[test]
         fn test_sets_up_the_data() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -157,7 +159,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node, &mut cell_key);
 
             assert_ok!(result);
             assert_eq!(walker.context.inherits.len(), 1);
@@ -165,6 +167,7 @@ mod tests {
 
         #[test]
         fn test_disallows_duplicate_namespace() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = walker();
 
             walker
@@ -178,7 +181,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node, &mut cell_key);
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -188,6 +191,7 @@ mod tests {
 
         #[test]
         fn test_disallows_no_inherit_pragma() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -196,7 +200,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node, &mut cell_key);
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -206,6 +210,7 @@ mod tests {
 
         #[test]
         fn test_disallows_efun_namespace() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -214,7 +219,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node, &mut cell_key);
 
             assert_eq!(
                 result.unwrap_err().to_string(),

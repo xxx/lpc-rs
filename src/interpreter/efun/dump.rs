@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use indexmap::IndexMap;
+use qcell::QCellOwner;
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
@@ -23,6 +24,7 @@ fn format_ref<const N: usize>(
     context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
+    cell_key: &QCellOwner,
 ) -> Result<String> {
     recursion_too_deep(recurse_level, context)?;
     context.increment_instruction_count(1)?;
@@ -39,7 +41,7 @@ fn format_ref<const N: usize>(
         LpcRef::Object(x) => Ok(format!(
             "{:width$}{}",
             "",
-            try_extract_value!(*x.borrow(), LpcValue::Object).borrow(),
+            try_extract_value!(*x.borrow(), LpcValue::Object).ro(cell_key),
             width = indent
         )),
         LpcRef::Function(x) => Ok(format!(
@@ -51,12 +53,12 @@ fn format_ref<const N: usize>(
         LpcRef::Array(x) => {
             let xb = x.borrow();
             let arr = try_extract_value!(*xb, LpcValue::Array);
-            format_array(arr, context, indent, recurse_level + 1)
+            format_array(arr, context, indent, recurse_level + 1, cell_key)
         }
         LpcRef::Mapping(x) => {
             let xb = x.borrow();
             let map = try_extract_value!(*xb, LpcValue::Mapping);
-            format_mapping(map, context, indent, recurse_level + 1)
+            format_mapping(map, context, indent, recurse_level + 1, cell_key)
         }
     }
 }
@@ -66,6 +68,7 @@ fn format_array<const N: usize>(
     context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
+    cell_key: &QCellOwner,
 ) -> Result<String> {
     recursion_too_deep(recurse_level, context)?;
     context.increment_instruction_count(arr.len())?;
@@ -74,7 +77,7 @@ fn format_array<const N: usize>(
 
     let inner = arr
         .iter()
-        .map(|var| format_ref(var, context, indent + 2, recurse_level + 1))
+        .map(|var| format_ref(var, context, indent + 2, recurse_level + 1, cell_key))
         .collect::<Result<Vec<_>>>();
 
     let inner = match inner {
@@ -95,6 +98,7 @@ fn format_mapping<const N: usize>(
     context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
+    cell_key: &QCellOwner,
 ) -> Result<String> {
     recursion_too_deep(recurse_level, context)?;
     context.increment_instruction_count(map.len())?;
@@ -104,8 +108,8 @@ fn format_mapping<const N: usize>(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_format = format_ref(key, context, 0, recurse_level + 1)?;
-            let v_format = format_ref(val, context, 2, recurse_level + 1)?;
+            let k_format = format_ref(key, context, 0, recurse_level + 1, cell_key)?;
+            let v_format = format_ref(val, context, 2, recurse_level + 1, cell_key)?;
 
             Ok(format!(
                 "{:width$}{k}: {v}",
@@ -131,7 +135,7 @@ fn format_mapping<const N: usize>(
 }
 
 /// The dump() Efun
-pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
+pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOwner) -> Result<()> {
     let arg_count = context.frame().called_with_num_args;
 
     let s = (1..=arg_count)
@@ -139,7 +143,7 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>) -> Result<()> {
         .map(|i| {
             let lpc_ref = context.resolve_local_register(i);
 
-            format_ref(&lpc_ref, context, 0, 0)
+            format_ref(&lpc_ref, context, 0, 0, cell_key)
         })
         .collect::<Result<Vec<_>>>()?
         .join(" ");
@@ -159,15 +163,16 @@ mod tests {
         interpreter::{memory::Memory, object_space::ObjectSpace, program::Program, task::Task},
     };
 
-    fn compile_prog(code: &str) -> Program {
+    fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
         let compiler = Compiler::default();
         compiler
-            .compile_string("~/my_file.c", code)
+            .compile_string("~/my_file.c", code, cell_key)
             .expect("Failed to compile.")
     }
 
     #[test]
     fn does_not_crash_on_recursive_structures() {
+        let mut cell_key = QCellOwner::new();
         // arrays
         let code = r##"
             void create() {
@@ -177,7 +182,7 @@ mod tests {
             }
         "##;
 
-        let program = compile_prog(code);
+        let program = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10));
         let mut cell_key = QCellOwner::new();
         let result = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
@@ -196,7 +201,7 @@ mod tests {
             }
         "##;
 
-        let program = compile_prog(code);
+        let program = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10));
         let result = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
 

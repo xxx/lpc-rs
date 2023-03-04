@@ -1,28 +1,35 @@
 use std::{
-    cell::RefCell,
     fmt,
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use educe::Educe;
 
 use indexmap::IndexMap;
 use itertools::Itertools;
+use qcell::QCell;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 
 use crate::interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process};
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
-#[derive(Eq, Debug, Clone)]
+#[derive(Educe, Clone)]
+#[educe(Debug)]
 pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
     String(String),
     Array(Vec<LpcRef>),
     Mapping(IndexMap<LpcRef, LpcRef>),
-    Object(Rc<RefCell<Process>>),
+    Object(
+        #[educe(Debug(ignore))]
+        Rc<QCell<Process>>
+    ),
     Function(FunctionPtr),
 }
+
+impl Eq for LpcValue {}
 
 /// Extract the final value (or reference to such, in the case of non-`Copy`
 /// value types) from an `LpcValue`. It's simply wrapping sugar to get the final
@@ -80,7 +87,8 @@ impl Display for LpcValue {
                 let inner = x.iter().map(|(k, v)| format!("{k}: {v}")).join(", ");
                 write!(f, "([ {inner} ])")
             }
-            LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),
+            LpcValue::Object(_x) => write!(f, "< object >"),
+            // LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),
             LpcValue::Function(x) => write!(f, "{x}"),
         }
     }
@@ -134,8 +142,8 @@ impl From<IndexMap<LpcRef, LpcRef>> for LpcValue {
     }
 }
 
-impl From<Rc<RefCell<Process>>> for LpcValue {
-    fn from(o: Rc<RefCell<Process>>) -> Self {
+impl From<Rc<QCell<Process>>> for LpcValue {
+    fn from(o: Rc<QCell<Process>>) -> Self {
         Self::Object(o)
     }
 }

@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_errors::{span::Span, Result};
 
@@ -59,8 +60,8 @@ impl SpannedNode for UnaryOpNode {
 }
 
 impl AstNodeTrait for UnaryOpNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_unary_op(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_unary_op(self, cell_key)
     }
 }
 

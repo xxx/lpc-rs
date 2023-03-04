@@ -1,9 +1,11 @@
 use std::{
-    cell::{Cell, RefCell},
+    cell::Cell,
     fmt,
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
+use educe::Educe;
+use qcell::{QCell, QCellOwner};
 
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
@@ -39,10 +41,12 @@ impl Display for LocalVariable {
 }
 
 /// A representation of a function call's context.
-#[derive(Debug, Clone)]
+#[derive(Educe, Clone)]
+#[educe(Debug)]
 pub struct CallFrame {
     /// A pointer to the process that owns the function being called
-    pub process: Rc<RefCell<Process>>,
+    #[educe(Debug(ignore))]
+    pub process: Rc<QCell<Process>>,
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,
     /// The actual locations of all arguments that were passed-in.
@@ -76,9 +80,10 @@ impl CallFrame {
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         upvalues: Option<&Vec<Register>>,
+        cell_key: &mut QCellOwner,
     ) -> Self
     where
-        P: Into<Rc<RefCell<Process>>>,
+        P: Into<Rc<QCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = function.arity().num_args + function.num_locals + 1;
@@ -95,7 +100,7 @@ impl CallFrame {
             upvalues: ups,
         };
 
-        instance.populate_upvalues();
+        instance.populate_upvalues(cell_key);
 
         instance
     }
@@ -118,13 +123,14 @@ impl CallFrame {
         called_with_num_args: usize,
         arg_capacity: usize,
         upvalues: Option<&Vec<Register>>,
+        cell_key: &mut QCellOwner,
     ) -> Self
     where
-        P: Into<Rc<RefCell<Process>>>,
+        P: Into<Rc<QCell<Process>>>,
     {
         Self {
             registers: RegisterBank::initialized_for_function(&function, arg_capacity),
-            ..Self::new(process, function, called_with_num_args, upvalues)
+            ..Self::new(process, function, called_with_num_args, upvalues, cell_key)
         }
     }
 
@@ -145,24 +151,25 @@ impl CallFrame {
         called_with_num_args: usize,
         registers: RegisterBank,
         upvalues: Option<&Vec<Register>>,
+        cell_key: &mut QCellOwner,
     ) -> Self
     where
-        P: Into<Rc<RefCell<Process>>>,
+        P: Into<Rc<QCell<Process>>>,
     {
         Self {
             registers,
-            ..Self::new(process, function, called_with_num_args, upvalues)
+            ..Self::new(process, function, called_with_num_args, upvalues, cell_key)
         }
     }
 
     /// Reserve space for the upvalues that this call will initialize
     /// Returns the index in the Process' `upvalues` array where the
     ///   newly-populated upvalues will be stored
-    fn populate_upvalues(&mut self) -> usize {
+    fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) -> usize {
         let num_upvalues = self.function.num_upvalues;
 
         let start_idx = {
-            let mut proc = self.process.borrow_mut();
+            let proc = self.process.rw(cell_key);
             let upvalues = &mut proc.upvalues;
             let idx = upvalues.len();
 
@@ -185,20 +192,20 @@ impl CallFrame {
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the variant
-    pub fn set_location(&mut self, location: RegisterVariant, lpc_ref: LpcRef) {
+    pub fn set_location(&mut self, location: RegisterVariant, lpc_ref: LpcRef, cell_key: &mut QCellOwner) {
         match location {
             RegisterVariant::Local(reg) => {
                 self.registers[reg] = lpc_ref;
             }
             RegisterVariant::Global(reg) => {
-                let mut proc = self.process.borrow_mut();
+                let proc = self.process.rw(cell_key);
                 proc.globals[reg] = lpc_ref;
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalues;
                 let idx = upvalues[reg.index()];
 
-                let mut proc = self.process.borrow_mut();
+                let proc = self.process.rw(cell_key);
                 proc.upvalues[idx] = lpc_ref;
             }
         }
@@ -206,7 +213,7 @@ impl CallFrame {
 
     /// Convenience to return a list of the local variables in this frame.
     /// Intended for debugging and testing.
-    pub fn local_variables(&self) -> Vec<LocalVariable> {
+    pub fn local_variables(&self, cell_key: &QCellOwner) -> Vec<LocalVariable> {
         self.function
             .local_variables
             .iter()
@@ -218,12 +225,12 @@ impl CallFrame {
 
                 let lpc_ref = match loc {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                    RegisterVariant::Global(reg) => self.process.borrow().globals[reg].clone(),
+                    RegisterVariant::Global(reg) => self.process.ro(cell_key).globals[reg].clone(),
                     RegisterVariant::Upvalue(ptr_reg) => {
                         let upvalues = &self.upvalues;
                         let data_reg = upvalues[ptr_reg.index()];
 
-                        self.process.borrow().upvalues[data_reg].clone()
+                        self.process.ro(cell_key).upvalues[data_reg].clone()
                     }
                 };
 
@@ -319,6 +326,7 @@ mod tests {
 
     #[test]
     fn new_sets_up_registers() {
+        let mut cell_key = QCellOwner::new();
         let process = Process::default();
 
         let prototype = FunctionPrototypeBuilder::default()
@@ -330,7 +338,7 @@ mod tests {
 
         let fs = ProgramFunction::new(prototype, 7);
 
-        let frame = CallFrame::new(process, Rc::new(fs), 4, None);
+        let frame = CallFrame::new(cell_key.cell(process), Rc::new(fs), 4, None, &mut cell_key);
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -341,6 +349,7 @@ mod tests {
 
         #[test]
         fn sets_up_registers_if_greater_max_is_passed() {
+            let mut cell_key = QCellOwner::new();
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -352,7 +361,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 30, None);
+            let frame = CallFrame::with_minimum_arg_capacity(cell_key.cell(process), Rc::new(fs), 4, 30, None, &mut cell_key);
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -360,6 +369,7 @@ mod tests {
 
         #[test]
         fn sets_up_registers_if_lesser_max_is_passed() {
+            let mut cell_key = QCellOwner::new();
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -371,7 +381,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = CallFrame::with_minimum_arg_capacity(process, Rc::new(fs), 4, 2, None);
+            let frame = CallFrame::with_minimum_arg_capacity(cell_key.cell(process), Rc::new(fs), 4, 2, None, &mut cell_key);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -383,6 +393,7 @@ mod tests {
 
         #[test]
         fn uses_the_passed_registers() {
+            let mut cell_key = QCellOwner::new();
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -396,7 +407,7 @@ mod tests {
 
             let registers = RegisterBank::new(vec![NULL; 21]);
 
-            let frame = CallFrame::with_registers(process, Rc::new(fs), 4, registers, None);
+            let frame = CallFrame::with_registers(cell_key.cell(process), Rc::new(fs), 4, registers, None, &mut cell_key);
 
             assert_eq!(frame.registers.len(), 21);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -409,6 +420,7 @@ mod tests {
 
         #[test]
         fn populates_upvalues() {
+            let mut cell_key = QCellOwner::new();
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -430,10 +442,10 @@ mod tests {
             pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
 
-            let frame = CallFrame::new(process, Rc::new(pf), 0, None);
+            let frame = CallFrame::new(cell_key.cell(process), Rc::new(pf), 0, None, &mut cell_key);
 
             assert_eq!(frame.upvalues, vec![Register(0), Register(1)]);
-            assert_eq!(frame.process.borrow().upvalues.len(), 2);
+            assert_eq!(frame.process.ro(&cell_key).upvalues.len(), 2);
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
@@ -458,9 +470,9 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None);
+            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, &mut cell_key);
             assert_eq!(frame.upvalues, vec![Register(2), Register(3), Register(4)]);
-            assert_eq!(frame.process.borrow().upvalues.len(), 5);
+            assert_eq!(frame.process.ro(&cell_key).upvalues.len(), 5);
         }
     }
 }

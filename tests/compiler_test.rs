@@ -5,6 +5,7 @@ use std::rc::Rc;
 use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
+use qcell::QCellOwner;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
@@ -36,16 +37,18 @@ fn default_compiler() -> Compiler {
 
 #[test]
 fn errors_on_max_inherit_depth() {
+    let mut cell_key = QCellOwner::new();
     let code = r#"inherit "/std/inherit_loop1";"#;
 
     let compiler = default_compiler();
-    let result = compiler.compile_string("foo.c", code);
+    let result = compiler.compile_string("foo.c", code, &mut cell_key);
 
     assert_err!(result, "maximum inheritance depth of 10 reached reached");
 }
 
 #[test]
 fn test_inheritance() {
+    let mut cell_key = QCellOwner::new();
     let code = indoc! { r##"
         inherit "/parent";
 
@@ -58,9 +61,9 @@ fn test_inheritance() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code);
+    let (_task, ctx) = run_prog(code, &mut cell_key);
     let proc = ctx.process();
-    let prog = &proc.borrow().program;
+    let prog = &proc.ro(&cell_key).program;
 
     assert_eq!(prog.num_globals, 5);
     assert_eq!(prog.num_init_registers, 6);
@@ -68,6 +71,7 @@ fn test_inheritance() {
 
 #[test]
 fn test_dynamic_receiver() {
+    let mut cell_key = QCellOwner::new();
     let code = indoc! { r##"
         void create() {
             function f = &->tacos();
@@ -80,9 +84,9 @@ fn test_dynamic_receiver() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code);
+    let (_task, ctx) = run_prog(code, &mut cell_key);
     let proc = ctx.process();
-    let prog = &proc.borrow().program;
+    let prog = &proc.ro(&cell_key).program;
 
     assert_eq!(prog.num_globals, 0);
     assert_eq!(prog.num_init_registers, 1);
@@ -90,6 +94,7 @@ fn test_dynamic_receiver() {
 
 #[test]
 fn test_duffs_device() {
+    let mut cell_key = QCellOwner::new();
     let code = indoc! { r##"
         int *copy(int *array, int count) {
             int n = (count + 7) / 8, idx = 0;
@@ -114,9 +119,9 @@ fn test_duffs_device() {
         mixed b = copy(a, 6);
     "## };
 
-    let (_task, ctx) = run_prog(code);
+    let (_task, ctx) = run_prog(code, &mut cell_key);
     let proc = ctx.process();
-    let borrowed = proc.borrow();
+    let borrowed = proc.ro(&cell_key);
     let b = &borrowed.globals[1];
 
     if_chain! {
@@ -145,6 +150,8 @@ fn test_duffs_device() {
 
 #[test]
 fn test_closures() {
+    let mut cell_key = QCellOwner::new();
+
     let code = indoc! { r##"
         function f = (:
             function f = &->tacos(,);
@@ -162,9 +169,9 @@ fn test_closures() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code);
+    let (_task, ctx) = run_prog(code, &mut cell_key);
     let proc = ctx.process();
-    let borrowed = proc.borrow();
+    let borrowed = proc.ro(&cell_key);
 
     assert_eq!(borrowed.globals.len(), 2);
     assert_eq!(

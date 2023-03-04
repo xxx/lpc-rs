@@ -4,6 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use qcell::QCellOwner;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -40,8 +41,8 @@ impl SpannedNode for MappingNode {
 }
 
 impl AstNodeTrait for MappingNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_mapping(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_mapping(self, cell_key)
     }
 }
 

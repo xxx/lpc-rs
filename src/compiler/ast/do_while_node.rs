@@ -4,6 +4,7 @@ use std::{
 };
 
 use indextree::NodeId;
+use qcell::QCellOwner;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -35,8 +36,8 @@ impl DoWhileNode {
 }
 
 impl AstNodeTrait for DoWhileNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_do_while(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_do_while(self, cell_key)
     }
 }
 

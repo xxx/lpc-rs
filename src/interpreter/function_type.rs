@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     fmt::{Display, Formatter},
     rc::Rc,
 };
@@ -7,6 +6,7 @@ use std::{
 use delegate::delegate;
 use educe::Educe;
 use itertools::Itertools;
+use qcell::QCell;
 use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
 };
@@ -16,19 +16,20 @@ use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Proces
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
-fn borrowed_owner_name(owner: &Rc<RefCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
-    f.write_str(&owner.borrow().filename())
+fn borrowed_owner_name(_owner: &Rc<QCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
+    // f.write_str(&owner.borrow().filename())
+    f.write_str("<Local Owner QCell>")
 }
 
 /// Different ways to store a function address, for handling at runtime.
 /// This is the run-time equivalent of
 /// [`FunctionTarget`](lpc_rs_core::function::FunctionTarget).
-#[derive(Educe, Clone, PartialEq, Eq)]
+#[derive(Educe, Clone)]
 #[educe(Debug)]
 pub enum FunctionAddress {
     /// The function being called is located in an object.
     Local(
-        #[educe(Debug(method = "borrowed_owner_name"))] Rc<RefCell<Process>>,
+        #[educe(Debug(method = "borrowed_owner_name"))] Rc<QCell<Process>>,
         Rc<ProgramFunction>,
     ),
 
@@ -62,11 +63,25 @@ impl FunctionAddress {
     }
 }
 
+impl PartialEq for FunctionAddress {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (FunctionAddress::Local(_, x), FunctionAddress::Local(_, y)) => x == y,
+            (FunctionAddress::Dynamic(x), FunctionAddress::Dynamic(y)) => x == y,
+            (FunctionAddress::Efun(x), FunctionAddress::Efun(y)) => x == y,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for FunctionAddress {}
+
 impl Display for FunctionAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FunctionAddress::Local(owner, x) => {
-                write!(f, "{}::{}", owner.borrow(), x)
+            FunctionAddress::Local(_owner, _x) => {
+                // write!(f, "{}::{}", owner.borrow(), x)
+                write!(f, "<QCell local>")
             }
             FunctionAddress::Dynamic(x) => write!(f, "dynamic::{x}"),
             FunctionAddress::Efun(x) => write!(f, "efun::{x}"),
@@ -75,12 +90,12 @@ impl Display for FunctionAddress {
 }
 
 /// A pointer to a function, created with the `&` syntax.
-#[derive(Educe, Clone, PartialEq, Eq)]
+#[derive(Educe, Clone)]
 #[educe(Debug)]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
     #[educe(Debug(method = "borrowed_owner_name"))]
-    pub owner: Rc<RefCell<Process>>,
+    pub owner: Rc<QCell<Process>>,
 
     /// Address of the function, in either the receiver or owner
     pub address: FunctionAddress,
@@ -120,12 +135,25 @@ impl FunctionPtr {
     }
 }
 
+impl PartialEq for FunctionPtr {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO handle owner somehow
+        self.address == other.address
+            && self.arity == other.arity
+            && self.partial_args == other.partial_args
+            && self.call_other == other.call_other
+            && self.upvalues == other.upvalues
+    }
+}
+
+impl Eq for FunctionPtr {}
+
 impl Display for FunctionPtr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
 
         s.push_str("FunctionPtr { ");
-        s.push_str(&format!("owner: {}, ", self.owner.borrow()));
+        s.push_str(&format!("owner: <QCell data>"));
         s.push_str(&format!("address: {}, ", self.address));
 
         let partial_args = &self

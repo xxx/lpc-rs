@@ -1,6 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use derive_builder::Builder;
+use educe::Educe;
+use qcell::{QCell, QCellOwner};
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
@@ -19,7 +21,8 @@ use crate::{
 /// compilation. A single one of these will be used for loading/compiling a
 /// single file (files `#include`d in that file will share this state object
 /// when they are compiled, as well.) Inherited files will have their own.
-#[derive(Debug, Builder)]
+#[derive(Educe, Builder)]
+#[educe(Debug)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct CompilationContext {
     /// The name of the main file being compiled.
@@ -72,7 +75,8 @@ pub struct CompilationContext {
     pub num_init_registers: usize,
 
     /// Pointer to the simul efuns
-    pub simul_efuns: Option<Rc<RefCell<Process>>>,
+    #[educe(Debug(ignore))]
+    pub simul_efuns: Option<Rc<QCell<Process>>>,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
@@ -132,6 +136,7 @@ impl CompilationContext {
         &self,
         name: T,
         namespace: &CallNamespace,
+        cell_key: &QCellOwner
     ) -> Option<FunctionLike>
     where
         T: AsRef<str>,
@@ -150,7 +155,7 @@ impl CompilationContext {
                     self.simul_efuns
                         .as_ref()
                         .and_then(|rc| {
-                            rc.borrow()
+                            rc.ro(cell_key)
                                 .lookup_function(nm, namespace)
                                 .map(|f| FunctionLike::from(f.clone()))
                         })
@@ -202,7 +207,7 @@ impl CompilationContext {
 
     /// Convenience function to check if a function is available anywhere that
     /// I am allowed access.
-    pub fn contains_function_complete(&self, name: &str, namespace: &CallNamespace) -> bool {
+    pub fn contains_function_complete(&self, name: &str, namespace: &CallNamespace, cell_key: &QCellOwner) -> bool {
         if !self.valid_namespace(namespace) {
             return false;
         }
@@ -215,7 +220,7 @@ impl CompilationContext {
             return self
                 .simul_efuns
                 .as_ref()
-                .map(|rc| rc.borrow().contains_function(name, namespace))
+                .map(|rc| rc.ro(cell_key).contains_function(name, namespace))
                 .unwrap_or(false)
                 || EFUN_PROTOTYPES.contains_key(name);
             // return EFUN_PROTOTYPES.contains_key(name);
@@ -304,6 +309,7 @@ mod tests {
     #[test]
     #[allow(clippy::bool_assert_comparison)]
     fn test_lookups() {
+        let mut cell_key = QCellOwner::new();
         let mut context = CompilationContext::default();
         let mut inherited = Program::default();
         let mut named_inherit = Program::default();
@@ -344,7 +350,7 @@ mod tests {
 
         context.inherit_names.insert("my_named_inherit".into(), 0);
 
-        let proc = Process::new(simul_efuns);
+        let proc = cell_key.cell(Process::new(simul_efuns));
         context.simul_efuns = Some(proc.into());
         // lookup_function
 
@@ -429,7 +435,7 @@ mod tests {
         assert_eq!(
             // gets from the inherited parent
             context
-                .lookup_function_complete("hello_friends", &CallNamespace::Local)
+                .lookup_function_complete("hello_friends", &CallNamespace::Local, &mut cell_key)
                 .unwrap()
                 .prototype(),
             &inherited_proto.prototype
@@ -438,7 +444,7 @@ mod tests {
         assert_eq!(
             // gets the local version
             context
-                .lookup_function_complete("foo", &CallNamespace::Local)
+                .lookup_function_complete("foo", &CallNamespace::Local, &mut cell_key)
                 .unwrap()
                 .prototype(),
             &proto
@@ -447,7 +453,7 @@ mod tests {
         assert_eq!(
             // gets the parent version
             context
-                .lookup_function_complete("foo", &CallNamespace::Parent)
+                .lookup_function_complete("foo", &CallNamespace::Parent, &mut cell_key)
                 .unwrap()
                 .prototype(),
             &overridden.prototype
@@ -456,7 +462,7 @@ mod tests {
         assert_eq!(
             // gets the more local overridden version
             context
-                .lookup_function_complete("this_object", &CallNamespace::Local)
+                .lookup_function_complete("this_object", &CallNamespace::Local, &mut cell_key)
                 .unwrap()
                 .prototype(),
             &efun_override
@@ -465,7 +471,7 @@ mod tests {
         assert_eq!(
             // efun namespace
             context
-                .lookup_function_complete("this_object", &CallNamespace::Named("efun".into()))
+                .lookup_function_complete("this_object", &CallNamespace::Named("efun".into()), &mut cell_key)
                 .unwrap()
                 .prototype(),
             EFUN_PROTOTYPES.get("this_object").unwrap()
@@ -474,7 +480,7 @@ mod tests {
         assert_eq!(
             // specifically-named namespace
             context
-                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into()))
+                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into()), &mut cell_key)
                 .unwrap()
                 .prototype(),
             &named_overridden.prototype
@@ -483,26 +489,26 @@ mod tests {
         assert_eq!(
             // cannot get to efuns through non `efun` namespaces
             context
-                .lookup_function_complete("dump", &CallNamespace::Named("my_named_inherit".into())),
+                .lookup_function_complete("dump", &CallNamespace::Named("my_named_inherit".into()), &mut cell_key),
             None
         );
 
         assert_eq!(
             // unknown namespace
-            context.lookup_function_complete("this_object", &CallNamespace::Named("blargh".into())),
+            context.lookup_function_complete("this_object", &CallNamespace::Named("blargh".into()), &mut cell_key),
             None
         );
 
         assert_eq!(
             // not defined
-            context.lookup_function_complete("bar", &CallNamespace::Local),
+            context.lookup_function_complete("bar", &CallNamespace::Local, &mut cell_key),
             None
         );
 
         assert_eq!(
             // efun
             context
-                .lookup_function_complete("dump", &CallNamespace::Local)
+                .lookup_function_complete("dump", &CallNamespace::Local, &mut cell_key)
                 .unwrap()
                 .prototype(),
             EFUN_PROTOTYPES.get("dump").unwrap()
@@ -511,7 +517,7 @@ mod tests {
         assert_eq!(
             // efun
             context
-                .lookup_function_complete("simul_efun", &CallNamespace::Local)
+                .lookup_function_complete("simul_efun", &CallNamespace::Local, &mut cell_key)
                 .unwrap()
                 .prototype(),
             &simul_efun.prototype
@@ -519,13 +525,13 @@ mod tests {
 
         assert_eq!(
             // not through parent
-            context.lookup_function_complete("dump", &CallNamespace::Parent),
+            context.lookup_function_complete("dump", &CallNamespace::Parent, &mut cell_key),
             None
         );
 
         assert_eq!(
             // not through parent
-            context.lookup_function_complete("simul_efun", &CallNamespace::Parent),
+            context.lookup_function_complete("simul_efun", &CallNamespace::Parent, &mut cell_key),
             None
         );
 
@@ -612,31 +618,31 @@ mod tests {
 
         assert_eq!(
             // gets from the inherited parent
-            context.contains_function_complete("hello_friends", &CallNamespace::Local),
+            context.contains_function_complete("hello_friends", &CallNamespace::Local, &mut cell_key),
             true
         );
 
         assert_eq!(
             // gets the local version
-            context.contains_function_complete("foo", &CallNamespace::Local),
+            context.contains_function_complete("foo", &CallNamespace::Local, &mut cell_key),
             true
         );
 
         assert_eq!(
             // gets the parent version
-            context.contains_function_complete("foo", &CallNamespace::Parent),
+            context.contains_function_complete("foo", &CallNamespace::Parent, &mut cell_key),
             true
         );
 
         assert_eq!(
             // gets the more local overridden version
-            context.contains_function_complete("this_object", &CallNamespace::Local),
+            context.contains_function_complete("this_object", &CallNamespace::Local, &mut cell_key),
             true
         );
 
         assert_eq!(
             // efun namespace
-            context.contains_function_complete("this_object", &CallNamespace::Named("efun".into())),
+            context.contains_function_complete("this_object", &CallNamespace::Named("efun".into()), &mut cell_key),
             true
         );
 
@@ -644,7 +650,8 @@ mod tests {
             // specifically-named namespace
             context.contains_function_complete(
                 "foo",
-                &CallNamespace::Named("my_named_inherit".into())
+                &CallNamespace::Named("my_named_inherit".into()),
+                &mut cell_key,
             ),
             true
         );
@@ -653,7 +660,8 @@ mod tests {
             // cannot get to efuns through non `efun` namespaces
             context.contains_function_complete(
                 "dump",
-                &CallNamespace::Named("my_named_inherit".into())
+                &CallNamespace::Named("my_named_inherit".into()),
+                &mut cell_key,
             ),
             false
         );
@@ -661,36 +669,36 @@ mod tests {
         assert_eq!(
             // unknown namespace
             context
-                .contains_function_complete("this_object", &CallNamespace::Named("blargh".into())),
+                .contains_function_complete("this_object", &CallNamespace::Named("blargh".into()), &mut cell_key),
             false
         );
 
         assert_eq!(
             // not defined
-            context.contains_function_complete("bar", &CallNamespace::Local),
+            context.contains_function_complete("bar", &CallNamespace::Local, &mut cell_key),
             false
         );
 
         assert_eq!(
             // efun
-            context.contains_function_complete("dump", &CallNamespace::Local),
+            context.contains_function_complete("dump", &CallNamespace::Local, &mut cell_key),
             true
         );
 
         assert_eq!(
             // efun
-            context.contains_function_complete("simul_efun", &CallNamespace::Local),
+            context.contains_function_complete("simul_efun", &CallNamespace::Local, &mut cell_key),
             true
         );
 
         assert_eq!(
             // not through parent
-            context.contains_function_complete("dump", &CallNamespace::Parent),
+            context.contains_function_complete("dump", &CallNamespace::Parent, &mut cell_key),
             false
         );
 
         assert_eq!(
-            context.contains_function_complete("simul_efun", &CallNamespace::Parent),
+            context.contains_function_complete("simul_efun", &CallNamespace::Parent, &mut cell_key),
             false
         );
     }

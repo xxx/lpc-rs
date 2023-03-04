@@ -70,7 +70,7 @@ impl Vm {
         };
 
         compiler
-            .compile_in_game_file(filename, None)
+            .compile_in_game_file(filename, None, cell_key)
             .and_then(|program| {
                 let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory);
                 task.initialize_program(program, self.config.clone(), self.object_space.clone(), cell_key)

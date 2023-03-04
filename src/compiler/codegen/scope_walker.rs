@@ -1,5 +1,6 @@
 use if_chain::if_chain;
 use itertools::Itertools;
+use qcell::QCellOwner;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId,
 };
@@ -95,26 +96,26 @@ impl ContextHolder for ScopeWalker {
 }
 
 impl TreeWalker for ScopeWalker {
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+    fn visit_block(&mut self, node: &mut BlockNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
 
         node.scope_id = Some(scope_id);
 
         for stmt in &mut node.body {
-            stmt.visit(self)?;
+            stmt.visit(self, cell_key)?;
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+    fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(rcvr) = &mut node.receiver {
-            rcvr.visit(self)?;
+            rcvr.visit(self, cell_key)?;
         }
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self, cell_key)?;
         }
 
         if_chain! {
@@ -131,7 +132,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    fn visit_closure(&mut self, node: &mut ClosureNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
@@ -141,7 +142,7 @@ impl TreeWalker for ScopeWalker {
 
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
-                param.visit(self)?;
+                param.visit(self, cell_key)?;
             }
         }
 
@@ -150,7 +151,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         for statement in &mut node.body {
-            statement.visit(self)?;
+            statement.visit(self, cell_key)?;
         }
 
         self.closure_scope_stack.pop();
@@ -159,39 +160,39 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+    fn visit_do_while(&mut self, node: &mut DoWhileNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let _ = node.body.visit(self);
-        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self, cell_key);
+        let _ = node.condition.visit(self, cell_key);
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+    fn visit_for(&mut self, node: &mut ForNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
         if let Some(n) = &mut *node.initializer {
-            let _ = n.visit(self);
+            let _ = n.visit(self, cell_key);
         }
         if let Some(n) = &mut node.condition {
-            let _ = n.visit(self);
+            let _ = n.visit(self, cell_key);
         }
 
-        let _ = node.body.visit(self);
+        let _ = node.body.visit(self, cell_key);
 
         if let Some(n) = &mut node.incrementer {
-            let _ = n.visit(self);
+            let _ = n.visit(self, cell_key);
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+    fn visit_foreach(&mut self, node: &mut ForEachNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
@@ -210,31 +211,31 @@ impl TreeWalker for ScopeWalker {
 
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
-                let _ = init.visit(self);
+                let _ = init.visit(self, cell_key);
             }
             ForEachInit::Mapping {
                 ref mut key,
                 ref mut value,
             } => {
-                let _ = key.visit(self);
-                let _ = value.visit(self);
+                let _ = key.visit(self, cell_key);
+                let _ = value.visit(self, cell_key);
             }
         }
-        let _ = node.collection.visit(self);
-        let _ = node.body.visit(self);
+        let _ = node.collection.visit(self, cell_key);
+        let _ = node.body.visit(self, cell_key);
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
         trace!("Defining function {}", &node.name);
 
         for parameter in &mut node.parameters {
-            parameter.visit(self)?;
+            parameter.visit(self, cell_key)?;
         }
 
         if node.flags.ellipsis() {
@@ -242,40 +243,40 @@ impl TreeWalker for ScopeWalker {
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+    fn visit_if(&mut self, node: &mut IfNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let _ = node.condition.visit(self);
-        let _ = node.body.visit(self);
+        let _ = node.condition.visit(self, cell_key);
+        let _ = node.body.visit(self, cell_key);
         if let Some(n) = &mut *node.else_clause {
-            let _ = n.visit(self);
+            let _ = n.visit(self, cell_key);
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
+    fn visit_program(&mut self, node: &mut ProgramNode, cell_key: &mut QCellOwner) -> Result<()> {
         // Push the global scope
         self.context.scopes.push_new();
 
         for expr in &mut node.body {
-            expr.visit(self)?;
+            expr.visit(self, cell_key)?;
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+    fn visit_var(&mut self, node: &mut VarNode, cell_key: &mut QCellOwner) -> Result<()> {
         // positional closure arg references are
         // 1) always allowed (if we've made it this far)
         // 2) never global
@@ -291,7 +292,7 @@ impl TreeWalker for ScopeWalker {
             // check for functions (i.e. declaring function pointers with no arguments)
             if self
                 .context
-                .contains_function_complete(&node.name, &CallNamespace::default())
+                .contains_function_complete(&node.name, &CallNamespace::default(), cell_key)
             {
                 node.set_function_name(true);
                 return Ok(());
@@ -341,7 +342,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+    fn visit_var_init(&mut self, node: &mut VarInitNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope = self.context.scopes.current();
 
         if scope.is_none() {
@@ -357,7 +358,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         if let Some(expr_node) = &mut node.value {
-            expr_node.visit(self)?;
+            expr_node.visit(self, cell_key)?;
         }
 
         self.insert_symbol(Symbol::from(node));
@@ -365,12 +366,12 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
+    fn visit_while(&mut self, node: &mut WhileNode, cell_key: &mut QCellOwner) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let _ = node.condition.visit(self);
-        let _ = node.body.visit(self);
+        let _ = node.condition.visit(self, cell_key);
+        let _ = node.body.visit(self, cell_key);
 
         self.context.scopes.pop();
         Ok(())
@@ -405,6 +406,7 @@ mod tests {
 
         #[test]
         fn sets_up_argv_for_ellipsis() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = ScopeWalker::default();
             let mut node = create!(
                 ClosureNode,
@@ -412,7 +414,7 @@ mod tests {
                 flags: FunctionFlags::default().with_ellipsis(true),
             );
 
-            let _ = walker.visit_closure(&mut node);
+            let _ = walker.visit_closure(&mut node, &mut cell_key);
 
             walker.context.scopes.goto(node.scope_id);
 
@@ -436,6 +438,7 @@ mod tests {
 
         #[test]
         fn sets_up_argv_for_ellipsis() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
@@ -446,7 +449,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_function_def(&mut node);
+            let _ = walker.visit_function_def(&mut node, &mut cell_key);
 
             walker.context.scopes.goto_function("marf").unwrap();
 
@@ -495,31 +498,34 @@ mod tests {
 
         #[test]
         fn sets_error_for_var_redefinition_in_same_scope() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
 
             assert!(!walker.context.errors.is_empty());
         }
 
         #[test]
         fn does_not_error_for_var_shadow_in_different_scope() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
             walker.context.scopes.push_new();
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
 
             assert!(walker.context.errors.is_empty());
         }
 
         #[test]
         fn inserts_the_symbol() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
             walker.context.scopes.push_new();
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node, &mut cell_key);
 
             assert!(walker
                 .context
@@ -552,6 +558,7 @@ mod tests {
 
         #[test]
         fn sets_global_flag() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
             walker.insert_symbol(Symbol {
@@ -564,16 +571,17 @@ mod tests {
                 upvalue: false,
             });
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
 
             assert!(node.global);
         }
 
         #[test]
         fn pushes_error_for_undefined_vars() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
 
             assert_regex!(
                 walker.context.errors[0].as_ref(),
@@ -583,10 +591,11 @@ mod tests {
 
         #[test]
         fn allows_closure_positional_arg_vars() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = ScopeWalker::default();
             let mut node = create!(VarNode, name: "$7".to_string());
 
-            let result = walker.visit_var(&mut node);
+            let result = walker.visit_var(&mut node, &mut cell_key);
 
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
@@ -594,6 +603,7 @@ mod tests {
 
         #[test]
         fn errors_if_accessing_private_variable_defined_elsewhere() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
             let mut inherited = Program::default();
@@ -612,7 +622,7 @@ mod tests {
 
             walker.context.inherits.push(inherited);
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
 
             assert_regex!(
                 walker.context.errors[0].as_ref(),
@@ -622,6 +632,7 @@ mod tests {
 
         #[test]
         fn allows_accessing_in_file_private_variable() {
+            let mut cell_key = QCellOwner::new();
             let (mut walker, mut node) = setup();
 
             let sym = Symbol {
@@ -636,13 +647,14 @@ mod tests {
 
             walker.insert_symbol(sym);
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
 
             assert!(walker.context.errors.is_empty());
         }
 
         #[test]
         fn upvalues_variables() {
+            let mut cell_key = QCellOwner::new();
             let mut walker = ScopeWalker::default();
             let _local_scope = walker.context.scopes.push_new(); // push a non-global scope
 
@@ -660,7 +672,7 @@ mod tests {
             let new_scope_id = walker.context.scopes.push_new();
             walker.closure_scope_stack.push(new_scope_id);
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node, &mut cell_key);
 
             assert!(walker.context.errors.is_empty());
 

@@ -4,6 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use qcell::QCellOwner;
 use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::Result;
 
@@ -22,8 +23,8 @@ pub struct DeclNode {
 }
 
 impl AstNodeTrait for DeclNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_decl(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_decl(self, cell_key)
     }
 }
 

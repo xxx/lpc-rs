@@ -4,6 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use qcell::QCellOwner;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -52,8 +53,8 @@ impl SpannedNode for CommaExpressionNode {
 }
 
 impl AstNodeTrait for CommaExpressionNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_comma_expression(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_comma_expression(self, cell_key)
     }
 }
 

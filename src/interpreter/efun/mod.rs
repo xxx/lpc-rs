@@ -269,8 +269,8 @@ pub fn call_efun<const N: usize>(name: &str, context: &mut EfunContext<N>, cell_
     match name {
         CLONE_OBJECT => clone_object(context, cell_key),
         DEBUG => debug(context),
-        DUMP => dump(context),
-        FILE_NAME => file_name(context),
+        DUMP => dump(context, cell_key),
+        FILE_NAME => file_name(context, cell_key),
         THIS_OBJECT => this_object(context),
         THROW => throw(context),
         _ => Err(LpcError::new(format!(

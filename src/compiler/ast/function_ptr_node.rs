@@ -5,6 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use lazy_format::lazy_format;
+use qcell::QCellOwner;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -49,8 +50,8 @@ impl SpannedNode for FunctionPtrNode {
 }
 
 impl AstNodeTrait for FunctionPtrNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_function_ptr(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_function_ptr(self, cell_key)
     }
 }
 

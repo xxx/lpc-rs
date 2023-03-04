@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_errors::{span::Span, Result};
 
@@ -103,8 +104,8 @@ impl SpannedNode for AssignmentNode {
 }
 
 impl AstNodeTrait for AssignmentNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_assignment(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_assignment(self, cell_key)
     }
 }
 

@@ -4,6 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use qcell::QCellOwner;
 use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 use lpc_rs_errors::{span::Span, Result};
 
@@ -37,8 +38,8 @@ impl SpannedNode for FunctionDefNode {
 }
 
 impl AstNodeTrait for FunctionDefNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_function_def(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_function_def(self, cell_key)
     }
 }
 

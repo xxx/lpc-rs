@@ -158,6 +158,7 @@ impl<'a> Program {
     ///
     /// # Examples
     /// ```
+    /// use qcell::QCellOwner;
     /// use lpc_rs::compiler::{
     ///     ast::{
     ///         binary_op_node::{BinaryOpNode, BinaryOperation},
@@ -176,8 +177,9 @@ impl<'a> Program {
     /// "#;
     ///
     /// let compiler = Compiler::default();
+    /// let mut cell_key = QCellOwner::new();
     /// let program = compiler
-    ///     .compile_string("~/my_file.c", code)
+    ///     .compile_string("~/my_file.c", code, &mut cell_key)
     ///     .expect("Failed to compile.");
     ///
     /// for instruction in program.listing() {
@@ -216,12 +218,13 @@ impl Display for Program {
 
 #[cfg(test)]
 mod tests {
-
+    use qcell::QCellOwner;
     use super::*;
     use crate::compiler::Compiler;
 
     #[test]
     fn test_serialization_and_deserialization() {
+        let mut cell_key = QCellOwner::new();
         let content = r#"
             int *foo = ({ 1, 2, 3, 4, 234 });
             void create() {
@@ -231,7 +234,7 @@ mod tests {
         "#;
         let compiler = Compiler::default();
         let prog = compiler
-            .compile_string("foo.c", content.to_string())
+            .compile_string("foo.c", content.to_string(), &mut cell_key)
             .unwrap();
 
         let msgpack = prog.to_msgpack();

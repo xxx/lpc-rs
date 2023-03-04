@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
 use lpc_rs_errors::{span::Span, Result};
@@ -79,8 +80,8 @@ impl SpannedNode for VarInitNode {
 }
 
 impl AstNodeTrait for VarInitNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_var_init(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_var_init(self, cell_key)
     }
 }
 

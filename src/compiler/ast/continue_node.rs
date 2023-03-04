@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_errors::{span::Span, Result};
 
@@ -30,8 +31,8 @@ impl SpannedNode for ContinueNode {
 }
 
 impl AstNodeTrait for ContinueNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_continue(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_continue(self, cell_key)
     }
 }
 

@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_errors::{span::Span, Result};
 
@@ -45,8 +46,8 @@ impl SpannedNode for TernaryNode {
 }
 
 impl AstNodeTrait for TernaryNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_ternary(self)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        tree_walker.visit_ternary(self, cell_key)
     }
 }
 

@@ -2,6 +2,7 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use qcell::QCellOwner;
 
 use lpc_rs_errors::Result;
 
@@ -31,9 +32,9 @@ impl LabeledStatementNode {
 }
 
 impl AstNodeTrait for LabeledStatementNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        self.label.visit(tree_walker)?;
-        self.node.visit(tree_walker)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+        self.label.visit(tree_walker, cell_key)?;
+        self.node.visit(tree_walker, cell_key)
     }
 }
 

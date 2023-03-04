@@ -1,3 +1,4 @@
+use qcell::QCellOwner;
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
@@ -39,7 +40,7 @@ impl ContextHolder for FunctionPrototypeWalker {
 }
 
 impl TreeWalker for FunctionPrototypeWalker {
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    fn visit_closure(&mut self, node: &mut ClosureNode, cell_key: &mut QCellOwner) -> Result<()> {
         let mut num_args = node
             .parameters
             .as_ref()
@@ -66,12 +67,12 @@ impl TreeWalker for FunctionPrototypeWalker {
         // look for cases of closures-within-closures
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
-                param.visit(self)?;
+                param.visit(self, cell_key)?;
             }
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
         }
 
         if self.max_closure_arg_reference > num_args {
@@ -100,7 +101,7 @@ impl TreeWalker for FunctionPrototypeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
         // Store the prototype now, to allow for forward references.
         let num_args = node.parameters.len();
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
@@ -136,17 +137,17 @@ impl TreeWalker for FunctionPrototypeWalker {
 
         // walk the contents of the function, in case any closures are defined.
         for parameter in &mut node.parameters {
-            parameter.visit(self)?;
+            parameter.visit(self, cell_key)?;
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self, cell_key)?;
         }
 
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+    fn visit_var(&mut self, node: &mut VarNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if node.is_closure_arg_var() {
             let idx = closure_arg_number(&node.name)?;
 
@@ -170,6 +171,7 @@ mod tests {
 
     #[test]
     fn function_def_stores_the_prototype() {
+        let mut cell_key = QCellOwner::new();
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
             return_type: LpcType::Mixed(false),
@@ -183,7 +185,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_function_def(&mut node);
+        let _ = walker.visit_function_def(&mut node, &mut cell_key);
 
         let proto = walker
             .context
@@ -205,6 +207,7 @@ mod tests {
 
     #[test]
     fn closure_stores_the_prototype() {
+        let mut cell_key = QCellOwner::new();
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = ClosureNode {
             name: "closure-123".into(),
@@ -219,7 +222,7 @@ mod tests {
             scope_id: None,
         };
 
-        let _ = walker.visit_closure(&mut node);
+        let _ = walker.visit_closure(&mut node, &mut cell_key);
 
         let proto = walker
             .context

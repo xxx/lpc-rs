@@ -1,5 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
-use qcell::QCellOwner;
+use std::rc::Rc;
+use qcell::{QCell, QCellOwner};
 
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, INIT_PROGRAM};
 use lpc_rs_errors::{LpcError, Result};
@@ -18,24 +18,24 @@ fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
     path: &str,
     cell_key: &mut QCellOwner,
-) -> Result<Rc<RefCell<Process>>> {
+) -> Result<Rc<QCell<Process>>> {
     let compiler = CompilerBuilder::default()
         .config(context.config())
         .build()?;
 
-    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &context.config().lib_dir);
+    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(cell_key), &context.config().lib_dir);
     // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 
     match context.lookup_process(path_str, cell_key) {
         Some(proc) => Ok(proc),
-        None => match compiler.compile_in_game_file(&full_path, context.current_debug_span()) {
+        None => match compiler.compile_in_game_file(&full_path, context.current_debug_span(), cell_key) {
             Ok(prog) => {
                 let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
-                let process: Rc<RefCell<Process>> = Process::new(prog).into();
+                let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                 context.insert_process(process.clone(), cell_key);
                 let function = {
-                    let borrowed = process.borrow();
+                    let borrowed = process.ro(cell_key);
                     borrowed
                         .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
                         .cloned()
@@ -73,7 +73,7 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut
         let master = load_master(context, path, cell_key)?;
 
         {
-            let borrowed = master.borrow();
+            let borrowed = master.ro(cell_key);
             if borrowed.program.pragmas.no_clone() {
                 return Err(context.runtime_error(format!(
                     "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
@@ -82,14 +82,14 @@ pub fn clone_object<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut
             }
         }
 
-        let new_prog = master.borrow().program.clone();
+        let new_prog = master.ro(cell_key).program.clone();
 
         let new_clone = context.insert_clone(new_prog, cell_key);
 
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
         {
             let function = {
-                let borrowed = new_clone.borrow();
+                let borrowed = new_clone.ro(cell_key);
                 borrowed
                     .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
                     .cloned()
@@ -136,7 +136,7 @@ mod tests {
     fn task_context_fixture(program: Program, config: Rc<Config>, cell_key: &QCellOwner) -> TaskContext {
         let process = Process::new(program);
 
-        TaskContext::new(config, process, cell_key.cell(ObjectSpace::default()), cell_key)
+        TaskContext::new(config, cell_key.cell(process), cell_key.cell(ObjectSpace::default()), cell_key)
     }
 
     fn fixture<'pool>() -> Task<'pool, MAX_CALL_STACK_SIZE> {
@@ -150,7 +150,7 @@ mod tests {
         "# };
 
         let mut cell_key = QCellOwner::new();
-        let (program, config, _) = compile_prog(prog);
+        let (program, config, _) = compile_prog(prog, &mut cell_key);
         let func = program
             .functions
             .get(INIT_PROGRAM)
@@ -170,11 +170,12 @@ mod tests {
 
     #[test]
     fn returns_error_if_no_clone() {
+        let mut cell_key = QCellOwner::new();
         let prog = indoc! { r#"
             object foo = clone_object("./no_clone.c");
         "# };
 
-        let (program, config, _) = compile_prog(prog);
+        let (program, config, _) = compile_prog(prog, &mut cell_key);
         let func = program
             .functions
             .get(INIT_PROGRAM)

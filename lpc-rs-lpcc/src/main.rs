@@ -48,7 +48,7 @@ fn main() {
 
     let mut cell_key = QCellOwner::new();
 
-    match compiler.compile_in_game_file(&lpc_path, None) {
+    match compiler.compile_in_game_file(&lpc_path, None, &mut cell_key) {
         Ok(program) => {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();

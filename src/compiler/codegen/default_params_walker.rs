@@ -1,3 +1,4 @@
+use qcell::QCellOwner;
 use lpc_rs_errors::Result;
 
 use crate::compiler::{
@@ -42,7 +43,7 @@ impl ContextHolder for DefaultParamsWalker {
 }
 
 impl TreeWalker for DefaultParamsWalker {
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    fn visit_closure(&mut self, node: &mut ClosureNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(parameters) = &node.parameters {
             self.insert_params(&node.name, parameters);
         }
@@ -50,7 +51,7 @@ impl TreeWalker for DefaultParamsWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode, _cell_key: &mut QCellOwner) -> Result<()> {
         self.insert_params(&node.name, &node.parameters);
 
         Ok(())
@@ -70,6 +71,7 @@ mod tests {
 
     #[test]
     fn test_visit_closure_populates_the_functions() {
+        let mut cell_key = QCellOwner::new();
         let context = CompilationContext::default();
         let mut walker = DefaultParamsWalker::new(context);
 
@@ -93,7 +95,7 @@ mod tests {
             parameters: Some(parameters),
         );
 
-        let _ = walker.visit_closure(&mut node);
+        let _ = walker.visit_closure(&mut node, &mut cell_key);
 
         let params = walker.context.default_function_params.get("foo").unwrap();
 
@@ -106,6 +108,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
+        let mut cell_key = QCellOwner::new();
         let context = CompilationContext::default();
         let mut walker = DefaultParamsWalker::new(context);
 
@@ -139,7 +142,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_function_def(&mut node);
+        let _ = walker.visit_function_def(&mut node, &mut cell_key);
 
         let params = walker.context.default_function_params.get("foo").unwrap();
 
