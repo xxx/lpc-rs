@@ -146,7 +146,8 @@ pub struct CodegenWalker {
     /// function or closure.
     function_upvalue_counter: RegisterCounter,
 
-    /// Number of [`Register`]s needed for global initialization
+    /// Number of [`Register`]s needed for global initialization.
+    /// This counter contains the total number for *all* inherited init-program functions.
     global_init_registers: usize,
 
     /// Compilation context
