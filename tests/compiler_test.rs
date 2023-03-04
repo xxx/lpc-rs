@@ -12,6 +12,18 @@ use lpc_rs::{
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::run_prog;
+use tracing;
+
+// #[ctor::ctor]
+// fn init() {
+//     tracing::subscriber::set_global_default(
+//         tracing_subscriber::fmt()
+//             .with_max_level(tracing::Level::TRACE)
+//             .with_writer(std::io::stdout)
+//             .finish(),
+//     )
+//         .expect("setting tracing default failed");
+// }
 
 fn default_compiler() -> Compiler {
     let config: Rc<Config> = ConfigBuilder::default()
@@ -131,47 +143,32 @@ fn test_duffs_device() {
     }
 }
 
-// TODO: re-enable this once it's supported
-// #[test]
-// fn test_closures() {
-//     let code = indoc! { r##"
-//         function f = (:
-//             function f = &->tacos();
-//             function g = (: f($1, $2) :);
-//             dump(g(this_object(), "assmar"));
-//             return 666;
-//         :);
-//
-//         void create() {
-//             int i = f();
-//         }
-//     "## };
-//
-//     let (_task, ctx) = run_prog(code);
-//     let proc = ctx.process();
-//     let borrowed = proc.borrow();
-//     let b = borrowed.globals[1].borrow();
-//
-//     if_chain! {
-//         if let LpcRef::Array(pool_ref) = &*b;
-//         let b = pool_ref.borrow();
-//         if let LpcValue::Array(arr) = &*b;
-//         then {
-//             assert_eq!(
-//                 arr,
-//                 &[
-//                     LpcRef::Int(0),
-//                     LpcRef::Int(2),
-//                     LpcRef::Int(3),
-//                     LpcRef::Int(4),
-//                     LpcRef::Int(5),
-//                     LpcRef::Int(6),
-//                     LpcRef::Int(7),
-//                     LpcRef::Int(0),
-//                 ]
-//             );
-//         } else {
-//             panic!("expected array");
-//         }
-//     }
-// }
+#[test]
+fn test_closures() {
+    let code = indoc! { r##"
+        function f = (:
+            function f = &->tacos(,);
+            function g = (: f($1, $2, $3) :);
+            return g(this_object(), 4, "crema");
+        :);
+        string str;
+
+        void create() {
+            str = f();
+        }
+
+        string tacos(int i, string t) {
+            return "I'll take " + i + " tacos with " + t + " on the side, por favor.";
+        }
+    "## };
+
+    let (_task, ctx) = run_prog(code);
+    let proc = ctx.process();
+    let borrowed = proc.borrow();
+
+    assert_eq!(borrowed.globals.len(), 2);
+    assert_eq!(
+        borrowed.globals.last().unwrap().to_string(),
+        r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
+    );
+}

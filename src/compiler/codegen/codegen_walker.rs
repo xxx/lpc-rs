@@ -228,9 +228,8 @@ impl CodegenWalker {
             filename: self.context.filename,
             functions: self.functions,
             global_variables,
-            // add +1, because r0 is also used
             num_globals: self.global_counter.number_emitted(),
-            num_upvalues: self.upvalue_counter.number_emitted(),
+            num_upvalues: self.upvalue_counter.number_emitted(), // TODO: is this needed?
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
@@ -413,6 +412,8 @@ impl CodegenWalker {
         } else {
             self.register_counter.next().unwrap().as_local()
         };
+
+        trace!("Assigning location {} to {}", current_register, sym);
 
         sym.location = Some(current_register);
 
@@ -729,6 +730,7 @@ impl TreeWalker for CodegenWalker {
             ExpressionNode::Var(_) => {
                 lhs.visit(self)?;
                 let lhs_result = self.current_result;
+                trace!("assignment: lhs: {}, rhs: {}", lhs_result, rhs_result);
 
                 let assign = Instruction::RegCopy(rhs_result, lhs_result);
 
@@ -1919,6 +1921,8 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
+            // TODO: positional closure arg vars are handled here.
+            //       they need to work with non-local locations.
             let idx = closure_arg_number(&node.name)?;
             self.current_result = Register(idx).as_local();
 
@@ -2017,7 +2021,7 @@ impl TreeWalker for CodegenWalker {
         } else {
             trace!("No value, defaulting to NULL");
             // Default value to 0 when uninitialized.
-            self.register_counter.next().unwrap().as_local()
+            self.assign_sym_location(&node.name)
         };
 
         self.current_result = current_register;
@@ -5202,7 +5206,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_globals, 3)
+            assert_eq!(program.num_globals, 5)
         }
 
         #[test]
@@ -5215,7 +5219,7 @@ mod tests {
         "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 3)
+            assert_eq!(program.num_init_registers, 4)
         }
 
         #[test]
@@ -5245,8 +5249,8 @@ mod tests {
         let program = walk_prog(code).into_program().expect("failed to compile");
         let init = program.functions.get(INIT_PROGRAM).unwrap();
 
-        assert_eq!(program.num_globals, 7);
-        assert_eq!(init.num_locals, 8);
+        assert_eq!(program.num_globals, 9);
+        assert_eq!(init.num_locals, 6);
     }
 
     #[test]

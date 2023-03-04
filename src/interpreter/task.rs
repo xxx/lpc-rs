@@ -685,7 +685,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 set_loc!(self, r2, new_ref)?;
             }
             Instruction::Ret => {
-                pop_frame!(self, task_context);
+                pop_frame!(self, task_context).map(|frame| {
+                    trace!("Returning from function: {}", frame.function.name());
+                });
 
                 // halt at the end of all input
                 if self.stack.is_empty() {
@@ -801,6 +803,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             }
         };
+        trace!("Calling function: {}", func);
 
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
@@ -823,12 +826,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
+                let val = get_loc!(self, *arg).map(|i| i.into_owned())?;
+
+                trace!(
+                    "Copying argument {} ({}) to {}",
+                    i,
+                    val,
+                    target_location
+                );
+
                 new_frame.arg_locations.push(target_location);
 
-                new_frame.set_location(
-                    target_location,
-                    get_loc!(self, *arg).map(|i| i.into_owned())?,
-                )
+                new_frame.set_location(target_location, val, )
             }
         }
 
@@ -871,6 +880,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let borrowed = func.borrow();
         let ptr = try_extract_value!(*borrowed, LpcValue::Function);
 
+        trace!("Calling function ptr: {}", ptr);
+
         let arity = ptr.arity;
         let partial_args = &ptr.partial_args;
         let passed_args_count = *num_args
@@ -894,22 +905,28 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
-                let lpc_ref = &*get_loc!(self, self.args[0])?;
+                let LpcRef::Object(lpc_ref) = &*get_loc!(self, self.args[0])? else {
+                    return Err(self.runtime_error("non-object receiver to function pointer call"));
+                };
 
-                if let LpcRef::Object(lpc_ref) = lpc_ref {
+                let pair_opt = {
                     let b = lpc_ref.borrow();
                     let cell = try_extract_value!(*b, LpcValue::Object);
                     let proc = cell.borrow();
-                    let func = proc.lookup_function(name, &CallNamespace::Local);
+                    proc
+                        .lookup_function(name, &CallNamespace::Local)
+                        .map(|func| (cell.clone(), func.clone()))
+                };
 
-                    if let Some(func) = func {
-                        (cell.clone(), func.clone())
-                    } else {
-                        return Err(self.runtime_error(format!("call to unknown function `{name}")));
-                    }
-                } else {
-                    return Err(self.runtime_error("non-object receiver to function pointer call"));
-                }
+                // short-circuit a 0 return if doing a call_other to a non-existent function
+                let Some(pair) = pair_opt else {
+                    let frame = self.stack.current_frame_mut()?;
+                    frame.registers[0] = NULL;
+                    return Ok(());
+                    // return Err(self.runtime_error(format!("call to unknown function `{name}`")));
+                };
+
+                pair
             }
             FunctionAddress::Efun(name) => {
                 // unwrap is safe because this should have been checked in an earlier step
@@ -947,6 +964,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     prototype.arg_spans.get(i),
                     &prototype.name,
                 )?;
+
+                trace!("Copying argument {} ({}) to {}", i, r, loc);
 
                 new_frame.arg_locations.push(loc);
                 new_frame.set_location(loc, r);
@@ -1069,6 +1088,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     };
                     let borrowed = pool_ref.borrow();
                     let function_name = try_extract_value!(*borrowed, LpcValue::String);
+
+                    trace!("Calling call_other: {receiver_ref}->{function_name}");
 
                     // An inner helper function to actually calculate the result, for easy re-use
                     // when using `call_other` with arrays and mappings.
@@ -1718,6 +1739,17 @@ mod tests {
         extract_value,
         test_support::{compile_prog, run_prog},
     };
+
+    // #[ctor::ctor]
+    // fn init() {
+    //     tracing::subscriber::set_global_default(
+    //         tracing_subscriber::fmt()
+    //             .with_max_level(tracing::Level::TRACE)
+    //             .with_writer(std::io::stdout)
+    //             .finish(),
+    //     )
+    //         .expect("setting tracing default failed");
+    // }
 
     #[allow(dead_code)]
     fn format_slice<I>(slice: &[I]) -> String

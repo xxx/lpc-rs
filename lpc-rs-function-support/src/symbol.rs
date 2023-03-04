@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use lpc_rs_core::{
     global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
     visibility::Visibility, ScopeId,
@@ -53,6 +54,12 @@ impl Symbol {
     #[inline]
     pub fn public(&self) -> bool {
         self.flags.visibility() == Visibility::Public
+    }
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.name, self.type_)
     }
 }
 

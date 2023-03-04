@@ -52,6 +52,7 @@ impl ScopeWalker {
     /// Insert a new symbol into the current scope
     fn insert_symbol(&mut self, symbol: Symbol) {
         if let Some(scope) = self.context.scopes.current_mut() {
+            trace!("Inserting symbol {} into scope {}", symbol, scope);
             scope.insert(symbol)
         }
     }
@@ -133,6 +134,8 @@ impl TreeWalker for ScopeWalker {
     fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
+
+        trace!("Defining closure {}", &node.name);
 
         self.closure_scope_stack.push(scope_id);
 
@@ -228,6 +231,8 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
+        trace!("Defining function {}", &node.name);
+
         for parameter in &mut node.parameters {
             parameter.visit(self)?;
         }
@@ -282,27 +287,26 @@ impl TreeWalker for ScopeWalker {
 
         let is_local = self.context.scopes.lookup(&node.name).is_some();
 
-        let symbol = match self.context.lookup_var(&node.name) {
-            Some(sym) => sym,
-            None => {
-                // check for functions (i.e. declaring function pointers with no arguments)
-                if self
-                    .context
-                    .contains_function_complete(&node.name, &CallNamespace::default())
-                {
-                    node.set_function_name(true);
-                    return Ok(());
-                };
-
-                // We check for undefined vars here, in case a symbol is subsequently defined.
-                let e = LpcError::new(format!("undefined variable `{}`", node.name))
-                    .with_span(node.span);
-
-                self.context.errors.push(e);
-
+        let Some(symbol) = self.context.lookup_var(&node.name) else {
+            // check for functions (i.e. declaring function pointers with no arguments)
+            if self
+                .context
+                .contains_function_complete(&node.name, &CallNamespace::default())
+            {
+                node.set_function_name(true);
                 return Ok(());
-            }
+            };
+
+            // We check for undefined vars here, in case a symbol is subsequently defined.
+            let e = LpcError::new(format!("undefined variable `{}`", node.name))
+                .with_span(node.span);
+
+            self.context.errors.push(e);
+
+            return Ok(());
         };
+
+        trace!("found symbol: {}", symbol);
 
         if !symbol.public() && !is_local {
             let e = LpcError::new(format!(
@@ -345,6 +349,8 @@ impl TreeWalker for ScopeWalker {
                 "There's no current scope for some reason? This is a pretty bad compiler bug.",
             ));
         }
+
+        trace!("Defining variable {}", &node.name);
 
         if let Err(e) = check_var_redefinition(node, scope.unwrap()) {
             self.context.errors.push(e);

@@ -33,6 +33,7 @@ pub struct Program {
     pub global_variables: HashMap<String, Symbol>,
 
     /// How many globals does this program need storage for?
+    /// Note that this number includes inherited globals.
     pub num_globals: usize,
 
     /// How many upvalues does this program need storage for?
