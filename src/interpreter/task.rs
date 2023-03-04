@@ -828,16 +828,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 let val = get_loc!(self, *arg).map(|i| i.into_owned())?;
 
-                trace!(
-                    "Copying argument {} ({}) to {}",
-                    i,
-                    val,
-                    target_location
-                );
+                trace!("Copying argument {} ({}) to {}", i, val, target_location);
 
                 new_frame.arg_locations.push(target_location);
 
-                new_frame.set_location(target_location, val, )
+                new_frame.set_location(target_location, val)
             }
         }
 
@@ -913,8 +908,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let b = lpc_ref.borrow();
                     let cell = try_extract_value!(*b, LpcValue::Object);
                     let proc = cell.borrow();
-                    proc
-                        .lookup_function(name, &CallNamespace::Local)
+                    proc.lookup_function(name, &CallNamespace::Local)
                         .map(|func| (cell.clone(), func.clone()))
                 };
 

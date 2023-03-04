@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+
 use lpc_rs_core::{
     global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
     visibility::Visibility, ScopeId,
