@@ -5,12 +5,12 @@ use std::rc::Rc;
 use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
-use qcell::QCellOwner;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use qcell::QCellOwner;
 
 use crate::support::run_prog;
 // use tracing;

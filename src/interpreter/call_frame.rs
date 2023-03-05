@@ -4,13 +4,13 @@ use std::{
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
-use educe::Educe;
-use qcell::{QCell, QCellOwner};
 
+use educe::Educe;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use qcell::{QCell, QCellOwner};
 use tracing::instrument;
 
 use crate::interpreter::{
@@ -192,7 +192,12 @@ impl CallFrame {
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the variant
-    pub fn set_location(&mut self, location: RegisterVariant, lpc_ref: LpcRef, cell_key: &mut QCellOwner) {
+    pub fn set_location(
+        &mut self,
+        location: RegisterVariant,
+        lpc_ref: LpcRef,
+        cell_key: &mut QCellOwner,
+    ) {
         match location {
             RegisterVariant::Local(reg) => {
                 self.registers[reg] = lpc_ref;
@@ -361,7 +366,14 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = CallFrame::with_minimum_arg_capacity(cell_key.cell(process), Rc::new(fs), 4, 30, None, &mut cell_key);
+            let frame = CallFrame::with_minimum_arg_capacity(
+                cell_key.cell(process),
+                Rc::new(fs),
+                4,
+                30,
+                None,
+                &mut cell_key,
+            );
 
             assert_eq!(frame.registers.len(), 38);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -381,7 +393,14 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let frame = CallFrame::with_minimum_arg_capacity(cell_key.cell(process), Rc::new(fs), 4, 2, None, &mut cell_key);
+            let frame = CallFrame::with_minimum_arg_capacity(
+                cell_key.cell(process),
+                Rc::new(fs),
+                4,
+                2,
+                None,
+                &mut cell_key,
+            );
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -407,7 +426,14 @@ mod tests {
 
             let registers = RegisterBank::new(vec![NULL; 21]);
 
-            let frame = CallFrame::with_registers(cell_key.cell(process), Rc::new(fs), 4, registers, None, &mut cell_key);
+            let frame = CallFrame::with_registers(
+                cell_key.cell(process),
+                Rc::new(fs),
+                4,
+                registers,
+                None,
+                &mut cell_key,
+            );
 
             assert_eq!(frame.registers.len(), 21);
             assert!(frame.registers.iter().all(|r| r == &NULL));

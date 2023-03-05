@@ -2,9 +2,9 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
-use qcell::{QCell, QCellOwner};
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
+use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{
@@ -101,11 +101,7 @@ impl TaskContext {
     where
         P: Into<Rc<QCell<Process>>>,
     {
-        ObjectSpace::insert_process(
-            &self.object_space,
-            process,
-            cell_key,
-        )
+        ObjectSpace::insert_process(&self.object_space, process, cell_key)
         // let process = process.into();
 
         // self.object_space.rw(cell_key).insert_process(process, &cell_key);
@@ -114,7 +110,11 @@ impl TaskContext {
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
     /// then insert it into the object space.
     #[inline]
-    pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>> {
+    pub fn insert_clone(
+        &self,
+        program: Rc<Program>,
+        cell_key: &mut QCellOwner,
+    ) -> Rc<QCell<Process>> {
         ObjectSpace::insert_clone(
             &self.object_space,
             program,

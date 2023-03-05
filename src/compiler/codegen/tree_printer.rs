@@ -1,5 +1,5 @@
-use qcell::QCellOwner;
 use lpc_rs_errors::Result;
+use qcell::QCellOwner;
 use tree_walker::TreeWalker;
 
 use crate::compiler::{
@@ -21,7 +21,6 @@ use crate::compiler::{
 ///
 /// # Examples
 /// ```
-/// use qcell::QCellOwner;
 /// use lpc_rs::{
 ///     compiler::{
 ///         codegen::{tree_printer::TreePrinter, tree_walker::TreeWalker},
@@ -30,6 +29,7 @@ use crate::compiler::{
 ///     },
 ///     lpc_parser,
 /// };
+/// use qcell::QCellOwner;
 ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let lexer = LexWrapper::new(prog);
@@ -74,7 +74,11 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_binary_op(
+        &mut self,
+        node: &mut BinaryOpNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         self.println_indented("Binary Op");
         self.indent += 2;
         self.println_indented(&format!("operation: {:?}", node.op));
@@ -126,7 +130,11 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_comma_expression(
+        &mut self,
+        node: &mut CommaExpressionNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         self.println_indented("Comma Expression");
         self.indent += 2;
         for expr in &mut node.value {
@@ -225,7 +233,11 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         self.println_indented("Function Def");
         self.indent += 2;
         self.println_indented(&format!("name: {}", node.name));
@@ -246,7 +258,11 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_ptr(
+        &mut self,
+        node: &mut FunctionPtrNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         self.println_indented("Function Ptr");
         self.indent += 2;
 

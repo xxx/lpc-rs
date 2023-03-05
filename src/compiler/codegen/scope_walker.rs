@@ -1,11 +1,11 @@
 use if_chain::if_chain;
 use itertools::Itertools;
-use qcell::QCellOwner;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId,
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::symbol::Symbol;
+use qcell::QCellOwner;
 use tracing::trace;
 
 use crate::compiler::{
@@ -228,7 +228,11 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 

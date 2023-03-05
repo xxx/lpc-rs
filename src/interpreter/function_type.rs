@@ -6,11 +6,11 @@ use std::{
 use delegate::delegate;
 use educe::Educe;
 use itertools::Itertools;
-use qcell::QCell;
 use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
 };
 use lpc_rs_function_support::program_function::ProgramFunction;
+use qcell::QCell;
 
 use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process};
 

@@ -1,5 +1,5 @@
-use qcell::QCellOwner;
 use lpc_rs_errors::Result;
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -51,7 +51,11 @@ impl TreeWalker for DefaultParamsWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        _cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         self.insert_params(&node.name, &node.parameters);
 
         Ok(())

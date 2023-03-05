@@ -1,4 +1,3 @@
-use qcell::QCellOwner;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
@@ -8,6 +7,7 @@ use lpc_rs::{
     },
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use qcell::QCellOwner;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -37,11 +37,19 @@ pub fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
         .expect("Failed to compile.")
 }
 
-pub fn run_prog<'a>(code: &str, cell_key: &mut QCellOwner) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog<'a>(
+    code: &str,
+    cell_key: &mut QCellOwner,
+) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
     let mut task = Task::new(Memory::default());
     let program = compile_prog(code, cell_key);
     let ctx = task
-        .initialize_program(program, test_config(), cell_key.cell(ObjectSpace::default()), cell_key)
+        .initialize_program(
+            program,
+            test_config(),
+            cell_key.cell(ObjectSpace::default()),
+            cell_key,
+        )
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             panic!("failed to initialize");

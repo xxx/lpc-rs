@@ -5,9 +5,9 @@ use std::{
 
 use itertools::Itertools;
 use lazy_format::lazy_format;
-use qcell::QCellOwner;
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_errors::{span::Span, Result};
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -44,7 +44,11 @@ impl SpannedNode for CallNode {
 }
 
 impl AstNodeTrait for CallNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit(
+        &mut self,
+        tree_walker: &mut impl TreeWalker,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         tree_walker.visit_call(self, cell_key)
     }
 }

@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use indexmap::IndexMap;
-use qcell::QCellOwner;
 use lpc_rs_errors::{LpcError, Result};
+use qcell::QCellOwner;
 
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
@@ -155,8 +155,8 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOw
 
 #[cfg(test)]
 mod tests {
-    use qcell::QCellOwner;
     use lpc_rs_utils::config::Config;
+    use qcell::QCellOwner;
 
     use crate::{
         compiler::Compiler,
@@ -185,7 +185,12 @@ mod tests {
         let program = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10));
         let mut cell_key = QCellOwner::new();
-        let result = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
+        let result = task.initialize_program(
+            program,
+            Config::default(),
+            cell_key.cell(ObjectSpace::default()),
+            &mut cell_key,
+        );
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -203,7 +208,12 @@ mod tests {
 
         let program = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10));
-        let result = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
+        let result = task.initialize_program(
+            program,
+            Config::default(),
+            cell_key.cell(ObjectSpace::default()),
+            &mut cell_key,
+        );
 
         assert_eq!(
             result.unwrap_err().to_string(),

@@ -1,8 +1,8 @@
 use std::rc::Rc;
-use qcell::{QCell, QCellOwner};
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use qcell::{QCell, QCellOwner};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -48,10 +48,15 @@ fn compile_simul_efuns(config: &Rc<Config>, cell_key: &mut QCellOwner) -> Progra
         "/",
         &config.lib_dir,
     );
-    compiler.compile_in_game_file(&path, None, cell_key).unwrap()
+    compiler
+        .compile_in_game_file(&path, None, cell_key)
+        .unwrap()
 }
 
-pub fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> (Program, Rc<Config>, Rc<QCell<Process>>) {
+pub fn compile_prog(
+    code: &str,
+    cell_key: &mut QCellOwner,
+) -> (Program, Rc<Config>, Rc<QCell<Process>>) {
     let config = Rc::new(test_config());
     let simul_efuns = compile_simul_efuns(&config, cell_key);
     let se_proc = Rc::new(cell_key.cell(Process::new(simul_efuns)));
@@ -69,7 +74,10 @@ pub fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> (Program, Rc<Confi
     (program, config, se_proc)
 }
 
-pub fn run_prog<'a>(code: &str, cell_key: &'a mut QCellOwner) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog<'a>(
+    code: &str,
+    cell_key: &'a mut QCellOwner,
+) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
     let mut task = Task::new(Memory::default());
     let (program, config, se_proc) = compile_prog(code, cell_key);
 

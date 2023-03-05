@@ -1,14 +1,11 @@
 use std::rc::Rc;
-use qcell::QCell;
 
 use lpc_rs_utils::config::Config;
+use qcell::QCell;
 
 use crate::interpreter::{object_space::ObjectSpace, process::Process};
 
-pub fn get_simul_efuns(
-    config: &Config,
-    object_space: &ObjectSpace,
-) -> Option<Rc<QCell<Process>>> {
+pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Rc<QCell<Process>>> {
     config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
         object_space.lookup(file).cloned()
@@ -17,9 +14,9 @@ pub fn get_simul_efuns(
 
 #[cfg(test)]
 mod tests {
-    use qcell::QCellOwner;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
+    use qcell::QCellOwner;
 
     use super::*;
     use crate::interpreter::program::ProgramBuilder;

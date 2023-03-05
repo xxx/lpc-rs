@@ -265,7 +265,11 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
 });
 
 /// call the actual function, from the given name, with the passed context.
-pub fn call_efun<const N: usize>(name: &str, context: &mut EfunContext<N>, cell_key: &mut QCellOwner) -> Result<()> {
+pub fn call_efun<const N: usize>(
+    name: &str,
+    context: &mut EfunContext<N>,
+    cell_key: &mut QCellOwner,
+) -> Result<()> {
     match name {
         CLONE_OBJECT => clone_object(context, cell_key),
         DEBUG => debug(context),

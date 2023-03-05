@@ -2,8 +2,8 @@ use std::{collections::HashMap, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
-use qcell::{QCell, QCellOwner};
 use lpc_rs_utils::config::Config;
+use qcell::{QCell, QCellOwner};
 
 use crate::interpreter::{process::Process, program::Program};
 
@@ -41,8 +41,8 @@ impl ObjectSpace {
 
     /// Create a new [`ObjectSpace`] with the passed [`Config`]
     pub fn new<T>(config: T) -> Self
-        where
-            T: Into<Rc<Config>>,
+    where
+        T: Into<Rc<Config>>,
     {
         Self {
             config: config.into(),
@@ -54,8 +54,8 @@ impl ObjectSpace {
     // /// table. If a new program with the same filename as an existing one is
     // /// added, the new will overwrite the old in the table.
     // /// Storage keys are the in-game filename
-    // pub fn insert_master(&mut self, program: Program, cell_key: &QCellOwner) -> Rc<QCell<Process>> {
-    //     let new = Process::new(program);
+    // pub fn insert_master(&mut self, program: Program, cell_key: &QCellOwner) ->
+    // Rc<QCell<Process>> {     let new = Process::new(program);
     //     let process: Rc<QCell<Process>> = cell_key.cell(new).into();
     //     let name = self.prepare_filename(&process, &cell_key);
     //     self.insert_process_directly(name, process.clone());
@@ -63,15 +63,17 @@ impl ObjectSpace {
     // }
 
     /// Insert a clone of the passed [`Program`] into the space.
-    pub fn insert_clone(space_cell: &Rc<QCell<Self>>, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>> {
+    pub fn insert_clone(
+        space_cell: &Rc<QCell<Self>>,
+        program: Rc<Program>,
+        cell_key: &mut QCellOwner,
+    ) -> Rc<QCell<Process>> {
         let clone = {
             let space = space_cell.rw(cell_key);
             Process::new_clone(program, space.clone_count)
         };
 
-        let name = {
-            space_cell.ro(cell_key).prepare_filename(&clone)
-        };
+        let name = { space_cell.ro(cell_key).prepare_filename(&clone) };
 
         let process: Rc<QCell<Process>> = cell_key.cell(clone).into();
 
@@ -97,7 +99,8 @@ impl ObjectSpace {
 
     fn prepare_filename(&self, process: &Process) -> String {
         let name = process.localized_filename(&self.config.lib_dir);
-        let name = name.strip_suffix(".c")
+        let name = name
+            .strip_suffix(".c")
             .map(ToString::to_string)
             .unwrap_or(name);
 
@@ -142,9 +145,9 @@ impl Default for ObjectSpace {
 //
 #[cfg(test)]
 mod tests {
-    use qcell::QCellOwner;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
+    use qcell::QCellOwner;
 
     use super::*;
 

@@ -2,7 +2,6 @@ use std::{collections::HashMap, rc::Rc};
 
 use derive_builder::Builder;
 use educe::Educe;
-use qcell::{QCell, QCellOwner};
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
@@ -11,6 +10,7 @@ use lpc_rs_function_support::{
     function_like::FunctionLike, function_prototype::FunctionPrototype, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
+use qcell::{QCell, QCellOwner};
 
 use crate::{
     compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
@@ -136,7 +136,7 @@ impl CompilationContext {
         &self,
         name: T,
         namespace: &CallNamespace,
-        cell_key: &QCellOwner
+        cell_key: &QCellOwner,
     ) -> Option<FunctionLike>
     where
         T: AsRef<str>,
@@ -207,7 +207,12 @@ impl CompilationContext {
 
     /// Convenience function to check if a function is available anywhere that
     /// I am allowed access.
-    pub fn contains_function_complete(&self, name: &str, namespace: &CallNamespace, cell_key: &QCellOwner) -> bool {
+    pub fn contains_function_complete(
+        &self,
+        name: &str,
+        namespace: &CallNamespace,
+        cell_key: &QCellOwner,
+    ) -> bool {
         if !self.valid_namespace(namespace) {
             return false;
         }
@@ -471,7 +476,11 @@ mod tests {
         assert_eq!(
             // efun namespace
             context
-                .lookup_function_complete("this_object", &CallNamespace::Named("efun".into()), &cell_key)
+                .lookup_function_complete(
+                    "this_object",
+                    &CallNamespace::Named("efun".into()),
+                    &cell_key
+                )
                 .unwrap()
                 .prototype(),
             EFUN_PROTOTYPES.get("this_object").unwrap()
@@ -480,7 +489,11 @@ mod tests {
         assert_eq!(
             // specifically-named namespace
             context
-                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into()), &cell_key)
+                .lookup_function_complete(
+                    "foo",
+                    &CallNamespace::Named("my_named_inherit".into()),
+                    &cell_key
+                )
                 .unwrap()
                 .prototype(),
             &named_overridden.prototype
@@ -488,14 +501,21 @@ mod tests {
 
         assert_eq!(
             // cannot get to efuns through non `efun` namespaces
-            context
-                .lookup_function_complete("dump", &CallNamespace::Named("my_named_inherit".into()), &cell_key),
+            context.lookup_function_complete(
+                "dump",
+                &CallNamespace::Named("my_named_inherit".into()),
+                &cell_key
+            ),
             None
         );
 
         assert_eq!(
             // unknown namespace
-            context.lookup_function_complete("this_object", &CallNamespace::Named("blargh".into()), &cell_key),
+            context.lookup_function_complete(
+                "this_object",
+                &CallNamespace::Named("blargh".into()),
+                &cell_key
+            ),
             None
         );
 
@@ -642,7 +662,11 @@ mod tests {
 
         assert_eq!(
             // efun namespace
-            context.contains_function_complete("this_object", &CallNamespace::Named("efun".into()), &cell_key),
+            context.contains_function_complete(
+                "this_object",
+                &CallNamespace::Named("efun".into()),
+                &cell_key
+            ),
             true
         );
 
@@ -668,8 +692,11 @@ mod tests {
 
         assert_eq!(
             // unknown namespace
-            context
-                .contains_function_complete("this_object", &CallNamespace::Named("blargh".into()), &cell_key),
+            context.contains_function_complete(
+                "this_object",
+                &CallNamespace::Named("blargh".into()),
+                &cell_key
+            ),
             false
         );
 

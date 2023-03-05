@@ -1,8 +1,8 @@
-use qcell::QCellOwner;
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 use lpc_rs_utils::string::closure_arg_number;
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -101,7 +101,11 @@ impl TreeWalker for FunctionPrototypeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         // Store the prototype now, to allow for forward references.
         let num_args = node.parameters.len();
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();

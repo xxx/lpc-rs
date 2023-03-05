@@ -1,8 +1,8 @@
 use std::rc::Rc;
-use qcell::{QCell, QCellOwner};
 
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, INIT_PROGRAM};
 use lpc_rs_errors::{LpcError, Result};
+use qcell::{QCell, QCellOwner};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -23,47 +23,59 @@ fn load_master<const N: usize>(
         .config(context.config())
         .build()?;
 
-    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(cell_key), &context.config().lib_dir);
+    let full_path = LpcPath::new_in_game(
+        path,
+        context.in_game_cwd(cell_key),
+        &context.config().lib_dir,
+    );
     // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 
     match context.lookup_process(path_str, cell_key) {
         Some(proc) => Ok(proc),
-        None => match compiler.compile_in_game_file(&full_path, context.current_debug_span(), cell_key) {
-            Ok(prog) => {
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
-                let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
-                context.insert_process(process.clone(), cell_key);
-                let function = {
-                    let borrowed = process.ro(cell_key);
-                    borrowed
-                        .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
-                        .cloned()
-                };
-                match function {
-                    Some(prog_function) => {
-                        let new_context =
-                            context.clone_task_context().with_process(process.clone());
-                        let eval_context = task.eval(prog_function, &[], new_context, cell_key)?;
+        None => {
+            match compiler.compile_in_game_file(&full_path, context.current_debug_span(), cell_key)
+            {
+                Ok(prog) => {
+                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
+                    let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
+                    context.insert_process(process.clone(), cell_key);
+                    let function = {
+                        let borrowed = process.ro(cell_key);
+                        borrowed
+                            .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
+                            .cloned()
+                    };
+                    match function {
+                        Some(prog_function) => {
+                            let new_context =
+                                context.clone_task_context().with_process(process.clone());
+                            let eval_context =
+                                task.eval(prog_function, &[], new_context, cell_key)?;
 
-                        context.increment_instruction_count(eval_context.instruction_count())?;
+                            context
+                                .increment_instruction_count(eval_context.instruction_count())?;
 
-                        Ok(process)
+                            Ok(process)
+                        }
+                        None => Err(LpcError::new("Init function not found on master?")),
                     }
-                    None => Err(LpcError::new("Init function not found on master?")),
+                }
+                Err(e) => {
+                    let debug_span = context.current_debug_span();
+
+                    Err(e.with_span(debug_span))
                 }
             }
-            Err(e) => {
-                let debug_span = context.current_debug_span();
-
-                Err(e.with_span(debug_span))
-            }
-        },
+        }
     }
 }
 
 /// `clone_object`, the efun for creating new object instances.
-pub fn clone_object<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOwner) -> Result<()> {
+pub fn clone_object<const N: usize>(
+    context: &mut EfunContext<N>,
+    cell_key: &mut QCellOwner,
+) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
     if let LpcRef::String(s) = arg {
@@ -133,10 +145,19 @@ mod tests {
         test_support::compile_prog,
     };
 
-    fn task_context_fixture(program: Program, config: Rc<Config>, cell_key: &QCellOwner) -> TaskContext {
+    fn task_context_fixture(
+        program: Program,
+        config: Rc<Config>,
+        cell_key: &QCellOwner,
+    ) -> TaskContext {
         let process = Process::new(program);
 
-        TaskContext::new(config, cell_key.cell(process), cell_key.cell(ObjectSpace::default()), cell_key)
+        TaskContext::new(
+            config,
+            cell_key.cell(process),
+            cell_key.cell(ObjectSpace::default()),
+            cell_key,
+        )
     }
 
     fn fixture<'pool>() -> Task<'pool, MAX_CALL_STACK_SIZE> {

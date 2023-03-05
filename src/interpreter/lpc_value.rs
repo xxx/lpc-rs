@@ -3,12 +3,12 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
-use educe::Educe;
 
+use educe::Educe;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use qcell::QCell;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
+use qcell::QCell;
 
 use crate::interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process};
 
@@ -22,10 +22,7 @@ pub enum LpcValue {
     String(String),
     Array(Vec<LpcRef>),
     Mapping(IndexMap<LpcRef, LpcRef>),
-    Object(
-        #[educe(Debug(ignore))]
-        Rc<QCell<Process>>
-    ),
+    Object(#[educe(Debug(ignore))] Rc<QCell<Process>>),
     Function(FunctionPtr),
 }
 

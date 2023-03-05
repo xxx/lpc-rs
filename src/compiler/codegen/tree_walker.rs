@@ -1,5 +1,5 @@
-use qcell::QCellOwner;
 use lpc_rs_errors::Result;
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -62,7 +62,11 @@ pub trait TreeWalker {
     }
 
     /// Visit an assignment node
-    fn visit_assignment(&mut self, node: &mut AssignmentNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_assignment(
+        &mut self,
+        node: &mut AssignmentNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()>
     where
         Self: Sized,
     {
@@ -138,7 +142,11 @@ pub trait TreeWalker {
     }
 
     /// Visit a comma expression
-    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_comma_expression(
+        &mut self,
+        node: &mut CommaExpressionNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()>
     where
         Self: Sized,
     {
@@ -230,7 +238,11 @@ pub trait TreeWalker {
     }
 
     /// Visit a function definition node
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()>
     where
         Self: Sized,
     {
@@ -246,7 +258,11 @@ pub trait TreeWalker {
     }
 
     /// Visit a function pointer node
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_function_ptr(
+        &mut self,
+        node: &mut FunctionPtrNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()>
     where
         Self: Sized,
     {

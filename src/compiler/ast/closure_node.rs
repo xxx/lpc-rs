@@ -4,9 +4,9 @@ use std::{
 };
 
 use itertools::Itertools;
-use qcell::QCellOwner;
 use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType, ScopeId};
 use lpc_rs_errors::{span::Span, Result};
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -35,7 +35,11 @@ impl SpannedNode for ClosureNode {
 }
 
 impl AstNodeTrait for ClosureNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit(
+        &mut self,
+        tree_walker: &mut impl TreeWalker,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         tree_walker.visit_closure(self, cell_key)
     }
 }

@@ -1,10 +1,10 @@
 use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc};
 
 use delegate::delegate;
-use qcell::{QCell, QCellOwner};
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
+use qcell::{QCell, QCellOwner};
 
 use crate::interpreter::{
     call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
@@ -102,7 +102,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Resolve any RegisterVariant
     #[inline]
-    pub fn resolve_register_variant(&self, variant: RegisterVariant, cell_key: &QCellOwner) -> Result<Cow<LpcRef>> {
+    pub fn resolve_register_variant(
+        &self,
+        variant: RegisterVariant,
+        cell_key: &QCellOwner,
+    ) -> Result<Cow<LpcRef>> {
         get_location(self.stack, variant, cell_key)
     }
 

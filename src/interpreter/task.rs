@@ -7,7 +7,6 @@ use std::{
 use decorum::Total;
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use qcell::{QCell, QCellOwner};
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
@@ -20,6 +19,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
+use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -70,7 +70,11 @@ pub fn get_location<'a, const N: usize>(
 
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[inline]
-pub fn get_location_in_frame<'a>(frame: &'a CallFrame, location: RegisterVariant, cell_key: &QCellOwner) -> Result<Cow<'a, LpcRef>> {
+pub fn get_location_in_frame<'a>(
+    frame: &'a CallFrame,
+    location: RegisterVariant,
+    cell_key: &QCellOwner,
+) -> Result<Cow<'a, LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -211,7 +215,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         program: Program,
         config: C,
         object_space: O,
-        cell_key: &mut QCellOwner
+        cell_key: &mut QCellOwner,
     ) -> Result<TaskContext>
     where
         C: Into<Rc<Config>> + Debug,
@@ -248,7 +252,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         f: F,
         args: &[LpcRef],
         task_context: TaskContext,
-        cell_key: &mut QCellOwner
+        cell_key: &mut QCellOwner,
     ) -> Result<TaskContext>
     where
         F: Into<Rc<ProgramFunction>>,
@@ -287,7 +291,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     /// The boolean represents whether we are at the end of input (i.e. we
     /// should halt the machine)
     #[instrument(skip_all)]
-    fn eval_one_instruction(&mut self, task_context: &TaskContext, cell_key: &mut QCellOwner) -> Result<bool> {
+    fn eval_one_instruction(
+        &mut self,
+        task_context: &TaskContext,
+        cell_key: &mut QCellOwner,
+    ) -> Result<bool> {
         if self.stack.is_empty() {
             return Ok(true);
         }
@@ -378,7 +386,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 apply_in_location(&mut self.stack, r1, |x| x.dec(), cell_key)?;
             }
             Instruction::EqEq(r1, r2, r3) => {
-                let out = (get_loc!(self, r1, cell_key)? == get_loc!(self, r2, cell_key)?) as LpcInt;
+                let out =
+                    (get_loc!(self, r1, cell_key)? == get_loc!(self, r2, cell_key)?) as LpcInt;
 
                 set_loc!(self, r3, LpcRef::Int(out), cell_key)?;
             }
@@ -406,17 +415,19 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y, cell_key)?;
             }
-            Instruction::IAdd(r1, r2, r3) => match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?) {
-                Ok(result) => {
-                    let out = self.memory.value_to_ref(result);
+            Instruction::IAdd(r1, r2, r3) => {
+                match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?) {
+                    Ok(result) => {
+                        let out = self.memory.value_to_ref(result);
 
-                    set_loc!(self, r3, out, cell_key)?;
+                        set_loc!(self, r3, out, cell_key)?;
+                    }
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
-                }
-            },
+            }
             Instruction::IConst(r, i) => {
                 set_loc!(self, r, LpcRef::Int(i), cell_key)?;
             }
@@ -426,37 +437,45 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::IConst1(r) => {
                 set_loc!(self, r, LpcRef::Int(1), cell_key)?;
             }
-            Instruction::IDiv(r1, r2, r3) => match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?) {
-                Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+            Instruction::IDiv(r1, r2, r3) => {
+                match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?) {
+                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-            },
-            Instruction::IMod(r1, r2, r3) => match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?) {
-                Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+            }
+            Instruction::IMod(r1, r2, r3) => {
+                match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?) {
+                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-            },
-            Instruction::IMul(r1, r2, r3) => match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?) {
-                Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+            }
+            Instruction::IMul(r1, r2, r3) => {
+                match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?) {
+                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-            },
+            }
             Instruction::Inc(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.inc(), cell_key)?;
             }
-            Instruction::ISub(r1, r2, r3) => match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?) {
-                Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+            Instruction::ISub(r1, r2, r3) => {
+                match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?) {
+                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-            },
+            }
             Instruction::Jmp(label) => {
                 let frame = self.stack.current_frame()?;
                 let address = match frame.lookup_label(&label) {
@@ -753,7 +772,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn handle_aconst(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_aconst(
+        &mut self,
+        instruction: &Instruction,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         match instruction {
             Instruction::AConst(r, vec) => {
                 let vars = vec
@@ -769,7 +792,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn handle_call<'task>(&mut self, instruction: &Instruction, task_context: &TaskContext, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_call<'task>(
+        &mut self,
+        instruction: &Instruction,
+        task_context: &TaskContext,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let Instruction::Call {
             name,
             namespace,
@@ -951,8 +979,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             None
         };
 
-        let mut new_frame =
-            CallFrame::with_registers(proc, function, passed_args_count, new_registers, upvalues, cell_key);
+        let mut new_frame = CallFrame::with_registers(
+            proc,
+            function,
+            passed_args_count,
+            new_registers,
+            upvalues,
+            cell_key,
+        );
 
         // negotiate the passed & partially-applied arguments
         if arity.num_args > 0_usize || arity.ellipsis || (dynamic_receiver && *num_args > 0) {
@@ -964,7 +998,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 loc: RegisterVariant,
                 r: LpcRef,
                 i: usize,
-                cell_key: &mut QCellOwner
+                cell_key: &mut QCellOwner,
             ) -> Result<()> {
                 let prototype = &new_frame.function.prototype;
                 task.type_check_call_arg(
@@ -1004,14 +1038,28 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 if let Some(Some(lpc_ref)) = partial_args.get(i) {
                     // if a partially-applied arg is present, use it
-                    type_check_and_assign_location(self, &mut new_frame, target_location, lpc_ref.clone(), i, cell_key)?;
+                    type_check_and_assign_location(
+                        self,
+                        &mut new_frame,
+                        target_location,
+                        lpc_ref.clone(),
+                        i,
+                        cell_key,
+                    )?;
                 } else if let Some(location) = from_slice.get(from_slice_index) {
                     // check if the user passed an argument, which will
                     // fill in the next hole in the partial arguments, or
                     // append to the end
 
                     let lpc_ref = get_loc!(self, *location, cell_key)?;
-                    type_check_and_assign_location(self, &mut new_frame, target_location, lpc_ref.into_owned(), i, cell_key)?;
+                    type_check_and_assign_location(
+                        self,
+                        &mut new_frame,
+                        target_location,
+                        lpc_ref.into_owned(),
+                        i,
+                        cell_key,
+                    )?;
 
                     from_slice_index += 1;
                 }
@@ -1054,8 +1102,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Ok(())
     }
 
-    fn prepare_and_call_efun(&mut self, name: &str, task_context: &TaskContext, cell_key: &mut QCellOwner) -> Result<()>
-    // where
+    fn prepare_and_call_efun(
+        &mut self,
+        name: &str,
+        task_context: &TaskContext,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()>
+// where
     //     'pool: 'task,
     {
         let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
@@ -1079,7 +1132,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         instruction: &Instruction,
         task_context: &TaskContext,
-        cell_key: &mut QCellOwner
+        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         match instruction {
             Instruction::CallOther {
@@ -1119,7 +1172,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             function_name,
                             task_context,
                             &CallNamespace::Local,
-                            cell_key
+                            cell_key,
                         );
 
                         if let Some(pr) = resolved {
@@ -1214,7 +1267,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             &args,
                                             task_context,
                                             &self.memory,
-                                            cell_key
+                                            cell_key,
                                         )
                                         .unwrap_or(NULL),
                                     )
@@ -1437,7 +1490,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn handle_load_mapping_key(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_load_mapping_key(
+        &mut self,
+        instruction: &Instruction,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         match instruction {
             Instruction::LoadMappingKey(r1, r2, r3) => {
                 let var = {
@@ -1477,7 +1534,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn handle_sconst(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_sconst(
+        &mut self,
+        instruction: &Instruction,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         match instruction {
             Instruction::SConst(r, s) => {
                 let new_ref = self.memory.value_to_ref(LpcValue::from(s));
@@ -1836,7 +1897,10 @@ mod tests {
                 LpcRef::Array(x) => {
                     let xb = x.borrow();
                     let a = extract_value!(&*xb, LpcValue::Array);
-                    let array = a.iter().map(|item| BareVal::from_lpc_ref(item, cell_key)).collect::<Vec<_>>();
+                    let array = a
+                        .iter()
+                        .map(|item| BareVal::from_lpc_ref(item, cell_key))
+                        .collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
@@ -1844,7 +1908,12 @@ mod tests {
                     let m = extract_value!(&*xb, LpcValue::Mapping);
                     let mapping = m
                         .into_iter()
-                        .map(|(k, v)| (BareVal::from_lpc_ref(k, cell_key), BareVal::from_lpc_ref(v, cell_key)))
+                        .map(|(k, v)| {
+                            (
+                                BareVal::from_lpc_ref(k, cell_key),
+                                BareVal::from_lpc_ref(v, cell_key),
+                            )
+                        })
                         .collect::<HashMap<_, _>>();
                     BareVal::Mapping(mapping)
                 }
@@ -1868,8 +1937,8 @@ mod tests {
             }
         }
 
-        // pub fn vec_equal(a: &[LpcRef], b: &[BareVal], cell_key: &QCellOwner) -> bool {
-        //     a.len() == b.len() &&
+        // pub fn vec_equal(a: &[LpcRef], b: &[BareVal], cell_key: &QCellOwner) -> bool
+        // {     a.len() == b.len() &&
         //         a.iter().zip(b.iter())
         //             .all(|(a, b)| BareVal::from_lpc_ref(a, cell_key) == *b)
         // }
@@ -2100,8 +2169,10 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
-                String("my public_function".into()).assert_equal(values.get("mine").unwrap(), &cell_key);
-                String("/std/object public".into()).assert_equal(values.get("parents").unwrap(), &cell_key);
+                String("my public_function".into())
+                    .assert_equal(values.get("mine").unwrap(), &cell_key);
+                String("/std/object public".into())
+                    .assert_equal(values.get("parents").unwrap(), &cell_key);
             }
 
             #[test]
@@ -2123,7 +2194,8 @@ mod tests {
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
                 assert!(
-                    String("file_name_override".into()) == (*values.get("this_one").unwrap(), &cell_key)
+                    String("file_name_override".into())
+                        == (*values.get("this_one").unwrap(), &cell_key)
                 );
                 assert!(
                     String("/std/object#0".into()) == (*values.get("efun_one").unwrap(), &cell_key)
@@ -2142,7 +2214,8 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
-                String("this is a simul_efun: marf".into()).assert_equal(values.get("this_one").unwrap(), &cell_key);
+                String("this is a simul_efun: marf".into())
+                    .assert_equal(values.get("this_one").unwrap(), &cell_key);
             }
         }
 
@@ -2635,7 +2708,11 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.ro(&cell_key);
 
-                BareVal::assert_vec_equal(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>(), &cell_key);
+                BareVal::assert_vec_equal(
+                    &expected,
+                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &cell_key,
+                );
             }
 
             #[test]
@@ -2678,7 +2755,11 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.ro(&cell_key);
 
-                 BareVal::assert_vec_equal(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>(), &cell_key);
+                BareVal::assert_vec_equal(
+                    &expected,
+                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &cell_key,
+                );
             }
         }
 
@@ -3036,7 +3117,12 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let mut task: Task<10> = Task::new(Memory::default());
                 let (program, _, _) = compile_prog(code, &mut cell_key);
-                let r = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
+                let r = task.initialize_program(
+                    program,
+                    Config::default(),
+                    cell_key.cell(ObjectSpace::default()),
+                    &mut cell_key,
+                );
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3082,7 +3168,12 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let mut task: Task<10> = Task::new(Memory::default());
                 let (program, _, _) = compile_prog(code, &mut cell_key);
-                let r = task.initialize_program(program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key);
+                let r = task.initialize_program(
+                    program,
+                    Config::default(),
+                    cell_key.cell(ObjectSpace::default()),
+                    &mut cell_key,
+                );
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3149,7 +3240,11 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.ro(&cell_key);
 
-                BareVal::assert_vec_equal(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>(), &cell_key);
+                BareVal::assert_vec_equal(
+                    &expected,
+                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &cell_key,
+                );
             }
 
             #[test]
@@ -3192,7 +3287,11 @@ mod tests {
                 let proc = ctx.process();
                 let proc = proc.ro(&cell_key);
 
-                BareVal::assert_vec_equal(&expected, &proc.globals.iter().cloned().collect::<Vec<_>>(), &cell_key);
+                BareVal::assert_vec_equal(
+                    &expected,
+                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &cell_key,
+                );
             }
         }
 
@@ -4020,7 +4119,10 @@ mod tests {
             let mut task: Task<5> = Task::new(Memory::default());
             let (program, _, _) = compile_prog(code, &mut cell_key);
             let r = task.initialize_program(
-                program, Config::default(), cell_key.cell(ObjectSpace::default()), &mut cell_key
+                program,
+                Config::default(),
+                cell_key.cell(ObjectSpace::default()),
+                &mut cell_key,
             );
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
@@ -4043,7 +4145,10 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut task: Task<5> = Task::new(Memory::default());
             let r = task.initialize_program(
-                program, config, cell_key.cell(ObjectSpace::default()), &mut cell_key
+                program,
+                config,
+                cell_key.cell(ObjectSpace::default()),
+                &mut cell_key,
             );
 
             assert_eq!(
@@ -4118,7 +4223,9 @@ mod tests {
                     .filter(|v| &v.name == k)
                     .collect::<Vec<_>>();
                 assert!(
-                    found.iter().any(|local| v.equal_to_lpc_ref(&local.value, &cell_key)),
+                    found
+                        .iter()
+                        .any(|local| v.equal_to_lpc_ref(&local.value, &cell_key)),
                     "key: {k}, value: {v}, found: {found:?}"
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);

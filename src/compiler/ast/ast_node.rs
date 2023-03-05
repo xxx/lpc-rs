@@ -50,7 +50,8 @@ pub enum AstNode {
 #[auto_impl(&mut)]
 pub trait AstNodeTrait {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()>;
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner)
+        -> Result<()>;
 }
 
 pub trait SpannedNode {
@@ -66,7 +67,11 @@ pub trait SpannedNode {
 }
 
 impl AstNodeTrait for AstNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit(
+        &mut self,
+        tree_walker: &mut impl TreeWalker,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         match self {
             AstNode::Block(y) => y.visit(tree_walker, cell_key),
             AstNode::Break(y) => y.visit(tree_walker, cell_key),

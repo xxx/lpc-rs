@@ -2,9 +2,9 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use qcell::QCellOwner;
 
 use lpc_rs_errors::{span::Span, Result};
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -45,7 +45,11 @@ impl SpannedNode for RangeNode {
 }
 
 impl AstNodeTrait for RangeNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit(
+        &mut self,
+        tree_walker: &mut impl TreeWalker,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         tree_walker.visit_range(self, cell_key)
     }
 }

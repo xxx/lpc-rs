@@ -1,8 +1,8 @@
 use if_chain::if_chain;
-use qcell::QCellOwner;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::string::closure_arg_number;
+use qcell::QCellOwner;
 
 use crate::{
     compile_time_config::MAX_CLOSURE_ARG_REFERENCE,
@@ -115,7 +115,11 @@ impl ContextHolder for SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
-    fn visit_assignment(&mut self, node: &mut AssignmentNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_assignment(
+        &mut self,
+        node: &mut AssignmentNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         node.lhs.visit(self, cell_key)?;
         node.rhs.visit(self, cell_key)?;
 
@@ -140,7 +144,11 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_binary_op(
+        &mut self,
+        node: &mut BinaryOpNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         node.l.visit(self, cell_key)?;
         node.r.visit(self, cell_key)?;
 
@@ -212,9 +220,9 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         // Further checks require access to the function prototype for error messaging
-        let proto_opt = self
-            .context
-            .lookup_function_complete(&node.name, &node.namespace, cell_key);
+        let proto_opt =
+            self.context
+                .lookup_function_complete(&node.name, &node.namespace, cell_key);
 
         let mut errors = vec![];
 
@@ -293,7 +301,11 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_continue(&mut self, node: &mut ContinueNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_continue(
+        &mut self,
+        node: &mut ContinueNode,
+        _cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         if !self.can_continue() {
             let e = LpcError::new("invalid `continue`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
@@ -379,12 +391,16 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         is_keyword(&node.name)?;
 
-        let proto_opt = self
-            .context
-            .lookup_function_complete(&node.name, &CallNamespace::default(), cell_key);
+        let proto_opt =
+            self.context
+                .lookup_function_complete(&node.name, &CallNamespace::default(), cell_key);
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
             if prototype.flags.nomask() {
@@ -414,10 +430,14 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode, cell_key: &mut QCellOwner) -> Result<()> {
-        let proto_opt = self
-            .context
-            .lookup_function_complete(&node.name, &CallNamespace::default(), cell_key);
+    fn visit_function_ptr(
+        &mut self,
+        node: &mut FunctionPtrNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
+        let proto_opt =
+            self.context
+                .lookup_function_complete(&node.name, &CallNamespace::default(), cell_key);
 
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
@@ -778,7 +798,13 @@ mod tests {
 
         let context = apply_walker!(ScopeWalker, program, context, cell_key, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, cell_key, false);
-        Ok(apply_walker!(SemanticCheckWalker, program, context, cell_key, false))
+        Ok(apply_walker!(
+            SemanticCheckWalker,
+            program,
+            context,
+            cell_key,
+            false
+        ))
     }
 
     mod test_visit_assignment {

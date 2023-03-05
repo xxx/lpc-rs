@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use clap::Parser;
-use qcell::QCellOwner;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
@@ -9,6 +8,7 @@ use lpc_rs::{
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
+use qcell::QCellOwner;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -53,9 +53,9 @@ fn main() {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory);
-            if let Err(e) = task.initialize_program(
-                program, config, cell_key.cell(object_space), &mut cell_key
-            ) {
+            if let Err(e) =
+                task.initialize_program(program, config, cell_key.cell(object_space), &mut cell_key)
+            {
                 e.emit_diagnostics();
             }
         }

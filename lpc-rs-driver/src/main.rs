@@ -1,8 +1,8 @@
 use clap::Parser;
 use if_chain::if_chain;
-use qcell::QCellOwner;
 use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::ConfigBuilder;
+use qcell::QCellOwner;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

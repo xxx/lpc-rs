@@ -1,6 +1,6 @@
-use qcell::QCellOwner;
 use lpc_rs_core::{lpc_path::LpcPath, EFUN};
 use lpc_rs_errors::{LpcError, Result};
+use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::inherit_node::InheritNode,

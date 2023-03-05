@@ -2,7 +2,6 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use qcell::QCellOwner;
 use lpc_rs_asm::instruction::{Address, Instruction, Label};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
@@ -20,6 +19,7 @@ use lpc_rs_function_support::{
     symbol::Symbol,
 };
 use lpc_rs_utils::string::closure_arg_number;
+use qcell::QCellOwner;
 use tracing::{instrument, trace};
 use tree_walker::TreeWalker;
 
@@ -148,7 +148,8 @@ pub struct CodegenWalker {
     function_upvalue_counter: RegisterCounter,
 
     /// Number of [`Register`]s needed for global initialization.
-    /// This counter contains the total number for *all* inherited init-program functions.
+    /// This counter contains the total number for *all* inherited init-program
+    /// functions.
     global_init_registers: usize,
 
     /// Compilation context
@@ -426,7 +427,12 @@ impl CodegenWalker {
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
-    fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn emit_range(
+        &mut self,
+        reference: RegisterVariant,
+        node: &mut RangeNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let first_index = if let Some(expr) = &mut *node.l {
             expr.visit(self, cell_key)?;
             self.current_result
@@ -723,7 +729,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_assignment(&mut self, node: &mut AssignmentNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_assignment(
+        &mut self,
+        node: &mut AssignmentNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         node.rhs.visit(self, cell_key)?;
         let rhs_result = self.current_result;
         let lhs = &mut *node.lhs;
@@ -769,7 +779,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_binary_op(
+        &mut self,
+        node: &mut BinaryOpNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         node.l.visit(self, cell_key)?;
         let reg_left = self.current_result;
 
@@ -956,9 +970,9 @@ impl TreeWalker for CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) = self
-            .context
-            .lookup_function_complete(&node.name, &node.namespace, cell_key)
+        if let Some(func) =
+            self.context
+                .lookup_function_complete(&node.name, &node.namespace, cell_key)
         {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
@@ -1138,7 +1152,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_continue(&mut self, node: &mut ContinueNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_continue(
+        &mut self,
+        node: &mut ContinueNode,
+        _cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         if let Some(JumpTarget {
             continue_target, ..
         }) = self.jump_targets.last()
@@ -1333,7 +1351,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_def(
+        &mut self,
+        node: &mut FunctionDefNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         // Note we don't look to inherited files at all for this -
         // We're generating code for a function defined _in this object_
         let prototype = match self.context.function_prototypes.get(&node.name) {
@@ -1425,7 +1447,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_function_ptr(
+        &mut self,
+        node: &mut FunctionPtrNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let mut applied_arguments = vec![];
         if let Some(args) = &mut node.arguments {
             for argument in args {
@@ -1626,7 +1652,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_program(&mut self, program: &mut ProgramNode, cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_program(
+        &mut self,
+        program: &mut ProgramNode,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         self.context.scopes.goto_root();
         self.setup_init();
 
@@ -3555,8 +3585,10 @@ mod tests {
         #[test]
         fn populates_the_default_arguments() {
             let mut cell_key = QCellOwner::new();
-            let mut walker =
-                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);", &mut cell_key);
+            let mut walker = compile(
+                "function f = (: [int i, int j = 666, float d = 3.54] i * j :);",
+                &mut cell_key,
+            );
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -4842,7 +4874,12 @@ mod tests {
             let _ = walker.visit_var_init(&mut node, cell_key);
         }
 
-        fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker, cell_key: &mut QCellOwner) {
+        fn setup_literal(
+            type_: LpcType,
+            value: ExpressionNode,
+            walker: &mut CodegenWalker,
+            cell_key: &mut QCellOwner,
+        ) {
             let mut node = VarInitNode {
                 type_,
                 name: "muffins".to_string(),
@@ -5298,7 +5335,9 @@ mod tests {
             string b;
         "##;
 
-            let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
+            let program = walk_prog(code, &mut cell_key)
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.num_globals, 5)
         }
 
@@ -5312,7 +5351,9 @@ mod tests {
             string b;
         "##;
 
-            let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
+            let program = walk_prog(code, &mut cell_key)
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.num_init_registers, 4)
         }
 
@@ -5327,7 +5368,9 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
+            let program = walk_prog(code, &mut cell_key)
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.num_init_registers, 1)
         }
     }
@@ -5342,7 +5385,9 @@ mod tests {
             string b;
         "##;
 
-        let program = walk_prog(code, &mut cell_key).into_program().expect("failed to compile");
+        let program = walk_prog(code, &mut cell_key)
+            .into_program()
+            .expect("failed to compile");
         let init = program.functions.get(INIT_PROGRAM).unwrap();
 
         assert_eq!(program.num_globals, 9);

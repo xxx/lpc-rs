@@ -158,7 +158,6 @@ impl<'a> Program {
     ///
     /// # Examples
     /// ```
-    /// use qcell::QCellOwner;
     /// use lpc_rs::compiler::{
     ///     ast::{
     ///         binary_op_node::{BinaryOpNode, BinaryOperation},
@@ -169,6 +168,7 @@ impl<'a> Program {
     ///     compilation_context::CompilationContext,
     ///     Compiler,
     /// };
+    /// use qcell::QCellOwner;
     ///
     /// let code = r#"
     ///     void foo() {
@@ -219,6 +219,7 @@ impl Display for Program {
 #[cfg(test)]
 mod tests {
     use qcell::QCellOwner;
+
     use super::*;
     use crate::compiler::Compiler;
 
