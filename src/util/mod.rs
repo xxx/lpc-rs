@@ -74,6 +74,6 @@ mod tests {
         let object_space = space_cell.ro(&cell_key);
         let simul_efuns = get_simul_efuns(&config, object_space).unwrap();
         let borrowed = simul_efuns.ro(&cell_key);
-        assert_eq!(borrowed.filename.to_string(), "/secure/simul_efuns");
+        assert_eq!(borrowed.as_ref().filename.to_string(), "/secure/simul_efuns");
     }
 }

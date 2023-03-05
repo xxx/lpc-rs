@@ -157,6 +157,7 @@ impl CompilationContext {
                         .as_ref()
                         .and_then(|rc| {
                             rc.ro(cell_key)
+                                .as_ref()
                                 .lookup_function(nm, namespace)
                                 .map(|f| FunctionLike::from(f.clone()))
                         })
@@ -226,7 +227,7 @@ impl CompilationContext {
             return self
                 .simul_efuns
                 .as_ref()
-                .map(|rc| rc.ro(cell_key).contains_function(name, namespace))
+                .map(|rc| rc.ro(cell_key).as_ref().contains_function(name, namespace))
                 .unwrap_or(false)
                 || EFUN_PROTOTYPES.contains_key(name);
             // return EFUN_PROTOTYPES.contains_key(name);

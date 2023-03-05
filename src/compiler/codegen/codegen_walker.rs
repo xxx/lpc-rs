@@ -1529,7 +1529,7 @@ impl TreeWalker for CodegenWalker {
             if_chain! {
                 if let Some(se) = &self.context.simul_efuns;
                 let simul_efuns = se.ro(cell_key);
-                if let Some(prototype) = simul_efuns.lookup_function(node.name.as_str(), &CallNamespace::Local);
+                if let Some(prototype) = simul_efuns.as_ref().lookup_function(node.name.as_str(), &CallNamespace::Local);
                 then {
                     let name = FunctionName::Literal(node.name.clone());
                     target = FunctionTarget::Local(name, FunctionReceiver::Local);

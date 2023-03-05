@@ -43,6 +43,7 @@ fn load_master<const N: usize>(
                     let function = {
                         let borrowed = process.ro(cell_key);
                         borrowed
+                            .as_ref()
                             .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
                             .cloned()
                     };
@@ -103,6 +104,7 @@ pub fn clone_object<const N: usize>(
             let function = {
                 let borrowed = new_clone.ro(cell_key);
                 borrowed
+                    .as_ref()
                     .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
                     .cloned()
             };

@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     fmt::{Debug, Display, Formatter},
-    ops::Deref,
     path::Path,
     rc::Rc,
 };
@@ -102,11 +101,8 @@ impl Process {
     }
 }
 
-// This is an officially sanctioned abuse of Deref.
-impl Deref for Process {
-    type Target = Program;
-
-    fn deref(&self) -> &Self::Target {
+impl AsRef<Program> for Process {
+    fn as_ref(&self) -> &Program {
         &self.program
     }
 }
