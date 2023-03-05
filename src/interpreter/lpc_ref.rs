@@ -6,6 +6,7 @@ use std::{
     hash::{Hash, Hasher},
     ptr,
 };
+use qcell::{QCell, QCellOwner};
 
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
@@ -158,6 +159,17 @@ impl LpcRef {
             LpcRef::Object(_) => LpcType::Object(false),
             LpcRef::Function(_) => LpcType::Function(false),
         }
+    }
+
+    /// Convenience to perform a binary operation on a pair of [`LpcRef`]s wrapped in QCells.
+    pub fn binary_op<F, T>(left: &QCell<Self>, right: &QCell<Self>, cell_key: &QCellOwner, op: F) -> T
+    where
+        F: Fn(&LpcRef, &LpcRef) -> T,
+    {
+        let left = cell_key.ro(&left);
+        let right = cell_key.ro(&right);
+
+        op(&left, &right)
     }
 
     pub fn add(&self, rhs: &Self) -> Result<LpcValue> {
