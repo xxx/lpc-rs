@@ -153,7 +153,7 @@ impl Display for FunctionPtr {
         let mut s = String::new();
 
         s.push_str("FunctionPtr { ");
-        s.push_str(&format!("owner: <QCell data>"));
+        s.push_str("owner: <QCell data>");
         s.push_str(&format!("address: {}, ", self.address));
 
         let partial_args = &self

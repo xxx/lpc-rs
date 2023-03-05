@@ -1836,7 +1836,7 @@ mod tests {
                 LpcRef::Array(x) => {
                     let xb = x.borrow();
                     let a = extract_value!(&*xb, LpcValue::Array);
-                    let array = a.iter().map(|item| BareVal::from_lpc_ref(item, &cell_key)).collect::<Vec<_>>();
+                    let array = a.iter().map(|item| BareVal::from_lpc_ref(item, cell_key)).collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
@@ -1844,14 +1844,14 @@ mod tests {
                     let m = extract_value!(&*xb, LpcValue::Mapping);
                     let mapping = m
                         .into_iter()
-                        .map(|(k, v)| (BareVal::from_lpc_ref(k, &cell_key), BareVal::from_lpc_ref(v, &cell_key)))
+                        .map(|(k, v)| (BareVal::from_lpc_ref(k, cell_key), BareVal::from_lpc_ref(v, cell_key)))
                         .collect::<HashMap<_, _>>();
                     BareVal::Mapping(mapping)
                 }
                 LpcRef::Object(x) => {
                     let xb = x.borrow();
                     let o = extract_value!(&*xb, LpcValue::Object);
-                    let filename = o.ro(&cell_key).filename().into_owned();
+                    let filename = o.ro(cell_key).filename().into_owned();
                     BareVal::Object(filename)
                 }
                 LpcRef::Function(x) => {
@@ -1860,7 +1860,7 @@ mod tests {
                     let args = fp
                         .partial_args
                         .iter()
-                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(r, &cell_key)))
+                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(r, cell_key)))
                         .collect::<Vec<_>>();
 
                     BareVal::Function(fp.name().into(), args)
@@ -2100,8 +2100,8 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
-                String("my public_function".into()).assert_equal(*values.get("mine").unwrap(), &cell_key);
-                String("/std/object public".into()).assert_equal(*values.get("parents").unwrap(), &cell_key);
+                String("my public_function".into()).assert_equal(values.get("mine").unwrap(), &cell_key);
+                String("/std/object public".into()).assert_equal(values.get("parents").unwrap(), &cell_key);
             }
 
             #[test]
@@ -2123,10 +2123,10 @@ mod tests {
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
                 assert!(
-                    &String("file_name_override".into()) == &(*values.get("this_one").unwrap(), &cell_key)
+                    String("file_name_override".into()) == (*values.get("this_one").unwrap(), &cell_key)
                 );
                 assert!(
-                    &String("/std/object#0".into()) == &(*values.get("efun_one").unwrap(), &cell_key)
+                    String("/std/object#0".into()) == (*values.get("efun_one").unwrap(), &cell_key)
                 );
             }
 
@@ -2142,7 +2142,7 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
-                String("this is a simul_efun: marf".into()).assert_equal(*values.get("this_one").unwrap(), &cell_key);
+                String("this is a simul_efun: marf".into()).assert_equal(values.get("this_one").unwrap(), &cell_key);
             }
         }
 
@@ -2396,11 +2396,11 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let mut object_space = ObjectSpace::default();
+                let object_space = ObjectSpace::default();
                 let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default());
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
-                let name = program.filename.clone();
+                let _name = program.filename.clone();
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
@@ -2422,8 +2422,8 @@ mod tests {
                 "##};
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
-                let mut object_space = ObjectSpace::default();
-                let mut object_space = cell_key.cell(object_space).into();
+                let object_space = ObjectSpace::default();
+                let object_space = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&object_space, process, &mut cell_key);
 
                 let result = task.initialize_program(program, config, object_space, &mut cell_key);
@@ -2444,7 +2444,7 @@ mod tests {
                 "##};
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
-                let mut object_space = ObjectSpace::default();
+                let object_space = ObjectSpace::default();
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
@@ -3926,7 +3926,7 @@ mod tests {
 
                 let expected = vec![Int(0), String("Hello, world!".into()), Int(13)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, registers, &cell_key);
             }
         }
 

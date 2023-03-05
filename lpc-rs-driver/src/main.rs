@@ -61,7 +61,7 @@ fn main() {
 
     let mut cell_key = QCellOwner::new();
 
-    let mut vm = Vm::new(config, &mut cell_key);
+    let mut vm = Vm::new(config, &cell_key);
 
     vm.initialize(&mut cell_key).unwrap_or_else(|e| {
         eprintln!("unable to initialize VM: {e:?}");

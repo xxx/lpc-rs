@@ -1,8 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
-use qcell::{QCell, QCellOwner, QCellOwnerID};
+use qcell::{QCell, QCellOwner};
 use lpc_rs_utils::config::Config;
 
 use crate::interpreter::{process::Process, program::Program};
@@ -89,7 +89,7 @@ impl ObjectSpace {
     {
         let process = process.into();
         let space = space_cell.ro(cell_key);
-        let name = space.prepare_filename(&process.ro(cell_key));
+        let name = space.prepare_filename(process.ro(cell_key));
 
         let space = space_cell.rw(cell_key);
         space.insert_process_directly(name, process);
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn test_insert_clone() {
         let mut cell_key = QCellOwner::new();
-        let mut space = ObjectSpace::default();
+        let space = ObjectSpace::default();
         let prog: Rc<Program> = Program::default().into();
         let filename = prog.filename.to_str().unwrap();
 
@@ -195,11 +195,11 @@ mod tests {
             .lib_dir("./tests/fixtures/code/")
             .build()
             .unwrap();
-        let mut space = ObjectSpace::new(config);
+        let space = ObjectSpace::new(config);
 
         let mut prog: Program = Program::default();
         let filename: LpcPath = "./tests/fixtures/code/foo/bar/baz.c".into();
-        prog.filename = filename.clone();
+        prog.filename = filename;
 
         let process = Process::new(prog);
         let space_cell = cell_key.cell(space).into();

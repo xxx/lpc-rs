@@ -65,7 +65,7 @@ impl Vm {
             let borrowed = self.object_space.ro(cell_key);
             CompilerBuilder::default()
                 .config(self.config.clone())
-                .simul_efuns(get_simul_efuns(&self.config, &borrowed))
+                .simul_efuns(get_simul_efuns(&self.config, borrowed))
                 .build()?
         };
 

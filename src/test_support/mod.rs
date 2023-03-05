@@ -73,9 +73,9 @@ pub fn run_prog<'a>(code: &str, cell_key: &'a mut QCellOwner) -> (Task<'a, MAX_C
     let mut task = Task::new(Memory::default());
     let (program, config, se_proc) = compile_prog(code, cell_key);
 
-    let mut object_space = ObjectSpace::default();
-    let mut object_space: Rc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
-    ObjectSpace::insert_process(&object_space.clone(), se_proc.clone(), cell_key);
+    let object_space = ObjectSpace::default();
+    let object_space: Rc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
+    ObjectSpace::insert_process(&object_space, se_proc, cell_key);
 
     let ctx = task
         .initialize_program(program, config, object_space, cell_key)

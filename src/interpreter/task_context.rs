@@ -61,7 +61,7 @@ impl TaskContext {
         let object_space = object_space.into();
         let instruction_counter = InstructionCounter::new_from_config(&config);
         let simul_efuns = {
-            let space = object_space.ro(&cell_key);
+            let space = object_space.ro(cell_key);
             get_simul_efuns(&config, space)
         };
 
@@ -91,7 +91,7 @@ impl TaskContext {
     where
         T: AsRef<str>,
     {
-        self.object_space.ro(&cell_key).lookup(path).cloned()
+        self.object_space.ro(cell_key).lookup(path).cloned()
     }
 
     /// Directly insert the passed [`Process`] into the object space, with
