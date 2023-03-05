@@ -23,6 +23,7 @@ use crate::{
     interpreter::{process::Process, program::Program},
     lpc_parser,
 };
+use crate::util::qcell_debug;
 
 pub mod ast;
 pub mod codegen;
@@ -82,7 +83,7 @@ pub struct Compiler {
 
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
 }
 

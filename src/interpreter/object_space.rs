@@ -6,6 +6,7 @@ use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
 use crate::interpreter::{process::Process, program::Program};
+use crate::util::qcell_debug;
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -14,11 +15,22 @@ use crate::interpreter::{process::Process, program::Program};
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
+// fn qcell_debug_hashmap(map: &HashMap<String, Rc<QCell<Process>>>, f: &mut Formatter) -> std::fmt::Result {
+//     let s = map.iter()
+//         .map(|(k, v)| {
+//             format!("{}: {:?}", k, v.clone().get_mut())
+//         })
+//         .collect::<Vec<String>>()
+//         .join(", ");
+//
+//     f.write_str(&s)
+// }
+
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     processes: HashMap<String, Rc<QCell<Process>>>,
 
     /// How many clones have been created so far?

@@ -18,6 +18,7 @@ use crate::interpreter::{
     process::Process,
     register_bank::RegisterBank,
 };
+use crate::util::qcell_debug;
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -45,7 +46,7 @@ impl Display for LocalVariable {
 #[educe(Debug)]
 pub struct CallFrame {
     /// A pointer to the process that owns the function being called
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     pub process: Rc<QCell<Process>>,
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,

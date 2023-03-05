@@ -11,6 +11,7 @@ use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use qcell::QCell;
 
 use crate::interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process};
+use crate::util::qcell_debug;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -22,7 +23,7 @@ pub enum LpcValue {
     String(String),
     Array(Vec<LpcRef>),
     Mapping(IndexMap<LpcRef, LpcRef>),
-    Object(#[educe(Debug(ignore))] Rc<QCell<Process>>),
+    Object(#[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>),
     Function(FunctionPtr),
 }
 

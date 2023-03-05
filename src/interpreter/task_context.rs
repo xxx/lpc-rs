@@ -11,7 +11,7 @@ use crate::{
         instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
         process::Process, program::Program,
     },
-    util::get_simul_efuns,
+    util::{get_simul_efuns, qcell_debug},
 };
 
 /// A struct to carry context during a single function's evaluation.
@@ -23,17 +23,17 @@ pub struct TaskContext {
     config: Rc<Config>,
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     process: Rc<QCell<Process>>,
     /// The global [`ObjectSpace`]
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     object_space: Rc<QCell<ObjectSpace>>,
     /// A counter, to ensure that too-long-evaluations do not occur
     instruction_counter: InstructionCounter,
     /// The final result of the original function that was called
     result: RefCell<LpcRef>,
     /// Direct pointer to the simul efuns
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
 }
 

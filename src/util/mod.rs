@@ -1,3 +1,4 @@
+use std::fmt::{Formatter};
 use std::rc::Rc;
 
 use lpc_rs_utils::config::Config;
@@ -11,6 +12,31 @@ pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Rc
         object_space.lookup(file).cloned()
     })
 }
+
+/// A shared target to call during debug for [`QCell`]-contained data
+pub fn qcell_debug<T>(_cell: T, f: &mut Formatter) -> std::fmt::Result
+{
+    f.write_str("<QCell>")
+}
+
+/// A shared target to call during debug for [`QCell`]-contained data
+// pub fn qcell_debug<T>(cell: &Rc<QCell<T>>, f: &mut Formatter) -> std::fmt::Result
+// where
+//     T: Debug,
+// {
+//     write!(f, "{:?}", *cell.clone().get_mut())
+// }
+//
+// pub fn qcell_debug_option<T>(cell: &Option<Rc<QCell<T>>>, f: &mut Formatter) -> std::fmt::Result
+// where
+//     T: Debug,
+// {
+//     if let Some(cell) = cell {
+//         write!(f, "{:?}", *cell.clone().get_mut())
+//     } else {
+//         write!(f, "None")
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

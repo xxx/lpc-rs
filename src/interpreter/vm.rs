@@ -14,13 +14,15 @@ use crate::{
     },
     util::get_simul_efuns,
 };
+use crate::util::qcell_debug;
+
 
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Vm {
     /// Our object space, which stores all of the system objects (masters and
     /// clones)
-    #[educe(Debug(ignore))]
+    #[educe(Debug(method = "qcell_debug"))]
     object_space: Rc<QCell<ObjectSpace>>,
 
     /// Shared VM memory

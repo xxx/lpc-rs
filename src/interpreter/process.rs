@@ -7,6 +7,7 @@ use std::{
     path::Path,
     rc::Rc,
 };
+use std::fmt::Debug;
 
 use delegate::delegate;
 
