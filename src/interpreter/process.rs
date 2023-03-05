@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    cell::RefCell,
     collections::HashMap,
     fmt::{Debug, Display, Formatter},
     ops::Deref,
@@ -115,12 +114,6 @@ impl Deref for Process {
 impl Display for Process {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename())
-    }
-}
-
-impl From<Process> for Rc<RefCell<Process>> {
-    fn from(process: Process) -> Self {
-        Rc::new(RefCell::new(process))
     }
 }
 

@@ -151,12 +151,6 @@ impl Default for ObjectSpace {
     }
 }
 
-// impl From<ObjectSpace> for Rc<RefCell<ObjectSpace>> {
-//     fn from(object_space: ObjectSpace) -> Self {
-//         Rc::new(RefCell::new(object_space))
-//     }
-// }
-//
 #[cfg(test)]
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
