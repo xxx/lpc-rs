@@ -5,8 +5,10 @@ use educe::Educe;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
-use crate::interpreter::{process::Process, program::Program};
-use crate::util::qcell_debug;
+use crate::{
+    interpreter::{process::Process, program::Program},
+    util::qcell_debug,
+};
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -15,8 +17,8 @@ use crate::util::qcell_debug;
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
-// fn qcell_debug_hashmap(map: &HashMap<String, Rc<QCell<Process>>>, f: &mut Formatter) -> std::fmt::Result {
-//     let s = map.iter()
+// fn qcell_debug_hashmap(map: &HashMap<String, Rc<QCell<Process>>>, f: &mut
+// Formatter) -> std::fmt::Result {     let s = map.iter()
 //         .map(|(k, v)| {
 //             format!("{}: {:?}", k, v.clone().get_mut())
 //         })

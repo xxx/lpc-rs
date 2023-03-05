@@ -12,10 +12,8 @@ use crate::{
     interpreter::{
         memory::Memory, object_space::ObjectSpace, task::Task, task_context::TaskContext,
     },
-    util::get_simul_efuns,
+    util::{get_simul_efuns, qcell_debug},
 };
-use crate::util::qcell_debug;
-
 
 #[derive(Educe)]
 #[educe(Debug)]

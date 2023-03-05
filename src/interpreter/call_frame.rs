@@ -13,12 +13,14 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
 use tracing::instrument;
 
-use crate::interpreter::{
-    lpc_ref::{LpcRef, NULL},
-    process::Process,
-    register_bank::RegisterBank,
+use crate::{
+    interpreter::{
+        lpc_ref::{LpcRef, NULL},
+        process::Process,
+        register_bank::RegisterBank,
+    },
+    util::qcell_debug,
 };
-use crate::util::qcell_debug;
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for

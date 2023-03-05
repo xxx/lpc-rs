@@ -2,12 +2,11 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     collections::HashMap,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
     ops::Deref,
     path::Path,
     rc::Rc,
 };
-use std::fmt::Debug;
 
 use delegate::delegate;
 

@@ -15,8 +15,8 @@ use qcell::{QCell, QCellOwner};
 use crate::{
     compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
+    util::qcell_debug,
 };
-use crate::util::qcell_debug;
 
 /// A big, fat state object to store data created at various stages of
 /// compilation. A single one of these will be used for loading/compiling a

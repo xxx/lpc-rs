@@ -1,5 +1,4 @@
-use std::fmt::{Formatter};
-use std::rc::Rc;
+use std::{fmt::Formatter, rc::Rc};
 
 use lpc_rs_utils::config::Config;
 use qcell::QCell;
@@ -14,8 +13,7 @@ pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Rc
 }
 
 /// A shared target to call during debug for [`QCell`]-contained data
-pub fn qcell_debug<T>(_cell: T, f: &mut Formatter) -> std::fmt::Result
-{
+pub fn qcell_debug<T>(_cell: T, f: &mut Formatter) -> std::fmt::Result {
     f.write_str("<QCell>")
 }
 

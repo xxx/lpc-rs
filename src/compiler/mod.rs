@@ -22,8 +22,8 @@ use crate::{
     compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
     interpreter::{process::Process, program::Program},
     lpc_parser,
+    util::qcell_debug,
 };
-use crate::util::qcell_debug;
 
 pub mod ast;
 pub mod codegen;
