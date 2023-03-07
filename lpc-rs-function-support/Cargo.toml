@@ -16,6 +16,6 @@ indexmap = { version = "1.8.2", features = ["serde"] }
 itertools = "0.10.0"
 lazy_format = "2.0.0"
 multimap = "0.8.2"
-readonly = "0.2.3"
+readonly = "0.2.4"
 serde = { version = "1.0.123", features = ["derive", "rc"] }
 tracing = "0.1"
