@@ -21,6 +21,7 @@ delegate = "0.9.0"
 derive_builder = "0.12.0"
 educe = "0.4.18"
 fs-err = "2.6.0"
+hash_hasher = "2.0.3"
 if_chain = "1.0.1"
 indexmap = { version = "1.8.2", features = ["serde"] }
 indextree = { version = "4.3.1", features = ["deser"] }
@@ -31,6 +32,7 @@ logos = "0.12.0"
 once_cell = "1.10.0"
 phf = { version = "0.11.0", features = ["macros"] }
 qcell = "0.5.3"
+readonly = "0.2.3"
 refpool = "0.4.3"
 regex = "1"
 rmp-serde = "1.0.0"

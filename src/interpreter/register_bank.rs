@@ -6,16 +6,19 @@ use std::{
 };
 
 use delegate::delegate;
+use educe::Educe;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
 /// A type to handle data movement (the arena itself stores the actual data)
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Educe, Clone, Default, PartialEq, Eq)]
+#[educe(Debug)]
 pub struct RegisterBank {
     /// Our storage. By convention, `registers[0]` is for the return value
     /// function calls.
+    #[educe(Debug(ignore))]
     pub registers: Vec<LpcRef>,
 }
 
@@ -60,15 +63,16 @@ impl RegisterBank {
 
 impl Display for RegisterBank {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut s = "[".to_string();
-        for (i, register) in self.registers.iter().enumerate() {
-            if i != 0 {
-                s.push_str(", ");
-            }
-            s.push_str(&format!("{register}"));
-        }
-        s.push(']');
-        write!(f, "{s}")
+        write!(f, "fix up RegisterBanks display")
+        // let mut s = "[".to_string();
+        // for (i, register) in self.registers.iter().enumerate() {
+        //     if i != 0 {
+        //         s.push_str(", ");
+        //     }
+        //     s.push_str(&format!("{register}"));
+        // }
+        // s.push(']');
+        // write!(f, "{s}")
     }
 }
 

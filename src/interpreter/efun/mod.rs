@@ -272,11 +272,11 @@ pub fn call_efun<const N: usize>(
 ) -> Result<()> {
     match name {
         CLONE_OBJECT => clone_object(context, cell_key),
-        DEBUG => debug(context),
+        DEBUG => debug(context, cell_key),
         DUMP => dump(context, cell_key),
         FILE_NAME => file_name(context, cell_key),
         THIS_OBJECT => this_object(context),
-        THROW => throw(context),
+        THROW => throw(context, cell_key),
         _ => Err(LpcError::new(format!(
             "runtime error: call to unknown function (that had a valid prototype?) `{name}`"
         ))),

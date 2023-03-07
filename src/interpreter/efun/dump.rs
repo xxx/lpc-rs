@@ -8,6 +8,7 @@ use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
 };
+use crate::interpreter::lpc_ref::HashedLpcRef;
 
 const MAX_RECURSION: usize = 20;
 
@@ -94,7 +95,7 @@ fn format_array<const N: usize>(
 }
 
 fn format_mapping<const N: usize>(
-    map: &IndexMap<LpcRef, LpcRef>,
+    map: &IndexMap<HashedLpcRef, LpcRef>,
     context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,
@@ -108,7 +109,7 @@ fn format_mapping<const N: usize>(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_format = format_ref(key, context, 0, recurse_level + 1, cell_key)?;
+            let k_format = format_ref(&key.value, context, 0, recurse_level + 1, cell_key)?;
             let v_format = format_ref(val, context, 2, recurse_level + 1, cell_key)?;
 
             Ok(format!(

@@ -5,6 +5,7 @@ use std::{
 };
 
 use decorum::Total;
+use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction};
@@ -40,6 +41,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::util::keyable::Keyable;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -330,14 +332,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.handle_aconst(&instruction, cell_key)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.bitand(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitand(y, cell_key), cell_key)?;
             }
             Instruction::Arg(r) => self.args.push(r),
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
                 let lpc_ref = &*get_loc!(self, r1, cell_key)?;
-                match lpc_ref.bitnot() {
+                match lpc_ref.bitnot(cell_key) {
                     Ok(result) => {
                         let var = self.memory.value_to_ref(result);
 
@@ -416,7 +418,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y, cell_key)?;
             }
             Instruction::IAdd(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?) {
+                match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => {
                         let out = self.memory.value_to_ref(result);
 
@@ -438,7 +440,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 set_loc!(self, r, LpcRef::Int(1), cell_key)?;
             }
             Instruction::IDiv(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?) {
+                match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -447,7 +449,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             }
             Instruction::IMod(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?) {
+                match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -456,7 +458,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             }
             Instruction::IMul(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?) {
+                match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -468,7 +470,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 apply_in_location(&mut self.stack, r1, |x| x.inc(), cell_key)?;
             }
             Instruction::ISub(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?) {
+                match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -526,14 +528,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y, cell_key)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.add(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.add(y, cell_key), cell_key)?;
             }
             Instruction::MapConst(r, map) => {
-                let mut register_map = IndexMap::new();
+                let mut register_map = IndexMap::with_hasher(HashBuildHasher::default());
 
                 for (key, value) in map {
                     register_map.insert(
-                        get_loc!(self, key, cell_key)?.into_owned(),
+                        get_loc!(self, key, cell_key)?.into_owned().into_hashed(cell_key),
                         get_loc!(self, value, cell_key)?.into_owned(),
                     );
                 }
@@ -543,10 +545,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 set_loc!(self, r, new_ref, cell_key)?;
             }
             Instruction::MMul(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.mul(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.mul(y, cell_key), cell_key)?;
             }
             Instruction::MSub(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.sub(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.sub(y, cell_key), cell_key)?;
             }
             Instruction::Not(r1, r2) => {
                 let matched = match &*get_loc!(self, r1, cell_key)? {
@@ -565,7 +567,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 set_loc!(self, r2, matched, cell_key)?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.bitor(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitor(y, cell_key), cell_key)?;
             }
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
@@ -758,13 +760,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.handle_sconst(&instruction, cell_key)?;
             }
             Instruction::Shl(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.shl(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shl(y, cell_key), cell_key)?;
             }
             Instruction::Shr(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.shr(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shr(y, cell_key), cell_key)?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.bitxor(y), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitxor(y, cell_key), cell_key)?;
             }
         }
 
@@ -861,13 +863,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
-                let val = get_loc!(self, *arg, cell_key).map(|i| i.into_owned())?;
+                let lpc_ref = get_loc!(self, *arg, cell_key).map(|i| i.into_owned())?;
 
-                trace!("Copying argument {} ({}) to {}", i, val, target_location);
+                trace!("Copying argument {} ({}) to {}", i, lpc_ref.with_key(cell_key), target_location);
 
                 new_frame.arg_locations.push(target_location);
 
-                new_frame.set_location(target_location, val, cell_key)
+                new_frame.set_location(target_location, lpc_ref, cell_key)
             }
         }
 
@@ -903,7 +905,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 func.clone() // this is a cheap clone
             } else {
                 return Err(
-                    self.runtime_error(format!("callfp instruction on non-function: {lpc_ref}"))
+                    self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref.with_key(cell_key)))
                 );
             }
         };
@@ -1009,7 +1011,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     &prototype.name,
                 )?;
 
-                trace!("Copying argument {} ({}) to {}", i, r, loc);
+                trace!("Copying argument {} ({}) to {}", i, r.with_key(cell_key), loc);
 
                 new_frame.arg_locations.push(loc);
                 new_frame.set_location(loc, r, cell_key);
@@ -1150,13 +1152,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let pool_ref = if let LpcRef::String(r) = name_ref {
                         r
                     } else {
-                        let str = format!("Invalid name passed to `call_other`: {name_ref}");
+                        let str = format!("Invalid name passed to `call_other`: {}", name_ref.with_key(cell_key));
                         return Err(self.runtime_error(str));
                     };
                     let borrowed = pool_ref.borrow();
                     let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
-                    trace!("Calling call_other: {receiver_ref}->{function_name}");
+                    trace!("Calling call_other: {}->{function_name}", receiver_ref.with_key(cell_key));
 
                     // An inner helper function to actually calculate the result, for easy re-use
                     // when using `call_other` with arrays and mappings.
@@ -1435,7 +1437,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 return Err(self.array_index_error(idx, vec.len()));
                             }
                         } else {
-                            return Err(self.array_index_error(lpc_ref, vec.len()));
+                            return Err(self.array_index_error(lpc_ref.with_key(cell_key), vec.len()));
                         }
 
                         Ok(())
@@ -1463,7 +1465,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         } else {
                             return Err(self.runtime_error(format!(
                                 "Attempting to access index {} in a string of length {}",
-                                lpc_ref,
+                                lpc_ref.with_key(cell_key),
                                 string.len()
                             )));
                         }
@@ -1474,7 +1476,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let value = map_ref.borrow();
                         let map = try_extract_value!(*value, LpcValue::Mapping);
 
-                        let var = if let Some(v) = map.get(&lpc_ref) {
+                        let var = if let Some(v) = map.get(&lpc_ref.into_hashed(cell_key)) {
                             v.clone()
                         } else {
                             NULL
@@ -1484,7 +1486,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         Ok(())
                     }
-                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`"))),
+                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x.with_key(cell_key)))),
                 }
             }
             _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
@@ -1512,19 +1514,19 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 LpcRef::Int(i) => *i,
                                 _ => {
                                     return Err(self
-                                        .runtime_error(format!("Invalid index type: {lpc_ref}")))
+                                        .runtime_error(format!("Invalid index type: {}", lpc_ref.with_key(cell_key))))
                                 }
                             };
 
                             if let Some((key, _)) = map.get_index(index as usize) {
-                                key.clone()
+                                key.value.clone()
                             } else {
                                 NULL
                             }
                         }
                         x => {
                             return Err(self
-                                .runtime_error(format!("Invalid attempt to take index of `{x}`")))
+                                .runtime_error(format!("Invalid attempt to take index of `{}`", x.with_key(cell_key))))
                         }
                     }
                 };
@@ -1595,11 +1597,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             )
                         };
 
-                        map.insert(index.clone(), get_loc!(self, *r1, cell_key)?.into_owned());
+                        map.insert(index.clone().into_hashed(cell_key), get_loc!(self, *r1, cell_key)?.into_owned());
 
                         Ok(())
                     }
-                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{x}`"))),
+                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x.with_key(cell_key)))),
                 }
             }
             _ => Err(self.runtime_error("non-Store instruction passed to `handle_store`")),
@@ -1695,12 +1697,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         cell_key: &mut QCellOwner,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef, &LpcRef) -> Result<LpcValue>,
+        F: Fn(&LpcRef, &LpcRef, &mut QCellOwner) -> Result<LpcValue>,
     {
         let ref1 = &*get_location(&self.stack, r1, cell_key)?;
         let ref2 = &*get_location(&self.stack, r2, cell_key)?;
 
-        match operation(ref1, ref2) {
+        match operation(ref1, ref2, cell_key) {
             Ok(result) => {
                 let var = self.memory.value_to_ref(result);
 
@@ -1912,7 +1914,7 @@ mod tests {
                         .into_iter()
                         .map(|(k, v)| {
                             (
-                                BareVal::from_lpc_ref(k, cell_key),
+                                BareVal::from_lpc_ref(&k.value, cell_key),
                                 BareVal::from_lpc_ref(v, cell_key),
                             )
                         })

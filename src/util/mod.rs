@@ -1,3 +1,5 @@
+pub mod keyable;
+
 use std::{fmt::Formatter, rc::Rc};
 
 use lpc_rs_utils::config::Config;

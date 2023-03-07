@@ -25,9 +25,11 @@ use crate::{
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
 /// testing and debugging.
-#[derive(Debug, Clone)]
+#[derive(Educe, Clone)]
+#[educe(Debug)]
 pub struct LocalVariable {
     pub name: String,
+    #[educe(Debug(method = "qcell_debug"))]
     pub value: LpcRef,
 }
 
@@ -38,8 +40,9 @@ impl LocalVariable {
 }
 
 impl Display for LocalVariable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.name, self.value)
+    fn fmt(&self, _f: &mut Formatter<'_>) -> fmt::Result {
+        todo!("fix this up")
+        // write!(f, "{}: {}", self.name, self.value)
     }
 }
 

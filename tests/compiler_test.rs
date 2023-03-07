@@ -11,9 +11,9 @@ use lpc_rs::{
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
+use lpc_rs::util::keyable::Keyable;
 
 use crate::support::run_prog;
-// use tracing;
 
 // #[ctor::ctor]
 // fn init() {
@@ -130,7 +130,7 @@ fn test_duffs_device() {
         if let LpcValue::Array(arr) = &*b;
         then {
             assert_eq!(
-                arr,
+                &arr.iter().map(|x| { x.with_key(&cell_key) }).collect::<Vec<_>>(),
                 &[
                     LpcRef::Int(0),
                     LpcRef::Int(2),
@@ -140,7 +140,7 @@ fn test_duffs_device() {
                     LpcRef::Int(6),
                     LpcRef::Int(7),
                     LpcRef::Int(0),
-                ]
+                ].iter().map(|x| { x.with_key(&cell_key) }).collect::<Vec<_>>()
             );
         } else {
             panic!("expected array");
@@ -175,7 +175,7 @@ fn test_closures() {
 
     assert_eq!(borrowed.globals.len(), 2);
     assert_eq!(
-        borrowed.globals.last().unwrap().to_string(),
+        borrowed.globals.last().unwrap().with_key(&cell_key).to_string(),
         r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
     );
 }

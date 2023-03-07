@@ -13,6 +13,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::QCell;
 
 use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process};
+use crate::util::qcell_debug;
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
@@ -98,6 +99,7 @@ pub struct FunctionPtr {
     pub owner: Rc<QCell<Process>>,
 
     /// Address of the function, in either the receiver or owner
+    #[educe(Debug(method = "qcell_debug"))]
     pub address: FunctionAddress,
 
     /// The arity of the function being pointed to
@@ -106,6 +108,7 @@ pub struct FunctionPtr {
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
+    #[educe(Debug(method = "qcell_debug"))]
     pub partial_args: Vec<Option<LpcRef>>,
 
     /// Does this pointer use `call_other`?
@@ -160,7 +163,7 @@ impl Display for FunctionPtr {
             .partial_args
             .iter()
             .map(|arg| match arg {
-                Some(a) => format!("{a}"),
+                Some(_a) => format!("<QCell LpcRef>"),
                 None => "<None>".to_string(),
             })
             .join(", ");
