@@ -12,8 +12,10 @@ use lpc_rs_core::{
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::QCell;
 
-use crate::interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process};
-use crate::util::qcell_debug;
+use crate::{
+    interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process},
+    util::qcell_debug,
+};
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers

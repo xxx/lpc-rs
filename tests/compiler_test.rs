@@ -8,10 +8,10 @@ use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
+    util::keyable::Keyable,
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
-use lpc_rs::util::keyable::Keyable;
 
 use crate::support::run_prog;
 
@@ -175,7 +175,12 @@ fn test_closures() {
 
     assert_eq!(borrowed.globals.len(), 2);
     assert_eq!(
-        borrowed.globals.last().unwrap().with_key(&cell_key).to_string(),
+        borrowed
+            .globals
+            .last()
+            .unwrap()
+            .with_key(&cell_key)
+            .to_string(),
         r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
     );
 }

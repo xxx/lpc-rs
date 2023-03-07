@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display, Formatter};
+
 use qcell::QCellOwner;
 
 pub struct WithKey<'a, T> {
@@ -10,8 +11,8 @@ pub struct WithKey<'a, T> {
 pub trait Keyable<'a> {
     /// Get a pairing of me and the cell key.
     fn with_key(&'a self, cell_key: &'a QCellOwner) -> WithKey<'a, Self>
-        where
-            Self: Sized
+    where
+        Self: Sized,
     {
         WithKey {
             value: self,
@@ -30,7 +31,7 @@ pub trait Keyable<'a> {
 
 impl<'a, T> Display for WithKey<'a, T>
 where
-    T: Keyable<'a>
+    T: Keyable<'a>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.value.keyable_display(self.cell_key))
@@ -39,7 +40,7 @@ where
 
 impl<'a, T> Debug for WithKey<'a, T>
 where
-    T: Keyable<'a>
+    T: Keyable<'a>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.value.keyable_debug(self.cell_key))
@@ -48,7 +49,7 @@ where
 
 impl<'a, T> PartialEq for WithKey<'a, T>
 where
-    T: Keyable<'a> + PartialEq
+    T: Keyable<'a> + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value

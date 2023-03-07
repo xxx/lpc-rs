@@ -11,10 +11,13 @@ use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use qcell::QCell;
 
 use crate::{
-    interpreter::{function_type::FunctionPtr, lpc_ref::LpcRef, process::Process},
+    interpreter::{
+        function_type::FunctionPtr,
+        lpc_ref::{HashedLpcRef, LpcRef},
+        process::Process,
+    },
     util::qcell_debug,
 };
-use crate::interpreter::lpc_ref::HashedLpcRef;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -24,7 +27,7 @@ pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
     String(String),
-    Array(#[educe(Debug(method = "qcell_debug"))]Vec<LpcRef>),
+    Array(#[educe(Debug(method = "qcell_debug"))] Vec<LpcRef>),
     Mapping(#[educe(Debug(method = "qcell_debug"))] IndexMap<HashedLpcRef, LpcRef>),
     Object(#[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>),
     Function(FunctionPtr),
@@ -86,8 +89,8 @@ impl Display for LpcValue {
             }
             LpcValue::Mapping(_x) => {
                 write!(f, "([ mapping (QCell data) ])")
-                // let inner = x.iter().map(|(k, v)| format!("{k}: {v}")).join(", ");
-                // write!(f, "([ {inner} ])")
+                // let inner = x.iter().map(|(k, v)| format!("{k}:
+                // {v}")).join(", "); write!(f, "([ {inner} ])")
             }
             LpcValue::Object(_x) => write!(f, "< object (QCell data) >"),
             // LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),

@@ -1,19 +1,25 @@
-use std::{cell::RefCell, cmp::Ordering, fmt, hash::{Hash, Hasher}, ptr};
-use std::collections::hash_map::DefaultHasher;
-use std::fmt::{Debug, Display, Formatter};
-use qcell::{QCell, QCellOwner};
+use std::{
+    cell::RefCell,
+    cmp::Ordering,
+    collections::hash_map::DefaultHasher,
+    fmt,
+    fmt::{Debug, Display, Formatter},
+    hash::{Hash, Hasher},
+    ptr,
+};
 
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
+use qcell::{QCell, QCellOwner};
 use refpool::PoolRef;
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::lpc_value::LpcValue,
     try_extract_value,
+    util::keyable::Keyable,
 };
-use crate::util::keyable::{Keyable};
 
 pub const NULL: LpcRef = LpcRef::Int(0);
 
@@ -157,13 +163,20 @@ impl LpcRef {
         }
     }
 
-    /// Convert this [`LpcRef`] into a [`HashedLpcRef`], for use in a [`HashMap`].
+    /// Convert this [`LpcRef`] into a [`HashedLpcRef`], for use in a
+    /// [`HashMap`].
     pub fn into_hashed(self, cell_key: &QCellOwner) -> HashedLpcRef {
         HashedLpcRef::new(self, cell_key)
     }
 
-    /// Convenience to perform a binary operation on a pair of [`LpcRef`]s wrapped in QCells.
-    pub fn binary_op<F, T>(left: &QCell<Self>, right: &QCell<Self>, cell_key: &QCellOwner, op: F) -> T
+    /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
+    /// wrapped in QCells.
+    pub fn binary_op<F, T>(
+        left: &QCell<Self>,
+        right: &QCell<Self>,
+        cell_key: &QCellOwner,
+        op: F,
+    ) -> T
     where
         F: Fn(&LpcRef, &LpcRef) -> T,
     {
@@ -515,9 +528,7 @@ impl<'a> Keyable<'a> for LpcRef {
             | LpcRef::Array(x)
             | LpcRef::Mapping(x)
             | LpcRef::Object(x)
-            | LpcRef::Function(x) => {
-                x.borrow().to_string()
-            }
+            | LpcRef::Function(x) => x.borrow().to_string(),
         }
     }
 }
@@ -535,7 +546,10 @@ impl HashedLpcRef {
     pub fn new(value: LpcRef, _cell_key: &QCellOwner) -> Self {
         let mut hasher = DefaultHasher::new();
         value.hash(&mut hasher);
-        Self { hash: hasher.finish(), value }
+        Self {
+            hash: hasher.finish(),
+            value,
+        }
     }
 }
 
@@ -693,7 +707,8 @@ mod tests {
             let pool = Pool::new(20);
             let array = LpcValue::from(vec![LpcRef::Int(123)]);
             let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
-            let result = value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool), &cell_key);
+            let result =
+                value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool), &cell_key);
 
             match &result {
                 Ok(v) => {

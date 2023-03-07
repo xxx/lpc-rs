@@ -11,9 +11,9 @@ use crate::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
         task::Task,
     },
-    try_extract_value
+    try_extract_value,
+    util::keyable::Keyable,
 };
-use crate::util::keyable::Keyable;
 
 fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
@@ -126,9 +126,10 @@ pub fn clone_object<const N: usize>(
 
         context.return_efun_result(result);
     } else {
-        return Err(
-            context.runtime_error(format!("invalid argument passed to `clone_object`: {}", arg.with_key(cell_key)))
-        );
+        return Err(context.runtime_error(format!(
+            "invalid argument passed to `clone_object`: {}",
+            arg.with_key(cell_key)
+        )));
     }
 
     Ok(())

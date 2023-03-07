@@ -40,8 +40,8 @@ use crate::{
         task_context::TaskContext,
     },
     try_extract_value,
+    util::keyable::Keyable,
 };
-use crate::util::keyable::Keyable;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -332,7 +332,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.handle_aconst(&instruction, cell_key)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitand(y, cell_key), cell_key)?;
+                self.binary_operation(
+                    r1,
+                    r2,
+                    r3,
+                    |x, y, cell_key| x.bitand(y, cell_key),
+                    cell_key,
+                )?;
             }
             Instruction::Arg(r) => self.args.push(r),
             Instruction::BitwiseNot(r1, r2) => {
@@ -535,7 +541,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 for (key, value) in map {
                     register_map.insert(
-                        get_loc!(self, key, cell_key)?.into_owned().into_hashed(cell_key),
+                        get_loc!(self, key, cell_key)?
+                            .into_owned()
+                            .into_hashed(cell_key),
                         get_loc!(self, value, cell_key)?.into_owned(),
                     );
                 }
@@ -766,7 +774,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shr(y, cell_key), cell_key)?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitxor(y, cell_key), cell_key)?;
+                self.binary_operation(
+                    r1,
+                    r2,
+                    r3,
+                    |x, y, cell_key| x.bitxor(y, cell_key),
+                    cell_key,
+                )?;
             }
         }
 
@@ -865,7 +879,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 let lpc_ref = get_loc!(self, *arg, cell_key).map(|i| i.into_owned())?;
 
-                trace!("Copying argument {} ({}) to {}", i, lpc_ref.with_key(cell_key), target_location);
+                trace!(
+                    "Copying argument {} ({}) to {}",
+                    i,
+                    lpc_ref.with_key(cell_key),
+                    target_location
+                );
 
                 new_frame.arg_locations.push(target_location);
 
@@ -904,9 +923,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
             } else {
-                return Err(
-                    self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref.with_key(cell_key)))
-                );
+                return Err(self.runtime_error(format!(
+                    "callfp instruction on non-function: {}",
+                    lpc_ref.with_key(cell_key)
+                )));
             }
         };
 
@@ -947,7 +967,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let b = lpc_ref.borrow();
                     let cell = try_extract_value!(*b, LpcValue::Object);
                     let proc = cell.ro(cell_key);
-                    proc.as_ref().lookup_function(name, &CallNamespace::Local)
+                    proc.as_ref()
+                        .lookup_function(name, &CallNamespace::Local)
                         .map(|func| (cell.clone(), func.clone()))
                 };
 
@@ -1011,7 +1032,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     &prototype.name,
                 )?;
 
-                trace!("Copying argument {} ({}) to {}", i, r.with_key(cell_key), loc);
+                trace!(
+                    "Copying argument {} ({}) to {}",
+                    i,
+                    r.with_key(cell_key),
+                    loc
+                );
 
                 new_frame.arg_locations.push(loc);
                 new_frame.set_location(loc, r, cell_key);
@@ -1152,13 +1178,19 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let pool_ref = if let LpcRef::String(r) = name_ref {
                         r
                     } else {
-                        let str = format!("Invalid name passed to `call_other`: {}", name_ref.with_key(cell_key));
+                        let str = format!(
+                            "Invalid name passed to `call_other`: {}",
+                            name_ref.with_key(cell_key)
+                        );
                         return Err(self.runtime_error(str));
                     };
                     let borrowed = pool_ref.borrow();
                     let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
-                    trace!("Calling call_other: {}->{function_name}", receiver_ref.with_key(cell_key));
+                    trace!(
+                        "Calling call_other: {}->{function_name}",
+                        receiver_ref.with_key(cell_key)
+                    );
 
                     // An inner helper function to actually calculate the result, for easy re-use
                     // when using `call_other` with arrays and mappings.
@@ -1362,7 +1394,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let proc_ref = &frame.process;
                 let borrowed_proc = proc_ref.ro(cell_key);
                 // look in the Local namespace first
-                let func = borrowed_proc.as_ref().lookup_function(&*s, &CallNamespace::Local);
+                let func = borrowed_proc
+                    .as_ref()
+                    .lookup_function(&*s, &CallNamespace::Local);
                 match func {
                     Some(program_function) => {
                         FunctionAddress::Local(proc, program_function.clone())
@@ -1437,7 +1471,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 return Err(self.array_index_error(idx, vec.len()));
                             }
                         } else {
-                            return Err(self.array_index_error(lpc_ref.with_key(cell_key), vec.len()));
+                            return Err(
+                                self.array_index_error(lpc_ref.with_key(cell_key), vec.len())
+                            );
                         }
 
                         Ok(())
@@ -1486,7 +1522,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                         Ok(())
                     }
-                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x.with_key(cell_key)))),
+                    x => Err(self.runtime_error(format!(
+                        "Invalid attempt to take index of `{}`",
+                        x.with_key(cell_key)
+                    ))),
                 }
             }
             _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
@@ -1513,8 +1552,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let index = match lpc_ref {
                                 LpcRef::Int(i) => *i,
                                 _ => {
-                                    return Err(self
-                                        .runtime_error(format!("Invalid index type: {}", lpc_ref.with_key(cell_key))))
+                                    return Err(self.runtime_error(format!(
+                                        "Invalid index type: {}",
+                                        lpc_ref.with_key(cell_key)
+                                    )))
                                 }
                             };
 
@@ -1525,8 +1566,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             }
                         }
                         x => {
-                            return Err(self
-                                .runtime_error(format!("Invalid attempt to take index of `{}`", x.with_key(cell_key))))
+                            return Err(self.runtime_error(format!(
+                                "Invalid attempt to take index of `{}`",
+                                x.with_key(cell_key)
+                            )))
                         }
                     }
                 };
@@ -1597,11 +1640,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             )
                         };
 
-                        map.insert(index.clone().into_hashed(cell_key), get_loc!(self, *r1, cell_key)?.into_owned());
+                        map.insert(
+                            index.clone().into_hashed(cell_key),
+                            get_loc!(self, *r1, cell_key)?.into_owned(),
+                        );
 
                         Ok(())
                     }
-                    x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x.with_key(cell_key)))),
+                    x => Err(self.runtime_error(format!(
+                        "Invalid attempt to take index of `{}`",
+                        x.with_key(cell_key)
+                    ))),
                 }
             }
             _ => Err(self.runtime_error("non-Store instruction passed to `handle_store`")),
@@ -1643,7 +1692,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process.ro(cell_key).as_ref().contains_function(name, namespace) {
+        if process
+            .ro(cell_key)
+            .as_ref()
+            .contains_function(name, namespace)
+        {
             Some(process)
         } else {
             None
