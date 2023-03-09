@@ -506,37 +506,51 @@ impl Default for LpcRef {
 }
 
 impl<'a> Keyable<'a> for LpcRef {
-    fn keyable_debug(&self, _cell_key: &QCellOwner) -> String {
-        match self {
-            LpcRef::Float(x) => format!("{:?}", x),
-            LpcRef::Int(x) => format!("{:?}", x),
-            LpcRef::String(x)
-            | LpcRef::Array(x)
-            | LpcRef::Mapping(x)
-            | LpcRef::Object(x)
-            | LpcRef::Function(x) => {
-                format!("{:?}", x.borrow())
-            }
-        }
+    fn keyable_debug(&self, f: &mut Formatter<'_>, _cell_key: &QCellOwner) -> fmt::Result {
+        write!(f, "{:?}", self)
+        // match self {
+        //     LpcRef::Float(x) => write!(f, "{:?}", x),
+        //     LpcRef::Int(x) => write!(f, "{:?}", x),
+        //     LpcRef::String(x)
+        //     | LpcRef::Array(x)
+        //     | LpcRef::Mapping(x)
+        //     | LpcRef::Object(x)
+        //     | LpcRef::Function(x) => {
+        //         write!(f, "{:?}", x.borrow())
+        //     }
+        // }
     }
 
-    fn keyable_display(&self, _cell_key: &QCellOwner) -> String {
-        match self {
-            LpcRef::Float(x) => x.to_string(),
-            LpcRef::Int(x) => x.to_string(),
-            LpcRef::String(x)
-            | LpcRef::Array(x)
-            | LpcRef::Mapping(x)
-            | LpcRef::Object(x)
-            | LpcRef::Function(x) => x.borrow().to_string(),
-        }
+    fn keyable_display(&self, f: &mut Formatter<'_>, _cell_key: &QCellOwner) -> fmt::Result {
+        write!(f, "{}", self)
+        // match self {
+        //     LpcRef::Float(x) => write!(f, "{}", x),
+        //     LpcRef::Int(x) => write!(f, "{}", x),
+        //     LpcRef::String(x)
+        //     | LpcRef::Array(x)
+        //     | LpcRef::Mapping(x)
+        //     | LpcRef::Object(x)
+        //     | LpcRef::Function(x) => write!(f, x.borrow()),
+        // }
+    }
+
+    fn keyable_hash<H: Hasher>(&self, state: &mut H, _cell_key: &QCellOwner) {
+        self.hash(state)
+    }
+
+    fn keyable_eq(&self, other: &Self, _cell_key: &QCellOwner) -> bool {
+        self.eq(other)
+    }
+
+    fn keyable_partial_cmp(&self, other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
+        self.partial_cmp(other)
     }
 }
 
 /// A structure that contains a pre-calculated hash, as LpcRef requires access
 /// to [`QCell`]s to calculate the hash.
-#[readonly::make]
 #[derive(Clone, Debug)]
+#[readonly::make]
 pub struct HashedLpcRef {
     pub hash: u64,
     pub value: LpcRef,
@@ -568,12 +582,24 @@ impl PartialEq for HashedLpcRef {
 impl Eq for HashedLpcRef {}
 
 impl<'a> Keyable<'a> for HashedLpcRef {
-    fn keyable_debug(&self, cell_key: &QCellOwner) -> String {
-        self.value.keyable_debug(cell_key)
+    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> fmt::Result {
+        self.value.keyable_debug(f, cell_key)
     }
 
-    fn keyable_display(&self, cell_key: &QCellOwner) -> String {
-        self.value.keyable_display(cell_key)
+    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> fmt::Result {
+        self.value.keyable_display(f, cell_key)
+    }
+
+    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+        self.value.keyable_hash(state, cell_key)
+    }
+
+    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+        self.value.keyable_eq(&other.value, cell_key)
+    }
+
+    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+        self.value.keyable_partial_cmp(&other.value, cell_key)
     }
 }
 
