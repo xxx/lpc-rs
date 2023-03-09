@@ -165,7 +165,7 @@ impl Display for FunctionPtr {
             .partial_args
             .iter()
             .map(|arg| match arg {
-                Some(_a) => format!("<QCell LpcRef>"),
+                Some(_a) => "<QCell LpcRef>".to_string(),
                 None => "<None>".to_string(),
             })
             .join(", ");

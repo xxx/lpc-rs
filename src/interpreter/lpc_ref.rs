@@ -180,10 +180,10 @@ impl LpcRef {
     where
         F: Fn(&LpcRef, &LpcRef) -> T,
     {
-        let left = cell_key.ro(&left);
-        let right = cell_key.ro(&right);
+        let left = cell_key.ro(left);
+        let right = cell_key.ro(right);
 
-        op(&left, &right)
+        op(left, right)
     }
 
     pub fn add(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
