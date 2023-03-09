@@ -17,5 +17,5 @@ itertools = "0.10.0"
 lazy_format = "2.0.0"
 multimap = "0.8.2"
 readonly = "0.2.3"
-serde = { version = "1.0.123", features = ["derive", "rc"] }
+serde = { version = "1.0.154", features = ["derive", "rc"] }
 tracing = "0.1"
