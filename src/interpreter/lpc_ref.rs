@@ -164,7 +164,7 @@ impl LpcRef {
     }
 
     /// Convert this [`LpcRef`] into a [`HashedLpcRef`], for use in a
-    /// [`HashMap`].
+    /// [`HashMap`](std::collections::HashMap).
     pub fn into_hashed(self, cell_key: &QCellOwner) -> HashedLpcRef {
         HashedLpcRef::new(self, cell_key)
     }
