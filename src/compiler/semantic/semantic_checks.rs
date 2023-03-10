@@ -354,9 +354,9 @@ pub fn node_type(
                         ) {
                             Ok(LpcType::Function(false))
                         } else {
-                            return Err(
+                            Err(
                                 LpcError::new(format!("undefined symbol {name}")).with_span(*span)
-                            );
+                            )
                         }
                     }
                 }

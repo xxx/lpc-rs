@@ -133,15 +133,15 @@ impl TaskContext {
 
         match current_cwd.strip_prefix(&self.config.lib_dir) {
             Ok(x) => {
-                let buf = if x.as_os_str().is_empty() {
+                
+
+                if x.as_os_str().is_empty() {
                     PathBuf::from("/")
                 } else if x.starts_with("/") {
                     x.to_path_buf()
                 } else {
                     PathBuf::from(format!("/{}", x.display()))
-                };
-
-                buf
+                }
             }
             Err(_e) => current_cwd.into_owned(),
         }

@@ -143,7 +143,6 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOw
     let arg_count = context.frame().called_with_num_args;
 
     let s = (1..=arg_count)
-        .into_iter()
         .map(|i| {
             let lpc_ref = context.resolve_local_register(i);
 

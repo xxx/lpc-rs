@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
     BitfieldSpecifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize,
 )]
 #[bits = 2]
+#[derive(Default)]
 pub enum Visibility {
+    #[default]
     Public,
     Private,
     Protected,
@@ -25,8 +27,4 @@ impl Display for Visibility {
     }
 }
 
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Public
-    }
-}
+

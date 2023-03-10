@@ -224,7 +224,7 @@ impl Preprocessor {
         let mut token_stream = LexWrapper::new(code.as_ref());
         token_stream.set_file_id(file_id);
 
-        let mut iter = token_stream.into_iter().peekable();
+        let mut iter = token_stream.peekable();
 
         while let Some(spanned_result) = iter.next() {
             match spanned_result {

@@ -3,7 +3,9 @@ use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum CallNamespace {
+    #[default]
     Local,
     Parent,
     Named(String),
@@ -19,11 +21,7 @@ impl CallNamespace {
     }
 }
 
-impl Default for CallNamespace {
-    fn default() -> Self {
-        CallNamespace::Local
-    }
-}
+
 
 impl Display for CallNamespace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
