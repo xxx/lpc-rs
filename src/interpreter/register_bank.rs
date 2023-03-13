@@ -12,17 +12,18 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
+pub type RegisterBank = Bank<LpcRef>;
+
 /// A type to handle data movement (the arena itself stores the actual data)
 #[derive(Educe, Clone, Default, PartialEq, Eq)]
 #[educe(Debug)]
-pub struct RegisterBank {
-    /// Our storage. By convention, `registers[0]` is for the return value
-    /// function calls.
+pub struct Bank<T> {
+    /// Our storage.
     #[educe(Debug(ignore))]
-    pub registers: Vec<LpcRef>,
+    pub registers: Vec<T>,
 }
 
-impl RegisterBank {
+impl<T> Bank<T> {
     delegate! {
         to self.registers {
             /// Get the length of the register bank.
@@ -32,17 +33,19 @@ impl RegisterBank {
             pub fn is_empty(&self) -> bool;
 
             /// Get an iterator over the registers
-            pub fn iter(&self) -> Iter<LpcRef>;
+            pub fn iter(&self) -> Iter<T>;
 
-            /// Push a new LpcRef onto the end of the registers.
-            pub fn push(&mut self, value: LpcRef);
+            /// Push a new T onto the end of the registers.
+            pub fn push(&mut self, value: T);
 
             /// Reserve additional space in the underlying Vec
             pub fn reserve(&mut self, additional: usize);
         }
     }
 
-    pub fn new(registers: Vec<LpcRef>) -> Self {
+    /// Create a new [`RegisterBank`] from the passed [`Vec`] of [`T`]s.
+    #[inline]
+    pub fn new(registers: Vec<T>) -> Self {
         Self { registers }
     }
 
@@ -61,9 +64,9 @@ impl RegisterBank {
     }
 }
 
-impl Display for RegisterBank {
+impl<T> Display for Bank<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fix up RegisterBanks display")
+        write!(f, "TODO: fix up RegisterBank's Display impl")
         // let mut s = "[".to_string();
         // for (i, register) in self.registers.iter().enumerate() {
         //     if i != 0 {
@@ -76,56 +79,40 @@ impl Display for RegisterBank {
     }
 }
 
-impl Index<Register> for RegisterBank {
-    type Output = LpcRef;
+impl<T> Index<Register> for Bank<T> {
+    type Output = T;
 
     #[inline]
-    fn index(&self, register: Register) -> &LpcRef {
+    fn index(&self, register: Register) -> &T {
         &self.registers[register.index()]
     }
 }
 
-impl Index<&Register> for RegisterBank {
-    type Output = LpcRef;
-
+impl<T> IndexMut<Register> for Bank<T> {
     #[inline]
-    fn index(&self, register: &Register) -> &LpcRef {
-        &self.registers[register.index()]
-    }
-}
-
-impl IndexMut<Register> for RegisterBank {
-    #[inline]
-    fn index_mut(&mut self, register: Register) -> &mut LpcRef {
+    fn index_mut(&mut self, register: Register) -> &mut T {
         &mut self.registers[register.index()]
     }
 }
 
-impl IndexMut<&Register> for RegisterBank {
-    #[inline]
-    fn index_mut(&mut self, register: &Register) -> &mut LpcRef {
-        &mut self.registers[register.index()]
-    }
-}
-
-impl Index<usize> for RegisterBank {
-    type Output = LpcRef;
+impl<T> Index<usize> for Bank<T> {
+    type Output = T;
 
     #[inline]
-    fn index(&self, index: usize) -> &LpcRef {
+    fn index(&self, index: usize) -> &T {
         &self.registers[index]
     }
 }
 
-impl IndexMut<usize> for RegisterBank {
+impl<T> IndexMut<usize> for Bank<T> {
     #[inline]
-    fn index_mut(&mut self, index: usize) -> &mut LpcRef {
+    fn index_mut(&mut self, index: usize) -> &mut T {
         &mut self.registers[index]
     }
 }
 
-impl Index<Range<usize>> for RegisterBank {
-    type Output = [LpcRef];
+impl<T> Index<Range<usize>> for Bank<T> {
+    type Output = [T];
 
     #[inline]
     fn index(&self, index: Range<usize>) -> &Self::Output {
@@ -133,15 +120,15 @@ impl Index<Range<usize>> for RegisterBank {
     }
 }
 
-impl IndexMut<Range<usize>> for RegisterBank {
+impl<T> IndexMut<Range<usize>> for Bank<T> {
     #[inline]
     fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
 }
 
-impl Index<RangeInclusive<usize>> for RegisterBank {
-    type Output = [LpcRef];
+impl<T> Index<RangeInclusive<usize>> for Bank<T> {
+    type Output = [T];
 
     #[inline]
     fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
@@ -149,15 +136,15 @@ impl Index<RangeInclusive<usize>> for RegisterBank {
     }
 }
 
-impl IndexMut<RangeInclusive<usize>> for RegisterBank {
+impl<T> IndexMut<RangeInclusive<usize>> for Bank<T> {
     #[inline]
     fn index_mut(&mut self, index: RangeInclusive<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
 }
 
-impl Index<RangeFrom<usize>> for RegisterBank {
-    type Output = [LpcRef];
+impl<T> Index<RangeFrom<usize>> for Bank<T> {
+    type Output = [T];
 
     #[inline]
     fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
@@ -165,15 +152,15 @@ impl Index<RangeFrom<usize>> for RegisterBank {
     }
 }
 
-impl IndexMut<RangeFrom<usize>> for RegisterBank {
+impl<T> IndexMut<RangeFrom<usize>> for Bank<T> {
     #[inline]
     fn index_mut(&mut self, index: RangeFrom<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
 }
 
-impl IntoIterator for RegisterBank {
-    type Item = LpcRef;
+impl<T> IntoIterator for Bank<T> {
+    type Item = T;
     type IntoIter = IntoIter<Self::Item>;
 
     #[inline]
@@ -182,9 +169,9 @@ impl IntoIterator for RegisterBank {
     }
 }
 
-impl<'a> IntoIterator for &'a RegisterBank {
-    type Item = &'a LpcRef;
-    type IntoIter = Iter<'a, LpcRef>;
+impl<'a, T> IntoIterator for &'a Bank<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -192,8 +179,8 @@ impl<'a> IntoIterator for &'a RegisterBank {
     }
 }
 
-impl Deref for RegisterBank {
-    type Target = [LpcRef];
+impl<T> Deref for Bank<T> {
+    type Target = [T];
 
     #[inline]
     fn deref(&self) -> &Self::Target {
