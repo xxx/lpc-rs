@@ -67,7 +67,7 @@ pub struct CallFrame {
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
-    /// The upvalue indexes for this specific call
+    /// The upvalue indexes (into the [`Process`]' `upvalues`) for this specific call
     pub upvalues: Vec<Register>,
 }
 
@@ -171,30 +171,22 @@ impl CallFrame {
     /// Reserve space for the upvalues that this call will initialize
     /// Returns the index in the Process' `upvalues` array where the
     ///   newly-populated upvalues will be stored
-    fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) -> usize {
+    fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {
         let num_upvalues = self.function.num_upvalues;
 
-        let start_idx = {
-            let proc = self.process.rw(cell_key);
-            let upvalues = &mut proc.upvalues;
-            let idx = upvalues.len();
+        let proc = self.process.rw(cell_key);
+        let upvalues = &mut proc.upvalues;
 
-            // println!("populating upvalues: {:?}", upvalues);
+        // Reserve space in the proc for the actual values
+        upvalues.reserve(num_upvalues);
 
-            upvalues.reserve(num_upvalues);
-            for _ in 0..num_upvalues {
-                upvalues.push(NULL);
-            }
-
-            idx
-        };
-
+        // Reserve space in me for the indexes
         self.upvalues.reserve(num_upvalues);
-        for i in 0..num_upvalues {
-            self.upvalues.push(Register(start_idx + i));
-        }
 
-        start_idx
+        for _ in 0..num_upvalues {
+            let idx = upvalues.insert(NULL);
+            self.upvalues.push(Register(idx));
+        }
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the variant

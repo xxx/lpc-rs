@@ -13,6 +13,7 @@ use crate::interpreter::{
     program::Program,
     ref_bank::RefBank,
 };
+use crate::interpreter::gc_bank::GcBank;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -30,7 +31,7 @@ pub struct Process {
     /// Local variables that are referred to by closures, which need to be
     /// stored beyond the scope of their original invocation.
     /// TODO: This needs to be garbage-collected
-    pub upvalues: RefBank,
+    pub upvalues: GcBank<LpcRef>,
 }
 
 impl Process {
@@ -46,7 +47,7 @@ impl Process {
             program,
             globals: RefBank::new(vec![NULL; num_globals]),
             clone_id: None,
-            upvalues: RefBank::default(),
+            upvalues: GcBank::default(),
         }
     }
 
@@ -59,7 +60,7 @@ impl Process {
             program,
             globals: RefBank::new(vec![NULL; num_globals]),
             clone_id: Some(clone_id),
-            upvalues: RefBank::default(),
+            upvalues: GcBank::default(),
         }
     }
 
