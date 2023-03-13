@@ -18,13 +18,13 @@ use crate::interpreter::{
 /// mutable runtime pieces together.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct Process {
-    /// The [`Program`] that this process is running
+    /// The [`Program`] that this process is running.
     pub program: Rc<Program>,
 
-    /// The stored global variable data for this instance
+    /// The stored global variable data for this instance.
     pub globals: RegisterBank,
 
-    /// What is the clone ID of this process? If `None`, this is a master object
+    /// What is the clone ID of this process? If `None`, this is a master object.
     clone_id: Option<usize>,
 
     /// Local variables that are referred to by closures, which need to be
@@ -34,6 +34,7 @@ pub struct Process {
 }
 
 impl Process {
+    /// Create a new [`Process`] from the passed [`Program`].
     pub fn new<T>(prog: T) -> Self
     where
         T: Into<Rc<Program>>,
@@ -49,6 +50,8 @@ impl Process {
         }
     }
 
+    /// Create a new [`Process`] from the passed [`Program`], with the passed
+    /// clone ID.
     pub fn new_clone(program: Rc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
 
@@ -102,12 +105,14 @@ impl Process {
 }
 
 impl AsRef<Program> for Process {
+    #[inline]
     fn as_ref(&self) -> &Program {
         &self.program
     }
 }
 
 impl Display for Process {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename())
     }

@@ -116,7 +116,8 @@ pub struct FunctionPtr {
     /// Does this pointer use `call_other`?
     pub call_other: bool,
 
-    /// Store the captured variables as upvalues
+    /// The variables that I need from the environment, at the time this
+    /// [`FunctionPtr`] ss created.
     pub upvalues: Vec<Register>,
 }
 
