@@ -9,7 +9,7 @@ pub mod memory;
 pub mod object_space;
 pub mod process;
 pub mod program;
-pub mod register_bank;
+pub mod ref_bank;
 pub mod task;
 pub mod task_context;
 pub mod vm;

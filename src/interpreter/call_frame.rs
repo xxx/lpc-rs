@@ -17,7 +17,7 @@ use crate::{
     interpreter::{
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        register_bank::RegisterBank,
+        ref_bank::{RefBank},
     },
     util::qcell_debug,
 };
@@ -60,7 +60,7 @@ pub struct CallFrame {
     pub arg_locations: Vec<RegisterVariant>,
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call.
-    pub registers: RegisterBank,
+    pub registers: RefBank,
     /// Track where the pc is pointing in this frame's function's instructions.
     pc: Cell<usize>,
     /// How many explicit arguments were passed to the call that created this
@@ -100,7 +100,7 @@ impl CallFrame {
             process,
             function,
             arg_locations: Vec::with_capacity(called_with_num_args),
-            registers: RegisterBank::new(vec![NULL; reg_len]),
+            registers: RefBank::new(vec![NULL; reg_len]),
             pc: 0.into(),
             called_with_num_args,
             upvalues: ups,
@@ -135,12 +135,12 @@ impl CallFrame {
         P: Into<Rc<QCell<Process>>>,
     {
         Self {
-            registers: RegisterBank::initialized_for_function(&function, arg_capacity),
+            registers: RefBank::initialized_for_function(&function, arg_capacity),
             ..Self::new(process, function, called_with_num_args, upvalues, cell_key)
         }
     }
 
-    /// Create a new [`CallFrame`] instance, using the passed [`RegisterBank`]
+    /// Create a new [`CallFrame`] instance, using the passed [`RefBank`]
     /// as the registers
     ///
     /// # Arguments
@@ -155,7 +155,7 @@ impl CallFrame {
         process: P,
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
-        registers: RegisterBank,
+        registers: RefBank,
         upvalues: Option<&Vec<Register>>,
         cell_key: &mut QCellOwner,
     ) -> Self
@@ -430,7 +430,7 @@ mod tests {
 
             let fs = ProgramFunction::new(prototype, 7);
 
-            let registers = RegisterBank::new(vec![NULL; 21]);
+            let registers = RefBank::new(vec![NULL; 21]);
 
             let frame = CallFrame::with_registers(
                 cell_key.cell(process),

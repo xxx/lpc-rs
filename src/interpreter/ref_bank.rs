@@ -12,13 +12,30 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
-pub type RegisterBank = Bank<LpcRef>;
+pub type RefBank = Bank<LpcRef>;
+
+impl RefBank {
+    /// Get a proper-sized [`RefBank`] for the passed function and runtime
+    /// arg count.
+    pub fn initialized_for_function(
+        function: &ProgramFunction,
+        runtime_arg_count: usize,
+    ) -> RefBank {
+        // add +1 for r0 (where return value is stored)
+        let static_length = function.arity().num_args + function.num_locals + 1;
+        let dynamic_length = runtime_arg_count + function.num_locals + 1;
+        let reservation = std::cmp::max(static_length, dynamic_length);
+
+        RefBank::new(vec![NULL; reservation])
+    }
+}
 
 /// A type to handle data movement (the arena itself stores the actual data)
 #[derive(Educe, Clone, Default, PartialEq, Eq)]
 #[educe(Debug)]
 pub struct Bank<T> {
     /// Our storage.
+    // TODO: Don't ignore this. It's ignored because of `QCell`ed data.
     #[educe(Debug(ignore))]
     pub registers: Vec<T>,
 }
@@ -32,50 +49,38 @@ impl<T> Bank<T> {
             /// Get whether the register bank is empty.
             pub fn is_empty(&self) -> bool;
 
-            /// Get an iterator over the registers
+            /// Get an iterator over the registers.
             pub fn iter(&self) -> Iter<T>;
 
             /// Push a new T onto the end of the registers.
             pub fn push(&mut self, value: T);
 
-            /// Reserve additional space in the underlying Vec
+            /// Reserve additional space in the underlying Vec.
             pub fn reserve(&mut self, additional: usize);
         }
     }
 
-    /// Create a new [`RegisterBank`] from the passed [`Vec`] of [`T`]s.
+    /// Create a new [`Bank`] from the passed [`Vec`] of [`T`]s.
     #[inline]
     pub fn new(registers: Vec<T>) -> Self {
         Self { registers }
     }
-
-    /// Get a proper-sized [`RegisterBank`] for the passed function and runtime
-    /// arg count
-    pub fn initialized_for_function(
-        function: &ProgramFunction,
-        runtime_arg_count: usize,
-    ) -> RegisterBank {
-        // add +1 for r0 (where return value is stored)
-        let static_length = function.arity().num_args + function.num_locals + 1;
-        let dynamic_length = runtime_arg_count + function.num_locals + 1;
-        let reservation = std::cmp::max(static_length, dynamic_length);
-
-        RegisterBank::new(vec![NULL; reservation])
-    }
 }
 
-impl<T> Display for Bank<T> {
+impl<T> Display for Bank<T>
+where
+    T: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TODO: fix up RegisterBank's Display impl")
-        // let mut s = "[".to_string();
-        // for (i, register) in self.registers.iter().enumerate() {
-        //     if i != 0 {
-        //         s.push_str(", ");
-        //     }
-        //     s.push_str(&format!("{register}"));
-        // }
-        // s.push(']');
-        // write!(f, "{s}")
+        let mut s = "[".to_string();
+        for (i, register) in self.registers.iter().enumerate() {
+            if i != 0 {
+                s.push_str(", ");
+            }
+            s.push_str(&format!("{register}"));
+        }
+        s.push(']');
+        write!(f, "{s}")
     }
 }
 

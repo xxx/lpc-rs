@@ -11,7 +11,7 @@ use delegate::delegate;
 use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     program::Program,
-    register_bank::RegisterBank,
+    ref_bank::RefBank,
 };
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
@@ -22,7 +22,7 @@ pub struct Process {
     pub program: Rc<Program>,
 
     /// The stored global variable data for this instance.
-    pub globals: RegisterBank,
+    pub globals: RefBank,
 
     /// What is the clone ID of this process? If `None`, this is a master object.
     clone_id: Option<usize>,
@@ -30,7 +30,7 @@ pub struct Process {
     /// Local variables that are referred to by closures, which need to be
     /// stored beyond the scope of their original invocation.
     /// TODO: This needs to be garbage-collected
-    pub upvalues: RegisterBank,
+    pub upvalues: RefBank,
 }
 
 impl Process {
@@ -44,9 +44,9 @@ impl Process {
 
         Self {
             program,
-            globals: RegisterBank::new(vec![NULL; num_globals]),
+            globals: RefBank::new(vec![NULL; num_globals]),
             clone_id: None,
-            upvalues: RegisterBank::default(),
+            upvalues: RefBank::default(),
         }
     }
 
@@ -57,9 +57,9 @@ impl Process {
 
         Self {
             program,
-            globals: RegisterBank::new(vec![NULL; num_globals]),
+            globals: RefBank::new(vec![NULL; num_globals]),
             clone_id: Some(clone_id),
-            upvalues: RegisterBank::default(),
+            upvalues: RefBank::default(),
         }
     }
 

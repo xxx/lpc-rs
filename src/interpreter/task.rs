@@ -36,7 +36,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        register_bank::RegisterBank,
+        ref_bank::RefBank,
         task_context::TaskContext,
     },
     try_extract_value,
@@ -993,7 +993,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
-        let new_registers = RegisterBank::initialized_for_function(&function, max_arg_length);
+        let new_registers = RefBank::initialized_for_function(&function, max_arg_length);
 
         let upvalues = if function.is_closure() {
             Some(&ptr.upvalues)
@@ -2082,7 +2082,7 @@ mod tests {
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 
-        fn snapshot_registers(code: &str, cell_key: &mut QCellOwner) -> RegisterBank {
+        fn snapshot_registers(code: &str, cell_key: &mut QCellOwner) -> RefBank {
             let (mut task, _) = run_prog(code, cell_key);
             let mut stack = task.snapshots.pop().unwrap();
 
