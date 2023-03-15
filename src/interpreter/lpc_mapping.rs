@@ -1,10 +1,14 @@
 use std::collections::HashSet;
+
 use bit_set::BitSet;
 use delegate::delegate;
 use indexmap::IndexMap;
 use qcell::QCellOwner;
-use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
-use crate::interpreter::lpc_ref::{HashedLpcRef, LpcRef};
+
+use crate::interpreter::{
+    gc::unique_id::{GcMark, UniqueId},
+    lpc_ref::{HashedLpcRef, LpcRef},
+};
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
@@ -41,7 +45,12 @@ impl LpcMapping {
 }
 
 impl GcMark for LpcMapping {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> lpc_rs_errors::Result<()> {
         if !processed.insert(self.unique_id) {
             return Ok(());
         }

@@ -1,18 +1,15 @@
 use std::fmt::Write;
 
-
 use lpc_rs_errors::{LpcError, Result};
 use qcell::QCellOwner;
 
 use crate::{
     interpreter::{
-        efun::efun_context::EfunContext,
-        lpc_ref::{LpcRef},
+        efun::efun_context::EfunContext, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
         lpc_value::LpcValue,
     },
     try_extract_value,
 };
-use crate::interpreter::lpc_mapping::LpcMapping;
 
 const MAX_RECURSION: usize = 20;
 

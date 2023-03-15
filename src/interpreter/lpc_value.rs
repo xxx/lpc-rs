@@ -13,13 +13,13 @@ use qcell::QCell;
 use crate::{
     interpreter::{
         function_type::FunctionPtr,
+        lpc_array::LpcArray,
+        lpc_mapping::LpcMapping,
         lpc_ref::{HashedLpcRef, LpcRef},
         process::Process,
     },
     util::qcell_debug,
 };
-use crate::interpreter::lpc_array::LpcArray;
-use crate::interpreter::lpc_mapping::LpcMapping;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.

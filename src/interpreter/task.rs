@@ -30,6 +30,7 @@ use crate::{
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{FunctionAddress, FunctionPtr},
+        gc::unique_id::UniqueId,
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
         memory::Memory,
@@ -42,7 +43,6 @@ use crate::{
     try_extract_value,
     util::keyable::Keyable,
 };
-use crate::interpreter::gc::unique_id::UniqueId;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

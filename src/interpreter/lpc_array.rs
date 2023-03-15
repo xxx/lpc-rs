@@ -1,12 +1,19 @@
-use std::collections::HashSet;
-use std::ops::{Deref, Index, IndexMut, Range, RangeInclusive};
+use std::{
+    collections::HashSet,
+    ops::{Deref, Index, IndexMut, Range, RangeInclusive},
+};
+
 use bit_set::BitSet;
 use delegate::delegate;
 use qcell::QCellOwner;
-use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
-use crate::interpreter::lpc_ref::LpcRef;
 
-/// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC purposes.
+use crate::interpreter::{
+    gc::unique_id::{GcMark, UniqueId},
+    lpc_ref::LpcRef,
+};
+
+/// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
+/// purposes.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LpcArray {
     pub unique_id: UniqueId,
@@ -35,7 +42,12 @@ impl LpcArray {
 }
 
 impl GcMark for LpcArray {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> lpc_rs_errors::Result<()> {
         if !processed.insert(self.unique_id) {
             return Ok(());
         }
@@ -59,14 +71,14 @@ impl Deref for LpcArray {
 
 impl<'a> FromIterator<&'a LpcRef> for LpcArray {
     #[inline]
-    fn from_iter<T: IntoIterator<Item=&'a LpcRef>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = &'a LpcRef>>(iter: T) -> Self {
         Self::new(iter.into_iter().cloned().collect())
     }
 }
 
 impl FromIterator<LpcRef> for LpcArray {
     #[inline]
-    fn from_iter<T: IntoIterator<Item=LpcRef>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = LpcRef>>(iter: T) -> Self {
         Self::new(iter.into_iter().collect())
     }
 }

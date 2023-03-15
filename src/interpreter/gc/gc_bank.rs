@@ -1,7 +1,8 @@
 use std::ops::{Index, IndexMut};
+
 use delegate::delegate;
-use slab::Slab;
 use lpc_rs_core::register::Register;
+use slab::Slab;
 
 /// A [`Slab`]-backed store that can re-use freed indices.
 #[derive(Debug, Default)]

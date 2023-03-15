@@ -1,26 +1,29 @@
 use std::{
+    collections::HashSet,
     fmt::{Display, Formatter},
-    rc::Rc,
+    rc::{Rc, Weak},
 };
-use std::collections::HashSet;
-use std::rc::Weak;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use delegate::delegate;
 use educe::Educe;
 use itertools::Itertools;
 use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
 };
+use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
-use lpc_rs_errors::Result;
 
 use crate::{
-    interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process},
+    interpreter::{
+        efun::EFUN_PROTOTYPES,
+        gc::unique_id::{GcMark, UniqueId},
+        lpc_ref::LpcRef,
+        process::Process,
+    },
     util::qcell_debug,
 };
-use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
@@ -150,7 +153,12 @@ impl FunctionPtr {
 }
 
 impl GcMark for FunctionPtr {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, _cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        _cell_key: &QCellOwner,
+    ) -> Result<()> {
         if !processed.insert(self.unique_id) {
             return Ok(());
         }

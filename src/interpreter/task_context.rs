@@ -133,8 +133,6 @@ impl TaskContext {
 
         match current_cwd.strip_prefix(&self.config.lib_dir) {
             Ok(x) => {
-                
-
                 if x.as_os_str().is_empty() {
                     PathBuf::from("/")
                 } else if x.starts_with("/") {

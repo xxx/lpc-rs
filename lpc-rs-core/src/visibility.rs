@@ -26,5 +26,3 @@ impl Display for Visibility {
         write!(f, "{s}")
     }
 }
-
-

@@ -1,12 +1,12 @@
 use std::{
     cell::Cell,
+    collections::HashSet,
     fmt,
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
-use std::collections::HashSet;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
@@ -17,13 +17,13 @@ use tracing::instrument;
 
 use crate::{
     interpreter::{
+        gc::unique_id::{GcMark, UniqueId},
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        ref_bank::{RefBank},
+        ref_bank::RefBank,
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -70,7 +70,8 @@ pub struct CallFrame {
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
-    /// The upvalue indexes (into the [`Process`]' `upvalues`) for this specific call
+    /// The upvalue indexes (into the [`Process`]' `upvalues`) for this specific
+    /// call
     pub upvalues: Vec<Register>,
     /// This object's unique ID, for garbage collection purposes
     pub unique_id: UniqueId,
@@ -321,7 +322,12 @@ impl CallFrame {
 }
 
 impl GcMark for CallFrame {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, _cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        _cell_key: &QCellOwner,
+    ) -> Result<()> {
         if !processed.insert(self.unique_id) {
             return Ok(());
         }
@@ -335,7 +341,6 @@ impl GcMark for CallFrame {
         Ok(())
     }
 }
-
 
 impl Display for CallFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

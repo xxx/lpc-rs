@@ -1,15 +1,14 @@
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, HashSet},
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ptr,
 };
-use std::collections::HashSet;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
@@ -18,11 +17,13 @@ use refpool::PoolRef;
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    interpreter::lpc_value::LpcValue,
+    interpreter::{
+        gc::unique_id::{GcMark, UniqueId},
+        lpc_value::LpcValue,
+    },
     try_extract_value,
     util::keyable::Keyable,
 };
-use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
 
 pub const NULL: LpcRef = LpcRef::Int(0);
 
@@ -417,12 +418,14 @@ impl LpcRef {
 }
 
 impl GcMark for LpcRef {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> Result<()> {
         match self {
-            LpcRef::Float(_)
-            | LpcRef::Int(_)
-            | LpcRef::String(_)
-            | LpcRef::Object(_) => Ok(()),
+            LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => Ok(()),
             LpcRef::Array(arr) => {
                 let arr = arr.borrow();
                 let arr = try_extract_value!(&*arr, LpcValue::Array);
@@ -639,9 +642,9 @@ mod tests {
 
     use claim::assert_err;
     use refpool::{Pool, PoolRef};
-    use crate::interpreter::lpc_array::LpcArray;
 
     use super::*;
+    use crate::interpreter::lpc_array::LpcArray;
 
     mod test_add {
         use indexmap::IndexMap;

@@ -5,18 +5,17 @@ use std::{
     path::Path,
     rc::Rc,
 };
+
 use bit_set::BitSet;
+use delegate::delegate;
 use lpc_rs_errors::{LpcError, Result};
 
-use delegate::delegate;
-
 use crate::interpreter::{
+    gc::{gc_bank::GcBank, unique_id::GcSweep},
     lpc_ref::{LpcRef, NULL},
     program::Program,
     ref_bank::RefBank,
 };
-use crate::interpreter::gc::gc_bank::GcBank;
-use crate::interpreter::gc::unique_id::GcSweep;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -28,7 +27,8 @@ pub struct Process {
     /// The stored global variable data for this instance.
     pub globals: RefBank,
 
-    /// What is the clone ID of this process? If `None`, this is a master object.
+    /// What is the clone ID of this process? If `None`, this is a master
+    /// object.
     clone_id: Option<usize>,
 
     /// Local variables that are referred to by closures, which need to be
