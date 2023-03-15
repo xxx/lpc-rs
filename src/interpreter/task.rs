@@ -42,6 +42,7 @@ use crate::{
     try_extract_value,
     util::keyable::Keyable,
 };
+use crate::interpreter::gc::unique_id::UniqueId;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -1430,13 +1431,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let frame = self.stack.current_frame()?;
         let fp = FunctionPtr {
-            owner: frame.process.clone(),
+            owner: Rc::downgrade(&frame.process),
             address,
             partial_args,
             arity,
             call_other,
             // Function pointers inherit the creating function's upvalues
             upvalues: frame.upvalues.clone(),
+            unique_id: UniqueId::new(),
         };
 
         // panic!("search here");
@@ -1964,7 +1966,7 @@ mod tests {
                     let xb = x.borrow();
                     let m = extract_value!(&*xb, LpcValue::Mapping);
                     let mapping = m
-                        .into_iter()
+                        .iter()
                         .map(|(k, v)| {
                             (
                                 BareVal::from_lpc_ref(&k.value, cell_key),

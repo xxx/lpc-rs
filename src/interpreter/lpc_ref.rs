@@ -7,6 +7,8 @@ use std::{
     hash::{Hash, Hasher},
     ptr,
 };
+use std::collections::HashSet;
+use bit_set::BitSet;
 
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
@@ -20,6 +22,7 @@ use crate::{
     try_extract_value,
     util::keyable::Keyable,
 };
+use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
 
 pub const NULL: LpcRef = LpcRef::Int(0);
 
@@ -413,6 +416,33 @@ impl LpcRef {
     }
 }
 
+impl GcMark for LpcRef {
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> Result<()> {
+        match self {
+            LpcRef::Float(_)
+            | LpcRef::Int(_)
+            | LpcRef::String(_)
+            | LpcRef::Object(_) => Ok(()),
+            LpcRef::Array(arr) => {
+                let arr = arr.borrow();
+                let arr = try_extract_value!(&*arr, LpcValue::Array);
+                arr.mark(marked, processed, cell_key)
+            }
+            LpcRef::Mapping(map) => {
+                let map = map.borrow();
+                let map = try_extract_value!(&*map, LpcValue::Mapping);
+                map.mark(marked, processed, cell_key)
+            }
+            LpcRef::Function(fun) => {
+                let fun = fun.borrow();
+                let fun = try_extract_value!(&*fun, LpcValue::Function);
+
+                fun.mark(marked, processed, cell_key)
+            }
+        }
+    }
+}
+
 impl From<BaseFloat> for LpcRef {
     fn from(f: BaseFloat) -> Self {
         Self::Float(LpcFloat::from(f))
@@ -609,6 +639,7 @@ mod tests {
 
     use claim::assert_err;
     use refpool::{Pool, PoolRef};
+    use crate::interpreter::lpc_array::LpcArray;
 
     use super::*;
 
@@ -819,7 +850,7 @@ mod tests {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(5);
             let int = LpcRef::Int(123);
-            let array = value_to_ref!(LpcValue::Array(vec![]), pool);
+            let array = value_to_ref!(LpcValue::Array(LpcArray::new(vec![])), pool);
             let result = int.add(&array, &cell_key);
 
             assert!(result.is_err());

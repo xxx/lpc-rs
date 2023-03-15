@@ -29,7 +29,7 @@ where
             return false;
         }
 
-        for (i, val) in self.registers.iter() {
+        for (i, val) in &self.registers {
             let Some(other) = other.registers.get(i) else {
                 return false;
             };

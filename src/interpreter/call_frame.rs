@@ -4,6 +4,8 @@ use std::{
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
+use std::collections::HashSet;
+use bit_set::BitSet;
 
 use educe::Educe;
 use lpc_rs_asm::instruction::{Address, Instruction};
@@ -21,6 +23,7 @@ use crate::{
     },
     util::qcell_debug,
 };
+use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -69,6 +72,8 @@ pub struct CallFrame {
     pub called_with_num_args: usize,
     /// The upvalue indexes (into the [`Process`]' `upvalues`) for this specific call
     pub upvalues: Vec<Register>,
+    /// This object's unique ID, for garbage collection purposes
+    pub unique_id: UniqueId,
 }
 
 impl CallFrame {
@@ -104,6 +109,7 @@ impl CallFrame {
             pc: 0.into(),
             called_with_num_args,
             upvalues: ups,
+            unique_id: UniqueId::new(),
         };
 
         instance.populate_upvalues(cell_key);
@@ -313,6 +319,23 @@ impl CallFrame {
             .unwrap_or_else(|| format!("(unknown) in {}()", self.function.name()))
     }
 }
+
+impl GcMark for CallFrame {
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, _cell_key: &QCellOwner) -> Result<()> {
+        if !processed.insert(self.unique_id) {
+            return Ok(());
+        }
+
+        marked.extend(self.upvalues.iter().copied().map(Register::index));
+
+        for lpc_ref in self.registers.iter() {
+            lpc_ref.mark(marked, processed, _cell_key)?;
+        }
+
+        Ok(())
+    }
+}
+
 
 impl Display for CallFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

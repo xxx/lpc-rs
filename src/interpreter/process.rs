@@ -5,6 +5,8 @@ use std::{
     path::Path,
     rc::Rc,
 };
+use bit_set::BitSet;
+use lpc_rs_errors::{LpcError, Result};
 
 use delegate::delegate;
 
@@ -13,7 +15,8 @@ use crate::interpreter::{
     program::Program,
     ref_bank::RefBank,
 };
-use crate::interpreter::gc_bank::GcBank;
+use crate::interpreter::gc::gc_bank::GcBank;
+use crate::interpreter::gc::unique_id::GcSweep;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -116,6 +119,18 @@ impl Display for Process {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename())
+    }
+}
+
+impl GcSweep for Process {
+    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
+        for idx in marked {
+            let Some(_) = self.upvalues.try_remove(idx) else {
+                return Err(LpcError::new(format!("Failed to remove upvalue at index {idx}")))
+            };
+        }
+
+        Ok(())
     }
 }
 

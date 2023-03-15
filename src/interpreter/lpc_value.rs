@@ -18,6 +18,8 @@ use crate::{
     },
     util::qcell_debug,
 };
+use crate::interpreter::lpc_array::LpcArray;
+use crate::interpreter::lpc_mapping::LpcMapping;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
@@ -27,8 +29,8 @@ pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
     String(String),
-    Array(#[educe(Debug(method = "qcell_debug"))] Vec<LpcRef>),
-    Mapping(#[educe(Debug(method = "qcell_debug"))] IndexMap<HashedLpcRef, LpcRef>),
+    Array(#[educe(Debug(method = "qcell_debug"))] LpcArray),
+    Mapping(#[educe(Debug(method = "qcell_debug"))] LpcMapping),
     Object(#[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>),
     Function(FunctionPtr),
 }
@@ -131,19 +133,19 @@ impl From<&String> for LpcValue {
 
 impl From<Vec<LpcRef>> for LpcValue {
     fn from(v: Vec<LpcRef>) -> Self {
-        Self::Array(v)
+        Self::Array(LpcArray::new(v))
     }
 }
 
 impl From<&[LpcRef]> for LpcValue {
     fn from(v: &[LpcRef]) -> Self {
-        Self::Array(v.to_vec())
+        Self::Array(LpcArray::new(v.to_vec()))
     }
 }
 
 impl<T> From<IndexMap<HashedLpcRef, LpcRef, T>> for LpcValue {
     fn from(m: IndexMap<HashedLpcRef, LpcRef, T>) -> Self {
-        Self::Mapping(m.into_iter().collect())
+        Self::Mapping(LpcMapping::new(m.into_iter().collect()))
     }
 }
 

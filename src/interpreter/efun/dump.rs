@@ -12,6 +12,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::interpreter::lpc_mapping::LpcMapping;
 
 const MAX_RECURSION: usize = 20;
 
@@ -98,7 +99,7 @@ fn format_array<const N: usize>(
 }
 
 fn format_mapping<const N: usize>(
-    map: &IndexMap<HashedLpcRef, LpcRef>,
+    map: &LpcMapping,
     context: &mut EfunContext<N>,
     indent: usize,
     recurse_level: usize,

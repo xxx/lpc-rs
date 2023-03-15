@@ -2,6 +2,9 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use std::collections::HashSet;
+use std::rc::Weak;
+use bit_set::BitSet;
 
 use delegate::delegate;
 use educe::Educe;
@@ -10,16 +13,18 @@ use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
 };
 use lpc_rs_function_support::program_function::ProgramFunction;
-use qcell::QCell;
+use qcell::{QCell, QCellOwner};
+use lpc_rs_errors::Result;
 
 use crate::{
     interpreter::{efun::EFUN_PROTOTYPES, lpc_ref::LpcRef, process::Process},
     util::qcell_debug,
 };
+use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers
-fn borrowed_owner_name(_owner: &Rc<QCell<Process>>, f: &mut Formatter) -> std::fmt::Result {
+fn borrowed_owner_name<T>(_owner: &T, f: &mut Formatter) -> std::fmt::Result {
     // f.write_str(&owner.borrow().filename())
     f.write_str("<Local Owner QCell>")
 }
@@ -98,7 +103,7 @@ impl Display for FunctionAddress {
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
     #[educe(Debug(method = "borrowed_owner_name"))]
-    pub owner: Rc<QCell<Process>>,
+    pub owner: Weak<QCell<Process>>,
 
     /// Address of the function, in either the receiver or owner
     #[educe(Debug(method = "qcell_debug"))]
@@ -119,6 +124,9 @@ pub struct FunctionPtr {
     /// The variables that I need from the environment, at the time this
     /// [`FunctionPtr`] ss created.
     pub upvalues: Vec<Register>,
+
+    /// A globally-unique ID for this function pointer, used for GC purposes.
+    pub unique_id: UniqueId,
 }
 
 impl FunctionPtr {
@@ -138,6 +146,18 @@ impl FunctionPtr {
             /// retrieve the flags for the function
             pub fn flags(&self) -> FunctionFlags;
         }
+    }
+}
+
+impl GcMark for FunctionPtr {
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, _cell_key: &QCellOwner) -> Result<()> {
+        if !processed.insert(self.unique_id) {
+            return Ok(());
+        }
+
+        marked.extend(self.upvalues.iter().copied().map(Register::index));
+
+        Ok(())
     }
 }
 
