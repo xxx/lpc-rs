@@ -541,30 +541,10 @@ impl Default for LpcRef {
 impl<'a> Keyable<'a> for LpcRef {
     fn keyable_debug(&self, f: &mut Formatter<'_>, _cell_key: &QCellOwner) -> fmt::Result {
         write!(f, "{:?}", self)
-        // match self {
-        //     LpcRef::Float(x) => write!(f, "{:?}", x),
-        //     LpcRef::Int(x) => write!(f, "{:?}", x),
-        //     LpcRef::String(x)
-        //     | LpcRef::Array(x)
-        //     | LpcRef::Mapping(x)
-        //     | LpcRef::Object(x)
-        //     | LpcRef::Function(x) => {
-        //         write!(f, "{:?}", x.borrow())
-        //     }
-        // }
     }
 
     fn keyable_display(&self, f: &mut Formatter<'_>, _cell_key: &QCellOwner) -> fmt::Result {
         write!(f, "{}", self)
-        // match self {
-        //     LpcRef::Float(x) => write!(f, "{}", x),
-        //     LpcRef::Int(x) => write!(f, "{}", x),
-        //     LpcRef::String(x)
-        //     | LpcRef::Array(x)
-        //     | LpcRef::Mapping(x)
-        //     | LpcRef::Object(x)
-        //     | LpcRef::Function(x) => write!(f, x.borrow()),
-        // }
     }
 
     fn keyable_hash<H: Hasher>(&self, state: &mut H, _cell_key: &QCellOwner) {
