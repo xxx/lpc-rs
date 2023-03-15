@@ -32,6 +32,7 @@ impl LpcMapping {
             pub fn extend<T>(&mut self, iter: T)
                 where T: IntoIterator<Item = (HashedLpcRef, LpcRef)>;
             pub fn iter(&self) -> indexmap::map::Iter<HashedLpcRef, LpcRef>;
+            pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
             pub fn keys(&self) -> indexmap::map::Keys<HashedLpcRef, LpcRef>;
             pub fn values(&self) -> indexmap::map::Values<HashedLpcRef, LpcRef>;

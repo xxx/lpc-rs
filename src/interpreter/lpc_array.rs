@@ -28,6 +28,7 @@ impl LpcArray {
             pub fn extend<T>(&mut self, iter: T)
                 where T: IntoIterator<Item = LpcRef>;
 
+            pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
         }
     }

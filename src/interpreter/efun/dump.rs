@@ -1,13 +1,13 @@
 use std::fmt::Write;
 
-use indexmap::IndexMap;
+
 use lpc_rs_errors::{LpcError, Result};
 use qcell::QCellOwner;
 
 use crate::{
     interpreter::{
         efun::efun_context::EfunContext,
-        lpc_ref::{HashedLpcRef, LpcRef},
+        lpc_ref::{LpcRef},
         lpc_value::LpcValue,
     },
     try_extract_value,

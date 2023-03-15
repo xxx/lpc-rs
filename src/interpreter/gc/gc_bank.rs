@@ -12,6 +12,7 @@ pub struct GcBank<T> {
 impl<T> GcBank<T> {
     delegate! {
         to self.registers {
+            pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
             pub fn insert(&mut self, value: T) -> usize;
             pub fn reserve(&mut self, additional: usize);
