@@ -17,17 +17,6 @@ use crate::{
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
-// fn qcell_debug_hashmap(map: &HashMap<String, Rc<QCell<Process>>>, f: &mut
-// Formatter) -> std::fmt::Result {     let s = map.iter()
-//         .map(|(k, v)| {
-//             format!("{}: {:?}", k, v.clone().get_mut())
-//         })
-//         .collect::<Vec<String>>()
-//         .join(", ");
-//
-//     f.write_str(&s)
-// }
-
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 pub struct ObjectSpace {
@@ -83,11 +72,11 @@ impl ObjectSpace {
         cell_key: &mut QCellOwner,
     ) -> Rc<QCell<Process>> {
         let clone = {
-            let space = space_cell.rw(cell_key);
-            Process::new_clone(program, space.clone_count)
+            let object_space = space_cell.ro(cell_key);
+            Process::new_clone(program, object_space.clone_count)
         };
 
-        let name = { space_cell.ro(cell_key).prepare_filename(&clone) };
+        let name = space_cell.ro(cell_key).prepare_filename(&clone);
 
         let process: Rc<QCell<Process>> = cell_key.cell(clone).into();
 
