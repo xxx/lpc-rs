@@ -294,6 +294,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     /// The boolean represents whether we are at the end of input (i.e. we
     /// should halt the machine)
     #[instrument(skip_all)]
+    #[inline]
     fn eval_one_instruction(
         &mut self,
         task_context: &TaskContext,
@@ -789,6 +790,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_aconst(
         &mut self,
         instruction: &Instruction,
@@ -911,6 +913,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_call_fp(
         &mut self,
         task_context: &TaskContext,
@@ -1158,6 +1161,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_call_other(
         &mut self,
         instruction: &Instruction,
@@ -1332,6 +1336,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_functionptrconst(
         &mut self,
         task_context: &TaskContext,
@@ -1449,6 +1454,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_load(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
         match instruction {
             Instruction::Load(r1, r2, r3) => {
@@ -1535,6 +1541,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_load_mapping_key(
         &mut self,
         instruction: &Instruction,
@@ -1583,6 +1590,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_sconst(
         &mut self,
         instruction: &Instruction,
@@ -1599,6 +1607,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     #[instrument(skip_all)]
+    #[inline]
     fn handle_store(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
         match instruction {
             Instruction::Store(r1, r2, r3) => {
