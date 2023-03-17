@@ -341,7 +341,7 @@ impl CallFrame {
 }
 
 impl Mark for CallFrame {
-    #[instrument(skip(self, _cell_key))]
+    #[instrument(skip(self, cell_key))]
     fn mark(
         &self,
         marked: &mut BitSet,
