@@ -538,7 +538,7 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, vm_upvalues.clone(), &mut cell_key);
+            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, vm_upvalues, &mut cell_key);
             assert_eq!(frame.upvalue_ptrs, vec![Register(2), Register(3), Register(4)]);
             assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 5);
         }
