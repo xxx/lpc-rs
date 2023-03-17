@@ -2,7 +2,8 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
-use lpc_rs_errors::Result;
+use once_cell::sync::OnceCell;
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
@@ -32,9 +33,8 @@ pub struct TaskContext {
     /// A counter, to ensure that too-long-evaluations do not occur
     instruction_counter: InstructionCounter,
     /// The final result of the original function that was called
-    // TODO: this should be an Option
     #[educe(Debug(method = "qcell_debug"))]
-    result: RefCell<LpcRef>,
+    result: OnceCell<LpcRef>,
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
@@ -77,7 +77,7 @@ impl TaskContext {
             process: process.into(),
             object_space,
             instruction_counter,
-            result: RefCell::new(LpcRef::default()),
+            result: OnceCell::new(),
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
         }
@@ -154,13 +154,17 @@ impl TaskContext {
 
     /// Update the context's `result` with the passed [`LpcRef`]
     #[inline]
-    pub fn set_result(&self, new_result: LpcRef) {
-        self.result.replace(new_result);
+    pub fn set_result(&self, new_result: LpcRef) -> Result<()> {
+        self.result.set(new_result).map_err(|_| {
+            LpcError::new_bug(
+        "TaskContext::set_result result already set",
+            )
+        })
     }
 
     /// Consume this context, and return its `result` field.
     #[inline]
-    pub fn into_result(self) -> LpcRef {
+    pub fn into_result(self) -> Option<LpcRef> {
         self.result.into_inner()
     }
 

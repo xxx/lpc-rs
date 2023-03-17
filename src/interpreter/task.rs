@@ -1257,7 +1257,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                             eval_context.instruction_count(),
                                         )?;
 
-                                        eval_context.into_result()
+                                        let Some(r) = eval_context.into_result() else {
+                                            return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
+                                        };
+
+                                        r
                                     } else {
                                         NULL
                                     }
@@ -1270,8 +1274,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             Err(LpcError::new("Unable to find the receiver."))
                         }
                     }
-
-                    // let registers = &self.stack.current_frame()?.registers;
 
                     let args = self
                         .args
