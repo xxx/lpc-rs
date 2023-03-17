@@ -11,7 +11,7 @@ edition = "2021"
 lpc-rs = { path = ".." }
 lpc-rs-utils = { path = "../lpc-rs-utils" }
 
-clap = { version = "4.1.6", features = ["derive"] }
+clap = { version = "4.1.9", features = ["derive"] }
 if_chain = "1.0.1"
 qcell = "0.5.3"
 tracing = "0.1"
