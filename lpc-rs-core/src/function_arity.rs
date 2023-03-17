@@ -47,3 +47,75 @@ impl FunctionArity {
         self.num_args - self.num_default_args
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod test_function_arity {
+        use super::*;
+
+        #[test]
+        fn test_is_valid() {
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: false,
+                ellipsis: false,
+            };
+
+            assert!(!arity.is_valid(0));
+            assert!(!arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(!arity.is_valid(6));
+
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: true,
+                ellipsis: false,
+            };
+
+            assert!(arity.is_valid(0));
+            assert!(arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(!arity.is_valid(6));
+
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: false,
+                ellipsis: true,
+            };
+
+            assert!(!arity.is_valid(0));
+            assert!(!arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(arity.is_valid(6));
+
+            let arity = FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+                varargs: true,
+                ellipsis: true,
+            };
+
+            assert!(arity.is_valid(0));
+            assert!(arity.is_valid(1));
+            assert!(arity.is_valid(2));
+            assert!(arity.is_valid(3));
+            assert!(arity.is_valid(4));
+            assert!(arity.is_valid(5));
+            assert!(arity.is_valid(6));
+        }
+    }
+}
