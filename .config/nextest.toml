@@ -1,0 +1,4 @@
+[profile.default]
+
+failure-output = "immediate-final"
+
