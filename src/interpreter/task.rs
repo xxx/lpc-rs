@@ -92,7 +92,7 @@ pub fn get_location_in_frame<'a>(
             Ok(Cow::Owned(proc.globals[reg].clone()))
         }
         RegisterVariant::Upvalue(upv) => {
-            let upvalues = &frame.upvalues;
+            let upvalues = &frame.upvalue_ptrs;
             let idx = upvalues[upv.index()];
 
             let vm_upvalues = &frame.vm_upvalues.ro(cell_key);
@@ -137,7 +137,7 @@ where
         }
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;
-            let upvalues = &frame.upvalues;
+            let upvalues = &frame.upvalue_ptrs;
             let idx = upvalues[reg.index()];
 
             let vm_upvalues = &mut frame.vm_upvalues.rw(cell_key);
@@ -1014,7 +1014,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let new_registers = RefBank::initialized_for_function(&function, max_arg_length);
 
         let upvalues = if function.is_closure() {
-            Some(&ptr.upvalues)
+            Some(&ptr.upvalue_ptrs)
         } else {
             // Calls to pointers to static functions do not inherit upvalues,
             // same as normal direct calls to them.
@@ -1457,7 +1457,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             arity,
             call_other,
             // Function pointers inherit the creating function's upvalues
-            upvalues: frame.upvalues.clone(),
+            upvalue_ptrs: frame.upvalue_ptrs.clone(),
             unique_id: UniqueId::new(),
         };
 
@@ -4362,11 +4362,11 @@ mod tests {
 
             let frame = snapshot.pop().unwrap();
 
-            assert_eq!(upvalues.len(), frame.upvalues.len());
+            assert_eq!(upvalues.len(), frame.upvalue_ptrs.len());
 
             for (i, v) in upvalues.iter().enumerate() {
                 let v: Register = (*v).into();
-                assert_eq!(v, frame.upvalues[i], "index: {i}");
+                assert_eq!(v, frame.upvalue_ptrs[i], "index: {i}");
             }
         }
 

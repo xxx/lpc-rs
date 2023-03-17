@@ -42,7 +42,7 @@ pub struct FunctionPtr {
 
     /// The variables that I need from the environment, at the time this
     /// [`FunctionPtr`] ss created.
-    pub upvalues: Vec<Register>,
+    pub upvalue_ptrs: Vec<Register>,
 
     /// A globally-unique ID for this function pointer, used for GC purposes.
     pub unique_id: UniqueId,
@@ -79,7 +79,7 @@ impl GcMark for FunctionPtr {
             return Ok(());
         }
 
-        marked.extend(self.upvalues.iter().copied().map(Register::index));
+        marked.extend(self.upvalue_ptrs.iter().copied().map(Register::index));
 
         Ok(())
     }
@@ -92,7 +92,7 @@ impl PartialEq for FunctionPtr {
             && self.arity == other.arity
             && self.partial_args == other.partial_args
             && self.call_other == other.call_other
-            && self.upvalues == other.upvalues
+            && self.upvalue_ptrs == other.upvalue_ptrs
     }
 }
 
@@ -117,7 +117,7 @@ impl Display for FunctionPtr {
         s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(
             "upvalues: [{}]",
-            self.upvalues.iter().map(|x| format!("{x}")).join(", ")
+            self.upvalue_ptrs.iter().map(|x| format!("{x}")).join(", ")
         ));
         s.push('}');
 

@@ -71,9 +71,8 @@ pub struct CallFrame {
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
     pub called_with_num_args: usize,
-    /// The upvalue indexes (into the [`Process`]' `upvalues`) for this specific
-    /// call
-    pub upvalues: Vec<Register>,
+    /// The upvalue indexes (into `vm_upvalues`) for this specific call
+    pub upvalue_ptrs: Vec<Register>,
     /// The upvalue data from the [`Vm`]
     #[educe(Debug(method = "qcell_debug"))]
     pub vm_upvalues: Rc<QCell<GcRefBank>>,
@@ -114,7 +113,7 @@ impl CallFrame {
             registers: RefBank::new(vec![NULL; reg_len]),
             pc: 0.into(),
             called_with_num_args,
-            upvalues: ups,
+            upvalue_ptrs: ups,
             vm_upvalues,
             unique_id: UniqueId::new(),
         };
@@ -196,11 +195,11 @@ impl CallFrame {
         upvalues.reserve(num_upvalues);
 
         // Reserve space in me for the indexes
-        self.upvalues.reserve(num_upvalues);
+        self.upvalue_ptrs.reserve(num_upvalues);
 
         for _ in 0..num_upvalues {
             let idx = upvalues.insert(NULL);
-            self.upvalues.push(Register(idx));
+            self.upvalue_ptrs.push(Register(idx));
         }
     }
 
@@ -220,7 +219,7 @@ impl CallFrame {
                 proc.globals[reg] = lpc_ref;
             }
             RegisterVariant::Upvalue(reg) => {
-                let upvalues = &self.upvalues;
+                let upvalues = &self.upvalue_ptrs;
                 let idx = upvalues[reg.index()];
 
                 let upvalues = self.vm_upvalues.rw(cell_key);
@@ -245,7 +244,7 @@ impl CallFrame {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),
                     RegisterVariant::Global(reg) => self.process.ro(cell_key).globals[reg].clone(),
                     RegisterVariant::Upvalue(ptr_reg) => {
-                        let upvalues = &self.upvalues;
+                        let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index()];
 
                         self.vm_upvalues.ro(cell_key)[data_reg].clone()
@@ -340,7 +339,7 @@ impl GcMark for CallFrame {
             return Ok(());
         }
 
-        marked.extend(self.upvalues.iter().copied().map(Register::index));
+        marked.extend(self.upvalue_ptrs.iter().copied().map(Register::index));
 
         for lpc_ref in self.registers.iter() {
             lpc_ref.mark(marked, processed, _cell_key)?;
@@ -519,7 +518,7 @@ mod tests {
             let vm_upvalues = Rc::new(cell_key.cell(GcBank::default()));
             let frame = CallFrame::new(cell_key.cell(process), Rc::new(pf), 0, None, vm_upvalues.clone(), &mut cell_key);
 
-            assert_eq!(frame.upvalues, vec![Register(0), Register(1)]);
+            assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
             assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 2);
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -546,7 +545,7 @@ mod tests {
             pf.num_upvalues = 3;
 
             let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, vm_upvalues.clone(), &mut cell_key);
-            assert_eq!(frame.upvalues, vec![Register(2), Register(3), Register(4)]);
+            assert_eq!(frame.upvalue_ptrs, vec![Register(2), Register(3), Register(4)]);
             assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 5);
         }
     }
