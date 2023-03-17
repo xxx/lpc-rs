@@ -12,13 +12,13 @@ use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
+    EFUN,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
-    lpc_type::LpcType,
-    register::{Register, RegisterVariant},
-    LpcInt, EFUN, INIT_PROGRAM,
+    INIT_PROGRAM,
+    lpc_type::LpcType, LpcInt, register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
@@ -30,7 +30,7 @@ use crate::{
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        function_type::{FunctionAddress, FunctionPtr},
+        function_type::FunctionAddress,
         gc::unique_id::UniqueId,
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
@@ -45,6 +45,7 @@ use crate::{
     util::keyable::Keyable,
     util::qcell_debug,
 };
+use crate::interpreter::function_type::function_ptr::FunctionPtr;
 use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
 
 macro_rules! pop_frame {
