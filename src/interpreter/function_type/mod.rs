@@ -6,9 +6,9 @@ use std::{
 };
 
 use educe::Educe;
-use itertools::Itertools;
+
 use lpc_rs_core::{
-    function_arity::FunctionArity, function_flags::FunctionFlags,
+    function_flags::FunctionFlags,
 };
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::QCell;
@@ -16,7 +16,6 @@ use qcell::QCell;
 use crate::{
     interpreter::{
         efun::EFUN_PROTOTYPES,
-        gc::unique_id::GcMark,
         process::Process,
     },
 };

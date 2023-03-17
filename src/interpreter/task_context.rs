@@ -1,4 +1,4 @@
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::{path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
@@ -14,7 +14,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
+use crate::interpreter::gc::gc_bank::{GcRefBank};
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -204,6 +204,7 @@ impl TaskContext {
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
+    use crate::interpreter::gc::gc_bank::GcBank;
 
     use super::*;
     use crate::interpreter::program::ProgramBuilder;

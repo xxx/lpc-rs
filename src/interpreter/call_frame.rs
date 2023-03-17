@@ -24,7 +24,7 @@ use crate::{
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
+use crate::interpreter::gc::gc_bank::{GcRefBank};
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -352,6 +352,7 @@ impl Display for CallFrame {
 mod tests {
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+    use crate::interpreter::gc::gc_bank::GcBank;
 
     use super::*;
 
