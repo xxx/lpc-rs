@@ -55,7 +55,7 @@ macro_rules! pop_frame {
             $task.stack.copy_result(&frame)?;
 
             if $task.stack.is_empty() {
-                $context.set_result(frame.registers[0].clone());
+                $context.set_result(frame.registers[0].clone())?;
             }
         }
 
