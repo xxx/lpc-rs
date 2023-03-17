@@ -24,6 +24,7 @@ use crate::{
     },
     util::qcell_debug,
 };
+use crate::interpreter::gc::gc_bank::GcBank;
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -73,6 +74,9 @@ pub struct CallFrame {
     /// The upvalue indexes (into the [`Process`]' `upvalues`) for this specific
     /// call
     pub upvalues: Vec<Register>,
+    /// The upvalue data from the [`Vm`]
+    #[educe(Debug(method = "qcell_debug"))]
+    pub vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
     /// This object's unique ID, for garbage collection purposes
     pub unique_id: UniqueId,
 }
@@ -92,6 +96,7 @@ impl CallFrame {
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         upvalues: Option<&Vec<Register>>,
+        vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -110,6 +115,7 @@ impl CallFrame {
             pc: 0.into(),
             called_with_num_args,
             upvalues: ups,
+            vm_upvalues,
             unique_id: UniqueId::new(),
         };
 
@@ -129,13 +135,15 @@ impl CallFrame {
     ///   the call to this function?
     /// * `arg_capacity` - Reserve space for at least this many registers (this
     ///   is used for ellipsis args and `call_other`)
-    /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
+    /// * `upvalues` - The indexes pointing to the real data, contained in `vm_upvalues`
+    /// * `vm_upvalues` - The upvalue data from the [`Vm`]
     pub fn with_minimum_arg_capacity<P>(
         process: P,
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         arg_capacity: usize,
         upvalues: Option<&Vec<Register>>,
+        vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -143,7 +151,7 @@ impl CallFrame {
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
-            ..Self::new(process, function, called_with_num_args, upvalues, cell_key)
+            ..Self::new(process, function, called_with_num_args, upvalues, vm_upvalues, cell_key)
         }
     }
 
@@ -164,6 +172,7 @@ impl CallFrame {
         called_with_num_args: usize,
         registers: RefBank,
         upvalues: Option<&Vec<Register>>,
+        vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -171,7 +180,7 @@ impl CallFrame {
     {
         Self {
             registers,
-            ..Self::new(process, function, called_with_num_args, upvalues, cell_key)
+            ..Self::new(process, function, called_with_num_args, upvalues, vm_upvalues, cell_key)
         }
     }
 
@@ -181,8 +190,7 @@ impl CallFrame {
     fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {
         let num_upvalues = self.function.num_upvalues;
 
-        let proc = self.process.rw(cell_key);
-        let upvalues = &mut proc.upvalues;
+        let upvalues = self.vm_upvalues.rw(cell_key);
 
         // Reserve space in the proc for the actual values
         upvalues.reserve(num_upvalues);
@@ -215,8 +223,8 @@ impl CallFrame {
                 let upvalues = &self.upvalues;
                 let idx = upvalues[reg.index()];
 
-                let proc = self.process.rw(cell_key);
-                proc.upvalues[idx] = lpc_ref;
+                let upvalues = self.vm_upvalues.rw(cell_key);
+                upvalues[idx] = lpc_ref;
             }
         }
     }
@@ -240,7 +248,7 @@ impl CallFrame {
                         let upvalues = &self.upvalues;
                         let data_reg = upvalues[ptr_reg.index()];
 
-                        self.process.ro(cell_key).upvalues[data_reg].clone()
+                        self.vm_upvalues.ro(cell_key)[data_reg].clone()
                     }
                 };
 
@@ -368,8 +376,16 @@ mod tests {
             .unwrap();
 
         let fs = ProgramFunction::new(prototype, 7);
+        let vm_upvalues = cell_key.cell(GcBank::default());
 
-        let frame = CallFrame::new(cell_key.cell(process), Rc::new(fs), 4, None, &mut cell_key);
+        let frame = CallFrame::new(
+            cell_key.cell(process),
+            Rc::new(fs),
+            4,
+            None,
+            vm_upvalues.into(),
+            &mut cell_key
+        );
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -391,6 +407,7 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
+            let vm_upvalues = cell_key.cell(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
                 cell_key.cell(process),
@@ -398,6 +415,7 @@ mod tests {
                 4,
                 30,
                 None,
+                vm_upvalues.into(),
                 &mut cell_key,
             );
 
@@ -418,6 +436,7 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
+            let vm_upvalues = cell_key.cell(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
                 cell_key.cell(process),
@@ -425,6 +444,7 @@ mod tests {
                 4,
                 2,
                 None,
+                vm_upvalues.into(),
                 &mut cell_key,
             );
 
@@ -451,6 +471,7 @@ mod tests {
             let fs = ProgramFunction::new(prototype, 7);
 
             let registers = RefBank::new(vec![NULL; 21]);
+            let vm_upvalues = cell_key.cell(GcBank::default());
 
             let frame = CallFrame::with_registers(
                 cell_key.cell(process),
@@ -458,6 +479,7 @@ mod tests {
                 4,
                 registers,
                 None,
+                vm_upvalues.into(),
                 &mut cell_key,
             );
 
@@ -494,10 +516,11 @@ mod tests {
             pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
 
-            let frame = CallFrame::new(cell_key.cell(process), Rc::new(pf), 0, None, &mut cell_key);
+            let vm_upvalues = Rc::new(cell_key.cell(GcBank::default()));
+            let frame = CallFrame::new(cell_key.cell(process), Rc::new(pf), 0, None, vm_upvalues.clone(), &mut cell_key);
 
             assert_eq!(frame.upvalues, vec![Register(0), Register(1)]);
-            assert_eq!(frame.process.ro(&cell_key).upvalues.len(), 2);
+            assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 2);
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
@@ -522,9 +545,9 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, &mut cell_key);
+            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, vm_upvalues.clone(), &mut cell_key);
             assert_eq!(frame.upvalues, vec![Register(2), Register(3), Register(4)]);
-            assert_eq!(frame.process.ro(&cell_key).upvalues.len(), 5);
+            assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 5);
         }
     }
 }

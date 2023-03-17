@@ -8,6 +8,7 @@ use lpc_rs::{
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
+use lpc_rs::interpreter::gc::gc_bank::GcBank;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -41,7 +42,8 @@ pub fn run_prog<'a>(
     code: &str,
     cell_key: &mut QCellOwner,
 ) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
-    let mut task = Task::new(Memory::default());
+    let upvalues = cell_key.cell(GcBank::default());
+    let mut task = Task::new(Memory::default(), upvalues);
     let program = compile_prog(code, cell_key);
     let ctx = task
         .initialize_program(

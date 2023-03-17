@@ -5,6 +5,7 @@ use std::{
 };
 
 use decorum::Total;
+use educe::Educe;
 use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
@@ -42,7 +43,9 @@ use crate::{
     },
     try_extract_value,
     util::keyable::Keyable,
+    util::qcell_debug,
 };
+use crate::interpreter::gc::gc_bank::GcBank;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -91,8 +94,8 @@ pub fn get_location_in_frame<'a>(
             let upvalues = &frame.upvalues;
             let idx = upvalues[upv.index()];
 
-            let proc = frame.process.ro(cell_key);
-            Ok(Cow::Owned(proc.upvalues[idx].clone()))
+            let vm_upvalues = &frame.vm_upvalues.ro(cell_key);
+            Ok(Cow::Owned(vm_upvalues[idx].clone()))
         }
     }
 }
@@ -109,6 +112,7 @@ fn set_location<const N: usize>(
     Ok(())
 }
 
+/// Apply an operation to a location, in-place.
 fn apply_in_location<F, const N: usize>(
     stack: &mut CallStack<N>,
     location: RegisterVariant,
@@ -135,8 +139,8 @@ where
             let upvalues = &frame.upvalues;
             let idx = upvalues[reg.index()];
 
-            let proc = frame.process.rw(cell_key);
-            func(&mut proc.upvalues[idx])
+            let vm_upvalues = &mut frame.vm_upvalues.rw(cell_key);
+            func(&mut vm_upvalues[idx])
         }
     }
 }
@@ -168,7 +172,8 @@ struct CatchPoint {
 
 /// An abstraction to allow for isolated running to completion of a specified
 /// function. It represents a single thread of execution
-#[derive(Debug, Clone)]
+#[derive(Educe, Clone)]
+#[educe(Debug)]
 pub struct Task<'pool, const STACKSIZE: usize> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
@@ -182,6 +187,10 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// The arg vector, populated prior to any of the `Call`-family instructions
     pub args: Vec<RegisterVariant>,
 
+    /// The upvalues from the [`Vm`]
+    #[educe(Debug(method = "qcell_debug"))]
+    upvalues: Rc<QCell<GcBank<LpcRef>>>,
+
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
     pub popped_frame: Option<CallFrame>,
@@ -193,15 +202,17 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
-    pub fn new<T>(memory: T) -> Self
+    pub fn new<T, U>(memory: T, upvalues: U) -> Self
     where
         T: Into<Cow<'pool, Memory>> + Debug,
+        U: Into<Rc<QCell<GcBank<LpcRef>>>>,
     {
         Self {
             memory: memory.into(),
             stack: CallStack::default(),
             catch_points: vec![],
             args: Vec::with_capacity(10),
+            upvalues: upvalues.into(),
 
             #[cfg(test)]
             popped_frame: None,
@@ -233,7 +244,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             function.unwrap().clone()
         };
         let process: Rc<QCell<Process>> = cell_key.cell(Process::new(program)).into();
-        let context = TaskContext::new(config, process.clone(), object_space, cell_key);
+        let upvalues = cell_key.cell(GcBank::default());
+        let context = TaskContext::new(config, process.clone(), object_space, upvalues, cell_key);
         context.insert_process(process, cell_key);
 
         self.eval(init_function, &[], context, cell_key)
@@ -263,7 +275,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let function = f.into();
         let process = task_context.process();
 
-        let mut frame = CallFrame::new(process, function, args.len(), None, cell_key);
+        let mut frame = CallFrame::new(process, function, args.len(), None, task_context.upvalues().clone(), cell_key);
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
@@ -864,6 +876,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             num_args,
             num_args,
             None, // static functions do not inherit upvalues from the calling function
+            task_context.upvalues().clone(),
             cell_key,
         );
 
@@ -1013,6 +1026,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             passed_args_count,
             new_registers,
             upvalues,
+            task_context.upvalues().clone(),
             cell_key,
         );
 
@@ -1219,7 +1233,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let value = LpcValue::from(pr);
                             let result = match value {
                                 LpcValue::Object(receiver) => {
-                                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(memory);
+                                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(memory, task_context.upvalues().clone());
 
                                     let new_context =
                                         task_context.clone().with_process(receiver.clone());
@@ -2538,7 +2552,8 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let object_space = ObjectSpace::default();
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default());
+                let upvalues = GcBank::default();
+                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default(), cell_key.cell(upvalues));
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
                 let _name = program.filename.clone();
@@ -3183,7 +3198,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let mut task: Task<10> = Task::new(Memory::default());
+                let mut task: Task<10> = Task::new(Memory::default(), cell_key.cell(GcBank::default()));
                 let (program, _, _) = compile_prog(code, &mut cell_key);
                 let r = task.initialize_program(
                     program,
@@ -3234,7 +3249,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let mut task: Task<10> = Task::new(Memory::default());
+                let vm_upvalues = cell_key.cell(GcBank::default());
+                let mut task: Task<10> = Task::new(Memory::default(), vm_upvalues);
                 let (program, _, _) = compile_prog(code, &mut cell_key);
                 let r = task.initialize_program(
                     program,
@@ -4081,7 +4097,8 @@ mod tests {
                 };
 
                 let mut cell_key = QCellOwner::new();
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default());
+                let vm_upvalues = cell_key.cell(GcBank::default());
+                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default(), vm_upvalues);
 
                 let object_space = ObjectSpace::default();
 
@@ -4184,7 +4201,8 @@ mod tests {
             "##};
 
             let mut cell_key = QCellOwner::new();
-            let mut task: Task<5> = Task::new(Memory::default());
+            let vm_upvalues = cell_key.cell(GcBank::default());
+            let mut task: Task<5> = Task::new(Memory::default(), vm_upvalues);
             let (program, _, _) = compile_prog(code, &mut cell_key);
             let r = task.initialize_program(
                 program,
@@ -4211,7 +4229,8 @@ mod tests {
                 .unwrap();
             let (program, _, _) = compile_prog(code, &mut cell_key);
             let mut cell_key = QCellOwner::new();
-            let mut task: Task<5> = Task::new(Memory::default());
+            let vm_upvalues = cell_key.cell(GcBank::default());
+            let mut task: Task<5> = Task::new(Memory::default(), vm_upvalues);
             let r = task.initialize_program(
                 program,
                 config,
@@ -4311,22 +4330,22 @@ mod tests {
             snapshot.pop(); // pop off the init frame
 
             let frame = snapshot.pop().unwrap();
-            let proc = frame.process.ro(&cell_key);
 
             assert_eq!(
                 upvalues.len(),
-                proc.upvalues.len(),
+                frame.vm_upvalues.ro(&cell_key).len(),
                 "upvalues: {:?}\nproc upvalues: {:?}",
                 upvalues
                     .iter()
                     .map(|i| i.clone().into())
                     .collect::<Vec<BareVal>>(),
-                proc.upvalues
+                frame.vm_upvalues.ro(&cell_key)
             );
 
+            let vm_upvalues = frame.vm_upvalues.ro(&cell_key);
             for (i, v) in upvalues.iter().enumerate() {
                 let v: BareVal = v.clone().into();
-                v.assert_equal(&proc.upvalues[i], &cell_key);
+                v.assert_equal(&vm_upvalues[i], &cell_key);
             }
         }
 

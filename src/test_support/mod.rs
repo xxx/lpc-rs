@@ -12,6 +12,7 @@ use crate::{
         task_context::TaskContext,
     },
 };
+use crate::interpreter::gc::gc_bank::GcBank;
 
 pub mod factories;
 
@@ -78,7 +79,8 @@ pub fn run_prog<'a>(
     code: &str,
     cell_key: &'a mut QCellOwner,
 ) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
-    let mut task = Task::new(Memory::default());
+    let upvalues = GcBank::default();
+    let mut task = Task::new(Memory::default(), cell_key.cell(upvalues));
     let (program, config, se_proc) = compile_prog(code, cell_key);
 
     let object_space = ObjectSpace::default();

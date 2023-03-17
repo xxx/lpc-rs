@@ -38,7 +38,8 @@ fn load_master<const N: usize>(
             match compiler.compile_in_game_file(&full_path, context.current_debug_span(), cell_key)
             {
                 Ok(prog) => {
-                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
+                    let upvalues = context.vm_upvalues().clone();
+                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
                     let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
                     let function = {
@@ -99,8 +100,8 @@ pub fn clone_object<const N: usize>(
         let new_prog = master.ro(cell_key).program.clone();
 
         let new_clone = context.insert_clone(new_prog, cell_key);
-
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory());
+        let upvalues = context.vm_upvalues().clone();
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
         {
             let function = {
                 let borrowed = new_clone.ro(cell_key);
@@ -148,6 +149,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::gc::gc_bank::GcBank;
 
     fn task_context_fixture(
         program: Program,
@@ -160,12 +162,13 @@ mod tests {
             config,
             cell_key.cell(process),
             cell_key.cell(ObjectSpace::default()),
+            cell_key.cell(GcBank::default()),
             cell_key,
         )
     }
 
-    fn fixture<'pool>() -> Task<'pool, MAX_CALL_STACK_SIZE> {
-        Task::new(Memory::new(10))
+    fn fixture<'pool>(cell_key: &QCellOwner) -> Task<'pool, MAX_CALL_STACK_SIZE> {
+        Task::new(Memory::new(10), Rc::new(cell_key.cell(GcBank::default())))
     }
 
     #[test]
@@ -182,7 +185,7 @@ mod tests {
             .expect("no init found?")
             .clone();
         let context = task_context_fixture(program, config, &cell_key);
-        let mut task = fixture();
+        let mut task = fixture(&cell_key);
 
         task.eval(func.clone(), &[], context.clone(), &mut cell_key)
             .expect("first task failed");
@@ -208,7 +211,7 @@ mod tests {
             .clone();
         let mut cell_key = QCellOwner::new();
         let context = task_context_fixture(program, config, &cell_key);
-        let mut task = fixture();
+        let mut task = fixture(&cell_key);
 
         let result = task.eval(func, &[], context, &mut cell_key);
 

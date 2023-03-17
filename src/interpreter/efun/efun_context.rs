@@ -11,6 +11,7 @@ use crate::interpreter::{
     memory::Memory, process::Process, program::Program, task::get_location,
     task_context::TaskContext,
 };
+use crate::interpreter::gc::gc_bank::GcBank;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
@@ -56,6 +57,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
             pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>>;
+
+            /// Get access to the [`Vm`]'s upvalues (i.e. all of them)
+            #[call(upvalues)]
+            pub fn vm_upvalues(&self) -> &Rc<QCell<GcBank<LpcRef>>>;
         }
 
         to self.memory {

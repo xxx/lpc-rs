@@ -61,5 +61,5 @@ pub trait GcMark {
 /// garbage-collected.
 pub trait GcSweep {
     /// Sweep the passed indices from the [`Process`]' `upvalues`.
-    fn sweep(&mut self, marked: &BitSet) -> Result<()>;
+    fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()>;
 }

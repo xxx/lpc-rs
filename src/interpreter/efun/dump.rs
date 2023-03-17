@@ -163,6 +163,7 @@ mod tests {
         compiler::Compiler,
         interpreter::{memory::Memory, object_space::ObjectSpace, program::Program, task::Task},
     };
+    use crate::interpreter::gc::gc_bank::GcBank;
 
     fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
         let compiler = Compiler::default();
@@ -184,7 +185,7 @@ mod tests {
         "##;
 
         let program = compile_prog(code, &mut cell_key);
-        let mut task: Task<5> = Task::new(Memory::new(10));
+        let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
         let mut cell_key = QCellOwner::new();
         let result = task.initialize_program(
             program,
@@ -208,7 +209,7 @@ mod tests {
         "##;
 
         let program = compile_prog(code, &mut cell_key);
-        let mut task: Task<5> = Task::new(Memory::new(10));
+        let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
         let result = task.initialize_program(
             program,
             Config::default(),

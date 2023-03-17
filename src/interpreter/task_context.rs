@@ -13,6 +13,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::gc::gc_bank::GcBank;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -31,11 +32,15 @@ pub struct TaskContext {
     /// A counter, to ensure that too-long-evaluations do not occur
     instruction_counter: InstructionCounter,
     /// The final result of the original function that was called
+    // TODO: this should be an Option
     #[educe(Debug(method = "qcell_debug"))]
     result: RefCell<LpcRef>,
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
+    /// The [`GcBank`] that stores all of the upvalues in the system, from the [`Vm`].
+    #[educe(Debug(method = "qcell_debug"))]
+    upvalues: Rc<QCell<GcBank<LpcRef>>>,
 }
 
 impl TaskContext {
@@ -52,11 +57,12 @@ impl TaskContext {
     }
 
     /// Create a new [`TaskContext`]
-    pub fn new<C, P, O>(config: C, process: P, object_space: O, cell_key: &QCellOwner) -> Self
+    pub fn new<C, P, O, U>(config: C, process: P, object_space: O, upvalues: U, cell_key: &QCellOwner) -> Self
     where
         C: Into<Rc<Config>>,
         P: Into<Rc<QCell<Process>>>,
         O: Into<Rc<QCell<ObjectSpace>>>,
+        U: Into<Rc<QCell<GcBank<LpcRef>>>>,
     {
         let config = config.into();
         let object_space = object_space.into();
@@ -73,6 +79,7 @@ impl TaskContext {
             instruction_counter,
             result: RefCell::new(LpcRef::default()),
             simul_efuns,
+            upvalues: upvalues.into(),
         }
     }
 
@@ -181,6 +188,12 @@ impl TaskContext {
     pub fn object_space(&self) -> &Rc<QCell<ObjectSpace>> {
         &self.object_space
     }
+
+    /// Return the `upvalues`
+    #[inline]
+    pub fn upvalues(&self) -> &Rc<QCell<GcBank<LpcRef>>> {
+        &self.upvalues
+    }
 }
 
 #[cfg(test)]
@@ -204,7 +217,8 @@ mod tests {
             .build()
             .unwrap();
         let process = Process::new(program);
-        let context = TaskContext::new(config, cell_key.cell(process), space, &cell_key);
+        let upvalues = cell_key.cell(GcBank::default());
+        let context = TaskContext::new(config, cell_key.cell(process), space, upvalues, &cell_key);
 
         assert_eq!(context.in_game_cwd(&cell_key).to_str().unwrap(), "/foo/bar");
     }

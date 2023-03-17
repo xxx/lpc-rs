@@ -9,6 +9,7 @@ use lpc_rs::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 use qcell::QCellOwner;
+use lpc_rs::interpreter::gc::gc_bank::GcBank;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -48,11 +49,13 @@ fn main() {
 
     let mut cell_key = QCellOwner::new();
 
+    let upvalues = cell_key.cell(GcBank::default());
+
     match compiler.compile_in_game_file(&lpc_path, None, &mut cell_key) {
         Ok(program) => {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
-            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory);
+            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory, upvalues);
             if let Err(e) =
                 task.initialize_program(program, config, cell_key.cell(object_space), &mut cell_key)
             {

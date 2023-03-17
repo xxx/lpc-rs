@@ -6,12 +6,9 @@ use std::{
     rc::Rc,
 };
 
-use bit_set::BitSet;
 use delegate::delegate;
-use lpc_rs_errors::{LpcError, Result};
 
 use crate::interpreter::{
-    gc::{gc_bank::GcBank, unique_id::GcSweep},
     lpc_ref::{LpcRef, NULL},
     program::Program,
     ref_bank::RefBank,
@@ -30,11 +27,6 @@ pub struct Process {
     /// What is the clone ID of this process? If `None`, this is a master
     /// object.
     clone_id: Option<usize>,
-
-    /// Local variables that are referred to by closures, which need to be
-    /// stored beyond the scope of their original invocation.
-    /// TODO: This needs to be garbage-collected
-    pub upvalues: GcBank<LpcRef>,
 }
 
 impl Process {
@@ -50,7 +42,6 @@ impl Process {
             program,
             globals: RefBank::new(vec![NULL; num_globals]),
             clone_id: None,
-            upvalues: GcBank::default(),
         }
     }
 
@@ -63,7 +54,6 @@ impl Process {
             program,
             globals: RefBank::new(vec![NULL; num_globals]),
             clone_id: Some(clone_id),
-            upvalues: GcBank::default(),
         }
     }
 
@@ -119,18 +109,6 @@ impl Display for Process {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename())
-    }
-}
-
-impl GcSweep for Process {
-    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
-        for idx in marked {
-            let Some(_) = self.upvalues.try_remove(idx) else {
-                return Err(LpcError::new(format!("Failed to remove upvalue at index {idx}")))
-            };
-        }
-
-        Ok(())
     }
 }
 

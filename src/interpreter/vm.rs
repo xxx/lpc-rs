@@ -1,8 +1,9 @@
 use std::rc::Rc;
+use bit_set::BitSet;
 
 use educe::Educe;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
@@ -14,6 +15,9 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::gc::gc_bank::GcBank;
+use crate::interpreter::gc::unique_id::GcSweep;
+use crate::interpreter::lpc_ref::LpcRef;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -26,6 +30,11 @@ pub struct Vm {
     /// Shared VM memory
     memory: Memory,
 
+    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
+    #[educe(Debug(method = "qcell_debug"))]
+    upvalues: Rc<QCell<GcBank<LpcRef>>>,
+
+    /// The [`Config`] that's in use for this [`Vm`]
     config: Rc<Config>,
 }
 
@@ -39,6 +48,7 @@ impl Vm {
             object_space: Rc::new(cell_key.cell(object_space)),
             memory: Memory::default(),
             config: config.into(),
+            upvalues: Rc::new(cell_key.cell(GcBank::default())),
         }
     }
 
@@ -78,7 +88,7 @@ impl Vm {
         compiler
             .compile_in_game_file(filename, None, cell_key)
             .and_then(|program| {
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory);
+                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
                 task.initialize_program(
                     program,
                     self.config.clone(),
@@ -86,5 +96,27 @@ impl Vm {
                     cell_key,
                 )
             })
+    }
+}
+
+impl GcSweep for Vm {
+    fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()> {
+        for idx in marked {
+            if self.upvalues.rw(cell_key).try_remove(idx).is_none() {
+                return Err(
+                    LpcError::new_bug(
+                        format!(
+                            concat!(
+                                "Failed to remove upvalue at index {} when doing a GC sweep.",
+                                " This should not happen."
+                            ),
+                            idx
+                        )
+                    )
+                )
+            };
+        }
+
+        Ok(())
     }
 }
