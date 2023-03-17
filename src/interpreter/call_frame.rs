@@ -43,13 +43,6 @@ impl LocalVariable {
     }
 }
 
-impl Display for LocalVariable {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> fmt::Result {
-        todo!("fix this up")
-        // write!(f, "{}: {}", self.name, self.value)
-    }
-}
-
 /// A representation of a function call's context.
 #[derive(Educe, Clone)]
 #[educe(Debug)]
