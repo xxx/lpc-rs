@@ -1,16 +1,14 @@
 use std::ops::{Index, IndexMut};
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use delegate::delegate;
-use qcell::QCellOwner;
 use lpc_rs_core::register::Register;
+use lpc_rs_errors::Result;
+use qcell::QCellOwner;
 use slab::Slab;
 use tracing::{instrument, trace};
 
-use crate::interpreter::gc::unique_id::GcSweep;
-use lpc_rs_errors::Result;
-
-use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::{gc::unique_id::GcSweep, lpc_ref::LpcRef};
 
 pub type GcRefBank = GcBank<LpcRef>;
 

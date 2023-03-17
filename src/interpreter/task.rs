@@ -1,11 +1,11 @@
 use std::{
     borrow::Cow,
+    collections::HashSet,
     fmt::{Debug, Display},
     rc::Rc,
 };
-use std::collections::HashSet;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use decorum::Total;
 use educe::Educe;
 use hash_hasher::HashBuildHasher;
@@ -35,7 +35,7 @@ use crate::{
         function_type::{function_ptr::FunctionPtr, FunctionAddress},
         gc::{
             gc_bank::{GcBank, GcRefBank},
-            unique_id::UniqueId,
+            unique_id::{GcMark, UniqueId},
         },
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
@@ -49,7 +49,6 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::gc::unique_id::{GcMark};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -1938,7 +1937,7 @@ mod tests {
                 // .with_env_filter("lpc_rs::interpreter::call_frame=trace")
                 .finish(),
         )
-            .expect("setting tracing default failed");
+        .expect("setting tracing default failed");
     }
 
     #[allow(dead_code)]

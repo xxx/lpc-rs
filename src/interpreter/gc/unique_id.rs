@@ -1,8 +1,8 @@
 use std::{
     collections::HashSet,
+    fmt::{Display, Formatter},
     sync::atomic::{AtomicUsize, Ordering},
 };
-use std::fmt::{Display, Formatter};
 
 use bit_set::BitSet;
 use lpc_rs_errors::Result;
