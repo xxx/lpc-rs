@@ -1,8 +1,13 @@
 use std::ops::{Index, IndexMut};
+use bit_set::BitSet;
 
 use delegate::delegate;
+use qcell::QCellOwner;
 use lpc_rs_core::register::Register;
 use slab::Slab;
+use lpc_rs_errors::LpcError;
+use crate::interpreter::gc::unique_id::GcSweep;
+use lpc_rs_errors::Result;
 
 use crate::interpreter::lpc_ref::LpcRef;
 
@@ -23,6 +28,30 @@ impl<T> GcBank<T> {
             pub fn reserve(&mut self, additional: usize);
             pub fn try_remove(&mut self, index: usize) -> Option<T>;
         }
+    }
+
+    /// A Sweep function without the key
+    pub fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
+        for idx in marked {
+            if self.try_remove(idx).is_none() {
+                return Err(LpcError::new_bug(format!(
+                    concat!(
+                    "Failed to remove upvalue at index {} when doing a GC sweep.",
+                    " This should not happen."
+                    ),
+                    idx
+                )));
+            };
+        }
+
+        Ok(())
+    }
+
+}
+
+impl<T> GcSweep for GcBank<T> {
+    fn sweep(&mut self, marked: &BitSet, _cell_key: &mut QCellOwner) -> Result<()> {
+        self.keyless_sweep(marked)
     }
 }
 

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
@@ -106,18 +106,6 @@ impl Vm {
 
 impl GcSweep for Vm {
     fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()> {
-        for idx in marked {
-            if self.upvalues.rw(cell_key).try_remove(idx).is_none() {
-                return Err(LpcError::new_bug(format!(
-                    concat!(
-                        "Failed to remove upvalue at index {} when doing a GC sweep.",
-                        " This should not happen."
-                    ),
-                    idx
-                )));
-            };
-        }
-
-        Ok(())
+        self.upvalues.rw(cell_key).keyless_sweep(marked)
     }
 }
