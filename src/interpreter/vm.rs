@@ -1,6 +1,6 @@
 use std::rc::Rc;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
@@ -11,13 +11,17 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        memory::Memory, object_space::ObjectSpace, task::Task, task_context::TaskContext,
+        gc::{
+            gc_bank::{GcBank, GcRefBank},
+            unique_id::GcSweep,
+        },
+        memory::Memory,
+        object_space::ObjectSpace,
+        task::Task,
+        task_context::TaskContext,
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
-use crate::interpreter::gc::unique_id::GcSweep;
-
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -88,7 +92,8 @@ impl Vm {
         compiler
             .compile_in_game_file(filename, None, cell_key)
             .and_then(|program| {
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
+                let mut task: Task<MAX_CALL_STACK_SIZE> =
+                    Task::new(&self.memory, self.upvalues.clone());
                 task.initialize_program(
                     program,
                     self.config.clone(),
@@ -103,17 +108,13 @@ impl GcSweep for Vm {
     fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()> {
         for idx in marked {
             if self.upvalues.rw(cell_key).try_remove(idx).is_none() {
-                return Err(
-                    LpcError::new_bug(
-                        format!(
-                            concat!(
-                                "Failed to remove upvalue at index {} when doing a GC sweep.",
-                                " This should not happen."
-                            ),
-                            idx
-                        )
-                    )
-                )
+                return Err(LpcError::new_bug(format!(
+                    concat!(
+                        "Failed to remove upvalue at index {} when doing a GC sweep.",
+                        " This should not happen."
+                    ),
+                    idx
+                )));
             };
         }
 

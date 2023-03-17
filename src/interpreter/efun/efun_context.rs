@@ -7,11 +7,10 @@ use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
 use crate::interpreter::{
-    call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef, lpc_value::LpcValue,
-    memory::Memory, process::Process, program::Program, task::get_location,
+    call_frame::CallFrame, call_stack::CallStack, gc::gc_bank::GcRefBank, lpc_ref::LpcRef,
+    lpc_value::LpcValue, memory::Memory, process::Process, program::Program, task::get_location,
     task_context::TaskContext,
 };
-use crate::interpreter::gc::gc_bank::GcRefBank;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called

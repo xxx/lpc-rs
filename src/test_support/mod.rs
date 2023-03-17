@@ -8,11 +8,10 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        memory::Memory, object_space::ObjectSpace, process::Process, program::Program, task::Task,
-        task_context::TaskContext,
+        gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, process::Process,
+        program::Program, task::Task, task_context::TaskContext,
     },
 };
-use crate::interpreter::gc::gc_bank::GcBank;
 
 pub mod factories;
 

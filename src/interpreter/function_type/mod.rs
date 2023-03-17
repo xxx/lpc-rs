@@ -6,19 +6,11 @@ use std::{
 };
 
 use educe::Educe;
-
-use lpc_rs_core::{
-    function_flags::FunctionFlags,
-};
+use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::QCell;
 
-use crate::{
-    interpreter::{
-        efun::EFUN_PROTOTYPES,
-        process::Process,
-    },
-};
+use crate::interpreter::{efun::EFUN_PROTOTYPES, process::Process};
 
 /// used for local Debug implementations, to avoid stack overflow when dumping
 /// function pointers

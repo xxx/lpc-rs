@@ -12,6 +12,7 @@ use qcell::QCell;
 
 use crate::{
     interpreter::{
+        function_type::function_ptr::FunctionPtr,
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::{HashedLpcRef, LpcRef},
@@ -19,7 +20,6 @@ use crate::{
     },
     util::qcell_debug,
 };
-use crate::interpreter::function_type::function_ptr::FunctionPtr;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.

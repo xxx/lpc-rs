@@ -2,13 +2,12 @@ use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        memory::Memory, object_space::ObjectSpace, program::Program, task::Task,
-        task_context::TaskContext,
+        gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, program::Program,
+        task::Task, task_context::TaskContext,
     },
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
-use lpc_rs::interpreter::gc::gc_bank::GcBank;
 
 #[macro_export]
 macro_rules! assert_regex {

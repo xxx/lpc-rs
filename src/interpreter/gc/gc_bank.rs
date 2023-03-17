@@ -3,6 +3,7 @@ use std::ops::{Index, IndexMut};
 use delegate::delegate;
 use lpc_rs_core::register::Register;
 use slab::Slab;
+
 use crate::interpreter::lpc_ref::LpcRef;
 
 pub type GcRefBank = GcBank<LpcRef>;

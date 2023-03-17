@@ -2,19 +2,18 @@ use std::{path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
-use once_cell::sync::OnceCell;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
+use once_cell::sync::OnceCell;
 use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{
-        instruction_counter::InstructionCounter, lpc_ref::LpcRef, object_space::ObjectSpace,
-        process::Process, program::Program,
+        gc::gc_bank::GcRefBank, instruction_counter::InstructionCounter, lpc_ref::LpcRef,
+        object_space::ObjectSpace, process::Process, program::Program,
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::gc_bank::{GcRefBank};
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -57,7 +56,13 @@ impl TaskContext {
     }
 
     /// Create a new [`TaskContext`]
-    pub fn new<C, P, O, U>(config: C, process: P, object_space: O, vm_upvalues: U, cell_key: &QCellOwner) -> Self
+    pub fn new<C, P, O, U>(
+        config: C,
+        process: P,
+        object_space: O,
+        vm_upvalues: U,
+        cell_key: &QCellOwner,
+    ) -> Self
     where
         C: Into<Rc<Config>>,
         P: Into<Rc<QCell<Process>>>,
@@ -155,11 +160,9 @@ impl TaskContext {
     /// Update the context's `result` with the passed [`LpcRef`]
     #[inline]
     pub fn set_result(&self, new_result: LpcRef) -> Result<()> {
-        self.result.set(new_result).map_err(|_| {
-            LpcError::new_bug(
-        "TaskContext::set_result result already set",
-            )
-        })
+        self.result
+            .set(new_result)
+            .map_err(|_| LpcError::new_bug("TaskContext::set_result result already set"))
     }
 
     /// Consume this context, and return its `result` field.
@@ -204,10 +207,9 @@ impl TaskContext {
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
-    use crate::interpreter::gc::gc_bank::GcBank;
 
     use super::*;
-    use crate::interpreter::program::ProgramBuilder;
+    use crate::interpreter::{gc::gc_bank::GcBank, program::ProgramBuilder};
 
     #[test]
     fn test_in_game_cwd() {

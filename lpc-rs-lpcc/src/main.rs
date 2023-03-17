@@ -4,12 +4,11 @@ use clap::Parser;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
-    interpreter::{memory::Memory, object_space::ObjectSpace, task::Task},
+    interpreter::{gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, task::Task},
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 use qcell::QCellOwner;
-use lpc_rs::interpreter::gc::gc_bank::GcBank;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

@@ -12,13 +12,13 @@ use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
-    EFUN,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
-    INIT_PROGRAM,
-    lpc_type::LpcType, LpcInt, register::{Register, RegisterVariant},
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    LpcInt, EFUN, INIT_PROGRAM,
 };
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
@@ -30,8 +30,11 @@ use crate::{
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        function_type::FunctionAddress,
-        gc::unique_id::UniqueId,
+        function_type::{function_ptr::FunctionPtr, FunctionAddress},
+        gc::{
+            gc_bank::{GcBank, GcRefBank},
+            unique_id::UniqueId,
+        },
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
         memory::Memory,
@@ -42,11 +45,8 @@ use crate::{
         task_context::TaskContext,
     },
     try_extract_value,
-    util::keyable::Keyable,
-    util::qcell_debug,
+    util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::function_type::function_ptr::FunctionPtr;
-use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -276,7 +276,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let function = f.into();
         let process = task_context.process();
 
-        let mut frame = CallFrame::new(process, function, args.len(), None, task_context.upvalues().clone(), cell_key);
+        let mut frame = CallFrame::new(
+            process,
+            function,
+            args.len(),
+            None,
+            task_context.upvalues().clone(),
+            cell_key,
+        );
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
@@ -1235,7 +1242,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let value = LpcValue::from(pr);
                             let result = match value {
                                 LpcValue::Object(receiver) => {
-                                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(memory, task_context.upvalues().clone());
+                                    let mut task: Task<MAX_CALL_STACK_SIZE> =
+                                        Task::new(memory, task_context.upvalues().clone());
 
                                     let new_context =
                                         task_context.clone().with_process(receiver.clone());
@@ -1447,7 +1455,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let partial_args = applied_arguments
             .iter()
             .map(|arg| {
-                arg.map(|register| Ok(get_loc!(self, register, cell_key)?.into_owned())).transpose()
+                arg.map(|register| Ok(get_loc!(self, register, cell_key)?.into_owned()))
+                    .transpose()
             })
             .collect::<Result<Vec<Option<LpcRef>>>>()?;
 
@@ -2556,7 +2565,8 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let object_space = ObjectSpace::default();
                 let upvalues = GcBank::default();
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default(), cell_key.cell(upvalues));
+                let mut task: Task<MAX_CALL_STACK_SIZE> =
+                    Task::new(Memory::default(), cell_key.cell(upvalues));
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
                 let _name = program.filename.clone();
@@ -3201,7 +3211,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let mut task: Task<10> = Task::new(Memory::default(), cell_key.cell(GcBank::default()));
+                let mut task: Task<10> =
+                    Task::new(Memory::default(), cell_key.cell(GcBank::default()));
                 let (program, _, _) = compile_prog(code, &mut cell_key);
                 let r = task.initialize_program(
                     program,

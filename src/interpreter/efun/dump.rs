@@ -161,9 +161,11 @@ mod tests {
 
     use crate::{
         compiler::Compiler,
-        interpreter::{memory::Memory, object_space::ObjectSpace, program::Program, task::Task},
+        interpreter::{
+            gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, program::Program,
+            task::Task,
+        },
     };
-    use crate::interpreter::gc::gc_bank::GcBank;
 
     fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
         let compiler = Compiler::default();

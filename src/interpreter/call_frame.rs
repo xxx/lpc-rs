@@ -17,14 +17,16 @@ use tracing::instrument;
 
 use crate::{
     interpreter::{
-        gc::unique_id::{GcMark, UniqueId},
+        gc::{
+            gc_bank::GcRefBank,
+            unique_id::{GcMark, UniqueId},
+        },
         lpc_ref::{LpcRef, NULL},
         process::Process,
         ref_bank::RefBank,
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::gc_bank::{GcRefBank};
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -143,7 +145,14 @@ impl CallFrame {
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
-            ..Self::new(process, function, called_with_num_args, upvalue_ptrs, vm_upvalues, cell_key)
+            ..Self::new(
+                process,
+                function,
+                called_with_num_args,
+                upvalue_ptrs,
+                vm_upvalues,
+                cell_key,
+            )
         }
     }
 
@@ -172,7 +181,14 @@ impl CallFrame {
     {
         Self {
             registers,
-            ..Self::new(process, function, called_with_num_args, upvalue_ptrs, vm_upvalues, cell_key)
+            ..Self::new(
+                process,
+                function,
+                called_with_num_args,
+                upvalue_ptrs,
+                vm_upvalues,
+                cell_key,
+            )
         }
     }
 
@@ -352,9 +368,9 @@ impl Display for CallFrame {
 mod tests {
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
-    use crate::interpreter::gc::gc_bank::GcBank;
 
     use super::*;
+    use crate::interpreter::gc::gc_bank::GcBank;
 
     #[test]
     fn new_sets_up_registers() {
@@ -377,7 +393,7 @@ mod tests {
             4,
             None,
             vm_upvalues.into(),
-            &mut cell_key
+            &mut cell_key,
         );
 
         assert_eq!(frame.registers.len(), 12);
@@ -510,7 +526,14 @@ mod tests {
             pf.num_upvalues = 2;
 
             let vm_upvalues = Rc::new(cell_key.cell(GcBank::default()));
-            let frame = CallFrame::new(cell_key.cell(process), Rc::new(pf), 0, None, vm_upvalues.clone(), &mut cell_key);
+            let frame = CallFrame::new(
+                cell_key.cell(process),
+                Rc::new(pf),
+                0,
+                None,
+                vm_upvalues.clone(),
+                &mut cell_key,
+            );
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
             assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 2);
@@ -538,8 +561,18 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Rc::new(pf), 0, None, vm_upvalues, &mut cell_key);
-            assert_eq!(frame.upvalue_ptrs, vec![Register(2), Register(3), Register(4)]);
+            let frame = CallFrame::new(
+                frame.process,
+                Rc::new(pf),
+                0,
+                None,
+                vm_upvalues,
+                &mut cell_key,
+            );
+            assert_eq!(
+                frame.upvalue_ptrs,
+                vec![Register(2), Register(3), Register(4)]
+            );
             assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 5);
         }
     }

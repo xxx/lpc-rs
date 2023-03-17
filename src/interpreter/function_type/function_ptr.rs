@@ -1,20 +1,27 @@
-use educe::Educe;
-use std::rc::Weak;
-use qcell::{QCell, QCellOwner};
-use lpc_rs_core::function_arity::FunctionArity;
-use lpc_rs_core::register::Register;
-use std::fmt::{Display, Formatter};
-use bit_set::BitSet;
-use std::collections::HashSet;
-use delegate::delegate;
-use itertools::Itertools;
-use crate::interpreter::function_type::FunctionAddress;
-use crate::interpreter::gc::unique_id::{GcMark, UniqueId};
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::process::Process;
-use crate::util::qcell_debug;
-use lpc_rs_core::function_flags::FunctionFlags;
+use std::{
+    collections::HashSet,
+    fmt::{Display, Formatter},
+    rc::Weak,
+};
 
+use bit_set::BitSet;
+use delegate::delegate;
+use educe::Educe;
+use itertools::Itertools;
+use lpc_rs_core::{
+    function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
+};
+use qcell::{QCell, QCellOwner};
+
+use crate::{
+    interpreter::{
+        function_type::FunctionAddress,
+        gc::unique_id::{GcMark, UniqueId},
+        lpc_ref::LpcRef,
+        process::Process,
+    },
+    util::qcell_debug,
+};
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone)]

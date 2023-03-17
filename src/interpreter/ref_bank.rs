@@ -6,10 +6,8 @@ use std::{
 };
 
 use delegate::delegate;
-
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
-
 
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
