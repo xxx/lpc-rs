@@ -59,7 +59,7 @@ pub struct CallFrame {
     /// Necessary for populating `argv` in ellipsis functions, e.g.
     pub arg_locations: Vec<RegisterVariant>,
     /// Our registers. By convention, `registers[0]` is for the return value of
-    /// the call.
+    /// the call, and is not otherwise used for storage of locals.
     pub registers: RefBank,
     /// Track where the pc is pointing in this frame's function's instructions.
     pc: Cell<usize>,
@@ -85,7 +85,8 @@ impl CallFrame {
     /// * `function` - The function being called
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
-    /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
+    /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
+    /// * `vm_upvalues` - The upvalue data from the [`Vm`]
     pub fn new<P>(
         process: P,
         function: Rc<ProgramFunction>,
@@ -130,7 +131,7 @@ impl CallFrame {
     ///   the call to this function?
     /// * `arg_capacity` - Reserve space for at least this many registers (this
     ///   is used for ellipsis args and `call_other`)
-    /// * `upvalues` - The indexes pointing to the real data, contained in `vm_upvalues`
+    /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
     /// * `vm_upvalues` - The upvalue data from the [`Vm`]
     pub fn with_minimum_arg_capacity<P>(
         process: P,
@@ -167,7 +168,8 @@ impl CallFrame {
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
     /// * `registers` - The registers that the CallFrame will use
-    /// * `upvalues` - The upvalues from the calling Function (i.e. Frame)
+    /// * `upvalue_ptrs` - The pointers to upvalued data from the calling Function (i.e. Frame)
+    /// * `vm_upvalues` - The upvalued data from the [`Vm`]
     pub fn with_registers<P>(
         process: P,
         function: Rc<ProgramFunction>,
@@ -194,7 +196,7 @@ impl CallFrame {
     }
 
     /// Reserve space for the upvalues that this call will initialize
-    /// Returns the index in the Process' `upvalues` array where the
+    /// Returns the index in the [`Vm`]'s `upvalues` array where the
     ///   newly-populated upvalues will be stored
     fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {
         let num_upvalues = self.function.num_upvalues;
@@ -213,7 +215,7 @@ impl CallFrame {
         }
     }
 
-    /// Assign an [`LpcRef`] to a specific location, based on the variant
+    /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
     pub fn set_location(
         &mut self,
         location: RegisterVariant,
@@ -344,7 +346,7 @@ impl Mark for CallFrame {
         &self,
         marked: &mut BitSet,
         processed: &mut HashSet<UniqueId>,
-        _cell_key: &QCellOwner,
+        cell_key: &QCellOwner,
     ) -> Result<()> {
         trace!("marking call frame {}", self.unique_id);
         if !processed.insert(self.unique_id) {
@@ -354,7 +356,7 @@ impl Mark for CallFrame {
         marked.extend(self.upvalue_ptrs.iter().copied().map(Register::index));
 
         for lpc_ref in self.registers.iter() {
-            lpc_ref.mark(marked, processed, _cell_key)?;
+            lpc_ref.mark(marked, processed, cell_key)?;
         }
 
         Ok(())
