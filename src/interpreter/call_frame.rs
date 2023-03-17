@@ -87,7 +87,7 @@ impl CallFrame {
         process: P,
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
-        upvalues: Option<&Vec<Register>>,
+        upvalue_ptrs: Option<&Vec<Register>>,
         vm_upvalues: Rc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
@@ -97,7 +97,7 @@ impl CallFrame {
         // add +1 for r0 (where return value is stored)
         let reg_len = function.arity().num_args + function.num_locals + 1;
         let process = process.into();
-        let ups = upvalues.cloned().unwrap_or_default();
+        let ups = upvalue_ptrs.cloned().unwrap_or_default();
 
         let mut instance = Self {
             process,
@@ -134,7 +134,7 @@ impl CallFrame {
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         arg_capacity: usize,
-        upvalues: Option<&Vec<Register>>,
+        upvalue_ptrs: Option<&Vec<Register>>,
         vm_upvalues: Rc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
@@ -143,7 +143,7 @@ impl CallFrame {
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
-            ..Self::new(process, function, called_with_num_args, upvalues, vm_upvalues, cell_key)
+            ..Self::new(process, function, called_with_num_args, upvalue_ptrs, vm_upvalues, cell_key)
         }
     }
 
@@ -163,7 +163,7 @@ impl CallFrame {
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         registers: RefBank,
-        upvalues: Option<&Vec<Register>>,
+        upvalue_ptrs: Option<&Vec<Register>>,
         vm_upvalues: Rc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
@@ -172,7 +172,7 @@ impl CallFrame {
     {
         Self {
             registers,
-            ..Self::new(process, function, called_with_num_args, upvalues, vm_upvalues, cell_key)
+            ..Self::new(process, function, called_with_num_args, upvalue_ptrs, vm_upvalues, cell_key)
         }
     }
 

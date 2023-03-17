@@ -190,7 +190,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
     /// The upvalues from the [`Vm`]
     #[educe(Debug(method = "qcell_debug"))]
-    upvalues: Rc<QCell<GcRefBank>>,
+    vm_upvalues: Rc<QCell<GcRefBank>>,
 
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
@@ -203,7 +203,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
-    pub fn new<T, U>(memory: T, upvalues: U) -> Self
+    pub fn new<T, U>(memory: T, vm_upvalues: U) -> Self
     where
         T: Into<Cow<'pool, Memory>> + Debug,
         U: Into<Rc<QCell<GcRefBank>>>,
@@ -213,7 +213,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             stack: CallStack::default(),
             catch_points: vec![],
             args: Vec::with_capacity(10),
-            upvalues: upvalues.into(),
+            vm_upvalues: vm_upvalues.into(),
 
             #[cfg(test)]
             popped_frame: None,
@@ -4335,7 +4335,7 @@ mod tests {
             assert_eq!(
                 upvalues.len(),
                 frame.vm_upvalues.ro(&cell_key).len(),
-                "upvalues: {:?}\nproc upvalues: {:?}",
+                "frame upvalues: {:?}\nvm upvalues: {:?}",
                 upvalues
                     .iter()
                     .map(|i| i.clone().into())
@@ -4350,7 +4350,7 @@ mod tests {
             }
         }
 
-        fn check_frame_upvalues<T>(code: &str, upvalues: &[T])
+        fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
         where
             T: Into<Register> + Copy,
         {
@@ -4362,9 +4362,9 @@ mod tests {
 
             let frame = snapshot.pop().unwrap();
 
-            assert_eq!(upvalues.len(), frame.upvalue_ptrs.len());
+            assert_eq!(upvalue_ptrs.len(), frame.upvalue_ptrs.len());
 
-            for (i, v) in upvalues.iter().enumerate() {
+            for (i, v) in upvalue_ptrs.iter().enumerate() {
                 let v: Register = (*v).into();
                 assert_eq!(v, frame.upvalue_ptrs[i], "index: {i}");
             }
@@ -4385,7 +4385,7 @@ mod tests {
             check_proc_upvalues(code, &expected);
 
             let expected = vec![Register(0)];
-            check_frame_upvalues(code, &expected);
+            check_frame_upvalue_ptrs(code, &expected);
 
             let expected: IndexMap<&str, BareVal> = IndexMap::new();
             check_local_vars(code, &expected);

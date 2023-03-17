@@ -40,7 +40,7 @@ pub struct TaskContext {
     simul_efuns: Option<Rc<QCell<Process>>>,
     /// The [`GcBank`] that stores all of the upvalues in the system, from the [`Vm`].
     #[educe(Debug(method = "qcell_debug"))]
-    upvalues: Rc<QCell<GcRefBank>>,
+    vm_upvalues: Rc<QCell<GcRefBank>>,
 }
 
 impl TaskContext {
@@ -57,7 +57,7 @@ impl TaskContext {
     }
 
     /// Create a new [`TaskContext`]
-    pub fn new<C, P, O, U>(config: C, process: P, object_space: O, upvalues: U, cell_key: &QCellOwner) -> Self
+    pub fn new<C, P, O, U>(config: C, process: P, object_space: O, vm_upvalues: U, cell_key: &QCellOwner) -> Self
     where
         C: Into<Rc<Config>>,
         P: Into<Rc<QCell<Process>>>,
@@ -79,7 +79,7 @@ impl TaskContext {
             instruction_counter,
             result: RefCell::new(LpcRef::default()),
             simul_efuns,
-            upvalues: upvalues.into(),
+            vm_upvalues: vm_upvalues.into(),
         }
     }
 
@@ -192,7 +192,7 @@ impl TaskContext {
     /// Return the `upvalues`
     #[inline]
     pub fn upvalues(&self) -> &Rc<QCell<GcRefBank>> {
-        &self.upvalues
+        &self.vm_upvalues
     }
 }
 
