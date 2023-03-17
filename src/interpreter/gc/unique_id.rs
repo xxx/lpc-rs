@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use std::fmt::{Display, Formatter};
 
 use bit_set::BitSet;
 use lpc_rs_errors::Result;
@@ -23,6 +24,12 @@ impl UniqueId {
 impl Default for UniqueId {
     fn default() -> Self {
         next_id()
+    }
+}
+
+impl Display for UniqueId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

@@ -12,6 +12,7 @@ use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
 };
 use qcell::{QCell, QCellOwner};
+use tracing::{instrument, trace};
 
 use crate::{
     interpreter::{
@@ -76,12 +77,15 @@ impl FunctionPtr {
 }
 
 impl GcMark for FunctionPtr {
+    #[instrument(skip(self, _cell_key))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut HashSet<UniqueId>,
         _cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
+        trace!("marking function ptr");
+
         if !processed.insert(self.unique_id) {
             return Ok(());
         }

@@ -5,6 +5,7 @@ use delegate::delegate;
 use qcell::QCellOwner;
 use lpc_rs_core::register::Register;
 use slab::Slab;
+use tracing::{instrument, trace};
 use lpc_rs_errors::LpcError;
 use crate::interpreter::gc::unique_id::GcSweep;
 use lpc_rs_errors::Result;
@@ -31,26 +32,19 @@ impl<T> GcBank<T> {
     }
 
     /// A Sweep function without the key
+    #[instrument(skip(self))]
     pub fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
-        for idx in marked {
-            if self.try_remove(idx).is_none() {
-                return Err(LpcError::new_bug(format!(
-                    concat!(
-                    "Failed to remove upvalue at index {} when doing a GC sweep.",
-                    " This should not happen."
-                    ),
-                    idx
-                )));
-            };
-        }
+        // `marked` is what's still alive. The rest can be culled.
+        self.registers.retain(|idx, _e| marked.contains(idx));
 
         Ok(())
     }
-
 }
 
 impl<T> GcSweep for GcBank<T> {
+    #[instrument(skip(self, _cell_key))]
     fn sweep(&mut self, marked: &BitSet, _cell_key: &mut QCellOwner) -> Result<()> {
+        trace!("sweeping");
         self.keyless_sweep(marked)
     }
 }

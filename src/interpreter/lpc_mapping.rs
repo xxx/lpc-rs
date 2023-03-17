@@ -4,6 +4,7 @@ use bit_set::BitSet;
 use delegate::delegate;
 use indexmap::IndexMap;
 use qcell::QCellOwner;
+use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::unique_id::{GcMark, UniqueId},
@@ -45,12 +46,15 @@ impl LpcMapping {
 }
 
 impl GcMark for LpcMapping {
+    #[instrument(skip(self, cell_key))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut HashSet<UniqueId>,
         cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
+        trace!("marking mapping");
+
         if !processed.insert(self.unique_id) {
             return Ok(());
         }

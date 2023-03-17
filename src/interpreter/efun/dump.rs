@@ -188,7 +188,6 @@ mod tests {
 
         let program = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
-        let mut cell_key = QCellOwner::new();
         let result = task.initialize_program(
             program,
             Config::default(),

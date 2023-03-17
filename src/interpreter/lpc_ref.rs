@@ -14,6 +14,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use qcell::{QCell, QCellOwner};
 use refpool::PoolRef;
+use tracing::{instrument, trace, trace_span};
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
@@ -418,12 +419,15 @@ impl LpcRef {
 }
 
 impl GcMark for LpcRef {
+    #[instrument(skip(self, cell_key))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut HashSet<UniqueId>,
         cell_key: &QCellOwner,
     ) -> Result<()> {
+        trace!("marking lpc ref of {type}", type = self.as_lpc_type());
+
         match self {
             LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => Ok(()),
             LpcRef::Array(arr) => {

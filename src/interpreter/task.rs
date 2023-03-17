@@ -3,6 +3,8 @@ use std::{
     fmt::{Debug, Display},
     rc::Rc,
 };
+use std::collections::HashSet;
+use bit_set::BitSet;
 
 use decorum::Total;
 use educe::Educe;
@@ -47,6 +49,7 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::gc::unique_id::{GcMark, GcSweep};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -305,6 +308,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             };
+
+            let mut marked = BitSet::new();
+            let mut processed = HashSet::new();
+            for frame in self.stack.iter() {
+                frame.mark(&mut marked, &mut processed, cell_key)?;
+            }
+
+            self.vm_upvalues.rw(cell_key).keyless_sweep(&marked)?;
         }
 
         Ok(task_context)
@@ -1918,16 +1929,17 @@ mod tests {
         test_support::{compile_prog, run_prog},
     };
 
-    // #[ctor::ctor]
-    // fn init() {
-    //     tracing::subscriber::set_global_default(
-    //         tracing_subscriber::fmt()
-    //             .with_max_level(tracing::Level::TRACE)
-    //             .with_writer(std::io::stdout)
-    //             .finish(),
-    //     )
-    //         .expect("setting tracing default failed");
-    // }
+    #[ctor::ctor]
+    fn init() {
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::INFO)
+                .with_writer(std::io::stdout)
+                // .with_env_filter("lpc_rs::interpreter::call_frame=trace")
+                .finish(),
+        )
+            .expect("setting tracing default failed");
+    }
 
     #[allow(dead_code)]
     fn format_slice<I>(slice: &[I]) -> String

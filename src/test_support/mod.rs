@@ -90,6 +90,7 @@ pub fn run_prog<'a>(
         .initialize_program(program, config, object_space, cell_key)
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
+            println!("{:?}", e);
             panic!("failed to initialize");
         });
 

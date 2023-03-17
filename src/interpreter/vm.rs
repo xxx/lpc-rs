@@ -6,6 +6,7 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
+use tracing::instrument;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -105,6 +106,7 @@ impl Vm {
 }
 
 impl GcSweep for Vm {
+    #[instrument(skip(self, cell_key))]
     fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()> {
         self.upvalues.rw(cell_key).keyless_sweep(marked)
     }

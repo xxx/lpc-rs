@@ -13,7 +13,7 @@ use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
-use tracing::instrument;
+use tracing::{instrument, trace};
 
 use crate::{
     interpreter::{
@@ -338,12 +338,14 @@ impl CallFrame {
 }
 
 impl GcMark for CallFrame {
+    #[instrument(skip(self, _cell_key))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut HashSet<UniqueId>,
         _cell_key: &QCellOwner,
     ) -> Result<()> {
+        trace!("marking call frame {}", self.unique_id);
         if !processed.insert(self.unique_id) {
             return Ok(());
         }
