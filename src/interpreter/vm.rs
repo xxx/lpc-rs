@@ -15,7 +15,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::gc_bank::GcBank;
+use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
 use crate::interpreter::gc::unique_id::GcSweep;
 use crate::interpreter::lpc_ref::LpcRef;
 
@@ -32,7 +32,7 @@ pub struct Vm {
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
     #[educe(Debug(method = "qcell_debug"))]
-    upvalues: Rc<QCell<GcBank<LpcRef>>>,
+    upvalues: Rc<QCell<GcRefBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]
     config: Rc<Config>,

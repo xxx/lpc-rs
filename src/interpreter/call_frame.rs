@@ -24,7 +24,7 @@ use crate::{
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::gc_bank::GcBank;
+use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -76,7 +76,7 @@ pub struct CallFrame {
     pub upvalues: Vec<Register>,
     /// The upvalue data from the [`Vm`]
     #[educe(Debug(method = "qcell_debug"))]
-    pub vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
+    pub vm_upvalues: Rc<QCell<GcRefBank>>,
     /// This object's unique ID, for garbage collection purposes
     pub unique_id: UniqueId,
 }
@@ -96,7 +96,7 @@ impl CallFrame {
         function: Rc<ProgramFunction>,
         called_with_num_args: usize,
         upvalues: Option<&Vec<Register>>,
-        vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
+        vm_upvalues: Rc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -143,7 +143,7 @@ impl CallFrame {
         called_with_num_args: usize,
         arg_capacity: usize,
         upvalues: Option<&Vec<Register>>,
-        vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
+        vm_upvalues: Rc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -172,7 +172,7 @@ impl CallFrame {
         called_with_num_args: usize,
         registers: RefBank,
         upvalues: Option<&Vec<Register>>,
-        vm_upvalues: Rc<QCell<GcBank<LpcRef>>>,
+        vm_upvalues: Rc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where

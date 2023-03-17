@@ -13,7 +13,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::gc_bank::GcBank;
+use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -40,7 +40,7 @@ pub struct TaskContext {
     simul_efuns: Option<Rc<QCell<Process>>>,
     /// The [`GcBank`] that stores all of the upvalues in the system, from the [`Vm`].
     #[educe(Debug(method = "qcell_debug"))]
-    upvalues: Rc<QCell<GcBank<LpcRef>>>,
+    upvalues: Rc<QCell<GcRefBank>>,
 }
 
 impl TaskContext {
@@ -62,7 +62,7 @@ impl TaskContext {
         C: Into<Rc<Config>>,
         P: Into<Rc<QCell<Process>>>,
         O: Into<Rc<QCell<ObjectSpace>>>,
-        U: Into<Rc<QCell<GcBank<LpcRef>>>>,
+        U: Into<Rc<QCell<GcRefBank>>>,
     {
         let config = config.into();
         let object_space = object_space.into();
@@ -191,7 +191,7 @@ impl TaskContext {
 
     /// Return the `upvalues`
     #[inline]
-    pub fn upvalues(&self) -> &Rc<QCell<GcBank<LpcRef>>> {
+    pub fn upvalues(&self) -> &Rc<QCell<GcRefBank>> {
         &self.upvalues
     }
 }

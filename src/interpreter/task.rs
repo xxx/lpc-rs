@@ -45,7 +45,7 @@ use crate::{
     util::keyable::Keyable,
     util::qcell_debug,
 };
-use crate::interpreter::gc::gc_bank::GcBank;
+use crate::interpreter::gc::gc_bank::{GcBank, GcRefBank};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -189,7 +189,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 
     /// The upvalues from the [`Vm`]
     #[educe(Debug(method = "qcell_debug"))]
-    upvalues: Rc<QCell<GcBank<LpcRef>>>,
+    upvalues: Rc<QCell<GcRefBank>>,
 
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
@@ -205,7 +205,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     pub fn new<T, U>(memory: T, upvalues: U) -> Self
     where
         T: Into<Cow<'pool, Memory>> + Debug,
-        U: Into<Rc<QCell<GcBank<LpcRef>>>>,
+        U: Into<Rc<QCell<GcRefBank>>>,
     {
         Self {
             memory: memory.into(),
