@@ -9,7 +9,7 @@ use slab::Slab;
 use tracing::{instrument, trace};
 
 use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::gc::sweep::GcSweep;
+use crate::interpreter::gc::sweep::{KeylessGcSweep};
 
 pub type GcRefBank = GcBank<LpcRef>;
 
@@ -29,22 +29,15 @@ impl<T> GcBank<T> {
             pub fn try_remove(&mut self, index: usize) -> Option<T>;
         }
     }
+}
 
-    /// A Sweep function without the key
+impl<T> KeylessGcSweep for GcBank<T> {
     #[instrument(skip(self))]
-    pub fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
+    fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
         // `marked` is what's still alive. The rest can be culled.
         self.registers.retain(|idx, _e| marked.contains(idx));
 
         Ok(())
-    }
-}
-
-impl<T> GcSweep for GcBank<T> {
-    #[instrument(skip(self, _cell_key))]
-    fn sweep(&mut self, marked: &BitSet, _cell_key: &mut QCellOwner) -> Result<()> {
-        trace!("sweeping");
-        self.keyless_sweep(marked)
     }
 }
 

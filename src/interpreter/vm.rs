@@ -22,7 +22,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::sweep::GcSweep;
+use crate::interpreter::gc::sweep::{GcSweep, KeylessGcSweep};
 
 #[derive(Educe)]
 #[educe(Debug)]

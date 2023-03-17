@@ -50,6 +50,7 @@ use crate::{
     util::{keyable::Keyable, qcell_debug},
 };
 use crate::interpreter::gc::mark::GcMark;
+use crate::interpreter::gc::sweep::KeylessGcSweep;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
