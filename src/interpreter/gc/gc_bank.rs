@@ -6,7 +6,7 @@ use qcell::QCellOwner;
 use lpc_rs_core::register::Register;
 use slab::Slab;
 use tracing::{instrument, trace};
-use lpc_rs_errors::LpcError;
+
 use crate::interpreter::gc::unique_id::GcSweep;
 use lpc_rs_errors::Result;
 

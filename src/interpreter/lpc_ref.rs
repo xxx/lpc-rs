@@ -14,7 +14,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use qcell::{QCell, QCellOwner};
 use refpool::PoolRef;
-use tracing::{instrument, trace, trace_span};
+use tracing::{instrument, trace};
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},

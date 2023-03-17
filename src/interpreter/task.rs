@@ -49,7 +49,7 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::gc::unique_id::{GcMark, GcSweep};
+use crate::interpreter::gc::unique_id::{GcMark};
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
