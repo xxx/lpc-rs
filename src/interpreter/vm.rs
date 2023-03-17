@@ -22,7 +22,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::gc::sweep::{GcSweep, KeylessGcSweep};
+use crate::interpreter::gc::sweep::{Sweep, KeylessSweep};
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -105,7 +105,7 @@ impl Vm {
     }
 }
 
-impl GcSweep for Vm {
+impl Sweep for Vm {
     #[instrument(skip(self, cell_key))]
     fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()> {
         self.upvalues.rw(cell_key).keyless_sweep(marked)

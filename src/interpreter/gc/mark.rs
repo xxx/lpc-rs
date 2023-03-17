@@ -5,8 +5,8 @@ use crate::interpreter::gc::unique_id::UniqueId;
 
 /// A trait for marking objects that contain references that could be
 /// garbage-collected.
-pub trait GcMark {
-    /// Mark indices in the [`Process`]' `upvalues` list that are live.
+pub trait Mark {
+    /// Mark indices in the [`Vm`]' `upvalues` list that are live.
     ///
     /// # Arguments
     /// * `marked` - A set of indices in the `upvalues` list that are live.

@@ -49,8 +49,8 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::gc::mark::GcMark;
-use crate::interpreter::gc::sweep::KeylessGcSweep;
+use crate::interpreter::gc::mark::Mark;
+use crate::interpreter::gc::sweep::KeylessSweep;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{

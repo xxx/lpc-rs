@@ -10,7 +10,7 @@ use crate::interpreter::{
     gc::unique_id::UniqueId,
     lpc_ref::{HashedLpcRef, LpcRef},
 };
-use crate::interpreter::gc::mark::GcMark;
+use crate::interpreter::gc::mark::Mark;
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
@@ -46,7 +46,7 @@ impl LpcMapping {
     }
 }
 
-impl GcMark for LpcMapping {
+impl Mark for LpcMapping {
     #[instrument(skip(self, cell_key))]
     fn mark(
         &self,

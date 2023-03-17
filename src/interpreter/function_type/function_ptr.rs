@@ -23,7 +23,7 @@ use crate::{
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::mark::GcMark;
+use crate::interpreter::gc::mark::Mark;
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone)]
@@ -77,7 +77,7 @@ impl FunctionPtr {
     }
 }
 
-impl GcMark for FunctionPtr {
+impl Mark for FunctionPtr {
     #[instrument(skip(self, _cell_key))]
     fn mark(
         &self,

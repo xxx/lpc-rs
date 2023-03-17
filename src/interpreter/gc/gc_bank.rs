@@ -9,7 +9,7 @@ use slab::Slab;
 use tracing::{instrument, trace};
 
 use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::gc::sweep::{KeylessGcSweep};
+use crate::interpreter::gc::sweep::{KeylessSweep};
 
 pub type GcRefBank = GcBank<LpcRef>;
 
@@ -31,7 +31,7 @@ impl<T> GcBank<T> {
     }
 }
 
-impl<T> KeylessGcSweep for GcBank<T> {
+impl<T> KeylessSweep for GcBank<T> {
     #[instrument(skip(self))]
     fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
         // `marked` is what's still alive. The rest can be culled.

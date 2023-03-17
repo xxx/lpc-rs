@@ -12,7 +12,7 @@ use crate::interpreter::{
     gc::unique_id::UniqueId,
     lpc_ref::LpcRef,
 };
-use crate::interpreter::gc::mark::GcMark;
+use crate::interpreter::gc::mark::Mark;
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
 /// purposes.
@@ -43,7 +43,7 @@ impl LpcArray {
     }
 }
 
-impl GcMark for LpcArray {
+impl Mark for LpcArray {
     #[instrument(skip(self, cell_key))]
     fn mark(
         &self,

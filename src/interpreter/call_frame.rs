@@ -27,7 +27,7 @@ use crate::{
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::mark::GcMark;
+use crate::interpreter::gc::mark::Mark;
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -338,7 +338,7 @@ impl CallFrame {
     }
 }
 
-impl GcMark for CallFrame {
+impl Mark for CallFrame {
     #[instrument(skip(self, _cell_key))]
     fn mark(
         &self,

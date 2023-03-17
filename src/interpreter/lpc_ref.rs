@@ -25,7 +25,7 @@ use crate::{
     try_extract_value,
     util::keyable::Keyable,
 };
-use crate::interpreter::gc::mark::GcMark;
+use crate::interpreter::gc::mark::Mark;
 
 pub const NULL: LpcRef = LpcRef::Int(0);
 
@@ -419,7 +419,7 @@ impl LpcRef {
     }
 }
 
-impl GcMark for LpcRef {
+impl Mark for LpcRef {
     #[instrument(skip(self, cell_key))]
     fn mark(
         &self,
