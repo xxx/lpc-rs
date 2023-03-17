@@ -9,9 +9,10 @@ use qcell::QCellOwner;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
-    gc::unique_id::{GcMark, UniqueId},
+    gc::unique_id::UniqueId,
     lpc_ref::LpcRef,
 };
+use crate::interpreter::gc::mark::GcMark;
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
 /// purposes.

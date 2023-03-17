@@ -17,12 +17,13 @@ use tracing::{instrument, trace};
 use crate::{
     interpreter::{
         function_type::FunctionAddress,
-        gc::unique_id::{GcMark, UniqueId},
+        gc::unique_id::UniqueId,
         lpc_ref::LpcRef,
         process::Process,
     },
     util::qcell_debug,
 };
+use crate::interpreter::gc::mark::GcMark;
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone)]

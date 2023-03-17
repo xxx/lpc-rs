@@ -8,7 +8,8 @@ use qcell::QCellOwner;
 use slab::Slab;
 use tracing::{instrument, trace};
 
-use crate::interpreter::{gc::unique_id::GcSweep, lpc_ref::LpcRef};
+use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::gc::sweep::GcSweep;
 
 pub type GcRefBank = GcBank<LpcRef>;
 

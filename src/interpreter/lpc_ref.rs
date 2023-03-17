@@ -9,7 +9,7 @@ use std::{
 };
 
 use bit_set::BitSet;
-use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
+use lpc_rs_core::{BaseFloat, lpc_type::LpcType, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use qcell::{QCell, QCellOwner};
@@ -19,12 +19,13 @@ use tracing::{instrument, trace};
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
-        gc::unique_id::{GcMark, UniqueId},
+        gc::unique_id::UniqueId,
         lpc_value::LpcValue,
     },
     try_extract_value,
     util::keyable::Keyable,
 };
+use crate::interpreter::gc::mark::GcMark;
 
 pub const NULL: LpcRef = LpcRef::Int(0);
 
@@ -622,10 +623,8 @@ impl<'a> Keyable<'a> for HashedLpcRef {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-
     use claim::assert_err;
-    use refpool::{Pool, PoolRef};
+    use refpool::Pool;
 
     use super::*;
     use crate::interpreter::lpc_array::LpcArray;

@@ -14,7 +14,6 @@ use crate::{
     interpreter::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
-            unique_id::GcSweep,
         },
         memory::Memory,
         object_space::ObjectSpace,
@@ -23,6 +22,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::gc::sweep::GcSweep;
 
 #[derive(Educe)]
 #[educe(Debug)]

@@ -10,7 +10,7 @@ use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
@@ -19,7 +19,7 @@ use crate::{
     interpreter::{
         gc::{
             gc_bank::GcRefBank,
-            unique_id::{GcMark, UniqueId},
+            unique_id::UniqueId,
         },
         lpc_ref::{LpcRef, NULL},
         process::Process,
@@ -27,6 +27,7 @@ use crate::{
     },
     util::qcell_debug,
 };
+use crate::interpreter::gc::mark::GcMark;
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
