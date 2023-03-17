@@ -949,6 +949,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         };
 
         // TODO: reduce the amount of time this borrow is live
+        //       This might be ok because functions are only borrowed immutably at this time.
         let borrowed = func.borrow();
         let ptr = try_extract_value!(*borrowed, LpcValue::Function);
 
@@ -1441,13 +1442,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
-        let partial_args: Vec<Option<LpcRef>> = applied_arguments
+        let partial_args = applied_arguments
             .iter()
             .map(|arg| {
-                // TODO: This should not use unwrap
-                arg.map(|register| get_loc!(self, register, cell_key).unwrap().into_owned())
+                arg.map(|register| Ok(get_loc!(self, register, cell_key)?.into_owned())).transpose()
             })
-            .collect();
+            .collect::<Result<Vec<Option<LpcRef>>>>()?;
 
         let frame = self.stack.current_frame()?;
         let fp = FunctionPtr {

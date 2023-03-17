@@ -9,6 +9,7 @@ use delegate::delegate;
 use educe::Educe;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
+use crate::util::qcell_debug;
 
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
@@ -31,12 +32,9 @@ impl RefBank {
 }
 
 /// A type to handle data movement (the arena itself stores the actual data)
-#[derive(Educe, Clone, Default, PartialEq, Eq)]
-#[educe(Debug)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Bank<T> {
     /// Our storage.
-    // TODO: Don't ignore this. It's ignored because of `QCell`ed data.
-    #[educe(Debug(ignore))]
     pub registers: Vec<T>,
 }
 

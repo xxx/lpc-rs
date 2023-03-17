@@ -85,19 +85,6 @@ impl GcMark for FunctionPtr {
     }
 }
 
-impl PartialEq for FunctionPtr {
-    fn eq(&self, other: &Self) -> bool {
-        // TODO handle owner somehow
-        self.address == other.address
-            && self.arity == other.arity
-            && self.partial_args == other.partial_args
-            && self.call_other == other.call_other
-            && self.upvalue_ptrs == other.upvalue_ptrs
-    }
-}
-
-impl Eq for FunctionPtr {}
-
 impl Display for FunctionPtr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();

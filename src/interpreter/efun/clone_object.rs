@@ -29,7 +29,6 @@ fn load_master<const N: usize>(
         context.in_game_cwd(cell_key),
         &context.config().lib_dir,
     );
-    // TODO: non-UTF8 filesystems could have problems here
     let path_str: &str = full_path.as_ref();
 
     match context.lookup_process(path_str, cell_key) {

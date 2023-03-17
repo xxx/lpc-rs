@@ -191,7 +191,7 @@ impl ToLpcPath for &str {
 impl AsRef<str> for LpcPath {
     fn as_ref(&self) -> &str {
         match self {
-            // TODO: terrible defaults here
+            // terrible defaults here. is there anything better?
             LpcPath::Server(x) => x.to_str().unwrap_or("."),
             LpcPath::InGame(x) => x.to_str().unwrap_or("/"),
         }

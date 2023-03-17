@@ -583,7 +583,7 @@ impl Preprocessor {
                         Ok(())
                     }
                     Err(e) => {
-                        // TODO: bleeeeeeech
+                        // TODO: bleeeeeeech. Errors should have a better way to handle this.
                         // If the error is just "file not found", keep looking
                         if e.as_ref().contains("unable to read include file") {
                             continue;
