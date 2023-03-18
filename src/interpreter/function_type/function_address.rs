@@ -48,7 +48,7 @@ impl FunctionAddress {
     pub fn flags(&self) -> FunctionFlags {
         match self {
             FunctionAddress::Local(_, x) => x.prototype.flags,
-            FunctionAddress::Dynamic(_) => FunctionFlags::default(),
+            FunctionAddress::Dynamic(_) => FunctionFlags::default(), // TODO: ???
             FunctionAddress::Efun(x) => EFUN_PROTOTYPES
                 .get(x.as_str())
                 .map(|x| x.flags)

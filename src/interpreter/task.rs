@@ -969,7 +969,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let borrowed = func.borrow();
         let ptr = try_extract_value!(*borrowed, LpcValue::Function);
 
-        trace!("Calling function ptr: {}", ptr);
+        trace!("Calling function ptr: {}", ptr.with_key(cell_key));
 
         let arity = ptr.arity;
         let partial_args = &ptr.partial_args;
@@ -979,14 +979,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 .fold(0, |sum, arg| sum + arg.is_some() as usize);
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
         let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
-        // for dynamic receivers, skip the first register of the passed args,
-        // which contains the receiver itself
+        // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = dynamic_receiver as usize;
         let adjusted_num_args = *num_args - (dynamic_receiver as usize);
         let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
-            if !pf.public() && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver)) {
+            if !pf.public() && !pf.is_closure() && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver)) {
                 return set_loc!(self, Register(0).as_local(), NULL, cell_key);
             }
         }
@@ -1926,18 +1925,6 @@ mod tests {
         extract_value,
         test_support::{compile_prog, run_prog},
     };
-
-    #[ctor::ctor]
-    fn init() {
-        tracing::subscriber::set_global_default(
-            tracing_subscriber::fmt()
-                .with_max_level(tracing::Level::INFO)
-                .with_writer(std::io::stdout)
-                // .with_env_filter("lpc_rs::interpreter::call_frame=trace")
-                .finish(),
-        )
-        .expect("setting tracing default failed");
-    }
 
     #[allow(dead_code)]
     fn format_slice<I>(slice: &[I]) -> String
