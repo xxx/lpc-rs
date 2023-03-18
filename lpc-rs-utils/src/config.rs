@@ -1,13 +1,11 @@
-use std::{path::Path, str::FromStr};
-use std::borrow::Cow;
+use std::{borrow::Cow, path::Path, str::FromStr};
 
 use derive_builder::Builder;
 use fs_err as fs;
 use if_chain::if_chain;
-use lpc_rs_errors::{LpcError, Result};
-use toml::{value::Index, Value};
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::span::Span;
+use lpc_rs_errors::{span::Span, LpcError, Result};
+use toml::{value::Index, Value};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -286,7 +284,11 @@ impl ConfigBuilder {
 
 impl Config {
     /// Validate the passed-in path, and return a canonical, full version of it
-    pub fn validate_in_game_path<'a>(&self, path: &'a LpcPath, span: Option<Span>) -> Result<Cow<'a, Path>> {
+    pub fn validate_in_game_path<'a>(
+        &self,
+        path: &'a LpcPath,
+        span: Option<Span>,
+    ) -> Result<Cow<'a, Path>> {
         let true_path = path.as_server(&self.lib_dir);
 
         if path.as_os_str().is_empty() || !true_path.starts_with(&self.lib_dir) {

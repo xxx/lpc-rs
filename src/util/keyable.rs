@@ -1,10 +1,10 @@
 use std::{
+    cmp::Ordering,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
 };
-use std::cmp::Ordering;
-use indexmap::IndexMap;
 
+use indexmap::IndexMap;
 use qcell::QCellOwner;
 
 #[derive(Clone)]
@@ -168,7 +168,7 @@ where
     }
 }
 
-impl <'a, K, V> Keyable<'a> for IndexMap<K, V>
+impl<'a, K, V> Keyable<'a> for IndexMap<K, V>
 where
     K: Keyable<'a> + Eq + Hash,
     V: Keyable<'a>,

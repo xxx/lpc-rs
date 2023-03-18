@@ -9,8 +9,8 @@ use crate::{
         lpc_value::LpcValue,
     },
     try_extract_value,
+    util::keyable::Keyable,
 };
-use crate::util::keyable::Keyable;
 
 const MAX_RECURSION: usize = 20;
 

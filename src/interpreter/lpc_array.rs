@@ -1,21 +1,23 @@
 use std::{
+    cmp::Ordering,
     collections::HashSet,
+    fmt::Formatter,
+    hash::{Hash, Hasher},
     ops::{Deref, Index, IndexMut, Range, RangeInclusive},
 };
-use std::cmp::Ordering;
-use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
 
 use bit_set::BitSet;
 use delegate::delegate;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
 
-use crate::interpreter::{
-    gc::{mark::Mark, unique_id::UniqueId},
-    lpc_ref::LpcRef,
+use crate::{
+    interpreter::{
+        gc::{mark::Mark, unique_id::UniqueId},
+        lpc_ref::LpcRef,
+    },
+    util::keyable::Keyable,
 };
-use crate::util::keyable::Keyable;
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
 /// purposes.
@@ -99,18 +101,20 @@ impl<'a> Keyable<'a> for LpcArray {
     }
 
     fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
-        self.unique_id.partial_cmp(&other.unique_id).and_then(|ord| {
-            if ord == Ordering::Equal {
-                self.array
-                    .iter()
-                    .zip(other.array.iter())
-                    .map(|(a, b)| a.with_key(cell_key).partial_cmp(&b.with_key(cell_key)))
-                    .find(|ord| ord != &Some(Ordering::Equal))
-                    .unwrap_or(Some(Ordering::Equal))
-            } else {
-                Some(ord)
-            }
-        })
+        self.unique_id
+            .partial_cmp(&other.unique_id)
+            .and_then(|ord| {
+                if ord == Ordering::Equal {
+                    self.array
+                        .iter()
+                        .zip(other.array.iter())
+                        .map(|(a, b)| a.with_key(cell_key).partial_cmp(&b.with_key(cell_key)))
+                        .find(|ord| ord != &Some(Ordering::Equal))
+                        .unwrap_or(Some(Ordering::Equal))
+                } else {
+                    Some(ord)
+                }
+            })
     }
 }
 

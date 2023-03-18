@@ -1,10 +1,10 @@
 use std::{
+    cmp::Ordering,
     collections::HashSet,
     fmt::{Display, Formatter},
+    hash::Hasher,
     rc::Weak,
 };
-use std::cmp::Ordering;
-use std::hash::Hasher;
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -18,14 +18,13 @@ use tracing::{instrument, trace};
 
 use crate::{
     interpreter::{
+        function_type::function_address::FunctionAddress,
         gc::{mark::Mark, unique_id::UniqueId},
         lpc_ref::LpcRef,
         process::Process,
     },
-    util::qcell_debug,
+    util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::function_type::function_address::FunctionAddress;
-use crate::util::keyable::Keyable;
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone)]

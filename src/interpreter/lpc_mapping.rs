@@ -1,7 +1,9 @@
-use std::cmp::Ordering;
-use std::collections::HashSet;
-use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    fmt::Formatter,
+    hash::{Hash, Hasher},
+};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -9,11 +11,13 @@ use indexmap::IndexMap;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
 
-use crate::interpreter::{
-    gc::{mark::Mark, unique_id::UniqueId},
-    lpc_ref::{HashedLpcRef, LpcRef},
+use crate::{
+    interpreter::{
+        gc::{mark::Mark, unique_id::UniqueId},
+        lpc_ref::{HashedLpcRef, LpcRef},
+    },
+    util::keyable::Keyable,
 };
-use crate::util::keyable::Keyable;
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
@@ -91,8 +95,7 @@ impl<'a> Keyable<'a> for LpcMapping {
     }
 
     fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
-        self.unique_id == other.unique_id
-            && self.mapping.keyable_eq(&other.mapping, cell_key)
+        self.unique_id == other.unique_id && self.mapping.keyable_eq(&other.mapping, cell_key)
     }
 
     fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::{Hasher}, rc::Rc};
+use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
@@ -9,7 +9,7 @@ use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{process::Process, program::Program},
-    util::{keyable::Keyable},
+    util::keyable::Keyable,
 };
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
@@ -34,7 +34,10 @@ pub struct ObjectSpace {
     // TODO: store simul_efuns here instead of in the processes?
 }
 
-fn processes_debug(processes: &HashMap<String, Rc<QCell<Process>>>, f: &mut Formatter<'_>) -> std::fmt::Result {
+fn processes_debug(
+    processes: &HashMap<String, Rc<QCell<Process>>>,
+    f: &mut Formatter<'_>,
+) -> std::fmt::Result {
     write!(f, "{}", processes.keys().join(", "))
 }
 

@@ -1,16 +1,19 @@
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    fmt::{Display, Formatter},
+    hash::Hasher,
+    rc::Rc,
+};
+
 use educe::Educe;
 use lpc_rs_core::function_flags::FunctionFlags;
-use std::rc::Rc;
-use qcell::{QCell, QCellOwner};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use std::fmt::{Display, Formatter};
-use std::hash::{Hasher};
-use crate::interpreter::efun::EFUN_PROTOTYPES;
-use crate::interpreter::process::Process;
-use crate::util::keyable::Keyable;
-use crate::util::qcell_debug;
+use qcell::{QCell, QCellOwner};
 
+use crate::{
+    interpreter::{efun::EFUN_PROTOTYPES, process::Process},
+    util::{keyable::Keyable, qcell_debug},
+};
 
 /// Different ways to store a function address, for handling at runtime.
 /// This is the run-time equivalent of
@@ -119,15 +122,14 @@ impl<'a> Keyable<'a> for FunctionAddress {
 
     fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
         match (self, other) {
-            (FunctionAddress::Local(process, function), FunctionAddress::Local(other_process, other_function)) => {
-                process.ro(cell_key) == other_process.ro(cell_key) && function == other_function
-            }
+            (
+                FunctionAddress::Local(process, function),
+                FunctionAddress::Local(other_process, other_function),
+            ) => process.ro(cell_key) == other_process.ro(cell_key) && function == other_function,
             (FunctionAddress::Dynamic(name), FunctionAddress::Dynamic(other_name)) => {
                 name == other_name
             }
-            (FunctionAddress::Efun(name), FunctionAddress::Efun(other_name)) => {
-                name == other_name
-            }
+            (FunctionAddress::Efun(name), FunctionAddress::Efun(other_name)) => name == other_name,
             _ => false,
         }
     }

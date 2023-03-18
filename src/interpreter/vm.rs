@@ -1,17 +1,16 @@
-use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, rc::Rc};
-use std::path::Path;
+use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
 
 use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result};
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::instrument;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::CompilerBuilder,
+    compiler::{Compiler, CompilerBuilder},
     interpreter::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
@@ -19,13 +18,12 @@ use crate::{
         },
         memory::Memory,
         object_space::ObjectSpace,
+        program::Program,
         task::Task,
         task_context::TaskContext,
     },
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
-use crate::compiler::Compiler;
-use crate::interpreter::program::Program;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -100,9 +98,9 @@ impl Vm {
 
         self.with_compiler(cell_key, |compiler, cell_key| {
             compiler.compile_in_game_file(filename, None, cell_key)
-        }).and_then(|program| {
-            self.create_and_initialize_task(program, cell_key)
-        }).map_err(|e| {
+        })
+        .and_then(|program| self.create_and_initialize_task(program, cell_key))
+        .map_err(|e| {
             e.emit_diagnostics();
             e
         })
@@ -126,19 +124,22 @@ impl Vm {
     /// # Examples
     ///
     /// ```
-    /// use qcell::QCellOwner;
-    /// use lpc_rs::interpreter::lpc_ref::LpcRef;
-    /// use lpc_rs::interpreter::vm::Vm;
+    /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
+    /// use qcell::QCellOwner;
     ///
     /// let mut cell_key = QCellOwner::new();
     /// let mut vm = Vm::new(Config::default(), &cell_key);
-    /// let ctx = vm.initialize_string("int x = 5;", "test.c", &mut cell_key).unwrap();
+    /// let ctx = vm
+    ///     .initialize_string("int x = 5;", "test.c", &mut cell_key)
+    ///     .unwrap();
     ///
-    /// assert_eq!(ctx.process().ro(&cell_key).globals.registers[0], LpcRef::Int(5));
+    /// assert_eq!(
+    ///     ctx.process().ro(&cell_key).globals.registers[0],
+    ///     LpcRef::Int(5)
+    /// );
     /// assert!(vm.object_space.ro(&cell_key).lookup("/test").is_some());
     /// ```
-    ///
     pub fn initialize_string<P, S>(
         &mut self,
         code: S,
@@ -149,15 +150,14 @@ impl Vm {
         P: AsRef<Path>,
         S: AsRef<str>,
     {
-        let f =
-            LpcPath::new_in_game(filename.as_ref(), "/", &self.config.lib_dir);
+        let f = LpcPath::new_in_game(filename.as_ref(), "/", &self.config.lib_dir);
         self.config.validate_in_game_path(&f, None)?;
 
         self.with_compiler(cell_key, |compiler, cell_key| {
             compiler.compile_string(f, code, cell_key)
-        }).and_then(|program| {
-            self.create_and_initialize_task(program, cell_key)
-        }).map_err(|e| {
+        })
+        .and_then(|program| self.create_and_initialize_task(program, cell_key))
+        .map_err(|e| {
             e.emit_diagnostics();
             e
         })
@@ -177,9 +177,12 @@ impl Vm {
     }
 
     /// Create a new [`Task`] and initialize it with the given [`Program`].
-    fn create_and_initialize_task(&mut self, program: Program, cell_key: &mut QCellOwner) -> Result<TaskContext> {
-        let mut task: Task<MAX_CALL_STACK_SIZE> =
-            Task::new(&self.memory, self.upvalues.clone());
+    fn create_and_initialize_task(
+        &mut self,
+        program: Program,
+        cell_key: &mut QCellOwner,
+    ) -> Result<TaskContext> {
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
 
         task.initialize_program(
             program,
@@ -187,12 +190,12 @@ impl Vm {
             self.object_space.clone(),
             cell_key,
         )
-            .map(|ctx| {
-                let process = ctx.process();
-                ObjectSpace::insert_process(&self.object_space, process, cell_key);
+        .map(|ctx| {
+            let process = ctx.process();
+            ObjectSpace::insert_process(&self.object_space, process, cell_key);
 
-                ctx
-            })
+            ctx
+        })
     }
 }
 
@@ -240,6 +243,7 @@ impl<'a> Keyable<'a> for Vm {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+
     use super::*;
     use crate::test_support::test_config;
 
@@ -281,14 +285,18 @@ mod tests {
             }
         "# };
 
-        vm.initialize_string(storage, "storage", &mut cell_key).map_err(|e| {
-            e.emit_diagnostics();
-            e
-        }).unwrap();
-        vm.initialize_string(runner, "runner", &mut cell_key).map_err(|e| {
-            e.emit_diagnostics();
-            e
-        }).unwrap();
+        vm.initialize_string(storage, "storage", &mut cell_key)
+            .map_err(|e| {
+                e.emit_diagnostics();
+                e
+            })
+            .unwrap();
+        vm.initialize_string(runner, "runner", &mut cell_key)
+            .map_err(|e| {
+                e.emit_diagnostics();
+                e
+            })
+            .unwrap();
 
         println!("{:?}", vm.upvalues.ro(&cell_key));
     }

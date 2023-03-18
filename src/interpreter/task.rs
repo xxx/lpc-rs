@@ -12,13 +12,13 @@ use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
-    EFUN,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
-    INIT_PROGRAM,
-    lpc_type::LpcType, LpcInt, register::{Register, RegisterVariant},
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    LpcInt, EFUN, INIT_PROGRAM,
 };
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
@@ -30,7 +30,7 @@ use crate::{
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        function_type::function_ptr::FunctionPtr,
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{
             gc_bank::{GcBank, GcRefBank},
             unique_id::UniqueId,
@@ -47,7 +47,6 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::function_type::function_address::FunctionAddress;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
