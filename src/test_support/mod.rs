@@ -17,6 +17,20 @@ pub mod factories;
 
 /// Module for various test utilities that are shared among unit tests.
 
+/// init() acts as a global test setup.
+#[ctor::ctor]
+fn init() {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_writer(std::io::stdout)
+            // .with_env_filter("lpc_rs::interpreter::call_frame=trace")
+            .with_env_filter("lpc_rs::interpreter::task=trace")
+            .finish(),
+    )
+        .expect("setting tracing default failed");
+}
+
 #[macro_export]
 macro_rules! assert_regex {
     ($string:expr, $regex:expr) => {

@@ -20,7 +20,7 @@ use crate::{
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        ref_bank::RefBank,
+        bank::RefBank,
     },
     util::qcell_debug,
 };

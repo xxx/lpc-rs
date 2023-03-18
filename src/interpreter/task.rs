@@ -41,7 +41,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        ref_bank::RefBank,
+        bank::RefBank,
         task_context::TaskContext,
     },
     try_extract_value,

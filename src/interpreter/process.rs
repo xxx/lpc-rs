@@ -11,7 +11,7 @@ use delegate::delegate;
 use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     program::Program,
-    ref_bank::RefBank,
+    bank::RefBank,
 };
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its

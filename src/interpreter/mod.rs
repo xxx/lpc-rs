@@ -12,7 +12,7 @@ pub mod memory;
 pub mod object_space;
 pub mod process;
 pub mod program;
-pub mod ref_bank;
+pub mod bank;
 pub mod task;
 pub mod task_context;
 pub mod vm;
