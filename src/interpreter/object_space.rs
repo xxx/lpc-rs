@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::{Hash, Hasher}, io, rc::Rc};
+use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::{Hasher}, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
@@ -9,7 +9,7 @@ use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{process::Process, program::Program},
-    util::{keyable::Keyable, qcell_debug},
+    util::{keyable::Keyable},
 };
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
@@ -163,15 +163,15 @@ impl<'a> Keyable<'a> for ObjectSpace {
         write!(f, " }}")
     }
 
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
         unimplemented!()
     }
 
-    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+    fn keyable_eq(&self, _other: &Self, _cell_key: &QCellOwner) -> bool {
         unimplemented!()
     }
 
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
         unimplemented!()
     }
 }

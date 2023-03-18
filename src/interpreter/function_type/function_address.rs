@@ -5,7 +5,7 @@ use std::rc::Rc;
 use qcell::{QCell, QCellOwner};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{Hasher};
 use crate::interpreter::efun::EFUN_PROTOTYPES;
 use crate::interpreter::process::Process;
 use crate::util::keyable::Keyable;
@@ -101,7 +101,7 @@ impl<'a> Keyable<'a> for FunctionAddress {
         }
     }
 
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
         unimplemented!()
         // match self {
         //     FunctionAddress::Local(process, function) => {
@@ -132,7 +132,7 @@ impl<'a> Keyable<'a> for FunctionAddress {
         }
     }
 
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
         unimplemented!()
         // match (self, other) {
         //     (FunctionAddress::Local(process, function), FunctionAddress::Local(other_process, other_function)) => {

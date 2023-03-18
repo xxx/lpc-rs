@@ -1,6 +1,6 @@
 use clap::Parser;
 use if_chain::if_chain;
-use lpc_rs::{interpreter::vm::Vm, util::keyable::Keyable};
+use lpc_rs::{interpreter::vm::Vm};
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
 

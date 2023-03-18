@@ -161,15 +161,15 @@ impl<'a> Keyable<'a> for FunctionPtr {
         write!(f, ")")
     }
 
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
         todo!()
     }
 
-    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+    fn keyable_eq(&self, _other: &Self, _cell_key: &QCellOwner) -> bool {
         todo!()
     }
 
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
         todo!()
     }
 }

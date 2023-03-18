@@ -33,8 +33,6 @@ use crate::{
         function_type::function_ptr::FunctionPtr,
         gc::{
             gc_bank::{GcBank, GcRefBank},
-            mark::Mark,
-            sweep::KeylessSweep,
             unique_id::UniqueId,
         },
         lpc_ref::{LpcRef, NULL},
@@ -4677,7 +4675,7 @@ mod tests {
                 }
             "##};
 
-            let (task, ctx) = run_prog(code, &mut cell_key);
+            let (_task, ctx) = run_prog(code, &mut cell_key);
             assert!(ctx.upvalues().ro(&cell_key).is_empty());
         }
     }

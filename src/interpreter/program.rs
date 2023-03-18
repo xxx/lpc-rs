@@ -235,7 +235,7 @@ mod tests {
         "#;
         let compiler = Compiler::default();
         let prog = compiler
-            .compile_string("foo.c", content.to_string(), &mut cell_key)
+            .compile_string("foo.c", content, &mut cell_key)
             .unwrap();
 
         let msgpack = prog.to_msgpack();

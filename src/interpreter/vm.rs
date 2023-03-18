@@ -1,10 +1,10 @@
-use std::{cmp::Ordering, collections::HashSet, fmt::Formatter, hash::Hasher, rc::Rc};
+use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, rc::Rc};
 use std::path::Path;
 
 use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{Result};
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::instrument;
@@ -15,13 +15,10 @@ use crate::{
     interpreter::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
-            mark::Mark,
             sweep::{KeylessSweep, Sweep},
-            unique_id::UniqueId,
         },
         memory::Memory,
         object_space::ObjectSpace,
-        process::Process,
         task::Task,
         task_context::TaskContext,
     },
@@ -153,7 +150,7 @@ impl Vm {
         S: AsRef<str>,
     {
         let f =
-            LpcPath::new_in_game(&filename.as_ref(), "/", &self.config.lib_dir);
+            LpcPath::new_in_game(filename.as_ref(), "/", &self.config.lib_dir);
         self.config.validate_in_game_path(&f, None)?;
 
         self.with_compiler(cell_key, |compiler, cell_key| {
@@ -227,15 +224,15 @@ impl<'a> Keyable<'a> for Vm {
         )
     }
 
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
         unimplemented!()
     }
 
-    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+    fn keyable_eq(&self, _other: &Self, _cell_key: &QCellOwner) -> bool {
         unimplemented!()
     }
 
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
         unimplemented!()
     }
 }
