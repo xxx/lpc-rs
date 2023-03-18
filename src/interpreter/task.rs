@@ -1390,7 +1390,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
             FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name {
                 FunctionName::Var(_) => {
-                    return Err(self.runtime_error(concat!(
+                    return Err(self.runtime_bug(concat!(
                         "A function pointer with `&` as the receiver somehow has a ",
                         "var function name. This should not be reachable if ",
                         "semantic checks have passed."
