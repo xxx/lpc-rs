@@ -979,6 +979,12 @@ impl TreeWalker for CodegenWalker {
             } else {
                 push_copy(self);
             }
+        } else if let Some(Symbol {
+            type_: LpcType::Function(false) | LpcType::Mixed(false),
+            ..
+        }) = self.context.lookup_var(&node.name)
+        {
+            push_copy(self);
         } else if node.receiver.is_some()
             || matches!(
                 self.context.scopes.lookup(&node.name),
@@ -991,8 +997,8 @@ impl TreeWalker for CodegenWalker {
             push_copy(self);
         } else {
             return Err(LpcError::new_bug(format!(
-                "Unable to find return type for `{}`. This is a weird issue that indicates \
-                something very broken in the semantic checks.",
+                "Unable to find the return type for `{}`. This is a weird issue that indicates \
+                something very broken in the semantic checks, or that I'm not looking hard enough.",
                 node.name
             ))
             .with_span(node.span));

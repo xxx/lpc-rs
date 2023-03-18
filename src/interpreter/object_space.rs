@@ -1,19 +1,16 @@
-use std::{collections::HashMap, rc::Rc};
-use std::cmp::Ordering;
-use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
+use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::{Hash, Hasher}, io, rc::Rc};
 
 use delegate::delegate;
 use educe::Educe;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{process::Process, program::Program},
-    util::qcell_debug,
+    util::{keyable::Keyable, qcell_debug},
 };
-use crate::util::keyable::Keyable;
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -26,7 +23,7 @@ const OBJECT_SPACE_SIZE: usize = 100_000;
 #[educe(Debug)]
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
-    #[educe(Debug(method = "qcell_debug"))]
+    #[educe(Debug(method = "processes_debug"))]
     processes: HashMap<String, Rc<QCell<Process>>>,
 
     /// How many clones have been created so far?
@@ -34,8 +31,11 @@ pub struct ObjectSpace {
 
     /// Our configuration
     config: Rc<Config>,
-
     // TODO: store simul_efuns here instead of in the processes?
+}
+
+fn processes_debug(processes: &HashMap<String, Rc<QCell<Process>>>, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", processes.keys().join(", "))
 }
 
 impl ObjectSpace {
@@ -118,7 +118,7 @@ impl ObjectSpace {
     }
 
     #[inline]
-    pub fn insert_process_directly<P, S>(&mut self, name: S, process: P)
+    fn insert_process_directly<P, S>(&mut self, name: S, process: P)
     where
         P: Into<Rc<QCell<Process>>>,
         S: Into<String>,
@@ -149,10 +149,14 @@ impl Default for ObjectSpace {
 
 impl<'a> Keyable<'a> for ObjectSpace {
     fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        let processes = self.processes.iter().map(|(k, v)| {
-            let v = v.ro(cell_key);
-            (k, v)
-        }).collect::<IndexMap<_, _>>();
+        let processes = self
+            .processes
+            .iter()
+            .map(|(k, v)| {
+                let v = v.ro(cell_key);
+                (k, v)
+            })
+            .collect::<IndexMap<_, _>>();
         write!(f, "ObjectSpace {{ processes: {:?}", processes)?;
         write!(f, ", clone_count: {:?}", self.clone_count)?;
         write!(f, ", config: {:?}", self.config)?;

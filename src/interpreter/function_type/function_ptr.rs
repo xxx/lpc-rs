@@ -3,6 +3,8 @@ use std::{
     fmt::{Display, Formatter},
     rc::Weak,
 };
+use std::cmp::Ordering;
+use std::hash::Hasher;
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -16,14 +18,14 @@ use tracing::{instrument, trace};
 
 use crate::{
     interpreter::{
-        function_type::FunctionAddress,
-        gc::unique_id::UniqueId,
+        gc::{mark::Mark, unique_id::UniqueId},
         lpc_ref::LpcRef,
         process::Process,
     },
     util::qcell_debug,
 };
-use crate::interpreter::gc::mark::Mark;
+use crate::interpreter::function_type::function_address::FunctionAddress;
+use crate::util::keyable::Keyable;
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Educe, Clone)]
@@ -91,6 +93,8 @@ impl Mark for FunctionPtr {
             return Ok(());
         }
 
+        trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
+
         marked.extend(self.upvalue_ptrs.iter().copied().map(Register::index));
 
         Ok(())
@@ -121,5 +125,51 @@ impl Display for FunctionPtr {
         s.push('}');
 
         write!(f, "{s}")
+    }
+}
+
+impl<'a> Keyable<'a> for FunctionPtr {
+    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
+        write!(f, "FunctionPtr {{ ")?;
+        match self.owner.upgrade() {
+            Some(owner) => write!(f, "owner: {:?}, ", owner.ro(cell_key))?,
+            None => write!(f, "owner: <dropped>, ")?,
+        }
+        write!(f, "address: {:?}, ", self.address.with_key(cell_key))?;
+        write!(f, "partial_args: [")?;
+        for arg in &self.partial_args {
+            match arg {
+                Some(arg) => write!(f, "{:?}, ", arg.with_key(cell_key))?,
+                None => write!(f, "<None>, ")?,
+            }
+        }
+        write!(f, "], ")?;
+        write!(f, "upvalue_ptrs: {:?}", &self.upvalue_ptrs)?;
+        write!(f, "unique_id: {:?}, ", self.unique_id)?;
+        write!(f, "}}")
+    }
+
+    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
+        write!(f, "{}", self.address.with_key(cell_key))?;
+        write!(f, "(")?;
+        for arg in &self.partial_args {
+            match arg {
+                Some(arg) => write!(f, "{}, ", arg.with_key(cell_key))?,
+                None => write!(f, ", ")?,
+            }
+        }
+        write!(f, ")")
+    }
+
+    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+        todo!()
+    }
+
+    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+        todo!()
+    }
+
+    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+        todo!()
     }
 }

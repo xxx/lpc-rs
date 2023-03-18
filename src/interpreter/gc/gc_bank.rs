@@ -4,12 +4,10 @@ use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 use slab::Slab;
-use tracing::{instrument, trace};
+use tracing::instrument;
 
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::gc::sweep::{KeylessSweep};
+use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};
 
 pub type GcRefBank = GcBank<LpcRef>;
 

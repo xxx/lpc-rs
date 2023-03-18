@@ -1,7 +1,7 @@
 use clap::Parser;
 use if_chain::if_chain;
-use lpc_rs::interpreter::vm::Vm;
-use lpc_rs_utils::config::ConfigBuilder;
+use lpc_rs::{interpreter::vm::Vm, util::keyable::Keyable};
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
 
 #[derive(Parser, Debug)]
@@ -32,6 +32,25 @@ fn main() {
         }
     };
 
+    init_tracing_subscriber(&config);
+
+    // This is the key that will be used for everything.
+    let mut cell_key = QCellOwner::new();
+
+    let mut vm = Vm::new(config, &cell_key);
+
+    vm.boot(&mut cell_key).unwrap_or_else(|e| {
+        eprintln!("unable to initialize VM: {e:?}");
+        std::process::exit(1);
+    });
+
+    // println!(
+    //     "space: {:#?}",
+    //     vm.object_space.ro(&cell_key).with_key(&cell_key)
+    // );
+}
+
+fn init_tracing_subscriber(config: &Config) {
     if_chain! {
         if let Some(level) = config.driver_log_level;
         if let Some(file) = &config.driver_log_file;
@@ -58,13 +77,4 @@ fn main() {
             }
         }
     }
-
-    let mut cell_key = QCellOwner::new();
-
-    let mut vm = Vm::new(config, &cell_key);
-
-    vm.initialize(&mut cell_key).unwrap_or_else(|e| {
-        eprintln!("unable to initialize VM: {e:?}");
-        std::process::exit(1);
-    });
 }

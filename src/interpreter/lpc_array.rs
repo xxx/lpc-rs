@@ -2,6 +2,9 @@ use std::{
     collections::HashSet,
     ops::{Deref, Index, IndexMut, Range, RangeInclusive},
 };
+use std::cmp::Ordering;
+use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -9,10 +12,10 @@ use qcell::QCellOwner;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
-    gc::unique_id::UniqueId,
+    gc::{mark::Mark, unique_id::UniqueId},
     lpc_ref::LpcRef,
 };
-use crate::interpreter::gc::mark::Mark;
+use crate::util::keyable::Keyable;
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
 /// purposes.
@@ -62,6 +65,52 @@ impl Mark for LpcArray {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> Keyable<'a> for LpcArray {
+    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
+        write!(f, "LpcArray {{ ")?;
+        write!(f, "unique_id: {}, ", self.unique_id)?;
+        write!(f, "array: [")?;
+        for (i, item) in self.array.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{:?}", item.with_key(cell_key))?;
+        }
+        write!(f, "] }}")
+    }
+
+    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+        self.unique_id.hash(state);
+        for item in &self.array {
+            item.with_key(cell_key).hash(state);
+        }
+    }
+
+    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+        self.unique_id == other.unique_id
+            && self
+                .array
+                .iter()
+                .zip(other.array.iter())
+                .all(|(a, b)| a.with_key(cell_key) == b.with_key(cell_key))
+    }
+
+    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+        self.unique_id.partial_cmp(&other.unique_id).and_then(|ord| {
+            if ord == Ordering::Equal {
+                self.array
+                    .iter()
+                    .zip(other.array.iter())
+                    .map(|(a, b)| a.with_key(cell_key).partial_cmp(&b.with_key(cell_key)))
+                    .find(|ord| ord != &Some(Ordering::Equal))
+                    .unwrap_or(Some(Ordering::Equal))
+            } else {
+                Some(ord)
+            }
+        })
     }
 }
 

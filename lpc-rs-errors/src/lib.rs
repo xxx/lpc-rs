@@ -165,12 +165,10 @@ impl LpcError {
 
     /// Emit this error's collected diagnostics
     pub fn emit_diagnostics(&self) {
-        {
-            output_diagnostics(
-                &self.to_diagnostics(),
-                &mut StandardStream::stderr(ColorChoice::Auto).lock(),
-            );
-        }
+        output_diagnostics(
+            &self.to_diagnostics(),
+            &mut StandardStream::stderr(ColorChoice::Auto).lock(),
+        );
     }
 
     /// Emit this error's collected diagnostics

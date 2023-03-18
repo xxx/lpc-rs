@@ -91,9 +91,8 @@ impl Compiler {
     /// Fully compile a file into a Program struct
     ///
     /// # Arguments
-    /// `path` - The full, on-server path of the file to compile. Also used for
-    /// error messaging.          If the file in question ends in `.c`, the
-    /// extension can be left off, per          common LPC usage.
+    /// `path` - The full, on-server path of the file to compile. Also used for error messaging.
+    ///  If the file in question ends in `.c`, the extension can be left off, per LPC convention.
     ///
     /// # Examples
     /// ```
@@ -142,8 +141,7 @@ impl Compiler {
         self.compile_string(lpc_path, file_content, cell_key)
     }
 
-    /// Intended for in-game use to be able to compile a file with relative
-    /// pathname handling
+    /// Intended for in-game use to be able to compile a file with relative pathname handling
     #[instrument(skip(self, cell_key))]
     pub fn compile_in_game_file(
         &self,
@@ -151,16 +149,7 @@ impl Compiler {
         span: Option<Span>,
         cell_key: &mut QCellOwner,
     ) -> Result<Program> {
-        let true_path = path.as_server(&self.config.lib_dir);
-
-        if path.as_os_str().is_empty() || !true_path.starts_with(&self.config.lib_dir) {
-            return Err(LpcError::new(format!(
-                "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                path,
-                true_path.display(),
-                &self.config.lib_dir
-            )).with_span(span));
-        }
+        self.config.validate_in_game_path(path, span)?;
 
         self.compile_file(path, cell_key)
     }
@@ -198,7 +187,7 @@ impl Compiler {
     ) -> Result<(Vec<Spanned<Token>>, Preprocessor)>
     where
         P: Into<LpcPath> + Debug,
-        S: AsRef<str> + Debug,
+        S: AsRef<str>,
     {
         let lpc_path = path.into();
 
@@ -219,8 +208,8 @@ impl Compiler {
     /// Compile a string containing an LPC program into a Program struct
     ///
     /// # Arguments
-    /// `path` - The absolute on-server path to the file being represented by
-    /// `code` `code` - The actual code to be compiled.
+    /// `path` - The absolute on-server path to the file being represented by `code`
+    /// `code` - The actual code to be compiled.
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
@@ -240,7 +229,7 @@ impl Compiler {
     ///     .compile_string("~/my_file.c", code, &mut cell_key)
     ///     .expect("Failed to compile.");
     /// ```
-    #[instrument(skip(self, code, cell_key))]
+    #[instrument(skip_all)]
     pub fn compile_string<T, U>(
         &self,
         path: T,
@@ -248,8 +237,8 @@ impl Compiler {
         cell_key: &mut QCellOwner,
     ) -> Result<Program>
     where
-        T: Into<LpcPath> + Debug,
-        U: AsRef<str> + Debug,
+        T: Into<LpcPath>,
+        U: AsRef<str>,
     {
         let lpc_path = path.into();
         let (mut program_node, context) = self.parse_string(&lpc_path, code)?;
@@ -331,7 +320,7 @@ impl Compiler {
         code: T,
     ) -> Result<(ProgramNode, CompilationContext)>
     where
-        T: AsRef<str> + Debug,
+        T: AsRef<str>,
     {
         let (tokens, preprocessor) = self.preprocess_string(path, code)?;
 

@@ -30,12 +30,17 @@ macro_rules! assert_regex {
     };
 }
 
+#[macro_export]
+macro_rules! test_config_builder {
+    () => {
+        ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .simul_efun_file("/secure/simul_efuns")
+    };
+}
+
 pub fn test_config() -> Config {
-    ConfigBuilder::default()
-        .lib_dir("./tests/fixtures/code")
-        .simul_efun_file("/secure/simul_efuns")
-        .build()
-        .unwrap()
+    test_config_builder!().build().unwrap()
 }
 
 fn compile_simul_efuns(config: &Rc<Config>, cell_key: &mut QCellOwner) -> Program {

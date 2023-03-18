@@ -1,4 +1,7 @@
+use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -7,10 +10,10 @@ use qcell::QCellOwner;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
-    gc::unique_id::UniqueId,
+    gc::{mark::Mark, unique_id::UniqueId},
     lpc_ref::{HashedLpcRef, LpcRef},
 };
-use crate::interpreter::gc::mark::Mark;
+use crate::util::keyable::Keyable;
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
@@ -66,6 +69,39 @@ impl Mark for LpcMapping {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> Keyable<'a> for LpcMapping {
+    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
+        write!(f, "LpcMapping {{")?;
+        for (key, value) in &self.mapping {
+            write!(f, " ")?;
+            key.value.keyable_debug(f, cell_key)?;
+            write!(f, ": ")?;
+            value.keyable_debug(f, cell_key)?;
+            write!(f, ",")?;
+        }
+        write!(f, " }}")
+    }
+
+    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+        self.unique_id.hash(state);
+        self.mapping.keyable_hash(state, cell_key);
+    }
+
+    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+        self.unique_id == other.unique_id
+            && self.mapping.keyable_eq(&other.mapping, cell_key)
+    }
+
+    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+        self.unique_id
+            .partial_cmp(&other.unique_id)
+            .and_then(|order| match order {
+                Ordering::Equal => self.mapping.keyable_partial_cmp(&other.mapping, cell_key),
+                _ => Some(order),
+            })
     }
 }
 

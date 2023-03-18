@@ -1,11 +1,9 @@
 use std::{
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
     rc::Rc,
 };
 
-use bit_set::BitSet;
 use decorum::Total;
 use educe::Educe;
 use hash_hasher::HashBuildHasher;
@@ -32,9 +30,11 @@ use crate::{
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
-        function_type::{function_ptr::FunctionPtr, FunctionAddress},
+        function_type::function_ptr::FunctionPtr,
         gc::{
             gc_bank::{GcBank, GcRefBank},
+            mark::Mark,
+            sweep::KeylessSweep,
             unique_id::UniqueId,
         },
         lpc_ref::{LpcRef, NULL},
@@ -49,8 +49,7 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::gc::mark::Mark;
-use crate::interpreter::gc::sweep::KeylessSweep;
+use crate::interpreter::function_type::function_address::FunctionAddress;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -310,13 +309,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             };
 
-            let mut marked = BitSet::with_capacity(64);
-            let mut processed = HashSet::new();
-            for frame in self.stack.iter() {
-                frame.mark(&mut marked, &mut processed, cell_key)?;
-            }
-
-            self.vm_upvalues.rw(cell_key).keyless_sweep(&marked)?;
+            // gc stress testing
+            // let mut marked = BitSet::with_capacity(64);
+            // let mut processed = HashSet::new();
+            // for frame in self.stack.iter() {
+            //     frame.mark(&mut marked, &mut processed, cell_key)?;
+            // }
+            //
+            // self.vm_upvalues.rw(cell_key).keyless_sweep(&marked)?;
         }
 
         Ok(task_context)

@@ -1,6 +1,6 @@
 use bit_set::BitSet;
-use qcell::QCellOwner;
 use lpc_rs_errors::Result;
+use qcell::QCellOwner;
 
 /// A trait for sweeping objects that contain references that could be
 /// garbage-collected.

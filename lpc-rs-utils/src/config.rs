@@ -1,10 +1,13 @@
 use std::{path::Path, str::FromStr};
+use std::borrow::Cow;
 
 use derive_builder::Builder;
 use fs_err as fs;
 use if_chain::if_chain;
 use lpc_rs_errors::{LpcError, Result};
 use toml::{value::Index, Value};
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::span::Span;
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -111,6 +114,7 @@ impl ConfigBuilder {
         new
     }
 
+    /// Get the system include directories. These are in-game directories.
     pub fn system_include_dirs<T>(&mut self, dirs: Vec<T>) -> &mut Self
     where
         T: Into<String>,
@@ -280,6 +284,24 @@ impl ConfigBuilder {
     }
 }
 
+impl Config {
+    /// Validate the passed-in path, and return a canonical, full version of it
+    pub fn validate_in_game_path<'a>(&self, path: &'a LpcPath, span: Option<Span>) -> Result<Cow<'a, Path>> {
+        let true_path = path.as_server(&self.lib_dir);
+
+        if path.as_os_str().is_empty() || !true_path.starts_with(&self.lib_dir) {
+            return Err(LpcError::new(format!(
+                "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
+                path,
+                true_path.display(),
+                &self.lib_dir
+            )).with_span(span));
+        }
+
+        Ok(true_path)
+    }
+}
+
 impl Default for Config {
     // The bare-bones default Config, used if there is no config file at all found.
     fn default() -> Self {
@@ -325,5 +347,61 @@ where
     match fs::canonicalize(path) {
         Ok(y) => Ok(y.to_string_lossy().into_owned()),
         Err(e) => Err(LpcError::new(e.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod test_dig {
+        use super::*;
+
+        #[test]
+        fn test_dig() {
+            let toml = r#"
+                [foo]
+                bar = "baz"
+            "#;
+            let toml = toml::from_str(toml).unwrap();
+            let path = ["foo", "bar"];
+            let result = dig(&toml, &path);
+            assert_eq!(result.unwrap().as_str().unwrap(), "baz");
+        }
+
+        #[test]
+        fn test_dig_missing() {
+            let toml = r#"
+                [foo]
+                bar = "baz"
+            "#;
+            let toml = toml::from_str(toml).unwrap();
+            let path = ["foo", "baz"];
+            let result = dig(&toml, &path);
+            assert_eq!(result, None);
+        }
+    }
+
+    mod test_validate_in_game_path {
+        use super::*;
+
+        #[test]
+        fn test_validate_in_game_path() {
+            let config = Config::default();
+            let path = LpcPath::new_in_game("/foo/bar.c", "/", &config.lib_dir);
+            let result = config.validate_in_game_path(&path, None);
+            assert!(result.is_ok());
+        }
+
+        // TODO: this doesn't actually fail, because the path is canonicalized before it checks.
+        // #[test]
+        // fn test_validate_in_game_path_outside_lib_dir() {
+        //     let config = Config::default();
+        //     let path = LpcPath::from("/../baz/../../foo/bar.c");
+        //     println!("path: {:?}", path);
+        //     let result = config.validate_in_game_path(&path, None);
+        //     println!("result: {:?}", result);
+        //     assert_eq!(result.unwrap_err().to_string(), "foo");
+        // }
     }
 }

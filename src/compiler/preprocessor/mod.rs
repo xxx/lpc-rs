@@ -170,17 +170,17 @@ impl Preprocessor {
     ///
     /// let processed = preprocessor.scan("foo.c", code);
     /// ```
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     pub fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
     where
-        P: Into<LpcPath> + Debug,
-        C: AsRef<str> + Debug,
+        P: Into<LpcPath>,
+        C: AsRef<str>,
     {
-        trace!("scanning");
-
         let mut output = vec![];
 
         let lpc_path = path.into();
+
+        trace!("scanning {:?} :: {:?}", lpc_path, code.as_ref());
 
         // handle auto-include
         if let Some(auto_include) = &self.context.config.auto_include_file {
@@ -207,7 +207,7 @@ impl Preprocessor {
         existing_output: Option<Vec<Spanned<Token>>>,
     ) -> Result<Vec<Spanned<Token>>>
     where
-        C: AsRef<str> + Debug,
+        C: AsRef<str>,
     {
         let mut output = existing_output.unwrap_or_default();
 

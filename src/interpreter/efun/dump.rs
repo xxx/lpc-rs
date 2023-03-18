@@ -10,6 +10,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::util::keyable::Keyable;
 
 const MAX_RECURSION: usize = 20;
 
@@ -49,7 +50,7 @@ fn format_ref<const N: usize>(
         LpcRef::Function(x) => Ok(format!(
             "{:width$}{}",
             "",
-            try_extract_value!(*x.borrow(), LpcValue::Function),
+            try_extract_value!(*x.borrow(), LpcValue::Function).with_key(cell_key),
             width = indent
         )),
         LpcRef::Array(x) => {
