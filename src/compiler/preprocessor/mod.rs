@@ -465,15 +465,10 @@ impl Preprocessor {
             Ok(())
         };
 
-        let lex_vec = |input| {
+        let lex_vec = |input| -> Result<Vec<Spanned<Token>>> {
             let lexer = LexWrapper::new(input);
 
-            let result: Result<Vec<Spanned<Token>>> = lexer.collect();
-
-            match result {
-                Ok(vec) => Ok(vec),
-                Err(e) => Err(e),
-            }
+            lexer.collect()
         };
 
         if let Some(captures) = DEFINEMACRO.captures(&token.1) {
@@ -550,8 +545,8 @@ impl Preprocessor {
 
     /// # Arguments
     /// `token` - The matched lexer token
-    /// `cwd` - an in-game directory, to use as the reference for relative
-    /// paths. `output` - The vector to append included tokens to
+    /// `cwd` - an in-game directory, to use as the reference for relative paths.
+    /// `output` - The vector to append included tokens to
     #[instrument(skip(self, output))]
     fn handle_sys_include<U>(
         &mut self,

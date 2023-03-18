@@ -198,6 +198,7 @@ impl CallFrame {
     /// Reserve space for the upvalues that this call will initialize
     /// Returns the index in the [`Vm`]'s `upvalues` array where the
     ///   newly-populated upvalues will be stored
+    #[instrument(skip_all)]
     fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {
         let num_upvalues = self.function.num_upvalues;
 
@@ -211,6 +212,7 @@ impl CallFrame {
 
         for _ in 0..num_upvalues {
             let idx = upvalues.insert(NULL);
+            trace!("pushing upvalue ptr: {}", idx);
             self.upvalue_ptrs.push(Register(idx));
         }
     }
@@ -333,6 +335,7 @@ impl CallFrame {
     }
 
     /// get a string representation of the frame's current current location
+    #[inline]
     pub fn to_stack_trace_format(&self) -> String {
         self.current_debug_span()
             .map(|span| format!("{} in {}()", span, self.function.name()))
@@ -353,7 +356,11 @@ impl Mark for CallFrame {
             return Ok(());
         }
 
-        marked.extend(self.upvalue_ptrs.iter().copied().map(Register::index));
+        trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
+
+        let ptrs = self.upvalue_ptrs.iter().copied().map(Register::index);
+
+        marked.extend(ptrs);
 
         for lpc_ref in self.registers.iter() {
             lpc_ref.mark(marked, processed, cell_key)?;

@@ -1,7 +1,11 @@
 use std::{collections::HashMap, rc::Rc};
+use std::cmp::Ordering;
+use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 
 use delegate::delegate;
 use educe::Educe;
+use indexmap::IndexMap;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
@@ -9,6 +13,7 @@ use crate::{
     interpreter::{process::Process, program::Program},
     util::qcell_debug,
 };
+use crate::util::keyable::Keyable;
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -29,6 +34,8 @@ pub struct ObjectSpace {
 
     /// Our configuration
     config: Rc<Config>,
+
+    // TODO: store simul_efuns here instead of in the processes?
 }
 
 impl ObjectSpace {
@@ -137,6 +144,31 @@ impl Default for ObjectSpace {
             clone_count: 0,
             config: Config::default().into(),
         }
+    }
+}
+
+impl<'a> Keyable<'a> for ObjectSpace {
+    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
+        let processes = self.processes.iter().map(|(k, v)| {
+            let v = v.ro(cell_key);
+            (k, v)
+        }).collect::<IndexMap<_, _>>();
+        write!(f, "ObjectSpace {{ processes: {:?}", processes)?;
+        write!(f, ", clone_count: {:?}", self.clone_count)?;
+        write!(f, ", config: {:?}", self.config)?;
+        write!(f, " }}")
+    }
+
+    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
+        unimplemented!()
+    }
+
+    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
+        unimplemented!()
+    }
+
+    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
+        unimplemented!()
     }
 }
 

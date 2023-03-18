@@ -310,7 +310,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             };
 
-            let mut marked = BitSet::new();
+            let mut marked = BitSet::with_capacity(64);
             let mut processed = HashSet::new();
             for frame in self.stack.iter() {
                 frame.mark(&mut marked, &mut processed, cell_key)?;
@@ -4648,6 +4648,37 @@ mod tests {
             ]);
 
             check_local_vars(code, &expected);
+        }
+    }
+
+    mod test_gc {
+        use super::*;
+
+        #[test]
+        fn test_gc_is_accurate() {
+            let mut cell_key = QCellOwner::new();
+            let code = indoc! { r##"
+                void create() {
+                    function make = make_maker();
+
+                    function made1 = make(1);
+                    function made2 = make(2);
+
+                    int c1 = made1();
+                    int c2 = made2(69);
+                    //
+                    // debug("snapshot_stack");
+                }
+
+                function make_maker() {
+                    return (: [int i]
+                        return (: $1 :);
+                    :);
+                }
+            "##};
+
+            let (task, ctx) = run_prog(code, &mut cell_key);
+            assert!(ctx.upvalues().ro(&cell_key).is_empty());
         }
     }
 }
