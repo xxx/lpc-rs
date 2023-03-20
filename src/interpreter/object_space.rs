@@ -1,10 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap},
-    fmt::Formatter,
-    hash::Hasher,
-    rc::Rc,
-};
+use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, rc::Rc};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -15,11 +9,7 @@ use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
 use crate::{
-    interpreter::{
-        gc::{mark::Mark},
-        process::Process,
-        program::Program,
-    },
+    interpreter::{gc::mark::Mark, process::Process, program::Program},
     util::keyable::Keyable,
 };
 

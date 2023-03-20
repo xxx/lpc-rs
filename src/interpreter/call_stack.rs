@@ -1,6 +1,4 @@
-use std::{
-    ops::{Index, IndexMut},
-};
+use std::ops::{Index, IndexMut};
 
 use arrayvec::ArrayVec;
 use bit_set::BitSet;
@@ -8,11 +6,7 @@ use delegate::delegate;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use qcell::QCellOwner;
 
-use crate::interpreter::{
-    call_frame::CallFrame,
-    gc::{mark::Mark},
-    lpc_ref::LpcRef,
-};
+use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef};
 
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {

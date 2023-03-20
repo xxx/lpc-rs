@@ -1,9 +1,5 @@
-
-
 use bit_set::BitSet;
 use qcell::QCellOwner;
-
-
 
 /// A trait for marking objects that contain references that could be
 /// garbage-collected.
