@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::{hash_map::DefaultHasher, HashSet},
+    collections::{hash_map::DefaultHasher},
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -19,7 +19,7 @@ use tracing::{instrument, trace};
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
-        gc::{mark::Mark, unique_id::UniqueId},
+        gc::{mark::Mark},
         lpc_value::LpcValue,
     },
     try_extract_value,

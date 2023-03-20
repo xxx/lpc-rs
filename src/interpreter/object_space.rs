@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
     fmt::Formatter,
     hash::Hasher,
     rc::Rc,
@@ -16,7 +16,7 @@ use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{
-        gc::{mark::Mark, unique_id::UniqueId},
+        gc::{mark::Mark},
         process::Process,
         program::Program,
     },

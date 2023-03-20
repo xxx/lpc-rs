@@ -1,6 +1,5 @@
 use std::{
     cell::Cell,
-    collections::HashSet,
     fmt,
     fmt::{Debug, Display, Formatter},
     rc::Rc,

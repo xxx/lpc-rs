@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashSet, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
+use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -16,7 +16,6 @@ use crate::{
             gc_bank::{GcBank, GcRefBank},
             mark::Mark,
             sweep::{KeylessSweep, Sweep},
-            unique_id::UniqueId,
         },
         memory::Memory,
         object_space::ObjectSpace,

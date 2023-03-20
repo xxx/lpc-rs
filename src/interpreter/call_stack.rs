@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     ops::{Index, IndexMut},
 };
 
@@ -11,7 +10,7 @@ use qcell::QCellOwner;
 
 use crate::interpreter::{
     call_frame::CallFrame,
-    gc::{mark::Mark, unique_id::UniqueId},
+    gc::{mark::Mark},
     lpc_ref::LpcRef,
 };
 

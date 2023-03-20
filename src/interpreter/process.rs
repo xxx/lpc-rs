@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
     fmt::{Debug, Display, Formatter},
     path::Path,
     rc::Rc,
@@ -12,7 +12,7 @@ use qcell::QCellOwner;
 
 use crate::interpreter::{
     bank::RefBank,
-    gc::{mark::Mark, unique_id::UniqueId},
+    gc::{mark::Mark},
     lpc_ref::{LpcRef, NULL},
     program::Program,
 };

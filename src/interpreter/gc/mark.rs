@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+
 
 use bit_set::BitSet;
 use qcell::QCellOwner;
 
-use crate::interpreter::gc::unique_id::UniqueId;
+
 
 /// A trait for marking objects that contain references that could be
 /// garbage-collected.

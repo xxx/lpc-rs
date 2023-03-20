@@ -1,6 +1,5 @@
 use core::slice::SliceIndex;
 use std::{
-    collections::HashSet,
     fmt::{Display, Formatter},
     ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
@@ -14,7 +13,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::QCellOwner;
 
 use crate::interpreter::{
-    gc::{mark::Mark, unique_id::UniqueId},
+    gc::{mark::Mark},
     lpc_ref::{LpcRef, NULL},
 };
 

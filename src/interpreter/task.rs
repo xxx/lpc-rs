@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
     rc::Rc,
 };

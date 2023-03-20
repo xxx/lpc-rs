@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    collections::HashSet,
     fmt::{Display, Formatter},
     hash::Hasher,
     rc::Weak,
