@@ -7,7 +7,6 @@ use lpc_rs_errors::Result;
 use slab::Slab;
 use slab::Iter as SlabIter;
 use tracing::instrument;
-use core::slice::SliceIndex;
 
 use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};
 

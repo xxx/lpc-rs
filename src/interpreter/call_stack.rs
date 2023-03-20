@@ -5,7 +5,7 @@ use arrayvec::ArrayVec;
 use bit_set::BitSet;
 use delegate::delegate;
 use qcell::QCellOwner;
-use lpc_rs_core::register::Register;
+
 use lpc_rs_errors::{span::Span, LpcError, Result};
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};

@@ -34,7 +34,7 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{
-            gc_bank::{GcBank, GcRefBank},
+            gc_bank::{GcRefBank},
             unique_id::UniqueId,
         },
         lpc_ref::{LpcRef, NULL},
@@ -1511,7 +1511,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         frame.upvalue_ptrs.iter().map(|ptr| {
             let upvalue = upvalues.get(ptr.index()).cloned().unwrap_or_default();
-            let new_index = upvalues.insert(upvalue.clone());
+            let new_index = upvalues.insert(upvalue);
             Ok(Register(new_index))
         }).collect::<Result<Vec<Register>>>()
     }
@@ -1959,6 +1959,7 @@ mod tests {
     use crate::{
         extract_value,
         test_support::{compile_prog, run_prog},
+        interpreter::gc::gc_bank::GcBank,
     };
 
     #[allow(dead_code)]
@@ -4698,7 +4699,7 @@ mod tests {
                 }
             "##};
 
-            let (mut task, ctx) = run_prog(code, &mut cell_key);
+            let (task, ctx) = run_prog(code, &mut cell_key);
             assert!(!ctx.upvalues().ro(&cell_key).is_empty());
 
             let mut marked = BitSet::new();

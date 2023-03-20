@@ -12,7 +12,7 @@ use delegate::delegate;
 use if_chain::if_chain;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
-use lpc_rs_errors::LpcError;
+
 
 use crate::{interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
@@ -60,7 +60,7 @@ where
         if_chain! {
             if let LpcRef::Array(other) = item;
             if let LpcValue::Array(other) = &*other.borrow();
-            if &*other == array;
+            if other == array;
             then {
                 result.push_str("({ self })");
                 continue;
@@ -77,7 +77,7 @@ impl Debug for LpcArray {
         write!(f, "LpcArray {{ ")?;
         write!(f, "unique_id: {:?}, ", self.unique_id)?;
         write!(f, "array: [")?;
-        f.write_str(&format_array(&self, |item| format!("{:?}", item)))?;
+        f.write_str(&format_array(self, |item| format!("{:?}", item)))?;
         write!(f, "] }}")
     }
 }
@@ -85,7 +85,7 @@ impl Debug for LpcArray {
 impl Display for LpcArray {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[")?;
-        f.write_str(&format_array(&self, |item| format!("{}", item)))?;
+        f.write_str(&format_array(self, |item| format!("{}", item)))?;
         write!(f, "]")
     }
 }
@@ -117,13 +117,13 @@ impl<'a> Keyable<'a> for LpcArray {
         write!(f, "LpcArray {{ ")?;
         write!(f, "unique_id: {:?}, ", self.unique_id)?;
         write!(f, "array: [")?;
-        f.write_str(&format_array(&self, |item| format!("{:?}", item.with_key(cell_key))))?;
+        f.write_str(&format_array(self, |item| format!("{:?}", item.with_key(cell_key))))?;
         write!(f, "] }}")
     }
 
     fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
         write!(f, "[")?;
-        f.write_str(&format_array(&self, |item| format!("{}", item.with_key(cell_key))))?;
+        f.write_str(&format_array(self, |item| format!("{}", item.with_key(cell_key))))?;
         write!(f, "]")
     }
 

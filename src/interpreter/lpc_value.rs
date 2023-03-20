@@ -5,9 +5,9 @@ use std::{
 };
 
 use educe::Educe;
-use if_chain::if_chain;
+
 use indexmap::IndexMap;
-use itertools::Itertools;
+
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
 use qcell::QCell;
 

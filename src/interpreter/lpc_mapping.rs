@@ -68,7 +68,7 @@ where
         if_chain! {
             if let LpcRef::Mapping(other) = &key.value;
             if let LpcValue::Mapping(other) = &*other.borrow();
-            if &*other == mapping;
+            if other == mapping;
             then {
                 result.push_str("([ this ])");
                 continue;
@@ -82,7 +82,7 @@ where
         if_chain! {
             if let LpcRef::Mapping(other) = &value;
             if let LpcValue::Mapping(other) = &*other.borrow();
-            if &*other == mapping;
+            if other == mapping;
             then {
                 result.push_str("([ this ])");
                 continue;

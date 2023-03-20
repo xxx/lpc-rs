@@ -93,9 +93,9 @@ pub fn compile_prog(
     (program, config, se_proc)
 }
 
-pub fn run_prog<'a, 'pool>(
+pub fn run_prog<'pool>(
     code: &str,
-    cell_key: &'a mut QCellOwner,
+    cell_key: &mut QCellOwner,
 ) -> (Task<'pool, MAX_CALL_STACK_SIZE>, TaskContext) {
     let upvalues = GcBank::default();
     let mut task = Task::new(Memory::default(), cell_key.cell(upvalues));
