@@ -201,17 +201,18 @@ impl<'a> Keyable<'a> for ObjectSpace {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
     use qcell::QCellOwner;
     use refpool::{Pool, PoolRef};
-    use crate::interpreter::lpc_array::LpcArray;
-    use std::cell::RefCell;
-    use crate::value_to_ref;
-    use crate::interpreter::lpc_value::LpcValue;
-    use crate::interpreter::lpc_ref::LpcRef;
 
     use super::*;
+    use crate::{
+        interpreter::{lpc_array::LpcArray, lpc_ref::LpcRef, lpc_value::LpcValue},
+        value_to_ref,
+    };
 
     // #[test]
     // fn test_insert_master() {

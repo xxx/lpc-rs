@@ -172,9 +172,11 @@ impl<'a> Keyable<'a> for FunctionPtr {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::rc::Rc;
+
     use factori::create;
+
+    use super::*;
     use crate::test_support::factories::*;
 
     #[test]

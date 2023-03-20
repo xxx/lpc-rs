@@ -1,12 +1,14 @@
-use crate::interpreter::function_type::function_ptr::FunctionPtr;
-use qcell::QCellOwner;
 use std::rc::Rc;
-use factori::factori;
-use crate::interpreter::process::Process;
-use crate::interpreter::function_type::function_address::FunctionAddress;
-use lpc_rs_core::function_arity::FunctionArity;
-use crate::interpreter::gc::unique_id::UniqueId;
 
+use factori::factori;
+use lpc_rs_core::function_arity::FunctionArity;
+use qcell::QCellOwner;
+
+use crate::interpreter::{
+    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    gc::unique_id::UniqueId,
+    process::Process,
+};
 
 factori!(FunctionPtr, {
     default {

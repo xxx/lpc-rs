@@ -634,12 +634,11 @@ impl<'a> Keyable<'a> for HashedLpcRef {
 #[cfg(test)]
 mod tests {
     use claim::assert_err;
+    use factori::create;
     use refpool::Pool;
 
     use super::*;
-    use crate::interpreter::lpc_array::LpcArray;
-    use factori::create;
-    use crate::test_support::factories::*;
+    use crate::{interpreter::lpc_array::LpcArray, test_support::factories::*};
 
     mod test_add {
         use indexmap::IndexMap;
@@ -1327,8 +1326,9 @@ mod tests {
 
     mod test_mark {
         use indexmap::IndexMap;
-        use crate::interpreter::lpc_mapping::LpcMapping;
+
         use super::*;
+        use crate::interpreter::lpc_mapping::LpcMapping;
 
         #[test]
         fn test_array() {
@@ -1357,7 +1357,9 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
 
-            mapping.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            mapping
+                .mark(&mut marked, &mut processed, &cell_key)
+                .unwrap();
 
             assert!(processed.contains(*mapping_id.as_ref()));
         }

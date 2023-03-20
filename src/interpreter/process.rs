@@ -129,12 +129,15 @@ impl Mark for Process {
 
 #[cfg(test)]
 mod tests {
-    use refpool::{Pool, PoolRef};
-    use crate::interpreter::lpc_array::LpcArray;
-    use crate::interpreter::lpc_value::LpcValue;
-    use crate::value_to_ref;
     use std::cell::RefCell;
+
+    use refpool::{Pool, PoolRef};
+
     use super::*;
+    use crate::{
+        interpreter::{lpc_array::LpcArray, lpc_value::LpcValue},
+        value_to_ref,
+    };
 
     #[test]
     fn test_filename() {
@@ -173,7 +176,9 @@ mod tests {
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        process.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        process
+            .mark(&mut marked, &mut processed, &cell_key)
+            .unwrap();
 
         assert!(processed.contains(*array_id.as_ref()));
     }

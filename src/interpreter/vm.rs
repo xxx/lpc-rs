@@ -305,13 +305,15 @@ mod tests {
             }
         "# };
 
-        let ctx1 = vm.initialize_string(storage, "storage", &mut cell_key)
+        let ctx1 = vm
+            .initialize_string(storage, "storage", &mut cell_key)
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
             })
             .unwrap();
-        let _ctx2 = vm.initialize_string(runner, "runner", &mut cell_key)
+        let _ctx2 = vm
+            .initialize_string(runner, "runner", &mut cell_key)
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
