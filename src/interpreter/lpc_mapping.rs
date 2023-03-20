@@ -4,9 +4,11 @@ use std::{
     fmt::Formatter,
     hash::{Hash, Hasher},
 };
+use std::fmt::{Debug, Display};
 
 use bit_set::BitSet;
 use delegate::delegate;
+use if_chain::if_chain;
 use indexmap::IndexMap;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
@@ -15,13 +17,14 @@ use crate::{
     interpreter::{
         gc::{mark::Mark, unique_id::UniqueId},
         lpc_ref::{HashedLpcRef, LpcRef},
+        lpc_value::LpcValue,
     },
     util::keyable::Keyable,
 };
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq)]
 pub struct LpcMapping {
     pub unique_id: UniqueId,
     pub mapping: IndexMap<HashedLpcRef, LpcRef>,
@@ -53,6 +56,61 @@ impl LpcMapping {
     }
 }
 
+fn format_mapping<F>(mapping: &LpcMapping, fun: F) -> String
+where
+    F: Fn(&LpcRef) -> String,
+{
+    let mut result = String::with_capacity(32);
+    for (i, (key, value)) in mapping.iter().enumerate() {
+        if i > 0 {
+            result.push_str(", ");
+        }
+        if_chain! {
+            if let LpcRef::Mapping(other) = &key.value;
+            if let LpcValue::Mapping(other) = &*other.borrow();
+            if &*other == mapping;
+            then {
+                result.push_str("([ this ])");
+                continue;
+            } else {
+                result.push_str(&fun(&key.value));
+            }
+        }
+
+        result.push_str(": ");
+
+        if_chain! {
+            if let LpcRef::Mapping(other) = &value;
+            if let LpcValue::Mapping(other) = &*other.borrow();
+            if &*other == mapping;
+            then {
+                result.push_str("([ this ])");
+                continue;
+            } else {
+                result.push_str(&fun(value));
+            }
+        }
+    }
+
+    result
+}
+
+impl Display for LpcMapping {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "([")?;
+        f.write_str(&format_mapping(self, |value| format!("{}", value)))?;
+        write!(f, " ])")
+    }
+}
+
+impl Debug for LpcMapping {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LpcMapping {{")?;
+        f.write_str(&format_mapping(self, |value| format!("{:?}", value)))?;
+        write!(f, " }}")
+    }
+}
+
 impl Mark for LpcMapping {
     #[instrument(skip(self, cell_key))]
     fn mark(
@@ -79,14 +137,14 @@ impl Mark for LpcMapping {
 impl<'a> Keyable<'a> for LpcMapping {
     fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
         write!(f, "LpcMapping {{")?;
-        for (key, value) in &self.mapping {
-            write!(f, " ")?;
-            key.value.keyable_debug(f, cell_key)?;
-            write!(f, ": ")?;
-            value.keyable_debug(f, cell_key)?;
-            write!(f, ",")?;
-        }
+        f.write_str(&format_mapping(self, |value| format!("{:?}", value.with_key(cell_key))))?;
         write!(f, " }}")
+    }
+
+    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
+        write!(f, "([")?;
+        f.write_str(&format_mapping(self, |value| format!("{}", value.with_key(cell_key))))?;
+        write!(f, " ])")
     }
 
     fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {

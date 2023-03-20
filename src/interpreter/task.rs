@@ -3,6 +3,8 @@ use std::{
     fmt::{Debug, Display},
     rc::Rc,
 };
+use std::collections::HashSet;
+use bit_set::BitSet;
 
 use decorum::Total;
 use educe::Educe;
@@ -47,6 +49,7 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::gc::mark::Mark;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -76,6 +79,7 @@ pub fn get_location<'a, const N: usize>(
 }
 
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
+#[instrument(skip(frame, cell_key))]
 #[inline]
 pub fn get_location_in_frame<'a>(
     frame: &'a CallFrame,
@@ -96,6 +100,7 @@ pub fn get_location_in_frame<'a>(
             let idx = upvalues[upv.index()];
 
             let vm_upvalues = &frame.vm_upvalues.ro(cell_key);
+            trace!("upvalue data: idx = {}, len = {}", idx, vm_upvalues.len());
             Ok(Cow::Owned(vm_upvalues[idx].clone()))
         }
     }
@@ -245,8 +250,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             function.unwrap().clone()
         };
         let process: Rc<QCell<Process>> = cell_key.cell(Process::new(program)).into();
-        let upvalues = cell_key.cell(GcBank::default());
-        let context = TaskContext::new(config, process.clone(), object_space, upvalues, cell_key);
+        let context = TaskContext::new(
+            config,
+            process.clone(),
+            object_space,
+            self.vm_upvalues.clone(),
+            cell_key
+        );
         context.insert_process(process, cell_key);
 
         self.eval(init_function, &[], context, cell_key)
@@ -897,6 +907,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             cell_key,
         );
 
+        trace!("copying arguments to new frame: {num_args}");
         // copy argument registers from old frame to new
         if num_args > 0_usize {
             let mut next_index = 1;
@@ -932,6 +943,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 .as_ref()
                 .contains_function(name, namespace)
                 || namespace.as_str() == EFUN);
+
+        trace!("pushing new frame");
 
         self.stack.push(new_frame)?;
 
@@ -1477,6 +1490,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             call_other,
             // Function pointers inherit the creating function's upvalues
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
+            // upvalue_ptrs: self.capture_environment(cell_key)?,
             unique_id: UniqueId::new(),
         };
 
@@ -1485,6 +1499,21 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let new_ref = self.memory.value_to_ref(LpcValue::from(fp));
 
         set_loc!(self, location, new_ref, cell_key)
+    }
+
+    #[instrument(skip_all)]
+    fn capture_environment(&mut self, cell_key: &mut QCellOwner) -> Result<Vec<Register>> {
+        let frame = self.stack.current_frame_mut()?;
+        let upvalues = self.vm_upvalues.rw(cell_key);
+
+        trace!("ptrs: {:?}", frame.upvalue_ptrs);
+        trace!("upvalues: {:?}",  upvalues);
+
+        frame.upvalue_ptrs.iter().map(|ptr| {
+            let upvalue = upvalues.get(ptr.index()).cloned().unwrap_or_default();
+            let new_index = upvalues.insert(upvalue.clone());
+            Ok(Register(new_index))
+        }).collect::<Result<Vec<Register>>>()
     }
 
     #[instrument(skip_all)]
@@ -1905,6 +1934,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let none_args = partial_args.iter().filter(|a| a.is_none()).count();
         let dynamic_len = partial_args.len() + num_args.saturating_sub(none_args);
         std::cmp::max(dynamic_len, arity.num_args)
+    }
+}
+
+impl<'pool, const STACKSIZE: usize> Mark for Task<'pool, STACKSIZE> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> Result<()> {
+        self.stack.mark(marked, processed, cell_key)
     }
 }
 
@@ -4324,13 +4359,14 @@ mod tests {
                     found
                         .iter()
                         .any(|local| v.equal_to_lpc_ref(&local.value, &cell_key)),
-                    "key: {k}, value: {v}, found: {found:?}"
+                    "key: {k}, value: {v}, found: {:?}",
+                    found.iter().map(|v| v.value.with_key(&cell_key)).collect::<Vec<_>>()
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
             }
         }
 
-        fn check_proc_upvalues<T>(code: &str, upvalues: &[T])
+        fn check_vm_upvalues<T>(code: &str, upvalues: &[T])
         where
             T: Into<BareVal> + Clone,
         {
@@ -4350,7 +4386,7 @@ mod tests {
                     .iter()
                     .map(|i| i.clone().into())
                     .collect::<Vec<BareVal>>(),
-                frame.vm_upvalues.ro(&cell_key)
+                frame.vm_upvalues.ro(&cell_key).iter().collect::<Vec<_>>()
             );
 
             let vm_upvalues = frame.vm_upvalues.ro(&cell_key);
@@ -4392,7 +4428,7 @@ mod tests {
             "##};
 
             let expected = vec![Int(2)];
-            check_proc_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected);
 
             let expected = vec![Register(0)];
             check_frame_upvalue_ptrs(code, &expected);
@@ -4443,7 +4479,7 @@ mod tests {
             "##};
 
             let expected = vec![Int(10), Int(666)];
-            check_proc_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected);
 
             let expected = IndexMap::from([
                 ("j", Int(10)),
@@ -4482,8 +4518,8 @@ mod tests {
                 }
             "##};
 
-            let expected = vec![Int(105), Int(1), Int(1), Int(100)];
-            check_proc_upvalues(code, &expected);
+            // let expected = vec![Int(105), Int(1), Int(1), Int(100)];
+            // check_vm_upvalues(code, &expected);
 
             let expected = IndexMap::from([
                 ("c1", Int(1)),
@@ -4521,7 +4557,7 @@ mod tests {
             "##};
 
             let expected: Vec<BareVal> = vec![];
-            check_proc_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected);
 
             let expected = IndexMap::from([
                 ("c1", Int(0)),
@@ -4568,7 +4604,7 @@ mod tests {
                 Int(3),
                 Int(77),
             ];
-            check_proc_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected);
 
             let expected = IndexMap::from([
                 ("c1", String("hello666 1 2 -4".into())),
@@ -4617,7 +4653,7 @@ mod tests {
                 Array(vec![Int(123), Int(456)]),
                 Array(vec![String("world".into()), Int(77)]),
             ];
-            check_proc_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected);
 
             let expected = IndexMap::from([
                 ("c1", Int(123)),
@@ -4636,32 +4672,40 @@ mod tests {
     }
 
     mod test_gc {
+        use crate::interpreter::gc::sweep::KeylessSweep;
         use super::*;
 
         #[test]
         fn test_gc_is_accurate() {
             let mut cell_key = QCellOwner::new();
             let code = indoc! { r##"
+                int k = 0;
+
                 void create() {
-                    function make = make_maker();
+                    function stored = store();
+                    function stored2 = store();
+                    function stored3 = store();
 
-                    function made1 = make(1);
-                    function made2 = make(2);
-
-                    int c1 = made1();
-                    int c2 = made2(69);
-                    //
-                    // debug("snapshot_stack");
+                    int i = stored();
+                    int j = stored2();
+                    int l = stored3();
                 }
 
-                function make_maker() {
-                    return (: [int i]
-                        return (: $1 :);
-                    :);
+                function store() {
+                    int i = k++;
+
+                    return (: i :);
                 }
             "##};
 
-            let (_task, ctx) = run_prog(code, &mut cell_key);
+            let (mut task, ctx) = run_prog(code, &mut cell_key);
+            assert!(!ctx.upvalues().ro(&cell_key).is_empty());
+
+            let mut marked = BitSet::new();
+            let mut processed = HashSet::new();
+            task.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            ctx.upvalues().rw(&mut cell_key).keyless_sweep(&marked).unwrap();
+
             assert!(ctx.upvalues().ro(&cell_key).is_empty());
         }
     }

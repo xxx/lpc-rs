@@ -25,7 +25,7 @@ fn init() {
             .with_max_level(tracing::Level::INFO)
             .with_writer(std::io::stdout)
             // .with_env_filter("lpc_rs::interpreter::call_frame=trace")
-            .with_env_filter("lpc_rs::interpreter::task=trace")
+            // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
             .finish(),
     )
         .expect("setting tracing default failed");
@@ -93,10 +93,10 @@ pub fn compile_prog(
     (program, config, se_proc)
 }
 
-pub fn run_prog<'a>(
+pub fn run_prog<'a, 'pool>(
     code: &str,
     cell_key: &'a mut QCellOwner,
-) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+) -> (Task<'pool, MAX_CALL_STACK_SIZE>, TaskContext) {
     let upvalues = GcBank::default();
     let mut task = Task::new(Memory::default(), cell_key.cell(upvalues));
     let (program, config, se_proc) = compile_prog(code, cell_key);
@@ -109,7 +109,7 @@ pub fn run_prog<'a>(
         .initialize_program(program, config, object_space, cell_key)
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
-            println!("{:?}", e);
+            eprintln!("{:?}", e);
             panic!("failed to initialize");
         });
 

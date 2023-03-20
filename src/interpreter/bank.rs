@@ -4,10 +4,16 @@ use std::{
     slice::Iter,
     vec::IntoIter,
 };
+use core::slice::SliceIndex;
+use std::collections::HashSet;
+use bit_set::BitSet;
 
 use delegate::delegate;
+use qcell::QCellOwner;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
+use crate::interpreter::gc::mark::Mark;
+use crate::interpreter::gc::unique_id::UniqueId;
 
 use crate::interpreter::lpc_ref::{LpcRef, NULL};
 
@@ -53,6 +59,9 @@ impl<T> Bank<T> {
 
             /// Reserve additional space in the underlying Vec.
             pub fn reserve(&mut self, additional: usize);
+
+            /// Get an element.
+            pub fn get<I>(&self, index: I) -> Option<&I::Output> where I: SliceIndex<[T]>;
         }
     }
 
@@ -77,6 +86,18 @@ where
         }
         s.push(']');
         write!(f, "{s}")
+    }
+}
+
+impl<T> Mark for Bank<T>
+where
+    T: Mark
+{
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+        for register in self.registers.iter() {
+            register.mark(marked, processed, cell_key)?;
+        }
+        Ok(())
     }
 }
 

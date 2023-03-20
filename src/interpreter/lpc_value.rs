@@ -5,6 +5,7 @@ use std::{
 };
 
 use educe::Educe;
+use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
@@ -85,15 +86,8 @@ impl Display for LpcValue {
             LpcValue::Float(x) => write!(f, "{x}"),
             LpcValue::Int(x) => write!(f, "{x}"),
             LpcValue::String(x) => write!(f, "\"{x}\""),
-            LpcValue::Array(x) => {
-                let inner = x.iter().map(|x| format!("{x}")).join(", ");
-                write!(f, "({{ {inner} }})")
-            }
-            LpcValue::Mapping(_x) => {
-                write!(f, "([ mapping (QCell data) ])")
-                // let inner = x.iter().map(|(k, v)| format!("{k}:
-                // {v}")).join(", "); write!(f, "([ {inner} ])")
-            }
+            LpcValue::Array(x) => write!(f, "{x}"),
+            LpcValue::Mapping(x) => write!(f, "{x}"),
             LpcValue::Object(_x) => write!(f, "< object (QCell data) >"),
             // LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),
             LpcValue::Function(x) => write!(f, "{x}"),

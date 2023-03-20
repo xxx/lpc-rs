@@ -1,10 +1,16 @@
+use std::collections::HashSet;
 use std::ops::{Index, IndexMut};
 
 use arrayvec::ArrayVec;
+use bit_set::BitSet;
 use delegate::delegate;
+use qcell::QCellOwner;
+use lpc_rs_core::register::Register;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
+use crate::interpreter::gc::mark::Mark;
+use crate::interpreter::gc::unique_id::UniqueId;
 
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
@@ -112,6 +118,16 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             .iter()
             .map(|f| f.to_stack_trace_format())
             .collect::<Vec<_>>()
+    }
+}
+
+impl<const STACKSIZE: usize> Mark for CallStack<STACKSIZE> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> Result<()> {
+        for frame in self.stack.iter() {
+            frame.mark(marked, processed, cell_key)?
+        }
+
+        Ok(())
     }
 }
 

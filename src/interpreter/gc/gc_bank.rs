@@ -5,7 +5,9 @@ use delegate::delegate;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::Result;
 use slab::Slab;
+use slab::Iter as SlabIter;
 use tracing::instrument;
+use core::slice::SliceIndex;
 
 use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};
 
@@ -25,6 +27,8 @@ impl<T> GcBank<T> {
             pub fn insert(&mut self, value: T) -> usize;
             pub fn reserve(&mut self, additional: usize);
             pub fn try_remove(&mut self, index: usize) -> Option<T>;
+            pub fn get(&self, index: usize) -> Option<&T>;
+            pub fn iter(&self) -> SlabIter<'_, T>;
         }
     }
 }

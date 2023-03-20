@@ -198,6 +198,11 @@ impl CallFrame {
     fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {
         let num_upvalues = self.function.num_upvalues;
 
+        trace!("populating upvalues: {}", num_upvalues);
+        if num_upvalues == 0 {
+            return;
+        }
+
         let upvalues = self.vm_upvalues.rw(cell_key);
 
         // Reserve space in the proc for the actual values
@@ -208,7 +213,6 @@ impl CallFrame {
 
         for _ in 0..num_upvalues {
             let idx = upvalues.insert(NULL);
-            trace!("pushing upvalue ptr: {}", idx);
             self.upvalue_ptrs.push(Register(idx));
         }
     }

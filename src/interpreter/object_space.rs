@@ -1,4 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, rc::Rc};
+use std::collections::HashSet;
+use bit_set::BitSet;
 
 use delegate::delegate;
 use educe::Educe;
@@ -11,6 +13,8 @@ use crate::{
     interpreter::{process::Process, program::Program},
     util::keyable::Keyable,
 };
+use crate::interpreter::gc::mark::Mark;
+use crate::interpreter::gc::unique_id::UniqueId;
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -150,6 +154,17 @@ impl Default for ObjectSpace {
     }
 }
 
+impl Mark for ObjectSpace {
+    #[inline]
+    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+        for process in self.processes.values() {
+            process.ro(cell_key).mark(marked, processed, cell_key)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl<'a> Keyable<'a> for ObjectSpace {
     fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
         let processes = self
@@ -246,7 +261,6 @@ mod tests {
 
         let space = space_cell.ro(&cell_key);
         assert_eq!(space.len(), 1);
-        println!("{:?}", space.processes.keys());
         assert!(space.processes.contains_key("/foo/bar/baz"));
     }
 }
