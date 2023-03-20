@@ -119,7 +119,7 @@ impl Mark for Process {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         self.globals.mark(marked, processed, cell_key)?;

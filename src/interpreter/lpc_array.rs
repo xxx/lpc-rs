@@ -97,12 +97,12 @@ impl Mark for LpcArray {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         trace!("marking array");
 
-        if !processed.insert(self.unique_id) {
+        if !processed.insert(*self.unique_id.as_ref()) {
             return Ok(());
         }
 

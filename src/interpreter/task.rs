@@ -1944,7 +1944,7 @@ impl<'pool, const STACKSIZE: usize> Mark for Task<'pool, STACKSIZE> {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> Result<()> {
         self.stack.mark(marked, processed, cell_key)
@@ -4714,7 +4714,7 @@ mod tests {
             assert!(!ctx.upvalues().ro(&cell_key).is_empty());
 
             let mut marked = BitSet::new();
-            let mut processed = HashSet::new();
+            let mut processed = BitSet::new();
             task.mark(&mut marked, &mut processed, &cell_key).unwrap();
             ctx.upvalues()
                 .rw(&mut cell_key)

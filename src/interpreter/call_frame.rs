@@ -346,11 +346,11 @@ impl Mark for CallFrame {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> Result<()> {
         trace!("marking call frame {}", self.unique_id);
-        if !processed.insert(self.unique_id) {
+        if !processed.insert(*self.unique_id.as_ref()) {
             return Ok(());
         }
 

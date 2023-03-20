@@ -128,7 +128,7 @@ impl<const STACKSIZE: usize> Mark for CallStack<STACKSIZE> {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> Result<()> {
         for frame in self.stack.iter() {

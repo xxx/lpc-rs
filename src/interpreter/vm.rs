@@ -206,7 +206,7 @@ impl Mark for Vm {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> Result<()> {
         // TODO: mark all tasks

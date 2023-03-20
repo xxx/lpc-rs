@@ -423,7 +423,7 @@ impl Mark for LpcRef {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> Result<()> {
         trace!("marking lpc ref of {type}", type = self.as_lpc_type());

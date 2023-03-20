@@ -29,6 +29,12 @@ impl Display for UniqueId {
     }
 }
 
+impl AsRef<usize> for UniqueId {
+    fn as_ref(&self) -> &usize {
+        &self.0
+    }
+}
+
 /// Get the next ID.
 /// This ID is used so we can avoid track objects that have been marked,
 /// to avoid infinitely processing a looping graph.

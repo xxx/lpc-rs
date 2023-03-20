@@ -23,7 +23,7 @@ pub trait Mark {
     fn mark(
         &self,
         marked: &mut BitSet,
-        processed: &mut HashSet<UniqueId>,
+        processed: &mut BitSet,
         cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()>;
 }
