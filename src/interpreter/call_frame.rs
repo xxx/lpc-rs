@@ -6,12 +6,13 @@ use std::{
 };
 
 use bit_set::BitSet;
+use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use qcell::{QCell, QCellOwner};
+use qcell::{QCell, QCellOwner, QCellOwnerID};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -40,32 +41,50 @@ impl LocalVariable {
 }
 
 /// A representation of a function call's context.
-#[derive(Educe, Clone)]
+#[derive(Educe, Clone, Builder)]
 #[educe(Debug)]
+#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct CallFrame {
     /// A pointer to the process that owns the function being called
     #[educe(Debug(method = "qcell_process_debug"))]
+    #[builder(setter(into))]
     pub process: Rc<QCell<Process>>,
+
     /// The function that this frame is a call to
+    #[builder(setter(into))]
     pub function: Rc<ProgramFunction>,
+
     /// The actual locations of all arguments that were passed-in.
     /// Necessary for populating `argv` in ellipsis functions, e.g.
+    #[builder(default)]
     pub arg_locations: Vec<RegisterVariant>,
+
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call, and is not otherwise used for storage of locals.
+    #[builder(default)]
     pub registers: RefBank,
+
     /// Track where the pc is pointing in this frame's function's instructions.
+    #[builder(default, setter(into))]
     pc: Cell<usize>,
+
     /// How many explicit arguments were passed to the call that created this
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
+    #[builder(default)]
     pub called_with_num_args: usize,
+
     /// The upvalue indexes (into `vm_upvalues`) for this specific call
+    #[builder(default, setter(into))]
     pub upvalue_ptrs: Vec<Register>,
+
     /// The upvalue data from the [`Vm`]
     #[educe(Debug(method = "qcell_debug"))]
+    #[builder(setter(into))]
     pub vm_upvalues: Rc<QCell<GcRefBank>>,
+
     /// This object's unique ID, for garbage collection purposes
+    #[builder(default)]
     pub unique_id: UniqueId,
 }
 
@@ -583,6 +602,51 @@ mod tests {
                 vec![Register(2), Register(3), Register(4)]
             );
             assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 5);
+        }
+    }
+
+    mod test_mark {
+        use super::*;
+
+        #[test]
+        fn test_mark() {
+            let mut cell_key = QCellOwner::new();
+            let process = Process::default();
+
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("my_function")
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap();
+
+            let fs = ProgramFunction::new(prototype, 7);
+            let vm_upvalues = cell_key.cell(GcBank::<LpcRef>::default());
+
+            let frame = CallFrameBuilder::default()
+                .process(cell_key.cell(process))
+                .function(Rc::new(fs))
+                .vm_upvalues(vm_upvalues)
+                .upvalue_ptrs(vec![Register(2), Register(5)])
+                .build()
+                .unwrap();
+
+            let mut marked = BitSet::new();
+            let mut processed = BitSet::new();
+
+            frame.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+            assert_eq!(marked.len(), 2);
+            assert!(marked.contains(5));
+            assert!(marked.contains(2));
+
+            assert_eq!(processed.len(), 1);
+            assert!(processed.contains(*frame.unique_id.as_ref()));
+
+            marked.clear();
+
+            frame.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+            assert_eq!(marked.len(), 0); // still empty because we already processed the frame
         }
     }
 }

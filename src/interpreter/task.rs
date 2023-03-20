@@ -185,7 +185,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// A pointer to a memory pool to allocate new values from
     memory: Cow<'pool, Memory>,
 
-    /// The arg vector, populated prior to any of the `Call`-family instructions
+    /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
     pub args: Vec<RegisterVariant>,
 
     /// The upvalues from the [`Vm`]

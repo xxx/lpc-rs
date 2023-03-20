@@ -6,7 +6,7 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
-use tracing::instrument;
+use tracing::{instrument, trace};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -87,6 +87,18 @@ impl Vm {
         let master_path =
             LpcPath::new_in_game(&self.config.master_object, "/", &self.config.lib_dir);
         self.initialize_file(&master_path, cell_key)
+    }
+
+    /// Do a full garbage collection cycle.
+    #[instrument(skip_all)]
+    pub fn gc(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+        self.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+        trace!("Marked {} objects", marked.len());
+
+        self.sweep(&marked, cell_key)
     }
 
     /// Compile and initialize code from the passed file.
@@ -293,17 +305,31 @@ mod tests {
             }
         "# };
 
-        vm.initialize_string(storage, "storage", &mut cell_key)
+        let ctx1 = vm.initialize_string(storage, "storage", &mut cell_key)
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
             })
             .unwrap();
-        vm.initialize_string(runner, "runner", &mut cell_key)
+        let _ctx2 = vm.initialize_string(runner, "runner", &mut cell_key)
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
             })
             .unwrap();
+
+        let upvalues = ctx1.upvalues();
+
+        assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 1);
+
+        vm.gc(&mut cell_key).unwrap();
+
+        assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 1);
+
+        vm.object_space.rw(&mut cell_key).clear();
+
+        vm.gc(&mut cell_key).unwrap();
+
+        assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 0);
     }
 }

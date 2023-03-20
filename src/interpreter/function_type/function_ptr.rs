@@ -169,3 +169,39 @@ impl<'a> Keyable<'a> for FunctionPtr {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+    use factori::create;
+    use crate::test_support::factories::*;
+
+    #[test]
+    fn test_mark() {
+        let cell_key = QCellOwner::new();
+        let mut ptr = create!(
+            FunctionPtr,
+            owner: Rc::downgrade(&Rc::new(cell_key.cell(Process::default()))),
+        );
+
+        ptr.upvalue_ptrs.push(Register(3));
+        ptr.upvalue_ptrs.push(Register(5));
+
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+        ptr.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        assert_eq!(marked.len(), 2);
+        assert!(marked.contains(3));
+        assert!(marked.contains(5));
+
+        assert_eq!(processed.len(), 1);
+        assert!(processed.contains(*ptr.unique_id.as_ref()));
+
+        marked.clear();
+
+        ptr.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+        assert_eq!(marked.len(), 0);
+    }
+}

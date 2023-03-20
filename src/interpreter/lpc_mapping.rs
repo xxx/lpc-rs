@@ -183,3 +183,55 @@ impl PartialEq<IndexMap<HashedLpcRef, LpcRef>> for LpcMapping {
         &self.mapping == other
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use factori::create;
+    use refpool::{Pool, PoolRef};
+    use crate::value_to_ref;
+    use super::*;
+    use crate::test_support::factories::*;
+    use lpc_rs_core::register::Register;
+    use std::cell::RefCell;
+
+    #[test]
+    fn test_mark() {
+        let cell_key = QCellOwner::new();
+        let pool = Pool::new(5);
+
+        let ptr = create!(
+            FunctionPtr,
+            upvalue_ptrs: vec![Register(4), Register(33)]
+        );
+        let key_id = *ptr.unique_id.as_ref();
+        let key_ref = value_to_ref!(LpcValue::Function(ptr), pool);
+
+        let ptr2 = create!(
+            FunctionPtr,
+            upvalue_ptrs: vec![Register(4), Register(666)]
+        );
+        let value_id = *ptr2.unique_id.as_ref();
+        let value_ref = value_to_ref!(LpcValue::Function(ptr2), pool);
+
+        let mut mapping = LpcMapping::new(
+            IndexMap::new()
+        );
+
+        mapping.insert(HashedLpcRef::new(key_ref, &cell_key), value_ref);
+
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+
+        mapping.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+        let mut marked_expected = BitSet::new();
+        marked_expected.extend([4_usize, 33_usize, 666_usize].into_iter());
+
+        assert_eq!(marked, marked_expected);
+
+        let mut processed_expected = BitSet::new();
+        processed_expected.extend([key_id, value_id, *mapping.unique_id.as_ref()].into_iter());
+
+        assert_eq!(processed, processed_expected);
+    }
+}

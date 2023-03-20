@@ -24,7 +24,7 @@ fn init() {
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::INFO)
             .with_writer(std::io::stdout)
-            // .with_env_filter("lpc_rs::interpreter::call_frame=trace")
+            .with_env_filter("lpc_rs::interpreter::vm=trace")
             // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
             .finish(),
     )

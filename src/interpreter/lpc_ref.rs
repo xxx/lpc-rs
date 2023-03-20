@@ -448,12 +448,21 @@ impl Mark for LpcRef {
 }
 
 impl From<BaseFloat> for LpcRef {
+    #[inline]
     fn from(f: BaseFloat) -> Self {
         Self::Float(LpcFloat::from(f))
     }
 }
 
+impl From<LpcInt> for LpcRef {
+    #[inline]
+    fn from(i: LpcInt) -> Self {
+        Self::Int(i)
+    }
+}
+
 impl Hash for LpcRef {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             LpcRef::Float(x) => x.hash(state),
@@ -468,6 +477,7 @@ impl Hash for LpcRef {
 }
 
 impl PartialEq for LpcRef {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
@@ -485,6 +495,7 @@ impl PartialEq for LpcRef {
 }
 
 impl PartialOrd for LpcRef {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
@@ -534,6 +545,7 @@ impl Debug for LpcRef {
 }
 
 impl Default for LpcRef {
+    #[inline]
     fn default() -> Self {
         NULL
     }
@@ -582,12 +594,14 @@ impl HashedLpcRef {
 }
 
 impl Hash for HashedLpcRef {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state)
     }
 }
 
 impl PartialEq for HashedLpcRef {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.hash == other.hash
     }
@@ -624,6 +638,8 @@ mod tests {
 
     use super::*;
     use crate::interpreter::lpc_array::LpcArray;
+    use factori::create;
+    use crate::test_support::factories::*;
 
     mod test_add {
         use indexmap::IndexMap;
@@ -1306,6 +1322,61 @@ mod tests {
             let pool = Pool::new(5);
             let mut string = value_to_ref!(LpcValue::String("foobar".to_string()), pool);
             assert_err!(string.dec());
+        }
+    }
+
+    mod test_mark {
+        use indexmap::IndexMap;
+        use crate::interpreter::lpc_mapping::LpcMapping;
+        use super::*;
+
+        #[test]
+        fn test_array() {
+            let cell_key = QCellOwner::new();
+            let pool = Pool::new(5);
+            let array = LpcArray::new(vec![LpcRef::Int(1), LpcRef::Int(2), LpcRef::Int(3)]);
+            let array_id = array.unique_id;
+            let mut array = value_to_ref!(LpcValue::Array(array), pool);
+
+            let mut marked = BitSet::new();
+            let mut processed = BitSet::new();
+
+            array.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+            assert!(processed.contains(*array_id.as_ref()));
+        }
+
+        #[test]
+        fn test_mapping() {
+            let cell_key = QCellOwner::new();
+            let pool = Pool::new(5);
+            let mapping = LpcMapping::new(IndexMap::new());
+            let mapping_id = mapping.unique_id;
+            let mut mapping = value_to_ref!(LpcValue::Mapping(mapping), pool);
+
+            let mut marked = BitSet::new();
+            let mut processed = BitSet::new();
+
+            mapping.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+            assert!(processed.contains(*mapping_id.as_ref()));
+        }
+
+        #[test]
+        fn test_function() {
+            let cell_key = QCellOwner::new();
+            let pool = Pool::new(5);
+
+            let ptr = create!(FunctionPtr);
+            let ptr_id = ptr.unique_id;
+            let mut ptr = value_to_ref!(LpcValue::Function(ptr), pool);
+
+            let mut marked = BitSet::new();
+            let mut processed = BitSet::new();
+
+            ptr.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+            assert!(processed.contains(*ptr_id.as_ref()));
         }
     }
 }

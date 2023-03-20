@@ -50,6 +50,9 @@ impl ObjectSpace {
 
             /// Get whether or not the space is empty
             pub fn is_empty(&self) -> bool;
+
+            /// Clear the entire space
+            pub fn clear(&mut self);
         }
     }
 
@@ -201,6 +204,12 @@ mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
     use qcell::QCellOwner;
+    use refpool::{Pool, PoolRef};
+    use crate::interpreter::lpc_array::LpcArray;
+    use std::cell::RefCell;
+    use crate::value_to_ref;
+    use crate::interpreter::lpc_value::LpcValue;
+    use crate::interpreter::lpc_ref::LpcRef;
 
     use super::*;
 
@@ -264,5 +273,29 @@ mod tests {
         let space = space_cell.ro(&cell_key);
         assert_eq!(space.len(), 1);
         assert!(space.processes.contains_key("/foo/bar/baz"));
+    }
+
+    #[test]
+    fn test_mark() {
+        let mut cell_key = QCellOwner::new();
+        let config = Config::default();
+        let mut space = ObjectSpace::new(config);
+
+        let cell_key = QCellOwner::new();
+        let pool = Pool::new(5);
+        let array = LpcArray::new(vec![]);
+        let array_id = array.unique_id;
+        let lpc_ref = value_to_ref!(LpcValue::Array(array), pool);
+
+        let mut process = Process::default();
+        process.globals.push(lpc_ref);
+
+        space.insert_process_directly("process", cell_key.cell(process));
+
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+        space.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+        assert!(processed.contains(*array_id.as_ref()));
     }
 }

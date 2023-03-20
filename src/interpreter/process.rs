@@ -129,6 +129,11 @@ impl Mark for Process {
 
 #[cfg(test)]
 mod tests {
+    use refpool::{Pool, PoolRef};
+    use crate::interpreter::lpc_array::LpcArray;
+    use crate::interpreter::lpc_value::LpcValue;
+    use crate::value_to_ref;
+    use std::cell::RefCell;
     use super::*;
 
     #[test]
@@ -153,5 +158,23 @@ mod tests {
         assert_eq!(proc.localized_filename("/foo"), "/bar/baz");
 
         assert_eq!(proc.localized_filename("/alksdjf"), "/foo/bar/baz");
+    }
+
+    #[test]
+    fn test_mark() {
+        let cell_key = QCellOwner::new();
+        let pool = Pool::new(5);
+        let array = LpcArray::new(vec![]);
+        let array_id = array.unique_id;
+        let lpc_ref = value_to_ref!(LpcValue::Array(array), &pool);
+
+        let mut process = Process::default();
+        process.globals.push(lpc_ref);
+
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+        process.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+        assert!(processed.contains(*array_id.as_ref()));
     }
 }

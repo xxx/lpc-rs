@@ -239,3 +239,44 @@ impl PartialEq<Vec<LpcRef>> for LpcArray {
         self.array == *other
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use factori::create;
+    use refpool::{Pool, PoolRef};
+    use crate::value_to_ref;
+    use super::*;
+    use crate::test_support::factories::*;
+    use lpc_rs_core::register::Register;
+    use std::cell::RefCell;
+
+    #[test]
+    fn test_mark() {
+        let cell_key = QCellOwner::new();
+        let pool = Pool::new(5);
+
+        let ptr = create!(
+            FunctionPtr,
+            upvalue_ptrs: vec![Register(4), Register(33)]
+        );
+        let ptr_id = *ptr.unique_id.as_ref();
+
+        let function_ref = value_to_ref!(LpcValue::Function(ptr), pool);
+
+        let array = LpcArray::new(vec![function_ref.clone()]);
+
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+
+        array.mark(&mut marked, &mut processed, &cell_key).unwrap();
+
+        let mut marked_expected = BitSet::new();
+        marked_expected.extend([4_usize, 33_usize].into_iter());
+
+        let mut processed_expected = BitSet::new();
+        processed_expected.extend([ptr_id, *array.unique_id.as_ref()].into_iter());
+
+        assert_eq!(marked, marked_expected);
+        assert_eq!(processed, processed_expected);
+    }
+}
