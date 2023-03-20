@@ -320,3 +320,59 @@ pub fn format_expected(expected: &[String]) -> String {
 
 /// Common `Result` type
 pub type Result<T> = result::Result<T, LpcError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builder() {
+        let error = LpcError::new("test error")
+            .with_span(Some(Span::new(0, 0..1)))
+            .with_note("test note")
+            .with_label("my label", Some(Span::new(0, 0..1)))
+            .with_additional_errors(vec![LpcError::new("test error 2")])
+            .with_stack_trace(vec!["test".to_string(), "test2".to_string()]);
+
+        assert_eq!(error.message, "test error");
+        assert_eq!(error.span.unwrap().l, 0);
+        assert_eq!(error.span.unwrap().r, 1);
+        assert_eq!(error.notes[0], "test note");
+        assert_eq!(error.labels[0].message, "my label");
+        assert_eq!(error.additional_errors.unwrap()[0].message, "test error 2");
+        assert_eq!(error.stack_trace.unwrap(), vec!["test", "test2"]);
+    }
+
+    #[test]
+    fn test_severity() {
+        let error = LpcError::new("test error");
+        assert_eq!(error.severity, LpcErrorSeverity::Error);
+        assert!(error.is_error());
+
+        let error = LpcError::new_warning("test warning");
+        assert_eq!(error.severity, LpcErrorSeverity::Warning);
+        assert!(error.is_warning());
+
+        let error = LpcError::new_bug("test bug");
+        assert_eq!(error.severity, LpcErrorSeverity::Bug);
+        assert!(error.is_bug());
+    }
+
+    #[test]
+    fn test_into_diagnostic() {
+        let error = LpcError::new("test error")
+            .with_span(Some(Span::new(0, 0..1)))
+            .with_note("test note")
+            .with_label("my label", Some(Span::new(0, 0..7)))
+            .with_additional_errors(vec![LpcError::new("test error 2")])
+            .with_stack_trace(vec!["test".to_string(), "test2".to_string()]);
+
+        let diagnostic = Diagnostic::from(&error);
+
+        assert_eq!(diagnostic.message, "test error");
+        assert_eq!(diagnostic.labels[0], Label::primary(0, 0..1).with_message(""));
+        assert_eq!(diagnostic.labels[1], Label::secondary(0, 0..7).with_message("my label"));
+        assert_eq!(diagnostic.notes[0], "test note");
+        assert_eq!(diagnostic.notes[1], "Stack trace:\n\ntest2\ntest");
+    }
+}

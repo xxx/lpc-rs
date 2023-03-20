@@ -139,3 +139,24 @@ pub trait HasSpan {
     /// Return a [`Span`] for this object
     fn span(&self) -> Span;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_combine_spans() {
+        assert_eq!(combine_spans(None, None), Span::new(0, 0..0));
+
+        let left = Span::new(0, 0..10);
+        let right = Span::new(0, 10..20);
+
+        assert_eq!(combine_spans(Some(left), None), left);
+        assert_eq!(combine_spans(None, Some(right)), right);
+
+        let combined = combine_spans(Some(left), Some(right));
+        assert_eq!(combined.l, left.l);
+        assert_eq!(combined.r, right.r);
+        assert_eq!(combined.file_id, left.file_id);
+    }
+}

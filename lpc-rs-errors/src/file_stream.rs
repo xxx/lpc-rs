@@ -2,8 +2,8 @@ use std::{fs::File, io::Write};
 
 use codespan_reporting::term::termcolor::{ColorSpec, WriteColor};
 
-/// A newtype so we can implement WriteColor and emit codespan diagnostics to
-/// files.
+/// A newtype so we can implement WriteColor and emit [`codespan`](codespan_reporting)
+/// diagnostics to files.
 pub struct FileStream {
     file: File,
 }
@@ -36,4 +36,25 @@ impl WriteColor for FileStream {
     fn reset(&mut self) -> std::io::Result<()> {
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_stream() {
+        use std::io::Write;
+
+        let mut file = FileStream::new(std::fs::File::create("test.txt").unwrap());
+        file.write_all(b"Hello, world!").unwrap();
+        file.flush().unwrap();
+
+        assert!(!file.supports_color());
+        assert!(file.set_color(&ColorSpec::new()).is_ok());
+        assert!(file.reset().is_ok());
+
+        std::fs::remove_file("test.txt").unwrap();
+    }
+
 }

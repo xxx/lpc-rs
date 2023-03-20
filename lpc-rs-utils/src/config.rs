@@ -406,4 +406,16 @@ mod tests {
         //     assert_eq!(result.unwrap_err().to_string(), "foo");
         // }
     }
+
+    #[test]
+    fn test_dig() {
+        let toml = r#"
+            [foo]
+            bar = "baz"
+        "#;
+        let toml = toml::from_str(toml).unwrap();
+        let path = ["foo", "bar"];
+        let result = dig(&toml, &path);
+        assert_eq!(result.unwrap().as_str().unwrap(), "baz");
+    }
 }
