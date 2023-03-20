@@ -1,11 +1,10 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fmt::Formatter,
+    fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, Index, IndexMut, Range, RangeInclusive},
 };
-use std::fmt::{Debug, Display};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -13,11 +12,14 @@ use if_chain::if_chain;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
 
-
-use crate::{interpreter::{
-    gc::{mark::Mark, unique_id::UniqueId},
-    lpc_ref::LpcRef,
-}, util::keyable::Keyable, interpreter::lpc_value::LpcValue};
+use crate::{
+    interpreter::{
+        gc::{mark::Mark, unique_id::UniqueId},
+        lpc_ref::LpcRef,
+        lpc_value::LpcValue,
+    },
+    util::keyable::Keyable,
+};
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
 /// purposes.
@@ -117,13 +119,17 @@ impl<'a> Keyable<'a> for LpcArray {
         write!(f, "LpcArray {{ ")?;
         write!(f, "unique_id: {:?}, ", self.unique_id)?;
         write!(f, "array: [")?;
-        f.write_str(&format_array(self, |item| format!("{:?}", item.with_key(cell_key))))?;
+        f.write_str(&format_array(self, |item| {
+            format!("{:?}", item.with_key(cell_key))
+        }))?;
         write!(f, "] }}")
     }
 
     fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
         write!(f, "[")?;
-        f.write_str(&format_array(self, |item| format!("{}", item.with_key(cell_key))))?;
+        f.write_str(&format_array(self, |item| {
+            format!("{}", item.with_key(cell_key))
+        }))?;
         write!(f, "]")
     }
 

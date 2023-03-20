@@ -1,23 +1,21 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{Debug, Display, Formatter},
     path::Path,
     rc::Rc,
 };
-use std::collections::HashSet;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use delegate::delegate;
 use qcell::QCellOwner;
 
 use crate::interpreter::{
+    bank::RefBank,
+    gc::{mark::Mark, unique_id::UniqueId},
     lpc_ref::{LpcRef, NULL},
     program::Program,
-    bank::RefBank,
 };
-use crate::interpreter::gc::mark::Mark;
-use crate::interpreter::gc::unique_id::UniqueId;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -118,7 +116,12 @@ impl Display for Process {
 }
 
 impl Mark for Process {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> lpc_rs_errors::Result<()> {
         self.globals.mark(marked, processed, cell_key)?;
         Ok(())
     }

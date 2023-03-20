@@ -1,11 +1,11 @@
 use std::{
     borrow::Cow,
+    collections::HashSet,
     fmt::{Debug, Display},
     rc::Rc,
 };
-use std::collections::HashSet;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use decorum::Total;
 use educe::Educe;
 use hash_hasher::HashBuildHasher;
@@ -29,27 +29,23 @@ use tracing::{instrument, trace};
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        bank::RefBank,
         call_frame::CallFrame,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-        gc::{
-            gc_bank::{GcRefBank},
-            unique_id::UniqueId,
-        },
+        gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
         memory::Memory,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        bank::RefBank,
         task_context::TaskContext,
     },
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::gc::mark::Mark;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -255,7 +251,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             process.clone(),
             object_space,
             self.vm_upvalues.clone(),
-            cell_key
+            cell_key,
         );
         context.insert_process(process, cell_key);
 
@@ -998,7 +994,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
-            if !pf.public() && !pf.is_closure() && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver)) {
+            if !pf.public()
+                && !pf.is_closure()
+                && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver))
+            {
                 return set_loc!(self, Register(0).as_local(), NULL, cell_key);
             }
         }
@@ -1507,13 +1506,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let upvalues = self.vm_upvalues.rw(cell_key);
 
         trace!("ptrs: {:?}", frame.upvalue_ptrs);
-        trace!("upvalues: {:?}",  upvalues);
+        trace!("upvalues: {:?}", upvalues);
 
-        frame.upvalue_ptrs.iter().map(|ptr| {
-            let upvalue = upvalues.get(ptr.index()).cloned().unwrap_or_default();
-            let new_index = upvalues.insert(upvalue);
-            Ok(Register(new_index))
-        }).collect::<Result<Vec<Register>>>()
+        frame
+            .upvalue_ptrs
+            .iter()
+            .map(|ptr| {
+                let upvalue = upvalues.get(ptr.index()).cloned().unwrap_or_default();
+                let new_index = upvalues.insert(upvalue);
+                Ok(Register(new_index))
+            })
+            .collect::<Result<Vec<Register>>>()
     }
 
     #[instrument(skip_all)]
@@ -1938,7 +1941,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 }
 
 impl<'pool, const STACKSIZE: usize> Mark for Task<'pool, STACKSIZE> {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> Result<()> {
         self.stack.mark(marked, processed, cell_key)
     }
 }
@@ -1958,8 +1966,8 @@ mod tests {
     use super::*;
     use crate::{
         extract_value,
-        test_support::{compile_prog, run_prog},
         interpreter::gc::gc_bank::GcBank,
+        test_support::{compile_prog, run_prog},
     };
 
     #[allow(dead_code)]
@@ -4361,7 +4369,10 @@ mod tests {
                         .iter()
                         .any(|local| v.equal_to_lpc_ref(&local.value, &cell_key)),
                     "key: {k}, value: {v}, found: {:?}",
-                    found.iter().map(|v| v.value.with_key(&cell_key)).collect::<Vec<_>>()
+                    found
+                        .iter()
+                        .map(|v| v.value.with_key(&cell_key))
+                        .collect::<Vec<_>>()
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
             }
@@ -4673,8 +4684,8 @@ mod tests {
     }
 
     mod test_gc {
-        use crate::interpreter::gc::sweep::KeylessSweep;
         use super::*;
+        use crate::interpreter::gc::sweep::KeylessSweep;
 
         #[test]
         fn test_gc_is_accurate() {
@@ -4705,7 +4716,10 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = HashSet::new();
             task.mark(&mut marked, &mut processed, &cell_key).unwrap();
-            ctx.upvalues().rw(&mut cell_key).keyless_sweep(&marked).unwrap();
+            ctx.upvalues()
+                .rw(&mut cell_key)
+                .keyless_sweep(&marked)
+                .unwrap();
 
             assert!(ctx.upvalues().ro(&cell_key).is_empty());
         }

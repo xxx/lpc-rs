@@ -28,7 +28,7 @@ fn init() {
             // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
             .finish(),
     )
-        .expect("setting tracing default failed");
+    .expect("setting tracing default failed");
 }
 
 #[macro_export]

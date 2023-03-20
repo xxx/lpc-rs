@@ -1,7 +1,12 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, rc::Rc};
-use std::collections::HashSet;
-use bit_set::BitSet;
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt::Formatter,
+    hash::Hasher,
+    rc::Rc,
+};
 
+use bit_set::BitSet;
 use delegate::delegate;
 use educe::Educe;
 use indexmap::IndexMap;
@@ -10,11 +15,13 @@ use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 
 use crate::{
-    interpreter::{process::Process, program::Program},
+    interpreter::{
+        gc::{mark::Mark, unique_id::UniqueId},
+        process::Process,
+        program::Program,
+    },
     util::keyable::Keyable,
 };
-use crate::interpreter::gc::mark::Mark;
-use crate::interpreter::gc::unique_id::UniqueId;
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -156,7 +163,12 @@ impl Default for ObjectSpace {
 
 impl Mark for ObjectSpace {
     #[inline]
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> lpc_rs_errors::Result<()> {
         for process in self.processes.values() {
             process.ro(cell_key).mark(marked, processed, cell_key)?;
         }

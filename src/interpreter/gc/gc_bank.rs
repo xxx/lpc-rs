@@ -4,8 +4,7 @@ use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::Result;
-use slab::Slab;
-use slab::Iter as SlabIter;
+use slab::{Iter as SlabIter, Slab};
 use tracing::instrument;
 
 use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};

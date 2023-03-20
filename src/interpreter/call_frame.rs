@@ -17,12 +17,12 @@ use tracing::{instrument, trace};
 
 use crate::{
     interpreter::{
+        bank::RefBank,
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        bank::RefBank,
     },
-    util::qcell_debug, util::qcell_process_debug,
+    util::{qcell_debug, qcell_process_debug},
 };
 
 /// A representation of a local variable name and value.

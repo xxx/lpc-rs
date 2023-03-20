@@ -1,10 +1,9 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fmt::Formatter,
+    fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
 };
-use std::fmt::{Debug, Display};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -137,13 +136,17 @@ impl Mark for LpcMapping {
 impl<'a> Keyable<'a> for LpcMapping {
     fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
         write!(f, "LpcMapping {{")?;
-        f.write_str(&format_mapping(self, |value| format!("{:?}", value.with_key(cell_key))))?;
+        f.write_str(&format_mapping(self, |value| {
+            format!("{:?}", value.with_key(cell_key))
+        }))?;
         write!(f, " }}")
     }
 
     fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
         write!(f, "([")?;
-        f.write_str(&format_mapping(self, |value| format!("{}", value.with_key(cell_key))))?;
+        f.write_str(&format_mapping(self, |value| {
+            format!("{}", value.with_key(cell_key))
+        }))?;
         write!(f, " ])")
     }
 

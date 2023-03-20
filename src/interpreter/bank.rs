@@ -1,21 +1,22 @@
+use core::slice::SliceIndex;
 use std::{
+    collections::HashSet,
     fmt::{Display, Formatter},
     ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
     vec::IntoIter,
 };
-use core::slice::SliceIndex;
-use std::collections::HashSet;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use delegate::delegate;
-use qcell::QCellOwner;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
-use crate::interpreter::gc::mark::Mark;
-use crate::interpreter::gc::unique_id::UniqueId;
+use qcell::QCellOwner;
 
-use crate::interpreter::lpc_ref::{LpcRef, NULL};
+use crate::interpreter::{
+    gc::{mark::Mark, unique_id::UniqueId},
+    lpc_ref::{LpcRef, NULL},
+};
 
 pub type RefBank = Bank<LpcRef>;
 
@@ -91,9 +92,14 @@ where
 
 impl<T> Mark for Bank<T>
 where
-    T: Mark
+    T: Mark,
 {
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> lpc_rs_errors::Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> lpc_rs_errors::Result<()> {
         for register in self.registers.iter() {
             register.mark(marked, processed, cell_key)?;
         }

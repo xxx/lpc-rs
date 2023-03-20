@@ -1,5 +1,4 @@
-use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
-use std::collections::HashSet;
+use std::{cmp::Ordering, collections::HashSet, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -15,7 +14,9 @@ use crate::{
     interpreter::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
+            mark::Mark,
             sweep::{KeylessSweep, Sweep},
+            unique_id::UniqueId,
         },
         memory::Memory,
         object_space::ObjectSpace,
@@ -25,8 +26,6 @@ use crate::{
     },
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::gc::mark::Mark;
-use crate::interpreter::gc::unique_id::UniqueId;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -204,9 +203,16 @@ impl Vm {
 
 impl Mark for Vm {
     #[instrument(skip(self, cell_key))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut HashSet<UniqueId>, cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut HashSet<UniqueId>,
+        cell_key: &QCellOwner,
+    ) -> Result<()> {
         // TODO: mark all tasks
-        self.object_space.ro(cell_key).mark(marked, processed, cell_key)
+        self.object_space
+            .ro(cell_key)
+            .mark(marked, processed, cell_key)
     }
 }
 
