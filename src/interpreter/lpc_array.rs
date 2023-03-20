@@ -263,7 +263,7 @@ mod tests {
 
         let function_ref = value_to_ref!(LpcValue::Function(ptr), pool);
 
-        let array = LpcArray::new(vec![function_ref.clone()]);
+        let array = LpcArray::new(vec![function_ref]);
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();

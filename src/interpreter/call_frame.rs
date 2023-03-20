@@ -12,7 +12,7 @@ use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use qcell::{QCell, QCellOwner, QCellOwnerID};
+use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -610,7 +610,7 @@ mod tests {
 
         #[test]
         fn test_mark() {
-            let mut cell_key = QCellOwner::new();
+            let cell_key = QCellOwner::new();
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()

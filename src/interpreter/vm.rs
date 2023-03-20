@@ -94,7 +94,7 @@ impl Vm {
     pub fn gc(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        self.mark(&mut marked, &mut processed, cell_key).unwrap();
 
         trace!("Marked {} objects", marked.len());
 
@@ -318,7 +318,7 @@ mod tests {
             })
             .unwrap();
 
-        let upvalues = ctx1.upvalues();
+        let _upvalues = ctx1.upvalues();
 
         assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 1);
 

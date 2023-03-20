@@ -1336,7 +1336,7 @@ mod tests {
             let pool = Pool::new(5);
             let array = LpcArray::new(vec![LpcRef::Int(1), LpcRef::Int(2), LpcRef::Int(3)]);
             let array_id = array.unique_id;
-            let mut array = value_to_ref!(LpcValue::Array(array), pool);
+            let array = value_to_ref!(LpcValue::Array(array), pool);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1352,7 +1352,7 @@ mod tests {
             let pool = Pool::new(5);
             let mapping = LpcMapping::new(IndexMap::new());
             let mapping_id = mapping.unique_id;
-            let mut mapping = value_to_ref!(LpcValue::Mapping(mapping), pool);
+            let mapping = value_to_ref!(LpcValue::Mapping(mapping), pool);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1369,7 +1369,7 @@ mod tests {
 
             let ptr = create!(FunctionPtr);
             let ptr_id = ptr.unique_id;
-            let mut ptr = value_to_ref!(LpcValue::Function(ptr), pool);
+            let ptr = value_to_ref!(LpcValue::Function(ptr), pool);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();

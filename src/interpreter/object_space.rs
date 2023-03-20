@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let mut cell_key = QCellOwner::new();
+        let _cell_key = QCellOwner::new();
         let config = Config::default();
         let mut space = ObjectSpace::new(config);
 
