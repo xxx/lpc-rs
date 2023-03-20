@@ -234,6 +234,7 @@ impl CallFrame {
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
+    #[inline]
     pub fn set_location(
         &mut self,
         location: RegisterVariant,
@@ -387,6 +388,7 @@ impl Mark for CallFrame {
 }
 
 impl Display for CallFrame {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_stack_trace_format())
     }
