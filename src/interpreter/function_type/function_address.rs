@@ -12,7 +12,7 @@ use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{efun::EFUN_PROTOTYPES, process::Process},
-    util::{keyable::Keyable, qcell_debug},
+    util::{keyable::Keyable, qcell_process_debug},
 };
 
 /// Different ways to store a function address, for handling at runtime.
@@ -23,7 +23,7 @@ use crate::{
 pub enum FunctionAddress {
     /// The function being called is located in an object.
     Local(
-        #[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>,
+        #[educe(Debug(method = "qcell_process_debug"))] Rc<QCell<Process>>,
         Rc<ProgramFunction>,
     ),
 

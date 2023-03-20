@@ -32,7 +32,6 @@ pub struct TaskContext {
     /// A counter, to ensure that too-long-evaluations do not occur
     instruction_counter: InstructionCounter,
     /// The final result of the original function that was called
-    #[educe(Debug(method = "qcell_debug"))]
     result: OnceCell<LpcRef>,
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]

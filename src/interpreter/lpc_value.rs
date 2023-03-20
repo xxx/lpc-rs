@@ -30,8 +30,8 @@ pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
     String(String),
-    Array(#[educe(Debug(method = "qcell_debug"))] LpcArray),
-    Mapping(#[educe(Debug(method = "qcell_debug"))] LpcMapping),
+    Array(LpcArray),
+    Mapping(LpcMapping),
     Object(#[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>),
     Function(FunctionPtr),
 }

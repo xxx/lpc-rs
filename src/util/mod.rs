@@ -16,27 +16,22 @@ pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Rc
 
 /// A shared target to call during debug for [`QCell`]-contained data
 pub fn qcell_debug<T>(_cell: T, f: &mut Formatter) -> std::fmt::Result {
-    f.write_str("<QCell>")
+    f.write_str("<QCell'ed Data>")
 }
 
-/// A shared target to call during debug for [`QCell`]-contained data
-// pub fn qcell_debug<T>(cell: &Rc<QCell<T>>, f: &mut Formatter) -> std::fmt::Result
-// where
-//     T: Debug,
-// {
-//     write!(f, "{:?}", *cell.clone().get_mut())
-// }
-//
-// pub fn qcell_debug_option<T>(cell: &Option<Rc<QCell<T>>>, f: &mut Formatter) -> std::fmt::Result
-// where
-//     T: Debug,
-// {
-//     if let Some(cell) = cell {
-//         write!(f, "{:?}", *cell.clone().get_mut())
-//     } else {
-//         write!(f, "None")
-//     }
-// }
+pub fn qcell_process_debug<T>(_cell: T, f: &mut Formatter) -> std::fmt::Result {
+    write!(f, "<QCell'ed Process>")
+}
+
+pub fn qcell_process_option_debug<T>(cell: &Option<T>, f: &mut Formatter) -> std::fmt::Result {
+    if let Some(cell) = cell {
+        f.write_str("Some(")?;
+        qcell_process_debug(cell, f)?;
+        f.write_str(")")
+    } else {
+        write!(f, "None")
+    }
+}
 
 #[cfg(test)]
 mod tests {

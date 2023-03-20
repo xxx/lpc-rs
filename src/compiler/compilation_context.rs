@@ -15,7 +15,7 @@ use qcell::{QCell, QCellOwner};
 use crate::{
     compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
-    util::qcell_debug,
+    util::qcell_process_option_debug,
 };
 
 /// A big, fat state object to store data created at various stages of
@@ -76,7 +76,7 @@ pub struct CompilationContext {
     pub num_init_registers: usize,
 
     /// Pointer to the simul efuns
-    #[educe(Debug(method = "qcell_debug"))]
+    #[educe(Debug(method = "qcell_process_option_debug"))]
     pub simul_efuns: Option<Rc<QCell<Process>>>,
 
     /// The count of closures that have been defined, so we can give them unique

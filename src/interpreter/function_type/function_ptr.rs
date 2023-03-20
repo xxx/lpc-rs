@@ -23,7 +23,7 @@ use crate::{
         lpc_ref::LpcRef,
         process::Process,
     },
-    util::{keyable::Keyable, qcell_debug},
+    util::{keyable::Keyable, qcell_process_debug},
 };
 
 /// A pointer to a function, created with the `&` syntax.
@@ -31,11 +31,10 @@ use crate::{
 #[educe(Debug)]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
-    #[educe(Debug(method = "qcell_debug"))]
+    #[educe(Debug(method = "qcell_process_debug"))]
     pub owner: Weak<QCell<Process>>,
 
     /// Address of the function, in either the receiver or owner
-    #[educe(Debug(method = "qcell_debug"))]
     pub address: FunctionAddress,
 
     /// The arity of the function being pointed to
@@ -44,7 +43,6 @@ pub struct FunctionPtr {
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
-    #[educe(Debug(method = "qcell_debug"))]
     pub partial_args: Vec<Option<LpcRef>>,
 
     /// Does this pointer use `call_other`?

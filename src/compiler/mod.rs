@@ -22,7 +22,7 @@ use crate::{
     compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
     interpreter::{process::Process, program::Program},
     lpc_parser,
-    util::qcell_debug,
+    util::qcell_process_option_debug,
 };
 
 pub mod ast;
@@ -83,7 +83,7 @@ pub struct Compiler {
 
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]
-    #[educe(Debug(method = "qcell_debug"))]
+    #[educe(Debug(method = "qcell_process_option_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
 }
 

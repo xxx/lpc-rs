@@ -22,17 +22,15 @@ use crate::{
         process::Process,
         bank::RefBank,
     },
-    util::qcell_debug,
+    util::qcell_debug, util::qcell_process_debug,
 };
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
 /// testing and debugging.
-#[derive(Educe, Clone)]
-#[educe(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocalVariable {
     pub name: String,
-    #[educe(Debug(method = "qcell_debug"))]
     pub value: LpcRef,
 }
 
@@ -47,7 +45,7 @@ impl LocalVariable {
 #[educe(Debug)]
 pub struct CallFrame {
     /// A pointer to the process that owns the function being called
-    #[educe(Debug(method = "qcell_debug"))]
+    #[educe(Debug(method = "qcell_process_debug"))]
     pub process: Rc<QCell<Process>>,
     /// The function that this frame is a call to
     pub function: Rc<ProgramFunction>,
