@@ -1134,8 +1134,6 @@ impl TreeWalker for CodegenWalker {
         self.current_result = location;
 
         // closures are just pointers to functions
-        // TODO: Ensure this still works when calling a
-        //       returned closure in another object
         let target = FunctionTarget::Local(
             FunctionName::Literal(node.name.clone()),
             FunctionReceiver::Local,
