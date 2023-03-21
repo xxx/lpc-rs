@@ -262,7 +262,7 @@ impl CodegenWalker {
     }
 
     /// helper to choose operation instructions
-    fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
+    fn to_operation_type(&self, node: &ExpressionNode, cell_key: &QCellOwner) -> OperationType {
         match node {
             ExpressionNode::Int(_)
             | ExpressionNode::Float(_) => OperationType::Register,
@@ -270,31 +270,41 @@ impl CodegenWalker {
             ExpressionNode::String(_)
             | ExpressionNode::Array(_)
             | ExpressionNode::Mapping(_)
-            // TODO: Calls can be optimized if we can get the return types available here
-            | ExpressionNode::Call(_)
             | ExpressionNode::Closure(_)
             | ExpressionNode::CommaExpression(_)
             | ExpressionNode::Range(_)
             | ExpressionNode::FunctionPtr(_) => OperationType::Memory,
-            ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs),
+            ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs, cell_key),
+            ExpressionNode::Call(node) => {
+                if let Some(func) = self.context
+                                                .lookup_function_complete(&node.name, &node.namespace, cell_key) {
+                    match func.prototype().return_type {
+                        LpcType::Int(_)
+                        | LpcType::Float(_) => OperationType::Register,
+                        _ => OperationType::Memory,
+                    }
+                } else {
+                    OperationType::Memory
+                }
+            }
             ExpressionNode::BinaryOp(node) => {
-                let left_type = self.to_operation_type(&node.l);
-                let right_type = self.to_operation_type(&node.r);
+                let left_type = self.to_operation_type(&node.l, cell_key);
+                let right_type = self.to_operation_type(&node.r, cell_key);
                 match (left_type, right_type) {
                     (OperationType::Register, OperationType::Register) => OperationType::Register,
                     _ => OperationType::Memory,
                 }
             }
             ExpressionNode::Ternary(node) => {
-                let body_type = self.to_operation_type(&node.body);
-                let else_type = self.to_operation_type(&node.else_clause);
+                let body_type = self.to_operation_type(&node.body, cell_key);
+                let else_type = self.to_operation_type(&node.else_clause, cell_key);
                 match (body_type, else_type) {
                     (OperationType::Register, OperationType::Register) => OperationType::Register,
                     _ => OperationType::Memory,
                 }
             }
             ExpressionNode::UnaryOp(node) => {
-                let expr_type = self.to_operation_type(&node.expr);
+                let expr_type = self.to_operation_type(&node.expr, cell_key);
 
                 if matches!(expr_type, OperationType::Register) {
                     OperationType::Register
@@ -325,22 +335,26 @@ impl CodegenWalker {
         reg_left: RegisterVariant,
         reg_right: RegisterVariant,
         reg_result: RegisterVariant,
+        cell_key: &QCellOwner,
     ) -> Instruction {
         match node.op {
             BinaryOperation::Add => self.choose_num_or_mixed(
                 node,
                 || Instruction::IAdd(reg_left, reg_right, reg_result),
                 || Instruction::MAdd(reg_left, reg_right, reg_result),
+                cell_key
             ),
             BinaryOperation::Sub => self.choose_num_or_mixed(
                 node,
                 || Instruction::ISub(reg_left, reg_right, reg_result),
                 || Instruction::MSub(reg_left, reg_right, reg_result),
+                cell_key
             ),
             BinaryOperation::Mul => self.choose_num_or_mixed(
                 node,
                 || Instruction::IMul(reg_left, reg_right, reg_result),
                 || Instruction::MMul(reg_left, reg_right, reg_result),
+                cell_key
             ),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Mod => Instruction::IMod(reg_left, reg_right, reg_result),
@@ -368,13 +382,13 @@ impl CodegenWalker {
     /// instructions, allowing choice between a numeric (i.e. held in
     /// registers) and mixed (i.e. tracked via references) Switching on the
     /// instructions lets us avoid some value lookups at runtime.
-    fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
+    fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G, cell_key: &QCellOwner) -> Instruction
     where
         F: Fn() -> Instruction,
         G: Fn() -> Instruction,
     {
-        let left_type = self.to_operation_type(&node.l);
-        let right_type = self.to_operation_type(&node.r);
+        let left_type = self.to_operation_type(&node.l, cell_key);
+        let right_type = self.to_operation_type(&node.r, cell_key);
 
         match (left_type, right_type) {
             (OperationType::Register, OperationType::Register) => a(),
@@ -847,7 +861,7 @@ impl TreeWalker for CodegenWalker {
         let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
 
-        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
+        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result, cell_key);
         push_instruction!(self, instruction, node.span);
 
         Ok(())

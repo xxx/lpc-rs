@@ -65,28 +65,6 @@ pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
         .unwrap_or_else(|| Span::new(0, 0..0))
 }
 
-impl ExpressionNode {
-    pub fn set_destination(&mut self, location: RegisterVariant) {
-        match self {
-            ExpressionNode::Assignment(node) => {}
-            ExpressionNode::BinaryOp(node) => {}
-            ExpressionNode::Call(node) => {}
-            ExpressionNode::Closure(node) => {}
-            ExpressionNode::CommaExpression(node) => {}
-            ExpressionNode::Float(node) => {}
-            ExpressionNode::FunctionPtr(node) => {}
-            ExpressionNode::Int(node) => {}
-            ExpressionNode::Range(node) => {}
-            ExpressionNode::String(node) => {}
-            ExpressionNode::Ternary(node) => {}
-            ExpressionNode::UnaryOp(node) => {}
-            ExpressionNode::Var(node) => {}
-            ExpressionNode::Array(node) => {}
-            ExpressionNode::Mapping(node) => {}
-        }
-    }
-}
-
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl AstNodeTrait for ExpressionNode {
