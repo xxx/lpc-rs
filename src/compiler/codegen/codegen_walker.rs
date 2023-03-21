@@ -163,6 +163,10 @@ pub struct CodegenWalker {
 
     /// Because Ranges have two results, we store both locations when we `visit_range`.
     visit_range_results: Option<(Option<RegisterVariant>, Option<RegisterVariant>)>,
+
+    /// Track the final locations of closure arguments, so that deeply nested
+    /// `$1`-type variables can resolve to the correct location.
+    closure_arg_locations: Vec<Vec<RegisterVariant>>,
 }
 
 impl CodegenWalker {
@@ -1037,27 +1041,23 @@ impl TreeWalker for CodegenWalker {
         self.register_counter.push();
         // Note that `upvalue_counter` is *not* pushed here.
         // We want to keep a consistent count of upvalues across all closures
-        // that are declared somewhere within this function
+        // that are declared somewhere within the static function
         self.function_upvalue_counter.push();
 
         self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
-        let declared_arg_count = node // XXX difference btwn closures & functions
-            .parameters
-            .as_ref()
-            .map(|nodes| nodes.len())
-            .unwrap_or_default();
-        // TODO: $ variables need to be able to refer to upvalues, and not assume local
         let declared_arg_locations = node // XXX
             .parameters
             .as_ref()
             .map(|nodes| self.visit_parameters(nodes))
             .unwrap_or_default();
+        let declared_arg_count = declared_arg_locations.len();
+
+        self.closure_arg_locations.push(declared_arg_locations);
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
         // bump the register counter if they have used `$\d` vars that go beyond
         // declared parameters, so that the positional params point to the correct slot.
-        // TODO: fix this for upvalues / default parameters
         let current_count = self.register_counter.number_emitted();
         if num_args > current_count {
             self.register_counter.set(num_args + 1);
@@ -1094,7 +1094,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        debug_assert_eq!(declared_arg_count, declared_arg_locations.len());
+        let declared_arg_locations = self.closure_arg_locations.pop().unwrap();
 
         if num_default_args > 0 {
             if let Some(parameters) = &mut node.parameters {
@@ -1957,10 +1957,14 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     fn visit_var(&mut self, node: &mut VarNode, cell_key: &mut QCellOwner) -> Result<()> {
         if node.is_closure_arg_var() {
-            // TODO: positional closure arg vars are handled here.
-            //       they need to work with non-local locations.
             let idx = closure_arg_number(&node.name)?;
-            self.current_result = Register(idx).as_local();
+            let loc = self
+                .closure_arg_locations
+                .last()
+                .and_then(|locs| locs.get(idx - 1))
+                .copied()
+                .unwrap_or_else(|| Register(idx).as_local());
+            self.current_result = loc;
 
             return Ok(());
         }
@@ -2129,6 +2133,7 @@ impl Default for CodegenWalker {
             case_addresses: vec![],
             visit_range_results: None,
             closure_scope_stack: vec![],
+            closure_arg_locations: vec![],
         }
     }
 }
@@ -4757,6 +4762,8 @@ mod tests {
     }
 
     mod test_visit_var {
+        use indoc::indoc;
+        use crate::test_support::compile_prog;
         use super::*;
 
         #[test]
@@ -4832,6 +4839,35 @@ mod tests {
 
             let expected = vec![];
             assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn test_closure_positional_arguments() {
+            let mut cell_key = QCellOwner::new();
+            let code = indoc! { r##"
+                function maker() {
+                    return (: [int i] dump("i", $1); (: i :) :);
+                }
+
+                void create() {
+                    function f = maker();
+                    mixed i = f(1);
+                }
+            "## };
+
+            let (prog, _, _) = compile_prog(code, &mut cell_key);
+
+            // `closure-1` is the outer closure that refers to $1.
+            let instructions = &prog.functions["closure-1"].instructions;
+            let expected = vec![
+                SConst(RegisterVariant::Local(Register(2)), "i".to_string()),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(2))),
+                Arg(RegisterVariant::Upvalue(Register(0))), // This is what we're really testing for
+                Call { name: "dump".to_string(), num_args: 2, namespace: CallNamespace::Local },
+                // ...etc. We don't care about the rest.
+            ];
+            assert_eq!(&instructions[0..=4], expected);
         }
     }
 
