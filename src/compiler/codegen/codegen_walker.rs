@@ -1419,7 +1419,11 @@ impl TreeWalker for CodegenWalker {
                 || (!sym.instructions.is_empty()
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
-                // TODO: This should emit a warning unless the return type is void
+                if sym.return_type() != LpcType::Void {
+                    self.context.errors.push(LpcError::new_warning(
+                        "non-void function does not return a value".to_string(),
+                    ).with_span(node.span));
+                }
                 sym.push_instruction(Instruction::Ret, node.span);
             }
         }
