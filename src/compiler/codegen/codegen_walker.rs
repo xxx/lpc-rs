@@ -158,14 +158,10 @@ pub struct CodegenWalker {
     /// Labels where jumps at any particular time need to go to.
     jump_targets: Vec<JumpTarget>,
 
-    /// Mapping of `switch` cases to the address of the first instruction for a
-    /// match
+    /// Mapping of `switch` cases to the address of the first instruction for a match
     case_addresses: Vec<Vec<(SwitchCase, Address)>>,
 
-    /// Because Ranges have two results, we store both locations when we
-    /// `visit_range`.
-    // TODO: test if this works with multi-dimensional arrays, or do we need to use a stack to
-    // track these?
+    /// Because Ranges have two results, we store both locations when we `visit_range`.
     visit_range_results: Option<(Option<RegisterVariant>, Option<RegisterVariant>)>,
 }
 

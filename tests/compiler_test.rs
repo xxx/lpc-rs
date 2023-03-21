@@ -5,11 +5,7 @@ use std::rc::Rc;
 use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
-use lpc_rs::{
-    compiler::{Compiler, CompilerBuilder},
-    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
-    util::keyable::Keyable,
-};
+use lpc_rs::{compiler::{Compiler, CompilerBuilder}, extract_value, interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue}, util::keyable::Keyable};
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
 
@@ -182,5 +178,42 @@ fn test_closures() {
             .with_key(&cell_key)
             .to_string(),
         r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
+    );
+}
+
+#[test]
+fn test_multi_dimensional_arrays() {
+    let mut cell_key = QCellOwner::new();
+    let code = indoc! { r##"
+        int *a = ({ 1, 2, 3, 4, 5, 6, 7, 8 });
+        mixed *b = ({ 9, 10, 11, 12, 13, ({ "14a", "14b", "14c" }), 15, 16 });
+        int *c = ({ 17, 18, 19, 20, 21, 22, 23, 24 });
+        int *d = ({ 25, 26, 27, 28, 29, 30, 31, 32 });
+
+        mixed *arr = ({ a, b, c, d });
+
+        string *x = arr[1][5][1..];
+    "## };
+
+    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let pr = ctx.process();
+    let proc = pr.ro(&cell_key);
+    let x_ref = proc.globals.last().unwrap();
+    let LpcRef::Array(arr) = x_ref else {
+        panic!("this shouldn't be reachable.");
+    };
+    let ab = arr.borrow();
+    let lpc_array = extract_value!(*ab, LpcValue::Array);
+
+    let vals = lpc_array.array.iter().map(|a| {
+        let LpcRef::String(s) = a else {
+            panic!("this shouldn't be reachable.");
+        };
+        s.borrow().clone()
+    }).collect::<Vec<_>>();
+
+    assert_eq!(
+        vals,
+        vec![LpcValue::from("14b".to_string()), LpcValue::from("14c".to_string())]
     );
 }
