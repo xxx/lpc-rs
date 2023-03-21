@@ -1421,7 +1421,7 @@ impl TreeWalker for CodegenWalker {
             {
                 if sym.return_type() != LpcType::Void {
                     self.context.errors.push(LpcError::new_warning(
-                        "non-void function does not return a value".to_string(),
+                        "non-void function does not return a value. defaulting to 0.".to_string(),
                     ).with_span(node.span));
                 }
                 sym.push_instruction(Instruction::Ret, node.span);
