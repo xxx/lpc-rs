@@ -360,11 +360,28 @@ pub fn node_type(
                 }
             }
         }
-        ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => Ok(combine_types(
-            node_type(l, context, cell_key)?,
-            node_type(r, context, cell_key)?,
-            *op,
-        )),
+        ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => {
+            if op == &BinaryOperation::Index {
+                let left_type = node_type(l, context, cell_key)?;
+
+                if left_type == LpcType::Mapping(false) {
+                    // mapping values can be any type
+                    return Ok(LpcType::Mixed(false));
+                }
+
+                if let &ExpressionNode::Range(_) = &**r {
+                    return Ok(left_type.as_array(true));
+                }
+
+                return Ok(left_type.as_array(false));
+            }
+
+            Ok(combine_types(
+                node_type(l, context, cell_key)?,
+                node_type(r, context, cell_key)?,
+                *op,
+            ))
+        },
         ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => {
             Ok(node_type(expr, context, cell_key)?)
         }
@@ -1949,6 +1966,7 @@ mod tests {
         }
 
         mod binary_ops {
+            use crate::compiler::ast::range_node::RangeNode;
             use super::*;
             use crate::compiler::semantic::scope_tree::ScopeTree;
 
@@ -1989,6 +2007,26 @@ mod tests {
                     node_type(&node, &context, &cell_key).unwrap(),
                     LpcType::Int(false)
                 );
+            }
+
+            #[test]
+            fn test_index_array_with_range() {
+                let cell_key = QCellOwner::new();
+                let left = ExpressionNode::from(vec![1, 2, 3, 4, 5]);
+                let right = ExpressionNode::Range(RangeNode {
+                    l: Box::new(Some(ExpressionNode::from(1))),
+                    r: Box::new(Some(ExpressionNode::from(3))),
+                    span: None,
+                });
+                let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(left),
+                    r: Box::new(right),
+                    op: BinaryOperation::Index,
+                    span: None,
+                });
+
+                let nt = node_type(&node, &CompilationContext::default(), &cell_key).unwrap();
+                assert_eq!(nt, LpcType::Int(true));
             }
 
             #[test]
