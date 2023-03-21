@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use lpc_rs_core::register::RegisterVariant;
 
 use crate::compiler::{
     ast::{
@@ -64,24 +65,24 @@ pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
         .unwrap_or_else(|| Span::new(0, 0..0))
 }
 
-impl SpannedNode for ExpressionNode {
-    fn span(&self) -> Option<Span> {
+impl ExpressionNode {
+    pub fn set_destination(&mut self, location: RegisterVariant) {
         match self {
-            ExpressionNode::Assignment(node) => node.span,
-            ExpressionNode::BinaryOp(node) => node.span,
-            ExpressionNode::Call(node) => node.span,
-            ExpressionNode::Closure(node) => node.span,
-            ExpressionNode::CommaExpression(node) => node.span,
-            ExpressionNode::Float(node) => node.span,
-            ExpressionNode::FunctionPtr(node) => node.span,
-            ExpressionNode::Int(node) => node.span,
-            ExpressionNode::Range(node) => node.span,
-            ExpressionNode::String(node) => node.span,
-            ExpressionNode::Ternary(node) => node.span,
-            ExpressionNode::UnaryOp(node) => node.span,
-            ExpressionNode::Var(node) => node.span,
-            ExpressionNode::Array(node) => node.span,
-            ExpressionNode::Mapping(node) => node.span,
+            ExpressionNode::Assignment(node) => {}
+            ExpressionNode::BinaryOp(node) => {}
+            ExpressionNode::Call(node) => {}
+            ExpressionNode::Closure(node) => {}
+            ExpressionNode::CommaExpression(node) => {}
+            ExpressionNode::Float(node) => {}
+            ExpressionNode::FunctionPtr(node) => {}
+            ExpressionNode::Int(node) => {}
+            ExpressionNode::Range(node) => {}
+            ExpressionNode::String(node) => {}
+            ExpressionNode::Ternary(node) => {}
+            ExpressionNode::UnaryOp(node) => {}
+            ExpressionNode::Var(node) => {}
+            ExpressionNode::Array(node) => {}
+            ExpressionNode::Mapping(node) => {}
         }
     }
 }
@@ -104,6 +105,16 @@ macro_rules! delegated_traits {
                 $(
                     $x(y) => write!(f, "{}", y),
                 )*
+                }
+            }
+        }
+
+        impl SpannedNode for ExpressionNode {
+            fn span(&self) -> Option<Span> {
+                match self {
+                    $(
+                        $x(y) => y.span,
+                    )*
                 }
             }
         }

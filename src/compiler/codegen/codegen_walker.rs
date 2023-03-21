@@ -2058,7 +2058,6 @@ impl TreeWalker for CodegenWalker {
             }
         } else {
             trace!("No value, defaulting to NULL");
-            // Default value to 0 when uninitialized.
             self.assign_sym_location(&node.name)
         };
 
