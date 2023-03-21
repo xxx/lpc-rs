@@ -6,12 +6,12 @@ use std::{
 };
 
 use educe::Educe;
-use lpc_rs_core::function_flags::FunctionFlags;
+
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
 
 use crate::{
-    interpreter::{efun::EFUN_PROTOTYPES, process::Process},
+    interpreter::{process::Process},
     util::{keyable::Keyable, qcell_process_debug},
 };
 
@@ -37,22 +37,11 @@ pub enum FunctionAddress {
 impl FunctionAddress {
     /// Get the name of the function being called.
     /// Will return the variable name in those cases.
+    #[inline]
     pub fn function_name(&self) -> &str {
         match self {
             FunctionAddress::Local(_, x) => x.name(),
             FunctionAddress::Dynamic(x) | FunctionAddress::Efun(x) => x,
-        }
-    }
-
-    /// Get the flags for the function this address represents
-    pub fn flags(&self) -> FunctionFlags {
-        match self {
-            FunctionAddress::Local(_, x) => x.prototype.flags,
-            FunctionAddress::Dynamic(_) => FunctionFlags::default(), // TODO: ???
-            FunctionAddress::Efun(x) => EFUN_PROTOTYPES
-                .get(x.as_str())
-                .map(|x| x.flags)
-                .unwrap_or_default(),
         }
     }
 }

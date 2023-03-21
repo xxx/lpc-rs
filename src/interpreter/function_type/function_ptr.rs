@@ -6,11 +6,11 @@ use std::{
 };
 
 use bit_set::BitSet;
-use delegate::delegate;
+
 use educe::Educe;
 use itertools::Itertools;
 use lpc_rs_core::{
-    function_arity::FunctionArity, function_flags::FunctionFlags, register::Register,
+    function_arity::FunctionArity, register::Register,
 };
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
@@ -58,20 +58,15 @@ pub struct FunctionPtr {
 impl FunctionPtr {
     /// Get the name of the function being called.
     /// Will return the variable name in those cases.
+    #[inline]
     pub fn name(&self) -> &str {
         self.address.function_name()
     }
 
     /// How many arguments do we expect to be called with at runtime?
+    #[inline]
     pub fn arity(&self) -> usize {
         self.partial_args.iter().filter(|x| x.is_none()).count()
-    }
-
-    delegate! {
-        to self.address {
-            /// retrieve the flags for the function
-            pub fn flags(&self) -> FunctionFlags;
-        }
     }
 }
 
