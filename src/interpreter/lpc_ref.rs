@@ -158,7 +158,7 @@ impl LpcRef {
             LpcRef::Float(_) => LpcType::Float(false),
             LpcRef::Int(_) => LpcType::Int(false),
             LpcRef::String(_) => LpcType::String(false),
-            LpcRef::Array(_) => LpcType::Mixed(true), // TODO: this could be better
+            LpcRef::Array(_) => LpcType::Mixed(true), // this could be better
             LpcRef::Mapping(_) => LpcType::Mapping(false),
             LpcRef::Object(_) => LpcType::Object(false),
             LpcRef::Function(_) => LpcType::Function(false),
