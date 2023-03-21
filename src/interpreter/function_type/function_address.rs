@@ -6,12 +6,11 @@ use std::{
 };
 
 use educe::Educe;
-
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
 
 use crate::{
-    interpreter::{process::Process},
+    interpreter::process::Process,
     util::{keyable::Keyable, qcell_process_debug},
 };
 

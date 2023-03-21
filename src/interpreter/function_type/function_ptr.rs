@@ -6,12 +6,9 @@ use std::{
 };
 
 use bit_set::BitSet;
-
 use educe::Educe;
 use itertools::Itertools;
-use lpc_rs_core::{
-    function_arity::FunctionArity, register::Register,
-};
+use lpc_rs_core::{function_arity::FunctionArity, register::Register};
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 

@@ -370,8 +370,14 @@ mod tests {
         let diagnostic = Diagnostic::from(&error);
 
         assert_eq!(diagnostic.message, "test error");
-        assert_eq!(diagnostic.labels[0], Label::primary(0, 0..1).with_message(""));
-        assert_eq!(diagnostic.labels[1], Label::secondary(0, 0..7).with_message("my label"));
+        assert_eq!(
+            diagnostic.labels[0],
+            Label::primary(0, 0..1).with_message("")
+        );
+        assert_eq!(
+            diagnostic.labels[1],
+            Label::secondary(0, 0..7).with_message("my label")
+        );
         assert_eq!(diagnostic.notes[0], "test note");
         assert_eq!(diagnostic.notes[1], "Stack trace:\n\ntest2\ntest");
     }

@@ -17,12 +17,12 @@ pub fn throw<const N: usize>(
 #[cfg(test)]
 mod tests {
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::test_support::compile_prog;
+
     use super::*;
+    use crate::{
+        interpreter::{gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, task::Task},
+        test_support::compile_prog,
+    };
 
     #[test]
     fn test_throw() {
@@ -43,9 +43,6 @@ mod tests {
             &mut cell_key,
         );
 
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "\"foo bar baz error!\""
-        );
+        assert_eq!(result.unwrap_err().to_string(), "\"foo bar baz error!\"");
     }
 }
