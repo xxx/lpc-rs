@@ -381,7 +381,7 @@ pub fn node_type(
                 node_type(r, context, cell_key)?,
                 *op,
             ))
-        },
+        }
         ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => {
             Ok(node_type(expr, context, cell_key)?)
         }
@@ -1966,9 +1966,8 @@ mod tests {
         }
 
         mod binary_ops {
-            use crate::compiler::ast::range_node::RangeNode;
             use super::*;
-            use crate::compiler::semantic::scope_tree::ScopeTree;
+            use crate::compiler::{ast::range_node::RangeNode, semantic::scope_tree::ScopeTree};
 
             #[test]
             fn test_index_array_returns_singular_of_left_type() {

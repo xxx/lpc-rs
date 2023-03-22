@@ -5,7 +5,12 @@ use std::rc::Rc;
 use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
-use lpc_rs::{compiler::{Compiler, CompilerBuilder}, extract_value, interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue}, util::keyable::Keyable};
+use lpc_rs::{
+    compiler::{Compiler, CompilerBuilder},
+    extract_value,
+    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
+    util::keyable::Keyable,
+};
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
 
@@ -205,15 +210,22 @@ fn test_multi_dimensional_arrays() {
     let ab = arr.borrow();
     let lpc_array = extract_value!(*ab, LpcValue::Array);
 
-    let vals = lpc_array.array.iter().map(|a| {
-        let LpcRef::String(s) = a else {
+    let vals = lpc_array
+        .array
+        .iter()
+        .map(|a| {
+            let LpcRef::String(s) = a else {
             panic!("this shouldn't be reachable.");
         };
-        s.borrow().clone()
-    }).collect::<Vec<_>>();
+            s.borrow().clone()
+        })
+        .collect::<Vec<_>>();
 
     assert_eq!(
         vals,
-        vec![LpcValue::from("14b".to_string()), LpcValue::from("14c".to_string())]
+        vec![
+            LpcValue::from("14b".to_string()),
+            LpcValue::from("14c".to_string())
+        ]
     );
 }

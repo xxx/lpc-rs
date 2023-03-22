@@ -606,7 +606,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let ellipsis_vars = &arg_locations[num_args..];
                         ellipsis_vars
                             .iter()
-                            .map(|x| get_location_in_frame(frame, *x, cell_key).map(|v| v.into_owned()))
+                            .map(|x| {
+                                get_location_in_frame(frame, *x, cell_key).map(|v| v.into_owned())
+                            })
                             .collect::<Result<Vec<_>>>()?
                     }
                 };

@@ -264,8 +264,7 @@ impl CodegenWalker {
     /// helper to choose operation instructions
     fn to_operation_type(&self, node: &ExpressionNode, cell_key: &QCellOwner) -> OperationType {
         match node {
-            ExpressionNode::Int(_)
-            | ExpressionNode::Float(_) => OperationType::Register,
+            ExpressionNode::Int(_) | ExpressionNode::Float(_) => OperationType::Register,
 
             ExpressionNode::String(_)
             | ExpressionNode::Array(_)
@@ -276,11 +275,12 @@ impl CodegenWalker {
             | ExpressionNode::FunctionPtr(_) => OperationType::Memory,
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs, cell_key),
             ExpressionNode::Call(node) => {
-                if let Some(func) = self.context
-                                                .lookup_function_complete(&node.name, &node.namespace, cell_key) {
+                if let Some(func) =
+                    self.context
+                        .lookup_function_complete(&node.name, &node.namespace, cell_key)
+                {
                     match func.prototype().return_type {
-                        LpcType::Int(_)
-                        | LpcType::Float(_) => OperationType::Register,
+                        LpcType::Int(_) | LpcType::Float(_) => OperationType::Register,
                         _ => OperationType::Memory,
                     }
                 } else {
@@ -314,14 +314,12 @@ impl CodegenWalker {
             }
             ExpressionNode::Var(v) => {
                 match self.context.lookup_var(&v.name) {
-                    Some(Symbol { type_: ty, .. }) => {
-                        match ty {
-                            LpcType::Int(false) => OperationType::Register,
-                            LpcType::Float(false) => OperationType::Register,
-                            _ => OperationType::Memory,
-                        }
-                    }
-                    None => OperationType::Memory // arbitrary - doing this instead of panicking
+                    Some(Symbol { type_: ty, .. }) => match ty {
+                        LpcType::Int(false) => OperationType::Register,
+                        LpcType::Float(false) => OperationType::Register,
+                        _ => OperationType::Memory,
+                    },
+                    None => OperationType::Memory, // arbitrary - doing this instead of panicking
                 }
             }
         }
@@ -342,19 +340,19 @@ impl CodegenWalker {
                 node,
                 || Instruction::IAdd(reg_left, reg_right, reg_result),
                 || Instruction::MAdd(reg_left, reg_right, reg_result),
-                cell_key
+                cell_key,
             ),
             BinaryOperation::Sub => self.choose_num_or_mixed(
                 node,
                 || Instruction::ISub(reg_left, reg_right, reg_result),
                 || Instruction::MSub(reg_left, reg_right, reg_result),
-                cell_key
+                cell_key,
             ),
             BinaryOperation::Mul => self.choose_num_or_mixed(
                 node,
                 || Instruction::IMul(reg_left, reg_right, reg_result),
                 || Instruction::MMul(reg_left, reg_right, reg_result),
-                cell_key
+                cell_key,
             ),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Mod => Instruction::IMod(reg_left, reg_right, reg_result),
@@ -382,7 +380,13 @@ impl CodegenWalker {
     /// instructions, allowing choice between a numeric (i.e. held in
     /// registers) and mixed (i.e. tracked via references) Switching on the
     /// instructions lets us avoid some value lookups at runtime.
-    fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G, cell_key: &QCellOwner) -> Instruction
+    fn choose_num_or_mixed<F, G>(
+        &self,
+        node: &BinaryOpNode,
+        a: F,
+        b: G,
+        cell_key: &QCellOwner,
+    ) -> Instruction
     where
         F: Fn() -> Instruction,
         G: Fn() -> Instruction,
@@ -858,7 +862,8 @@ impl TreeWalker for CodegenWalker {
         let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
 
-        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result, cell_key);
+        let instruction =
+            self.choose_op_instruction(node, reg_left, reg_right, reg_result, cell_key);
         push_instruction!(self, instruction, node.span);
 
         Ok(())
@@ -1418,9 +1423,13 @@ impl TreeWalker for CodegenWalker {
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
                 if sym.return_type() != LpcType::Void {
-                    self.context.errors.push(LpcError::new_warning(
-                        "non-void function does not return a value. defaulting to 0.".to_string(),
-                    ).with_span(node.span));
+                    self.context.errors.push(
+                        LpcError::new_warning(
+                            "non-void function does not return a value. defaulting to 0."
+                                .to_string(),
+                        )
+                        .with_span(node.span),
+                    );
                 }
                 sym.push_instruction(Instruction::Ret, node.span);
             }
@@ -4778,8 +4787,9 @@ mod tests {
 
     mod test_visit_var {
         use indoc::indoc;
-        use crate::test_support::compile_prog;
+
         use super::*;
+        use crate::test_support::compile_prog;
 
         #[test]
         fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
@@ -4878,8 +4888,12 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(2)), "i".to_string()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
-                Arg(RegisterVariant::Upvalue(Register(0))), // This is what we're really testing for
-                Call { name: "dump".to_string(), num_args: 2, namespace: CallNamespace::Local },
+                Arg(RegisterVariant::Upvalue(Register(0))), /* This is what we're really testing for */
+                Call {
+                    name: "dump".to_string(),
+                    num_args: 2,
+                    namespace: CallNamespace::Local,
+                },
                 // ...etc. We don't care about the rest.
             ];
             assert_eq!(&instructions[0..=4], expected);

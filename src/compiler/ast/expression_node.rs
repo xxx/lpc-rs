@@ -8,7 +8,6 @@ use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
 
-
 use crate::compiler::{
     ast::{
         array_node::ArrayNode,

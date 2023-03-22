@@ -311,15 +311,13 @@ impl CallFrame {
                 self.pc.replace(*addr);
                 Ok(())
             }
-            JumpLocation::Label(label) => {
-                match self.lookup_label(label) {
-                    Some(a) => {
-                        self.pc.replace(*a);
-                        Ok(())
-                    }
-                    None => Err(self.runtime_error(format!("Unable to find address for {label}"))),
+            JumpLocation::Label(label) => match self.lookup_label(label) {
+                Some(a) => {
+                    self.pc.replace(*a);
+                    Ok(())
                 }
-            }
+                None => Err(self.runtime_error(format!("Unable to find address for {label}"))),
+            },
         }
     }
 
