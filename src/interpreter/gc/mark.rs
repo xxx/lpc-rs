@@ -15,7 +15,7 @@ pub trait Mark {
     ///
     /// # Returns
     /// * `Ok(())` if the marking was successful.
-    /// * `Err` if the marking failed.
+    /// * `Err(LpcError)` if the marking failed.
     fn mark(
         &self,
         marked: &mut BitSet,
