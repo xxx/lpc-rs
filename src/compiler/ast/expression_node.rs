@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
-use lpc_rs_core::register::RegisterVariant;
+
 
 use crate::compiler::{
     ast::{
