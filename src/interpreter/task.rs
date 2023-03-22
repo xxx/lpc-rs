@@ -392,7 +392,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call { name, namespace, num_args } => {
+            Instruction::Call {
+                name,
+                namespace,
+                num_args,
+            } => {
                 self.handle_call(&name, &namespace, num_args, task_context, cell_key)?;
             }
             Instruction::CallFp { location, num_args } => {
@@ -1211,9 +1215,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
             trace!(
-                        "Calling call_other: {}->{function_name}",
-                        receiver_ref.with_key(cell_key)
-                    );
+                "Calling call_other: {}->{function_name}",
+                receiver_ref.with_key(cell_key)
+            );
 
             // An inner helper function to actually calculate the result, for easy re-use
             // when using `call_other` with arrays and mappings.
@@ -1240,8 +1244,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let mut task: Task<MAX_CALL_STACK_SIZE> =
                                 Task::new(memory, task_context.upvalues().clone());
 
-                            let new_context =
-                                task_context.clone().with_process(receiver.clone());
+                            let new_context = task_context.clone().with_process(receiver.clone());
                             // unwrap() is ok because resolve_call_other_receiver() checks
                             // for the function's presence.
                             let function = receiver
@@ -1308,7 +1311,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                 &self.memory,
                                 cell_key,
                             )
-                                .unwrap_or(NULL)
+                            .unwrap_or(NULL)
                         })
                         .collect::<Vec<_>>()
                         .into();
@@ -1331,7 +1334,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                                     &self.memory,
                                     cell_key,
                                 )
-                                    .unwrap_or(NULL),
+                                .unwrap_or(NULL),
                             )
                         })
                         .collect::<IndexMap<_, _>>()
@@ -1493,7 +1496,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_load(&mut self, container_loc: RegisterVariant, index_loc: RegisterVariant, destination: RegisterVariant, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_load(
+        &mut self,
+        container_loc: RegisterVariant,
+        index_loc: RegisterVariant,
+        destination: RegisterVariant,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let container_ref = get_loc!(self, container_loc, cell_key)?.into_owned();
         let lpc_ref = get_loc!(self, index_loc, cell_key)?.into_owned();
 
@@ -1515,9 +1524,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         return Err(self.array_index_error(idx, vec.len()));
                     }
                 } else {
-                    return Err(
-                        self.array_index_error(lpc_ref.with_key(cell_key), vec.len())
-                    );
+                    return Err(self.array_index_error(lpc_ref.with_key(cell_key), vec.len()));
                 }
 
                 Ok(())
@@ -1634,7 +1641,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_store(&mut self, value_loc: RegisterVariant, container_loc: RegisterVariant, index_loc: RegisterVariant, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_store(
+        &mut self,
+        value_loc: RegisterVariant,
+        container_loc: RegisterVariant,
+        index_loc: RegisterVariant,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let mut container = get_loc!(self, container_loc, cell_key)?.into_owned();
         let index = &*get_loc!(self, index_loc, cell_key)?;
         let array_idx = if let LpcRef::Int(i) = index { *i } else { 0 };
