@@ -229,3 +229,17 @@ fn test_multi_dimensional_arrays() {
         ]
     );
 }
+
+#[test]
+fn test_positional_vars_into_argv() {
+    let mut cell_key = QCellOwner::new();
+    let code = indoc! { r##"
+        void create() {
+            function f = (: [...] $2 :);
+            f(666, 777);
+        }
+    "## };
+
+    let (_task, ctx) = run_prog(code, &mut cell_key);
+    assert_eq!(&LpcRef::Int(777), ctx.result().unwrap());
+}
