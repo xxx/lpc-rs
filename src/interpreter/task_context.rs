@@ -200,6 +200,12 @@ impl TaskContext {
     pub fn upvalues(&self) -> &Rc<QCell<GcRefBank>> {
         &self.vm_upvalues
     }
+
+    /// Get the final result of the Task that this context is for, if it's finished.
+    #[inline]
+    pub fn result(&self) -> Option<&LpcRef> {
+        self.result.get()
+    }
 }
 
 #[cfg(test)]

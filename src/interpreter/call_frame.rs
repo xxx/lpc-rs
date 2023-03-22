@@ -8,7 +8,7 @@ use std::{
 use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
-use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_asm::instruction::{Address, Instruction, JumpLocation};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -305,13 +305,21 @@ impl CallFrame {
     /// Set the pc to the address for the passed label.
     /// Returns an error if the label is not found.
     #[inline]
-    pub fn set_pc_from_label(&self, label: &str) -> Result<()> {
-        match self.lookup_label(label) {
-            Some(a) => {
-                self.pc.replace(*a);
+    pub fn set_pc_from_jump_location(&self, jump_location: &JumpLocation) -> Result<()> {
+        match jump_location {
+            JumpLocation::Address(addr) => {
+                self.pc.replace(*addr);
                 Ok(())
             }
-            None => Err(self.runtime_error(format!("Unable to find address for {label}"))),
+            JumpLocation::Label(label) => {
+                match self.lookup_label(label) {
+                    Some(a) => {
+                        self.pc.replace(*a);
+                        Ok(())
+                    }
+                    None => Err(self.runtime_error(format!("Unable to find address for {label}"))),
+                }
+            }
         }
     }
 

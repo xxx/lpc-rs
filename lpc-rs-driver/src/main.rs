@@ -60,6 +60,7 @@ fn init_tracing_subscriber(config: &Config) {
                     tracing::subscriber::set_global_default(
                         tracing_subscriber::fmt()
                             .with_max_level(level)
+                            // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
                             .with_writer(std::io::stdout)
                             .finish(),
                     )

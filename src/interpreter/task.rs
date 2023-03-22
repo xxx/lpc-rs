@@ -10,7 +10,7 @@ use educe::Educe;
 use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_asm::instruction::{Address, Instruction, JumpLocation};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
@@ -520,41 +520,24 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Jmp(label) => {
+            Instruction::Jmp(ref jump_location) => {
                 let frame = self.stack.current_frame()?;
-                let address = match frame.lookup_label(&label) {
-                    Some(x) => *x,
-                    None => {
-                        return Err(
-                            self.runtime_error(format!("Missing address for label `{label}`"))
-                        )
-                    }
-                };
-                frame.set_pc(address);
+                frame.set_pc_from_jump_location(jump_location)?;
             }
-            Instruction::Jnz(r1, label) => {
+            Instruction::Jnz(r1, ref jump_location) => {
                 let v = &*get_loc!(self, r1, cell_key)?;
 
                 if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
                     let frame = self.stack.current_frame()?;
-                    let address = match frame.lookup_label(&label) {
-                        Some(x) => *x,
-                        None => {
-                            return Err(
-                                self.runtime_error(format!("Missing address for label `{label}`"))
-                            )
-                        }
-                    };
-                    let frame = self.stack.current_frame()?;
-                    frame.set_pc(address);
+                    frame.set_pc_from_jump_location(jump_location)?;
                 }
             }
-            Instruction::Jz(r1, ref label) => {
+            Instruction::Jz(r1, ref jump_location) => {
                 let v = &*get_loc!(self, r1, cell_key)?;
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
                     let frame = self.stack.current_frame()?;
-                    frame.set_pc_from_label(label)?;
+                    frame.set_pc_from_jump_location(jump_location)?;
                 }
             }
             Instruction::Load(..) => {
@@ -616,11 +599,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
                 let arg_locations = &frame.arg_locations;
-                let ellipsis_vars = &arg_locations[num_args..];
-                let refs = ellipsis_vars
-                    .iter()
-                    .map(|x| get_location_in_frame(frame, *x, cell_key).map(|v| v.into_owned()))
-                    .collect::<Result<Vec<_>>>()?;
+                let refs = {
+                    if arg_locations.len() < num_args {
+                        vec![]
+                    } else {
+                        let ellipsis_vars = &arg_locations[num_args..];
+                        ellipsis_vars
+                            .iter()
+                            .map(|x| get_location_in_frame(frame, *x, cell_key).map(|v| v.into_owned()))
+                            .collect::<Result<Vec<_>>>()?
+                    }
+                };
+
                 let new_ref = self.memory.value_to_ref(LpcValue::from(refs));
 
                 set_location(&mut self.stack, r, new_ref, cell_key)?;
@@ -3894,6 +3884,20 @@ mod tests {
                 ];
 
                 BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+            }
+
+            #[test]
+            fn test_creates_empty_array() {
+                let code = indoc! { r##"
+                    void create() {
+                        function f = (: [int i = 69, ...] dump(i, argv); argv :);
+                        f();
+                    }
+                "##};
+
+                let mut cell_key = QCellOwner::new();
+                let (_task, ctx) = run_prog(code, &mut cell_key);
+                Array(vec![]).assert_equal(ctx.result().unwrap(), &cell_key);
             }
         }
 

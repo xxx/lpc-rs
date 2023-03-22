@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction, Label};
+use lpc_rs_asm::instruction::{Address, Instruction, JumpLocation, Label};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
@@ -657,8 +657,7 @@ impl CodegenWalker {
         parameters: &mut [VarInitNode],
         declared_arg_locations: &[RegisterVariant],
         span: Option<Span>,
-        populate_defaults_index: Option<usize>,
-        start_label: Label,
+        populate_defaults_index: Address,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let mut default_init_addresses = vec![];
@@ -677,19 +676,17 @@ impl CodegenWalker {
         }
 
         // backpatch the the correct init addresses for the PopulateDefaults call.
-        if let Some(idx) = populate_defaults_index {
-            let sym = self.function_stack.last_mut().unwrap();
-            let instruction = &sym.instructions[idx];
-            if let Instruction::PopulateDefaults(_) = instruction {
-                let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
-                sym.instructions[idx] = new_instruction;
-            } else {
-                return Err(LpcError::new("Invalid populate_defaults_index").with_span(span));
-            }
+        let sym = self.function_stack.last_mut().unwrap();
+        let instruction = &sym.instructions[populate_defaults_index];
+        if let Instruction::PopulateDefaults(_) = instruction {
+            let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
+            sym.instructions[populate_defaults_index] = new_instruction;
+        } else {
+            return Err(LpcError::new("Invalid populate_defaults_index").with_span(span));
         }
 
         // jump back to the function now that defaults are populated.
-        let instruction = Instruction::Jmp(start_label);
+        let instruction = Instruction::Jmp((populate_defaults_index + 1).into());
         push_instruction!(self, instruction, span);
 
         Ok(())
@@ -813,12 +810,12 @@ impl TreeWalker for CodegenWalker {
             BinaryOperation::AndAnd => {
                 // Handle short-circuit behavior
                 let end_label = self.new_label("andand-end");
-                let instruction = Instruction::Jz(reg_left, end_label.clone());
+                let instruction = Instruction::Jz(reg_left, end_label.clone().into());
                 push_instruction!(self, instruction, node.span);
 
                 node.r.visit(self, cell_key)?;
                 let reg_right = self.current_result;
-                let instruction = Instruction::Jz(reg_right, end_label.clone());
+                let instruction = Instruction::Jz(reg_right, end_label.clone().into());
                 push_instruction!(self, instruction, node.span);
 
                 let reg_result = self.register_counter.next().unwrap().as_local();
@@ -839,7 +836,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::RegCopy(reg_left, reg_result);
                 push_instruction!(self, instruction, node.span);
 
-                let instruction = Instruction::Jnz(reg_result, end_label.clone());
+                let instruction = Instruction::Jnz(reg_result, end_label.clone().into());
                 push_instruction!(self, instruction, node.span);
 
                 node.r.visit(self, cell_key)?;
@@ -1112,12 +1109,13 @@ impl TreeWalker for CodegenWalker {
 
         if num_default_args > 0 {
             if let Some(parameters) = &mut node.parameters {
+                debug_assert!(populate_defaults_index.is_some());
+
                 self.init_default_params(
                     parameters,
                     &declared_arg_locations,
                     node.span,
-                    populate_defaults_index,
-                    start_label,
+                    populate_defaults_index.unwrap(),
                     cell_key,
                 )?;
             }
@@ -1213,7 +1211,7 @@ impl TreeWalker for CodegenWalker {
         node.condition.visit(self, cell_key)?;
 
         // Go back to the start of the loop if the result isn't zero
-        let instruction = Instruction::Jnz(self.current_result, start_label);
+        let instruction = Instruction::Jnz(self.current_result, start_label.into());
         push_instruction!(self, instruction, node.span);
         let end_addr = self.current_address();
         self.insert_label(end_label, end_addr);
@@ -1252,7 +1250,7 @@ impl TreeWalker for CodegenWalker {
         if let Some(cond) = &mut node.condition {
             cond.visit(self, cell_key)?;
 
-            let instruction = Instruction::Jz(self.current_result, end_label.clone());
+            let instruction = Instruction::Jz(self.current_result, end_label.clone().into());
             push_instruction!(self, instruction, cond.span());
         };
 
@@ -1266,7 +1264,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label);
+        let instruction = Instruction::Jmp(start_label.into());
         push_instruction!(self, instruction, node.span);
 
         let addr = self.current_address();
@@ -1319,7 +1317,7 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
         push_instruction!(self, instruction, node.span);
 
-        let instruction = Instruction::Jnz(eqeq_result, end_label.clone());
+        let instruction = Instruction::Jnz(eqeq_result, end_label.clone().into());
         push_instruction!(self, instruction, node.span);
 
         // assign next element(s) to the locations
@@ -1353,7 +1351,7 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label);
+        let instruction = Instruction::Jmp(start_label.into());
         push_instruction!(self, instruction, node.span);
 
         let addr = self.current_address();
@@ -1431,12 +1429,14 @@ impl TreeWalker for CodegenWalker {
         debug_assert_eq!(declared_arg_count, declared_arg_locations.len());
 
         if num_default_args > 0 {
+            // always set when num_default_args > 0
+            debug_assert!(populate_defaults_index.is_some());
+
             self.init_default_params(
                 &mut node.parameters,
                 &declared_arg_locations,
                 node.span,
-                populate_defaults_index,
-                start_label,
+                populate_defaults_index.unwrap(),
                 cell_key,
             )?;
         }
@@ -1594,14 +1594,14 @@ impl TreeWalker for CodegenWalker {
         // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the
         // "then" body. Insert a placeholder address, which we correct below
         // after the body's code is generated
-        let instruction = Instruction::Jz(self.current_result, else_label.clone());
+        let instruction = Instruction::Jz(self.current_result, else_label.clone().into());
         push_instruction!(self, instruction, node.span);
 
         // Generate the main body of the statement
         node.body.visit(self, cell_key)?;
 
         if node.else_clause.is_some() {
-            let instruction = Instruction::Jmp(end_label.clone());
+            let instruction = Instruction::Jmp(end_label.clone().into());
             push_instruction!(self, instruction, node.span);
         }
 
@@ -1777,7 +1777,7 @@ impl TreeWalker for CodegenWalker {
         let expr_result = self.current_result;
 
         let test_label = self.new_label("switch-test");
-        let instruction = Instruction::Jmp(test_label.clone());
+        let instruction = Instruction::Jmp(test_label.clone().into());
         push_instruction!(self, instruction, node.span);
 
         let end_label = self.new_label("switch-end");
@@ -1789,7 +1789,7 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
 
         // skip over the tests that we're about to generate.
-        let instruction = Instruction::Jmp(end_label.clone());
+        let instruction = Instruction::Jmp(end_label.clone().into());
         // skip this jump if the final case statement ended with its own `break`.
         if self
             .function_stack
@@ -1852,13 +1852,13 @@ impl TreeWalker for CodegenWalker {
                     }
 
                     let case_label = self.new_label("switch-case");
-                    let instruction = Instruction::Jnz(test_result, case_label.clone());
+                    let instruction = Instruction::Jnz(test_result, case_label.clone().into());
                     push_instruction!(self, instruction, node.span);
                     self.insert_label(case_label, case_address.1);
                 }
                 None => {
                     let default_label = self.new_label("switch-default");
-                    let instruction = Instruction::Jmp(default_label.clone());
+                    let instruction = Instruction::Jmp(default_label.clone().into());
                     push_instruction!(self, instruction, node.span);
                     self.insert_label(default_label, case_address.1);
                 }
@@ -1881,7 +1881,7 @@ impl TreeWalker for CodegenWalker {
 
         node.condition.visit(self, cell_key)?;
 
-        let instruction = Instruction::Jz(self.current_result, else_label.clone());
+        let instruction = Instruction::Jz(self.current_result, else_label.clone().into());
         push_instruction!(self, instruction, node.span);
 
         node.body.visit(self, cell_key)?;
@@ -1891,7 +1891,7 @@ impl TreeWalker for CodegenWalker {
             node.span
         );
 
-        let instruction = Instruction::Jmp(end_label.clone());
+        let instruction = Instruction::Jmp(end_label.clone().into());
         push_instruction!(self, instruction, node.span);
 
         let else_addr = self.current_address();
@@ -2107,13 +2107,13 @@ impl TreeWalker for CodegenWalker {
 
         let cond_result = self.current_result;
 
-        let instruction = Instruction::Jz(cond_result, end_label.clone());
+        let instruction = Instruction::Jz(cond_result, end_label.clone().into());
         push_instruction!(self, instruction, node.span);
 
         node.body.visit(self, cell_key)?;
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label);
+        let instruction = Instruction::Jmp(start_label.into());
         push_instruction!(self, instruction, node.span);
 
         let addr = self.current_address();
@@ -3636,7 +3636,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp("closure-body-start_0".into()),
+                    Jmp(1.into()),
                 ],
             );
         }
@@ -4219,7 +4219,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp("function-body-start_0".into()),
+                    Jmp(1.into()),
                 ],
             );
         }

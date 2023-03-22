@@ -16,6 +16,48 @@ pub type Address = usize;
 
 pub type Label = String;
 
+/// A jump target, either a label or an address
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JumpLocation {
+    /// Jump to a label
+    Label(Label),
+    /// Jump to an address
+    Address(Address),
+}
+
+impl Display for JumpLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            JumpLocation::Label(label) => write!(f, "{}", label),
+            JumpLocation::Address(address) => write!(f, "{}", address),
+        }
+    }
+}
+
+impl From<Label> for JumpLocation {
+    fn from(label: Label) -> Self {
+        JumpLocation::Label(label)
+    }
+}
+
+impl From<&Label> for JumpLocation {
+    fn from(label: &Label) -> Self {
+        JumpLocation::Label(label.clone())
+    }
+}
+
+impl From<&str> for JumpLocation {
+    fn from(label: &str) -> Self {
+        JumpLocation::Label(label.to_string())
+    }
+}
+
+impl From<Address> for JumpLocation {
+    fn from(address: Address) -> Self {
+        JumpLocation::Address(address)
+    }
+}
+
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la
 /// the AT&T syntax
@@ -125,13 +167,13 @@ pub enum Instruction {
     ISub(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Unconditional jump
-    Jmp(Label),
+    Jmp(JumpLocation),
 
     /// Jump if the value in the register is not zero (Int or Float)
-    Jnz(RegisterVariant, Label),
+    Jnz(RegisterVariant, JumpLocation),
 
     /// Jump if the value in the register is zero (Int or Float)
-    Jz(RegisterVariant, Label),
+    Jz(RegisterVariant, JumpLocation),
 
     /// Load a single item from an array or mapping into a register
     /// x.2 = x.0[x.1]
