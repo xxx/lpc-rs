@@ -364,8 +364,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         };
 
         match instruction {
-            Instruction::AConst(..) => {
-                self.handle_aconst(&instruction, cell_key)?;
+            Instruction::AConst(location, items) => {
+                self.handle_aconst(location, &items, cell_key)?;
             }
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(
@@ -392,14 +392,14 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call { .. } => {
-                self.handle_call(&instruction, task_context, cell_key)?;
+            Instruction::Call { name, namespace, num_args } => {
+                self.handle_call(&name, &namespace, num_args, task_context, cell_key)?;
             }
             Instruction::CallFp { location, num_args } => {
                 self.handle_call_fp(task_context, &location, &num_args, cell_key)?;
             }
-            Instruction::CallOther { .. } => {
-                self.handle_call_other(&instruction, task_context, cell_key)?;
+            Instruction::CallOther { receiver, name, .. } => {
+                self.handle_call_other(receiver, name, task_context, cell_key)?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -540,11 +540,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     frame.set_pc_from_jump_location(jump_location)?;
                 }
             }
-            Instruction::Load(..) => {
-                self.handle_load(&instruction, cell_key)?;
+            Instruction::Load(container, index, destination) => {
+                self.handle_load(container, index, destination, cell_key)?;
             }
-            Instruction::LoadMappingKey(..) => {
-                self.handle_load_mapping_key(&instruction, cell_key)?;
+            Instruction::LoadMappingKey(container, index, destination) => {
+                self.handle_load_mapping_key(container, index, destination, cell_key)?;
             }
             Instruction::Lt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x < y, cell_key)?;
@@ -788,12 +788,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 set_loc!(self, r2, lpc_ref, cell_key)?;
             }
-            Instruction::Store(..) => {
+            Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;
-                self.handle_store(&instruction, cell_key)?;
+                self.handle_store(value_loc, container_loc, index_loc, cell_key)?;
             }
-            Instruction::SConst(..) => {
-                self.handle_sconst(&instruction, cell_key)?;
+            Instruction::SConst(location, string) => {
+                self.handle_sconst(location, &string, cell_key)?;
             }
             Instruction::Shl(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shl(y, cell_key), cell_key)?;
@@ -819,41 +819,30 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[inline]
     fn handle_aconst(
         &mut self,
-        instruction: &Instruction,
+        location: RegisterVariant,
+        items: &[RegisterVariant],
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        match instruction {
-            Instruction::AConst(r, vec) => {
-                let vars = vec
-                    .iter()
-                    .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
-                    .collect::<Result<Vec<_>>>()?;
-                let new_ref = self.memory.value_to_ref(LpcValue::from(vars));
+        let vars = items
+            .iter()
+            .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
+            .collect::<Result<Vec<_>>>()?;
+        let new_ref = self.memory.value_to_ref(LpcValue::from(vars));
 
-                set_loc!(self, *r, new_ref, cell_key)
-            }
-            _ => Err(self.runtime_error("non-AConst instruction passed to `handle_aconst`")),
-        }
+        set_loc!(self, location, new_ref, cell_key)
     }
 
     #[instrument(skip_all)]
     fn handle_call<'task>(
         &mut self,
-        instruction: &Instruction,
+        name: &str,
+        namespace: &CallNamespace,
+        num_args: usize,
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let Instruction::Call {
-            name,
-            namespace,
-            num_args,
-        } = instruction else {
-            return Err(self.runtime_error("non-Call instruction passed to `handle_call`"));
-        };
-
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
-        let num_args = *num_args;
         let func = {
             let borrowed = process.ro(cell_key);
 
@@ -870,7 +859,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         func.clone()
                     } else {
                         // See if there is a normal efun with this name
-                        if let Some(prototype) = EFUN_PROTOTYPES.get(name.as_str()) {
+                        if let Some(prototype) = EFUN_PROTOTYPES.get(name) {
                             let func = ProgramFunction::new(prototype.clone(), 0);
 
                             Rc::new(func)
@@ -923,7 +912,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let function_is_efun = EFUN_PROTOTYPES.contains_key(name.as_str())
+        let function_is_efun = EFUN_PROTOTYPES.contains_key(name)
             && (!current_frame
                 .process
                 .ro(cell_key)
@@ -936,7 +925,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         self.stack.push(new_frame)?;
 
         if function_is_efun {
-            return self.prepare_and_call_efun(name.as_str(), task_context, cell_key);
+            return self.prepare_and_call_efun(name, task_context, cell_key);
         }
 
         Ok(())
@@ -1198,178 +1187,170 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[inline]
     fn handle_call_other(
         &mut self,
-        instruction: &Instruction,
+        receiver: RegisterVariant,
+        name_location: RegisterVariant,
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        match instruction {
-            Instruction::CallOther {
-                receiver,
-                name,
-                num_args: _,
-            } => {
-                // set up result_ref in a block, as `registers` is a long-lived reference that
-                // doesn't work as mutable, but needs to be written to at the very end.
-                let result_ref = {
-                    // figure out which function we're calling
-                    let receiver_ref = &*get_location(&self.stack, *receiver, cell_key)?;
-                    let name_ref = &*get_location(&self.stack, *name, cell_key)?;
-                    let pool_ref = if let LpcRef::String(r) = name_ref {
-                        r
-                    } else {
-                        let str = format!(
-                            "Invalid name passed to `call_other`: {}",
-                            name_ref.with_key(cell_key)
-                        );
-                        return Err(self.runtime_error(str));
-                    };
-                    let borrowed = pool_ref.borrow();
-                    let function_name = try_extract_value!(*borrowed, LpcValue::String);
+        // set up result_ref in a block, as `registers` is a long-lived reference that
+        // doesn't work as mutable, but needs to be written to at the very end.
+        let result_ref = {
+            // figure out which function we're calling
+            let receiver_ref = &*get_location(&self.stack, receiver, cell_key)?;
+            let name_ref = &*get_location(&self.stack, name_location, cell_key)?;
+            let pool_ref = if let LpcRef::String(r) = name_ref {
+                r
+            } else {
+                let str = format!(
+                    "Invalid name passed to `call_other`: {}",
+                    name_ref.with_key(cell_key)
+                );
+                return Err(self.runtime_error(str));
+            };
+            let borrowed = pool_ref.borrow();
+            let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
-                    trace!(
+            trace!(
                         "Calling call_other: {}->{function_name}",
                         receiver_ref.with_key(cell_key)
                     );
 
-                    // An inner helper function to actually calculate the result, for easy re-use
-                    // when using `call_other` with arrays and mappings.
-                    fn resolve_result(
-                        receiver_ref: &LpcRef,
-                        function_name: &str,
-                        args: &[LpcRef],
-                        task_context: &TaskContext,
-                        memory: &Memory,
-                        cell_key: &mut QCellOwner,
-                    ) -> Result<LpcRef> {
-                        let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
-                            receiver_ref,
-                            function_name,
-                            task_context,
-                            &CallNamespace::Local,
-                            cell_key,
-                        );
+            // An inner helper function to actually calculate the result, for easy re-use
+            // when using `call_other` with arrays and mappings.
+            fn resolve_result(
+                receiver_ref: &LpcRef,
+                function_name: &str,
+                args: &[LpcRef],
+                task_context: &TaskContext,
+                memory: &Memory,
+                cell_key: &mut QCellOwner,
+            ) -> Result<LpcRef> {
+                let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
+                    receiver_ref,
+                    function_name,
+                    task_context,
+                    &CallNamespace::Local,
+                    cell_key,
+                );
 
-                        if let Some(pr) = resolved {
-                            let value = LpcValue::from(pr);
-                            let result = match value {
-                                LpcValue::Object(receiver) => {
-                                    let mut task: Task<MAX_CALL_STACK_SIZE> =
-                                        Task::new(memory, task_context.upvalues().clone());
+                if let Some(pr) = resolved {
+                    let value = LpcValue::from(pr);
+                    let result = match value {
+                        LpcValue::Object(receiver) => {
+                            let mut task: Task<MAX_CALL_STACK_SIZE> =
+                                Task::new(memory, task_context.upvalues().clone());
 
-                                    let new_context =
-                                        task_context.clone().with_process(receiver.clone());
-                                    // unwrap() is ok because resolve_call_other_receiver() checks
-                                    // for the function's presence.
-                                    let function = receiver
-                                        .ro(cell_key)
-                                        .as_ref()
-                                        // TODO: namespace needs to be made available to this
-                                        // instruction
-                                        .lookup_function(function_name, &CallNamespace::Local)
-                                        .unwrap()
-                                        .clone();
+                            let new_context =
+                                task_context.clone().with_process(receiver.clone());
+                            // unwrap() is ok because resolve_call_other_receiver() checks
+                            // for the function's presence.
+                            let function = receiver
+                                .ro(cell_key)
+                                .as_ref()
+                                // TODO: namespace needs to be made available to this
+                                // instruction
+                                .lookup_function(function_name, &CallNamespace::Local)
+                                .unwrap()
+                                .clone();
 
-                                    if function.public() {
-                                        let eval_context =
-                                            task.eval(function, args, new_context, cell_key)?;
-                                        task_context.increment_instruction_count(
-                                            eval_context.instruction_count(),
-                                        )?;
+                            if function.public() {
+                                let eval_context =
+                                    task.eval(function, args, new_context, cell_key)?;
+                                task_context.increment_instruction_count(
+                                    eval_context.instruction_count(),
+                                )?;
 
-                                        let Some(r) = eval_context.into_result() else {
-                                            return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
-                                        };
+                                let Some(r) = eval_context.into_result() else {
+                                    return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
+                                };
 
-                                        r
-                                    } else {
-                                        NULL
-                                    }
-                                }
-                                _ => NULL,
-                            };
-
-                            Ok(result)
-                        } else {
-                            Err(LpcError::new("Unable to find the receiver."))
+                                r
+                            } else {
+                                NULL
+                            }
                         }
-                    }
+                        _ => NULL,
+                    };
 
-                    let args = self
-                        .args
-                        .iter()
-                        .map(|i| get_loc!(self, *i, cell_key).map(|r| r.into_owned()))
-                        .collect::<Result<Vec<_>>>()?;
-
-                    match &receiver_ref {
-                        LpcRef::String(_) | LpcRef::Object(_) => resolve_result(
-                            receiver_ref,
-                            function_name,
-                            &args,
-                            task_context,
-                            &self.memory,
-                            cell_key,
-                        )?,
-                        LpcRef::Array(r) => {
-                            let b = r.borrow();
-                            let array = try_extract_value!(*b, LpcValue::Array);
-
-                            let array_value: LpcValue = array
-                                .iter()
-                                .map(|lpc_ref| {
-                                    resolve_result(
-                                        lpc_ref,
-                                        function_name,
-                                        &args,
-                                        task_context,
-                                        &self.memory,
-                                        cell_key,
-                                    )
-                                    .unwrap_or(NULL)
-                                })
-                                .collect::<Vec<_>>()
-                                .into();
-                            self.memory.value_to_ref(array_value)
-                        }
-                        LpcRef::Mapping(m) => {
-                            let b = m.borrow();
-                            let map = try_extract_value!(*b, LpcValue::Mapping);
-
-                            let with_results: LpcValue = map
-                                .iter()
-                                .map(|(key_ref, value_ref)| {
-                                    (
-                                        key_ref.clone(),
-                                        resolve_result(
-                                            value_ref,
-                                            function_name,
-                                            &args,
-                                            task_context,
-                                            &self.memory,
-                                            cell_key,
-                                        )
-                                        .unwrap_or(NULL),
-                                    )
-                                })
-                                .collect::<IndexMap<_, _>>()
-                                .into();
-
-                            self.memory.value_to_ref(with_results)
-                        }
-                        _ => {
-                            return Err(self.runtime_error(format!(
-                                "What are you trying to call `{function_name}` on?"
-                            )))
-                        }
-                    }
-                };
-
-                let registers = &mut self.stack.current_frame_mut()?.registers;
-                registers[0] = result_ref;
-
-                Ok(())
+                    Ok(result)
+                } else {
+                    Err(LpcError::new("Unable to find the receiver."))
+                }
             }
-            _ => Err(self.runtime_error("non-CallOther instruction passed to `handle_call_other`")),
-        }
+
+            let args = self
+                .args
+                .iter()
+                .map(|i| get_loc!(self, *i, cell_key).map(|r| r.into_owned()))
+                .collect::<Result<Vec<_>>>()?;
+
+            match &receiver_ref {
+                LpcRef::String(_) | LpcRef::Object(_) => resolve_result(
+                    receiver_ref,
+                    function_name,
+                    &args,
+                    task_context,
+                    &self.memory,
+                    cell_key,
+                )?,
+                LpcRef::Array(r) => {
+                    let b = r.borrow();
+                    let array = try_extract_value!(*b, LpcValue::Array);
+
+                    let array_value: LpcValue = array
+                        .iter()
+                        .map(|lpc_ref| {
+                            resolve_result(
+                                lpc_ref,
+                                function_name,
+                                &args,
+                                task_context,
+                                &self.memory,
+                                cell_key,
+                            )
+                                .unwrap_or(NULL)
+                        })
+                        .collect::<Vec<_>>()
+                        .into();
+                    self.memory.value_to_ref(array_value)
+                }
+                LpcRef::Mapping(m) => {
+                    let b = m.borrow();
+                    let map = try_extract_value!(*b, LpcValue::Mapping);
+
+                    let with_results: LpcValue = map
+                        .iter()
+                        .map(|(key_ref, value_ref)| {
+                            (
+                                key_ref.clone(),
+                                resolve_result(
+                                    value_ref,
+                                    function_name,
+                                    &args,
+                                    task_context,
+                                    &self.memory,
+                                    cell_key,
+                                )
+                                    .unwrap_or(NULL),
+                            )
+                        })
+                        .collect::<IndexMap<_, _>>()
+                        .into();
+
+                    self.memory.value_to_ref(with_results)
+                }
+                _ => {
+                    return Err(self.runtime_error(format!(
+                        "What are you trying to call `{function_name}` on?"
+                    )))
+                }
+            }
+        };
+
+        let registers = &mut self.stack.current_frame_mut()?.registers;
+        registers[0] = result_ref;
+
+        Ok(())
     }
 
     #[instrument(skip_all)]
@@ -1512,88 +1493,83 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_load(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
-        match instruction {
-            Instruction::Load(r1, r2, r3) => {
-                let container_ref = get_loc!(self, *r1, cell_key)?.into_owned();
-                let lpc_ref = get_loc!(self, *r2, cell_key)?.into_owned();
+    fn handle_load(&mut self, container_loc: RegisterVariant, index_loc: RegisterVariant, destination: RegisterVariant, cell_key: &mut QCellOwner) -> Result<()> {
+        let container_ref = get_loc!(self, container_loc, cell_key)?.into_owned();
+        let lpc_ref = get_loc!(self, index_loc, cell_key)?.into_owned();
 
-                match container_ref {
-                    LpcRef::Array(vec_ref) => {
-                        let value = vec_ref.borrow();
-                        let vec = try_extract_value!(*value, LpcValue::Array);
+        match container_ref {
+            LpcRef::Array(vec_ref) => {
+                let value = vec_ref.borrow();
+                let vec = try_extract_value!(*value, LpcValue::Array);
 
-                        if let LpcRef::Int(i) = lpc_ref {
-                            let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+                if let LpcRef::Int(i) = lpc_ref {
+                    let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
 
-                            if idx >= 0 {
-                                if let Some(v) = vec.get(idx as usize) {
-                                    set_loc!(self, *r3, v.clone(), cell_key)?;
-                                } else {
-                                    return Err(self.array_index_error(idx, vec.len()));
-                                }
-                            } else {
-                                return Err(self.array_index_error(idx, vec.len()));
-                            }
+                    if idx >= 0 {
+                        if let Some(v) = vec.get(idx as usize) {
+                            set_loc!(self, destination, v.clone(), cell_key)?;
                         } else {
-                            return Err(
-                                self.array_index_error(lpc_ref.with_key(cell_key), vec.len())
-                            );
+                            return Err(self.array_index_error(idx, vec.len()));
                         }
-
-                        Ok(())
+                    } else {
+                        return Err(self.array_index_error(idx, vec.len()));
                     }
-                    LpcRef::String(string_ref) => {
-                        let value = string_ref.borrow();
-                        let string = try_extract_value!(*value, LpcValue::String);
-
-                        if let LpcRef::Int(i) = lpc_ref {
-                            let idx = if i >= 0 {
-                                i
-                            } else {
-                                string.len() as LpcInt + i
-                            };
-
-                            if idx >= 0 {
-                                if let Some(v) = string.chars().nth(idx as usize) {
-                                    set_loc!(self, *r3, LpcRef::Int(v as i64), cell_key)?;
-                                } else {
-                                    set_loc!(self, *r3, LpcRef::Int(0), cell_key)?;
-                                }
-                            } else {
-                                set_loc!(self, *r3, LpcRef::Int(0), cell_key)?;
-                            }
-                        } else {
-                            return Err(self.runtime_error(format!(
-                                "Attempting to access index {} in a string of length {}",
-                                lpc_ref.with_key(cell_key),
-                                string.len()
-                            )));
-                        }
-
-                        Ok(())
-                    }
-                    LpcRef::Mapping(map_ref) => {
-                        let value = map_ref.borrow();
-                        let map = try_extract_value!(*value, LpcValue::Mapping);
-
-                        let var = if let Some(v) = map.get(&lpc_ref.into_hashed(cell_key)) {
-                            v.clone()
-                        } else {
-                            NULL
-                        };
-
-                        set_loc!(self, *r3, var, cell_key)?;
-
-                        Ok(())
-                    }
-                    x => Err(self.runtime_error(format!(
-                        "Invalid attempt to take index of `{}`",
-                        x.with_key(cell_key)
-                    ))),
+                } else {
+                    return Err(
+                        self.array_index_error(lpc_ref.with_key(cell_key), vec.len())
+                    );
                 }
+
+                Ok(())
             }
-            _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
+            LpcRef::String(string_ref) => {
+                let value = string_ref.borrow();
+                let string = try_extract_value!(*value, LpcValue::String);
+
+                if let LpcRef::Int(i) = lpc_ref {
+                    let idx = if i >= 0 {
+                        i
+                    } else {
+                        string.len() as LpcInt + i
+                    };
+
+                    if idx >= 0 {
+                        if let Some(v) = string.chars().nth(idx as usize) {
+                            set_loc!(self, destination, LpcRef::Int(v as i64), cell_key)?;
+                        } else {
+                            set_loc!(self, destination, LpcRef::Int(0), cell_key)?;
+                        }
+                    } else {
+                        set_loc!(self, destination, LpcRef::Int(0), cell_key)?;
+                    }
+                } else {
+                    return Err(self.runtime_error(format!(
+                        "Attempting to access index {} in a string of length {}",
+                        lpc_ref.with_key(cell_key),
+                        string.len()
+                    )));
+                }
+
+                Ok(())
+            }
+            LpcRef::Mapping(map_ref) => {
+                let value = map_ref.borrow();
+                let map = try_extract_value!(*value, LpcValue::Mapping);
+
+                let var = if let Some(v) = map.get(&lpc_ref.into_hashed(cell_key)) {
+                    v.clone()
+                } else {
+                    NULL
+                };
+
+                set_loc!(self, destination, var, cell_key)?;
+
+                Ok(())
+            }
+            x => Err(self.runtime_error(format!(
+                "Invalid attempt to take index of `{}`",
+                x.with_key(cell_key)
+            ))),
         }
     }
 
@@ -1601,127 +1577,115 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[inline]
     fn handle_load_mapping_key(
         &mut self,
-        instruction: &Instruction,
+        container_loc: RegisterVariant,
+        index_loc: RegisterVariant,
+        destination: RegisterVariant,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        match instruction {
-            Instruction::LoadMappingKey(r1, r2, r3) => {
-                let var = {
-                    let container_ref = &*get_loc!(self, *r1, cell_key)?;
-                    let lpc_ref = &*get_loc!(self, *r2, cell_key)?;
+        let var = {
+            let container_ref = &*get_loc!(self, container_loc, cell_key)?;
+            let lpc_ref = &*get_loc!(self, index_loc, cell_key)?;
 
-                    match container_ref {
-                        LpcRef::Mapping(map_ref) => {
-                            let value = map_ref.borrow();
-                            let map = try_extract_value!(*value, LpcValue::Mapping);
+            match container_ref {
+                LpcRef::Mapping(map_ref) => {
+                    let value = map_ref.borrow();
+                    let map = try_extract_value!(*value, LpcValue::Mapping);
 
-                            let index = match lpc_ref {
-                                LpcRef::Int(i) => *i,
-                                _ => {
-                                    return Err(self.runtime_error(format!(
-                                        "Invalid index type: {}",
-                                        lpc_ref.with_key(cell_key)
-                                    )))
-                                }
-                            };
-
-                            if let Some((key, _)) = map.get_index(index as usize) {
-                                key.value.clone()
-                            } else {
-                                NULL
-                            }
-                        }
-                        x => {
+                    let index = match lpc_ref {
+                        LpcRef::Int(i) => *i,
+                        _ => {
                             return Err(self.runtime_error(format!(
-                                "Invalid attempt to take index of `{}`",
-                                x.with_key(cell_key)
+                                "Invalid index type: {}",
+                                lpc_ref.with_key(cell_key)
                             )))
                         }
-                    }
-                };
+                    };
 
-                set_loc!(self, *r3, var, cell_key)
+                    if let Some((key, _)) = map.get_index(index as usize) {
+                        key.value.clone()
+                    } else {
+                        NULL
+                    }
+                }
+                x => {
+                    return Err(self.runtime_error(format!(
+                        "Invalid attempt to take index of `{}`",
+                        x.with_key(cell_key)
+                    )))
+                }
             }
-            _ => Err(self.runtime_error("non-Load instruction passed to `handle_load`")),
-        }
+        };
+
+        set_loc!(self, destination, var, cell_key)
     }
 
     #[instrument(skip_all)]
     #[inline]
     fn handle_sconst(
         &mut self,
-        instruction: &Instruction,
+        location: RegisterVariant,
+        string: &str,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        match instruction {
-            Instruction::SConst(r, s) => {
-                let new_ref = self.memory.value_to_ref(LpcValue::from(s));
+        let new_ref = self.memory.value_to_ref(LpcValue::from(string));
 
-                set_loc!(self, *r, new_ref, cell_key)
-            }
-            _ => Err(self.runtime_error("non-SConst instruction passed to `handle_sconst`")),
-        }
+        set_loc!(self, location, new_ref, cell_key)
     }
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_store(&mut self, instruction: &Instruction, cell_key: &mut QCellOwner) -> Result<()> {
-        match instruction {
-            Instruction::Store(r1, r2, r3) => {
-                let mut container = get_loc!(self, *r2, cell_key)?.into_owned();
-                let index = &*get_loc!(self, *r3, cell_key)?;
-                let array_idx = if let LpcRef::Int(i) = index { *i } else { 0 };
+    fn handle_store(&mut self, value_loc: RegisterVariant, container_loc: RegisterVariant, index_loc: RegisterVariant, cell_key: &mut QCellOwner) -> Result<()> {
+        let mut container = get_loc!(self, container_loc, cell_key)?.into_owned();
+        let index = &*get_loc!(self, index_loc, cell_key)?;
+        let array_idx = if let LpcRef::Int(i) = index { *i } else { 0 };
 
-                match container {
-                    LpcRef::Array(vec_ref) => {
-                        let mut r = vec_ref.borrow_mut();
-                        let vec = match *r {
-                            LpcValue::Array(ref mut v) => v,
-                            _ => return Err(self.runtime_bug(
-                                "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
-                            )
-                        };
+        match container {
+            LpcRef::Array(vec_ref) => {
+                let mut r = vec_ref.borrow_mut();
+                let vec = match *r {
+                    LpcValue::Array(ref mut v) => v,
+                    _ => return Err(self.runtime_bug(
+                        "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
+                    )
+                };
 
-                        let len = vec.len();
+                let len = vec.len();
 
-                        // handle negative indices
-                        let idx = if array_idx >= 0 {
-                            array_idx
-                        } else {
-                            len as LpcInt + array_idx
-                        };
+                // handle negative indices
+                let idx = if array_idx >= 0 {
+                    array_idx
+                } else {
+                    len as LpcInt + array_idx
+                };
 
-                        if idx >= 0 && (idx as usize) < len {
-                            vec[idx as usize] = (*get_loc!(self, *r1, cell_key)?).clone();
-                        } else {
-                            return Err(self.array_index_error(idx, len));
-                        }
-
-                        Ok(())
-                    }
-                    LpcRef::Mapping(ref mut map_ref) => {
-                        let mut r = map_ref.borrow_mut();
-                        let map = match *r {
-                            LpcValue::Mapping(ref mut m) => m,
-                            _ => return Err(self.runtime_bug(
-                                "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
-                            )
-                        };
-
-                        map.insert(
-                            index.clone().into_hashed(cell_key),
-                            get_loc!(self, *r1, cell_key)?.into_owned(),
-                        );
-
-                        Ok(())
-                    }
-                    x => Err(self.runtime_error(format!(
-                        "Invalid attempt to take index of `{}`",
-                        x.with_key(cell_key)
-                    ))),
+                if idx >= 0 && (idx as usize) < len {
+                    vec[idx as usize] = (*get_loc!(self, value_loc, cell_key)?).clone();
+                } else {
+                    return Err(self.array_index_error(idx, len));
                 }
+
+                Ok(())
             }
-            _ => Err(self.runtime_error("non-Store instruction passed to `handle_store`")),
+            LpcRef::Mapping(ref mut map_ref) => {
+                let mut r = map_ref.borrow_mut();
+                let map = match *r {
+                    LpcValue::Mapping(ref mut m) => m,
+                    _ => return Err(self.runtime_bug(
+                        "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
+                    )
+                };
+
+                map.insert(
+                    index.clone().into_hashed(cell_key),
+                    get_loc!(self, value_loc, cell_key)?.into_owned(),
+                );
+
+                Ok(())
+            }
+            x => Err(self.runtime_error(format!(
+                "Invalid attempt to take index of `{}`",
+                x.with_key(cell_key)
+            ))),
         }
     }
 
