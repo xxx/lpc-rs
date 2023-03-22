@@ -22,20 +22,26 @@ pub struct TaskContext {
     /// The [`Config`] that's in use for the
     /// [`Task`](crate::interpreter::task::Task).
     config: Rc<Config>,
+
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
     #[educe(Debug(method = "qcell_debug"))]
     process: Rc<QCell<Process>>,
+
     /// The global [`ObjectSpace`]
     #[educe(Debug(method = "qcell_debug"))]
     object_space: Rc<QCell<ObjectSpace>>,
+
     /// A counter, to ensure that too-long-evaluations do not occur
     instruction_counter: InstructionCounter,
+
     /// The final result of the original function that was called
     result: OnceCell<LpcRef>,
+
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
+
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
