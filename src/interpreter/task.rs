@@ -188,7 +188,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
     pub args: Vec<RegisterVariant>,
 
-    /// The upvalues from the [`Vm`]
+    /// The upvalues from the [`Vm`](crate::interpreter::vm::Vm)
     #[educe(Debug(method = "qcell_debug"))]
     vm_upvalues: Rc<QCell<GcRefBank>>,
 

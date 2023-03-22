@@ -65,7 +65,7 @@ impl<T> Bank<T> {
         }
     }
 
-    /// Create a new [`Bank`] from the passed [`Vec`] of [`T`]s.
+    /// Create a new [`Bank`] from the passed [`Vec`] of `T`s.
     #[inline]
     pub fn new(registers: Vec<T>) -> Self {
         Self { registers }

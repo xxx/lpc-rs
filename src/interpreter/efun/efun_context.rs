@@ -57,7 +57,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// then insert it into the object space.
             pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>>;
 
-            /// Get access to the [`Vm`]'s upvalues (i.e. all of them)
+            /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
             pub fn vm_upvalues(&self) -> &Rc<QCell<GcRefBank>>;
         }

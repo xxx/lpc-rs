@@ -78,7 +78,7 @@ pub struct CallFrame {
     #[builder(default, setter(into))]
     pub upvalue_ptrs: Vec<Register>,
 
-    /// The upvalue data from the [`Vm`]
+    /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
     pub vm_upvalues: Rc<QCell<GcRefBank>>,
@@ -98,7 +98,7 @@ impl CallFrame {
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
     /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
-    /// * `vm_upvalues` - The upvalue data from the [`Vm`]
+    /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     pub fn new<P>(
         process: P,
         function: Rc<ProgramFunction>,
@@ -144,7 +144,7 @@ impl CallFrame {
     /// * `arg_capacity` - Reserve space for at least this many registers (this
     ///   is used for ellipsis args and `call_other`)
     /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
-    /// * `vm_upvalues` - The upvalue data from the [`Vm`]
+    /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     pub fn with_minimum_arg_capacity<P>(
         process: P,
         function: Rc<ProgramFunction>,
@@ -181,7 +181,7 @@ impl CallFrame {
     ///   the call to this function?
     /// * `registers` - The registers that the CallFrame will use
     /// * `upvalue_ptrs` - The pointers to upvalued data from the calling Function (i.e. Frame)
-    /// * `vm_upvalues` - The upvalued data from the [`Vm`]
+    /// * `vm_upvalues` - The upvalued data from the [`Vm`](crate::interpreter::vm::Vm)
     pub fn with_registers<P>(
         process: P,
         function: Rc<ProgramFunction>,
@@ -208,7 +208,7 @@ impl CallFrame {
     }
 
     /// Reserve space for the upvalues that this call will initialize
-    /// Returns the index in the [`Vm`]'s `upvalues` array where the
+    /// Returns the index in the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues` array where the
     ///   newly-populated upvalues will be stored
     #[instrument(skip_all)]
     fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {

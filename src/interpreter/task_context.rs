@@ -36,7 +36,8 @@ pub struct TaskContext {
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
     simul_efuns: Option<Rc<QCell<Process>>>,
-    /// The [`GcBank`] that stores all of the upvalues in the system, from the [`Vm`].
+    /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
+    /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
     vm_upvalues: Rc<QCell<GcRefBank>>,
 }
