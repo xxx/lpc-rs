@@ -963,7 +963,6 @@ impl TreeWalker for CodegenWalker {
                     then {
                         Instruction::CallFp {
                             location: x.location.unwrap(),
-                            num_args: arg_results.len(),
                         }
                     } else {
                         Instruction::Call {
@@ -3224,7 +3223,6 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 CallFp {
                     location: RegisterVariant::Local(Register(1)),
-                    num_args: 1,
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3269,7 +3267,6 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 CallFp {
                     location: RegisterVariant::Global(Register(0)),
-                    num_args: 1,
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),

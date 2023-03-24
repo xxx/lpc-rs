@@ -85,8 +85,6 @@ pub enum Instruction {
     /// Call a function pointer, located in `location`
     CallFp {
         location: RegisterVariant,
-        /// Number of args that were actually passed in the call
-        num_args: usize,
     },
 
     /// Call a function in another object
@@ -299,8 +297,8 @@ impl Display for Instruction {
             } => {
                 write!(f, "call {name}, {namespace}")
             }
-            Instruction::CallFp { location, num_args } => {
-                write!(f, "callfp {location}, {num_args}")
+            Instruction::CallFp { location } => {
+                write!(f, "callfp {location}")
             }
             Instruction::CallOther {
                 receiver,

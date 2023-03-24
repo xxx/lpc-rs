@@ -399,8 +399,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             } => {
                 self.handle_call(&name, &namespace, task_context, cell_key)?;
             }
-            Instruction::CallFp { location, num_args } => {
-                self.handle_call_fp(task_context, &location, &num_args, cell_key)?;
+            Instruction::CallFp { location } => {
+                self.handle_call_fp(task_context, location, cell_key)?;
             }
             Instruction::CallOther { receiver, name } => {
                 self.handle_call_other(receiver, name, task_context, cell_key)?;
@@ -940,12 +940,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     fn handle_call_fp(
         &mut self,
         task_context: &TaskContext,
-        location: &RegisterVariant,
-        num_args: &usize,
+        location: RegisterVariant,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
+        let num_args = self.args.len();
         let func = {
-            let lpc_ref = &*get_loc!(self, *location, cell_key)?;
+            let lpc_ref = &*get_loc!(self, location, cell_key)?;
 
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
@@ -966,7 +966,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let arity = ptr.arity;
         let partial_args = &ptr.partial_args;
-        let passed_args_count = *num_args
+        let passed_args_count = num_args
             + partial_args
                 .iter()
                 .fold(0, |sum, arg| sum + arg.is_some() as usize);
@@ -974,7 +974,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = dynamic_receiver as usize;
-        let adjusted_num_args = *num_args - (dynamic_receiver as usize);
+        let adjusted_num_args = num_args - (dynamic_receiver as usize);
         let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
@@ -1044,7 +1044,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         );
 
         // negotiate the passed & partially-applied arguments
-        if arity.num_args > 0_usize || arity.ellipsis || (dynamic_receiver && *num_args > 0) {
+        if arity.num_args > 0_usize || arity.ellipsis || (dynamic_receiver && num_args > 0) {
             let from_slice = &self.args[index..(index + adjusted_num_args)];
 
             fn type_check_and_assign_location<const STACKSIZE: usize>(
