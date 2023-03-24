@@ -43,12 +43,15 @@ pub struct Program {
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
 
-    /// All of my Inherited parent objects
+    /// All of my inherited parent objects
     /// The ordering of this field can be assumed to be in file order
     pub inherits: Vec<Program>,
 
     /// The index of name -> inherited objects, for inherits with names
     pub inherit_names: HashMap<String, usize>,
+
+    /// Interned strings
+    pub strings: Rc<Vec<String>>,
 }
 
 impl<'a> Program {
@@ -106,20 +109,20 @@ impl<'a> Program {
     where
         T: AsRef<str>,
     {
-        let r = name.as_ref();
+        let function_name = name.as_ref();
 
         let find_in_inherit = || {
             self.inherits
                 .iter()
                 .rev()
-                .any(|p| p.contains_function(r, &CallNamespace::Local))
+                .any(|p| p.contains_function(function_name, &CallNamespace::Local))
         };
 
         match namespace {
-            CallNamespace::Local => self.functions.contains_key(r) || find_in_inherit(),
+            CallNamespace::Local => self.functions.contains_key(function_name) || find_in_inherit(),
             CallNamespace::Parent => find_in_inherit(),
             CallNamespace::Named(ns) => match ns.as_str() {
-                EFUN => EFUN_PROTOTYPES.contains_key(r),
+                EFUN => EFUN_PROTOTYPES.contains_key(function_name),
                 ns => self
                     .inherit_names
                     .get(ns)
@@ -186,7 +189,6 @@ impl<'a> Program {
     ///     println!("{}", instruction);
     /// }
     /// ```
-
     pub fn listing(&self) -> Vec<String> {
         let functions = self.functions.values().sorted_unstable_by(|a, b| {
             if a.name() == INIT_PROGRAM {

@@ -847,6 +847,7 @@ dependencies = [
  "fs-err",
  "indextree",
  "modular-bitfield",
+ "once_cell",
  "path-absolutize",
  "serde",
 ]
@@ -892,6 +893,7 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
  "multimap",
+ "once_cell",
  "readonly",
  "serde",
  "tracing",

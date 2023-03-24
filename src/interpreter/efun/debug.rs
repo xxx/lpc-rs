@@ -18,9 +18,9 @@ pub fn debug<const N: usize>(
     let lpc_ref = context.resolve_local_register(1_usize);
     if let LpcRef::String(x) = lpc_ref {
         let b = x.borrow();
-        let string = try_extract_value!(*b, LpcValue::String);
+        let str = try_extract_value!(*b, LpcValue::String).to_str();
 
-        match string.as_str() {
+        match str {
             SNAPSHOT_STACK => {
                 #[cfg(test)]
                 {

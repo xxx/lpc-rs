@@ -19,6 +19,7 @@ pub mod lpc_type_union;
 pub mod pragma_flags;
 pub mod register;
 pub mod register_counter;
+pub mod serialize;
 pub mod visibility;
 
 /// Name of the user-overridable initializer function for objects

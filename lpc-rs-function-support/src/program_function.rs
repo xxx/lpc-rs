@@ -10,6 +10,7 @@ use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType, register::RegisterVariant};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -58,6 +59,12 @@ pub struct ProgramFunction {
     /// Track the location of where my arguments are expected
     #[builder(default)]
     pub arg_locations: Vec<RegisterVariant>,
+
+    /// Interned strings
+    #[builder(default)]
+    #[serde(serialize_with = "lpc_rs_core::serialize::serialize_once_cell")]
+    #[serde(deserialize_with = "lpc_rs_core::serialize::deserialize_once_cell")]
+    pub strings: OnceCell<Rc<Vec<String>>>,
 }
 
 impl ProgramFunction {
@@ -92,6 +99,7 @@ impl ProgramFunction {
             labels: HashMap::new(),
             local_variables: vec![],
             arg_locations: vec![],
+            strings: OnceCell::new(),
         }
     }
 

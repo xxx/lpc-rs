@@ -35,12 +35,12 @@ fn format_ref<const N: usize>(
     match lpc_ref {
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
-        LpcRef::String(x) => Ok(format!(
-            "{:width$}{}",
-            "",
-            try_extract_value!(*x.borrow(), LpcValue::String),
-            width = indent
-        )),
+        LpcRef::String(x) => {
+            let xb = x.borrow();
+            let s = try_extract_value!(*xb, LpcValue::String).to_str();
+
+            Ok(format!("{:width$}{}", "", s, width = indent))
+        }
         LpcRef::Object(x) => Ok(format!(
             "{:width$}{}",
             "",

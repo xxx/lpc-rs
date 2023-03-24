@@ -83,6 +83,7 @@ pub fn clone_object<const N: usize>(
     if let LpcRef::String(s) = arg {
         let r = s.borrow();
         let path = try_extract_value!(*r, LpcValue::String);
+        let path = path.to_str();
 
         let master = load_master(context, path, cell_key)?;
 

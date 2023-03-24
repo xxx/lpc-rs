@@ -265,8 +265,8 @@ pub enum Instruction {
     Store(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// String constant.
-    /// Store an index into the program's ConstantPool in the passed register
-    SConst(RegisterVariant, String),
+    /// Store an index into the [`Program`]'s `strings` vector.
+    SConst(RegisterVariant, usize),
 
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
@@ -454,7 +454,7 @@ impl Display for Instruction {
                 write!(f, "store {r1}, {r2}, {r3}")
             }
             Instruction::SConst(r, s) => {
-                write!(f, "sconst {r}, \"{s}\"")
+                write!(f, "sconst {r}, {s}")
             }
             Instruction::Xor(r1, r2, r3) => {
                 write!(f, "xor {r1}, {r2}, {r3}")

@@ -15,6 +15,7 @@ use crate::{
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::{HashedLpcRef, LpcRef},
+        lpc_string::LpcString,
         process::Process,
     },
     util::qcell_debug,
@@ -27,7 +28,7 @@ use crate::{
 pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
-    String(String),
+    String(LpcString),
     Array(LpcArray),
     Mapping(LpcMapping),
     Object(#[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>),
@@ -107,19 +108,25 @@ impl From<BaseFloat> for LpcValue {
 
 impl From<&str> for LpcValue {
     fn from(s: &str) -> Self {
-        Self::String(String::from(s))
+        Self::String(LpcString::from(s))
     }
 }
 
 impl From<String> for LpcValue {
     fn from(s: String) -> Self {
-        Self::String(s)
+        Self::String(LpcString::from(s))
     }
 }
 
 impl From<&String> for LpcValue {
     fn from(s: &String) -> Self {
-        Self::String(String::from(s))
+        Self::String(LpcString::from(s))
+    }
+}
+
+impl From<LpcString> for LpcValue {
+    fn from(s: LpcString) -> Self {
+        Self::String(s)
     }
 }
 

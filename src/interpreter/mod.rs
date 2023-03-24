@@ -8,6 +8,7 @@ pub mod instruction_counter;
 pub mod lpc_array;
 pub mod lpc_mapping;
 pub mod lpc_ref;
+pub mod lpc_string;
 pub mod lpc_value;
 pub mod memory;
 pub mod object_space;

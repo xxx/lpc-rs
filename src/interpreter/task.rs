@@ -35,6 +35,7 @@ use crate::{
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
+        lpc_string::LpcString,
         lpc_value::LpcValue,
         memory::Memory,
         object_space::ObjectSpace,
@@ -700,7 +701,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         }
                         LpcRef::String(v_ref) => {
                             let value = v_ref.borrow();
-                            let string = try_extract_value!(*value, LpcValue::String);
+                            let string = try_extract_value!(*value, LpcValue::String).to_str();
 
                             if string.is_empty() {
                                 return Ok(LpcValue::from(""));
@@ -796,8 +797,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 // r2[r3] = r1;
                 self.handle_store(value_loc, container_loc, index_loc, cell_key)?;
             }
-            Instruction::SConst(location, string) => {
-                self.handle_sconst(location, &string, cell_key)?;
+            Instruction::SConst(location, index) => {
+                self.handle_sconst(location, index, cell_key)?;
             }
             Instruction::Shl(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shl(y, cell_key), cell_key)?;
@@ -1223,7 +1224,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             // when using `call_other` with arrays and mappings.
             fn resolve_result(
                 receiver_ref: &LpcRef,
-                function_name: &str,
+                function_name: &LpcString,
                 args: &[LpcRef],
                 task_context: &TaskContext,
                 memory: &Memory,
@@ -1531,7 +1532,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             LpcRef::String(string_ref) => {
                 let value = string_ref.borrow();
-                let string = try_extract_value!(*value, LpcValue::String);
+                let string = try_extract_value!(*value, LpcValue::String).to_str();
 
                 if let LpcRef::Int(i) = lpc_ref {
                     let idx = if i >= 0 {
@@ -1631,10 +1632,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     fn handle_sconst(
         &mut self,
         location: RegisterVariant,
-        string: &str,
+        index: usize,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let new_ref = self.memory.value_to_ref(LpcValue::from(string));
+        let Some(strings) = self.stack.current_frame()?.function.strings.get() else {
+            return Err(self.runtime_bug("the `strings` reference was never assigned to the function."));
+        };
+        let lpc_string = LpcString::Static(index, strings.clone());
+
+        trace!(?lpc_string, "Storing static string");
+
+        let new_ref = self.memory.value_to_ref(LpcValue::from(lpc_string));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -1705,7 +1713,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
     fn resolve_call_other_receiver(
         receiver_ref: &LpcRef,
-        name: &str,
+        name: &LpcString,
         context: &TaskContext,
         namespace: &CallNamespace,
         cell_key: &QCellOwner,
@@ -1850,7 +1858,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 if let LpcRef::String(s) = name_ref {
                     let b = s.borrow();
                     let str = try_extract_value!(*b, LpcValue::String);
-                    Ok(str.clone().into())
+                    Ok(str.to_string().into())
                 } else {
                     Err(LpcError::new(
                         "runtime error: found function var that didn't resolve to a string?",
@@ -1995,7 +2003,7 @@ mod tests {
                 LpcRef::String(x) => {
                     let xb = x.borrow();
                     let s = extract_value!(&*xb, LpcValue::String);
-                    BareVal::String(s.clone())
+                    BareVal::String(s.to_string())
                 }
                 LpcRef::Array(x) => {
                     let xb = x.borrow();
@@ -2315,8 +2323,11 @@ mod tests {
                 let (_task, ctx) = run_prog(code, &mut cell_key);
 
                 let proc = ctx.process();
+                println!("{:?}", ctx.process().ro(&cell_key).program.strings);
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
+                println!("{:?}", values.get("this_one"));
+                // todo!("inherited strings need to be included in child string tables")
                 String("this is a simul_efun: marf".into())
                     .assert_equal(values.get("this_one").unwrap(), &cell_key);
             }
@@ -4036,6 +4047,7 @@ mod tests {
             use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
             use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+            use once_cell::sync::OnceCell;
 
             use super::*;
             use crate::test_support::test_config;
@@ -4115,13 +4127,14 @@ mod tests {
                         num_locals: 2,
                         num_upvalues: 0,
                         instructions: vec![
-                            SConst(Register(1).as_local(), "Hello, world!".into()),
+                            SConst(Register(1).as_local(), 0),
                             Sizeof(Register(1).as_local(), Register(2).as_local()),
                         ],
                         debug_spans: vec![None, None],
                         labels: Default::default(),
                         local_variables: Default::default(),
                         arg_locations: Default::default(),
+                        strings: OnceCell::with_value(vec!["Hello, world!".into()].into()),
                     }
                     .into(),
                 );

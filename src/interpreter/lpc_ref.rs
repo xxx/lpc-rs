@@ -198,21 +198,30 @@ impl LpcRef {
             LpcRef::Int(i) => match rhs {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
-                LpcRef::String(s) => Ok(LpcValue::String(concatenate_strings(
-                    i.to_string(),
-                    try_extract_value!(*s.borrow(), LpcValue::String),
-                )?)),
+                LpcRef::String(s) => Ok(LpcValue::String(
+                    concatenate_strings(
+                        i.to_string(),
+                        try_extract_value!(*s.borrow(), LpcValue::String).to_str(),
+                    )?
+                    .into(),
+                )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
             },
             LpcRef::String(s) => match rhs {
-                LpcRef::String(s2) => Ok(LpcValue::String(concatenate_strings(
-                    try_extract_value!(*s.borrow(), LpcValue::String),
-                    try_extract_value!(*s2.borrow(), LpcValue::String),
-                )?)),
-                LpcRef::Int(i) => Ok(LpcValue::String(concatenate_strings(
-                    try_extract_value!(*s.borrow(), LpcValue::String),
-                    i.to_string(),
-                )?)),
+                LpcRef::String(s2) => Ok(LpcValue::String(
+                    concatenate_strings(
+                        try_extract_value!(*s.borrow(), LpcValue::String).to_string(),
+                        try_extract_value!(*s2.borrow(), LpcValue::String).to_str(),
+                    )?
+                    .into(),
+                )),
+                LpcRef::Int(i) => Ok(LpcValue::String(
+                    concatenate_strings(
+                        try_extract_value!(*s.borrow(), LpcValue::String).to_string(),
+                        i.to_string(),
+                    )?
+                    .into(),
+                )),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
             },
             LpcRef::Array(vec) => match rhs {
@@ -272,12 +281,16 @@ impl LpcRef {
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(string::repeat_string(string, *y)?))
+                Ok(LpcValue::String(
+                    string::repeat_string(string.to_str(), *y)?.into(),
+                ))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.borrow();
                 let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(string::repeat_string(string, *x)?))
+                Ok(LpcValue::String(
+                    string::repeat_string(string.to_str(), *x)?.into(),
+                ))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs, cell_key)),
         }
@@ -675,8 +688,8 @@ mod tests {
         fn string_string() {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(20);
-            let string1 = value_to_ref!(LpcValue::String("foo".to_string()), pool);
-            let string2 = value_to_ref!(LpcValue::String("bar".to_string()), pool);
+            let string1 = value_to_ref!(LpcValue::String("foo".into()), pool);
+            let string2 = value_to_ref!(LpcValue::String("bar".into()), pool);
             let result = string1.add(&string2, &cell_key);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foobar"))
@@ -689,7 +702,7 @@ mod tests {
         fn string_int() {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(5);
-            let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
+            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(123);
             let result = string.add(&int, &cell_key);
             if let Ok(LpcValue::String(x)) = result {
@@ -703,7 +716,7 @@ mod tests {
         fn int_string() {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(5);
-            let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
+            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(123);
             let result = int.add(&string, &cell_key);
             if let Ok(LpcValue::String(x)) = result {
@@ -950,7 +963,7 @@ mod tests {
         fn string_int() {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(5);
-            let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
+            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(4);
             let result = string.mul(&int, &cell_key);
             if let Ok(LpcValue::String(x)) = result {
@@ -964,7 +977,7 @@ mod tests {
         fn int_string() {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(5);
-            let string = value_to_ref!(LpcValue::String("foo".to_string()), pool);
+            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(4);
             let result = int.mul(&string, &cell_key);
             if let Ok(LpcValue::String(x)) = result {
@@ -978,7 +991,7 @@ mod tests {
         fn string_int_overflow_does_not_panic() {
             let cell_key = QCellOwner::new();
             let pool = Pool::new(5);
-            let string = value_to_ref!(LpcValue::String("1234567890abcdef".to_string()), pool);
+            let string = value_to_ref!(LpcValue::String("1234567890abcdef".into()), pool);
             let int = LpcRef::Int(LpcInt::MAX);
             let result = string.mul(&int, &cell_key);
             assert_err!(result.clone());
@@ -1169,7 +1182,7 @@ mod tests {
             let cell_key = QCellOwner::new();
             let int = LpcRef::Int(123);
 
-            assert!((int.div(&NULL, &cell_key)).is_err());
+            assert!((int.rem(&NULL, &cell_key)).is_err());
         }
     }
 
@@ -1294,7 +1307,7 @@ mod tests {
         #[test]
         fn fails_other_types() {
             let pool = Pool::new(5);
-            let mut string = value_to_ref!(LpcValue::String("foobar".to_string()), pool);
+            let mut string = value_to_ref!(LpcValue::String("foobar".into()), pool);
             assert_err!(string.inc());
         }
     }
@@ -1319,7 +1332,7 @@ mod tests {
         #[test]
         fn fails_other_types() {
             let pool = Pool::new(5);
-            let mut string = value_to_ref!(LpcValue::String("foobar".to_string()), pool);
+            let mut string = value_to_ref!(LpcValue::String("foobar".into()), pool);
             assert_err!(string.dec());
         }
     }
