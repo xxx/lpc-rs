@@ -80,8 +80,6 @@ pub enum Instruction {
     Call {
         name: String,
         namespace: CallNamespace,
-        /// Number of args that were actually passed in the call
-        num_args: usize,
     },
 
     /// Call a function pointer, located in `location`
@@ -298,9 +296,8 @@ impl Display for Instruction {
             Instruction::Call {
                 name,
                 namespace,
-                num_args,
             } => {
-                write!(f, "call {name}, {namespace}, {num_args}")
+                write!(f, "call {name}, {namespace}")
             }
             Instruction::CallFp { location, num_args } => {
                 write!(f, "callfp {location}, {num_args}")

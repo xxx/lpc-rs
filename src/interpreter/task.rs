@@ -396,9 +396,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call {
                 name,
                 namespace,
-                num_args,
             } => {
-                self.handle_call(&name, &namespace, num_args, task_context, cell_key)?;
+                self.handle_call(&name, &namespace, task_context, cell_key)?;
             }
             Instruction::CallFp { location, num_args } => {
                 self.handle_call_fp(task_context, &location, &num_args, cell_key)?;
@@ -842,10 +841,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         name: &str,
         namespace: &CallNamespace,
-        num_args: usize,
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
+        let num_args = self.args.len();
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {

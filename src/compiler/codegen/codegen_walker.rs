@@ -969,7 +969,6 @@ impl TreeWalker for CodegenWalker {
                         Instruction::Call {
                             name: node.name.clone(),
                             namespace: node.namespace.clone(),
-                            num_args: arg_results.len(),
                         }
                     }
                 }
@@ -2770,7 +2769,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -2785,7 +2783,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -2839,7 +2836,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -2854,7 +2850,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("for-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -2912,7 +2907,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
@@ -2927,7 +2921,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("do-while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
@@ -2988,7 +2981,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("switch-end_2".into()),
                 SConst(RegisterVariant::Local(Register(3)), 1),
@@ -2997,7 +2989,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 SConst(RegisterVariant::Local(Register(4)), 2),
                 ClearArgs,
@@ -3005,7 +2996,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("switch-end_2".into()),
                 IConst(RegisterVariant::Local(Register(5)), 666),
@@ -3082,7 +3072,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
             ];
 
@@ -3318,7 +3307,6 @@ mod tests {
                 Call {
                     name: String::from("marfin"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3356,7 +3344,6 @@ mod tests {
                 Call {
                     name: String::from("void_thing"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
             ];
 
@@ -3379,7 +3366,6 @@ mod tests {
                 Call {
                     name: String::from("clone_object"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3406,7 +3392,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
             ];
 
@@ -3446,7 +3431,6 @@ mod tests {
                 Call {
                     name: "my_func".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 3,
                 },
             ];
 
@@ -3489,7 +3473,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
             ];
 
@@ -3587,7 +3570,6 @@ mod tests {
                     Call {
                         name: "dump".into(),
                         namespace: CallNamespace::Local,
-                        num_args: 1,
                     },
                     Ret
                 ]
@@ -3721,7 +3703,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -3736,7 +3717,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("while-start_1".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -3790,7 +3770,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
@@ -3805,7 +3784,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("for-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
@@ -3862,7 +3840,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
@@ -3877,7 +3854,6 @@ mod tests {
                 Call {
                     name: "dump".into(),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("do-while-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
@@ -4018,7 +3994,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 IConst(RegisterVariant::Local(Register(3)), 777),
@@ -4104,7 +4079,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 IConst1(RegisterVariant::Local(Register(2))),
                 ISub(
@@ -4343,7 +4317,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("if-end_1".into()),
                 SConst(RegisterVariant::Local(Register(5)), 1),
@@ -4352,7 +4325,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
             ];
 
@@ -4402,7 +4374,6 @@ mod tests {
                 Call {
                     name: String::from("create"),
                     namespace: CallNamespace::Local,
-                    num_args: 0,
                 },
                 Ret,
             ];
@@ -4420,7 +4391,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Ret, // Automatically added due to no explicit return
             ];
@@ -4486,7 +4456,6 @@ mod tests {
                 Call {
                     name: String::from("create"),
                     namespace: CallNamespace::Local,
-                    num_args: 0,
                 },
                 Ret, // end of initialization
             ];
@@ -4881,7 +4850,6 @@ mod tests {
                 Arg(RegisterVariant::Upvalue(Register(0))), /* This is what we're really testing for */
                 Call {
                     name: "dump".to_string(),
-                    num_args: 2,
                     namespace: CallNamespace::Local,
                 },
                 // ...etc. We don't care about the rest.
@@ -5165,7 +5133,6 @@ mod tests {
                     Call {
                         name: String::from("clone_object"),
                         namespace: CallNamespace::Local,
-                        num_args: 1,
                     },
                     RegCopy(
                         RegisterVariant::Local(Register(0)),
@@ -5363,7 +5330,6 @@ mod tests {
                 Call {
                     name: String::from("dump"),
                     namespace: CallNamespace::Local,
-                    num_args: 1,
                 },
                 Jmp("while-start_0".into()),
             ];
@@ -5493,7 +5459,6 @@ mod tests {
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
-                num_args: 0,
             },
             Ret,
         ];
@@ -5530,7 +5495,6 @@ mod tests {
             Call {
                 name: CREATE_FUNCTION.to_string(),
                 namespace: CallNamespace::Local,
-                num_args: 0,
             },
             Ret,
         ];
