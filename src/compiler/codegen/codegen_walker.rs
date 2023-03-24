@@ -942,8 +942,7 @@ impl TreeWalker for CodegenWalker {
 
                 Instruction::CallOther {
                     receiver: receiver_result,
-                    name: name_register,
-                    num_args: arg_results.len(),
+                    name: name_register
                 }
             } else if node.name == CALL_OTHER {
                 debug_assert!(
@@ -955,8 +954,7 @@ impl TreeWalker for CodegenWalker {
 
                 Instruction::CallOther {
                     receiver,
-                    name,
-                    num_args: arg_results.len() - 2,
+                    name
                 }
             } else {
                 if_chain! {
@@ -3113,8 +3111,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(3)), 1),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(2)),
-                    name: RegisterVariant::Local(Register(3)),
-                    num_args: 1,
+                    name: RegisterVariant::Local(Register(3))
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3133,8 +3130,7 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(3))),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(1)),
-                    name: RegisterVariant::Local(Register(2)),
-                    num_args: 1,
+                    name: RegisterVariant::Local(Register(2))
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),

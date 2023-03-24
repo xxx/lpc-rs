@@ -95,10 +95,6 @@ pub enum Instruction {
     CallOther {
         receiver: RegisterVariant,
         name: RegisterVariant,
-        /// Number of args that were actually passed in the call,
-        /// not including the receiver and function name
-        /// (which are passed along with the args as an implementation detail)
-        num_args: usize,
     },
 
     /// Finish a block of instructions that can catch errors and continue
@@ -312,9 +308,8 @@ impl Display for Instruction {
             Instruction::CallOther {
                 receiver,
                 name,
-                num_args,
             } => {
-                write!(f, "callother {receiver}, {name}, {num_args}")
+                write!(f, "callother {receiver}, {name}")
             }
             Instruction::ClearArgs => {
                 write!(f, "clearargs")

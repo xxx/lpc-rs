@@ -403,7 +403,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CallFp { location, num_args } => {
                 self.handle_call_fp(task_context, &location, &num_args, cell_key)?;
             }
-            Instruction::CallOther { receiver, name, .. } => {
+            Instruction::CallOther { receiver, name } => {
                 self.handle_call_other(receiver, name, task_context, cell_key)?;
             }
             Instruction::CatchEnd => {
