@@ -1635,8 +1635,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         index: usize,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let Some(strings) = self.stack.current_frame()?.function.strings.get() else {
-            return Err(self.runtime_bug("the `strings` reference was never assigned to the function."));
+        let function_strings = self.stack.current_frame()?.function.strings.get();
+        const MSG: &str = "the `strings` reference was never assigned to the function.";
+        debug_assert!(function_strings.is_some(), "{}", MSG); // This is very bad if it happens.
+        let Some(strings) = function_strings else {
+            return Err(self.runtime_bug(MSG));
         };
         let lpc_string = LpcString::Static(index, strings.clone());
 
