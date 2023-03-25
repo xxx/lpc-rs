@@ -320,8 +320,6 @@ mod tests {
             })
             .unwrap();
 
-        let _upvalues = ctx1.upvalues();
-
         assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 1);
 
         vm.gc(&mut cell_key).unwrap();

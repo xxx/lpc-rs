@@ -11,7 +11,7 @@ use crate::{
 /// object
 pub fn file_name<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &QCellOwner,
+    cell_key: &mut QCellOwner,
 ) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1_usize);
     let value = match lpc_ref {
