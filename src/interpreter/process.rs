@@ -83,7 +83,7 @@ impl Process {
     /// present.
     #[inline]
     pub fn filename(&self) -> Cow<str> {
-        let filename: &str = self.program.filename.as_ref();
+        let filename: &str = (&*self.program.filename).as_ref();
         let name = filename.strip_suffix(".c").unwrap_or(filename);
         match self.clone_id {
             Some(x) => Cow::Owned(format!("{name}#{x}")),

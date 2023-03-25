@@ -23,7 +23,7 @@ use crate::interpreter::efun::EFUN_PROTOTYPES;
 pub struct Program {
     /// The path to the file that this program was compiled from. Used for error
     /// messaging. This is intended to be the fully-expanded, in-game path.
-    pub filename: LpcPath,
+    pub filename: Rc<LpcPath>,
 
     /// function mapping of (mangled) name to Symbol
     pub functions: HashMap<String, Rc<ProgramFunction>>,
@@ -60,7 +60,7 @@ impl<'a> Program {
         T: Into<LpcPath>,
     {
         Self {
-            filename: filename.into(),
+            filename: Rc::new(filename.into()),
             ..Default::default()
         }
     }
@@ -261,7 +261,7 @@ mod tests {
         program.filename = "marf.c".into();
         assert_eq!(program.cwd().to_str().unwrap(), full_path);
 
-        program.filename = LpcPath::Server(Path::new("").to_path_buf());
+        program.filename = Rc::new(LpcPath::Server(Path::new("").to_path_buf()));
         assert_eq!(program.cwd().to_str().unwrap(), "");
     }
 }

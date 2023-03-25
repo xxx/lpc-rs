@@ -236,7 +236,7 @@ impl CodegenWalker {
         }
 
         Ok(Program {
-            filename: self.context.filename,
+            filename: Rc::new(self.context.filename),
             functions: self.functions,
             global_variables,
             num_globals: self.global_counter.number_emitted(),
