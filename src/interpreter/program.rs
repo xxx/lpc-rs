@@ -25,7 +25,7 @@ pub struct Program {
     /// messaging. This is intended to be the fully-expanded, in-game path.
     pub filename: LpcPath,
 
-    /// function mapping of name to Symbol
+    /// function mapping of (mangled) name to Symbol
     pub functions: HashMap<String, Rc<ProgramFunction>>,
 
     /// The map of global variables in this program.

@@ -21,6 +21,7 @@ pub mod register;
 pub mod register_counter;
 pub mod serialize;
 pub mod visibility;
+pub mod mangle;
 
 /// Name of the user-overridable initializer function for objects
 pub const CREATE_FUNCTION: &str = "create";

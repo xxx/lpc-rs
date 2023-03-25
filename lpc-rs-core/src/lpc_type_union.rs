@@ -9,6 +9,7 @@ use modular_bitfield::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::lpc_type::LpcType;
+use crate::mangle::Mangle;
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
@@ -256,6 +257,76 @@ impl Display for LpcTypeUnion {
             .join(" | ");
 
         write!(f, "{s}")
+    }
+}
+
+impl Mangle for LpcTypeUnion {
+    fn mangle(&self) -> String {
+        let mut vec = vec![];
+
+        if self.void() {
+            vec.push(LpcType::Void.mangle())
+        }
+
+        if self.int() {
+            vec.push(LpcType::Int(false).mangle());
+        }
+
+        if self.int_array() {
+            vec.push(LpcType::Int(true).mangle());
+        }
+
+        if self.string() {
+            vec.push(LpcType::String(false).mangle());
+        }
+
+        if self.string_array() {
+            vec.push(LpcType::String(true).mangle());
+        }
+
+        if self.float() {
+            vec.push(LpcType::Float(false).mangle());
+        }
+
+        if self.float_array() {
+            vec.push(LpcType::Float(true).mangle());
+        }
+
+        if self.object() {
+            vec.push(LpcType::Object(false).mangle());
+        }
+
+        if self.object_array() {
+            vec.push(LpcType::Object(true).mangle());
+        }
+
+        if self.mapping() {
+            vec.push(LpcType::Mapping(false).mangle());
+        }
+
+        if self.mapping_array() {
+            vec.push(LpcType::Mapping(true).mangle());
+        }
+
+        if self.mixed() {
+            vec.push(LpcType::Mixed(false).mangle());
+        }
+
+        if self.mixed_array() {
+            vec.push(LpcType::Mixed(true).mangle());
+        }
+
+        if self.function_array() {
+            vec.push(LpcType::Function(true).mangle());
+        }
+
+        let s = vec
+            .iter()
+            .map(|i| format!("{i}"))
+            .collect::<Vec<_>>()
+            .join("|");
+
+        s
     }
 }
 

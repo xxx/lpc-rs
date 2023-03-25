@@ -11,6 +11,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
+use lpc_rs_core::mangle::Mangle;
 
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
@@ -46,6 +47,20 @@ pub struct FunctionPrototype {
     pub flags: FunctionFlags,
 }
 
+impl Mangle for FunctionPrototype {
+    fn mangle(&self) -> String {
+        // name__return_type__arg_types__flags
+        let mut name = self.name.to_string();
+        name.push_str("__");
+        name.push_str(&self.return_type.mangle());
+        name.push_str("__");
+        name.push_str(&self.arg_types.iter().map(|t| t.mangle()).join("_"));
+        name.push_str("__");
+        name.push_str(&self.flags.mangle());
+        name
+    }
+}
+
 impl Display for FunctionPrototype {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let flags = self.flags;
@@ -73,11 +88,5 @@ impl Display for FunctionPrototype {
             "{}{}{}{} {}({})",
             nomask, varargs, visibility, self.return_type, self.name, args
         )
-    }
-}
-
-impl AsRef<FunctionPrototype> for FunctionPrototype {
-    fn as_ref(&self) -> &Self {
-        self
     }
 }

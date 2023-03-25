@@ -1,5 +1,6 @@
 use modular_bitfield::prelude::*;
 use serde::{Deserialize, Serialize};
+use crate::mangle::Mangle;
 
 use crate::visibility::Visibility;
 
@@ -33,6 +34,45 @@ impl FunctionFlags {
     #[inline]
     pub fn protected(&self) -> bool {
         self.visibility() == Visibility::Protected
+    }
+}
+
+impl Mangle for FunctionFlags {
+    fn mangle(&self) -> String {
+        let mut result = String::new();
+
+        match self.visibility() {
+            Visibility::Public => {
+                result.push_str("pb");
+            }
+            Visibility::Private => {
+                result.push_str("pv");
+            }
+            Visibility::Protected => {
+                result.push_str("pt");
+            }
+        }
+
+        let mut flag_str = String::new();
+
+        if self.ellipsis() {
+            flag_str.push('e');
+        }
+
+        if self.varargs() {
+            flag_str.push('v');
+        }
+
+        if self.nomask() {
+            flag_str.push('n');
+        }
+
+        if !flag_str.is_empty() {
+            result.push('_');
+            result.push_str(&flag_str);
+        }
+
+        result
     }
 }
 
