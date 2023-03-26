@@ -83,9 +83,7 @@ pub enum Instruction {
     },
 
     /// Call a function pointer, located in `location`
-    CallFp {
-        location: RegisterVariant,
-    },
+    CallFp { location: RegisterVariant },
 
     /// Call a function in another object
     CallOther {
@@ -291,19 +289,13 @@ impl Display for Instruction {
             Instruction::CatchStart(r1, label) => {
                 write!(f, "catchstart {r1}, {label}")
             }
-            Instruction::Call {
-                name,
-                namespace,
-            } => {
+            Instruction::Call { name, namespace } => {
                 write!(f, "call {name}, {namespace}")
             }
             Instruction::CallFp { location } => {
                 write!(f, "callfp {location}")
             }
-            Instruction::CallOther {
-                receiver,
-                name,
-            } => {
+            Instruction::CallOther { receiver, name } => {
                 write!(f, "callother {receiver}, {name}")
             }
             Instruction::ClearArgs => {

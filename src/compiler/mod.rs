@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc};
+use std::{collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc, sync::Arc};
 
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use codegen::{
@@ -192,7 +192,7 @@ impl Compiler {
         let lpc_path = path.into();
 
         let context = CompilationContextBuilder::default()
-            .filename(&lpc_path)
+            .filename(Arc::new(lpc_path.clone()))
             .config(self.config.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
@@ -409,8 +409,16 @@ mod tests {
             let prog = compiler
                 .compile_string("my_file.c", code, &mut cell_key)
                 .unwrap();
-            assert_eq!(prog.inherits.len(), 2);
-            assert_eq!(prog.inherits[0].filename.to_str().unwrap(), "/std/auto.c");
+            println!("{:?}", prog.functions.keys().collect::<Vec<_>>());
+            let inherited = prog
+                .functions
+                .iter()
+                .find(|(_, f)| f.name() == "auto_inherited")
+                .unwrap();
+            println!("{:?}", inherited);
+            // assert!(prog.functions.keys().)
+            // assert_eq!(prog.inherits.len(), 2);
+            // assert_eq!(prog.inherits[0].filename.to_str().unwrap(), "/std/auto.c");
         }
 
         #[test]

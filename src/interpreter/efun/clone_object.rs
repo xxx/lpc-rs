@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, INIT_PROGRAM};
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
 use qcell::{QCell, QCellOwner};
 
@@ -37,31 +37,20 @@ fn load_master<const N: usize>(
             match compiler.compile_in_game_file(&full_path, context.current_debug_span(), cell_key)
             {
                 Ok(prog) => {
+                    let Some(prog_function) = prog.initializer.clone() else {
+                        return Err(LpcError::new("Init function not found on master?"));
+                    };
                     let upvalues = context.vm_upvalues().clone();
                     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
                     let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
-                    let function = {
-                        let borrowed = process.ro(cell_key);
-                        borrowed
-                            .as_ref()
-                            .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
-                            .cloned()
-                    };
-                    match function {
-                        Some(prog_function) => {
-                            let new_context =
-                                context.clone_task_context().with_process(process.clone());
-                            let eval_context =
-                                task.eval(prog_function, &[], new_context, cell_key)?;
 
-                            context
-                                .increment_instruction_count(eval_context.instruction_count())?;
+                    let new_context = context.clone_task_context().with_process(process.clone());
+                    let eval_context = task.eval(prog_function, &[], new_context, cell_key)?;
 
-                            Ok(process)
-                        }
-                        None => Err(LpcError::new("Init function not found on master?")),
-                    }
+                    context.increment_instruction_count(eval_context.instruction_count())?;
+
+                    Ok(process)
                 }
                 Err(e) => {
                     let debug_span = context.current_debug_span();
@@ -98,28 +87,19 @@ pub fn clone_object<const N: usize>(
         }
 
         let new_prog = master.ro(cell_key).program.clone();
+        let Some(initializer) = new_prog.initializer.clone() else {
+            return Err(LpcError::new("Init function not found on clone?"));
+        };
 
         let new_clone = context.insert_clone(new_prog, cell_key);
         let upvalues = context.vm_upvalues().clone();
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
-        {
-            let function = {
-                let borrowed = new_clone.ro(cell_key);
-                borrowed
-                    .as_ref()
-                    .lookup_function(INIT_PROGRAM, &CallNamespace::Local)
-                    .cloned()
-            };
 
-            match function {
-                Some(prog_function) => {
-                    let new_context = context.clone_task_context().with_process(new_clone.clone());
-                    let eval_context = task.eval(prog_function, &[], new_context, cell_key)?;
-                    context.increment_instruction_count(eval_context.instruction_count())?;
-                }
-                None => return Err(LpcError::new("Init function not found in clone?")),
-            }
-        }
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
+
+        let new_context = context.clone_task_context().with_process(new_clone.clone());
+        let eval_context = task.eval(initializer, &[], new_context, cell_key)?;
+
+        context.increment_instruction_count(eval_context.instruction_count())?;
 
         // Set up the return value
         let v = LpcValue::Object(new_clone);
@@ -179,11 +159,7 @@ mod tests {
 
         let mut cell_key = QCellOwner::new();
         let (program, config, _) = compile_prog(prog, &mut cell_key);
-        let func = program
-            .functions
-            .get(INIT_PROGRAM)
-            .expect("no init found?")
-            .clone();
+        let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, &cell_key);
         let mut task = fixture(&cell_key);
 
@@ -204,11 +180,7 @@ mod tests {
         "# };
 
         let (program, config, _) = compile_prog(prog, &mut cell_key);
-        let func = program
-            .functions
-            .get(INIT_PROGRAM)
-            .expect("no init found?")
-            .clone();
+        let func = program.initializer.clone().expect("no init found?");
         let mut cell_key = QCellOwner::new();
         let context = task_context_fixture(program, config, &cell_key);
         let mut task = fixture(&cell_key);

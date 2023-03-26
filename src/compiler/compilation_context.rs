@@ -1,13 +1,15 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use derive_builder::Builder;
 use educe::Educe;
+use indexmap::{IndexMap, IndexSet};
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
 use lpc_rs_errors::LpcError;
 use lpc_rs_function_support::{
-    function_like::FunctionLike, function_prototype::FunctionPrototype, symbol::Symbol,
+    function_like::FunctionLike, function_prototype::FunctionPrototype,
+    program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
@@ -28,7 +30,7 @@ use crate::{
 pub struct CompilationContext {
     /// The name of the main file being compiled.
     #[builder(setter(into))]
-    pub filename: LpcPath,
+    pub filename: Arc<LpcPath>,
 
     /// The configuration being used for this compilation.
     #[builder(setter(into))]
@@ -49,6 +51,12 @@ pub struct CompilationContext {
 
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,
+
+    /// Strings table
+    pub strings: IndexSet<String>,
+
+    /// All of the inherited functions, keyed by their mangled name.
+    pub inherited_functions: IndexMap<String, Rc<ProgramFunction>>,
 
     /// All of my Inherited parent objects
     /// The ordering of this field can be assumed to be in the order of
@@ -271,15 +279,17 @@ impl CompilationContext {
 impl Default for CompilationContext {
     fn default() -> Self {
         Self {
-            filename: LpcPath::default(),
+            filename: LpcPath::default().into(),
             config: Rc::new(Config::default()),
             errors: vec![],
             scopes: ScopeTree::default(),
             default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
+            strings: IndexSet::new(),
             inherits: vec![],
             inherit_names: HashMap::new(),
+            inherited_functions: IndexMap::new(),
             inherit_depth: 0,
             num_globals: 0,
             num_upvalues: 0,
@@ -302,6 +312,7 @@ mod tests {
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototypeBuilder::default()
             .name(name)
+            .filename(Arc::new(name.into()))
             .return_type(LpcType::Int(false))
             .build()
             .unwrap()

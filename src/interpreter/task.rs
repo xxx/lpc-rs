@@ -17,7 +17,7 @@ use lpc_rs_core::{
     function_arity::FunctionArity,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
-    LpcInt, EFUN, INIT_PROGRAM,
+    LpcInt, EFUN,
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -238,12 +238,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         O: Into<Rc<QCell<ObjectSpace>>>,
     {
         let init_function = {
-            let function = program.lookup_function(INIT_PROGRAM, &CallNamespace::Local);
-            if function.is_none() {
+            let Some(function) = &program.initializer else {
                 return Err(LpcError::new("Init function not found?"));
-            }
+            };
 
-            function.unwrap().clone()
+            function.clone()
         };
         let process: Rc<QCell<Process>> = cell_key.cell(Process::new(program)).into();
         let context = TaskContext::new(
@@ -393,10 +392,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call {
-                name,
-                namespace,
-            } => {
+            Instruction::Call { name, namespace } => {
                 self.handle_call(&name, &namespace, task_context, cell_key)?;
             }
             Instruction::CallFp { location } => {
@@ -1021,6 +1017,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 (frame.process.clone(), Rc::new(pf))
             }
+            FunctionAddress::SimulEfun(name) => {
+                let Some(simul_efuns) = task_context.simul_efuns() else {
+                    return Err(self.runtime_bug("simul_efun called without simul_efuns"));
+                };
+
+                let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name, &CallNamespace::Local) else {
+                    return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
+                };
+
+                (simul_efuns.clone(), function.clone())
+            }
         };
 
         let new_registers = RefBank::initialized_for_function(&function, max_arg_length);
@@ -1035,7 +1042,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let mut new_frame = CallFrame::with_registers(
             proc,
-            function,
+            function.clone(),
             passed_args_count,
             new_registers,
             upvalues,
@@ -1083,6 +1090,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             let arg_locations = match &ptr.address {
                 FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
                 FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
+                FunctionAddress::SimulEfun(_) => Cow::Borrowed(&function.arg_locations),
             };
 
             for i in 0..max_arg_length {
@@ -1375,6 +1383,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let address = match target {
             FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
+            FunctionTarget::SimulEfun(func_name) => FunctionAddress::SimulEfun(func_name),
             FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name {
                 FunctionName::Var(_) => {
                     return Err(self.runtime_bug(concat!(
@@ -1431,6 +1440,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     None => {
                         if_chain! {
                             // check simul efuns, which use the `Local` FunctionTarget
+                            // TODO: This shouldn't be the case now.
                             if let Some(rc) = task_context.simul_efuns();
                             let b = rc.ro(cell_key);
                             if let Some(func) = b.as_ref().lookup_function(&*s, &CallNamespace::Local);
@@ -4046,8 +4056,10 @@ mod tests {
         }
 
         mod test_sizeof {
+            use std::sync::Arc;
+
             use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
-            use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
+            use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, INIT_PROGRAM};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
 
@@ -4115,35 +4127,34 @@ mod tests {
             #[test]
             fn stores_the_value_for_strings() {
                 let config = Rc::new(test_config());
-                let path = LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir);
+                let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir));
 
-                let mut functions = HashMap::new();
-                functions.insert(
-                    INIT_PROGRAM.to_string(),
-                    ProgramFunction {
-                        prototype: FunctionPrototypeBuilder::default()
-                            .name(INIT_PROGRAM)
-                            .return_type(LpcType::Void)
-                            .build()
-                            .unwrap(),
-                        num_locals: 2,
-                        num_upvalues: 0,
-                        instructions: vec![
-                            SConst(Register(1).as_local(), 0),
-                            Sizeof(Register(1).as_local(), Register(2).as_local()),
-                        ],
-                        debug_spans: vec![None, None],
-                        labels: Default::default(),
-                        local_variables: Default::default(),
-                        arg_locations: Default::default(),
-                        strings: OnceCell::with_value(vec!["Hello, world!".into()].into()),
-                    }
-                    .into(),
-                );
+                let prototype = FunctionPrototypeBuilder::default()
+                    .name(INIT_PROGRAM)
+                    .filename(path.clone())
+                    .return_type(LpcType::Void)
+                    .build()
+                    .unwrap();
+                let initializer = ProgramFunction {
+                    prototype,
+                    num_locals: 2,
+                    num_upvalues: 0,
+                    instructions: vec![
+                        SConst(Register(1).as_local(), 0),
+                        Sizeof(Register(1).as_local(), Register(2).as_local()),
+                    ],
+                    debug_spans: vec![None, None],
+                    labels: Default::default(),
+                    local_variables: Default::default(),
+                    arg_locations: Default::default(),
+                    strings: OnceCell::with_value(vec!["Hello, world!".into()].into()),
+                }
+                .into();
 
                 let program = Program {
                     filename: path,
-                    functions,
+                    functions: IndexMap::new(),
+                    initializer: Some(initializer),
                     num_init_registers: 2,
                     ..Default::default()
                 };

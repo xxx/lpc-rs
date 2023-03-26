@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use lpc_rs_core::mangle::Mangle;
+
 use crate::{function_prototype::FunctionPrototype, program_function::ProgramFunction};
 
 /// A facade to allow us to lookup prototypes or compiled functions
@@ -16,6 +18,16 @@ impl<'a> FunctionLike<'a> {
             FunctionLike::Prototype(prototype) => prototype,
             FunctionLike::Compiled(program_function) => &program_function.prototype,
         }
+    }
+
+    pub fn is_efun(&self) -> bool {
+        self.prototype().is_efun()
+    }
+}
+
+impl<'a> Mangle for FunctionLike<'a> {
+    fn mangle(&self) -> String {
+        self.prototype().mangle()
     }
 }
 
@@ -39,6 +51,8 @@ impl<'a> From<Rc<ProgramFunction>> for FunctionLike<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use lpc_rs_core::lpc_type::LpcType;
 
     use super::*;
@@ -48,6 +62,7 @@ mod tests {
     fn test_prototype() {
         let prototype = FunctionPrototypeBuilder::default()
             .name("foo")
+            .filename(Arc::new("foo".into()))
             .return_type(LpcType::Int(false))
             .build()
             .unwrap();

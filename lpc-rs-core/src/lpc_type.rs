@@ -3,8 +3,7 @@ use std::{fmt, ops::BitOr};
 use fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 
-use crate::lpc_type_union::LpcTypeUnion;
-use crate::mangle::Mangle;
+use crate::{lpc_type_union::LpcTypeUnion, mangle::Mangle};
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.
@@ -93,49 +92,49 @@ impl Mangle for LpcType {
                 } else {
                     String::from("i")
                 }
-            },
+            }
             LpcType::Float(a) => {
                 if *a {
                     String::from("f*")
                 } else {
                     String::from("f")
                 }
-            },
+            }
             LpcType::String(a) => {
                 if *a {
                     String::from("s*")
                 } else {
                     String::from("s")
                 }
-            },
+            }
             LpcType::Object(a) => {
                 if *a {
                     String::from("o*")
                 } else {
                     String::from("o")
                 }
-            },
+            }
             LpcType::Mapping(a) => {
                 if *a {
                     String::from("m*")
                 } else {
                     String::from("m")
                 }
-            },
+            }
             LpcType::Mixed(a) => {
                 if *a {
                     String::from("x*")
                 } else {
                     String::from("x")
                 }
-            },
+            }
             LpcType::Function(a) => {
                 if *a {
                     String::from("F*")
                 } else {
                     String::from("F")
                 }
-            },
+            }
             LpcType::Union(union) => union.mangle(),
         }
     }

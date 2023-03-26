@@ -402,6 +402,8 @@ impl Display for CallFrame {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
@@ -415,6 +417,7 @@ mod tests {
 
         let prototype = FunctionPrototypeBuilder::default()
             .name("my_function")
+            .filename(Arc::new("my_function".into()))
             .return_type(LpcType::Void)
             .arity(FunctionArity::new(4))
             .build()
@@ -446,6 +449,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
+                .filename(Arc::new("my_function".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(4))
                 .build()
@@ -475,6 +479,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
+                .filename(Arc::new("my_function".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(4))
                 .build()
@@ -508,6 +513,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
+                .filename(Arc::new("my_function".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(4))
                 .build()
@@ -544,6 +550,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
+                .filename(Arc::new("my_function".into()))
                 .return_type(LpcType::Void)
                 .build()
                 .unwrap();
@@ -576,6 +583,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
+                .filename(Arc::new("my_function".into()))
                 .return_type(LpcType::Void)
                 .build()
                 .unwrap();
@@ -623,6 +631,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
+                .filename(Arc::new("my_file".into()))
                 .return_type(LpcType::Void)
                 .build()
                 .unwrap();

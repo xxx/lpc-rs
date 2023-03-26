@@ -8,8 +8,7 @@ use std::{
 use modular_bitfield::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::lpc_type::LpcType;
-use crate::mangle::Mangle;
+use crate::{lpc_type::LpcType, mangle::Mangle};
 
 /// A type that exists solely to allow for union types while remaining `Copy`.
 /// I hate it.
@@ -322,7 +321,7 @@ impl Mangle for LpcTypeUnion {
 
         let s = vec
             .iter()
-            .map(|i| format!("{i}"))
+            .map(|i| i.to_string())
             .collect::<Vec<_>>()
             .join("|");
 

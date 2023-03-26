@@ -11,6 +11,8 @@ use bstr::ByteSlice;
 use path_absolutize::Absolutize;
 use serde::{Deserialize, Serialize};
 
+use crate::mangle::Mangle;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LpcPath {
     /// Represent an on-server path. Relative paths are relative to the running
@@ -132,6 +134,14 @@ impl LpcPath {
                 buf.pop();
                 LpcPath::InGame(buf)
             }
+        }
+    }
+}
+
+impl Mangle for LpcPath {
+    fn mangle(&self) -> String {
+        match self {
+            LpcPath::Server(x) | LpcPath::InGame(x) => x.to_string_lossy().to_string(),
         }
     }
 }

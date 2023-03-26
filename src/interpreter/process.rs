@@ -83,7 +83,7 @@ impl Process {
     /// present.
     #[inline]
     pub fn filename(&self) -> Cow<str> {
-        let filename: &str = (&*self.program.filename).as_ref();
+        let filename: &str = (*self.program.filename).as_ref();
         let name = filename.strip_suffix(".c").unwrap_or(filename);
         match self.clone_id {
             Some(x) => Cow::Owned(format!("{name}#{x}")),
@@ -129,7 +129,7 @@ impl Mark for Process {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::{cell::RefCell, sync::Arc};
 
     use refpool::{Pool, PoolRef};
 
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_filename() {
         let prog = Program {
-            filename: "/foo/bar/baz.c".into(),
+            filename: Arc::new("/foo/bar/baz.c".into()),
             ..Default::default()
         };
         let proc = Process::new(prog);
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_localized_filename() {
         let prog = Program {
-            filename: "/foo/bar/baz.c".into(),
+            filename: Arc::new("/foo/bar/baz.c".into()),
             ..Default::default()
         };
         let proc = Process::new(prog);

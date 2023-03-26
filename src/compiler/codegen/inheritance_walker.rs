@@ -21,7 +21,7 @@ impl InheritanceWalker {
         Self { context }
     }
 
-    fn valid_inherit(&self, node: &InheritNode) -> Result<()> {
+    fn validate(&self, node: &InheritNode) -> Result<()> {
         let depth = self.context.inherit_depth;
 
         if depth >= self.context.config.max_inherit_depth {
@@ -57,7 +57,7 @@ impl ContextHolder for InheritanceWalker {
 
 impl TreeWalker for InheritanceWalker {
     fn visit_inherit(&mut self, node: &mut InheritNode, cell_key: &mut QCellOwner) -> Result<()> {
-        self.valid_inherit(node)?;
+        self.validate(node)?;
 
         let cwd = match self.context.filename.cwd() {
             LpcPath::Server(_) => self
@@ -111,6 +111,14 @@ impl TreeWalker for InheritanceWalker {
 
                 self.context.num_globals += program.num_globals;
                 self.context.num_init_registers += program.num_init_registers;
+                println!("inheriting functions: {:?}", program.functions.keys());
+                self.context.inherited_functions.extend(
+                    program
+                        .functions
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone())),
+                );
+                self.context.strings.extend(program.strings.iter().cloned());
 
                 self.context.inherits.push(program);
 
@@ -135,7 +143,7 @@ mod tests {
             .unwrap();
 
         let context = CompilationContextBuilder::default()
-            .filename("test.c")
+            .filename(LpcPath::InGame("test.c".into()))
             .config(config)
             .build()
             .unwrap();

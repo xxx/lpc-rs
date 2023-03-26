@@ -93,7 +93,7 @@ impl Preprocessor {
     ///
     /// # Examples
     /// ```
-    /// use std::rc::Rc;
+    /// use std::{rc::Rc, sync::Arc};
     ///
     /// use lpc_rs::compiler::{
     ///     compilation_context::{CompilationContext, CompilationContextBuilder},
@@ -107,7 +107,7 @@ impl Preprocessor {
     ///     .build()
     ///     .unwrap();
     /// let context = CompilationContextBuilder::default()
-    ///     .filename("test.c")
+    ///     .filename(Arc::new("test.c".into()))
     ///     .config(config)
     ///     .build()
     ///     .unwrap();
@@ -140,7 +140,7 @@ impl Preprocessor {
     ///
     /// # Examples
     /// ```
-    /// use std::rc::Rc;
+    /// use std::{rc::Rc, sync::Arc};
     ///
     /// use lpc_rs::compiler::{
     ///     compilation_context::{CompilationContext, CompilationContextBuilder},
@@ -154,7 +154,7 @@ impl Preprocessor {
     ///     .build()
     ///     .unwrap();
     /// let context = CompilationContextBuilder::default()
-    ///     .filename("test.c")
+    ///     .filename(Arc::new("test.c".into()))
     ///     .config(config)
     ///     .build()
     ///     .unwrap();
@@ -996,6 +996,8 @@ impl Default for Preprocessor {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use indoc::indoc;
     use lpc_rs_utils::config::ConfigBuilder;
 
@@ -1011,7 +1013,7 @@ mod tests {
             .unwrap();
 
         let context = CompilationContextBuilder::default()
-            .filename("test.c")
+            .filename(Arc::new("test.c".into()))
             .config(config)
             .build()
             .unwrap();

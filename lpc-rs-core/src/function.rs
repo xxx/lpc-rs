@@ -42,6 +42,9 @@ pub enum FunctionTarget {
     /// The call will be to an efun
     Efun(String),
 
+    /// The call will be to a simulated efun
+    SimulEfun(String),
+
     /// The call will be to an lfun defined in some object
     Local(FunctionName, FunctionReceiver),
 }
@@ -50,6 +53,7 @@ impl Display for FunctionTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FunctionTarget::Efun(name) => write!(f, "{name}"),
+            FunctionTarget::SimulEfun(name) => write!(f, "{name}"),
             FunctionTarget::Local(name, receiver) => match receiver {
                 FunctionReceiver::Local => write!(f, "{name}"),
                 FunctionReceiver::Var(reg) => write!(f, "var({reg})->{name}"),

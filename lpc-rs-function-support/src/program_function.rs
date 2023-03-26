@@ -7,7 +7,9 @@ use std::{
 
 use derive_builder::Builder;
 use lpc_rs_asm::instruction::{Address, Instruction};
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType, register::RegisterVariant};
+use lpc_rs_core::{
+    function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant,
+};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use once_cell::sync::OnceCell;
@@ -20,7 +22,7 @@ use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 /// metadata for type checking, etc.
 ///
 /// Note that closures also use this structure. By convention, they are named
-/// `closure-<id>`, which is unparsable, and cannot conflict with user-defined
+/// `closure-<id>`, which is unparseable, and cannot conflict with user-defined
 /// functions They otherwise act as normal functions, with the exception of
 /// upvalue access.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
@@ -104,15 +106,16 @@ impl ProgramFunction {
         }
     }
 
-    /// Push an [`Instruction`] and corresponding [`Span`] into this function's
-    /// code.
+    /// Push an [`Instruction`] and corresponding [`Span`] into this function's code.
+    #[inline]
     pub fn push_instruction(&mut self, instruction: Instruction, debug_span: Option<Span>) {
-        trace!(instruction = %instruction, span = ?debug_span, "pushing instruction");
+        trace!(instruction = %instruction, "pushing instruction");
         self.instructions.push(instruction);
         self.debug_spans.push(debug_span);
     }
 
     /// Insert a label at the specified address into this function
+    #[inline]
     pub fn insert_label<T>(&mut self, label: T, address: Address)
     where
         T: Into<String>,
@@ -125,8 +128,12 @@ impl ProgramFunction {
         let mut v = vec![];
 
         v.push(format!(
-            "fn {} num_args={} num_locals={} num_upvalues={}:",
-            self.prototype.name, self.prototype.arity.num_args, self.num_locals, self.num_upvalues
+            "fn {} ({}) num_args={} num_locals={} num_upvalues={}:",
+            self.prototype.name,
+            self.mangle(),
+            self.prototype.arity.num_args,
+            self.num_locals,
+            self.num_upvalues
         ));
 
         // use MultiMap as multiple labels can be at the same address
@@ -143,7 +150,11 @@ impl ProgramFunction {
                 }
             }
 
-            v.push(format!("    {instruction}"));
+            v.push(format!(
+                "    {:04x}  {instruction}",
+                counter,
+                instruction = instruction
+            ));
         }
 
         v
@@ -156,19 +167,29 @@ impl ProgramFunction {
     }
 }
 
+impl Mangle for ProgramFunction {
+    #[inline]
+    fn mangle(&self) -> String {
+        self.prototype.mangle()
+    }
+}
+
 impl Display for ProgramFunction {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.prototype.name)
     }
 }
 
 impl AsRef<FunctionPrototype> for ProgramFunction {
+    #[inline]
     fn as_ref(&self) -> &FunctionPrototype {
         &self.prototype
     }
 }
 
 impl AsRef<FunctionPrototype> for Rc<ProgramFunction> {
+    #[inline]
     fn as_ref(&self) -> &FunctionPrototype {
         &self.prototype
     }

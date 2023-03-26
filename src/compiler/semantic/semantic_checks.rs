@@ -1788,6 +1788,8 @@ mod tests {
         use super::*;
 
         mod arrays {
+            use std::sync::Arc;
+
             use lpc_rs_core::EFUN;
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
@@ -1922,6 +1924,7 @@ mod tests {
 
                 let proto = FunctionPrototypeBuilder::default()
                     .name("clone_object")
+                    .filename(Arc::new("".into()))
                     .return_type(LpcType::Int(true))
                     .build()
                     .unwrap();

@@ -5,31 +5,42 @@ use std::{
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
     rc::Rc,
+    sync::Arc,
 };
 
 use derive_builder::Builder;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN, INIT_PROGRAM,
+    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, INIT_PROGRAM,
 };
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 
-use crate::interpreter::efun::EFUN_PROTOTYPES;
-
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
-    /// The path to the file that this program was compiled from. Used for error
-    /// messaging. This is intended to be the fully-expanded, in-game path.
-    pub filename: Rc<LpcPath>,
+    /// The path to the file that this program was compiled from.
+    /// This is intended to be the fully-expanded, in-game path.
+    #[builder(setter(into))]
+    pub filename: Arc<LpcPath>,
 
-    /// function mapping of (mangled) name to Symbol
-    pub functions: HashMap<String, Rc<ProgramFunction>>,
+    /// function mapping of (mangled) name to the function
+    pub functions: IndexMap<String, Rc<ProgramFunction>>,
+
+    /// Function mapping of unmangled name to the function.
+    /// This is needed for `call_other`.
+    /// Due to unmangled names not being unique, only the last-defined
+    /// function with a given unmangled name is referenced here.
+    pub unmangled_functions: IndexMap<String, Rc<ProgramFunction>>,
+
+    /// The function that is called when the program is first loaded,
+    /// which initializes the global variables. This function is
+    /// the combined initializer of all of the inherited programs.
+    pub initializer: Option<Rc<ProgramFunction>>,
 
     /// The map of global variables in this program.
-    /// Note this only includes vars defined within this program's file.
     pub global_variables: HashMap<String, Symbol>,
 
     /// How many globals does this program need storage for?
@@ -43,14 +54,8 @@ pub struct Program {
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
 
-    /// All of my inherited parent objects
-    /// The ordering of this field can be assumed to be in file order
-    pub inherits: Vec<Program>,
-
-    /// The index of name -> inherited objects, for inherits with names
-    pub inherit_names: HashMap<String, usize>,
-
     /// Interned strings
+    #[builder(setter(into))]
     pub strings: Rc<Vec<String>>,
 }
 
@@ -60,7 +65,7 @@ impl<'a> Program {
         T: Into<LpcPath>,
     {
         Self {
-            filename: Rc::new(filename.into()),
+            filename: Arc::new(filename.into()),
             ..Default::default()
         }
     }
@@ -78,62 +83,66 @@ impl<'a> Program {
     pub fn lookup_function<T>(
         &self,
         name: T,
-        namespace: &CallNamespace,
+        _namespace: &CallNamespace,
     ) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
         let r = name.as_ref();
-
-        let find_in_inherit = || {
-            self.inherits
-                .iter()
-                .rev()
-                .find_map(|p| p.lookup_function(r, &CallNamespace::Local))
-        };
-
-        match namespace {
-            CallNamespace::Local => self.functions.get(r).or_else(find_in_inherit),
-            CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => self.inherit_names.get(ns).and_then(|i| {
-                self.inherits
-                    .get(*i)
-                    .and_then(|p| p.lookup_function(name, &CallNamespace::Local))
-            }),
-        }
+        self.functions
+            .get(r)
+            .or_else(|| self.unmangled_functions.get(r))
+        // let find_in_inherit = || {
+        //     self.inherits
+        //         .iter()
+        //         .rev()
+        //         .find_map(|p| p.lookup_function(r, &CallNamespace::Local))
+        // };
+        //
+        // match namespace {
+        //     CallNamespace::Local => self.functions.get(r).or_else(self.public_functions.get(r)),
+        //     CallNamespace::Parent => find_in_inherit(),
+        //     CallNamespace::Named(ns) => self.inherit_names.get(ns).and_then(|i| {
+        //         self.inherits
+        //             .get(*i)
+        //             .and_then(|p| p.lookup_function(name, &CallNamespace::Local))
+        //     }),
+        // }
     }
 
     /// Return whether or not we have a function with this name either locally,
     /// or in any of our inherited-from parents.
-    pub fn contains_function<T>(&self, name: T, namespace: &CallNamespace) -> bool
+    pub fn contains_function<T>(&self, name: T, _namespace: &CallNamespace) -> bool
     where
         T: AsRef<str>,
     {
         let function_name = name.as_ref();
+        self.functions.contains_key(function_name)
+            || self.unmangled_functions.contains_key(function_name)
 
-        let find_in_inherit = || {
-            self.inherits
-                .iter()
-                .rev()
-                .any(|p| p.contains_function(function_name, &CallNamespace::Local))
-        };
-
-        match namespace {
-            CallNamespace::Local => self.functions.contains_key(function_name) || find_in_inherit(),
-            CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => match ns.as_str() {
-                EFUN => EFUN_PROTOTYPES.contains_key(function_name),
-                ns => self
-                    .inherit_names
-                    .get(ns)
-                    .and_then(|i| {
-                        self.inherits
-                            .get(*i)
-                            .map(|p| p.contains_function(name, &CallNamespace::Local))
-                    })
-                    .unwrap_or(false),
-            },
-        }
+        // let find_in_inherit = || {
+        //     self.inherits
+        //         .iter()
+        //         .rev()
+        //         .any(|p| p.contains_function(function_name, &CallNamespace::Local))
+        // };
+        //
+        // match namespace {
+        //     CallNamespace::Local => self.functions.contains_key(function_name) || find_in_inherit(),
+        //     CallNamespace::Parent => find_in_inherit(),
+        //     CallNamespace::Named(ns) => match ns.as_str() {
+        //         EFUN => EFUN_PROTOTYPES.contains_key(function_name),
+        //         ns => self
+        //             .inherit_names
+        //             .get(ns)
+        //             .and_then(|i| {
+        //                 self.inherits
+        //                     .get(*i)
+        //                     .map(|p| p.contains_function(name, &CallNamespace::Local))
+        //             })
+        //             .unwrap_or(false),
+        //     },
+        // }
     }
 
     /// Call the passed callback, passing the function reference if found.
@@ -248,7 +257,7 @@ mod tests {
     #[test]
     fn test_cwd() {
         let mut program = Program {
-            filename: "foo/bar/baz.c".into(),
+            filename: Arc::new("foo/bar/baz.c".into()),
             ..Program::default()
         };
 
@@ -258,10 +267,10 @@ mod tests {
             format!("{full_path}/foo/bar")
         );
 
-        program.filename = "marf.c".into();
+        program.filename = Arc::new("marf.c".into());
         assert_eq!(program.cwd().to_str().unwrap(), full_path);
 
-        program.filename = Rc::new(LpcPath::Server(Path::new("").to_path_buf()));
+        program.filename = Arc::new(LpcPath::Server(Path::new("").to_path_buf()));
         assert_eq!(program.cwd().to_str().unwrap(), "");
     }
 }

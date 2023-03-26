@@ -201,7 +201,7 @@ impl<'a> Keyable<'a> for ObjectSpace {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::{cell::RefCell, sync::Arc};
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
@@ -234,7 +234,7 @@ mod tests {
         let filename = prog.filename.to_str().unwrap();
 
         let mut prog2: Program = Program::default();
-        let filename2: LpcPath = "/foo/bar/baz".into();
+        let filename2: Arc<LpcPath> = Arc::new("/foo/bar/baz".into());
         prog2.filename = filename2.clone();
 
         let object_space = cell_key.cell(space).into();
@@ -264,7 +264,7 @@ mod tests {
         let space = ObjectSpace::new(config);
 
         let mut prog: Program = Program::default();
-        let filename: LpcPath = "./tests/fixtures/code/foo/bar/baz.c".into();
+        let filename: Arc<LpcPath> = Arc::new("./tests/fixtures/code/foo/bar/baz.c".into());
         prog.filename = filename;
 
         let process = Process::new(prog);

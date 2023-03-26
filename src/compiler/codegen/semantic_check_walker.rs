@@ -740,6 +740,7 @@ mod tests {
     use std::{
         collections::{HashMap, VecDeque},
         default::Default,
+        sync::Arc,
     };
 
     use claim::*;
@@ -1157,6 +1158,8 @@ mod tests {
     }
 
     mod test_visit_call {
+        use std::sync::Arc;
+
         use lpc_rs_core::{function_flags::FunctionFlags, visibility::Visibility};
         use lpc_rs_function_support::{
             function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
@@ -1181,6 +1184,7 @@ mod tests {
                 String::from("known"),
                 FunctionPrototypeBuilder::default()
                     .name("known")
+                    .filename(Arc::new("test.c".into()))
                     .return_type(LpcType::Int(false))
                     .build()
                     .unwrap(),
@@ -1216,6 +1220,7 @@ mod tests {
                 String::from("known"),
                 FunctionPrototypeBuilder::default()
                     .name("known")
+                    .filename(Arc::new("test.c".into()))
                     .return_type(LpcType::Int(false))
                     .flags(FunctionFlags::default().with_visibility(Visibility::Private))
                     .build()
@@ -1249,6 +1254,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .build()
                 .unwrap();
@@ -1285,6 +1291,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .build()
                 .unwrap();
@@ -1321,6 +1328,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .flags(FunctionFlags::from(&["private"][..]))
                 .build()
@@ -1362,6 +1370,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .build()
                 .unwrap();
@@ -1420,6 +1429,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .flags(FunctionFlags::from(&["private"][..]))
                 .build()
@@ -1464,6 +1474,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .build()
                 .unwrap();
@@ -1504,6 +1515,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("test.c".into()))
                 .return_type(LpcType::Int(false))
                 .flags(FunctionFlags::default().with_visibility(Visibility::Private))
                 .build()
@@ -1705,6 +1717,7 @@ mod tests {
                 String::from("my_function"),
                 FunctionPrototypeBuilder::default()
                     .name("my_function")
+                    .filename(Arc::new("my_function.c".into()))
                     .return_type(LpcType::Int(false))
                     .arity(FunctionArity {
                         num_args: 5,
@@ -1753,6 +1766,7 @@ mod tests {
                 String::from("my_func"),
                 FunctionPrototypeBuilder::default()
                     .name("my_func")
+                    .filename(Arc::new("my_func.c".into()))
                     .return_type(LpcType::Int(false))
                     .arity(FunctionArity {
                         num_args: 1,
@@ -1794,6 +1808,7 @@ mod tests {
                 String::from("my_func"),
                 FunctionPrototypeBuilder::default()
                     .name("my_func")
+                    .filename(Arc::new("my_func.c".into()))
                     .return_type(LpcType::Int(false))
                     .arity(FunctionArity::new(1))
                     .arg_types(vec![LpcType::String(false)])
@@ -1830,6 +1845,7 @@ mod tests {
                 String::from("my_func"),
                 FunctionPrototypeBuilder::default()
                     .name("my_func")
+                    .filename(Arc::new("my_func".into()))
                     .return_type(LpcType::String(false))
                     .arity(FunctionArity::new(1))
                     .arg_types(vec![LpcType::String(false)])
@@ -1961,6 +1977,8 @@ mod tests {
     }
 
     mod test_visit_function_def {
+        use std::sync::Arc;
+
         use lpc_rs_core::function_flags::FunctionFlags;
         use lpc_rs_function_support::{
             function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
@@ -2091,6 +2109,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("duplicate")
+                .filename(Arc::new("duplicate".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(4))
                 .flags(FunctionFlags::default().with_nomask(true))
@@ -2143,6 +2162,7 @@ mod tests {
                 String::from("known"),
                 FunctionPrototypeBuilder::default()
                     .name("known")
+                    .filename(Arc::new("known".into()))
                     .return_type(LpcType::Int(false))
                     .flags(FunctionFlags::default().with_visibility(Visibility::Private))
                     .build()
@@ -2175,6 +2195,7 @@ mod tests {
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("known")
+                .filename(Arc::new("known".into()))
                 .return_type(LpcType::Int(false))
                 .flags(FunctionFlags::default().with_visibility(Visibility::Private))
                 .build()

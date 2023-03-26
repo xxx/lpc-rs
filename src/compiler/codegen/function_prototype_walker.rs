@@ -83,6 +83,7 @@ impl TreeWalker for FunctionPrototypeWalker {
             node.name.clone(),
             FunctionPrototypeBuilder::default()
                 .name(node.name.clone())
+                .filename(self.context.filename.clone())
                 .return_type(node.return_type)
                 .arity(FunctionArity {
                     num_args,
@@ -119,6 +120,7 @@ impl TreeWalker for FunctionPrototypeWalker {
             node.name.clone(),
             FunctionPrototypeBuilder::default()
                 .name(node.name.clone())
+                .filename(self.context.filename.clone())
                 .return_type(node.return_type)
                 .arity(FunctionArity {
                     num_args,
@@ -166,7 +168,9 @@ impl TreeWalker for FunctionPrototypeWalker {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+    use std::sync::Arc;
+
+    use lpc_rs_core::{function_flags::FunctionFlags, lpc_path::LpcPath, lpc_type::LpcType};
 
     use super::*;
     use crate::compiler::ast::{
@@ -201,6 +205,7 @@ mod tests {
             *proto,
             FunctionPrototypeBuilder::default()
                 .name("marf")
+                .filename(Arc::new(LpcPath::new_server("/")))
                 .return_type(LpcType::Mixed(false))
                 .arity(FunctionArity::new(2))
                 .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])
@@ -238,6 +243,7 @@ mod tests {
             *proto,
             FunctionPrototypeBuilder::default()
                 .name("closure-123")
+                .filename(Arc::new(LpcPath::new_server("/")))
                 .return_type(LpcType::Mixed(false))
                 .arity(FunctionArity::new(4))
                 .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])

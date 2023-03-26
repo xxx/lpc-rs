@@ -1,13 +1,14 @@
 use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction, Label};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
     lpc_type::LpcType,
+    mangle::Mangle,
     register::{Register, RegisterVariant},
     register_counter::RegisterCounter,
     ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
@@ -128,6 +129,9 @@ pub struct CodegenWalker {
     /// Map of function Symbols, to their respective addresses
     pub functions: HashMap<String, Rc<ProgramFunction>>,
 
+    /// The initialization function for the program, which sets up global variables.
+    initializer: Option<Rc<ProgramFunction>>,
+
     /// Track where the result of a child branch is
     current_result: RegisterVariant,
 
@@ -167,9 +171,6 @@ pub struct CodegenWalker {
     /// Track the final locations of closure arguments, so that deeply nested
     /// `$1`-type variables can resolve to the correct location.
     closure_arg_locations: Vec<Vec<RegisterVariant>>,
-
-    /// The interned Strings that we've generated.
-    strings: IndexSet<String>,
 }
 
 impl CodegenWalker {
@@ -203,6 +204,7 @@ impl CodegenWalker {
     pub fn setup_init(&mut self) {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
+            .filename(self.context.filename.clone())
             .return_type(LpcType::Void)
             .build()
             .expect("Failed to build init prototype");
@@ -230,21 +232,43 @@ impl CodegenWalker {
         let global_variables =
             std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
 
-        let strings = Rc::new(self.strings.into_iter().collect::<Vec<_>>());
-        for func in self.functions.values_mut() {
+        let strings = Rc::new(self.context.strings.into_iter().collect::<Vec<_>>());
+        for func in self.functions.values() {
             func.strings.set(strings.clone()).unwrap();
         }
+        self.initializer
+            .as_ref()
+            .unwrap()
+            .strings
+            .set(strings.clone())
+            .unwrap();
+
+        let functions: IndexMap<_, _> = self
+            .context
+            .inherited_functions
+            .into_iter()
+            .chain(self.functions.into_iter())
+            .collect();
+
+        // Note that due to name clashes, only the latest seen version of a function is included,
+        // but that should be fine, as they are inserted in the order they are processed.
+        let unmangled_functions = functions
+            .values()
+            .map(|f| (f.prototype.name.to_string(), f.clone()))
+            .collect();
 
         Ok(Program {
-            filename: Rc::new(self.context.filename),
-            functions: self.functions,
+            filename: self.context.filename.clone(),
+            functions,
+            initializer: self.initializer,
+            unmangled_functions,
             global_variables,
             num_globals: self.global_counter.number_emitted(),
             // add +1 for r0, which is skipped
             num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
-            inherits: self.context.inherits,
-            inherit_names: self.context.inherit_names,
+            // inherits: self.context.inherits,
+            // inherit_names: self.context.inherit_names,
             strings,
         })
     }
@@ -555,9 +579,9 @@ impl CodegenWalker {
     ///
     /// # Arguments
     /// * instructions: A mutable reference to a vector, where the combined
-    ///   instructions will be stored. Done this way to avoid a lot of vector
+    ///   [`Instruction`]s will be stored. Done this way to avoid a lot of vector
     ///   creations in the recursion.
-    /// * debug_spans: A mutable reference to a vector, where the debug spans of
+    /// * debug_spans: A mutable reference to a vector, where the debug [`Span`]s of
     ///   the combined instructions will be stored.
     fn combine_inits(
         &mut self,
@@ -567,10 +591,11 @@ impl CodegenWalker {
         let calls_create = |instructions: &[Instruction]| -> bool {
             let len = instructions.len();
 
+            debug_assert!(CREATE_FUNCTION == "create"); // have to hardcode this below in the starts_with check
             if_chain! {
                 if len > 1;
                 if let Instruction::Call { name, .. } = &instructions[len - 2];
-                if name == CREATE_FUNCTION && matches!(&instructions[len - 1], Instruction::Ret);
+                if name.starts_with("create__") && matches!(&instructions[len - 1], Instruction::Ret);
                 then {
                     true
                 } else {
@@ -605,7 +630,7 @@ impl CodegenWalker {
                 debug_spans.extend(func.debug_spans[range].iter());
             };
         for inherit in &self.context.inherits {
-            if let Some(func) = inherit.functions.get(INIT_PROGRAM) {
+            if let Some(func) = &inherit.initializer {
                 extend_instructions(func, instructions, debug_spans);
             }
         }
@@ -936,13 +961,13 @@ impl TreeWalker for CodegenWalker {
                 let receiver_result = self.current_result;
 
                 let name_register = self.register_counter.next().unwrap().as_local();
-                let (index, _) = self.strings.insert_full(node.name.clone());
+                let (index, _) = self.context.strings.insert_full(node.name.clone());
 
                 push_instruction!(self, Instruction::SConst(name_register, index), node.span);
 
                 Instruction::CallOther {
                     receiver: receiver_result,
-                    name: name_register
+                    name: name_register,
                 }
             } else if node.name == CALL_OTHER {
                 debug_assert!(
@@ -952,10 +977,7 @@ impl TreeWalker for CodegenWalker {
                 let receiver = arg_results[0];
                 let name = arg_results[1];
 
-                Instruction::CallOther {
-                    receiver,
-                    name
-                }
+                Instruction::CallOther { receiver, name }
             } else {
                 if_chain! {
                     if let Some(x) = self.context.lookup_var(&node.name);
@@ -965,8 +987,21 @@ impl TreeWalker for CodegenWalker {
                             location: x.location.unwrap(),
                         }
                     } else {
+                        let Some(func) =
+                            self.context.lookup_function_complete(&node.name, &node.namespace, cell_key) else {
+                            return Err(LpcError::new_bug(
+                                format!("Cannot find function during code gen: {}", node.name)
+                            ).with_span(node.span));
+                        };
+
+                        let name = if func.is_efun() {
+                            node.name.clone()
+                        } else {
+                            func.mangle()
+                        };
+
                         Instruction::Call {
-                            name: node.name.clone(),
+                            name,
                             namespace: node.namespace.clone(),
                         }
                     }
@@ -1141,7 +1176,8 @@ impl TreeWalker for CodegenWalker {
             Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
 
-        self.functions.insert(node.name.clone(), func.into());
+        let mangled = func.mangle();
+        self.functions.insert(mangled.clone(), func.into());
 
         self.function_upvalue_counter.pop();
         self.register_counter.pop();
@@ -1154,10 +1190,7 @@ impl TreeWalker for CodegenWalker {
         self.current_result = location;
 
         // closures are just pointers to functions
-        let target = FunctionTarget::Local(
-            FunctionName::Literal(node.name.clone()),
-            FunctionReceiver::Local,
-        );
+        let target = FunctionTarget::Local(FunctionName::Literal(mangled), FunctionReceiver::Local);
 
         let instruction = Instruction::FunctionPtrConst {
             location,
@@ -1467,7 +1500,7 @@ impl TreeWalker for CodegenWalker {
             Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
 
-        self.functions.insert(node.name.clone(), func.into());
+        self.functions.insert(func.mangle(), func.into());
 
         self.function_upvalue_counter.pop();
         self.upvalue_counter.pop();
@@ -1509,7 +1542,10 @@ impl TreeWalker for CodegenWalker {
                 FunctionPtrReceiver::Dynamic => FunctionReceiver::Argument,
             };
 
-            // `call_other` always assumes a literal name
+            // `call_other` always assumes a literal name, and cannot mangle it
+            // because the receiver won't be known until runtime.
+            // TODO: this probably needs a new FunctionName variant to
+            //       differentiate between mangled and unmangled names
             let name = FunctionName::Literal(node.name.clone());
 
             target = FunctionTarget::Local(name, receiver);
@@ -1534,6 +1570,7 @@ impl TreeWalker for CodegenWalker {
                     if !s.type_.matches_type(LpcType::Function(false)) {
                         // if there are no function-type vars of this name, assume the name is
                         // literal
+                        // TODO: Another unmangled FunctionName::Literal
                         FunctionName::Literal(node.name.clone())
                     } else {
                         let sym_loc = match s.location {
@@ -1550,7 +1587,7 @@ impl TreeWalker for CodegenWalker {
                         FunctionName::Var(sym_loc)
                     }
                 }
-                None => FunctionName::Literal(node.name.clone()),
+                None => FunctionName::Literal(prototype.mangle()),
             };
 
             target = FunctionTarget::Local(name, FunctionReceiver::Local);
@@ -1561,8 +1598,7 @@ impl TreeWalker for CodegenWalker {
                 let simul_efuns = se.ro(cell_key);
                 if let Some(prototype) = simul_efuns.as_ref().lookup_function(node.name.as_str(), &CallNamespace::Local);
                 then {
-                    let name = FunctionName::Literal(node.name.clone());
-                    target = FunctionTarget::Local(name, FunctionReceiver::Local);
+                    target = FunctionTarget::SimulEfun(node.name.clone());
                     arity = prototype.arity();
                 } else {
                     if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
@@ -1702,6 +1738,7 @@ impl TreeWalker for CodegenWalker {
             node.visit(self, cell_key)?;
         }
 
+        // Insert a call to `create`, if it's been defined.
         if self
             .context
             .lookup_function(CREATE_FUNCTION, &CallNamespace::Local)
@@ -1727,10 +1764,13 @@ impl TreeWalker for CodegenWalker {
             node.visit(self, cell_key)?;
         }
 
-        let mut sym = self.function_stack.pop().unwrap();
-        sym.num_locals = self.register_counter.number_emitted();
+        // populate the initializer
+        let mut func = self.function_stack.pop().unwrap();
+        debug_assert!(func.name() == INIT_PROGRAM);
+        func.num_locals = self.register_counter.number_emitted();
 
-        self.functions.insert(sym.name().to_string(), sym.into());
+        self.initializer = Some(Rc::new(func));
+        // self.functions.insert(func.mangle(), func.into());
 
         self.context.scopes.pop();
 
@@ -1774,7 +1814,7 @@ impl TreeWalker for CodegenWalker {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
 
-        let (index, _) = self.strings.insert_full(node.value.clone());
+        let (index, _) = self.context.strings.insert_full(node.value.clone());
 
         push_instruction!(self, Instruction::SConst(register, index), node.span);
 
@@ -2147,6 +2187,7 @@ impl Default for CodegenWalker {
             function_stack: vec![],
             label_count: 0,
             functions: Default::default(),
+            initializer: None,
             current_result: RegisterVariant::Local(Register(0)),
             register_counter,
             global_counter,
@@ -2159,14 +2200,13 @@ impl Default for CodegenWalker {
             visit_range_results: None,
             closure_scope_stack: vec![],
             closure_arg_locations: vec![],
-            strings: IndexSet::new(),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
+    use std::{collections::VecDeque, sync::Arc};
 
     use claim::assert_some;
     use factori::create;
@@ -2210,6 +2250,7 @@ mod tests {
             ProgramFunction::new(
                 FunctionPrototypeBuilder::default()
                     .name("simul_efun")
+                    .filename(Arc::new("/secure/simul_efuns".into()))
                     .return_type(LpcType::Void)
                     .build()
                     .unwrap(),
@@ -2255,7 +2296,11 @@ mod tests {
     where
         T: AsRef<str>,
     {
-        let function = walker.functions.get_mut(name.as_ref()).unwrap();
+        let function = walker
+            .functions
+            .values()
+            .find(|f| f.name() == name.as_ref())
+            .unwrap();
         function.instructions.clone()
     }
 
@@ -2266,11 +2311,17 @@ mod tests {
     fn generate_init_instructions(prog: &str, cell_key: &mut QCellOwner) -> Vec<Instruction> {
         // walker_init_instructions(&mut walk_prog(prog))
         walk_prog(prog, cell_key)
-            .functions
-            .get_mut(INIT_PROGRAM)
+            .initializer
             .unwrap()
             .instructions
             .clone()
+    }
+
+    fn find_function<'a, K>(
+        map: &'a IndexMap<K, Rc<ProgramFunction>>,
+        name: &str,
+    ) -> Option<&'a Rc<ProgramFunction>> {
+        map.values().find(|f| f.name() == name)
     }
 
     #[test]
@@ -3099,7 +3150,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(3)), 1),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(2)),
-                    name: RegisterVariant::Local(Register(3))
+                    name: RegisterVariant::Local(Register(3)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3118,7 +3169,7 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(3))),
                 CallOther {
                     receiver: RegisterVariant::Local(Register(1)),
-                    name: RegisterVariant::Local(Register(2))
+                    name: RegisterVariant::Local(Register(2)),
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3194,6 +3245,7 @@ mod tests {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
+                .filename(Arc::new("marfin".into()))
                 .return_type(LpcType::Int(false))
                 .arity(FunctionArity::new(1))
                 .build()
@@ -3239,6 +3291,7 @@ mod tests {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
+                .filename(Arc::new("marfin".into()))
                 .return_type(LpcType::Int(false))
                 .arity(FunctionArity::new(1))
                 .build()
@@ -3283,6 +3336,7 @@ mod tests {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
+                .filename(Arc::new("marfin.c".into()))
                 .return_type(LpcType::Int(false))
                 .arity(FunctionArity::new(1))
                 .build()
@@ -3320,6 +3374,7 @@ mod tests {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("void_thing")
+                .filename(Arc::new("void_thing.c".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(1))
                 .build()
@@ -3401,6 +3456,7 @@ mod tests {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_func")
+                .filename(Arc::new("my_func.c".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(1))
                 .arg_types(vec![LpcType::String(false)])
@@ -3646,7 +3702,8 @@ mod tests {
 
             let closure = walker
                 .functions
-                .get("closure-0")
+                .values()
+                .find(|f| f.name() == "closure-0")
                 .expect("where's the closure?");
             assert_eq!(closure.num_upvalues, 0);
             assert_eq!(closure.local_variables.len(), 1);
@@ -3656,7 +3713,11 @@ mod tests {
                 &RegisterVariant::Local(Register(1))
             );
 
-            let func = walker.functions.get("create").expect("where's create()?");
+            let func = walker
+                .functions
+                .values()
+                .find(|f| f.name() == "create")
+                .expect("where's create()?");
             assert_eq!(func.num_upvalues, 1);
             assert_eq!(func.local_variables.len(), 2);
             assert_eq!(func.local_variables.first().unwrap().name, "i");
@@ -4244,10 +4305,7 @@ mod tests {
 
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
-                target: FunctionTarget::Local(
-                    FunctionName::Literal("simul_efun".into()),
-                    FunctionReceiver::Local,
-                ),
+                target: FunctionTarget::SimulEfun("simul_efun".into()),
                 arity: FunctionArity {
                     num_args: 0,
                     num_default_args: 0,
@@ -4369,16 +4427,13 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 Call {
-                    name: String::from("create"),
+                    name: String::from("create__v____pb__"),
                     namespace: CallNamespace::Local,
                 },
                 Ret,
             ];
 
-            assert_eq!(
-                walker.functions.get(INIT_PROGRAM).unwrap().instructions,
-                expected
-            );
+            assert_eq!(walker.initializer.unwrap().instructions, expected);
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
@@ -4393,7 +4448,12 @@ mod tests {
             ];
 
             assert_eq!(
-                walker.functions.get(CREATE_FUNCTION).unwrap().instructions,
+                walker
+                    .functions
+                    .values()
+                    .find(|f| f.name() == CREATE_FUNCTION)
+                    .unwrap()
+                    .instructions,
                 expected
             );
         }
@@ -4451,7 +4511,7 @@ mod tests {
                 ),
                 ClearArgs,
                 Call {
-                    name: String::from("create"),
+                    name: String::from("create__v____pb__"),
                     namespace: CallNamespace::Local,
                 },
                 Ret, // end of initialization
@@ -4839,7 +4899,9 @@ mod tests {
             let (prog, _, _) = compile_prog(code, &mut cell_key);
 
             // `closure-1` is the outer closure that refers to $1.
-            let instructions = &prog.functions["closure-1"].instructions;
+            let instructions = &find_function(&prog.functions, "closure-1")
+                .unwrap()
+                .instructions;
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(2)), 0),
                 ClearArgs,
@@ -5402,11 +5464,12 @@ mod tests {
             let program = walk_prog(code, &mut cell_key)
                 .into_program()
                 .expect("failed to compile");
-            assert_eq!(program.functions.len(), 2);
+            assert_eq!(program.functions.len(), 1);
             assert_eq!(
                 &**program
                     .functions
-                    .get("create")
+                    .values()
+                    .next()
                     .unwrap()
                     .strings
                     .get()
@@ -5429,7 +5492,7 @@ mod tests {
         let program = walk_prog(code, &mut cell_key)
             .into_program()
             .expect("failed to compile");
-        let init = program.functions.get(INIT_PROGRAM).unwrap();
+        let init = program.initializer.unwrap();
 
         assert_eq!(program.num_globals, 9);
         assert_eq!(init.num_locals, 6);
@@ -5438,23 +5501,25 @@ mod tests {
     #[test]
     fn test_combine_inits() {
         let mut cell_key = QCellOwner::new();
-        let prototype = FunctionPrototypeBuilder::default()
+        let init_prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
+            .filename(LpcPath::InGame("/grandparent.c".into()))
             .return_type(LpcType::Void)
             .build()
             .unwrap();
         let create_prototype = FunctionPrototypeBuilder::default()
             .name(CREATE_FUNCTION)
+            .filename(LpcPath::InGame("/grandparent.c".into()))
             .return_type(LpcType::Void)
             .build()
             .unwrap();
 
-        let mut grandparent_init = ProgramFunction::new(prototype.clone(), 0);
+        let mut grandparent_init = ProgramFunction::new(init_prototype, 0);
         let grandparent_init_instructions = vec![
             IConst1(RegisterVariant::Local(Register(0))),
             IConst(RegisterVariant::Local(Register(0)), 666),
             Call {
-                name: CREATE_FUNCTION.to_string(),
+                name: create_prototype.mangle(),
                 namespace: CallNamespace::Local,
             },
             Ret,
@@ -5473,24 +5538,33 @@ mod tests {
         );
         let _ = std::mem::replace(&mut grandparent_init.debug_spans, grandparent_spans);
 
+        let grandparent_create_mangle = create_prototype.mangle();
+
         let grandparent_create = ProgramFunction::new(create_prototype, 0);
 
-        let mut grandparent = Program::default();
-        grandparent
-            .functions
-            .insert(INIT_PROGRAM.to_string(), grandparent_init.into());
+        let mut grandparent = Program {
+            initializer: Some(grandparent_init.into()),
+            ..Default::default()
+        };
         grandparent
             .functions
             .insert(CREATE_FUNCTION.to_string(), grandparent_create.into());
 
-        let mut parent_init = ProgramFunction::new(prototype, 0);
+        let parent_init_prototype = FunctionPrototypeBuilder::default()
+            .name(INIT_PROGRAM)
+            .filename(LpcPath::InGame("/parent.c".into()))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+
+        let mut parent_init = ProgramFunction::new(parent_init_prototype, 0);
         let parent_init_instructions = vec![
             IConst1(RegisterVariant::Local(Register(0))),
             IConst(RegisterVariant::Local(Register(0)), 666),
             SConst(RegisterVariant::Local(Register(1)), 0),
             IConst(RegisterVariant::Local(Register(5)), 4321),
             Call {
-                name: CREATE_FUNCTION.to_string(),
+                name: grandparent_create_mangle,
                 namespace: CallNamespace::Local,
             },
             Ret,
@@ -5506,11 +5580,11 @@ mod tests {
         let _ = std::mem::replace(&mut parent_init.instructions, parent_init_instructions);
         let _ = std::mem::replace(&mut parent_init.debug_spans, parent_spans);
 
-        let mut parent = Program::default();
-        parent
-            .functions
-            .insert(INIT_PROGRAM.to_string(), parent_init.into());
-        parent.inherits.push(grandparent);
+        let parent = Program {
+            functions: grandparent.functions.clone(),
+            initializer: Some(parent_init.into()),
+            ..Default::default()
+        };
 
         let mut walker = default_walker(&mut cell_key);
         walker.context.inherits.push(parent);

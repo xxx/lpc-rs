@@ -15,13 +15,13 @@ pub mod lpc_path;
 pub mod lpc_type;
 #[allow(clippy::identity_op)]
 pub mod lpc_type_union;
+pub mod mangle;
 #[allow(clippy::identity_op)]
 pub mod pragma_flags;
 pub mod register;
 pub mod register_counter;
 pub mod serialize;
 pub mod visibility;
-pub mod mangle;
 
 /// Name of the user-overridable initializer function for objects
 pub const CREATE_FUNCTION: &str = "create";

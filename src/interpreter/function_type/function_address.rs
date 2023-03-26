@@ -31,6 +31,9 @@ pub enum FunctionAddress {
 
     /// The function being called is an efun, and requires the name.
     Efun(String),
+
+    /// The function being called is a simulated efun, and requires the name.
+    SimulEfun(String),
 }
 
 impl FunctionAddress {
@@ -40,7 +43,9 @@ impl FunctionAddress {
     pub fn function_name(&self) -> &str {
         match self {
             FunctionAddress::Local(_, x) => x.name(),
-            FunctionAddress::Dynamic(x) | FunctionAddress::Efun(x) => x,
+            FunctionAddress::Dynamic(x)
+            | FunctionAddress::Efun(x)
+            | FunctionAddress::SimulEfun(x) => x,
         }
     }
 }
@@ -51,6 +56,7 @@ impl PartialEq for FunctionAddress {
             (FunctionAddress::Local(_, x), FunctionAddress::Local(_, y)) => x == y,
             (FunctionAddress::Dynamic(x), FunctionAddress::Dynamic(y)) => x == y,
             (FunctionAddress::Efun(x), FunctionAddress::Efun(y)) => x == y,
+            (FunctionAddress::SimulEfun(x), FunctionAddress::SimulEfun(y)) => x == y,
             _ => false,
         }
     }
@@ -67,6 +73,7 @@ impl Display for FunctionAddress {
             }
             FunctionAddress::Dynamic(x) => write!(f, "dynamic::{x}"),
             FunctionAddress::Efun(x) => write!(f, "efun::{x}"),
+            FunctionAddress::SimulEfun(x) => write!(f, "simul_efun::{x}"),
         }
     }
 }
@@ -79,6 +86,7 @@ impl<'a> Keyable<'a> for FunctionAddress {
             }
             FunctionAddress::Dynamic(name) => write!(f, "dynamic::{:?}", name),
             FunctionAddress::Efun(name) => write!(f, "efun::{:?}", name),
+            FunctionAddress::SimulEfun(name) => write!(f, "simul_efun::{:?}", name),
         }
     }
 
@@ -89,6 +97,7 @@ impl<'a> Keyable<'a> for FunctionAddress {
             }
             FunctionAddress::Dynamic(name) => write!(f, "dynamic::{name}"),
             FunctionAddress::Efun(name) => write!(f, "efun::{name}"),
+            FunctionAddress::SimulEfun(name) => write!(f, "simul_efun::{name}"),
         }
     }
 
@@ -118,6 +127,9 @@ impl<'a> Keyable<'a> for FunctionAddress {
                 name == other_name
             }
             (FunctionAddress::Efun(name), FunctionAddress::Efun(other_name)) => name == other_name,
+            (FunctionAddress::SimulEfun(name), FunctionAddress::SimulEfun(other_name)) => {
+                name == other_name
+            }
             _ => false,
         }
     }
