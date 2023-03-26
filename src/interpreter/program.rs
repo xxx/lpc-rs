@@ -200,17 +200,16 @@ impl<'a> Program {
     /// ```
     pub fn listing(&self) -> Vec<String> {
         let functions = self.functions.values().sorted_unstable_by(|a, b| {
-            if a.name() == INIT_PROGRAM {
-                return Ordering::Less;
-            }
-            if b.name() == INIT_PROGRAM {
-                return Ordering::Greater;
-            }
-
             Ord::cmp(&a.name(), &b.name())
         });
 
-        functions.flat_map(|func| func.listing()).collect()
+        self.initializer
+            .as_ref()
+            .map(|init| init.listing())
+            .unwrap_or_default()
+            .into_iter()
+            .chain(functions.into_iter().flat_map(|func| func.listing()))
+            .collect()
     }
 }
 
