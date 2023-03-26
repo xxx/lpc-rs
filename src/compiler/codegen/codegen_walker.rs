@@ -609,9 +609,9 @@ impl CodegenWalker {
             // remove any calls to `create` from the inherited initializers -
             // we'll call it once at the end, if necessary.
             if calls_create(instructions) {
-                0..len - 2
+                0..len - 3 // drop ClearArgs, Call, and Ret
             } else if len > 0 && matches!(&instructions[len - 1], Instruction::Ret) {
-                0..len - 1
+                0..len - 1 // drop Ret
             } else {
                 0..len
             }
@@ -623,8 +623,8 @@ impl CodegenWalker {
              debug_spans: &mut Vec<Option<Span>>| {
                 let range = get_range(&func.instructions);
                 if calls_create(instructions) {
-                    instructions.truncate(instructions.len() - 2);
-                    debug_spans.truncate(debug_spans.len() - 2);
+                    instructions.truncate(instructions.len() - 3);
+                    debug_spans.truncate(debug_spans.len() - 3);
                 }
                 instructions.extend(func.instructions[range.clone()].iter().cloned());
                 debug_spans.extend(func.debug_spans[range].iter());
@@ -5518,6 +5518,7 @@ mod tests {
         let grandparent_init_instructions = vec![
             IConst1(RegisterVariant::Local(Register(0))),
             IConst(RegisterVariant::Local(Register(0)), 666),
+            ClearArgs,
             Call {
                 name: create_prototype.mangle(),
                 namespace: CallNamespace::Local,
@@ -5563,6 +5564,7 @@ mod tests {
             IConst(RegisterVariant::Local(Register(0)), 666),
             SConst(RegisterVariant::Local(Register(1)), 0),
             IConst(RegisterVariant::Local(Register(5)), 4321),
+            ClearArgs,
             Call {
                 name: grandparent_create_mangle,
                 namespace: CallNamespace::Local,
