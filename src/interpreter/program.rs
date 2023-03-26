@@ -77,82 +77,37 @@ impl<'a> Program {
     /// Look up a function by its name, starting from this program,
     /// and searching all of its inherited-from programs, last-declared-inherit
     /// first.
-    pub fn lookup_function<T>(
-        &self,
-        name: T,
-        _namespace: &CallNamespace,
-    ) -> Option<&Rc<ProgramFunction>>
+    pub fn lookup_function<T>(&self, name: T, ) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
-        let r = name.as_ref();
+        let function_name = name.as_ref();
         self.functions
-            .get(r)
-            .or_else(|| self.unmangled_functions.get(r))
-        // let find_in_inherit = || {
-        //     self.inherits
-        //         .iter()
-        //         .rev()
-        //         .find_map(|p| p.lookup_function(r, &CallNamespace::Local))
-        // };
-        //
-        // match namespace {
-        //     CallNamespace::Local => self.functions.get(r).or_else(self.public_functions.get(r)),
-        //     CallNamespace::Parent => find_in_inherit(),
-        //     CallNamespace::Named(ns) => self.inherit_names.get(ns).and_then(|i| {
-        //         self.inherits
-        //             .get(*i)
-        //             .and_then(|p| p.lookup_function(name, &CallNamespace::Local))
-        //     }),
-        // }
+            .get(function_name)
+            .or_else(|| self.unmangled_functions.get(function_name))
     }
 
     /// Return whether or not we have a function with this name either locally,
     /// or in any of our inherited-from parents.
-    pub fn contains_function<T>(&self, name: T, _namespace: &CallNamespace) -> bool
+    pub fn contains_function<T>(&self, name: T) -> bool
     where
         T: AsRef<str>,
     {
         let function_name = name.as_ref();
         self.functions.contains_key(function_name)
             || self.unmangled_functions.contains_key(function_name)
-
-        // let find_in_inherit = || {
-        //     self.inherits
-        //         .iter()
-        //         .rev()
-        //         .any(|p| p.contains_function(function_name, &CallNamespace::Local))
-        // };
-        //
-        // match namespace {
-        //     CallNamespace::Local => self.functions.contains_key(function_name) || find_in_inherit(),
-        //     CallNamespace::Parent => find_in_inherit(),
-        //     CallNamespace::Named(ns) => match ns.as_str() {
-        //         EFUN => EFUN_PROTOTYPES.contains_key(function_name),
-        //         ns => self
-        //             .inherit_names
-        //             .get(ns)
-        //             .and_then(|i| {
-        //                 self.inherits
-        //                     .get(*i)
-        //                     .map(|p| p.contains_function(name, &CallNamespace::Local))
-        //             })
-        //             .unwrap_or(false),
-        //     },
-        // }
     }
 
     /// Call the passed callback, passing the function reference if found.
     pub fn with_function<F, T>(
         &self,
         name: &str,
-        namespace: &CallNamespace,
         callback: F,
     ) -> Option<T>
     where
         F: FnOnce(&Rc<ProgramFunction>) -> T,
     {
-        self.lookup_function(name, namespace).map(callback)
+        self.lookup_function(name).map(callback)
     }
 
     /// Get the directory of this program. Used for clone_object, etc.

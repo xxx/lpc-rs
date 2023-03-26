@@ -1596,7 +1596,7 @@ impl TreeWalker for CodegenWalker {
             if_chain! {
                 if let Some(se) = &self.context.simul_efuns;
                 let simul_efuns = se.ro(cell_key);
-                if let Some(prototype) = simul_efuns.as_ref().lookup_function(node.name.as_str(), &CallNamespace::Local);
+                if let Some(prototype) = simul_efuns.as_ref().lookup_function(node.name.as_str());
                 then {
                     target = FunctionTarget::SimulEfun(node.name.clone());
                     arity = prototype.arity();

@@ -846,7 +846,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let func = {
             let borrowed = process.ro(cell_key);
 
-            let function = borrowed.as_ref().lookup_function(name, namespace);
+            let function = borrowed.as_ref().lookup_function(name);
             if let Some(func) = function {
                 func.clone()
             } else {
@@ -854,7 +854,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     // See if there is a simul efun with this name
                     if let Some(func) = task_context.simul_efuns();
                     let b = func.ro(cell_key);
-                    if let Some(func) = b.as_ref().lookup_function(name, &CallNamespace::Local);
+                    if let Some(func) = b.as_ref().lookup_function(name);
                     then {
                         func.clone()
                     } else {
@@ -917,7 +917,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 .process
                 .ro(cell_key)
                 .as_ref()
-                .contains_function(name, namespace)
+                .contains_function(name)
                 || namespace.as_str() == EFUN);
 
         trace!("pushing new frame");
@@ -994,7 +994,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let cell = try_extract_value!(*b, LpcValue::Object);
                     let proc = cell.ro(cell_key);
                     proc.as_ref()
-                        .lookup_function(name, &CallNamespace::Local)
+                        .lookup_function(name)
                         .map(|func| (cell.clone(), func.clone()))
                 };
 
@@ -1022,7 +1022,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     return Err(self.runtime_bug("simul_efun called without simul_efuns"));
                 };
 
-                let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name, &CallNamespace::Local) else {
+                let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name) else {
                     return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
                 };
 
@@ -1241,7 +1241,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     receiver_ref,
                     function_name,
                     task_context,
-                    &CallNamespace::Local,
                     cell_key,
                 );
 
@@ -1258,9 +1257,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             let function = receiver
                                 .ro(cell_key)
                                 .as_ref()
-                                // TODO: namespace needs to be made available to this
-                                // instruction
-                                .lookup_function(function_name, &CallNamespace::Local)
+                                .lookup_function(function_name)
                                 .unwrap()
                                 .clone();
 
@@ -1429,10 +1426,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let frame = self.stack.current_frame()?;
                 let proc_ref = &frame.process;
                 let borrowed_proc = proc_ref.ro(cell_key);
-                // look in the Local namespace first
-                let func = borrowed_proc
-                    .as_ref()
-                    .lookup_function(&*s, &CallNamespace::Local);
+                let func = borrowed_proc.as_ref().lookup_function(&*s);
                 match func {
                     Some(program_function) => {
                         FunctionAddress::Local(proc, program_function.clone())
@@ -1443,7 +1437,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                             // TODO: This shouldn't be the case now.
                             if let Some(rc) = task_context.simul_efuns();
                             let b = rc.ro(cell_key);
-                            if let Some(func) = b.as_ref().lookup_function(&*s, &CallNamespace::Local);
+                            if let Some(func) = b.as_ref().lookup_function(&*s);
                             then {
                                 FunctionAddress::Local(proc, func.clone())
                             } else {
@@ -1727,7 +1721,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         receiver_ref: &LpcRef,
         name: &LpcString,
         context: &TaskContext,
-        namespace: &CallNamespace,
         cell_key: &QCellOwner,
     ) -> Option<Rc<QCell<Process>>> {
         let process = match receiver_ref {
@@ -1760,7 +1753,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         if process
             .ro(cell_key)
             .as_ref()
-            .contains_function(name, namespace)
+            .contains_function(name)
         {
             Some(process)
         } else {

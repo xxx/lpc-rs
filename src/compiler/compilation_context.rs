@@ -118,7 +118,7 @@ impl CompilationContext {
             // look up in reverse, so later declarations override earlier ones
             self.inherits.iter().rev().find_map(|inherit| {
                 inherit
-                    .lookup_function(r, &CallNamespace::Local)
+                    .lookup_function(r)
                     .map(|f| &f.prototype)
             })
         };
@@ -130,7 +130,7 @@ impl CompilationContext {
                 EFUN => EFUN_PROTOTYPES.get(r),
                 ns => self.inherit_names.get(ns).and_then(|i| {
                     self.inherits.get(*i).and_then(|p| {
-                        p.lookup_function(name, &CallNamespace::Local)
+                        p.lookup_function(name)
                             .map(|f| &f.prototype)
                     })
                 }),
@@ -166,7 +166,7 @@ impl CompilationContext {
                         .and_then(|rc| {
                             rc.ro(cell_key)
                                 .as_ref()
-                                .lookup_function(nm, namespace)
+                                .lookup_function(nm)
                                 .map(|f| FunctionLike::from(f.clone()))
                         })
                         .or_else(|| EFUN_PROTOTYPES.get(nm).map(FunctionLike::from))
@@ -192,7 +192,7 @@ impl CompilationContext {
             self.inherits
                 .iter()
                 .rev()
-                .any(|p| p.contains_function(name, &CallNamespace::Local))
+                .any(|p| p.contains_function(name))
         };
 
         match namespace {
@@ -208,7 +208,7 @@ impl CompilationContext {
                     .and_then(|i| {
                         self.inherits
                             .get(*i)
-                            .map(|p| p.contains_function(name, &CallNamespace::Local))
+                            .map(|p| p.contains_function(name))
                     })
                     .unwrap_or(false),
             },
@@ -235,7 +235,7 @@ impl CompilationContext {
             return self
                 .simul_efuns
                 .as_ref()
-                .map(|rc| rc.ro(cell_key).as_ref().contains_function(name, namespace))
+                .map(|rc| rc.ro(cell_key).as_ref().contains_function(name))
                 .unwrap_or(false)
                 || EFUN_PROTOTYPES.contains_key(name);
             // return EFUN_PROTOTYPES.contains_key(name);
