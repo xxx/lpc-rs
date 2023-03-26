@@ -994,15 +994,13 @@ impl TreeWalker for CodegenWalker {
                             ).with_span(node.span));
                         };
 
-                        let name = if func.is_efun() {
-                            node.name.clone()
+                        if func.is_efun() {
+                            Instruction::CallEfun(node.name.clone())
                         } else {
-                            func.mangle()
-                        };
-
-                        Instruction::Call {
-                            name,
-                            namespace: node.namespace.clone(),
+                            Instruction::Call {
+                                name: func.mangle(),
+                                namespace: node.namespace.clone(),
+                            }
                         }
                     }
                 }
@@ -2816,10 +2814,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2830,10 +2825,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -2883,10 +2875,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2897,10 +2886,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("for-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -2954,10 +2940,7 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2968,10 +2951,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("do-while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
@@ -3028,25 +3008,16 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(2)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("switch-end_2".into()),
                 SConst(RegisterVariant::Local(Register(3)), 1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(3))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 SConst(RegisterVariant::Local(Register(4)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("switch-end_2".into()),
                 IConst(RegisterVariant::Local(Register(5)), 666),
                 EqEq(
@@ -3119,10 +3090,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), -1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3339,9 +3307,11 @@ mod tests {
                 .filename(Arc::new("marfin.c".into()))
                 .return_type(LpcType::Int(false))
                 .arity(FunctionArity::new(1))
+                .span(Some(Span::new(0, 0..0)))
                 .build()
                 .unwrap();
 
+            let mangled = prototype.mangle();
             context
                 .function_prototypes
                 .insert("marfin".into(), prototype);
@@ -3356,7 +3326,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 Call {
-                    name: String::from("marfin"),
+                    name: mangled,
                     namespace: CallNamespace::Local,
                 },
                 RegCopy(
@@ -3377,9 +3347,11 @@ mod tests {
                 .filename(Arc::new("void_thing.c".into()))
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(1))
+                .span(Some(Span::new(0, 0..0)))
                 .build()
                 .unwrap();
 
+            let mangled = prototype.mangle();
             context
                 .function_prototypes
                 .insert("void_thing".into(), prototype);
@@ -3394,7 +3366,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 Call {
-                    name: String::from("void_thing"),
+                    name: mangled,
                     namespace: CallNamespace::Local,
                 },
             ];
@@ -3415,10 +3387,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: String::from("clone_object"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("clone_object".into()),
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3441,10 +3410,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3461,9 +3427,11 @@ mod tests {
                 .arity(FunctionArity::new(1))
                 .arg_types(vec![LpcType::String(false)])
                 .flags(FunctionFlags::default().with_ellipsis(true))
+                .span(Some(Span::new(0, 0..0)))
                 .build()
                 .unwrap();
 
+            let mangled = prototype.mangle();
             context
                 .function_prototypes
                 .insert("my_func".into(), prototype);
@@ -3482,7 +3450,7 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(2))),
                 Arg(RegisterVariant::Local(Register(3))),
                 Call {
-                    name: "my_func".into(),
+                    name: mangled,
                     namespace: CallNamespace::Local,
                 },
             ];
@@ -3523,10 +3491,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 127983),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3620,10 +3585,7 @@ mod tests {
                     ),
                     ClearArgs,
                     Arg(RegisterVariant::Local(Register(3))),
-                    Call {
-                        name: "dump".into(),
-                        namespace: CallNamespace::Local,
-                    },
+                    CallEfun("dump".into()),
                     Ret
                 ]
             );
@@ -3758,10 +3720,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3772,10 +3731,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                                CallEfun("dump".into()),
                 Jmp("while-start_1".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -3825,10 +3781,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3839,10 +3792,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                                CallEfun("dump".into()),
                 Jmp("for-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -3895,10 +3845,7 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3909,10 +3856,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                Call {
-                    name: "dump".into(),
-                    namespace: CallNamespace::Local,
-                },
+                                CallEfun("dump".into()),
                 Jmp("do-while-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
@@ -4049,10 +3993,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 IConst(RegisterVariant::Local(Register(3)), 777),
                 EqEq(
@@ -4134,10 +4075,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(1)), "for-end_1".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 IConst1(RegisterVariant::Local(Register(2))),
                 ISub(
                     RegisterVariant::Local(Register(1)),
@@ -4369,18 +4307,12 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("if-end_1".into()),
                 SConst(RegisterVariant::Local(Register(5)), 1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(5))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4440,10 +4372,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(2)), 9),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Ret, // Automatically added due to no explicit return
             ];
 
@@ -4907,10 +4836,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
                 Arg(RegisterVariant::Upvalue(Register(0))), /* This is what we're really testing for */
-                Call {
-                    name: "dump".to_string(),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 // ...etc. We don't care about the rest.
             ];
             assert_eq!(&instructions[0..=4], expected);
@@ -5189,10 +5115,7 @@ mod tests {
                     SConst(RegisterVariant::Local(Register(1)), 0),
                     ClearArgs,
                     Arg(RegisterVariant::Local(Register(1))),
-                    Call {
-                        name: String::from("clone_object"),
-                        namespace: CallNamespace::Local,
-                    },
+                    CallEfun("clone_object".into()),
                     RegCopy(
                         RegisterVariant::Local(Register(0)),
                         RegisterVariant::Local(Register(2))
@@ -5386,10 +5309,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                Call {
-                    name: String::from("dump"),
-                    namespace: CallNamespace::Local,
-                },
+                CallEfun("dump".into()),
                 Jmp("while-start_0".into()),
             ];
 

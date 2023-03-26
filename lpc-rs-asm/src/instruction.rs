@@ -82,6 +82,9 @@ pub enum Instruction {
         namespace: CallNamespace,
     },
 
+    /// Call an Efun.
+    CallEfun(String),
+
     /// Call a function pointer, located in `location`
     CallFp { location: RegisterVariant },
 
@@ -291,6 +294,9 @@ impl Display for Instruction {
             }
             Instruction::Call { name, namespace } => {
                 write!(f, "call {name}, {namespace}")
+            }
+            Instruction::CallEfun(name) => {
+                write!(f, "callefun {name}")
             }
             Instruction::CallFp { location } => {
                 write!(f, "callfp {location}")

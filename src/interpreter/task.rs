@@ -395,6 +395,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call { name, namespace } => {
                 self.handle_call(&name, &namespace, task_context, cell_key)?;
             }
+            Instruction::CallEfun(ref name) => {
+                // TODO: find a lighter way to call efuns, that doesn't require a process or program function
+                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                let pf = ProgramFunction::new(prototype.clone(), 0);
+                let process = self.stack.current_frame()?.process.clone();
+                let new_frame = self.prepare_new_call_frame(task_context, cell_key, process, pf.into())?;
+
+                self.stack.push(new_frame)?;
+
+                self.prepare_and_call_efun(name, task_context, cell_key)?;
+            }
             Instruction::CallFp { location } => {
                 self.handle_call_fp(task_context, location, cell_key)?;
             }
@@ -840,7 +851,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let num_args = self.args.len();
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
@@ -872,7 +882,30 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
         trace!("Calling function: {}", func);
+        let function_is_efun = EFUN_PROTOTYPES.contains_key(name)
+            && (!current_frame
+            .process
+            .ro(cell_key)
+            .as_ref()
+            .contains_function(name)
+            || namespace.as_str() == EFUN);
 
+        let new_frame = self.prepare_new_call_frame(task_context, cell_key, process, func)?;
+
+        trace!("pushing new frame");
+
+        self.stack.push(new_frame)?;
+
+        if function_is_efun {
+            return self.prepare_and_call_efun(name, task_context, cell_key);
+        }
+
+        Ok(())
+    }
+
+    /// Prepare and populate a new [`CallFrame`] for a call to a static function.
+    fn prepare_new_call_frame(&mut self, task_context: &TaskContext, cell_key: &mut QCellOwner, process: Rc<QCell<Process>>, func: Rc<ProgramFunction>) -> Result<CallFrame> {
+        let num_args = self.args.len();
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
             func.clone(),
@@ -889,8 +922,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             let mut next_index = 1;
             for (i, arg) in self.args.iter().enumerate() {
                 let target_location = func.arg_locations.get(i).copied().unwrap_or_else(|| {
-                    // This should only be reached by variables that will go
-                    // into an ellipsis function's argv.
+                    // This should only be reached by efun calls, or variables that will go
+                    // into an ellipsis function's `argv`.
                     Register(next_index).as_local()
                 });
                 if let RegisterVariant::Local(r) = target_location {
@@ -912,23 +945,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let function_is_efun = EFUN_PROTOTYPES.contains_key(name)
-            && (!current_frame
-                .process
-                .ro(cell_key)
-                .as_ref()
-                .contains_function(name)
-                || namespace.as_str() == EFUN);
-
-        trace!("pushing new frame");
-
-        self.stack.push(new_frame)?;
-
-        if function_is_efun {
-            return self.prepare_and_call_efun(name, task_context, cell_key);
-        }
-
-        Ok(())
+        Ok(new_frame)
     }
 
     #[instrument(skip_all)]
@@ -1176,8 +1193,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()>
-// where
-    //     'pool: 'task,
     {
         let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
 
