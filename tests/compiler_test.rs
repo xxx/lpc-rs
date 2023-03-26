@@ -8,13 +8,15 @@ use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     extract_value,
-    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
     util::keyable::Keyable,
 };
+use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
 
-use crate::support::run_prog;
+use crate::support::{run_prog, test_config};
 
 // #[ctor::ctor]
 // fn init() {
@@ -242,4 +244,83 @@ fn test_positional_vars_into_argv() {
 
     let (_task, ctx) = run_prog(code, &mut cell_key);
     assert_eq!(&LpcRef::Int(777), ctx.result().unwrap());
+}
+
+#[test]
+fn test_inherited_create_called_when_not_overridden() {
+    let mut cell_key = QCellOwner::new();
+    let mut vm = Vm::new(test_config(), &cell_key);
+    let grandparent = indoc! { r#"
+        void create() {
+            dump("grandparent create");
+        }
+    "# };
+
+    let parent = indoc! { r#"
+        inherit "test_grandparent";
+
+        void create() {
+            dump("parent create");
+        }
+    "# };
+    let _parent2 = indoc! { r#"
+        inherit "test_grandparent";
+
+        void create() {
+            dump("parent2 create"); // this should be called because child inherits it last.
+        }
+    "# };
+
+    let child = indoc! { r#"
+        inherit "test_parent";
+        inherit "test_parent2";
+    "# };
+
+    let _grandparent_ctx = vm
+        .initialize_string(grandparent, "test_grandparent.c", &mut cell_key)
+        .map_err(|e| {
+            e.emit_diagnostics();
+            e
+        })
+        .unwrap();
+    let _parent_ctx = vm
+        .initialize_string(parent, "test_parent.c", &mut cell_key)
+        .map_err(|e| {
+            e.emit_diagnostics();
+            e
+        })
+        .unwrap();
+    let _parent2_ctx = vm
+        .initialize_string(parent, "test_parent2.c", &mut cell_key)
+        .map_err(|e| {
+            e.emit_diagnostics();
+            e
+        })
+        .unwrap();
+    let child_ctx = vm
+        .initialize_string(child, "test_child.c", &mut cell_key)
+        .map_err(|e| {
+            e.emit_diagnostics();
+            e
+        })
+        .unwrap();
+
+    let init = child_ctx
+        .process()
+        .ro(&cell_key)
+        .program
+        .initializer
+        .clone()
+        .unwrap();
+
+    let expected = vec![
+        Instruction::Call {
+            name: "create__v__/test_parent2.c__pb__".to_string(),
+            namespace: CallNamespace::Local,
+        },
+        Instruction::Ret,
+    ];
+
+    let inst = &init.instructions;
+    assert_eq!(&inst[(inst.len() - 2)..], &expected);
 }

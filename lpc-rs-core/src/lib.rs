@@ -1,5 +1,4 @@
 use decorum::Total;
-use fs_err as fs;
 use indextree::NodeId;
 
 pub mod call_namespace;

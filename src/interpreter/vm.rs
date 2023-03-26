@@ -163,11 +163,11 @@ impl Vm {
         P: AsRef<Path>,
         S: AsRef<str>,
     {
-        let f = LpcPath::new_in_game(filename.as_ref(), "/", &self.config.lib_dir);
-        self.config.validate_in_game_path(&f, None)?;
+        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &self.config.lib_dir);
+        self.config.validate_in_game_path(&lpc_path, None)?;
 
         self.with_compiler(cell_key, |compiler, cell_key| {
-            compiler.compile_string(f, code, cell_key)
+            compiler.compile_string(lpc_path, code, cell_key)
         })
         .and_then(|program| self.create_and_initialize_task(program, cell_key))
         .map_err(|e| {

@@ -5,22 +5,22 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use lpc_rs_core::{
     convert_escapes,
     lpc_path::LpcPath,
-    LpcInt,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    LpcInt,
 };
-use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, LpcError, Result, span::Span};
+use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result};
+use lpc_rs_utils::read_lpc_file;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use tracing::{instrument, trace};
-use lpc_rs_utils::read_lpc_file;
 
 use crate::{
     compiler::{
         ast::binary_op_node::BinaryOperation,
         compilation_context::CompilationContext,
         lexer::{
-            LexWrapper,
-            logos_token::{IntToken, StringToken}, Spanned, Token, TokenVecWrapper,
+            logos_token::{IntToken, StringToken},
+            LexWrapper, Spanned, Token, TokenVecWrapper,
         },
         preprocessor::preprocessor_node::PreprocessorNode,
     },

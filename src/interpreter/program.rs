@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    cmp::Ordering,
     collections::HashMap,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
@@ -11,9 +10,7 @@ use std::{
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::{
-    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, INIT_PROGRAM,
-};
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
@@ -199,9 +196,10 @@ impl<'a> Program {
     /// }
     /// ```
     pub fn listing(&self) -> Vec<String> {
-        let functions = self.functions.values().sorted_unstable_by(|a, b| {
-            Ord::cmp(&a.name(), &b.name())
-        });
+        let functions = self
+            .functions
+            .values()
+            .sorted_unstable_by(|a, b| Ord::cmp(&a.name(), &b.name()));
 
         self.initializer
             .as_ref()
