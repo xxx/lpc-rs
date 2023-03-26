@@ -76,17 +76,30 @@ impl Vm {
     /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
     /// * `Err(LpcError)` - If there was an error loading the master object or simul_efun file.
     pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<TaskContext> {
-        if let Some(path) = &self.config.simul_efun_file {
-            let simul_efun_path = LpcPath::new_in_game(path, "/", &self.config.lib_dir);
-            if let Err(e) = self.initialize_file(&simul_efun_path, cell_key) {
-                e.emit_diagnostics();
-                return Err(e);
-            }
+        if let Some(Err(e)) = self.initialize_simul_efuns(cell_key) {
+            e.emit_diagnostics();
+            return Err(e);
         }
 
         let master_path =
             LpcPath::new_in_game(&self.config.master_object, "/", &self.config.lib_dir);
         self.initialize_file(&master_path, cell_key)
+    }
+
+    /// Initialize the simulated efuns file, if it is configured.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Ok(TaskContext))` - The [`TaskContext`] for the simul_efun file
+    /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
+    /// * `None` - If there is no simul_efun file configured
+    pub fn initialize_simul_efuns(&mut self, cell_key: &mut QCellOwner) -> Option<Result<TaskContext>> {
+        let Some(path) = &self.config.simul_efun_file else {
+            return None
+        };
+
+        let simul_efun_path = LpcPath::new_in_game(path, "/", &self.config.lib_dir);
+        Some(self.initialize_file(&simul_efun_path, cell_key))
     }
 
     /// Do a full garbage collection cycle.

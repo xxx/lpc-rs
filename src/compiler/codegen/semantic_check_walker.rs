@@ -209,7 +209,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         let lookup = self.context.scopes.lookup(&node.name);
         // Check function existence.
-        if !self.context.contains_function_complete(node.name.as_str(), &CallNamespace::default(), cell_key)
+        if !self.context.contains_function_complete(node.name.as_str(), &CallNamespace::Local, cell_key)
             // check for function pointers & closures
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {

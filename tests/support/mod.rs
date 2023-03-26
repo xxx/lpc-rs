@@ -8,6 +8,7 @@ use lpc_rs::{
 };
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
+use lpc_rs_core::lpc_path::LpcPath;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -22,28 +23,40 @@ macro_rules! assert_regex {
     };
 }
 
+pub fn test_config_builder() -> ConfigBuilder {
+    let mut builder = ConfigBuilder::default();
+    builder.lib_dir("./tests/fixtures/code");
+    builder
+}
+
 pub fn test_config() -> Config {
-    ConfigBuilder::default()
-        .lib_dir("./tests/fixtures/code")
+    test_config_builder()
         .build()
         .unwrap()
 }
 
-pub fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
-    let config = test_config();
+pub fn compile_prog_custom<P>(code: &str, path: P, config: Config, cell_key: &mut QCellOwner) -> Program
+where
+    P: Into<LpcPath>
+{
     let compiler = CompilerBuilder::default().config(config).build().unwrap();
     compiler
-        .compile_string("/my_file.c", code, cell_key)
+        .compile_string(path, code, cell_key)
         .expect("Failed to compile.")
 }
 
-pub fn run_prog<'a>(
+pub fn run_prog_custom<'a, P>(
     code: &str,
+    path: P,
+    config: Config,
     cell_key: &mut QCellOwner,
-) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext)
+where
+    P: Into<LpcPath>
+{
     let upvalues = cell_key.cell(GcBank::default());
     let mut task = Task::new(Memory::default(), upvalues);
-    let program = compile_prog(code, cell_key);
+    let program = compile_prog_custom(code, path, config, cell_key);
     let ctx = task
         .initialize_program(
             program,
@@ -57,4 +70,11 @@ pub fn run_prog<'a>(
         });
 
     (task, ctx)
+}
+
+pub fn run_prog<'a>(
+    code: &str,
+    cell_key: &mut QCellOwner,
+) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+    run_prog_custom(code, "/my_file.c", test_config(), cell_key)
 }

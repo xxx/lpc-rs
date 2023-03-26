@@ -5,18 +5,13 @@ use std::rc::Rc;
 use claim::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
-use lpc_rs::{
-    compiler::{Compiler, CompilerBuilder},
-    extract_value,
-    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
-    util::keyable::Keyable,
-};
+use lpc_rs::{compiler::{Compiler, CompilerBuilder}, extract_value, interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm}, util::keyable::Keyable};
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
 
-use crate::support::{run_prog, test_config};
+use crate::support::{run_prog, test_config, test_config_builder};
 
 // #[ctor::ctor]
 // fn init() {
@@ -323,4 +318,24 @@ fn test_inherited_create_called_when_not_overridden() {
 
     let inst = &init.instructions;
     assert_eq!(&inst[(inst.len() - 2)..], &expected);
+}
+
+#[test]
+fn test_calls_simul_efuns() {
+    let mut cell_key = QCellOwner::new();
+
+    let config = test_config_builder().simul_efun_file("/secure/simul_efuns.c").build().unwrap();
+
+    let mut vm = Vm::new(config, &cell_key);
+    vm.initialize_simul_efuns(&mut cell_key).expect("no simul efuns?").expect("init error");
+
+    let code = indoc! { r##"
+        void create() {
+            simul_efun("cool!");
+        }
+    "## };
+    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+
+    let val = ctx.result().unwrap();
+    assert_eq!("\"this is a simul_efun: cool!\"", val.to_string());
 }

@@ -32,7 +32,6 @@ pub struct ObjectSpace {
 
     /// Our configuration
     config: Rc<Config>,
-    // TODO: store simul_efuns here instead of in the processes?
 }
 
 fn processes_debug(
