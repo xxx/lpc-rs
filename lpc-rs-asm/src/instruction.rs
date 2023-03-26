@@ -78,8 +78,7 @@ pub enum Instruction {
 
     /// Call a function
     Call {
-        name: String,
-        namespace: CallNamespace,
+        name: String
     },
 
     /// Call an Efun.
@@ -292,8 +291,8 @@ impl Display for Instruction {
             Instruction::CatchStart(r1, label) => {
                 write!(f, "catchstart {r1}, {label}")
             }
-            Instruction::Call { name, namespace } => {
-                write!(f, "call {name}, {namespace}")
+            Instruction::Call { name } => {
+                write!(f, "call {name}")
             }
             Instruction::CallEfun(name) => {
                 write!(f, "callefun {name}")

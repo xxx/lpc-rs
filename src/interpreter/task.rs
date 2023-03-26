@@ -392,8 +392,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call { name, namespace } => {
-                self.handle_call(&name, &namespace, task_context, cell_key)?;
+            Instruction::Call { name } => {
+                self.handle_call(&name, task_context, cell_key)?;
             }
             Instruction::CallEfun(ref name) => {
                 // TODO: find a lighter way to call efuns, that doesn't require a process or program function
@@ -847,7 +847,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     fn handle_call<'task>(
         &mut self,
         name: &str,
-        namespace: &CallNamespace,
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
@@ -881,24 +880,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 }
             }
         };
-        trace!("Calling function: {}", func);
-        let function_is_efun = EFUN_PROTOTYPES.contains_key(name)
-            && (!current_frame
-            .process
-            .ro(cell_key)
-            .as_ref()
-            .contains_function(name)
-            || namespace.as_str() == EFUN);
 
         let new_frame = self.prepare_new_call_frame(task_context, cell_key, process, func)?;
 
         trace!("pushing new frame");
 
         self.stack.push(new_frame)?;
-
-        if function_is_efun {
-            return self.prepare_and_call_efun(name, task_context, cell_key);
-        }
 
         Ok(())
     }

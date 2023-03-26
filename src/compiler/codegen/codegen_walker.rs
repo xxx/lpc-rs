@@ -997,10 +997,7 @@ impl TreeWalker for CodegenWalker {
                         if func.is_efun() {
                             Instruction::CallEfun(node.name.clone())
                         } else {
-                            Instruction::Call {
-                                name: func.mangle(),
-                                namespace: node.namespace.clone(),
-                            }
+                            Instruction::Call { name: func.mangle() }
                         }
                     }
                 }
@@ -3327,7 +3324,6 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: mangled,
-                    namespace: CallNamespace::Local,
                 },
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
@@ -3367,7 +3363,6 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 Call {
                     name: mangled,
-                    namespace: CallNamespace::Local,
                 },
             ];
 
@@ -3451,7 +3446,6 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(3))),
                 Call {
                     name: mangled,
-                    namespace: CallNamespace::Local,
                 },
             ];
 
@@ -4360,7 +4354,6 @@ mod tests {
                 ClearArgs,
                 Call {
                     name: String::from("create__v____pb__"),
-                    namespace: CallNamespace::Local,
                 },
                 Ret,
             ];
@@ -4441,7 +4434,6 @@ mod tests {
                 ClearArgs,
                 Call {
                     name: String::from("create__v____pb__"),
-                    namespace: CallNamespace::Local,
                 },
                 Ret, // end of initialization
             ];
@@ -5441,7 +5433,6 @@ mod tests {
             ClearArgs,
             Call {
                 name: create_prototype.mangle(),
-                namespace: CallNamespace::Local,
             },
             Ret,
         ];
@@ -5487,7 +5478,6 @@ mod tests {
             ClearArgs,
             Call {
                 name: grandparent_create_mangle,
-                namespace: CallNamespace::Local,
             },
             Ret,
         ];
