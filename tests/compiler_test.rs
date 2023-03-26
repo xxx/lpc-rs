@@ -309,9 +309,7 @@ fn test_inherited_create_called_when_not_overridden() {
         .unwrap();
 
     let expected = vec![
-        Instruction::Call {
-            name: "create__v__/test_parent2.c__pb__".to_string(),
-        },
+        Instruction::Call("create__v__/test_parent2.c__pb__".to_string()),
         Instruction::Ret,
     ];
 

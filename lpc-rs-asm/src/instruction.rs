@@ -77,9 +77,7 @@ pub enum Instruction {
     BitwiseNot(RegisterVariant, RegisterVariant),
 
     /// Call a function
-    Call {
-        name: String
-    },
+    Call(String),
 
     /// Call an Efun.
     CallEfun(String),
@@ -291,7 +289,7 @@ impl Display for Instruction {
             Instruction::CatchStart(r1, label) => {
                 write!(f, "catchstart {r1}, {label}")
             }
-            Instruction::Call { name } => {
+            Instruction::Call(name) => {
                 write!(f, "call {name}")
             }
             Instruction::CallEfun(name) => {

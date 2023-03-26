@@ -392,8 +392,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call { name } => {
-                self.handle_call(&name, task_context, cell_key)?;
+            Instruction::Call(ref name) => {
+                self.handle_call(name, task_context, cell_key)?;
             }
             Instruction::CallEfun(ref name) => {
                 // TODO: find a lighter way to call efuns, that doesn't require a process or program function

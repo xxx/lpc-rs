@@ -594,7 +594,7 @@ impl CodegenWalker {
             debug_assert!(CREATE_FUNCTION == "create"); // have to hardcode this below in the starts_with check
             if_chain! {
                 if len > 1;
-                if let Instruction::Call { name, .. } = &instructions[len - 2];
+                if let Instruction::Call(name)= &instructions[len - 2];
                 if name.starts_with("create__") && matches!(&instructions[len - 1], Instruction::Ret);
                 then {
                     true
@@ -997,7 +997,7 @@ impl TreeWalker for CodegenWalker {
                         if func.is_efun() {
                             Instruction::CallEfun(node.name.clone())
                         } else {
-                            Instruction::Call { name: func.mangle() }
+                            Instruction::Call(func.mangle())
                         }
                     }
                 }
@@ -3322,9 +3322,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: mangled,
-                },
+                Call(mangled),
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3361,9 +3359,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                Call {
-                    name: mangled,
-                },
+                Call(mangled),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3444,9 +3440,7 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 Arg(RegisterVariant::Local(Register(2))),
                 Arg(RegisterVariant::Local(Register(3))),
-                Call {
-                    name: mangled,
-                },
+                Call(mangled),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4352,9 +4346,7 @@ mod tests {
 
             let expected = vec![
                 ClearArgs,
-                Call {
-                    name: String::from("create__v____pb__"),
-                },
+                Call(String::from("create__v____pb__")),
                 Ret,
             ];
 
@@ -4432,9 +4424,7 @@ mod tests {
                     RegisterVariant::Global(Register(0)),
                 ),
                 ClearArgs,
-                Call {
-                    name: String::from("create__v____pb__"),
-                },
+                Call(String::from("create__v____pb__")),
                 Ret, // end of initialization
             ];
 
@@ -5431,9 +5421,7 @@ mod tests {
             IConst1(RegisterVariant::Local(Register(0))),
             IConst(RegisterVariant::Local(Register(0)), 666),
             ClearArgs,
-            Call {
-                name: create_prototype.mangle(),
-            },
+            Call(create_prototype.mangle()),
             Ret,
         ];
         let grandparent_spans = vec![
@@ -5476,9 +5464,7 @@ mod tests {
             SConst(RegisterVariant::Local(Register(1)), 0),
             IConst(RegisterVariant::Local(Register(5)), 4321),
             ClearArgs,
-            Call {
-                name: grandparent_create_mangle,
-            },
+            Call(grandparent_create_mangle),
             Ret,
         ];
         let parent_spans = vec![
