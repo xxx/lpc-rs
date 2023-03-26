@@ -332,7 +332,44 @@ fn test_calls_simul_efuns() {
         }
     "## };
     let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
-
     let val = ctx.result().unwrap();
     assert_eq!("\"this is a simul_efun: cool!\"", val.to_string());
+
+
+    let code = indoc! { r##"
+        string simul_efun(string s) {
+            return "local simul_efun: " + s;
+        }
+
+        void create() {
+            simul_efun("cool!");
+        }
+    "## };
+    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let val = ctx.result().unwrap();
+    assert_eq!("\"local simul_efun: cool!\"", val.to_string());
+
+    let code = indoc! { r##"
+        void create() {
+            function f = &simul_efun("pointed!");
+            f();
+        }
+    "## };
+    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let val = ctx.result().unwrap();
+    assert_eq!("\"this is a simul_efun: pointed!\"", val.to_string());
+
+    let code = indoc! { r##"
+        string simul_efun(string s) {
+            return "local simul_efun: " + s;
+        }
+
+        void create() {
+            function f = &simul_efun("pointed!");
+            f();
+        }
+    "## };
+    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let val = ctx.result().unwrap();
+    assert_eq!("\"local simul_efun: pointed!\"", val.to_string());
 }
