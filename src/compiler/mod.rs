@@ -11,12 +11,13 @@ use compilation_context::CompilationContext;
 use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Spanned, Token, TokenVecWrapper};
-use lpc_rs_core::{lpc_path::LpcPath, read_lpc_file};
-use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::{LpcError, LpcErrorSeverity, Result, span::Span};
 use lpc_rs_utils::config::Config;
 use preprocessor::Preprocessor;
 use qcell::{QCell, QCellOwner};
 use tracing::instrument;
+use lpc_rs_utils::read_lpc_file;
 
 use crate::{
     compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
