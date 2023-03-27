@@ -5,11 +5,12 @@ use std::{
 
 use itertools::Itertools;
 use lpc_rs_core::{
-    function::FunctionTarget, function_arity::FunctionArity, LpcFloat, LpcInt,
-    register::RegisterVariant,
+    function::FunctionTarget, function_arity::FunctionArity, register::RegisterVariant, LpcFloat,
+    LpcInt,
 };
 use serde::{Deserialize, Serialize};
-use crate::jump_location::{Address, JumpLocation, Label};
+
+use crate::jump_location::{Address, JumpLocation};
 
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la
@@ -54,7 +55,7 @@ pub enum Instruction {
     /// Start a block of instructions that can catch errors and continue
     /// execution. Store the error in x.0, and jump to x.1 to continue
     /// execution
-    CatchStart(RegisterVariant, Label),
+    CatchStart(RegisterVariant, Address),
 
     /// Clear the [`Task`]'s `args` vector, in preparation for a new call
     ClearArgs,

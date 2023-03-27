@@ -2,18 +2,21 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_asm::{
+    instruction::Instruction,
+    jump_location::{Address, Label},
+};
 use lpc_rs_core::{
     call_namespace::CallNamespace,
-    CREATE_FUNCTION,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
-    INIT_PROGRAM,
     lpc_type::LpcType,
     mangle::Mangle,
-    register::{Register, RegisterVariant}, register_counter::RegisterCounter, ScopeId,
+    register::{Register, RegisterVariant},
+    register_counter::RegisterCounter,
+    ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
 };
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::{
     function_prototype::FunctionPrototypeBuilder,
     program_function::{ProgramFunction, ProgramFunctionBuilder},
@@ -22,7 +25,6 @@ use lpc_rs_function_support::{
 use lpc_rs_utils::string::closure_arg_number;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
-use lpc_rs_asm::jump_location::{Address, Label};
 use tree_walker::TreeWalker;
 
 use crate::{
@@ -31,7 +33,7 @@ use crate::{
             array_node::ArrayNode,
             assignment_node::AssignmentNode,
             ast_node::{AstNode, AstNodeTrait, SpannedNode},
-            binary_op_node::{BinaryOperation, BinaryOpNode},
+            binary_op_node::{BinaryOpNode, BinaryOperation},
             block_node::BlockNode,
             break_node::BreakNode,
             call_node::CallNode,
@@ -41,9 +43,9 @@ use crate::{
             do_while_node::DoWhileNode,
             expression_node::ExpressionNode,
             float_node::FloatNode,
-            for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
+            for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
             for_node::ForNode,
-            function_def_node::{ARGV, FunctionDefNode},
+            function_def_node::{FunctionDefNode, ARGV},
             function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
             if_node::IfNode,
             int_node::IntNode,
@@ -55,7 +57,7 @@ use crate::{
             string_node::StringNode,
             switch_node::SwitchNode,
             ternary_node::TernaryNode,
-            unary_op_node::{UnaryOperation, UnaryOpNode},
+            unary_op_node::{UnaryOpNode, UnaryOperation},
             var_init_node::VarInitNode,
             var_node::VarNode,
             while_node::WhileNode,
@@ -531,9 +533,10 @@ impl CodegenWalker {
         let result_register = self.register_counter.next().unwrap().as_local();
         let label = self.new_label("catch_end");
 
+        let start_address = self.current_address();
         push_instruction!(
             self,
-            Instruction::CatchStart(result_register, label.clone()),
+            Instruction::CatchStart(result_register, Address(0)),
             node.span
         );
 
@@ -541,11 +544,18 @@ impl CodegenWalker {
             argument.visit(self, cell_key)?;
         }
 
-        // get the address of the `catchend` pseudo-instruction, so we can jump to a
+        // get the address of the `catch_end` pseudo-instruction, so we can jump to a
         // location that is both guaranteed to have an instruction, as well as
         // clean up the handled catch point
         let label_address = self.current_address();
         self.insert_label(label, label_address);
+
+        // backpatch the `catch_start` instruction with the address of the `catchend`
+        let instructions = &mut self.function_stack.last_mut().unwrap().instructions;
+        let _ = std::mem::replace(
+            &mut instructions[start_address.0],
+            Instruction::CatchStart(result_register, label_address),
+        );
 
         push_instruction!(self, Instruction::CatchEnd, node.span);
 
@@ -1144,10 +1154,7 @@ impl TreeWalker for CodegenWalker {
                 let target = RegisterVariant::Local(Register(0));
 
                 if self.current_result != target {
-                    sym.push_instruction(
-                        Instruction::Copy(self.current_result, target),
-                        node.span,
-                    );
+                    sym.push_instruction(Instruction::Copy(self.current_result, target), node.span);
                 }
 
                 sym.push_instruction(Instruction::Ret, node.span);
@@ -2226,7 +2233,7 @@ mod tests {
     use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
-    use lpc_rs_errors::{LpcErrorSeverity, Result, span::Span};
+    use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
@@ -2243,8 +2250,8 @@ mod tests {
                 inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
-            CompilerBuilder,
             lexer::LexWrapper,
+            CompilerBuilder,
         },
         interpreter::{process::Process, program::Program},
         lpc_parser,
@@ -2357,16 +2364,12 @@ mod tests {
             IConst(RegisterVariant::Local(Register(3)), 666),
             ClearArrayItems,
             PushArrayItem(RegisterVariant::Local(Register(3))),
-            AConst(
-                RegisterVariant::Local(Register(4)),
-            ),
+            AConst(RegisterVariant::Local(Register(4))),
             ClearArrayItems,
             PushArrayItem(RegisterVariant::Local(Register(1))),
             PushArrayItem(RegisterVariant::Local(Register(2))),
             PushArrayItem(RegisterVariant::Local(Register(4))),
-            AConst(
-                RegisterVariant::Local(Register(5)),
-            ),
+            AConst(RegisterVariant::Local(Register(5))),
         ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -2647,15 +2650,11 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 123),
                 ClearArrayItems,
                 PushArrayItem(RegisterVariant::Local(Register(1))),
-                AConst(
-                    RegisterVariant::Local(Register(2)),
-                ),
+                AConst(RegisterVariant::Local(Register(2))),
                 IConst(RegisterVariant::Local(Register(3)), 456),
                 ClearArrayItems,
                 PushArrayItem(RegisterVariant::Local(Register(3))),
-                AConst(
-                    RegisterVariant::Local(Register(4)),
-                ),
+                AConst(RegisterVariant::Local(Register(4))),
                 MAdd(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(4)),
@@ -2685,9 +2684,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 123),
                 ClearArrayItems,
                 PushArrayItem(RegisterVariant::Local(Register(1))),
-                AConst(
-                    RegisterVariant::Local(Register(2)),
-                ),
+                AConst(RegisterVariant::Local(Register(2))),
                 IConst0(RegisterVariant::Local(Register(3))),
                 Load(
                     RegisterVariant::Local(Register(2)),
@@ -2721,9 +2718,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 123),
                 ClearArrayItems,
                 PushArrayItem(RegisterVariant::Local(Register(1))),
-                AConst(
-                    RegisterVariant::Local(Register(2)),
-                ),
+                AConst(RegisterVariant::Local(Register(2))),
                 IConst1(RegisterVariant::Local(Register(3))),
                 IConst(RegisterVariant::Local(Register(4)), -1),
                 Range(
@@ -3189,9 +3184,7 @@ mod tests {
                 PushArrayItem(RegisterVariant::Local(Register(1))),
                 PushArrayItem(RegisterVariant::Local(Register(2))),
                 PushArrayItem(RegisterVariant::Local(Register(3))),
-                AConst(
-                    RegisterVariant::Local(Register(4)),
-                ),
+                AConst(RegisterVariant::Local(Register(4))),
                 Sizeof(
                     RegisterVariant::Local(Register(4)),
                     RegisterVariant::Local(Register(5)),
@@ -3212,7 +3205,7 @@ mod tests {
             let _ = tree.visit(&mut walker, &mut cell_key);
 
             let expected = vec![
-                CatchStart(RegisterVariant::Local(Register(1)), "catch_end_0".into()),
+                CatchStart(RegisterVariant::Local(Register(1)), Address(4)),
                 IConst(RegisterVariant::Local(Register(2)), 12),
                 IConst0(RegisterVariant::Local(Register(3))),
                 IDiv(
@@ -3524,9 +3517,7 @@ mod tests {
             IConst(RegisterVariant::Local(Register(3)), 666),
             ClearArrayItems,
             PushArrayItem(RegisterVariant::Local(Register(3))),
-            AConst(
-                RegisterVariant::Local(Register(4)),
-            ),
+            AConst(RegisterVariant::Local(Register(4))),
         ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3925,9 +3916,7 @@ mod tests {
             IConst(RegisterVariant::Local(Register(2)), 56),
             ClearArrayItems,
             PushArrayItem(RegisterVariant::Local(Register(2))),
-            AConst(
-                RegisterVariant::Local(Register(3)),
-            ),
+            AConst(RegisterVariant::Local(Register(3))),
             Copy(
                 RegisterVariant::Local(Register(3)),
                 RegisterVariant::Global(Register(1)),
@@ -5060,9 +5049,7 @@ mod tests {
                     IConst(RegisterVariant::Local(Register(1)), 1234),
                     ClearArrayItems,
                     PushArrayItem(RegisterVariant::Local(Register(1))),
-                    AConst(
-                        RegisterVariant::Local(Register(2)),
-                    )
+                    AConst(RegisterVariant::Local(Register(2)),)
                 ]
             );
         }
@@ -5177,17 +5164,13 @@ mod tests {
                 PushArrayItem(RegisterVariant::Local(Register(4))),
                 PushArrayItem(RegisterVariant::Local(Register(5))),
                 PushArrayItem(RegisterVariant::Local(Register(6))),
-                AConst(
-                    RegisterVariant::Local(Register(7)),
-                ),
+                AConst(RegisterVariant::Local(Register(7))),
                 ClearArrayItems,
                 PushArrayItem(RegisterVariant::Local(Register(1))),
                 PushArrayItem(RegisterVariant::Local(Register(2))),
                 PushArrayItem(RegisterVariant::Local(Register(3))),
                 PushArrayItem(RegisterVariant::Local(Register(7))),
-                AConst(
-                    RegisterVariant::Local(Register(8)),
-                ),
+                AConst(RegisterVariant::Local(Register(8))),
                 Copy(
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Global(Register(0)),

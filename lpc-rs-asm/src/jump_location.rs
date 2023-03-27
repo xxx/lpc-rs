@@ -1,6 +1,9 @@
-use std::fmt::{Display, Formatter};
-use std::fmt;
-use std::ops::Add;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+    ops::Add,
+};
+
 use serde::{Deserialize, Serialize};
 
 /// Really just a `pc` index in the vm.

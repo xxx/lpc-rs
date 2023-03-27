@@ -11,20 +11,19 @@ use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_asm::{instruction::Instruction, jump_location::Address};
 use lpc_rs_core::{
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
     lpc_type::LpcType,
-    LpcInt,
     register::{Register, RegisterVariant},
+    LpcInt,
 };
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
-use lpc_rs_asm::jump_location::Address;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -32,7 +31,7 @@ use crate::{
         bank::RefBank,
         call_frame::CallFrame,
         call_stack::CallStack,
-        efun::{Efun, efun_context::EfunContext, EFUN_PROTOTYPES, HasEfuns},
+        efun::{efun_context::EfunContext, Efun, HasEfuns, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
@@ -427,17 +426,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CatchEnd => {
                 self.catch_points.pop();
             }
-            Instruction::CatchStart(r, label) => {
-                let frame = self.stack.current_frame()?;
-                let address = match frame.lookup_label(&label) {
-                    Some(x) => *x,
-                    None => {
-                        return Err(
-                            self.runtime_error(format!("Missing address for label `{label}`"))
-                        )
-                    }
-                };
-
+            Instruction::CatchStart(r, address) => {
                 let catch_point = CatchPoint {
                     frame_index: self.stack.len() - 1,
                     register: r,
@@ -588,7 +577,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::MapConst(r) => {
                 let mut register_map = IndexMap::with_hasher(HashBuildHasher::default());
 
-                debug_assert!(self.array_items.len() % 2 == 0, "Odd number of items in `array` when creating a mapping constant");
+                debug_assert!(
+                    self.array_items.len() % 2 == 0,
+                    "Odd number of items in `array` when creating a mapping constant"
+                );
                 for chunk in &self.array_items.iter().copied().chunks(2) {
                     let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
@@ -4071,7 +4063,7 @@ mod tests {
             use std::sync::Arc;
 
             use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
-            use lpc_rs_core::{INIT_PROGRAM, lpc_path::LpcPath, lpc_type::LpcType};
+            use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, INIT_PROGRAM};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
 
