@@ -10,6 +10,7 @@ use educe::Educe;
 use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
     function::{FunctionName, FunctionReceiver, FunctionTarget},
@@ -580,10 +581,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::MAdd(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, cell_key| x.add(y, cell_key), cell_key)?;
             }
-            Instruction::MapConst(r, map) => {
+            Instruction::MapConst(r) => {
                 let mut register_map = IndexMap::with_hasher(HashBuildHasher::default());
 
-                for (key, value) in map {
+                debug_assert!(self.array_items.len() % 2 == 0, "Odd number of items in `array` when creating a mapping constant");
+                for chunk in &self.array_items.iter().copied().chunks(2) {
+                    let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
                         get_loc!(self, key, cell_key)?
                             .into_owned()

@@ -1707,18 +1707,26 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_mapping(&mut self, node: &mut MappingNode, cell_key: &mut QCellOwner) -> Result<()> {
-        let mut map = IndexMap::new();
+        let mut items = Vec::with_capacity(node.value.len() * 2);
+
         for (key, value) in &mut node.value {
             key.visit(self, cell_key)?;
-            let key_result = self.current_result;
-            value.visit(self, cell_key)?;
+            items.push(self.current_result);
 
-            map.insert(key_result, self.current_result);
+            value.visit(self, cell_key)?;
+            items.push(self.current_result);
+        }
+
+        push_instruction!(self, Instruction::ClearArrayItems, node.span);
+
+        for item in items {
+            // Just let the `array_items` vector do double duty.
+            push_instruction!(self, Instruction::PushArrayItem(item), node.span);
         }
 
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
-        push_instruction!(self, Instruction::MapConst(register, map), node.span);
+        push_instruction!(self, Instruction::MapConst(register), node.span);
 
         Ok(())
     }
@@ -4908,17 +4916,15 @@ mod tests {
                 &mut cell_key,
             );
 
-            let mut map = IndexMap::new();
-            map.insert(
-                RegisterVariant::Local(Register(1)),
-                RegisterVariant::Local(Register(2)),
-            );
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
                     SConst(RegisterVariant::Local(Register(1)), 0),
                     SConst(RegisterVariant::Local(Register(2)), 1),
-                    MapConst(RegisterVariant::Local(Register(3)), map)
+                    ClearArrayItems,
+                    PushArrayItem(RegisterVariant::Local(Register(1))),
+                    PushArrayItem(RegisterVariant::Local(Register(2))),
+                    MapConst(RegisterVariant::Local(Register(3)))
                 ]
             );
         }

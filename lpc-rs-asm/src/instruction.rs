@@ -3,7 +3,6 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
     function::FunctionTarget, function_arity::FunctionArity, LpcFloat, LpcInt,
@@ -60,7 +59,8 @@ pub enum Instruction {
     /// Clear the [`Task`]'s `args` vector, in preparation for a new call
     ClearArgs,
 
-    /// Clear the [`Task`]'s `array_items` vector, in preparation for a new array constant
+    /// Clear the [`Task`]'s `array_items` vector, in preparation for a
+    /// new array or mapping constant.
     ClearArrayItems,
 
     /// Decrement the value in x.0 by 1
@@ -142,7 +142,7 @@ pub enum Instruction {
     Lte(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Create a mapping from the keys and values in the hashmap
-    MapConst(RegisterVariant, IndexMap<RegisterVariant, RegisterVariant>),
+    MapConst(RegisterVariant),
 
     /// Addition where at least one side is a reference type, so check at
     /// runtime.
@@ -348,13 +348,8 @@ impl Display for Instruction {
             Instruction::Lte(r1, r2, r3) => {
                 write!(f, "lte {r1}, {r2}, {r3}")
             }
-            Instruction::MapConst(r, i) => {
-                let str = i
-                    .iter()
-                    .map(|(key, value)| format!("{key}: {value}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "map_const {r}, {str}")
+            Instruction::MapConst(r) => {
+                write!(f, "map_const {r}")
             }
             Instruction::MAdd(r1, r2, r3) => {
                 write!(f, "m_add {r1}, {r2}, {r3}")
