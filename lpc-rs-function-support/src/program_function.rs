@@ -62,7 +62,7 @@ pub struct ProgramFunction {
     #[builder(default)]
     pub arg_locations: Vec<RegisterVariant>,
 
-    /// Interned strings. These are stored by our containing [`Program`] and
+    /// Interned strings. These are stored by our containing `Program` and
     /// shared among all functions in the program.
     #[builder(default)]
     #[serde(serialize_with = "lpc_rs_core::serialize::serialize_once_cell")]

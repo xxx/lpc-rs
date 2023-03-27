@@ -56,10 +56,10 @@ pub enum Instruction {
     /// get back to the correct location.
     CatchStart(RegisterVariant, Address),
 
-    /// Clear the [`Task`]'s `args` vector, in preparation for a new call
+    /// Clear the `Task`'s `args` vector, in preparation for a new call
     ClearArgs,
 
-    /// Clear the [`Task`]'s `array_items` vector, in preparation for a
+    /// Clear the `Task`'s `array_items` vector, in preparation for a
     /// new array or mapping constant.
     ClearArrayItems,
 
@@ -186,7 +186,7 @@ pub enum Instruction {
     /// parameters that have default values.
     PopulateDefaults(Vec<Address>),
 
-    /// Push a location onto the [`Task`]'s `array_items` vector, used for creating
+    /// Push a location onto the `Task`'s `array_items` vector, used for creating
     /// array literals
     PushArrayItem(RegisterVariant),
 
@@ -219,7 +219,7 @@ pub enum Instruction {
     Store(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// String constant.
-    /// Store an index into the [`Program`]'s `strings` vector.
+    /// Store an index into the `Program`'s `strings` vector.
     SConst(RegisterVariant, usize),
 
     /// bitwise ^ comparison.
