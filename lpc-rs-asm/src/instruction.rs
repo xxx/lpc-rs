@@ -18,7 +18,7 @@ use crate::jump_location::{Address, JumpLocation, Label};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
-    AConst(RegisterVariant, Vec<RegisterVariant>),
+    AConst(RegisterVariant),
 
     /// bitwise-and combination.
     /// x.2 = x.0 & x.1
@@ -57,8 +57,11 @@ pub enum Instruction {
     /// execution
     CatchStart(RegisterVariant, Label),
 
-    /// Clear the Task's `args` vector, in preparation for a new call
+    /// Clear the [`Task`]'s `args` vector, in preparation for a new call
     ClearArgs,
+
+    /// Clear the [`Task`]'s `array_items` vector, in preparation for a new array constant
+    ClearArrayItems,
 
     /// Decrement the value in x.0 by 1
     Dec(RegisterVariant),
@@ -180,6 +183,10 @@ pub enum Instruction {
     /// parameters that have default values.
     PopulateDefaults(Vec<Address>),
 
+    /// Push a location onto the [`Task`]'s `array_items` vector, used for creating
+    /// array literals
+    PushArrayItem(RegisterVariant),
+
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
     Range(
@@ -223,13 +230,8 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Instruction::AConst(r1, vec) => {
-                let s = vec
-                    .iter()
-                    .map(|i| format!("{i}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "aconst {r1}, {s}")
+            Instruction::AConst(r1) => {
+                write!(f, "aconst {r1}")
             }
             Instruction::And(r1, r2, r3) => {
                 write!(f, "and {r1}, {r2}, {r3}")
@@ -238,37 +240,40 @@ impl Display for Instruction {
                 write!(f, "arg {r}")
             }
             Instruction::BitwiseNot(r1, r2) => {
-                write!(f, "bitwisenot {r1}, {r2}")
+                write!(f, "bitwise_not {r1}, {r2}")
             }
             Instruction::CatchEnd => {
-                write!(f, "catchend")
+                write!(f, "catch_end")
             }
             Instruction::CatchStart(r1, label) => {
-                write!(f, "catchstart {r1}, {label}")
+                write!(f, "catch_start {r1}, {label}")
             }
             Instruction::Call(name) => {
                 write!(f, "call {name}")
             }
             Instruction::CallEfun(name) => {
-                write!(f, "callefun {name}")
+                write!(f, "call_efun {name}")
             }
             Instruction::CallFp { location } => {
-                write!(f, "callfp {location}")
+                write!(f, "call_fp {location}")
             }
             Instruction::CallOther { receiver, name } => {
-                write!(f, "callother {receiver}, {name}")
+                write!(f, "call_other {receiver}, {name}")
             }
             Instruction::ClearArgs => {
-                write!(f, "clearargs")
+                write!(f, "clear_args")
+            }
+            Instruction::ClearArrayItems => {
+                write!(f, "clear_array_items")
             }
             Instruction::Dec(r) => {
                 write!(f, "dec {r}")
             }
             Instruction::EqEq(r1, r2, r3) => {
-                write!(f, "eqeq {r1}, {r2}, {r3}")
+                write!(f, "eq_eq {r1}, {r2}, {r3}")
             }
             Instruction::FConst(r, fl) => {
-                write!(f, "fconst {r}, {fl}")
+                write!(f, "f_const {r}, {fl}")
             }
             Instruction::FunctionPtrConst {
                 location,
@@ -287,7 +292,7 @@ impl Display for Instruction {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "functionptrconst {location}, {target}, {args}")
+                write!(f, "function_ptr_const {location}, {target}, {args}")
             }
             Instruction::Gt(r1, r2, r3) => {
                 write!(f, "gt {r1}, {r2}, {r3}")
@@ -296,31 +301,31 @@ impl Display for Instruction {
                 write!(f, "gte {r1}, {r2}, {r3}")
             }
             Instruction::IAdd(r1, r2, r3) => {
-                write!(f, "iadd {r1}, {r2}, {r3}")
+                write!(f, "i_add {r1}, {r2}, {r3}")
             }
             Instruction::IConst(r, i) => {
-                write!(f, "iconst {r}, {i}")
+                write!(f, "i_const {r}, {i}")
             }
             Instruction::IConst0(r) => {
-                write!(f, "iconst0 {r}")
+                write!(f, "i_const0 {r}")
             }
             Instruction::IConst1(r) => {
-                write!(f, "iconst1 {r}")
+                write!(f, "i_const1 {r}")
             }
             Instruction::IDiv(r1, r2, r3) => {
-                write!(f, "idiv {r1}, {r2}, {r3}")
+                write!(f, "i_div {r1}, {r2}, {r3}")
             }
             Instruction::IMod(r1, r2, r3) => {
-                write!(f, "imod {r1}, {r2}, {r3}")
+                write!(f, "i_mod {r1}, {r2}, {r3}")
             }
             Instruction::Inc(r) => {
                 write!(f, "inc {r}")
             }
             Instruction::IMul(r1, r2, r3) => {
-                write!(f, "imul {r1}, {r2}, {r3}")
+                write!(f, "i_mul {r1}, {r2}, {r3}")
             }
             Instruction::ISub(r1, r2, r3) => {
-                write!(f, "isub {r1}, {r2}, {r3}")
+                write!(f, "i_sub {r1}, {r2}, {r3}")
             }
             Instruction::Jmp(address) => {
                 write!(f, "jmp {address}")
@@ -335,7 +340,7 @@ impl Display for Instruction {
                 write!(f, "load {r1}, {r2}, {r3}")
             }
             Instruction::LoadMappingKey(r1, r2, r3) => {
-                write!(f, "loadmappingkey {r1}, {r2}, {r3}")
+                write!(f, "load_mapping_key {r1}, {r2}, {r3}")
             }
             Instruction::Lt(r1, r2, r3) => {
                 write!(f, "lt {r1}, {r2}, {r3}")
@@ -349,16 +354,16 @@ impl Display for Instruction {
                     .map(|(key, value)| format!("{key}: {value}"))
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "mapconst {r}, {str}")
+                write!(f, "map_const {r}, {str}")
             }
             Instruction::MAdd(r1, r2, r3) => {
-                write!(f, "madd {r1}, {r2}, {r3}")
+                write!(f, "m_add {r1}, {r2}, {r3}")
             }
             Instruction::MMul(r1, r2, r3) => {
-                write!(f, "mmul {r1}, {r2}, {r3}")
+                write!(f, "m_mul {r1}, {r2}, {r3}")
             }
             Instruction::MSub(r1, r2, r3) => {
-                write!(f, "msub {r1}, {r2}, {r3}")
+                write!(f, "m_sub {r1}, {r2}, {r3}")
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "not {r1}, {r2}")
@@ -367,18 +372,21 @@ impl Display for Instruction {
                 write!(f, "or {r1}, {r2}, {r3}")
             }
             Instruction::PopulateArgv(r, num_args, num_locals) => {
-                write!(f, "populateargv {r}, {num_args}, {num_locals}")
+                write!(f, "populate_argv {r}, {num_args}, {num_locals}")
             }
             Instruction::PopulateDefaults(default_inits) => {
                 let s = default_inits.iter().map(|i| format!("{i}")).join(", ");
 
-                write!(f, "populatedefaults {s}")
+                write!(f, "populate_defaults {s}")
+            }
+            Instruction::PushArrayItem(r1) => {
+                write!(f, "push_array_item {r1}")
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {r1}, {r2}, {r3}, {r4}")
             }
             Instruction::RegCopy(r1, r2) => {
-                write!(f, "regcopy {r1}, {r2}")
+                write!(f, "reg_copy {r1}, {r2}")
             }
             Instruction::Ret => {
                 write!(f, "ret")
@@ -396,7 +404,7 @@ impl Display for Instruction {
                 write!(f, "store {r1}, {r2}, {r3}")
             }
             Instruction::SConst(r, s) => {
-                write!(f, "sconst {r}, {s}")
+                write!(f, "s_const {r}, {s}")
             }
             Instruction::Xor(r1, r2, r3) => {
                 write!(f, "xor {r1}, {r2}, {r3}")

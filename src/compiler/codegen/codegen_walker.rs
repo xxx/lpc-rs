@@ -776,7 +776,12 @@ impl TreeWalker for CodegenWalker {
 
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
-        push_instruction!(self, Instruction::AConst(register, items), node.span);
+        push_instruction!(self, Instruction::ClearArrayItems, node.span);
+        for item in items.iter() {
+            let instruction = Instruction::PushArrayItem(*item);
+            push_instruction!(self, instruction, node.span);
+        }
+        push_instruction!(self, Instruction::AConst(register), node.span);
 
         Ok(())
     }
@@ -2342,17 +2347,17 @@ mod tests {
             IConst(RegisterVariant::Local(Register(1)), 123),
             SConst(RegisterVariant::Local(Register(2)), 0),
             IConst(RegisterVariant::Local(Register(3)), 666),
+            ClearArrayItems,
+            PushArrayItem(RegisterVariant::Local(Register(3))),
             AConst(
                 RegisterVariant::Local(Register(4)),
-                vec![RegisterVariant::Local(Register(3))],
             ),
+            ClearArrayItems,
+            PushArrayItem(RegisterVariant::Local(Register(1))),
+            PushArrayItem(RegisterVariant::Local(Register(2))),
+            PushArrayItem(RegisterVariant::Local(Register(4))),
             AConst(
                 RegisterVariant::Local(Register(5)),
-                vec![
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Local(Register(4)),
-                ],
             ),
         ];
 
@@ -2632,14 +2637,16 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(1))),
                 AConst(
                     RegisterVariant::Local(Register(2)),
-                    vec![RegisterVariant::Local(Register(1))],
                 ),
                 IConst(RegisterVariant::Local(Register(3)), 456),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(3))),
                 AConst(
                     RegisterVariant::Local(Register(4)),
-                    vec![RegisterVariant::Local(Register(3))],
                 ),
                 MAdd(
                     RegisterVariant::Local(Register(2)),
@@ -2668,9 +2675,10 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(1))),
                 AConst(
                     RegisterVariant::Local(Register(2)),
-                    vec![RegisterVariant::Local(Register(1))],
                 ),
                 IConst0(RegisterVariant::Local(Register(3))),
                 Load(
@@ -2703,9 +2711,10 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(1))),
                 AConst(
                     RegisterVariant::Local(Register(2)),
-                    vec![RegisterVariant::Local(Register(1))],
                 ),
                 IConst1(RegisterVariant::Local(Register(3))),
                 IConst(RegisterVariant::Local(Register(4)), -1),
@@ -3168,13 +3177,12 @@ mod tests {
                 IConst1(RegisterVariant::Local(Register(1))),
                 IConst(RegisterVariant::Local(Register(2)), 2),
                 SConst(RegisterVariant::Local(Register(3)), 0),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(1))),
+                PushArrayItem(RegisterVariant::Local(Register(2))),
+                PushArrayItem(RegisterVariant::Local(Register(3))),
                 AConst(
                     RegisterVariant::Local(Register(4)),
-                    vec![
-                        RegisterVariant::Local(Register(1)),
-                        RegisterVariant::Local(Register(2)),
-                        RegisterVariant::Local(Register(3)),
-                    ],
                 ),
                 Sizeof(
                     RegisterVariant::Local(Register(4)),
@@ -3506,9 +3514,10 @@ mod tests {
             IConst(RegisterVariant::Local(Register(1)), 123),
             SConst(RegisterVariant::Local(Register(2)), 0),
             IConst(RegisterVariant::Local(Register(3)), 666),
+            ClearArrayItems,
+            PushArrayItem(RegisterVariant::Local(Register(3))),
             AConst(
                 RegisterVariant::Local(Register(4)),
-                vec![RegisterVariant::Local(Register(3))],
             ),
         ];
 
@@ -3906,9 +3915,10 @@ mod tests {
                 RegisterVariant::Global(Register(0)),
             ),
             IConst(RegisterVariant::Local(Register(2)), 56),
+            ClearArrayItems,
+            PushArrayItem(RegisterVariant::Local(Register(2))),
             AConst(
                 RegisterVariant::Local(Register(3)),
-                vec![RegisterVariant::Local(Register(2))],
             ),
             RegCopy(
                 RegisterVariant::Local(Register(3)),
@@ -5042,9 +5052,10 @@ mod tests {
                 walker_init_instructions(&mut walker),
                 [
                     IConst(RegisterVariant::Local(Register(1)), 1234),
+                    ClearArrayItems,
+                    PushArrayItem(RegisterVariant::Local(Register(1))),
                     AConst(
                         RegisterVariant::Local(Register(2)),
-                        vec![RegisterVariant::Local(Register(1))]
                     )
                 ]
             );
@@ -5156,22 +5167,20 @@ mod tests {
                 IConst1(RegisterVariant::Local(Register(4))),
                 IConst(RegisterVariant::Local(Register(5)), 2),
                 IConst(RegisterVariant::Local(Register(6)), 3),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(4))),
+                PushArrayItem(RegisterVariant::Local(Register(5))),
+                PushArrayItem(RegisterVariant::Local(Register(6))),
                 AConst(
                     RegisterVariant::Local(Register(7)),
-                    vec![
-                        RegisterVariant::Local(Register(4)),
-                        RegisterVariant::Local(Register(5)),
-                        RegisterVariant::Local(Register(6)),
-                    ],
                 ),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(1))),
+                PushArrayItem(RegisterVariant::Local(Register(2))),
+                PushArrayItem(RegisterVariant::Local(Register(3))),
+                PushArrayItem(RegisterVariant::Local(Register(7))),
                 AConst(
                     RegisterVariant::Local(Register(8)),
-                    vec![
-                        RegisterVariant::Local(Register(1)),
-                        RegisterVariant::Local(Register(2)),
-                        RegisterVariant::Local(Register(3)),
-                        RegisterVariant::Local(Register(7)),
-                    ],
                 ),
                 RegCopy(
                     RegisterVariant::Local(Register(8)),

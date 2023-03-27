@@ -189,6 +189,9 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
     pub args: Vec<RegisterVariant>,
 
+    /// The vector used to collect members of a soon-to-be-created array
+    array_items: Vec<RegisterVariant>,
+
     /// The upvalues from the [`Vm`](crate::interpreter::vm::Vm)
     #[educe(Debug(method = "qcell_debug"))]
     vm_upvalues: Rc<QCell<GcRefBank>>,
@@ -214,6 +217,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             stack: CallStack::default(),
             catch_points: vec![],
             args: Vec::with_capacity(10),
+            array_items: Vec::with_capacity(10),
             vm_upvalues: vm_upvalues.into(),
 
             #[cfg(test)]
@@ -364,8 +368,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         };
 
         match instruction {
-            Instruction::AConst(location, items) => {
-                self.handle_aconst(location, &items, cell_key)?;
+            Instruction::AConst(location) => {
+                self.handle_aconst(location, cell_key)?;
             }
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(
@@ -443,6 +447,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::ClearArgs => {
                 self.args.clear();
+            }
+            Instruction::ClearArrayItems => {
+                self.array_items.clear();
             }
             Instruction::Dec(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.dec(), cell_key)?;
@@ -649,6 +656,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     frame.set_pc(address);
                 }
             }
+            Instruction::PushArrayItem(r1) => {
+                self.array_items.push(r1);
+            }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
 
@@ -838,9 +848,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     fn handle_aconst(
         &mut self,
         location: RegisterVariant,
-        items: &[RegisterVariant],
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
+        let items = &self.array_items;
         let vars = items
             .iter()
             .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
