@@ -8,12 +8,13 @@ use std::{
 use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
-use lpc_rs_asm::instruction::{Address, Instruction, JumpLocation};
+use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::register::{Register, RegisterVariant};
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
+use lpc_rs_asm::jump_location::{Address, JumpLocation};
 
 use crate::{
     interpreter::{

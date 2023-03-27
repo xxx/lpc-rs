@@ -10,19 +10,20 @@ use educe::Educe;
 use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
     lpc_type::LpcType,
-    register::{Register, RegisterVariant},
     LpcInt,
+    register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
+use lpc_rs_asm::jump_location::Address;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -30,7 +31,7 @@ use crate::{
         bank::RefBank,
         call_frame::CallFrame,
         call_stack::CallStack,
-        efun::{efun_context::EfunContext, Efun, HasEfuns, EFUN_PROTOTYPES},
+        efun::{Efun, efun_context::EfunContext, EFUN_PROTOTYPES, HasEfuns},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
@@ -4058,7 +4059,7 @@ mod tests {
             use std::sync::Arc;
 
             use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
-            use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, INIT_PROGRAM};
+            use lpc_rs_core::{INIT_PROGRAM, lpc_path::LpcPath, lpc_type::LpcType};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
 

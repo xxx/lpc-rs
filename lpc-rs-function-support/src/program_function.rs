@@ -6,7 +6,7 @@ use std::{
 };
 
 use derive_builder::Builder;
-use lpc_rs_asm::instruction::{Address, Instruction};
+use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
     function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant,
 };
@@ -15,6 +15,7 @@ use multimap::MultiMap;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
+use lpc_rs_asm::jump_location::Address;
 
 use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 

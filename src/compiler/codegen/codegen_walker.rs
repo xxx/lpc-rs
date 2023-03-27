@@ -2,18 +2,18 @@ use std::{collections::HashMap, ops::Range, rc::Rc};
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use lpc_rs_asm::instruction::{Address, Instruction, Label};
+use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
     call_namespace::CallNamespace,
+    CREATE_FUNCTION,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
+    INIT_PROGRAM,
     lpc_type::LpcType,
     mangle::Mangle,
-    register::{Register, RegisterVariant},
-    register_counter::RegisterCounter,
-    ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
+    register::{Register, RegisterVariant}, register_counter::RegisterCounter, ScopeId,
 };
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::{
     function_prototype::FunctionPrototypeBuilder,
     program_function::{ProgramFunction, ProgramFunctionBuilder},
@@ -22,6 +22,7 @@ use lpc_rs_function_support::{
 use lpc_rs_utils::string::closure_arg_number;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
+use lpc_rs_asm::jump_location::{Address, Label};
 use tree_walker::TreeWalker;
 
 use crate::{
@@ -30,7 +31,7 @@ use crate::{
             array_node::ArrayNode,
             assignment_node::AssignmentNode,
             ast_node::{AstNode, AstNodeTrait, SpannedNode},
-            binary_op_node::{BinaryOpNode, BinaryOperation},
+            binary_op_node::{BinaryOperation, BinaryOpNode},
             block_node::BlockNode,
             break_node::BreakNode,
             call_node::CallNode,
@@ -40,9 +41,9 @@ use crate::{
             do_while_node::DoWhileNode,
             expression_node::ExpressionNode,
             float_node::FloatNode,
-            for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+            for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
             for_node::ForNode,
-            function_def_node::{FunctionDefNode, ARGV},
+            function_def_node::{ARGV, FunctionDefNode},
             function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
             if_node::IfNode,
             int_node::IntNode,
@@ -54,7 +55,7 @@ use crate::{
             string_node::StringNode,
             switch_node::SwitchNode,
             ternary_node::TernaryNode,
-            unary_op_node::{UnaryOpNode, UnaryOperation},
+            unary_op_node::{UnaryOperation, UnaryOpNode},
             var_init_node::VarInitNode,
             var_node::VarNode,
             while_node::WhileNode,
@@ -2210,7 +2211,7 @@ mod tests {
     use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
-    use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
+    use lpc_rs_errors::{LpcErrorSeverity, Result, span::Span};
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
@@ -2227,8 +2228,8 @@ mod tests {
                 inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
-            lexer::LexWrapper,
             CompilerBuilder,
+            lexer::LexWrapper,
         },
         interpreter::{process::Process, program::Program},
         lpc_parser,
