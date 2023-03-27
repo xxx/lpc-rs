@@ -10,7 +10,7 @@ use std::{
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags};
+use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
@@ -77,7 +77,7 @@ impl<'a> Program {
     /// Look up a function by its name, starting from this program,
     /// and searching all of its inherited-from programs, last-declared-inherit
     /// first.
-    pub fn lookup_function<T>(&self, name: T, ) -> Option<&Rc<ProgramFunction>>
+    pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
@@ -99,11 +99,7 @@ impl<'a> Program {
     }
 
     /// Call the passed callback, passing the function reference if found.
-    pub fn with_function<F, T>(
-        &self,
-        name: &str,
-        callback: F,
-    ) -> Option<T>
+    pub fn with_function<F, T>(&self, name: &str, callback: F) -> Option<T>
     where
         F: FnOnce(&Rc<ProgramFunction>) -> T,
     {

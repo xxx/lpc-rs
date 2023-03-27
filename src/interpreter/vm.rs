@@ -93,7 +93,10 @@ impl Vm {
     /// * `Some(Ok(TaskContext))` - The [`TaskContext`] for the simul_efun file
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
-    pub fn initialize_simul_efuns(&mut self, cell_key: &mut QCellOwner) -> Option<Result<TaskContext>> {
+    pub fn initialize_simul_efuns(
+        &mut self,
+        cell_key: &mut QCellOwner,
+    ) -> Option<Result<TaskContext>> {
         let Some(path) = &self.config.simul_efun_file else {
             return None
         };

@@ -116,11 +116,10 @@ impl CompilationContext {
 
         let find_in_inherit = || {
             // look up in reverse, so later declarations override earlier ones
-            self.inherits.iter().rev().find_map(|inherit| {
-                inherit
-                    .lookup_function(r)
-                    .map(|f| &f.prototype)
-            })
+            self.inherits
+                .iter()
+                .rev()
+                .find_map(|inherit| inherit.lookup_function(r).map(|f| &f.prototype))
         };
 
         match namespace {
@@ -129,10 +128,9 @@ impl CompilationContext {
             CallNamespace::Named(ns) => match ns.as_str() {
                 EFUN => EFUN_PROTOTYPES.get(r),
                 ns => self.inherit_names.get(ns).and_then(|i| {
-                    self.inherits.get(*i).and_then(|p| {
-                        p.lookup_function(name)
-                            .map(|f| &f.prototype)
-                    })
+                    self.inherits
+                        .get(*i)
+                        .and_then(|p| p.lookup_function(name).map(|f| &f.prototype))
                 }),
             },
         }
@@ -205,11 +203,7 @@ impl CompilationContext {
                 ns => self
                     .inherit_names
                     .get(ns)
-                    .and_then(|i| {
-                        self.inherits
-                            .get(*i)
-                            .map(|p| p.contains_function(name))
-                    })
+                    .and_then(|i| self.inherits.get(*i).map(|p| p.contains_function(name)))
                     .unwrap_or(false),
             },
         }

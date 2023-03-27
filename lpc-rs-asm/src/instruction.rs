@@ -6,8 +6,8 @@ use std::{
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, function::FunctionTarget, function_arity::FunctionArity,
-    register::RegisterVariant, LpcFloat, LpcInt,
+    function::FunctionTarget, function_arity::FunctionArity, register::RegisterVariant, LpcFloat,
+    LpcInt,
 };
 use serde::{Deserialize, Serialize};
 
@@ -80,8 +80,10 @@ pub enum Instruction {
     /// The `usize` is an index into the object's `strings` table.
     Call(usize),
 
-    /// Call an Efun.
-    CallEfun(String),
+    /// Call an Efun. The `usize` is the index into the object's `strings` table.
+    // TODO: maybe index directly into a collection of efuns, which saves 1 lookup.
+    //       This can potentially break programs that have been pre-compiled and cached to disk.
+    CallEfun(usize),
 
     /// Call a function pointer, located in `location`
     CallFp { location: RegisterVariant },

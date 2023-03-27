@@ -9,21 +9,15 @@ pub(crate) mod throw;
 
 use std::collections::HashMap;
 
-use clone_object::clone_object;
-use debug::debug;
-use dump::dump;
-use file_name::file_name;
 use lpc_rs_core::{
     function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
     lpc_type::LpcType,
 };
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::{FunctionPrototype, FunctionPrototypeBuilder};
 use once_cell::sync::Lazy;
 use phf::phf_map;
 use qcell::QCellOwner;
-use this_object::this_object;
-use throw::throw;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
@@ -192,22 +186,3 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
 
     m
 });
-
-/// call the actual function, from the given name, with the passed context.
-pub fn call_efun<const N: usize>(
-    name: &str,
-    context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
-    match name {
-        CLONE_OBJECT => clone_object(context, cell_key),
-        DEBUG => debug(context, cell_key),
-        DUMP => dump(context, cell_key),
-        FILE_NAME => file_name(context, cell_key),
-        THIS_OBJECT => this_object(context, cell_key),
-        THROW => throw(context, cell_key),
-        _ => Err(LpcError::new(format!(
-            "runtime error: call to unknown function (that had a valid prototype?) `{name}`"
-        ))),
-    }
-}

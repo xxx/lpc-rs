@@ -12,12 +12,11 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::instruction::{Address, Instruction};
 use lpc_rs_core::{
-    call_namespace::CallNamespace,
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
-    LpcInt, EFUN,
+    LpcInt,
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -31,7 +30,7 @@ use crate::{
         bank::RefBank,
         call_frame::CallFrame,
         call_stack::CallStack,
-        efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
+        efun::{efun_context::EfunContext, Efun, HasEfuns, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
@@ -395,16 +394,23 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::Call(name) => {
                 self.handle_call(name, task_context, cell_key)?;
             }
-            Instruction::CallEfun(ref name) => {
-                // TODO: find a lighter way to call efuns, that doesn't require a process or program function
-                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                let pf = ProgramFunction::new(prototype.clone(), 0);
+            Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
-                let new_frame = self.prepare_new_call_frame(task_context, cell_key, process, pf.into())?;
+                let (pf, efun) = {
+                    let name = &process.ro(cell_key).program.strings[name_idx];
+                    let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                    let pf = ProgramFunction::new(prototype.clone(), 0);
+                    let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(name).unwrap();
+
+                    (pf, efun)
+                };
+
+                let new_frame =
+                    self.prepare_new_call_frame(task_context, cell_key, process, pf.into())?;
 
                 self.stack.push(new_frame)?;
 
-                self.prepare_and_call_efun(name, task_context, cell_key)?;
+                self.prepare_and_call_efun(efun, task_context, cell_key)?;
             }
             Instruction::CallFp { location } => {
                 self.handle_call_fp(task_context, location, cell_key)?;
@@ -885,7 +891,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
-    fn prepare_new_call_frame(&mut self, task_context: &TaskContext, cell_key: &mut QCellOwner, process: Rc<QCell<Process>>, func: Rc<ProgramFunction>) -> Result<CallFrame> {
+    fn prepare_new_call_frame(
+        &mut self,
+        task_context: &TaskContext,
+        cell_key: &mut QCellOwner,
+        process: Rc<QCell<Process>>,
+        func: Rc<ProgramFunction>,
+    ) -> Result<CallFrame> {
         let num_args = self.args.len();
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
@@ -1136,7 +1148,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         self.stack.push(new_frame)?;
 
         if function_is_efun {
-            self.prepare_and_call_efun(pf.name(), task_context, cell_key)?;
+            let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(pf.name()).unwrap();
+            self.prepare_and_call_efun(efun, task_context, cell_key)?;
         }
 
         Ok(())
@@ -1170,14 +1183,13 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     fn prepare_and_call_efun(
         &mut self,
-        name: &str,
+        efun: Efun<STACKSIZE>,
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
 
-        call_efun(name, &mut ctx, cell_key)?;
+        efun(&mut ctx, cell_key)?;
 
         #[cfg(test)]
         {
@@ -1746,11 +1758,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process
-            .ro(cell_key)
-            .as_ref()
-            .contains_function(name)
-        {
+        if process.ro(cell_key).as_ref().contains_function(name) {
             Some(process)
         } else {
             None
@@ -1927,6 +1935,8 @@ impl<'pool, const STACKSIZE: usize> Mark for Task<'pool, STACKSIZE> {
         self.stack.mark(marked, processed, cell_key)
     }
 }
+
+impl<'pool, const STACKSIZE: usize> HasEfuns<STACKSIZE> for Task<'pool, STACKSIZE> {}
 
 #[cfg(test)]
 mod tests {

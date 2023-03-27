@@ -6,9 +6,9 @@ use lpc_rs::{
         task::Task, task_context::TaskContext,
     },
 };
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
-use lpc_rs_core::lpc_path::LpcPath;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -30,14 +30,17 @@ pub fn test_config_builder() -> ConfigBuilder {
 }
 
 pub fn test_config() -> Config {
-    test_config_builder()
-        .build()
-        .unwrap()
+    test_config_builder().build().unwrap()
 }
 
-pub fn compile_prog_custom<P>(code: &str, path: P, config: Config, cell_key: &mut QCellOwner) -> Program
+pub fn compile_prog_custom<P>(
+    code: &str,
+    path: P,
+    config: Config,
+    cell_key: &mut QCellOwner,
+) -> Program
 where
-    P: Into<LpcPath>
+    P: Into<LpcPath>,
 {
     let compiler = CompilerBuilder::default().config(config).build().unwrap();
     compiler
@@ -52,7 +55,7 @@ pub fn run_prog_custom<'a, P>(
     cell_key: &mut QCellOwner,
 ) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext)
 where
-    P: Into<LpcPath>
+    P: Into<LpcPath>,
 {
     let upvalues = cell_key.cell(GcBank::default());
     let mut task = Task::new(Memory::default(), upvalues);

@@ -996,7 +996,8 @@ impl TreeWalker for CodegenWalker {
                         };
 
                         if func.is_efun() {
-                            Instruction::CallEfun(node.name.clone())
+                            let (idx, _) = self.context.strings.insert_full(node.name.clone());
+                            Instruction::CallEfun(idx)
                         } else {
                             let (idx, _) = self.context.strings.insert_full(func.mangle());
                             Instruction::Call(idx)
@@ -2207,8 +2208,6 @@ mod tests {
 
     use claim::assert_some;
     use factori::create;
-    use indexmap::IndexSet;
-    use once_cell::sync::OnceCell;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
@@ -2815,7 +2814,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2823,10 +2822,10 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                 ),
                 Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
-                SConst(RegisterVariant::Local(Register(6)), 1),
+                SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -2876,7 +2875,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2884,10 +2883,10 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                 ),
                 Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
-                SConst(RegisterVariant::Local(Register(6)), 1),
+                SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("for-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -2941,7 +2940,7 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2949,10 +2948,10 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
-                SConst(RegisterVariant::Local(Register(4)), 1),
+                SConst(RegisterVariant::Local(Register(4)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("do-while-end_2".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
@@ -3009,16 +3008,16 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(2)), 1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
-                CallEfun("dump".into()),
+                CallEfun(2),
                 Jmp("switch-end_2".into()),
-                SConst(RegisterVariant::Local(Register(3)), 2),
+                SConst(RegisterVariant::Local(Register(3)), 3),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(3))),
-                CallEfun("dump".into()),
-                SConst(RegisterVariant::Local(Register(4)), 3),
+                CallEfun(2),
+                SConst(RegisterVariant::Local(Register(4)), 4),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                CallEfun("dump".into()),
+                CallEfun(2),
                 Jmp("switch-end_2".into()),
                 IConst(RegisterVariant::Local(Register(5)), 666),
                 EqEq(
@@ -3091,7 +3090,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), -1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(0),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3312,7 +3311,6 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let mangled = prototype.mangle();
             context
                 .function_prototypes
                 .insert("marfin".into(), prototype);
@@ -3349,7 +3347,6 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let mangled = prototype.mangle();
             context
                 .function_prototypes
                 .insert("void_thing".into(), prototype);
@@ -3382,7 +3379,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("clone_object".into()),
+                CallEfun(1),
                 RegCopy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3405,7 +3402,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(1),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3426,7 +3423,6 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let mangled = prototype.mangle();
             context
                 .function_prototypes
                 .insert("my_func".into(), prototype);
@@ -3483,7 +3479,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 127983),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(0),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3577,7 +3573,7 @@ mod tests {
                     ),
                     ClearArgs,
                     Arg(RegisterVariant::Local(Register(3))),
-                    CallEfun("dump".into()),
+                    CallEfun(0),
                     Ret
                 ]
             );
@@ -3712,7 +3708,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3720,10 +3716,10 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                 ),
                 Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
-                SConst(RegisterVariant::Local(Register(6)), 1),
+                SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("while-start_1".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -3773,7 +3769,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3781,10 +3777,10 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                 ),
                 Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
-                SConst(RegisterVariant::Local(Register(6)), 1),
+                SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
-                                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("for-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -3837,7 +3833,7 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3845,10 +3841,10 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
-                SConst(RegisterVariant::Local(Register(4)), 1),
+                SConst(RegisterVariant::Local(Register(4)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("do-while-continue_3".into()),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
@@ -3985,7 +3981,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 IConst(RegisterVariant::Local(Register(3)), 777),
                 EqEq(
@@ -4067,7 +4063,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(1)), "for-end_1".into()),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallEfun("dump".into()),
+                CallEfun(0),
                 IConst1(RegisterVariant::Local(Register(2))),
                 ISub(
                     RegisterVariant::Local(Register(1)),
@@ -4299,12 +4295,12 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("if-end_1".into()),
-                SConst(RegisterVariant::Local(Register(5)), 1),
+                SConst(RegisterVariant::Local(Register(5)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(5))),
-                CallEfun("dump".into()),
+                CallEfun(1),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4348,11 +4344,7 @@ mod tests {
 
             let walker = walk_prog(prog, &mut cell_key);
 
-            let expected = vec![
-                ClearArgs,
-                Call(0),
-                Ret,
-            ];
+            let expected = vec![ClearArgs, Call(0), Ret];
 
             assert_eq!(walker.initializer.unwrap().instructions, expected);
 
@@ -4361,7 +4353,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(2)), 9),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 Ret, // Automatically added due to no explicit return
             ];
 
@@ -4822,7 +4814,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
                 Arg(RegisterVariant::Upvalue(Register(0))), /* This is what we're really testing for */
-                CallEfun("dump".into()),
+                CallEfun(2),
                 // ...etc. We don't care about the rest.
             ];
             assert_eq!(&instructions[0..=4], expected);
@@ -5101,7 +5093,7 @@ mod tests {
                     SConst(RegisterVariant::Local(Register(1)), 0),
                     ClearArgs,
                     Arg(RegisterVariant::Local(Register(1))),
-                    CallEfun("clone_object".into()),
+                    CallEfun(1),
                     RegCopy(
                         RegisterVariant::Local(Register(0)),
                         RegisterVariant::Local(Register(2))
@@ -5295,7 +5287,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
-                CallEfun("dump".into()),
+                CallEfun(1),
                 Jmp("while-start_0".into()),
             ];
 
@@ -5380,7 +5372,11 @@ mod tests {
                     .strings
                     .get()
                     .unwrap(),
-                &vec!["create__i____pb__".to_string(), "sup dawg".to_string()]
+                &vec![
+                    "create__i____pb__".to_string(),
+                    "sup dawg".to_string(),
+                    "dump".to_string()
+                ]
             );
         }
     }
@@ -5455,7 +5451,11 @@ mod tests {
 
         let mut parent_init = ProgramFunction::new(parent_init_prototype, 0);
 
-        let strings = Rc::new(vec![grandparent_init.mangle(), grandparent_create_mangle, parent_init.mangle()]);
+        let strings = Rc::new(vec![
+            grandparent_init.mangle(),
+            grandparent_create_mangle,
+            parent_init.mangle(),
+        ]);
 
         let mut grandparent = Program {
             initializer: Some(grandparent_init.into()),
@@ -5494,7 +5494,6 @@ mod tests {
         let mut walker = default_walker(&mut cell_key);
         walker.context.inherits.push(parent);
         walker.context.strings = strings.iter().cloned().collect();
-
 
         let expected = vec![
             IConst1(RegisterVariant::Local(Register(0))),
