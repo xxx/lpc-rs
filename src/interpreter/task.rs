@@ -392,7 +392,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call(ref name) => {
+            Instruction::Call(name) => {
                 self.handle_call(name, task_context, cell_key)?;
             }
             Instruction::CallEfun(ref name) => {
@@ -846,7 +846,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[instrument(skip_all)]
     fn handle_call<'task>(
         &mut self,
-        name: &str,
+        name_idx: usize,
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
@@ -855,6 +855,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let func = {
             let borrowed = process.ro(cell_key);
 
+            let name = &borrowed.program.strings[name_idx];
             let function = borrowed.as_ref().lookup_function(name);
             if let Some(func) = function {
                 func.clone()
@@ -867,15 +868,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     then {
                         func.clone()
                     } else {
-                        // See if there is a normal efun with this name
-                        if let Some(prototype) = EFUN_PROTOTYPES.get(name) {
-                            let func = ProgramFunction::new(prototype.clone(), 0);
-
-                            Rc::new(func)
-                        } else {
-                            let msg = format!("Call to unknown function `{name}`");
-                            return Err(self.runtime_error(msg));
-                        }
+                        let msg = format!("Call to unknown function `{name}`");
+                        return Err(self.runtime_error(msg));
                     }
                 }
             }

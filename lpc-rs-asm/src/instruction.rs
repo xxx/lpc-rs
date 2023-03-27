@@ -76,8 +76,9 @@ pub enum Instruction {
     /// x.1 = ~x.0
     BitwiseNot(RegisterVariant, RegisterVariant),
 
-    /// Call a function
-    Call(String),
+    /// Call a function in the current object.
+    /// The `usize` is an index into the object's `strings` table.
+    Call(usize),
 
     /// Call an Efun.
     CallEfun(String),
