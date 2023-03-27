@@ -556,10 +556,12 @@ impl CodegenWalker {
 
     #[inline]
     fn current_address(&self) -> Address {
-        match self.function_stack.last() {
+        let a = match self.function_stack.last() {
             Some(x) => x.instructions.len(),
             None => 0,
-        }
+        };
+
+        Address::from(a)
     }
 
     #[inline]
@@ -647,7 +649,7 @@ impl CodegenWalker {
         &mut self,
         span: Option<Span>,
         num_default_args: usize,
-    ) -> Option<usize> {
+    ) -> Option<Address> {
         if num_default_args > 0 {
             let address = Some(self.current_address());
 
@@ -666,7 +668,7 @@ impl CodegenWalker {
         ellipsis: bool,
         span: Option<Span>,
         passed_param_count: usize,
-    ) -> Option<usize> {
+    ) -> Option<Address> {
         if ellipsis {
             let argv_location = self.assign_sym_location(ARGV);
             // yep, argv can be upvalued
@@ -717,10 +719,10 @@ impl CodegenWalker {
 
         // backpatch the the correct init addresses for the PopulateDefaults call.
         let sym = self.function_stack.last_mut().unwrap();
-        let instruction = &sym.instructions[populate_defaults_index];
+        let instruction = &sym.instructions[populate_defaults_index.0];
         if let Instruction::PopulateDefaults(_) = instruction {
             let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
-            sym.instructions[populate_defaults_index] = new_instruction;
+            sym.instructions[populate_defaults_index.0] = new_instruction;
         } else {
             return Err(LpcError::new("Invalid populate_defaults_index").with_span(span));
         }
@@ -734,14 +736,14 @@ impl CodegenWalker {
 
     fn backpatch_populate_argv(
         func: &mut ProgramFunction,
-        populate_argv_index: usize,
+        populate_argv_address: Address,
         span: Option<Span>,
     ) -> Result<()> {
-        let instruction = &func.instructions[populate_argv_index];
+        let instruction = &func.instructions[populate_argv_address.0];
 
         if let Instruction::PopulateArgv(loc, num_args, _) = instruction {
             let new_instruction = Instruction::PopulateArgv(*loc, *num_args, func.num_locals);
-            func.instructions[populate_argv_index] = new_instruction;
+            func.instructions[populate_argv_address.0] = new_instruction;
 
             Ok(())
         } else {
@@ -1130,7 +1132,7 @@ impl TreeWalker for CodegenWalker {
         // return the current result if there is no explicit return.
         {
             let sym = self.function_stack.last_mut().unwrap();
-            if sym.instructions.len() == len
+            if sym.instructions.len() == len.0
                 || (!sym.instructions.is_empty()
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
@@ -1453,7 +1455,7 @@ impl TreeWalker for CodegenWalker {
         // insert a final return if one isn't already there.
         {
             let sym = self.function_stack.last_mut().unwrap();
-            if sym.instructions.len() == len
+            if sym.instructions.len() == len.0
                 || (!sym.instructions.is_empty()
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
@@ -3609,7 +3611,7 @@ mod tests {
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
-                    PopulateDefaults(vec![4, 6]),
+                    PopulateDefaults(vec![Address(4), Address(6)]),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
@@ -3630,7 +3632,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp(1.into()),
+                    Jmp(Address(1).into()),
                 ],
             );
         }
@@ -4156,7 +4158,7 @@ mod tests {
             assert_compiles_to(
                 "int main(int i, int j = 666, float d = 3.54) { return i * j; }",
                 vec![
-                    PopulateDefaults(vec![4, 6]),
+                    PopulateDefaults(vec![Address(4), Address(6)]),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
@@ -4177,7 +4179,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp(1.into()),
+                    Jmp(Address(1).into()),
                 ],
             );
         }

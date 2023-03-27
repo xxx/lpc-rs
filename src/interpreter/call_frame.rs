@@ -299,8 +299,11 @@ impl CallFrame {
 
     /// set the pc to a specific value
     #[inline]
-    pub fn set_pc(&self, new_val: usize) {
-        self.pc.replace(new_val);
+    pub fn set_pc<T>(&self, new_val: T)
+    where
+        T: Into<usize>
+    {
+        self.pc.replace(new_val.into());
     }
 
     /// Set the pc to the address for the passed label.
@@ -309,12 +312,12 @@ impl CallFrame {
     pub fn set_pc_from_jump_location(&self, jump_location: &JumpLocation) -> Result<()> {
         match jump_location {
             JumpLocation::Address(addr) => {
-                self.pc.replace(*addr);
+                self.pc.replace(addr.0);
                 Ok(())
             }
             JumpLocation::Label(label) => match self.lookup_label(label) {
                 Some(a) => {
-                    self.pc.replace(*a);
+                    self.pc.replace(a.0);
                     Ok(())
                 }
                 None => Err(self.runtime_error(format!("Unable to find address for {label}"))),

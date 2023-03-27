@@ -145,7 +145,7 @@ impl ProgramFunction {
             .collect::<MultiMap<_, _>>();
 
         for (counter, instruction) in self.instructions.iter().enumerate() {
-            if let Some(vec) = labels_by_pc.get_vec(&counter) {
+            if let Some(vec) = labels_by_pc.get_vec(&Address(counter)) {
                 for label in vec {
                     v.push(format!("  {label}:"));
                 }
