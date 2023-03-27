@@ -63,6 +63,9 @@ pub enum Instruction {
     /// new array or mapping constant.
     ClearArrayItems,
 
+    /// Copy x.0 to x.1
+    Copy(RegisterVariant, RegisterVariant),
+
     /// Decrement the value in x.0 by 1
     Dec(RegisterVariant),
 
@@ -196,9 +199,6 @@ pub enum Instruction {
         RegisterVariant,
     ),
 
-    /// Copy x.0 to x.1
-    RegCopy(RegisterVariant, RegisterVariant),
-
     /// Return from current function
     Ret,
 
@@ -265,6 +265,9 @@ impl Display for Instruction {
             }
             Instruction::ClearArrayItems => {
                 write!(f, "clear_array_items")
+            }
+            Instruction::Copy(r1, r2) => {
+                write!(f, "copy {r1}, {r2}")
             }
             Instruction::Dec(r) => {
                 write!(f, "dec {r}")
@@ -379,9 +382,6 @@ impl Display for Instruction {
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {r1}, {r2}, {r3}, {r4}")
-            }
-            Instruction::RegCopy(r1, r2) => {
-                write!(f, "reg_copy {r1}, {r2}")
             }
             Instruction::Ret => {
                 write!(f, "ret")

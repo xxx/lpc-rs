@@ -452,6 +452,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::ClearArrayItems => {
                 self.array_items.clear();
             }
+            Instruction::Copy(r1, r2) => {
+                let new_ref = get_location(&self.stack, r1, cell_key)?.into_owned();
+                set_loc!(self, r2, new_ref, cell_key)?;
+            }
             Instruction::Dec(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.dec(), cell_key)?;
             }
@@ -772,11 +776,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 let new_val = { get_new_value(&self.stack)? };
                 return_value(new_val, &self.memory, &mut self.stack, cell_key)?;
-            }
-
-            Instruction::RegCopy(r1, r2) => {
-                let new_ref = get_location(&self.stack, r1, cell_key)?.into_owned();
-                set_loc!(self, r2, new_ref, cell_key)?;
             }
             Instruction::Ret => {
                 pop_frame!(self, task_context).map(|frame| {

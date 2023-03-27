@@ -712,7 +712,7 @@ impl CodegenWalker {
                 // pre-generated locations of the parameters above.
                 value.visit(self, cell_key)?;
                 let instruction =
-                    Instruction::RegCopy(self.current_result, declared_arg_locations[idx]);
+                    Instruction::Copy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
             }
         }
@@ -802,7 +802,7 @@ impl TreeWalker for CodegenWalker {
                 let lhs_result = self.current_result;
                 trace!("assignment: lhs: {}, rhs: {}", lhs_result, rhs_result);
 
-                let assign = Instruction::RegCopy(rhs_result, lhs_result);
+                let assign = Instruction::Copy(rhs_result, lhs_result);
 
                 push_instruction!(self, assign, node.span);
 
@@ -868,7 +868,7 @@ impl TreeWalker for CodegenWalker {
                 let reg_result = self.register_counter.next().unwrap().as_local();
                 self.current_result = reg_result;
 
-                let instruction = Instruction::RegCopy(reg_right, reg_result);
+                let instruction = Instruction::Copy(reg_right, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 self.insert_label(end_label, self.current_address());
@@ -880,7 +880,7 @@ impl TreeWalker for CodegenWalker {
                 let end_label = self.new_label("oror-end");
 
                 let reg_result = self.register_counter.next().unwrap().as_local();
-                let instruction = Instruction::RegCopy(reg_left, reg_result);
+                let instruction = Instruction::Copy(reg_left, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 let instruction = Instruction::Jnz(reg_result, end_label.clone().into());
@@ -888,7 +888,7 @@ impl TreeWalker for CodegenWalker {
 
                 node.r.visit(self, cell_key)?;
                 let reg_right = self.current_result;
-                let instruction = Instruction::RegCopy(reg_right, reg_result);
+                let instruction = Instruction::Copy(reg_right, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 self.insert_label(end_label, self.current_address());
@@ -1022,7 +1022,7 @@ impl TreeWalker for CodegenWalker {
 
             push_instruction!(
                 walker,
-                Instruction::RegCopy(Register(0).as_local(), next_register),
+                Instruction::Copy(Register(0).as_local(), next_register),
                 node.span()
             );
 
@@ -1145,7 +1145,7 @@ impl TreeWalker for CodegenWalker {
 
                 if self.current_result != target {
                     sym.push_instruction(
-                        Instruction::RegCopy(self.current_result, target),
+                        Instruction::Copy(self.current_result, target),
                         node.span,
                     );
                 }
@@ -1814,7 +1814,7 @@ impl TreeWalker for CodegenWalker {
     fn visit_return(&mut self, node: &mut ReturnNode, cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(expression) = &mut node.value {
             expression.visit(self, cell_key)?;
-            let copy = Instruction::RegCopy(self.current_result, Register(0).as_local());
+            let copy = Instruction::Copy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
         }
 
@@ -1951,7 +1951,7 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
         push_instruction!(
             self,
-            Instruction::RegCopy(self.current_result, result_reg),
+            Instruction::Copy(self.current_result, result_reg),
             node.span
         );
 
@@ -1964,7 +1964,7 @@ impl TreeWalker for CodegenWalker {
         node.else_clause.visit(self, cell_key)?;
         push_instruction!(
             self,
-            Instruction::RegCopy(self.current_result, result_reg),
+            Instruction::Copy(self.current_result, result_reg),
             node.span
         );
 
@@ -2004,7 +2004,7 @@ impl TreeWalker for CodegenWalker {
                 if node.is_post {
                     // TODO: only copy if pre-operation value is needed elsewhere
                     let temp = self.register_counter.next().unwrap().as_local();
-                    let copy = Instruction::RegCopy(location, temp);
+                    let copy = Instruction::Copy(location, temp);
                     push_instruction!(self, copy, node.span);
                     push_instruction!(self, instruction, node.span);
                     temp
@@ -2105,7 +2105,7 @@ impl TreeWalker for CodegenWalker {
                 trace!("Copying global to {:?}", next_register);
                 push_instruction!(
                     self,
-                    Instruction::RegCopy(self.current_result, next_register),
+                    Instruction::Copy(self.current_result, next_register),
                     node.span()
                 );
 
@@ -2119,7 +2119,7 @@ impl TreeWalker for CodegenWalker {
                 trace!("Copying upvalue to {:?}", next_register);
                 push_instruction!(
                     self,
-                    Instruction::RegCopy(self.current_result, next_register),
+                    Instruction::Copy(self.current_result, next_register),
                     node.span()
                 );
                 next_register
@@ -2130,7 +2130,7 @@ impl TreeWalker for CodegenWalker {
                 trace!("Copying var to {:?}", next_register);
                 push_instruction!(
                     self,
-                    Instruction::RegCopy(self.current_result, next_register),
+                    Instruction::Copy(self.current_result, next_register),
                     node.span()
                 );
                 next_register
@@ -2407,7 +2407,7 @@ mod tests {
                 walker_init_instructions(&mut walker),
                 [
                     IConst(RegisterVariant::Local(Register(1)), -12),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Global(Register(666))
                     ),
@@ -2444,7 +2444,7 @@ mod tests {
                 walker_init_instructions(&mut walker),
                 [
                     IConst(RegisterVariant::Local(Register(1)), -12),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(666))
                     )
@@ -2757,7 +2757,7 @@ mod tests {
                 // and also
                 SConst(RegisterVariant::Local(Register(2)), 0),
                 Jz(RegisterVariant::Local(Register(2)), "andand-end_0".into()),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
@@ -2783,14 +2783,14 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
                 ),
                 Jnz(RegisterVariant::Local(Register(2)), "oror-end_0".into()),
                 // else
                 SConst(RegisterVariant::Local(Register(3)), 0),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(2)),
                 ),
@@ -2853,7 +2853,7 @@ mod tests {
                     RegisterVariant::Local(Register(7)),
                     RegisterVariant::Local(Register(8)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -2914,7 +2914,7 @@ mod tests {
                     RegisterVariant::Local(Register(7)),
                     RegisterVariant::Local(Register(8)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -2924,7 +2924,7 @@ mod tests {
                     RegisterVariant::Local(Register(9)),
                     RegisterVariant::Local(Register(10)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -2979,7 +2979,7 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(6)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(6)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -3140,7 +3140,7 @@ mod tests {
                     receiver: RegisterVariant::Local(Register(2)),
                     name: RegisterVariant::Local(Register(3)),
                 },
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(4)),
                 ),
@@ -3159,7 +3159,7 @@ mod tests {
                     receiver: RegisterVariant::Local(Register(1)),
                     name: RegisterVariant::Local(Register(2)),
                 },
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(4)),
                 ),
@@ -3263,7 +3263,7 @@ mod tests {
                 CallFp {
                     location: RegisterVariant::Local(Register(1)),
                 },
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
@@ -3308,7 +3308,7 @@ mod tests {
                 CallFp {
                     location: RegisterVariant::Global(Register(0)),
                 },
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
@@ -3344,7 +3344,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 Call(0),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
@@ -3399,7 +3399,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 CallEfun(1),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
@@ -3608,7 +3608,7 @@ mod tests {
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
                     PopulateArgv(RegisterVariant::Local(Register(2)), 1, 1),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(0)),
                     ),
@@ -3634,18 +3634,18 @@ mod tests {
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(4)),
                     ),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(4)),
                         RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
                     IConst(RegisterVariant::Local(Register(5)), 666),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(5)),
                         RegisterVariant::Local(Register(2)),
                     ),
                     FConst(RegisterVariant::Local(Register(6)), 3.54.into()),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
@@ -3747,7 +3747,7 @@ mod tests {
                     RegisterVariant::Local(Register(7)),
                     RegisterVariant::Local(Register(8)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -3808,7 +3808,7 @@ mod tests {
                     RegisterVariant::Local(Register(7)),
                     RegisterVariant::Local(Register(8)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -3818,7 +3818,7 @@ mod tests {
                     RegisterVariant::Local(Register(9)),
                     RegisterVariant::Local(Register(10)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -3872,7 +3872,7 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(6)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(6)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -3918,7 +3918,7 @@ mod tests {
 
         let expected = vec![
             IConst1(RegisterVariant::Local(Register(1))),
-            RegCopy(
+            Copy(
                 RegisterVariant::Local(Register(1)),
                 RegisterVariant::Global(Register(0)),
             ),
@@ -3928,7 +3928,7 @@ mod tests {
             AConst(
                 RegisterVariant::Local(Register(3)),
             ),
-            RegCopy(
+            Copy(
                 RegisterVariant::Local(Register(3)),
                 RegisterVariant::Global(Register(1)),
             ),
@@ -4091,7 +4091,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -4147,7 +4147,7 @@ mod tests {
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(3)),
                         RegisterVariant::Local(Register(0)),
                     ),
@@ -4162,7 +4162,7 @@ mod tests {
                 "int main(int i, ...) { return argv; }",
                 vec![
                     PopulateArgv(RegisterVariant::Local(Register(2)), 1, 1),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(0)),
                     ),
@@ -4182,18 +4182,18 @@ mod tests {
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(4)),
                     ),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(4)),
                         RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
                     IConst(RegisterVariant::Local(Register(5)), 666),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(5)),
                         RegisterVariant::Local(Register(2)),
                     ),
                     FConst(RegisterVariant::Local(Register(6)), 3.54.into()),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
@@ -4404,12 +4404,12 @@ mod tests {
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 123),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Global(Register(0)),
                 ),
                 SConst(RegisterVariant::Local(Register(2)), 0),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Global(Register(1)),
                 ),
@@ -4436,7 +4436,7 @@ mod tests {
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Global(Register(0)),
                 ),
@@ -4463,12 +4463,12 @@ mod tests {
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Global(Register(0)),
                 ),
                 IConst(RegisterVariant::Local(Register(2)), 777),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Global(Register(1)),
                 ),
@@ -4489,7 +4489,7 @@ mod tests {
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 666),
-            RegCopy(
+            Copy(
                 RegisterVariant::Local(Register(1)),
                 RegisterVariant::Local(Register(0)),
             ),
@@ -4566,13 +4566,13 @@ mod tests {
                 ),
                 Jz(RegisterVariant::Local(Register(4)), "ternary-else_0".into()), // jump to else
                 IConst(RegisterVariant::Local(Register(5)), 666),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp("ternary-end_1".into()), // jump to end
                 IConst(RegisterVariant::Local(Register(6)), 777),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(6)),
                     RegisterVariant::Local(Register(1)),
                 ),
@@ -4643,7 +4643,7 @@ mod tests {
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
                     ),
@@ -4677,7 +4677,7 @@ mod tests {
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
                     ),
@@ -4937,7 +4937,7 @@ mod tests {
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
-                [RegCopy(
+                [Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2))
                 )]
@@ -4969,7 +4969,7 @@ mod tests {
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
-                [RegCopy(
+                [Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2))
                 )]
@@ -5004,7 +5004,7 @@ mod tests {
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
-                [RegCopy(
+                [Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2))
                 )]
@@ -5036,7 +5036,7 @@ mod tests {
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
-                [RegCopy(
+                [Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2))
                 )]
@@ -5075,7 +5075,7 @@ mod tests {
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
-                [RegCopy(
+                [Copy(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2))
                 )]
@@ -5114,7 +5114,7 @@ mod tests {
                     ClearArgs,
                     Arg(RegisterVariant::Local(Register(1))),
                     CallEfun(1),
-                    RegCopy(
+                    Copy(
                         RegisterVariant::Local(Register(0)),
                         RegisterVariant::Local(Register(2))
                     )
@@ -5188,12 +5188,12 @@ mod tests {
                 AConst(
                     RegisterVariant::Local(Register(8)),
                 ),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Global(Register(0)),
                 ),
                 SConst(RegisterVariant::Local(Register(9)), 1),
-                RegCopy(
+                Copy(
                     RegisterVariant::Local(Register(9)),
                     RegisterVariant::Global(Register(1)),
                 ),
