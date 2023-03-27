@@ -417,10 +417,10 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 self.prepare_and_call_efun(efun, task_context, cell_key)?;
             }
-            Instruction::CallFp { location } => {
+            Instruction::CallFp(location) => {
                 self.handle_call_fp(task_context, location, cell_key)?;
             }
-            Instruction::CallOther { receiver, name } => {
+            Instruction::CallOther(receiver, name) => {
                 self.handle_call_other(receiver, name, task_context, cell_key)?;
             }
             Instruction::CatchEnd => {

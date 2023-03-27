@@ -984,27 +984,22 @@ impl TreeWalker for CodegenWalker {
 
                 push_instruction!(self, Instruction::SConst(name_register, index), node.span);
 
-                Instruction::CallOther {
-                    receiver: receiver_result,
-                    name: name_register,
-                }
+                Instruction::CallOther(receiver_result, name_register)
             } else if node.name == CALL_OTHER {
                 debug_assert!(
                     arg_results.len() >= 2,
                     "CallOther requires at least 2 arguments, for the receiver and function name"
                 );
                 let receiver = arg_results[0];
-                let name = arg_results[1];
+                let name_index = arg_results[1];
 
-                Instruction::CallOther { receiver, name }
+                Instruction::CallOther(receiver, name_index)
             } else {
                 if_chain! {
                     if let Some(x) = self.context.lookup_var(&node.name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
-                        Instruction::CallFp {
-                            location: x.location.unwrap(),
-                        }
+                        Instruction::CallFp(x.location.unwrap())
                     } else {
                         let Some(func) =
                             self.context.lookup_function_complete(&node.name, &node.namespace, cell_key) else {
@@ -3131,10 +3126,10 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 SConst(RegisterVariant::Local(Register(2)), 0),
                 SConst(RegisterVariant::Local(Register(3)), 1),
-                CallOther {
-                    receiver: RegisterVariant::Local(Register(2)),
-                    name: RegisterVariant::Local(Register(3)),
-                },
+                CallOther(
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                ),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(4)),
@@ -3150,10 +3145,10 @@ mod tests {
                 Arg(RegisterVariant::Local(Register(1))),
                 Arg(RegisterVariant::Local(Register(2))),
                 Arg(RegisterVariant::Local(Register(3))),
-                CallOther {
-                    receiver: RegisterVariant::Local(Register(1)),
-                    name: RegisterVariant::Local(Register(2)),
-                },
+                CallOther(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                ),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(4)),
@@ -3253,9 +3248,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallFp {
-                    location: RegisterVariant::Local(Register(1)),
-                },
+                CallFp(RegisterVariant::Local(Register(1))),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3298,9 +3291,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
-                CallFp {
-                    location: RegisterVariant::Global(Register(0)),
-                },
+                CallFp(RegisterVariant::Global(Register(0))),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),

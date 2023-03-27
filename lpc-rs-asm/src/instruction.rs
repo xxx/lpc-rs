@@ -40,13 +40,11 @@ pub enum Instruction {
     CallEfun(usize),
 
     /// Call a function pointer, located in `location`
-    CallFp { location: RegisterVariant },
+    CallFp(RegisterVariant),
 
-    /// Call a function in another object
-    CallOther {
-        receiver: RegisterVariant,
-        name: RegisterVariant,
-    },
+    /// Call a function in another object.
+    /// x.0 is the receiver, x.1 is the function name
+    CallOther(RegisterVariant, RegisterVariant),
 
     /// Finish a block of instructions that can catch errors and continue
     /// execution.
@@ -54,7 +52,8 @@ pub enum Instruction {
 
     /// Start a block of instructions that can catch errors and continue
     /// execution. Store the error in x.0, and jump to x.1 to continue
-    /// execution
+    /// execution. Jumping to x.1 may include removing call frames to
+    /// get back to the correct location.
     CatchStart(RegisterVariant, Address),
 
     /// Clear the [`Task`]'s `args` vector, in preparation for a new call
@@ -249,16 +248,16 @@ impl Display for Instruction {
             Instruction::CatchStart(r1, label) => {
                 write!(f, "catch_start {r1}, {label}")
             }
-            Instruction::Call(name) => {
-                write!(f, "call {name}")
+            Instruction::Call(name_index) => {
+                write!(f, "call {name_index}")
             }
-            Instruction::CallEfun(name) => {
-                write!(f, "call_efun {name}")
+            Instruction::CallEfun(name_index) => {
+                write!(f, "call_efun {name_index}")
             }
-            Instruction::CallFp { location } => {
+            Instruction::CallFp(location) => {
                 write!(f, "call_fp {location}")
             }
-            Instruction::CallOther { receiver, name } => {
+            Instruction::CallOther(receiver, name) => {
                 write!(f, "call_other {receiver}, {name}")
             }
             Instruction::ClearArgs => {
