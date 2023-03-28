@@ -552,12 +552,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     frame.set_pc(address);
                 }
             }
-            Instruction::Jz(r1, ref jump_location) => {
+            Instruction::Jz(r1, address) => {
                 let v = &*get_loc!(self, r1, cell_key)?;
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
                     let frame = self.stack.current_frame()?;
-                    frame.set_pc_from_jump_location(jump_location)?;
+                    frame.set_pc(address);
                 }
             }
             Instruction::Load(container, index, destination) => {

@@ -127,7 +127,7 @@ pub enum Instruction {
     Jnz(RegisterVariant, Address),
 
     /// Jump if the value in the register is zero (Int or Float)
-    Jz(RegisterVariant, JumpLocation),
+    Jz(RegisterVariant, Address),
 
     /// Load a single item from an array or mapping into a register
     /// x.2 = x.0[x.1]
@@ -242,7 +242,7 @@ impl Instruction {
                 *self = Instruction::Jnz(*r, address.into());
             }
             Instruction::Jz(r, _) => {
-                *self = Instruction::Jz(*r, JumpLocation::Address(address.into()));
+                *self = Instruction::Jz(*r, address.into());
             }
             _ => {
                 return Err(LpcError::new_bug(format!("Cannot backpatch instruction {:?}", self)));

@@ -936,12 +936,14 @@ impl TreeWalker for CodegenWalker {
             BinaryOperation::AndAnd => {
                 // Handle short-circuit behavior
                 let end_label = self.new_label("andand-end");
-                let instruction = Instruction::Jz(reg_left, end_label.clone().into());
+                self.schedule_backpatch(&end_label, self.current_address())?;
+                let instruction = Instruction::Jz(reg_left, Address(0));
                 push_instruction!(self, instruction, node.span);
 
                 node.r.visit(self, cell_key)?;
                 let reg_right = self.current_result;
-                let instruction = Instruction::Jz(reg_right, end_label.clone().into());
+                self.schedule_backpatch(&end_label, self.current_address())?;
+                let instruction = Instruction::Jz(reg_right, Address(0));
                 push_instruction!(self, instruction, node.span);
 
                 let reg_result = self.register_counter.next().unwrap().as_local();
@@ -1376,7 +1378,8 @@ impl TreeWalker for CodegenWalker {
         if let Some(cond) = &mut node.condition {
             cond.visit(self, cell_key)?;
 
-            let instruction = Instruction::Jz(self.current_result, end_label.clone().into());
+            self.schedule_backpatch(&end_label, self.current_address())?;
+            let instruction = Instruction::Jz(self.current_result, Address(0));
             push_instruction!(self, instruction, cond.span());
         };
 
@@ -1733,7 +1736,8 @@ impl TreeWalker for CodegenWalker {
         // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the
         // "then" body. Insert a placeholder address, which we correct below
         // after the body's code is generated
-        let instruction = Instruction::Jz(self.current_result, else_label.clone().into());
+        self.schedule_backpatch(&else_label, self.current_address())?;
+        let instruction = Instruction::Jz(self.current_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
         // Generate the main body of the statement
@@ -2040,7 +2044,8 @@ impl TreeWalker for CodegenWalker {
 
         node.condition.visit(self, cell_key)?;
 
-        let instruction = Instruction::Jz(self.current_result, else_label.clone().into());
+        self.schedule_backpatch(&else_label, self.current_address())?;
+        let instruction = Instruction::Jz(self.current_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
         node.body.visit(self, cell_key)?;
@@ -2267,7 +2272,8 @@ impl TreeWalker for CodegenWalker {
 
         let cond_result = self.current_result;
 
-        let instruction = Instruction::Jz(cond_result, end_label.clone().into());
+        self.schedule_backpatch(&end_label, self.current_address())?;
+        let instruction = Instruction::Jz(cond_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
         node.body.visit(self, cell_key)?;
@@ -2827,6 +2833,7 @@ mod tests {
         fn populates_the_instructions_for_andand_expressions() {
             let mut cell_key = QCellOwner::new();
             let mut walker = default_walker(&mut cell_key);
+            walker.backpatch_maps.push(HashMap::new());
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(123)),
@@ -2839,10 +2846,10 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
-                Jz(RegisterVariant::Local(Register(1)), "andand-end_0".into()),
+                Jz(RegisterVariant::Local(Register(1)), Address(0)),
                 // and also
                 SConst(RegisterVariant::Local(Register(2)), 0),
-                Jz(RegisterVariant::Local(Register(2)), "andand-end_0".into()),
+                Jz(RegisterVariant::Local(Register(2)), Address(0)),
                 Copy(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
@@ -2918,7 +2925,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(18)),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 CallEfun(1),
@@ -2928,7 +2935,7 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                     RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
+                Jz(RegisterVariant::Local(Register(5)), Address(14)),
                 SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
@@ -2979,7 +2986,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(22)),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 CallEfun(1),
@@ -2989,7 +2996,7 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                     RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
+                Jz(RegisterVariant::Local(Register(5)), Address(15)),
                 SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
@@ -3054,7 +3061,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(11)),
                 SConst(RegisterVariant::Local(Register(4)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
@@ -3806,7 +3813,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "while-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(18)),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 CallEfun(1),
@@ -3816,7 +3823,7 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                     RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Local(Register(5)), "if-else_3".into()),
+                Jz(RegisterVariant::Local(Register(5)), Address(14)),
                 SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
@@ -3867,7 +3874,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "for-end_2".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(22)),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 CallEfun(1),
@@ -3877,7 +3884,7 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                     RegisterVariant::Local(Register(5)),
                 ),
-                Jz(RegisterVariant::Local(Register(5)), "if-else_4".into()),
+                Jz(RegisterVariant::Local(Register(5)), Address(15)),
                 SConst(RegisterVariant::Local(Register(6)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
@@ -3941,7 +3948,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "if-else_4".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(11)),
                 SConst(RegisterVariant::Local(Register(4)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
@@ -4162,7 +4169,7 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 10),
-                Jz(RegisterVariant::Local(Register(1)), "for-end_1".into()),
+                Jz(RegisterVariant::Local(Register(1)), Address(0)),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(1))),
                 CallEfun(0),
@@ -4396,7 +4403,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "if-else_0".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(0)),
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
@@ -4708,7 +4715,7 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(4)),
                 ),
-                Jz(RegisterVariant::Local(Register(4)), "ternary-else_0".into()), // jump to else
+                Jz(RegisterVariant::Local(Register(4)), Address(0)), // jump to else
                 IConst(RegisterVariant::Local(Register(5)), 666),
                 Copy(
                     RegisterVariant::Local(Register(5)),
@@ -5440,7 +5447,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), "while-end_1".into()),
+                Jz(RegisterVariant::Local(Register(3)), Address(0)),
                 SConst(RegisterVariant::Local(Register(4)), 0),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
