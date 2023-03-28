@@ -11,7 +11,7 @@ use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_asm::{instruction::Instruction, jump_location::Address};
+use lpc_rs_asm::{instruction::Instruction, address::Address};
 use lpc_rs_core::{
     function::{FunctionName, FunctionReceiver, FunctionTarget},
     function_arity::FunctionArity,

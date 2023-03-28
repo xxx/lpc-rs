@@ -10,7 +10,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::{
     instruction::Instruction,
-    jump_location::{Address, JumpLocation},
+    address::Address,
 };
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
@@ -306,25 +306,6 @@ impl CallFrame {
         T: Into<usize>,
     {
         self.pc.replace(new_val.into());
-    }
-
-    /// Set the pc to the address for the passed label.
-    /// Returns an error if the label is not found.
-    #[inline]
-    pub fn set_pc_from_jump_location(&self, jump_location: &JumpLocation) -> Result<()> {
-        match jump_location {
-            JumpLocation::Address(addr) => {
-                self.pc.replace(addr.0);
-                Ok(())
-            }
-            JumpLocation::Label(label) => match self.lookup_label(label) {
-                Some(a) => {
-                    self.pc.replace(a.0);
-                    Ok(())
-                }
-                None => Err(self.runtime_error(format!("Unable to find address for {label}"))),
-            },
-        }
     }
 
     /// increment the pc

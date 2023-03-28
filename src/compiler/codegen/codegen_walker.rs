@@ -5,7 +5,7 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::{
     instruction::Instruction,
-    jump_location::{Address, Label},
+    address::{Address, Label},
 };
 use lpc_rs_core::{
     call_namespace::CallNamespace,
@@ -4622,7 +4622,6 @@ mod tests {
     }
 
     mod test_visit_switch {
-        use lpc_rs_asm::jump_location::JumpLocation::Label;
         use super::*;
 
         #[test]

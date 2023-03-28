@@ -11,7 +11,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::jump_location::{Address, JumpLocation};
+use crate::address::Address;
 
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la

@@ -1,2 +1,2 @@
 pub mod instruction;
-pub mod jump_location;
+pub mod address;
