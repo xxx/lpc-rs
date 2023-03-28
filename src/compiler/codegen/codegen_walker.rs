@@ -582,7 +582,7 @@ impl CodegenWalker {
             backpatch_map.insert(label.to_string(), bitset);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     // special case for `catch()`
@@ -732,7 +732,7 @@ impl CodegenWalker {
 
         // these addresses are backpatched later, once we have them.
         for _ in 0..num_default_args {
-            let instruction = Instruction::Jmp(Address(0).into());
+            let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, span);
         }
 
@@ -800,14 +800,14 @@ impl CodegenWalker {
             let idx = populate_defaults_index.0;
             for i in 1..=default_init_addresses.len() {
                 debug_assert!(matches!(sym.instructions[idx + i], Instruction::Jmp(_)), "Expected a Jmp instruction for argument default {}.", i);
-                sym.instructions[idx + i] = Instruction::Jmp(default_init_addresses[i - 1].into());
+                sym.instructions[idx + i] = Instruction::Jmp(default_init_addresses[i - 1]);
             }
         } else {
             return Err(LpcError::new_bug("Invalid populate_defaults_index").with_span(span));
         }
 
         // jump back to the function now that defaults are populated.
-        let instruction = Instruction::Jmp((populate_defaults_index + 1 + default_init_addresses.len()).into());
+        let instruction = Instruction::Jmp(populate_defaults_index + 1 + default_init_addresses.len());
         push_instruction!(self, instruction, span);
 
         Ok(())
@@ -3715,8 +3715,8 @@ mod tests {
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
                     PopulateDefaults,
-                    Jmp(Address(6).into()),
-                    Jmp(Address(8).into()),
+                    Jmp(Address(6)),
+                    Jmp(Address(8)),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
@@ -3737,7 +3737,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp(Address(3).into()),
+                    Jmp(Address(3)),
                 ],
             );
         }
@@ -4265,8 +4265,8 @@ mod tests {
                 "int main(int i, int j = 666, float d = 3.54) { return i * j; }",
                 vec![
                     PopulateDefaults,
-                    Jmp(Address(6).into()),
-                    Jmp(Address(8).into()),
+                    Jmp(Address(6)),
+                    Jmp(Address(8)),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
@@ -4287,7 +4287,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp(Address(3).into()),
+                    Jmp(Address(3)),
                 ],
             );
         }
@@ -4644,7 +4644,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code, &mut cell_key);
+            let walker = walk_prog(code, &mut cell_key);
             let func = walker.functions.values().find(|f| f.name() == "create").unwrap();
             let instructions = func.instructions.clone();
             let expected = vec![
