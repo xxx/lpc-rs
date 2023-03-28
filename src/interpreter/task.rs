@@ -539,16 +539,17 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Jmp(jump_location) => {
+            Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame()?;
-                frame.set_pc(jump_location);
+                frame.set_pc(address);
             }
-            Instruction::Jnz(r1, ref jump_location) => {
+            Instruction::Jnz(r1, address) => {
                 let v = &*get_loc!(self, r1, cell_key)?;
 
+                // TODO: re-decide of 0.0 floats should match here and with Jz
                 if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
                     let frame = self.stack.current_frame()?;
-                    frame.set_pc_from_jump_location(jump_location)?;
+                    frame.set_pc(address);
                 }
             }
             Instruction::Jz(r1, ref jump_location) => {

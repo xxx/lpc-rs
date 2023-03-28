@@ -124,7 +124,7 @@ pub enum Instruction {
     Jmp(Address),
 
     /// Jump if the value in the register is not zero (Int or Float)
-    Jnz(RegisterVariant, JumpLocation),
+    Jnz(RegisterVariant, Address),
 
     /// Jump if the value in the register is zero (Int or Float)
     Jz(RegisterVariant, JumpLocation),
@@ -239,7 +239,7 @@ impl Instruction {
                 *self = Instruction::Jmp(address.into());
             }
             Instruction::Jnz(r, _) => {
-                *self = Instruction::Jnz(*r, JumpLocation::Address(address.into()));
+                *self = Instruction::Jnz(*r, address.into());
             }
             Instruction::Jz(r, _) => {
                 *self = Instruction::Jz(*r, JumpLocation::Address(address.into()));

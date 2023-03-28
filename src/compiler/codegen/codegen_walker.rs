@@ -565,7 +565,7 @@ impl CodegenWalker {
     ///
     /// # Panics
     /// If the instruction address is already in the backpatch map for the given label.
-    fn append_backpatch(&mut self, label: &Label, instruction_address: Address) -> Result<()> {
+    fn schedule_backpatch(&mut self, label: &Label, instruction_address: Address) -> Result<()> {
         let Some(backpatch_map) = self.backpatch_maps.last_mut() else {
             return Err(LpcError::new_bug("No backpatch map found to append to".to_string()));
         };
@@ -962,7 +962,8 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::Copy(reg_left, reg_result);
                 push_instruction!(self, instruction, node.span);
 
-                let instruction = Instruction::Jnz(reg_result, end_label.clone().into());
+                self.schedule_backpatch(&end_label, self.current_address())?;
+                let instruction = Instruction::Jnz(reg_result, Address(0));
                 push_instruction!(self, instruction, node.span);
 
                 node.r.visit(self, cell_key)?;
@@ -1006,7 +1007,7 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     fn visit_break(&mut self, node: &mut BreakNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
-            self.append_backpatch(&break_target.clone(), self.current_address())?;
+            self.schedule_backpatch(&break_target.clone(), self.current_address())?;
             let instruction = Instruction::Jmp(0.into());
             push_instruction!(self, instruction, node.span);
             return Ok(());
@@ -1296,7 +1297,7 @@ impl TreeWalker for CodegenWalker {
             continue_target, ..
         }) = self.jump_targets.last()
         {
-            self.append_backpatch(&continue_target.clone(), self.current_address())?;
+            self.schedule_backpatch(&continue_target.clone(), self.current_address())?;
             let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, node.span);
             return Ok(());
@@ -1335,7 +1336,8 @@ impl TreeWalker for CodegenWalker {
         node.condition.visit(self, cell_key)?;
 
         // Go back to the start of the loop if the result isn't zero
-        let instruction = Instruction::Jnz(self.current_result, start_label.into());
+        self.schedule_backpatch(&start_label, self.current_address())?;
+        let instruction = Instruction::Jnz(self.current_result, Address(0));
         push_instruction!(self, instruction, node.span);
         let end_addr = self.current_address();
         self.insert_label(end_label, end_addr);
@@ -1388,7 +1390,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         // go back to the start of the loop
-        self.append_backpatch(&start_label, self.current_address())?;
+        self.schedule_backpatch(&start_label, self.current_address())?;
         let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
@@ -1442,7 +1444,8 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
         push_instruction!(self, instruction, node.span);
 
-        let instruction = Instruction::Jnz(eqeq_result, end_label.clone().into());
+        self.schedule_backpatch(&end_label, self.current_address())?;
+        let instruction = Instruction::Jnz(eqeq_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
         // assign next element(s) to the locations
@@ -1476,7 +1479,7 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         // go back to the start of the loop
-        self.append_backpatch(&start_label, self.current_address())?;
+        self.schedule_backpatch(&start_label, self.current_address())?;
         let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
@@ -1737,7 +1740,7 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
 
         if node.else_clause.is_some() {
-            self.append_backpatch(&end_label, self.current_address())?;
+            self.schedule_backpatch(&end_label, self.current_address())?;
             let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, node.span);
         }
@@ -1928,7 +1931,7 @@ impl TreeWalker for CodegenWalker {
         let expr_result = self.current_result;
 
         let test_label = self.new_label("switch-test");
-        self.append_backpatch(&test_label, self.current_address())?;
+        self.schedule_backpatch(&test_label, self.current_address())?;
         let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
@@ -1953,7 +1956,7 @@ impl TreeWalker for CodegenWalker {
             != &instruction
         {
             // TODO: this may be sketchy, since the jump address we're testing against has not been set
-            self.append_backpatch(&end_label, self.current_address())?;
+            self.schedule_backpatch(&end_label, self.current_address())?;
             push_instruction!(self, instruction, node.span);
         }
 
@@ -2006,13 +2009,14 @@ impl TreeWalker for CodegenWalker {
                     }
 
                     let case_label = self.new_label("switch-case");
-                    let instruction = Instruction::Jnz(test_result, case_label.clone().into());
+                    self.schedule_backpatch(&case_label, self.current_address())?;
+                    let instruction = Instruction::Jnz(test_result, Address(0));
                     push_instruction!(self, instruction, node.span);
                     self.insert_label(case_label, case_address.1);
                 }
                 None => {
                     let default_label = self.new_label("switch-default");
-                    self.append_backpatch(&default_label, self.current_address())?;
+                    self.schedule_backpatch(&default_label, self.current_address())?;
                     let instruction = Instruction::Jmp(Address(0));
                     push_instruction!(self, instruction, node.span);
                     self.insert_label(default_label, case_address.1);
@@ -2046,7 +2050,7 @@ impl TreeWalker for CodegenWalker {
             node.span
         );
 
-        self.append_backpatch(&end_label, self.current_address())?;
+        self.schedule_backpatch(&end_label, self.current_address())?;
         let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
@@ -2269,7 +2273,7 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
 
         // go back to the start of the loop
-        self.append_backpatch(&start_label, self.current_address())?;
+        self.schedule_backpatch(&start_label, self.current_address())?;
         let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
@@ -2853,6 +2857,7 @@ mod tests {
         fn populates_the_instructions_for_oror_expressions() {
             let mut cell_key = QCellOwner::new();
             let mut walker = default_walker(&mut cell_key);
+            walker.backpatch_maps.push(HashMap::new());
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(123)),
@@ -2869,7 +2874,7 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(2)), "oror-end_0".into()),
+                Jnz(RegisterVariant::Local(Register(2)), Address(0)),
                 // else
                 SConst(RegisterVariant::Local(Register(3)), 0),
                 Copy(
@@ -2928,7 +2933,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp(Address(0)),
+                Jmp(Address(18)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -2939,7 +2944,7 @@ mod tests {
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(3)),
+                Jmp(Address(0)),
                 Ret,
             ];
 
@@ -2989,7 +2994,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp(Address(0)),
+                Jmp(Address(22)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3010,7 +3015,7 @@ mod tests {
                     RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(0)),
+                Jmp(Address(1)),
                 Ret,
             ];
 
@@ -3054,7 +3059,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(1),
-                Jmp(Address(0)),
+                Jmp(Address(17)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3073,7 +3078,7 @@ mod tests {
                 ),
                 Jnz(
                     RegisterVariant::Local(Register(8)),
-                    "do-while-start_1".into(),
+                    Address(0),
                 ),
                 Ret,
             ];
@@ -3106,12 +3111,12 @@ mod tests {
             let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                Jmp(Address(0)),
+                Jmp(Address(16)),
                 SConst(RegisterVariant::Local(Register(2)), 1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
                 CallEfun(2),
-                Jmp(Address(0)),
+                Jmp(Address(26)),
                 SConst(RegisterVariant::Local(Register(3)), 3),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(3))),
@@ -3120,14 +3125,14 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(2),
-                Jmp(Address(0)),
+                Jmp(Address(26)),
                 IConst(RegisterVariant::Local(Register(5)), 666),
                 EqEq(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(6)),
                 ),
-                Jnz(RegisterVariant::Local(Register(6)), "switch-case_3".into()),
+                Jnz(RegisterVariant::Local(Register(6)), Address(2)),
                 IConst(RegisterVariant::Local(Register(7)), 10),
                 IConst(RegisterVariant::Local(Register(8)), 200),
                 Gte(
@@ -3145,8 +3150,8 @@ mod tests {
                     RegisterVariant::Local(Register(11)),
                     RegisterVariant::Local(Register(9)),
                 ),
-                Jnz(RegisterVariant::Local(Register(9)), "switch-case_4".into()),
-                Jmp(Address(0)),
+                Jnz(RegisterVariant::Local(Register(9)), Address(11)),
+                Jmp(Address(7)),
                 Ret,
             ];
 
@@ -3877,7 +3882,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp(Address(0)),
+                Jmp(Address(18)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3898,7 +3903,7 @@ mod tests {
                     RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(0)),
+                Jmp(Address(1)),
                 Ret,
             ];
 
@@ -3941,7 +3946,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(1),
-                Jmp(Address(0)),
+                Jmp(Address(14)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3960,7 +3965,7 @@ mod tests {
                 ),
                 Jnz(
                     RegisterVariant::Local(Register(8)),
-                    "do-while-start_1".into(),
+                    Address(0),
                 ),
                 Ret,
             ];
@@ -4051,6 +4056,7 @@ mod tests {
         fn test_populates_the_instructions() {
             let mut cell_key = QCellOwner::new();
             let mut walker = default_walker(&mut cell_key);
+            walker.backpatch_maps.push(HashMap::new());
 
             let mut node = DoWhileNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -4086,7 +4092,7 @@ mod tests {
                 ),
                 Jnz(
                     RegisterVariant::Local(Register(4)),
-                    "do-while-start_0".into(),
+                    Address(0),
                 ),
             ];
 
@@ -4150,6 +4156,7 @@ mod tests {
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
+            walker.backpatch_maps.push(HashMap::new());
 
             walker.visit_for(&mut node, &mut cell_key).unwrap();
 
@@ -4352,6 +4359,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
 
             let mut walker = default_walker(&mut cell_key);
+            walker.backpatch_maps.push(HashMap::new());
 
             let mut node = IfNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
@@ -4653,10 +4661,10 @@ mod tests {
                 Jmp(Address(24)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 EqEq(RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(5)), RegisterVariant::Local(Register(6))),
-                Jnz(RegisterVariant::Local(Register(6)), Label("switch-case_3".into())),
+                Jnz(RegisterVariant::Local(Register(6)), Address(2)),
                 IConst(RegisterVariant::Local(Register(7)), 2),
                 EqEq(RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(7)), RegisterVariant::Local(Register(8))),
-                Jnz(RegisterVariant::Local(Register(8)), Label("switch-case_4".into())),
+                Jnz(RegisterVariant::Local(Register(8)), Address(7)),
                 Jmp(Address(12)),
                 Ret
             ];
@@ -4688,6 +4696,7 @@ mod tests {
             };
 
             let mut walker = CodegenWalker::new(CompilationContext::default());
+            walker.backpatch_maps.push(HashMap::new());
 
             walker.visit_ternary(&mut node, &mut cell_key).unwrap();
 
@@ -5401,6 +5410,7 @@ mod tests {
         fn test_populates_the_instructions() {
             let mut cell_key = QCellOwner::new();
             let mut walker = default_walker(&mut cell_key);
+            walker.backpatch_maps.push(HashMap::new());
 
             let mut node = WhileNode {
                 condition: ExpressionNode::BinaryOp(BinaryOpNode {
