@@ -232,7 +232,7 @@ impl Instruction {
     /// Returns an error if the instruction cannot be backpatched.
     pub fn backpatch<A>(&mut self, address: A) -> Result<()>
     where
-        A: Into<Address>
+        A: Into<Address>,
     {
         match self {
             Instruction::Jmp(_) => {
@@ -245,7 +245,10 @@ impl Instruction {
                 *self = Instruction::Jz(*r, address.into());
             }
             _ => {
-                return Err(LpcError::new_bug(format!("Cannot backpatch instruction {:?}", self)));
+                return Err(LpcError::new_bug(format!(
+                    "Cannot backpatch instruction {:?}",
+                    self
+                )));
             }
         }
 

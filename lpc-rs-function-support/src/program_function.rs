@@ -6,7 +6,10 @@ use std::{
 };
 
 use derive_builder::Builder;
-use lpc_rs_asm::{instruction::Instruction, address::Address};
+use lpc_rs_asm::{
+    address::{Address, Label},
+    instruction::Instruction,
+};
 use lpc_rs_core::{
     function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant,
 };
@@ -15,7 +18,6 @@ use multimap::MultiMap;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
-use lpc_rs_asm::address::Label;
 
 use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 
@@ -151,11 +153,7 @@ impl ProgramFunction {
                 }
             }
 
-            v.push(format!(
-                "    {:04x}  {}",
-                counter,
-                instruction
-            ));
+            v.push(format!("    {:04x}  {}", counter, instruction));
         }
 
         v

@@ -1,2 +1,2 @@
-pub mod instruction;
 pub mod address;
+pub mod instruction;

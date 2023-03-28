@@ -8,10 +8,7 @@ use std::{
 use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
-use lpc_rs_asm::{
-    instruction::Instruction,
-    address::Address,
-};
+use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;

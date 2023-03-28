@@ -1,11 +1,11 @@
 use std::{collections::HashMap, ops::Range, rc::Rc};
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::{
-    instruction::Instruction,
     address::{Address, Label},
+    instruction::Instruction,
 };
 use lpc_rs_core::{
     call_namespace::CallNamespace,
@@ -537,7 +537,10 @@ impl CodegenWalker {
 
     /// Backpatch the instructions of the passed function, based on the map of
     /// labels and addresses.
-    fn backpatch(backpatch_map: &HashMap<Label, BitSet>, function: &mut ProgramFunction) -> Result<()> {
+    fn backpatch(
+        backpatch_map: &HashMap<Label, BitSet>,
+        function: &mut ProgramFunction,
+    ) -> Result<()> {
         for (label, addresses) in backpatch_map {
             let Some(label_address) = function.labels.get(label) else {
                 return Err(LpcError::new_bug(format!("Label `{}` not found in function `{}", label, function.name())));
@@ -799,7 +802,11 @@ impl CodegenWalker {
         if matches!(instruction, Instruction::PopulateDefaults) {
             let idx = populate_defaults_index.0;
             for i in 1..=default_init_addresses.len() {
-                debug_assert!(matches!(sym.instructions[idx + i], Instruction::Jmp(_)), "Expected a Jmp instruction for argument default {}.", i);
+                debug_assert!(
+                    matches!(sym.instructions[idx + i], Instruction::Jmp(_)),
+                    "Expected a Jmp instruction for argument default {}.",
+                    i
+                );
                 sym.instructions[idx + i] = Instruction::Jmp(default_init_addresses[i - 1]);
             }
         } else {
@@ -807,7 +814,8 @@ impl CodegenWalker {
         }
 
         // jump back to the function now that defaults are populated.
-        let instruction = Instruction::Jmp(populate_defaults_index + 1 + default_init_addresses.len());
+        let instruction =
+            Instruction::Jmp(populate_defaults_index + 1 + default_init_addresses.len());
         push_instruction!(self, instruction, span);
 
         Ok(())
@@ -3083,10 +3091,7 @@ mod tests {
                     RegisterVariant::Local(Register(7)),
                     RegisterVariant::Local(Register(8)),
                 ),
-                Jnz(
-                    RegisterVariant::Local(Register(8)),
-                    Address(0),
-                ),
+                Jnz(RegisterVariant::Local(Register(8)), Address(0)),
                 Ret,
             ];
 
@@ -3970,10 +3975,7 @@ mod tests {
                     RegisterVariant::Local(Register(7)),
                     RegisterVariant::Local(Register(8)),
                 ),
-                Jnz(
-                    RegisterVariant::Local(Register(8)),
-                    Address(0),
-                ),
+                Jnz(RegisterVariant::Local(Register(8)), Address(0)),
                 Ret,
             ];
 
@@ -4097,10 +4099,7 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(4)),
                 ),
-                Jnz(
-                    RegisterVariant::Local(Register(4)),
-                    Address(0),
-                ),
+                Jnz(RegisterVariant::Local(Register(4)), Address(0)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4645,7 +4644,11 @@ mod tests {
             "#;
 
             let walker = walk_prog(code, &mut cell_key);
-            let func = walker.functions.values().find(|f| f.name() == "create").unwrap();
+            let func = walker
+                .functions
+                .values()
+                .find(|f| f.name() == "create")
+                .unwrap();
             let instructions = func.instructions.clone();
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4666,13 +4669,21 @@ mod tests {
                 CallEfun(2),
                 Jmp(Address(24)),
                 IConst1(RegisterVariant::Local(Register(5))),
-                EqEq(RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(5)), RegisterVariant::Local(Register(6))),
+                EqEq(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(6)),
+                ),
                 Jnz(RegisterVariant::Local(Register(6)), Address(2)),
                 IConst(RegisterVariant::Local(Register(7)), 2),
-                EqEq(RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(7)), RegisterVariant::Local(Register(8))),
+                EqEq(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(7)),
+                    RegisterVariant::Local(Register(8)),
+                ),
                 Jnz(RegisterVariant::Local(Register(8)), Address(7)),
                 Jmp(Address(12)),
-                Ret
+                Ret,
             ];
 
             assert_eq!(instructions, expected);
