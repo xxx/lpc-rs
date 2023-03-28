@@ -8,6 +8,7 @@ use lpc_rs_core::{
     function::FunctionTarget, function_arity::FunctionArity, register::RegisterVariant, LpcFloat,
     LpcInt,
 };
+use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::jump_location::{Address, JumpLocation};
@@ -120,7 +121,7 @@ pub enum Instruction {
     ISub(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Unconditional jump
-    Jmp(JumpLocation),
+    Jmp(Address),
 
     /// Jump if the value in the register is not zero (Int or Float)
     Jnz(RegisterVariant, JumpLocation),
@@ -223,6 +224,33 @@ pub enum Instruction {
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
     Xor(RegisterVariant, RegisterVariant, RegisterVariant),
+}
+
+impl Instruction {
+    /// Backpatch an instruction with a new address.
+    /// This is used to fix up jumps after the code has been generated.
+    /// Returns an error if the instruction cannot be backpatched.
+    pub fn backpatch<A>(&mut self, address: A) -> Result<()>
+    where
+        A: Into<Address>
+    {
+        match self {
+            Instruction::Jmp(_) => {
+                *self = Instruction::Jmp(address.into());
+            }
+            Instruction::Jnz(r, _) => {
+                *self = Instruction::Jnz(*r, JumpLocation::Address(address.into()));
+            }
+            Instruction::Jz(r, _) => {
+                *self = Instruction::Jz(*r, JumpLocation::Address(address.into()));
+            }
+            _ => {
+                return Err(LpcError::new_bug(format!("Cannot backpatch instruction {:?}", self)));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Display for Instruction {

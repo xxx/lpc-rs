@@ -1,4 +1,5 @@
 use std::{collections::HashMap, ops::Range, rc::Rc};
+use bit_set::BitSet;
 
 use if_chain::if_chain;
 use indexmap::IndexMap;
@@ -122,14 +123,18 @@ pub struct CodegenWalker {
     /// initialization)
     function_stack: Vec<ProgramFunction>,
 
+    /// Stack of HashMaps, with keys being Labels, and values being a set of indices of
+    /// [`Instruction`]s that need to be patched once the labels have known [`Address`]es.
+    backpatch_maps: Vec<HashMap<Label, BitSet>>,
+
     /// Track the currently-processing closure, so we know where to copy
-    /// captured variables Symbols.
+    /// captured variable Symbols.
     closure_scope_stack: Vec<ScopeId>,
 
     /// Counter for labels, as they need to be unique.
     label_count: usize,
 
-    /// Map of function Symbols, to their respective addresses
+    /// Function table. The keys are the mangled names of the functions.
     pub functions: HashMap<String, Rc<ProgramFunction>>,
 
     /// The initialization function for the program, which sets up global variables.
@@ -157,6 +162,8 @@ pub struct CodegenWalker {
     /// Number of [`Register`]s needed for global initialization.
     /// This counter contains the total number for *all* inherited init-program
     /// functions.
+    // TODO: this is likely a vestige of the past, and this same value should be
+    //       calculated as normal in the `init-program` function.
     global_init_registers: usize,
 
     /// Compilation context
@@ -528,6 +535,56 @@ impl CodegenWalker {
         r
     }
 
+    /// Backpatch the instructions of the passed function, based on the map of
+    /// labels and addresses.
+    fn backpatch(backpatch_map: &HashMap<Label, BitSet>, function: &mut ProgramFunction) -> Result<()> {
+        for (label, addresses) in backpatch_map {
+            let Some(label_address) = function.labels.get(label) else {
+                return Err(LpcError::new_bug(format!("Label `{}` not found in function `{}", label, function.name())));
+            };
+
+            for address in addresses {
+                let Some(instruction) = function.instructions.get_mut(address) else {
+                    return Err(LpcError::new_bug(format!("Instruction at address {} not found in function `{}", address, function.name())));
+                };
+                instruction.backpatch(*label_address)?
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Append a backpatch entry to the current backpatch map.
+    ///
+    /// # Arguments
+    /// `label` - The label, whose address we're going to insert back into the instructions.
+    /// `instruction_address` - The address of the instruction that needs to be backpatched.
+    ///
+    /// # Errors
+    /// If there is no backpatch map to append to, an error is returned.
+    ///
+    /// # Panics
+    /// If the instruction address is already in the backpatch map for the given label.
+    fn append_backpatch(&mut self, label: &Label, instruction_address: Address) -> Result<()> {
+        let Some(backpatch_map) = self.backpatch_maps.last_mut() else {
+            return Err(LpcError::new_bug("No backpatch map found to append to".to_string()));
+        };
+
+        if let Some(bitset) = backpatch_map.get_mut(label) {
+            debug_assert!(
+                !bitset.contains(instruction_address.0),
+                "Backpatching the same instruction twice"
+            );
+            bitset.insert(instruction_address.0);
+        } else {
+            let mut bitset = BitSet::new();
+            bitset.insert(instruction_address.0);
+            backpatch_map.insert(label.to_string(), bitset);
+        }
+
+        return Ok(());
+    }
+
     // special case for `catch()`
     fn emit_catch(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
         let result_register = self.register_counter.next().unwrap().as_local();
@@ -565,6 +622,10 @@ impl CodegenWalker {
     }
 
     #[inline]
+    /// Get the current address of the current function.
+    /// This is actually the *next* address that a pushed instruction will be
+    /// stored at.
+    /// tl;dr This returns the length of the current function's `instructions` vector.
     fn current_address(&self) -> Address {
         let a = match self.function_stack.last() {
             Some(x) => x.instructions.len(),
@@ -945,12 +1006,13 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     fn visit_break(&mut self, node: &mut BreakNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
-            let instruction = Instruction::Jmp(break_target.into());
+            self.append_backpatch(&break_target.clone(), self.current_address())?;
+            let instruction = Instruction::Jmp(0.into());
             push_instruction!(self, instruction, node.span);
             return Ok(());
         }
 
-        Err(LpcError::new("`break` statement without a jump target?").with_span(node.span))
+        Err(LpcError::new_bug("`break` statement without a jump target?").with_span(node.span))
     }
 
     #[instrument(skip_all)]
@@ -1097,6 +1159,7 @@ impl TreeWalker for CodegenWalker {
         let func = ProgramFunction::new(prototype.clone(), 0);
 
         self.function_stack.push(func);
+        self.backpatch_maps.push(HashMap::new());
 
         if let Some(scope_id) = node.scope_id {
             self.closure_scope_stack.push(scope_id);
@@ -1192,6 +1255,9 @@ impl TreeWalker for CodegenWalker {
             Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
 
+        let backpatch_map = self.backpatch_maps.pop().unwrap();
+        Self::backpatch(&backpatch_map, &mut func)?;
+
         let mangled = func.mangle();
         self.functions.insert(mangled.clone(), func.into());
 
@@ -1230,7 +1296,8 @@ impl TreeWalker for CodegenWalker {
             continue_target, ..
         }) = self.jump_targets.last()
         {
-            let instruction = Instruction::Jmp(continue_target.into());
+            self.append_backpatch(&continue_target.clone(), self.current_address())?;
+            let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, node.span);
             return Ok(());
         }
@@ -1321,7 +1388,8 @@ impl TreeWalker for CodegenWalker {
         }
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label.into());
+        self.append_backpatch(&start_label, self.current_address())?;
+        let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
         let addr = self.current_address();
@@ -1408,7 +1476,8 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label.into());
+        self.append_backpatch(&start_label, self.current_address())?;
+        let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
         let addr = self.current_address();
@@ -1445,6 +1514,7 @@ impl TreeWalker for CodegenWalker {
         let sym = ProgramFunction::new(prototype.clone(), 0);
 
         self.function_stack.push(sym);
+        self.backpatch_maps.push(HashMap::new());
 
         let len = self.current_address();
         self.register_counter.push();
@@ -1516,6 +1586,8 @@ impl TreeWalker for CodegenWalker {
             Self::backpatch_populate_argv(&mut func, idx, node.span)?;
         }
 
+        let backpatch_map = self.backpatch_maps.pop().unwrap();
+        Self::backpatch(&backpatch_map, &mut func)?;
         self.functions.insert(func.mangle(), func.into());
 
         self.function_upvalue_counter.pop();
@@ -1665,7 +1737,8 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
 
         if node.else_clause.is_some() {
-            let instruction = Instruction::Jmp(end_label.clone().into());
+            self.append_backpatch(&end_label, self.current_address())?;
+            let instruction = Instruction::Jmp(Address(0));
             push_instruction!(self, instruction, node.span);
         }
 
@@ -1749,6 +1822,7 @@ impl TreeWalker for CodegenWalker {
     ) -> Result<()> {
         self.context.scopes.goto_root();
         self.setup_init();
+        self.backpatch_maps.push(HashMap::new());
 
         // Partition global variable initializations vs everything else
         let (global_init, functions): (Vec<&mut AstNode>, Vec<&mut AstNode>) = program
@@ -1773,7 +1847,7 @@ impl TreeWalker for CodegenWalker {
                 arguments: vec![],
                 name: CREATE_FUNCTION.to_string(),
                 span: None,
-                namespace: CallNamespace::default(),
+                namespace: CallNamespace::Local,
             };
             call.visit(self, cell_key)?;
         }
@@ -1788,10 +1862,13 @@ impl TreeWalker for CodegenWalker {
             node.visit(self, cell_key)?;
         }
 
+        let backpatch_map = self.backpatch_maps.pop().unwrap();
         // populate the initializer
         let mut func = self.function_stack.pop().unwrap();
         debug_assert!(func.name() == INIT_PROGRAM);
         func.num_locals = self.register_counter.number_emitted();
+
+        Self::backpatch(&backpatch_map, &mut func)?;
 
         self.initializer = Some(Rc::new(func));
         // self.functions.insert(func.mangle(), func.into());
@@ -1851,7 +1928,8 @@ impl TreeWalker for CodegenWalker {
         let expr_result = self.current_result;
 
         let test_label = self.new_label("switch-test");
-        let instruction = Instruction::Jmp(test_label.clone().into());
+        self.append_backpatch(&test_label, self.current_address())?;
+        let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
         let end_label = self.new_label("switch-end");
@@ -1863,7 +1941,7 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
 
         // skip over the tests that we're about to generate.
-        let instruction = Instruction::Jmp(end_label.clone().into());
+        let instruction = Instruction::Jmp(Address(0));
         // skip this jump if the final case statement ended with its own `break`.
         if self
             .function_stack
@@ -1874,6 +1952,8 @@ impl TreeWalker for CodegenWalker {
             .unwrap()
             != &instruction
         {
+            // TODO: this may be sketchy, since the jump address we're testing against has not been set
+            self.append_backpatch(&end_label, self.current_address())?;
             push_instruction!(self, instruction, node.span);
         }
 
@@ -1932,7 +2012,8 @@ impl TreeWalker for CodegenWalker {
                 }
                 None => {
                     let default_label = self.new_label("switch-default");
-                    let instruction = Instruction::Jmp(default_label.clone().into());
+                    self.append_backpatch(&default_label, self.current_address())?;
+                    let instruction = Instruction::Jmp(Address(0));
                     push_instruction!(self, instruction, node.span);
                     self.insert_label(default_label, case_address.1);
                 }
@@ -1965,7 +2046,8 @@ impl TreeWalker for CodegenWalker {
             node.span
         );
 
-        let instruction = Instruction::Jmp(end_label.clone().into());
+        self.append_backpatch(&end_label, self.current_address())?;
+        let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
         let else_addr = self.current_address();
@@ -2187,7 +2269,8 @@ impl TreeWalker for CodegenWalker {
         node.body.visit(self, cell_key)?;
 
         // go back to the start of the loop
-        let instruction = Instruction::Jmp(start_label.into());
+        self.append_backpatch(&start_label, self.current_address())?;
+        let instruction = Instruction::Jmp(Address(0));
         push_instruction!(self, instruction, node.span);
 
         let addr = self.current_address();
@@ -2209,6 +2292,7 @@ impl Default for CodegenWalker {
 
         Self {
             function_stack: vec![],
+            backpatch_maps: vec![],
             label_count: 0,
             functions: Default::default(),
             initializer: None,
@@ -2844,7 +2928,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp("while-end_2".into()),
+                Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -2855,7 +2939,7 @@ mod tests {
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp("while-start_1".into()),
+                Jmp(Address(3)),
                 Ret,
             ];
 
@@ -2905,7 +2989,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp("for-end_2".into()),
+                Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -2926,7 +3010,7 @@ mod tests {
                     RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp("for-start_1".into()),
+                Jmp(Address(0)),
                 Ret,
             ];
 
@@ -2970,7 +3054,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(1),
-                Jmp("do-while-end_2".into()),
+                Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3022,12 +3106,12 @@ mod tests {
             let mut walker = walk_prog(code, &mut cell_key);
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
-                Jmp("switch-test_1".into()),
+                Jmp(Address(0)),
                 SConst(RegisterVariant::Local(Register(2)), 1),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(2))),
                 CallEfun(2),
-                Jmp("switch-end_2".into()),
+                Jmp(Address(0)),
                 SConst(RegisterVariant::Local(Register(3)), 3),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(3))),
@@ -3036,7 +3120,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(2),
-                Jmp("switch-end_2".into()),
+                Jmp(Address(0)),
                 IConst(RegisterVariant::Local(Register(5)), 666),
                 EqEq(
                     RegisterVariant::Local(Register(1)),
@@ -3062,7 +3146,7 @@ mod tests {
                     RegisterVariant::Local(Register(9)),
                 ),
                 Jnz(RegisterVariant::Local(Register(9)), "switch-case_4".into()),
-                Jmp("switch-default_5".into()),
+                Jmp(Address(0)),
                 Ret,
             ];
 
@@ -3732,7 +3816,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp("while-start_1".into()),
+                Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3743,7 +3827,7 @@ mod tests {
                     RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp("while-start_1".into()),
+                Jmp(Address(0)),
                 Ret,
             ];
 
@@ -3793,7 +3877,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(6))),
                 CallEfun(1),
-                Jmp("for-continue_3".into()),
+                Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -3814,7 +3898,7 @@ mod tests {
                     RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp("for-start_1".into()),
+                Jmp(Address(0)),
                 Ret,
             ];
 
@@ -3857,7 +3941,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(1),
-                Jmp("do-while-continue_3".into()),
+                Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
@@ -4085,7 +4169,7 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp("for-start_0".into()),
+                Jmp(Address(0)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4309,7 +4393,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(1),
-                Jmp("if-end_1".into()),
+                Jmp(Address(0)),
                 SConst(RegisterVariant::Local(Register(5)), 2),
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(5))),
@@ -4522,6 +4606,65 @@ mod tests {
         assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
+    mod test_visit_switch {
+        use lpc_rs_asm::jump_location::JumpLocation::Label;
+        use super::*;
+
+        #[test]
+        fn populates_the_instructions() {
+            let mut cell_key = QCellOwner::new();
+
+            let code = r#"
+                void create() {
+                    switch(666) {
+                        case 1:
+                            dump("one");
+                            break;
+                        case 2:
+                            dump("two");
+                            break;
+                        default:
+                            dump("default");
+                            break;
+                    }
+                }
+            "#;
+
+            let mut walker = walk_prog(code, &mut cell_key);
+            let func = walker.functions.values().find(|f| f.name() == "create").unwrap();
+            let instructions = func.instructions.clone();
+            let expected = vec![
+                IConst(RegisterVariant::Local(Register(1)), 666),
+                Jmp(Address(17)),
+                SConst(RegisterVariant::Local(Register(2)), 1),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(2))),
+                CallEfun(2),
+                Jmp(Address(24)),
+                SConst(RegisterVariant::Local(Register(3)), 3),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(3))),
+                CallEfun(2),
+                Jmp(Address(24)),
+                SConst(RegisterVariant::Local(Register(4)), 4),
+                ClearArgs,
+                Arg(RegisterVariant::Local(Register(4))),
+                CallEfun(2),
+                Jmp(Address(24)),
+                IConst1(RegisterVariant::Local(Register(5))),
+                EqEq(RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(5)), RegisterVariant::Local(Register(6))),
+                Jnz(RegisterVariant::Local(Register(6)), Label("switch-case_3".into())),
+                IConst(RegisterVariant::Local(Register(7)), 2),
+                EqEq(RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(7)), RegisterVariant::Local(Register(8))),
+                Jnz(RegisterVariant::Local(Register(8)), Label("switch-case_4".into())),
+                Jmp(Address(12)),
+                Ret
+            ];
+
+            assert_eq!(instructions, expected);
+        }
+    }
+
     mod test_visit_ternary {
         use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
 
@@ -4562,7 +4705,7 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp("ternary-end_1".into()), // jump to end
+                Jmp(Address(0)), // jump to end
                 IConst(RegisterVariant::Local(Register(6)), 777),
                 Copy(
                     RegisterVariant::Local(Register(6)),
@@ -5292,7 +5435,7 @@ mod tests {
                 ClearArgs,
                 Arg(RegisterVariant::Local(Register(4))),
                 CallEfun(1),
-                Jmp("while-start_0".into()),
+                Jmp(Address(0)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -5307,11 +5450,11 @@ mod tests {
             let mut cell_key = QCellOwner::new();
 
             let code = r##"
-            int i = 123, j;
-            mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
-            string asdf = "asdf";
-            string b;
-        "##;
+                int i = 123, j;
+                mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
+                string asdf = "asdf";
+                string b;
+            "##;
 
             let program = walk_prog(code, &mut cell_key)
                 .into_program()
@@ -5323,11 +5466,11 @@ mod tests {
         fn sets_num_init_registers() {
             let mut cell_key = QCellOwner::new();
             let code = r##"
-            int i = 123, j;
-            mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
-            string asdf = "asdf";
-            string b;
-        "##;
+                int i = 123, j;
+                mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
+                string asdf = "asdf";
+                string b;
+            "##;
 
             let program = walk_prog(code, &mut cell_key)
                 .into_program()

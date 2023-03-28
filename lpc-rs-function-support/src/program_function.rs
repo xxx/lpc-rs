@@ -15,6 +15,7 @@ use multimap::MultiMap;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
+use lpc_rs_asm::jump_location::Label;
 
 use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 
@@ -52,7 +53,7 @@ pub struct ProgramFunction {
 
     /// Map of labels, to their respective addresses
     #[builder(default)]
-    pub labels: HashMap<String, Address>,
+    pub labels: HashMap<Label, Address>,
 
     /// List of local variables declared within this function
     #[builder(default)]
@@ -151,9 +152,9 @@ impl ProgramFunction {
             }
 
             v.push(format!(
-                "    {:04x}  {instruction}",
+                "    {:04x}  {}",
                 counter,
-                instruction = instruction
+                instruction
             ));
         }
 

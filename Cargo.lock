@@ -835,6 +835,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "lpc-rs-core",
+ "lpc-rs-errors",
  "serde",
 ]
 

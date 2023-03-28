@@ -539,9 +539,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     }
                 }
             }
-            Instruction::Jmp(ref jump_location) => {
+            Instruction::Jmp(jump_location) => {
                 let frame = self.stack.current_frame()?;
-                frame.set_pc_from_jump_location(jump_location)?;
+                frame.set_pc(jump_location);
             }
             Instruction::Jnz(r1, ref jump_location) => {
                 let v = &*get_loc!(self, r1, cell_key)?;
