@@ -660,17 +660,22 @@ impl CodegenWalker {
         span: Option<Span>,
         num_default_args: usize,
     ) -> Option<Address> {
-        if num_default_args > 0 {
-            let address = Some(self.current_address());
-
-            // the addresses are backpatched below, once we have them.
-            let instruction = Instruction::PopulateDefaults(vec![]);
-            push_instruction!(self, instruction, span);
-
-            address
-        } else {
-            None
+        if num_default_args == 0 {
+            return None;
         }
+
+        let address = Some(self.current_address());
+
+        let instruction = Instruction::PopulateDefaults;
+        push_instruction!(self, instruction, span);
+
+        // these addresses are backpatched later, once we have them.
+        for _ in 0..num_default_args {
+            let instruction = Instruction::Jmp(Address(0).into());
+            push_instruction!(self, instruction, span);
+        }
+
+        address
     }
 
     fn setup_populate_argv(
@@ -718,7 +723,7 @@ impl CodegenWalker {
             if let Some(value) = &mut parameter.value {
                 default_init_addresses.push(self.current_address());
 
-                // generate code for only the value, then assign by hand, because we
+                // generate code for only the value, then copy by hand, because we
                 // pre-generated locations of the parameters above.
                 value.visit(self, cell_key)?;
                 let instruction =
@@ -730,15 +735,18 @@ impl CodegenWalker {
         // backpatch the the correct init addresses for the PopulateDefaults call.
         let sym = self.function_stack.last_mut().unwrap();
         let instruction = &sym.instructions[populate_defaults_index.0];
-        if let Instruction::PopulateDefaults(_) = instruction {
-            let new_instruction = Instruction::PopulateDefaults(default_init_addresses);
-            sym.instructions[populate_defaults_index.0] = new_instruction;
+        if matches!(instruction, Instruction::PopulateDefaults) {
+            let idx = populate_defaults_index.0;
+            for i in 1..=default_init_addresses.len() {
+                debug_assert!(matches!(sym.instructions[idx + i], Instruction::Jmp(_)), "Expected a Jmp instruction for argument default {}.", i);
+                sym.instructions[idx + i] = Instruction::Jmp(default_init_addresses[i - 1].into());
+            }
         } else {
-            return Err(LpcError::new("Invalid populate_defaults_index").with_span(span));
+            return Err(LpcError::new_bug("Invalid populate_defaults_index").with_span(span));
         }
 
         // jump back to the function now that defaults are populated.
-        let instruction = Instruction::Jmp((populate_defaults_index + 1).into());
+        let instruction = Instruction::Jmp((populate_defaults_index + 1 + default_init_addresses.len()).into());
         push_instruction!(self, instruction, span);
 
         Ok(())
@@ -3610,7 +3618,9 @@ mod tests {
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
-                    PopulateDefaults(vec![Address(4), Address(6)]),
+                    PopulateDefaults,
+                    Jmp(Address(6).into()),
+                    Jmp(Address(8).into()),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
@@ -3631,7 +3641,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp(Address(1).into()),
+                    Jmp(Address(3).into()),
                 ],
             );
         }
@@ -4156,7 +4166,9 @@ mod tests {
             assert_compiles_to(
                 "int main(int i, int j = 666, float d = 3.54) { return i * j; }",
                 vec![
-                    PopulateDefaults(vec![Address(4), Address(6)]),
+                    PopulateDefaults,
+                    Jmp(Address(6).into()),
+                    Jmp(Address(8).into()),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
@@ -4177,7 +4189,7 @@ mod tests {
                         RegisterVariant::Local(Register(6)),
                         RegisterVariant::Local(Register(3)),
                     ),
-                    Jmp(Address(1).into()),
+                    Jmp(Address(3).into()),
                 ],
             );
         }

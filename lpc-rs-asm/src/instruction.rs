@@ -180,11 +180,9 @@ pub enum Instruction {
 
     /// Special case instruction to handle calls to functions that have default
     /// argument values.
-    /// The first `usize` is the number of formal parameters to the function
-    ///   (whether they have default values or not).
     /// The vector is the list of addresses to jump to, to initialize the
     /// parameters that have default values.
-    PopulateDefaults(Vec<Address>),
+    PopulateDefaults,
 
     /// Push a location onto the `Task`'s `array_items` vector, used for creating
     /// array literals
@@ -372,10 +370,8 @@ impl Display for Instruction {
             Instruction::PopulateArgv(r, num_args, num_locals) => {
                 write!(f, "populate_argv {r}, {num_args}, {num_locals}")
             }
-            Instruction::PopulateDefaults(default_inits) => {
-                let s = default_inits.iter().map(|i| format!("{i}")).join(", ");
-
-                write!(f, "populate_defaults {s}")
+            Instruction::PopulateDefaults => {
+                write!(f, "populate_defaults")
             }
             Instruction::PushArrayItem(r1) => {
                 write!(f, "push_array_item {r1}")

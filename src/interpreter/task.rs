@@ -641,19 +641,18 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
                 set_location(&mut self.stack, r, new_ref, cell_key)?;
             }
-            Instruction::PopulateDefaults(default_addresses) => {
+            Instruction::PopulateDefaults => {
+                // let default_addresses = &self.defaults;
                 let frame = self.stack.current_frame()?;
                 let func = &frame.function;
-                let declared_args = func.arity().num_args;
+                let num_args = func.arity().num_args;
+                let num_default_args = func.arity().num_default_args;
+                // let non_default_args = num_args - num_default_args;
                 let called_args = frame.called_with_num_args;
+                let defaults_to_init = (num_args.saturating_sub(called_args)).min(num_default_args);
 
-                if called_args < declared_args {
-                    let difference = declared_args - called_args;
-                    debug_assert!(difference <= default_addresses.len());
-                    let index = default_addresses.len() - difference;
-                    let address = default_addresses[index];
-                    frame.set_pc(address);
-                }
+                let jump = num_default_args - defaults_to_init;
+                frame.set_pc(frame.pc() + jump);
             }
             Instruction::PushArrayItem(r1) => {
                 self.array_items.push(r1);
