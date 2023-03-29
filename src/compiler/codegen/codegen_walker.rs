@@ -9,7 +9,7 @@ use lpc_rs_asm::{
 };
 use lpc_rs_core::{
     call_namespace::CallNamespace,
-    function::{FunctionName, FunctionReceiver, FunctionTarget},
+    function::{FunctionName, FunctionReceiver},
     function_arity::FunctionArity,
     lpc_type::LpcType,
     mangle::Mangle,
@@ -1258,6 +1258,8 @@ impl TreeWalker for CodegenWalker {
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
 
+        let (name, _) = self.context.strings.insert_full(func.prototype.name.to_string());
+
         func.num_locals = self.register_counter.number_emitted() - num_args;
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
         func.arg_locations = declared_arg_locations;
@@ -1283,11 +1285,10 @@ impl TreeWalker for CodegenWalker {
         self.current_result = location;
 
         // closures are just pointers to functions
-        let target = FunctionTarget::Local(FunctionName::Literal(mangled), FunctionReceiver::Local);
-
         let instruction = Instruction::FunctionPtrConst {
             location,
-            target,
+            receiver: FunctionReceiver::Local,
+            name,
             applied_arguments: vec![],
         };
 
@@ -1628,83 +1629,30 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        let target;
-        let arity;
-
-        if let Some(rcvr) = &mut node.receiver {
+        let receiver = if let Some(rcvr) = &mut node.receiver {
             // remote receiver, i.e. `call_other`
-            let receiver = match rcvr {
+            match rcvr {
                 FunctionPtrReceiver::Static(rcvr_node) => {
                     rcvr_node.visit(self, cell_key)?;
                     FunctionReceiver::Var(self.current_result)
                 }
 
                 // `&` used as the receiver
-                FunctionPtrReceiver::Dynamic => FunctionReceiver::Argument,
-            };
-
-            // `call_other` always assumes a literal name, and cannot mangle it
-            // because the receiver won't be known until runtime.
-            // TODO: this probably needs a new FunctionName variant to
-            //       differentiate between mangled and unmangled names
-            let name = FunctionName::Literal(node.name.clone());
-
-            target = FunctionTarget::Local(name, receiver);
-
-            // just use a placeholder arity that allows anything
-            arity = FunctionArity {
-                num_args: 0,
-                num_default_args: 0,
-                varargs: true,
-                ellipsis: true,
-            };
-        } else if let Some(prototype) = self
-            .context
-            .lookup_function(node.name.as_str(), &CallNamespace::Local)
-        {
+                FunctionPtrReceiver::Dynamic => FunctionReceiver::Dynamic,
+            }
+        } else if self.context.contains_function(node.name.as_str(), &CallNamespace::Local) {
             // A local / inherited function
-
-            // Determine if the name is a var, or a literal function name.
-            // Vars take precedence.
-            let name = match self.context.lookup_var(&node.name) {
-                Some(s) => {
-                    if !s.type_.matches_type(LpcType::Function(false)) {
-                        // if there are no function-type vars of this name, assume the name is
-                        // literal
-                        // TODO: Another unmangled FunctionName::Literal
-                        FunctionName::Literal(node.name.clone())
-                    } else {
-                        let sym_loc = match s.location {
-                            Some(l) => l,
-                            None => {
-                                return Err(LpcError::new(format!(
-                                    "Symbol `{}` has no location set.",
-                                    s.name
-                                ))
-                                .with_span(node.span));
-                            }
-                        };
-
-                        FunctionName::Var(sym_loc)
-                    }
-                }
-                None => FunctionName::Literal(prototype.mangle()),
-            };
-
-            target = FunctionTarget::Local(name, FunctionReceiver::Local);
-            arity = prototype.arity;
+            FunctionReceiver::Local
         } else {
             if_chain! {
                 if let Some(se) = &self.context.simul_efuns;
                 let simul_efuns = se.ro(cell_key);
-                if let Some(prototype) = simul_efuns.as_ref().lookup_function(node.name.as_str());
+                if simul_efuns.as_ref().contains_function(node.name.as_str());
                 then {
-                    target = FunctionTarget::SimulEfun(node.name.clone());
-                    arity = prototype.arity();
+                    FunctionReceiver::SimulEfun
                 } else {
-                    if let Some(prototype) = EFUN_PROTOTYPES.get(node.name.as_str()) {
-                        target = FunctionTarget::Efun(node.name.clone());
-                        arity = prototype.arity;
+                    if EFUN_PROTOTYPES.contains_key(node.name.as_str()) {
+                        FunctionReceiver::Efun
                     } else {
                         return Err(LpcError::new(format!(
                             "unknown call in function pointer: `{}`",
@@ -1714,14 +1662,17 @@ impl TreeWalker for CodegenWalker {
                     }
                 }
             }
-        }
+        };
+
+        let (name, _) = self.context.strings.insert_full(node.name.clone());
 
         let location = self.register_counter.next().unwrap().as_local();
         self.current_result = location;
 
         let instruction = Instruction::FunctionPtrConst {
             location,
-            target,
+            name,
+            receiver,
             applied_arguments,
         };
 
@@ -4310,7 +4261,8 @@ mod tests {
 
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
-                target: FunctionTarget::Efun(String::from("dump")),
+                receiver: FunctionReceiver::Efun,
+                name: 0,
                 applied_arguments: vec![],
             }];
 
@@ -4333,7 +4285,8 @@ mod tests {
 
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
-                target: FunctionTarget::SimulEfun("simul_efun".into()),
+                receiver: FunctionReceiver::SimulEfun,
+                name: 0,
                 applied_arguments: vec![],
             }];
 

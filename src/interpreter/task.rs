@@ -13,8 +13,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
-    function::{FunctionName, FunctionReceiver, FunctionTarget},
-    function_arity::FunctionArity,
+    function::{FunctionName, FunctionReceiver},
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
     LpcInt,
@@ -459,13 +458,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::FunctionPtrConst {
                 location,
-                target,
+                receiver,
+                name,
                 applied_arguments,
             } => {
                 self.handle_functionptrconst(
                     task_context,
                     location,
-                    target,
+                    receiver,
+                    name,
                     applied_arguments,
                     cell_key,
                 )?;
@@ -1375,84 +1376,73 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         &mut self,
         task_context: &TaskContext,
         location: RegisterVariant,
-        target: FunctionTarget,
+        receiver: FunctionReceiver,
+        name_idx: usize,
         applied_arguments: Vec<Option<RegisterVariant>>,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let call_other = if let FunctionTarget::Local(_, ref rcvr) = target {
-            !matches!(rcvr, FunctionReceiver::Local)
-        } else {
-            false
+        let call_other = match receiver {
+            FunctionReceiver::Var(_)
+            | FunctionReceiver::Dynamic => true,
+            FunctionReceiver::Local
+            | FunctionReceiver::Efun
+            | FunctionReceiver::SimulEfun => false
         };
 
-        let address = match target {
-            FunctionTarget::Efun(func_name) => FunctionAddress::Efun(func_name),
-            FunctionTarget::SimulEfun(func_name) => FunctionAddress::SimulEfun(func_name),
-            FunctionTarget::Local(func_name, FunctionReceiver::Argument) => match func_name {
-                FunctionName::Var(_) => {
-                    return Err(self.runtime_bug(concat!(
-                        "A function pointer with `&` as the receiver somehow has a ",
-                        "var function name. This should not be reachable if ",
-                        "semantic checks have passed."
-                    )));
-                }
-                FunctionName::Literal(name) => FunctionAddress::Dynamic(name),
-            },
-            FunctionTarget::Local(func_name, func_receiver) => {
-                let proc = match func_receiver {
-                    FunctionReceiver::Var(receiver_reg) => {
-                        let receiver_ref = &*get_loc!(self, receiver_reg, cell_key)?;
-                        match receiver_ref {
-                            LpcRef::Object(x) => {
-                                let b = x.borrow();
-                                let process = try_extract_value!(*b, LpcValue::Object);
-                                process.clone()
-                            }
-                            LpcRef::String(_) => todo!(),
-                            LpcRef::Array(_)
-                            | LpcRef::Mapping(_)
-                            | LpcRef::Float(_)
-                            | LpcRef::Int(_)
-                            | LpcRef::Function(_) => {
-                                return Err(self.runtime_error("Receiver was not object or string"));
-                            }
-                        }
-                    }
-                    FunctionReceiver::Local => {
-                        let frame = self.stack.current_frame()?;
-                        let proc = &frame.process;
+        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().get(name_idx) else {
+            return Err(self.runtime_bug("Unable to find the name being pointed to."));
+        };
 
-                        proc.clone()
-                    }
-                    FunctionReceiver::Argument => {
-                        unreachable!("This is specified in an earlier arm of the parent `match`");
-                    }
+        let func_name = func_name.clone();
+
+        let address = match receiver {
+            FunctionReceiver::Efun => FunctionAddress::Efun(func_name),
+            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name),
+            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name),
+            FunctionReceiver::Local => {
+                let frame = self.stack.current_frame()?;
+                let process = frame.process.clone();
+
+                let borrowed_proc = process.ro(cell_key);
+                let Some(func) = borrowed_proc.as_ref().lookup_function(&func_name) else {
+                    return Err(self.runtime_error(format!(
+                        "Unable to find function `{}` in local process `{}`.",
+                        func_name,
+                        process.ro(cell_key).filename()
+                    )));
                 };
 
-                let s = Self::resolve_function_name(&self.stack, &func_name, cell_key)?;
-                let frame = self.stack.current_frame()?;
-                let proc_ref = &frame.process;
-                let borrowed_proc = proc_ref.ro(cell_key);
-                let func = borrowed_proc.as_ref().lookup_function(&*s);
-                match func {
-                    Some(program_function) => {
-                        FunctionAddress::Local(proc, program_function.clone())
+                let func = func.clone();
+                FunctionAddress::Local(process, func)
+            }
+            FunctionReceiver::Var(location) => {
+                let receiver_ref = &*get_loc!(self, location, cell_key)?;
+                match receiver_ref {
+                    LpcRef::Object(x) => {
+                        let b = x.borrow();
+                        let process = try_extract_value!(*b, LpcValue::Object);
+                        let process = process.clone();
+
+                        let borrowed_proc = process.ro(cell_key);
+                        let Some(func) = borrowed_proc.as_ref().lookup_function(&func_name) else {
+                            return Err(self.runtime_error(format!(
+                                "Unable to find function `{}` in remote process `{}`.",
+                                func_name,
+                                process.ro(cell_key).filename()
+                            )));
+                        };
+
+                        let func = func.clone();
+                        FunctionAddress::Local(process, func)
                     }
-                    None => {
-                        if_chain! {
-                            // check simul efuns, which use the `Local` FunctionTarget
-                            // TODO: This shouldn't be the case now.
-                            if let Some(rc) = task_context.simul_efuns();
-                            let b = rc.ro(cell_key);
-                            if let Some(func) = b.as_ref().lookup_function(&*s);
-                            then {
-                                FunctionAddress::Local(proc, func.clone())
-                            } else {
-                                return Err(
-                                    self.runtime_error(format!("unknown local target `{s}`"))
-                                );
-                            }
-                        }
+                    LpcRef::String(_) => {
+                        todo!("strings need to be supported as receivers for function pointers")
+                    }
+                    _ => {
+                        return Err(self.runtime_error(format!(
+                            "Unable to find the receiver for function `{}`.",
+                            func_name
+                        )));
                     }
                 }
             }
@@ -1471,15 +1461,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             owner: Rc::downgrade(&frame.process),
             address,
             partial_args,
-            // arity,
             call_other,
             // Function pointers inherit the creating function's upvalues
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
             // upvalue_ptrs: self.capture_environment(cell_key)?,
             unique_id: UniqueId::new(),
         };
-
-        // panic!("search here");
 
         let new_ref = self.memory.value_to_ref(LpcValue::from(fp));
 
@@ -2000,8 +1987,7 @@ mod tests {
         ret
     }
 
-    /// A type to make it easier to set up test expectations for register
-    /// contents
+    /// A type to make it easier to set up test expectations for register contents
     #[derive(Debug, Eq, Clone)]
     enum BareVal {
         String(String),

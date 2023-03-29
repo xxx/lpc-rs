@@ -5,11 +5,12 @@ use std::{
 
 use itertools::Itertools;
 use lpc_rs_core::{
-    function::FunctionTarget, function_arity::FunctionArity, register::RegisterVariant, LpcFloat,
+    register::RegisterVariant, LpcFloat,
     LpcInt,
 };
 use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
+use lpc_rs_core::function::FunctionReceiver;
 
 use crate::address::Address;
 
@@ -77,10 +78,12 @@ pub enum Instruction {
     /// Float Constant
     FConst(RegisterVariant, LpcFloat),
 
-    /// A function pointer constant
+    /// A function pointer constant.
+    /// `location` is where the pointer will be stored
     FunctionPtrConst {
         location: RegisterVariant,
-        target: FunctionTarget,
+        receiver: FunctionReceiver,
+        name: usize,
         applied_arguments: Vec<Option<RegisterVariant>>,
     },
 
@@ -308,7 +311,8 @@ impl Display for Instruction {
             }
             Instruction::FunctionPtrConst {
                 location,
-                target,
+                receiver,
+                name,
                 applied_arguments,
             } => {
                 let args = applied_arguments
@@ -322,7 +326,7 @@ impl Display for Instruction {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "function_ptr_const {location}, {target}, {args}")
+                write!(f, "function_ptr_const {location}, {receiver}, {name}, {args}")
             }
             Instruction::Gt(r1, r2, r3) => {
                 write!(f, "gt {r1}, {r2}, {r3}")
