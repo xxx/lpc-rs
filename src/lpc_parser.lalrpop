@@ -857,7 +857,7 @@ AssignmentExpression: ExpressionNode = {
     }
 };
 
-pub Expression: ExpressionNode = {
+Expression: ExpressionNode = {
     <AssignmentExpression>,
     <e:Expression> <c:","> <ass:AssignmentExpression> => {
         let file_id = if let Some(s) = e.span() {

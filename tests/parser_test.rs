@@ -31,21 +31,29 @@ use lpc_rs_errors::{span::Span, Result};
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
-    let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new()
+    let code = format!("void create() {{ {}; }}", expr);
+    let lexer = LexWrapper::new(&code);
+    let prog_node: ProgramNode = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+    let AstNode::FunctionDef(function_def_node) = prog_node.body[0].clone() else {
+        panic!("Expected a function");
+    };
+    let AstNode::Expression(expr_node) = function_def_node.body[0].clone() else {
+        panic!("Expected an expression");
+    };
 
     let expected = ExpressionNode::Int(IntNode {
         value,
         span: Some(Span {
             file_id: 0,
-            l: 0,
-            r: expr.len(),
+            l: 16,
+            r: 16 + expr.len(),
         }),
     });
 
-    assert_eq!(node, expected);
+
+    assert_eq!(expr_node, expected);
 }
 
 #[test]
@@ -190,18 +198,25 @@ fn int_literal_binary() {
 
 #[test]
 fn float_literal_underscores() {
-    let expr = "1_1.234_332e2_2";
+    let expr = "void create() { 1_1.234_332e2_2; }";
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+
+    let AstNode::FunctionDef(function_def_node) = prog_node.body[0].clone() else {
+        panic!("Expected a function");
+    };
+    let AstNode::Expression(node) = function_def_node.body[0].clone() else {
+        panic!("Expected an expression");
+    };
 
     let expected = ExpressionNode::Float(FloatNode {
         value: LpcFloat::from(112343320000000000000000.0),
         span: Some(Span {
             file_id: 0,
-            l: 0,
-            r: expr.len(),
+            l: 16,
+            r: 31,
         }),
     });
 
@@ -210,27 +225,34 @@ fn float_literal_underscores() {
 
 #[test]
 fn string_literal_concat() {
-    let expr = r##""foo" + "bar" + "baz" + "quux""##;
+    let expr = r##"void create() { "foo" + "bar" + "baz" + "quux"; }"##;
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+    let AstNode::FunctionDef(function_def_node) = prog_node.body[0].clone() else {
+        panic!("Expected a function");
+    };
+
+    let AstNode::Expression(node) = function_def_node.body[0].clone() else {
+        panic!("Expected an expression");
+    };
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foobarbazquux"),
         span: Some(Span {
             file_id: 0,
-            l: 0,
-            r: expr.len(),
+            l: 16,
+            r: 46,
         }),
     });
 
     assert_eq!(node, expected);
 
     // test overflow
-    let expr = r##"("f" * 1_000_000_000) + ("b" * 1_000_000_000)"##;
+    let expr = r##"void create() { ("f" * 1_000_000_000) + ("b" * 1_000_000_000) }"##;
     let lexer = LexWrapper::new(expr);
-    let error = lpc_parser::ExpressionParser::new()
+    let error = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap_err();
 
@@ -239,45 +261,59 @@ fn string_literal_concat() {
 
 #[test]
 fn string_literal_repeat() {
-    let expr = r##""foo" * 3"##;
+    let expr = r##"void create() { "foo" * 3; }"##;
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
 
+    let AstNode::FunctionDef(function_def_node) = prog_node.body[0].clone() else {
+        panic!("Expected a function");
+    };
+
+    let AstNode::Expression(node) = function_def_node.body[0].clone() else {
+        panic!("Expected an expression");
+    };
     let expected = ExpressionNode::String(StringNode {
         value: String::from("foofoofoo"),
         span: Some(Span {
             file_id: 0,
-            l: 0,
-            r: expr.len(),
+            l: 16,
+            r: 25,
         }),
     });
 
     assert_eq!(node, expected);
 
     // test negative multiplier
-    let expr = r##""foo" * -3"##;
+    let expr = r##"void create() { "foo" * -3; }"##;
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+
+    let AstNode::FunctionDef(function_def_node) = prog_node.body[0].clone() else {
+        panic!("Expected a function");
+    };
+    let AstNode::Expression(node) = function_def_node.body[0].clone() else {
+        panic!("Expected an expression");
+    };
 
     let expected = ExpressionNode::String(StringNode {
         value: String::from(""),
         span: Some(Span {
             file_id: 0,
-            l: 0,
-            r: expr.len(),
+            l: 16,
+            r: 26,
         }),
     });
 
     assert_eq!(node, expected);
 
     // test overflow
-    let expr = r##""foo" * 9223372036854775807"##;
+    let expr = r##"void create() { "foo" * 9223372036854775807; }"##;
     let lexer = LexWrapper::new(expr);
-    let error = lpc_parser::ExpressionParser::new()
+    let error = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap_err();
 
@@ -286,18 +322,24 @@ fn string_literal_repeat() {
 
 #[test]
 fn compound_assignment_decompose() {
-    let expr = "a += 2";
+    let expr = "void create() { a += 2; }";
     let lexer = LexWrapper::new(expr);
-    let node = lpc_parser::ExpressionParser::new()
+    let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
+    let AstNode::FunctionDef(FunctionDefNode { body, .. }) = prog_node.body[0].clone() else {
+        panic!("Expected a function def");
+    };
+    let AstNode::Expression(node) = body[0].clone() else {
+        panic!("Expected a declaration");
+    };
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
         lhs: Box::new(ExpressionNode::Var(VarNode {
             name: "a".to_string(),
             span: Some(Span {
-                l: 0,
-                r: 1,
+                l: 16,
+                r: 17,
                 file_id: 0,
             }),
             global: false,
@@ -308,8 +350,8 @@ fn compound_assignment_decompose() {
             l: Box::new(ExpressionNode::Var(VarNode {
                 name: "a".to_string(),
                 span: Some(Span {
-                    l: 0,
-                    r: 1,
+                    l: 16,
+                    r: 17,
                     file_id: 0,
                 }),
                 global: false,
@@ -319,21 +361,21 @@ fn compound_assignment_decompose() {
             r: Box::new(ExpressionNode::Int(IntNode {
                 value: 2,
                 span: Some(Span {
-                    l: 5,
-                    r: 6,
+                    l: 21,
+                    r: 22,
                     file_id: 0,
                 }),
             })),
             op: BinaryOperation::Add,
             span: Some(Span {
-                l: 5,
-                r: 6,
+                l: 21,
+                r: 22,
                 file_id: 0,
             }),
         })),
         span: Some(Span {
-            l: 0,
-            r: 6,
+            l: 16,
+            r: 22,
             file_id: 0,
         }),
     });

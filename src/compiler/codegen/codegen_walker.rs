@@ -3139,6 +3139,7 @@ mod tests {
     mod test_visit_call {
         use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
+        use crate::test_support::compile_prog;
 
         use super::*;
 
@@ -3181,22 +3182,23 @@ mod tests {
         fn populates_the_instructions_for_call_other() {
             let mut cell_key = QCellOwner::new();
             let mut check = |code: &str, expected: &[Instruction]| {
-                let mut walker = default_walker(&mut cell_key);
-                let mut tree = lpc_parser::ExpressionParser::new()
-                    .parse(&mut CompilationContext::default(), LexWrapper::new(code))
-                    .unwrap();
+                let wrapped = format!("void create() {{ {}; }}", code);
+                let (prog, _, _) = compile_prog(&wrapped, &mut cell_key);
 
-                let _ = tree.visit(&mut walker, &mut cell_key);
+                // `closure-1` is the outer closure that refers to $1.
+                let instructions = &find_function(&prog.functions, "create")
+                    .unwrap()
+                    .instructions;
 
-                assert_eq!(walker_init_instructions(&mut walker), expected);
+                assert_eq!(instructions, expected);
             };
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                SConst(RegisterVariant::Local(Register(2)), 0),
-                SConst(RegisterVariant::Local(Register(3)), 1),
+                SConst(RegisterVariant::Local(Register(2)), 1),
+                SConst(RegisterVariant::Local(Register(3)), 2),
                 CallOther(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
@@ -3205,12 +3207,13 @@ mod tests {
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(4)),
                 ),
+                Ret,
             ];
             check(r#""foo"->print(4 - 5)"#, &expected);
 
             let expected = vec![
-                SConst(RegisterVariant::Local(Register(1)), 0),
-                SConst(RegisterVariant::Local(Register(2)), 1),
+                SConst(RegisterVariant::Local(Register(1)), 1),
+                SConst(RegisterVariant::Local(Register(2)), 2),
                 IConst(RegisterVariant::Local(Register(3)), -1),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
@@ -3224,6 +3227,7 @@ mod tests {
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(4)),
                 ),
+                Ret,
             ];
             check(r#"call_other("foo", "print", 4 - 5)"#, &expected);
         }
@@ -3232,20 +3236,20 @@ mod tests {
         fn populates_the_instructions_for_sizeof() {
             let mut cell_key = QCellOwner::new();
             let mut check = |code: &str, expected: &[Instruction]| {
-                let mut walker = default_walker(&mut cell_key);
-                let mut tree = lpc_parser::ExpressionParser::new()
-                    .parse(&mut CompilationContext::default(), LexWrapper::new(code))
-                    .unwrap();
+                let wrapped = format!("void create() {{ {}; }}", code);
+                let (prog, _, _) = compile_prog(&wrapped, &mut cell_key);
 
-                let _ = tree.visit(&mut walker, &mut cell_key);
+                let instructions = &find_function(&prog.functions, "create")
+                    .unwrap()
+                    .instructions;
 
-                assert_eq!(walker_init_instructions(&mut walker), expected);
+                assert_eq!(instructions, expected);
             };
 
             let expected = vec![
                 IConst1(RegisterVariant::Local(Register(1))),
                 IConst(RegisterVariant::Local(Register(2)), 2),
-                SConst(RegisterVariant::Local(Register(3)), 0),
+                SConst(RegisterVariant::Local(Register(3)), 1),
                 ClearArrayItems,
                 PushArrayItem(RegisterVariant::Local(Register(1))),
                 PushArrayItem(RegisterVariant::Local(Register(2))),
@@ -3255,6 +3259,7 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                     RegisterVariant::Local(Register(5)),
                 ),
+                Ret,
             ];
             check(r#"sizeof(({ 1, 2, "c" }))"#, &expected);
         }
@@ -3262,13 +3267,11 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_catch() {
             let mut cell_key = QCellOwner::new();
-            let mut walker = default_walker(&mut cell_key);
-            let call = "catch(12 / 0)";
-            let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&mut CompilationContext::default(), LexWrapper::new(call))
-                .unwrap();
-
-            let _ = tree.visit(&mut walker, &mut cell_key);
+            let call = "void create() { catch(12 / 0); }";
+            let (prog, _, _) = compile_prog(call, &mut cell_key);
+            let instructions = &find_function(&prog.functions, "create")
+                .unwrap()
+                .instructions;
 
             let expected = vec![
                 CatchStart(RegisterVariant::Local(Register(1)), Address(4)),
@@ -3280,9 +3283,10 @@ mod tests {
                     RegisterVariant::Local(Register(4)),
                 ),
                 CatchEnd,
+                Ret,
             ];
 
-            assert_eq!(walker_init_instructions(&mut walker), expected);
+            assert_eq!(instructions, &expected);
         }
 
         #[test]
@@ -3307,26 +3311,31 @@ mod tests {
             sym.location = Some(RegisterVariant::Local(Register(1)));
             context.scopes.current_mut().unwrap().insert(sym);
 
-            let call = "my_func(666)";
-            let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&mut context, LexWrapper::new(call))
-                .unwrap();
-
-            let mut walker = CodegenWalker::new(context);
-            let _ = tree.visit(&mut walker, &mut cell_key);
+            let call = "void create() { function my_func = (: $1 :); my_func(666); }";
+            let (prog, _, _) = compile_prog(call, &mut cell_key);
+            let instructions = &find_function(&prog.functions, "create")
+                .unwrap()
+                .instructions;
 
             let expected = vec![
-                IConst(RegisterVariant::Local(Register(1)), 666),
+                ClearPartialArgs,
+                FunctionPtrConst {
+                    location: RegisterVariant::Local(Register(1)),
+                    receiver: FunctionReceiver::Local,
+                    name_index: 1
+                },
+                IConst(RegisterVariant::Local(Register(2)), 666),
                 ClearArgs,
-                PushArg(RegisterVariant::Local(Register(1))),
+                PushArg(RegisterVariant::Local(Register(2))),
                 CallFp(RegisterVariant::Local(Register(1))),
                 Copy(
                     RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
                 ),
+                Ret,
             ];
 
-            assert_eq!(walker_init_instructions(&mut walker), expected);
+            assert_eq!(instructions, &expected);
         }
 
         #[test]
@@ -3350,13 +3359,11 @@ mod tests {
             sym.location = Some(RegisterVariant::Global(Register(0)));
             context.scopes.current_mut().unwrap().insert(sym);
 
-            let call = "my_func(666)";
-            let mut tree = lpc_parser::ExpressionParser::new()
-                .parse(&mut context, LexWrapper::new(call))
-                .unwrap();
-
-            let mut walker = CodegenWalker::new(context);
-            let _ = tree.visit(&mut walker, &mut cell_key);
+            let call = "function my_func = (: $1 :); void create() { my_func(666); }";
+            let (prog, _, _) = compile_prog(call, &mut cell_key);
+            let instructions = &find_function(&prog.functions, "create")
+                .unwrap()
+                .instructions;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3367,9 +3374,10 @@ mod tests {
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
+                Ret,
             ];
 
-            assert_eq!(walker_init_instructions(&mut walker), expected);
+            assert_eq!(instructions, &expected);
         }
 
         #[test]
