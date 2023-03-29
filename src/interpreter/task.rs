@@ -233,17 +233,19 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
     /// Convenience helper to get a Program initialized.
     #[instrument(skip_all)]
-    pub fn initialize_program<C, O>(
+    pub fn initialize_program<P, C, O>(
         &mut self,
-        program: Program,
+        program: P,
         config: C,
         object_space: O,
         cell_key: &mut QCellOwner,
     ) -> Result<TaskContext>
     where
+        P: Into<Rc<Program>>,
         C: Into<Rc<Config>> + Debug,
         O: Into<Rc<QCell<ObjectSpace>>>,
     {
+        let program = program.into();
         let init_function = {
             let Some(function) = &program.initializer else {
                 return Err(LpcError::new("Init function not found?"));
