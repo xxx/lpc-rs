@@ -14,6 +14,37 @@ use lpc_rs_core::{
 use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
 
+/// Kinds of functions. Used for codegen.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FunctionKind {
+    /// A plain old normal LPC function, defined in a plain old normal LPC object.
+    Local,
+
+    /// A simulated efun, which is a plain old normal LPC function,
+    /// defined in a very unique and special LPC object, which
+    /// allows to be called as if it were an efun.
+    SimulEfun,
+
+    /// An efun. These are implemented in Rust, and can be called from anywhere.
+    Efun,
+}
+
+impl Default for FunctionKind {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
+impl Display for FunctionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Local => write!(f, "local"),
+            Self::SimulEfun => write!(f, "simul_efun"),
+            Self::Efun => write!(f, "efun"),
+        }
+    }
+}
+
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
@@ -29,6 +60,10 @@ pub struct FunctionPrototype {
 
     /// The return type
     pub return_type: LpcType,
+
+    /// The kind of function this is
+    #[builder(default)]
+    pub kind: FunctionKind,
 
     /// The arity of the this function
     #[builder(default)]

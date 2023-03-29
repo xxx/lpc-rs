@@ -26,14 +26,18 @@ pub enum Instruction {
 
     /// Call a function in the current object.
     /// The `usize` is an index into the object's `strings` table.
+    /// TODO: make this index directly into the list of functions
     Call(usize),
 
-    /// Call an Efun. The `usize` is the index into the object's `strings` table.
+    /// Call an Efun. x.0 is the index into the caller's `strings` table.
     // TODO: maybe index directly into a collection of efuns, which saves 1 lookup.
     //       This can potentially break programs that have been pre-compiled and cached to disk.
     CallEfun(usize),
 
-    /// Call a function pointer, located in `location`
+    /// Call a simulated efun. x.0 is the index into the caller's `strings` table.
+    CallSimulEfun(usize),
+
+    /// Call a function pointer, located in x.0.
     CallFp(RegisterVariant),
 
     /// Call a function in another object.
@@ -73,7 +77,7 @@ pub enum Instruction {
     /// Float Constant
     FConst(RegisterVariant, LpcFloat),
 
-    /// A function pointer constant.
+    /// A function pointer constant. Closures are stored as function pointers as well.
     /// `location` is where the pointer will be stored
     FunctionPtrConst {
         location: RegisterVariant,
@@ -288,6 +292,9 @@ impl Display for Instruction {
             }
             Instruction::CallOther(receiver, name) => {
                 write!(f, "call_other {receiver}, {name}")
+            }
+            Instruction::CallSimulEfun(name_index) => {
+                write!(f, "call_simul_efun {name_index}")
             }
             Instruction::ClearArgs => {
                 write!(f, "clear_args")

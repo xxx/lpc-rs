@@ -14,7 +14,7 @@ use lpc_rs_core::{
     lpc_type::LpcType,
 };
 use lpc_rs_errors::Result;
-use lpc_rs_function_support::function_prototype::{FunctionPrototype, FunctionPrototypeBuilder};
+use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototype, FunctionPrototypeBuilder};
 use once_cell::sync::Lazy;
 use phf::phf_map;
 use qcell::QCellOwner;
@@ -56,6 +56,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CALL_OTHER)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(false))
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 2,
                 num_default_args: 0,
@@ -84,6 +85,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CATCH)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(false))
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Mixed(false) | LpcType::Void])
             .build()
@@ -96,6 +98,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CLONE_OBJECT)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Object(false))
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::String(false)])
             .build()
@@ -108,6 +111,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(DEBUG)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(false))
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 2,
                 num_default_args: 1,
@@ -125,6 +129,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(DUMP)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 1,
                 num_default_args: 0,
@@ -143,6 +148,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(FILE_NAME)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::String(false))
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Object(false)])
             .build()
@@ -156,6 +162,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(SIZEOF)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Mixed(true) | LpcType::Mapping(false)])
             .build()
@@ -168,6 +175,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(THIS_OBJECT)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Object(false))
+            .kind(FunctionKind::Efun)
             .build()
             .expect("failed to build this_object"),
     );
@@ -178,6 +186,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(THROW)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Mixed(false)])
             .build()

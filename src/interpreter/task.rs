@@ -402,6 +402,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let (pf, efun) = {
                     let name = &process.ro(cell_key).program.strings[name_idx];
                     let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                    // TODO: get rid of this clone. The efun Functions should be cached.
                     let pf = ProgramFunction::new(prototype.clone(), 0);
                     let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(name).unwrap();
 
@@ -420,6 +421,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
             Instruction::CallOther(receiver, name) => {
                 self.handle_call_other(receiver, name, task_context, cell_key)?;
+            }
+            Instruction::CallSimulEfun(name_idx) => {
+                self.handle_call_simul_efun(task_context, name_idx, cell_key)?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -868,6 +872,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             if let Some(func) = function {
                 func.clone()
             } else {
+                // These shouldn't be reachable due to the CallEfun and CallSimulEfun instructions,
+                // but are kept juuuuuust in case.
+                {
+                    let e = LpcError::new_warning(
+                        format!("Call to unknown local function `{name}`. Falling back to legacy SEfun and Efun checks.")
+                    ).with_span(current_frame.current_debug_span());
+                    e.emit_diagnostics();
+                }
+
                 if_chain! {
                     // See if there is a simul efun with this name
                     if let Some(func) = task_context.simul_efuns();
@@ -1365,6 +1378,43 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         let registers = &mut self.stack.current_frame_mut()?.registers;
         registers[0] = result_ref;
+
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    #[inline]
+    fn handle_call_simul_efun(
+        &mut self,
+        task_context: &TaskContext,
+        name_idx: usize,
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
+        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().get(name_idx) else {
+            return Err(self.runtime_bug("Unable to find the name being pointed to."));
+        };
+
+        let Some(simul_efuns) = task_context.simul_efuns() else {
+            // This could be legitimately hit in the case an object was compiled with simul_efuns,
+            // cached to disk, and then later executed without them.
+            // tl;dr objects are dynamically linked.
+            return Err(self.runtime_error("Unable to find simul_efuns. Were they configured?"));
+        };
+
+        let func = {
+            let b = simul_efuns.ro(cell_key);
+
+            if let Some(func) = b.as_ref().lookup_function(func_name) {
+                func.clone()
+            } else {
+                let msg = format!("Call to unknown function `{func_name}`");
+                return Err(self.runtime_error(msg));
+            }
+        };
+
+        let new_frame = self.prepare_new_call_frame(task_context, cell_key, simul_efuns, func)?;
+
+        self.stack.push(new_frame)?;
 
         Ok(())
     }
@@ -2020,12 +2070,6 @@ mod tests {
             }
         }
 
-        // pub fn vec_equal(a: &[LpcRef], b: &[BareVal], cell_key: &QCellOwner) -> bool
-        // {     a.len() == b.len() &&
-        //         a.iter().zip(b.iter())
-        //             .all(|(a, b)| BareVal::from_lpc_ref(a, cell_key) == *b)
-        // }
-
         pub fn equal_to_lpc_ref(&self, other: &LpcRef, cell_key: &QCellOwner) -> bool {
             self == &BareVal::from_lpc_ref(other, cell_key)
         }
@@ -2035,7 +2079,7 @@ mod tests {
         }
 
         pub fn assert_vec_equal(a: &[BareVal], b: &[LpcRef], cell_key: &QCellOwner) {
-            assert_eq!(a.len(), b.len());
+            assert_eq!(a.len(), b.len(), "Vectors {:?} and {:?} are of different lengths", a, b);
             for (a, b) in a.iter().zip(b.iter()) {
                 a.assert_equal(b, cell_key);
             }
@@ -2287,6 +2331,7 @@ mod tests {
 
             #[test]
             fn calls_correct_function_with_simul_efuns() {
+                // this is deprecated behavior that emits a warning, but probably won't ever be removed completely.
                 let code = indoc! { r##"
                     string this_one = simul_efun("marf");
                 "##};
@@ -2295,13 +2340,52 @@ mod tests {
                 let (_task, ctx) = run_prog(code, &mut cell_key);
 
                 let proc = ctx.process();
-                println!("{:?}", ctx.process().ro(&cell_key).program.strings);
                 let borrowed = proc.ro(&cell_key);
                 let values = borrowed.global_variable_values();
-                println!("{:?}", values.get("this_one"));
-                // todo!("inherited strings need to be included in child string tables")
                 String("this is a simul_efun: marf".into())
                     .assert_equal(values.get("this_one").unwrap(), &cell_key);
+            }
+        }
+
+        mod test_call_efun {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = this_object();
+                "##};
+
+                let mut cell_key = QCellOwner::new();
+                let (task, _) = run_prog(code, &mut cell_key);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![Object("/my_file".into()), Object("/my_file".into())];
+
+                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+            }
+        }
+
+        mod test_call_simul_efun {
+            use super::*;
+
+            #[test]
+            fn stores_the_value() {
+                let code = indoc! { r##"
+                    mixed q = simul_efun("marf");
+                "##};
+
+                let mut cell_key = QCellOwner::new();
+                let (task, _) = run_prog(code, &mut cell_key);
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    String("this is a simul_efun: marf".into()),
+                    String("marf".into()),
+                    String("this is a simul_efun: marf".into())
+                ];
+
+                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
             }
         }
 

@@ -18,7 +18,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::{
-    function_prototype::FunctionPrototypeBuilder,
+    function_prototype::{FunctionPrototypeBuilder, FunctionKind},
     program_function::{ProgramFunction, ProgramFunctionBuilder},
     symbol::Symbol,
 };
@@ -1088,12 +1088,19 @@ impl TreeWalker for CodegenWalker {
                             ).with_span(node.span));
                         };
 
-                        if func.is_efun() {
-                            let (idx, _) = self.context.strings.insert_full(node.name.clone());
-                            Instruction::CallEfun(idx)
-                        } else {
-                            let (idx, _) = self.context.strings.insert_full(func.mangle());
-                            Instruction::Call(idx)
+                        match func.prototype().kind {
+                            FunctionKind::Local => {
+                                let (idx, _) = self.context.strings.insert_full(func.mangle());
+                                Instruction::Call(idx)
+                            }
+                            FunctionKind::Efun => {
+                                let (idx, _) = self.context.strings.insert_full(node.name.clone());
+                                Instruction::CallEfun(idx)
+                            }
+                            FunctionKind::SimulEfun => {
+                                let (idx, _) = self.context.strings.insert_full(node.name.clone());
+                                Instruction::CallSimulEfun(idx)
+                            }
                         }
                     }
                 }
@@ -2340,6 +2347,21 @@ mod tests {
                     .name("simul_efun")
                     .filename(Arc::new("/secure/simul_efuns".into()))
                     .return_type(LpcType::Void)
+                    .kind(FunctionKind::SimulEfun)
+                    .build()
+                    .unwrap(),
+                0,
+            )
+            .into(),
+        );
+        prog.functions.insert(
+            "local_function".into(),
+            ProgramFunction::new(
+                FunctionPrototypeBuilder::default()
+                    .name("local_function")
+                    .filename(Arc::new("/test/local.c".into()))
+                    .return_type(LpcType::Void)
+                    .kind(FunctionKind::Local)
                     .build()
                     .unwrap(),
                 0,
@@ -3160,7 +3182,26 @@ mod tests {
         }
 
         #[test]
-        fn populates_the_instructions() {
+        fn populates_the_instructions_for_local_calls() {
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
+            let call = "mixed m = local_function(4 - 5);";
+            let mut node = get_call_node(call, &mut walker.context);
+
+            walker.visit_call(&mut node, &mut cell_key).unwrap();
+
+            let expected = vec![
+                IConst(RegisterVariant::Local(Register(1)), -1),
+                ClearArgs,
+                PushArg(RegisterVariant::Local(Register(1))),
+                Call(0),
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_efuns() {
             let mut cell_key = QCellOwner::new();
             let mut walker = default_walker(&mut cell_key);
             let call = "mixed m = dump(4 - 5);";
@@ -3173,6 +3214,25 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(0),
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_simul_efuns() {
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
+            let call = "mixed m = simul_efun(4 - 5);";
+            let mut node = get_call_node(call, &mut walker.context);
+
+            let _ = walker.visit_call(&mut node, &mut cell_key);
+
+            let expected = vec![
+                IConst(RegisterVariant::Local(Register(1)), -1),
+                ClearArgs,
+                PushArg(RegisterVariant::Local(Register(1))),
+                CallSimulEfun(0),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);

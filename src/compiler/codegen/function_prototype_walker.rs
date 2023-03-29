@@ -1,6 +1,6 @@
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
-use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;
 use qcell::QCellOwner;
 
@@ -25,15 +25,28 @@ pub struct FunctionPrototypeWalker {
 }
 
 impl FunctionPrototypeWalker {
+    /// Create a new instance
+    #[inline]
     pub fn new(context: CompilationContext) -> Self {
         Self {
             context,
             max_closure_arg_reference: 0,
         }
     }
+
+    /// Am I walking the simul efuns? Used in codegen.
+    #[inline]
+    fn is_simul_efuns(&self) -> bool {
+        let Some(simul_efun_file) = &self.context.config.simul_efun_file else {
+            return false;
+        };
+
+        self.context.filename.ends_with(&simul_efun_file)
+    }
 }
 
 impl ContextHolder for FunctionPrototypeWalker {
+    #[inline]
     fn into_context(self) -> CompilationContext {
         self.context
     }
@@ -111,6 +124,8 @@ impl TreeWalker for FunctionPrototypeWalker {
         let num_args = node.parameters.len();
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
 
+        let kind = if self.is_simul_efuns() { FunctionKind::SimulEfun } else { FunctionKind::Local };
+
         let arg_types = node
             .parameters
             .iter()
@@ -122,6 +137,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                 .name(node.name.clone())
                 .filename(self.context.filename.clone())
                 .return_type(node.return_type)
+                .kind(kind)
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,
