@@ -52,7 +52,6 @@ fn assert_int(value: LpcInt, expr: &str) {
         }),
     });
 
-
     assert_eq!(expr_node, expected);
 }
 

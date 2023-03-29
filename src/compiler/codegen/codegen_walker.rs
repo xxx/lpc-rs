@@ -3139,9 +3139,9 @@ mod tests {
     mod test_visit_call {
         use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
         use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
-        use crate::test_support::compile_prog;
 
         use super::*;
+        use crate::test_support::compile_prog;
 
         fn get_call_node(code: &str, context: &mut CompilationContext) -> CallNode {
             let mut prog_node = lpc_parser::ProgramParser::new()
@@ -3322,7 +3322,7 @@ mod tests {
                 FunctionPtrConst {
                     location: RegisterVariant::Local(Register(1)),
                     receiver: FunctionReceiver::Local,
-                    name_index: 1
+                    name_index: 1,
                 },
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 ClearArgs,
