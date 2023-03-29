@@ -9,8 +9,7 @@ use lpc_rs_asm::{
 };
 use lpc_rs_core::{
     call_namespace::CallNamespace,
-    function::{FunctionName, FunctionReceiver},
-    function_arity::FunctionArity,
+    function::FunctionReceiver,
     lpc_type::LpcType,
     mangle::Mangle,
     register::{Register, RegisterVariant},
@@ -1258,7 +1257,10 @@ impl TreeWalker for CodegenWalker {
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
 
-        let (name, _) = self.context.strings.insert_full(func.prototype.name.to_string());
+        let (name, _) = self
+            .context
+            .strings
+            .insert_full(func.prototype.name.to_string());
 
         func.num_locals = self.register_counter.number_emitted() - num_args;
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
@@ -1272,7 +1274,7 @@ impl TreeWalker for CodegenWalker {
         Self::backpatch(&backpatch_map, &mut func)?;
 
         let mangled = func.mangle();
-        self.functions.insert(mangled.clone(), func.into());
+        self.functions.insert(mangled, func.into());
 
         self.function_upvalue_counter.pop();
         self.register_counter.pop();
@@ -1641,7 +1643,10 @@ impl TreeWalker for CodegenWalker {
                 // `&` used as the receiver
                 FunctionPtrReceiver::Dynamic => FunctionReceiver::Dynamic,
             }
-        } else if self.context.contains_function(node.name.as_str(), &CallNamespace::Local) {
+        } else if self
+            .context
+            .contains_function(node.name.as_str(), &CallNamespace::Local)
+        {
             // A local / inherited function
             FunctionReceiver::Local
         } else {
@@ -4273,7 +4278,7 @@ mod tests {
                     location: RegisterVariant::Local(Register(1)),
                     receiver: FunctionReceiver::Efun,
                     name_index: 0,
-                }
+                },
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4298,8 +4303,8 @@ mod tests {
                 FunctionPtrConst {
                     location: RegisterVariant::Local(Register(1)),
                     receiver: FunctionReceiver::SimulEfun,
-                    name_index: 0
-                }
+                    name_index: 0,
+                },
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);

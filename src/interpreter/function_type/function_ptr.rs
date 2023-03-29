@@ -8,7 +8,7 @@ use std::{
 use bit_set::BitSet;
 use educe::Educe;
 use itertools::Itertools;
-use lpc_rs_core::{function_arity::FunctionArity, register::Register};
+use lpc_rs_core::register::Register;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
@@ -35,7 +35,6 @@ pub struct FunctionPtr {
 
     // /// The arity of the function being pointed to
     // pub arity: FunctionArity,
-
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.

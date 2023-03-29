@@ -3,21 +3,16 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use itertools::Itertools;
-use lpc_rs_core::{
-    register::RegisterVariant, LpcFloat,
-    LpcInt,
-};
+use lpc_rs_core::{function::FunctionReceiver, register::RegisterVariant, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
-use lpc_rs_core::function::FunctionReceiver;
 
 use crate::address::Address;
 
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la
 /// the AT&T syntax
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Instruction {
     /// Create an array with values from the vector
     AConst(RegisterVariant),
@@ -407,7 +402,7 @@ impl Display for Instruction {
                 write!(f, "push_array_item {r1}")
             }
             Instruction::PushPartialArg(r) => {
-                let s = r.map(|r| r.to_string()).unwrap_or_else(|| String::new());
+                let s = r.map(|r| r.to_string()).unwrap_or_default();
                 write!(f, "push_partial_arg {s}")
             }
             Instruction::Range(r1, r2, r3, r4) => {

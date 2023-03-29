@@ -320,8 +320,8 @@ impl CallFrame {
     /// get the current instruction
     #[inline]
     #[instrument(skip(self))]
-    pub fn instruction(&self) -> Option<&Instruction> {
-        self.function.instructions.get(self.pc.get())
+    pub fn instruction(&self) -> Option<Instruction> {
+        self.function.instructions.get(self.pc.get()).copied()
     }
 
     /// lookup a label's address by name

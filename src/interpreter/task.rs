@@ -13,7 +13,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
-    function::{FunctionName, FunctionReceiver},
+    function::FunctionReceiver,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
     LpcInt,
@@ -353,17 +353,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 Err(_) => return Ok(true),
             };
 
-            let instruction = match frame.instruction() {
-                // TODO: Get rid of this clone (once Instruction is Copy, this will go away)
-                Some(i) => {
-                    trace!("about to evaluate: {}", i);
-                    i.clone()
-                }
-                None => {
-                    trace!("No more instructions");
-                    return Ok(true);
-                }
+            let Some(instruction) = frame.instruction() else {
+                trace!("No more instructions");
+                return Ok(true);
             };
+            trace!("about to evaluate: {}", instruction);
 
             frame.inc_pc();
 
@@ -467,13 +461,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 receiver,
                 name_index: name,
             } => {
-                self.handle_functionptrconst(
-                    task_context,
-                    location,
-                    receiver,
-                    name,
-                    cell_key,
-                )?;
+                self.handle_functionptrconst(task_context, location, receiver, name, cell_key)?;
             }
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x > y, cell_key)?;
@@ -992,7 +980,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = dynamic_receiver as usize;
         let adjusted_num_args = num_args - (dynamic_receiver as usize);
-        let interim_max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args);
+        let _interim_max_arg_length =
+            Self::calculate_max_arg_length(adjusted_num_args, partial_args);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public()
@@ -1382,18 +1371,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     #[inline]
     fn handle_functionptrconst(
         &mut self,
-        task_context: &TaskContext,
+        _task_context: &TaskContext,
         location: RegisterVariant,
         receiver: FunctionReceiver,
         name_idx: usize,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let call_other = match receiver {
-            FunctionReceiver::Var(_)
-            | FunctionReceiver::Dynamic => true,
-            FunctionReceiver::Local
-            | FunctionReceiver::Efun
-            | FunctionReceiver::SimulEfun => false
+            FunctionReceiver::Var(_) | FunctionReceiver::Dynamic => true,
+            FunctionReceiver::Local | FunctionReceiver::Efun | FunctionReceiver::SimulEfun => false,
         };
 
         let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().get(name_idx) else {
@@ -1455,7 +1441,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
-        let partial_args = self.partial_args
+        let partial_args = self
+            .partial_args
             .iter()
             .map(|arg| {
                 arg.map(|register| Ok(get_loc!(self, register, cell_key)?.into_owned()))
@@ -1846,31 +1833,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         set_loc!(self, r3, LpcRef::Int(out), cell_key)
     }
 
-    /// Get the true name of the function to call.
-    #[instrument(skip(stack, cell_key))]
-    fn resolve_function_name<'a, const N: usize>(
-        stack: &'a CallStack<N>,
-        name: &'a FunctionName,
-        cell_key: &QCellOwner,
-    ) -> Result<Cow<'a, str>> {
-        match name {
-            FunctionName::Var(reg) => {
-                let name_ref = &*get_location(stack, *reg, cell_key)?;
-
-                if let LpcRef::String(s) = name_ref {
-                    let b = s.borrow();
-                    let str = try_extract_value!(*b, LpcValue::String);
-                    Ok(str.to_string().into())
-                } else {
-                    Err(LpcError::new(
-                        "runtime error: found function var that didn't resolve to a string?",
-                    ))
-                }
-            }
-            FunctionName::Literal(s) => Ok(s.into()),
-        }
-    }
-
     /// convenience helper to generate runtime errors
     #[inline]
     fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
@@ -1917,10 +1879,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     ///
     /// The maximum number of arguments that space needs to be made for.
     #[instrument(skip_all)]
-    fn calculate_max_arg_length<T>(
-        num_args: usize,
-        partial_args: &[Option<T>]
-    ) -> usize {
+    fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>]) -> usize {
         let none_args = partial_args.iter().filter(|a| a.is_none()).count();
         partial_args.len() + num_args.saturating_sub(none_args)
     }

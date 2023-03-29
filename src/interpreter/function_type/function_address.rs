@@ -15,8 +15,6 @@ use crate::{
 };
 
 /// Different ways to store a function address, for handling at runtime.
-/// This is the run-time equivalent of
-/// [`FunctionTarget`](lpc_rs_core::function::FunctionTarget).
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 pub enum FunctionAddress {
@@ -26,7 +24,7 @@ pub enum FunctionAddress {
         Rc<ProgramFunction>,
     ),
 
-    /// The receiver isn't known until runtime (i.e. the `&->foo()` syntax)
+    /// The receiver isn't known until called (i.e. the `&->foo()` syntax)
     Dynamic(String),
 
     /// The function being called is an efun, and requires the name.

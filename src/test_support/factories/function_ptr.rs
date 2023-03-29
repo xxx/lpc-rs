@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use factori::factori;
-use lpc_rs_core::function_arity::FunctionArity;
 use qcell::QCellOwner;
 
 use crate::interpreter::{
