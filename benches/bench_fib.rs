@@ -1,15 +1,12 @@
-
 use std::rc::Rc;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use qcell::QCellOwner;
-
-use lpc_rs::compiler::Compiler;
-use lpc_rs::interpreter::gc::gc_bank::{GcRefBank};
-
-use lpc_rs::interpreter::memory::Memory;
-use lpc_rs::interpreter::object_space::ObjectSpace;
-use lpc_rs::interpreter::task::Task;
+use lpc_rs::{
+    compiler::Compiler,
+    interpreter::{gc::gc_bank::GcRefBank, memory::Memory, object_space::ObjectSpace, task::Task},
+};
 use lpc_rs_utils::config::Config;
+use qcell::QCellOwner;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut cell_key = QCellOwner::new();
@@ -40,7 +37,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("fib 20", |b| {
         b.iter(|| {
             let mut t = task.clone();
-            let _ = t.initialize_program(program.clone(), black_box(Config::default()), cell_key.cell(ObjectSpace::default()), &mut cell_key);
+            let _ = t.initialize_program(
+                program.clone(),
+                black_box(Config::default()),
+                cell_key.cell(ObjectSpace::default()),
+                &mut cell_key,
+            );
         })
     });
 }

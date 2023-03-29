@@ -18,7 +18,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::{
-    function_prototype::{FunctionPrototypeBuilder, FunctionKind},
+    function_prototype::{FunctionKind, FunctionPrototypeBuilder},
     program_function::{ProgramFunction, ProgramFunctionBuilder},
     symbol::Symbol,
 };

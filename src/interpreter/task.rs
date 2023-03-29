@@ -2079,7 +2079,13 @@ mod tests {
         }
 
         pub fn assert_vec_equal(a: &[BareVal], b: &[LpcRef], cell_key: &QCellOwner) {
-            assert_eq!(a.len(), b.len(), "Vectors {:?} and {:?} are of different lengths", a, b);
+            assert_eq!(
+                a.len(),
+                b.len(),
+                "Vectors {:?} and {:?} are of different lengths",
+                a,
+                b
+            );
             for (a, b) in a.iter().zip(b.iter()) {
                 a.assert_equal(b, cell_key);
             }
@@ -2382,7 +2388,7 @@ mod tests {
                 let expected = vec![
                     String("this is a simul_efun: marf".into()),
                     String("marf".into()),
-                    String("this is a simul_efun: marf".into())
+                    String("this is a simul_efun: marf".into()),
                 ];
 
                 BareVal::assert_vec_equal(&expected, &registers, &cell_key);

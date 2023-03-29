@@ -14,7 +14,9 @@ use lpc_rs_core::{
     lpc_type::LpcType,
 };
 use lpc_rs_errors::Result;
-use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototype, FunctionPrototypeBuilder};
+use lpc_rs_function_support::function_prototype::{
+    FunctionKind, FunctionPrototype, FunctionPrototypeBuilder,
+};
 use once_cell::sync::Lazy;
 use phf::phf_map;
 use qcell::QCellOwner;

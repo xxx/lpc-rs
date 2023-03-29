@@ -124,7 +124,11 @@ impl TreeWalker for FunctionPrototypeWalker {
         let num_args = node.parameters.len();
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
 
-        let kind = if self.is_simul_efuns() { FunctionKind::SimulEfun } else { FunctionKind::Local };
+        let kind = if self.is_simul_efuns() {
+            FunctionKind::SimulEfun
+        } else {
+            FunctionKind::Local
+        };
 
         let arg_types = node
             .parameters
