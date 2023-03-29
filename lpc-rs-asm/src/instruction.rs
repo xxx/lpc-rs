@@ -70,7 +70,7 @@ pub enum Instruction {
     /// Decrement the value in x.0 by 1
     Dec(RegisterVariant),
 
-    /// == comparison
+    /// `==` comparison
     /// x.2 = x.0 == x.1
     EqEq(RegisterVariant, RegisterVariant, RegisterVariant),
 
@@ -81,7 +81,6 @@ pub enum Instruction {
     FunctionPtrConst {
         location: RegisterVariant,
         target: FunctionTarget,
-        arity: FunctionArity,
         applied_arguments: Vec<Option<RegisterVariant>>,
     },
 
@@ -311,7 +310,6 @@ impl Display for Instruction {
                 location,
                 target,
                 applied_arguments,
-                arity: _arity,
             } => {
                 let args = applied_arguments
                     .iter()

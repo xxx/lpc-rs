@@ -461,14 +461,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 location,
                 target,
                 applied_arguments,
-                arity,
             } => {
                 self.handle_functionptrconst(
                     task_context,
                     location,
                     target,
                     applied_arguments,
-                    arity,
                     cell_key,
                 )?;
             }
@@ -975,7 +973,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         trace!("Calling function ptr: {}", ptr.with_key(cell_key));
 
-        let arity = ptr.arity;
         let partial_args = &ptr.partial_args;
         let passed_args_count = num_args
             + partial_args
@@ -986,7 +983,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = dynamic_receiver as usize;
         let adjusted_num_args = num_args - (dynamic_receiver as usize);
-        let max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args, arity);
+        let interim_max_arg_length = Self::calculate_max_arg_length(adjusted_num_args, partial_args);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public()
@@ -1045,6 +1042,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
+        let max_arg_length = std::cmp::max(interim_max_arg_length, function.arity().num_args);
         let new_registers = RefBank::initialized_for_function(&function, max_arg_length);
 
         let upvalues = if function.is_closure() {
@@ -1065,87 +1063,84 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             cell_key,
         );
 
-        // negotiate the passed & partially-applied arguments
-        if arity.num_args > 0_usize || arity.ellipsis || (dynamic_receiver && num_args > 0) {
-            let from_slice = &self.args[index..(index + adjusted_num_args)];
+        let from_slice = &self.args[index..(index + adjusted_num_args)];
 
-            fn type_check_and_assign_location<const STACKSIZE: usize>(
-                task: &Task<STACKSIZE>,
-                new_frame: &mut CallFrame,
-                loc: RegisterVariant,
-                r: LpcRef,
-                i: usize,
-                cell_key: &mut QCellOwner,
-            ) -> Result<()> {
-                let prototype = &new_frame.function.prototype;
-                task.type_check_call_arg(
-                    &r,
-                    prototype.arg_types.get(i),
-                    prototype.arg_spans.get(i),
-                    &prototype.name,
-                )?;
+        fn type_check_and_assign_location<const STACKSIZE: usize>(
+            task: &Task<STACKSIZE>,
+            new_frame: &mut CallFrame,
+            loc: RegisterVariant,
+            r: LpcRef,
+            i: usize,
+            cell_key: &mut QCellOwner,
+        ) -> Result<()> {
+            let prototype = &new_frame.function.prototype;
+            task.type_check_call_arg(
+                &r,
+                prototype.arg_types.get(i),
+                prototype.arg_spans.get(i),
+                &prototype.name,
+            )?;
 
-                trace!(
-                    "Copying argument {} ({}) to {}",
-                    i,
-                    r.with_key(cell_key),
-                    loc
-                );
+            trace!(
+                "Copying argument {} ({}) to {}",
+                i,
+                r.with_key(cell_key),
+                loc
+            );
 
-                new_frame.arg_locations.push(loc);
-                new_frame.set_location(loc, r, cell_key);
+            new_frame.arg_locations.push(loc);
+            new_frame.set_location(loc, r, cell_key);
 
-                Ok(())
+            Ok(())
+        }
+
+        let mut from_slice_index = 0;
+        let mut next_index = 1;
+        let b = func.borrow();
+        let ptr = try_extract_value!(&*b, LpcValue::Function);
+        let arg_locations = match &ptr.address {
+            FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
+            FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
+            FunctionAddress::SimulEfun(_) => Cow::Borrowed(&function.arg_locations),
+        };
+
+        for i in 0..max_arg_length {
+            let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
+                // This should only be reached by variables that will go
+                // into an ellipsis function's argv.
+                Register(next_index).as_local()
+            });
+
+            if let RegisterVariant::Local(r) = target_location {
+                next_index = r.index() + 1;
             }
 
-            let mut from_slice_index = 0;
-            let mut next_index = 1;
-            let b = func.borrow();
-            let ptr = try_extract_value!(&*b, LpcValue::Function);
-            let arg_locations = match &ptr.address {
-                FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-                FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
-                FunctionAddress::SimulEfun(_) => Cow::Borrowed(&function.arg_locations),
-            };
+            if let Some(Some(lpc_ref)) = partial_args.get(i) {
+                // if a partially-applied arg is present, use it
+                type_check_and_assign_location(
+                    self,
+                    &mut new_frame,
+                    target_location,
+                    lpc_ref.clone(),
+                    i,
+                    cell_key,
+                )?;
+            } else if let Some(location) = from_slice.get(from_slice_index) {
+                // check if the user passed an argument, which will
+                // fill in the next hole in the partial arguments, or
+                // append to the end
 
-            for i in 0..max_arg_length {
-                let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
-                    // This should only be reached by variables that will go
-                    // into an ellipsis function's argv.
-                    Register(next_index).as_local()
-                });
+                let lpc_ref = get_loc!(self, *location, cell_key)?;
+                type_check_and_assign_location(
+                    self,
+                    &mut new_frame,
+                    target_location,
+                    lpc_ref.into_owned(),
+                    i,
+                    cell_key,
+                )?;
 
-                if let RegisterVariant::Local(r) = target_location {
-                    next_index = r.index() + 1;
-                }
-
-                if let Some(Some(lpc_ref)) = partial_args.get(i) {
-                    // if a partially-applied arg is present, use it
-                    type_check_and_assign_location(
-                        self,
-                        &mut new_frame,
-                        target_location,
-                        lpc_ref.clone(),
-                        i,
-                        cell_key,
-                    )?;
-                } else if let Some(location) = from_slice.get(from_slice_index) {
-                    // check if the user passed an argument, which will
-                    // fill in the next hole in the partial arguments, or
-                    // append to the end
-
-                    let lpc_ref = get_loc!(self, *location, cell_key)?;
-                    type_check_and_assign_location(
-                        self,
-                        &mut new_frame,
-                        target_location,
-                        lpc_ref.into_owned(),
-                        i,
-                        cell_key,
-                    )?;
-
-                    from_slice_index += 1;
-                }
+                from_slice_index += 1;
             }
         }
 
@@ -1382,7 +1377,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         location: RegisterVariant,
         target: FunctionTarget,
         applied_arguments: Vec<Option<RegisterVariant>>,
-        arity: FunctionArity,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let call_other = if let FunctionTarget::Local(_, ref rcvr) = target {
@@ -1477,7 +1471,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             owner: Rc::downgrade(&frame.process),
             address,
             partial_args,
-            arity,
+            // arity,
             call_other,
             // Function pointers inherit the creating function's upvalues
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
@@ -1918,15 +1912,23 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         frame
     }
 
+    /// Negotiate how much space needs to be made for a call to a function pointer.
+    ///
+    /// # Arguments
+    ///
+    /// num_args: the number of arguments actually passed to the function for this call
+    /// partial_args: the arguments that were passed to the function when the function pointer was created
+    ///
+    /// # Returns
+    ///
+    /// The maximum number of arguments that space needs to be made for.
     #[instrument(skip_all)]
     fn calculate_max_arg_length<T>(
         num_args: usize,
-        partial_args: &[Option<T>],
-        arity: FunctionArity,
+        partial_args: &[Option<T>]
     ) -> usize {
         let none_args = partial_args.iter().filter(|a| a.is_none()).count();
-        let dynamic_len = partial_args.len() + num_args.saturating_sub(none_args);
-        std::cmp::max(dynamic_len, arity.num_args)
+        partial_args.len() + num_args.saturating_sub(none_args)
     }
 }
 

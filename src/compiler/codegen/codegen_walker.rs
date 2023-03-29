@@ -1288,7 +1288,6 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::FunctionPtrConst {
             location,
             target,
-            arity,
             applied_arguments: vec![],
         };
 
@@ -1723,7 +1722,6 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::FunctionPtrConst {
             location,
             target,
-            arity,
             applied_arguments,
         };
 
@@ -4313,12 +4311,6 @@ mod tests {
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
                 target: FunctionTarget::Efun(String::from("dump")),
-                arity: FunctionArity {
-                    num_args: 1,
-                    num_default_args: 0,
-                    ellipsis: true,
-                    varargs: false,
-                },
                 applied_arguments: vec![],
             }];
 
@@ -4342,12 +4334,6 @@ mod tests {
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
                 target: FunctionTarget::SimulEfun("simul_efun".into()),
-                arity: FunctionArity {
-                    num_args: 0,
-                    num_default_args: 0,
-                    ellipsis: false,
-                    varargs: false,
-                },
                 applied_arguments: vec![],
             }];
 

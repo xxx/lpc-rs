@@ -14,7 +14,7 @@ factori!(FunctionPtr, {
     default {
         owner = Rc::downgrade(&Rc::new(QCellOwner::new().cell(Process::default()))),
         address = FunctionAddress::Efun("dump".to_string()),
-        arity = FunctionArity::default(),
+        // arity = FunctionArity::default(),
         partial_args = vec![],
         call_other = false,
         upvalue_ptrs = vec![],
