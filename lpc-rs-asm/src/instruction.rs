@@ -83,7 +83,7 @@ pub enum Instruction {
     FunctionPtrConst {
         location: RegisterVariant,
         receiver: FunctionReceiver,
-        name: usize,
+        name_index: usize,
         applied_arguments: Vec<Option<RegisterVariant>>,
     },
 
@@ -312,7 +312,7 @@ impl Display for Instruction {
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
-                name,
+                name_index: name,
                 applied_arguments,
             } => {
                 let args = applied_arguments

@@ -1288,7 +1288,7 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::FunctionPtrConst {
             location,
             receiver: FunctionReceiver::Local,
-            name,
+            name_index: name,
             applied_arguments: vec![],
         };
 
@@ -1671,7 +1671,7 @@ impl TreeWalker for CodegenWalker {
 
         let instruction = Instruction::FunctionPtrConst {
             location,
-            name,
+            name_index: name,
             receiver,
             applied_arguments,
         };
@@ -4262,7 +4262,7 @@ mod tests {
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
                 receiver: FunctionReceiver::Efun,
-                name: 0,
+                name_index: 0,
                 applied_arguments: vec![],
             }];
 
@@ -4286,7 +4286,7 @@ mod tests {
             let expected = vec![FunctionPtrConst {
                 location: RegisterVariant::Local(Register(1)),
                 receiver: FunctionReceiver::SimulEfun,
-                name: 0,
+                name_index: 0,
                 applied_arguments: vec![],
             }];
 

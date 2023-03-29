@@ -459,7 +459,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
-                name,
+                name_index: name,
                 applied_arguments,
             } => {
                 self.handle_functionptrconst(
