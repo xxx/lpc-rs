@@ -26,9 +26,6 @@ pub enum Instruction {
     /// x.2 = x.0 & x.1
     And(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// Push the location into the Task's `args` vector
-    Arg(RegisterVariant),
-
     /// x.1 = ~x.0
     BitwiseNot(RegisterVariant, RegisterVariant),
 
@@ -61,6 +58,9 @@ pub enum Instruction {
     /// Clear the `Task`'s `args` vector, in preparation for a new call
     ClearArgs,
 
+    /// Clear the `Task`'s `partial_args` vector, in preparation for a new function pointer
+    ClearPartialArgs,
+
     /// Clear the `Task`'s `array_items` vector, in preparation for a
     /// new array or mapping constant.
     ClearArrayItems,
@@ -84,7 +84,6 @@ pub enum Instruction {
         location: RegisterVariant,
         receiver: FunctionReceiver,
         name_index: usize,
-        applied_arguments: Vec<Option<RegisterVariant>>,
     },
 
     /// Greater than
@@ -187,9 +186,16 @@ pub enum Instruction {
     /// parameters that have default values.
     PopulateDefaults,
 
+    /// Push the location into the Task's `args` vector
+    PushArg(RegisterVariant),
+
     /// Push a location onto the `Task`'s `array_items` vector, used for creating
     /// array literals
     PushArrayItem(RegisterVariant),
+
+    /// Push a location onto the `Task`'s `partial_args` vector, used for creating
+    /// function pointer literals
+    PushPartialArg(Option<RegisterVariant>),
 
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
@@ -267,9 +273,6 @@ impl Display for Instruction {
             Instruction::And(r1, r2, r3) => {
                 write!(f, "and {r1}, {r2}, {r3}")
             }
-            Instruction::Arg(r) => {
-                write!(f, "arg {r}")
-            }
             Instruction::BitwiseNot(r1, r2) => {
                 write!(f, "bitwise_not {r1}, {r2}")
             }
@@ -297,6 +300,9 @@ impl Display for Instruction {
             Instruction::ClearArrayItems => {
                 write!(f, "clear_array_items")
             }
+            Instruction::ClearPartialArgs => {
+                write!(f, "clear_partial_args")
+            }
             Instruction::Copy(r1, r2) => {
                 write!(f, "copy {r1}, {r2}")
             }
@@ -313,20 +319,8 @@ impl Display for Instruction {
                 location,
                 receiver,
                 name_index: name,
-                applied_arguments,
             } => {
-                let args = applied_arguments
-                    .iter()
-                    .map(|i| {
-                        if let Some(reg) = i {
-                            format!("{reg}")
-                        } else {
-                            "None".into()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "function_ptr_const {location}, {receiver}, {name}, {args}")
+                write!(f, "function_ptr_const {location}, {receiver}, {name}")
             }
             Instruction::Gt(r1, r2, r3) => {
                 write!(f, "gt {r1}, {r2}, {r3}")
@@ -406,8 +400,15 @@ impl Display for Instruction {
             Instruction::PopulateDefaults => {
                 write!(f, "populate_defaults")
             }
+            Instruction::PushArg(r) => {
+                write!(f, "push_arg {r}")
+            }
             Instruction::PushArrayItem(r1) => {
                 write!(f, "push_array_item {r1}")
+            }
+            Instruction::PushPartialArg(r) => {
+                let s = r.map(|r| r.to_string()).unwrap_or_else(|| String::new());
+                write!(f, "push_partial_arg {s}")
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "range {r1}, {r2}, {r3}, {r4}")

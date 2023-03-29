@@ -188,6 +188,9 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
     pub args: Vec<RegisterVariant>,
 
+    /// The vector used to collect arguments when creating a partially-applied function pointer
+    pub partial_args: Vec<Option<RegisterVariant>>,
+
     /// The vector used to collect members of a soon-to-be-created array
     array_items: Vec<RegisterVariant>,
 
@@ -216,6 +219,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             stack: CallStack::default(),
             catch_points: vec![],
             args: Vec::with_capacity(10),
+            partial_args: Vec::with_capacity(10),
             array_items: Vec::with_capacity(10),
             vm_upvalues: vm_upvalues.into(),
 
@@ -379,7 +383,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     cell_key,
                 )?;
             }
-            Instruction::Arg(r) => self.args.push(r),
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
@@ -440,6 +443,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::ClearArrayItems => {
                 self.array_items.clear();
             }
+            Instruction::ClearPartialArgs => {
+                self.partial_args.clear();
+            }
             Instruction::Copy(r1, r2) => {
                 let new_ref = get_location(&self.stack, r1, cell_key)?.into_owned();
                 set_loc!(self, r2, new_ref, cell_key)?;
@@ -460,14 +466,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 location,
                 receiver,
                 name_index: name,
-                applied_arguments,
             } => {
                 self.handle_functionptrconst(
                     task_context,
                     location,
                     receiver,
                     name,
-                    applied_arguments,
                     cell_key,
                 )?;
             }
@@ -654,8 +658,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let jump = num_default_args - defaults_to_init;
                 frame.set_pc(frame.pc() + jump);
             }
+            Instruction::PushArg(r) => self.args.push(r),
             Instruction::PushArrayItem(r1) => {
                 self.array_items.push(r1);
+            }
+            Instruction::PushPartialArg(r) => {
+                self.partial_args.push(r);
             }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
@@ -1043,7 +1051,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
-        let max_arg_length = std::cmp::max(interim_max_arg_length, function.arity().num_args);
+        let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
         let new_registers = RefBank::initialized_for_function(&function, max_arg_length);
 
         let upvalues = if function.is_closure() {
@@ -1378,7 +1386,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         location: RegisterVariant,
         receiver: FunctionReceiver,
         name_idx: usize,
-        applied_arguments: Vec<Option<RegisterVariant>>,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let call_other = match receiver {
@@ -1448,7 +1455,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         };
 
-        let partial_args = applied_arguments
+        let partial_args = self.partial_args
             .iter()
             .map(|arg| {
                 arg.map(|register| Ok(get_loc!(self, register, cell_key)?.into_owned()))
