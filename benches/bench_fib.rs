@@ -1,11 +1,11 @@
-use std::borrow::Cow;
+
 use std::rc::Rc;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use qcell::QCellOwner;
-use refpool::Pool;
+
 use lpc_rs::compiler::Compiler;
-use lpc_rs::interpreter::gc::gc_bank::{GcBank, GcRefBank};
-use lpc_rs::interpreter::lpc_ref::LpcRef;
+use lpc_rs::interpreter::gc::gc_bank::{GcRefBank};
+
 use lpc_rs::interpreter::memory::Memory;
 use lpc_rs::interpreter::object_space::ObjectSpace;
 use lpc_rs::interpreter::task::Task;
