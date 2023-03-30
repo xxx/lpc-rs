@@ -17,6 +17,7 @@ use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use string_interner::StringInterner;
 use tracing::trace;
 
 use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
@@ -70,7 +71,7 @@ pub struct ProgramFunction {
     #[builder(default)]
     #[serde(serialize_with = "lpc_rs_core::serialize::serialize_once_cell")]
     #[serde(deserialize_with = "lpc_rs_core::serialize::deserialize_once_cell")]
-    pub strings: OnceCell<Rc<Vec<String>>>,
+    pub strings: OnceCell<Rc<StringInterner>>,
 }
 
 impl ProgramFunction {

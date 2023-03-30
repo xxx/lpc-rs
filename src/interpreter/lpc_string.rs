@@ -4,12 +4,13 @@ use std::{
     hash::{Hash, Hasher},
     rc::Rc,
 };
+use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
 /// An enum to differentiate between statically and dynamically created strings.
 #[derive(Debug, Clone)]
 pub enum LpcString {
     /// A static string, indexing into its twinned string set.
-    Static(usize, Rc<Vec<String>>),
+    Static(usize, Rc<StringInterner>),
 
     /// A dynamically created string.
     Dynamic(String),
@@ -20,7 +21,7 @@ impl LpcString {
     #[inline]
     pub fn to_str(&self) -> &str {
         match self {
-            LpcString::Static(s, strings) => strings.get(*s).map(|s| s.as_str()).unwrap_or(""),
+            LpcString::Static(s, strings) => strings.resolve(DefaultSymbol::try_from_usize(*s).unwrap()).unwrap_or(""),
             LpcString::Dynamic(ref s) => s.as_str(),
         }
     }

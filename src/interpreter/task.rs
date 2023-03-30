@@ -22,6 +22,7 @@ use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
+use string_interner::{DefaultSymbol, Symbol};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -400,8 +401,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
                 let (pf, efun) = {
-                    let name = &process.ro(cell_key).program.strings[name_idx];
-                    let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                    let name = process.ro(cell_key).program.strings.resolve(Self::index_symbol(name_idx)).unwrap();
+                    let prototype = EFUN_PROTOTYPES.get(name).unwrap();
                     // TODO: get rid of this clone. The efun Functions should be cached.
                     let pf = ProgramFunction::new(prototype.clone(), 0);
                     let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(name).unwrap();
@@ -867,7 +868,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let func = {
             let borrowed = process.ro(cell_key);
 
-            let name = &borrowed.program.strings[name_idx];
+            let name = &borrowed.program.strings.resolve(Self::index_symbol(name_idx)).unwrap();
             let function = borrowed.as_ref().lookup_function(name);
             if let Some(func) = function {
                 func.clone()
@@ -1390,7 +1391,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         name_idx: usize,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().get(name_idx) else {
+        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
@@ -1434,16 +1435,16 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             FunctionReceiver::Local | FunctionReceiver::Efun | FunctionReceiver::SimulEfun => false,
         };
 
-        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().get(name_idx) else {
+        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
         let func_name = func_name.clone();
 
         let address = match receiver {
-            FunctionReceiver::Efun => FunctionAddress::Efun(func_name),
-            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name),
-            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name),
+            FunctionReceiver::Efun => FunctionAddress::Efun(func_name.to_owned()),
+            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name.to_owned()),
+            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name.to_owned()),
             FunctionReceiver::Local => {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
@@ -1931,9 +1932,15 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     ///
     /// The maximum number of arguments that space needs to be made for.
     #[instrument(skip_all)]
+    #[inline]
     fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>]) -> usize {
         let none_args = partial_args.iter().filter(|a| a.is_none()).count();
         partial_args.len() + num_args.saturating_sub(none_args)
+    }
+
+    #[inline]
+    fn index_symbol(index: usize) -> DefaultSymbol {
+        DefaultSymbol::try_from_usize(index).unwrap()
     }
 }
 
@@ -4112,6 +4119,7 @@ mod tests {
             use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, INIT_PROGRAM};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
+            use string_interner::StringInterner;
 
             use super::*;
             use crate::test_support::test_config;
@@ -4197,7 +4205,7 @@ mod tests {
                     labels: Default::default(),
                     local_variables: Default::default(),
                     arg_locations: Default::default(),
-                    strings: OnceCell::with_value(vec!["Hello, world!".into()].into()),
+                    strings: OnceCell::with_value(StringInterner::from_iter(["Hello, world!"].into_iter()).into()),
                 }
                 .into();
 

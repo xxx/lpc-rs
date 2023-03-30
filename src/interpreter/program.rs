@@ -14,6 +14,7 @@ use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
+use string_interner::StringInterner;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
@@ -53,7 +54,7 @@ pub struct Program {
 
     /// Interned strings
     #[builder(setter(into))]
-    pub strings: Rc<Vec<String>>,
+    pub strings: Rc<StringInterner>,
 }
 
 impl<'a> Program {

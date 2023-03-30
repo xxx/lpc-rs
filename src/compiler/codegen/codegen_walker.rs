@@ -24,6 +24,7 @@ use lpc_rs_function_support::{
 };
 use lpc_rs_utils::string::closure_arg_number;
 use qcell::QCellOwner;
+use string_interner::{DefaultSymbol, Symbol as StringInternerSymbol};
 use tracing::{instrument, trace};
 use tree_walker::TreeWalker;
 
@@ -241,7 +242,7 @@ impl CodegenWalker {
         let global_variables =
             std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
 
-        let strings = Rc::new(self.context.strings.into_iter().collect::<Vec<_>>());
+        let strings = Rc::new(self.context.strings);
         for func in self.functions.values() {
             func.strings.set(strings.clone()).unwrap();
         }
@@ -671,7 +672,7 @@ impl CodegenWalker {
             if_chain! {
                 if len > 1;
                 if let Instruction::Call(name_idx) = &instructions[len - 2];
-                if let Some(name) = self.context.strings.get_index(*name_idx);
+                if let Some(name) = self.context.strings.resolve(DefaultSymbol::try_from_usize(*name_idx).unwrap());
                 if name.starts_with("create__") && matches!(&instructions[len - 1], Instruction::Ret);
                 then {
                     true
@@ -1060,9 +1061,9 @@ impl TreeWalker for CodegenWalker {
                 let receiver_result = self.current_result;
 
                 let name_register = self.register_counter.next().unwrap().as_local();
-                let (index, _) = self.context.strings.insert_full(node.name.clone());
+                let index = self.context.strings.get_or_intern(&node.name);
 
-                push_instruction!(self, Instruction::SConst(name_register, index), node.span);
+                push_instruction!(self, Instruction::SConst(name_register, index.to_usize()), node.span);
 
                 Instruction::CallOther(receiver_result, name_register)
             } else if node.name == CALL_OTHER {
@@ -1090,16 +1091,16 @@ impl TreeWalker for CodegenWalker {
 
                         match func.prototype().kind {
                             FunctionKind::Local => {
-                                let (idx, _) = self.context.strings.insert_full(func.mangle());
-                                Instruction::Call(idx)
+                                let idx = self.context.strings.get_or_intern(func.mangle());
+                                Instruction::Call(idx.to_usize())
                             }
                             FunctionKind::Efun => {
-                                let (idx, _) = self.context.strings.insert_full(node.name.clone());
-                                Instruction::CallEfun(idx)
+                                let idx = self.context.strings.get_or_intern(&node.name);
+                                Instruction::CallEfun(idx.to_usize())
                             }
                             FunctionKind::SimulEfun => {
-                                let (idx, _) = self.context.strings.insert_full(node.name.clone());
-                                Instruction::CallSimulEfun(idx)
+                                let idx = self.context.strings.get_or_intern(&node.name);
+                                Instruction::CallSimulEfun(idx.to_usize())
                             }
                         }
                     }
@@ -1264,10 +1265,10 @@ impl TreeWalker for CodegenWalker {
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
 
-        let (name, _) = self
+        let name_index = self
             .context
             .strings
-            .insert_full(func.prototype.name.to_string());
+            .get_or_intern(&*func.prototype.name);
 
         func.num_locals = self.register_counter.number_emitted() - num_args;
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
@@ -1299,7 +1300,7 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::FunctionPtrConst {
             location,
             receiver: FunctionReceiver::Local,
-            name_index: name,
+            name_index: name_index.to_usize(),
         };
 
         push_instruction!(self, instruction, node.span);
@@ -1677,7 +1678,7 @@ impl TreeWalker for CodegenWalker {
             }
         };
 
-        let (name, _) = self.context.strings.insert_full(node.name.clone());
+        let name_index = self.context.strings.get_or_intern(&*node.name);
 
         // prepare the partially-applied arguments
         let instruction = Instruction::ClearPartialArgs;
@@ -1692,7 +1693,7 @@ impl TreeWalker for CodegenWalker {
 
         let instruction = Instruction::FunctionPtrConst {
             location,
-            name_index: name,
+            name_index: name_index.to_usize(),
             receiver,
         };
 
@@ -1899,9 +1900,9 @@ impl TreeWalker for CodegenWalker {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
 
-        let (index, _) = self.context.strings.insert_full(node.value.clone());
+        let index = self.context.strings.get_or_intern(&node.value);
 
-        push_instruction!(self, Instruction::SConst(register, index), node.span);
+        push_instruction!(self, Instruction::SConst(register, index.to_usize()), node.span);
 
         Ok(())
     }
@@ -5562,14 +5563,18 @@ mod tests {
                 .expect("failed to compile");
             assert_eq!(program.functions.len(), 1);
             assert_eq!(
-                &**program
+                &program
                     .functions
                     .values()
                     .next()
                     .unwrap()
                     .strings
                     .get()
-                    .unwrap(),
+                    .unwrap()
+                    .clone()
+                    .into_iter()
+                    .map(|(_, b)| b)
+                    .collect::<Vec<_>>(),
                 &vec![
                     "create__i____pb__".to_string(),
                     "sup dawg".to_string(),

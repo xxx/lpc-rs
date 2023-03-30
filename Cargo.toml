@@ -39,6 +39,7 @@ regex = "1"
 rmp-serde = "1.0.0"
 serde = { version = "1.0.123", features = ["derive", "rc"] }
 slab = "0.4.8"
+string-interner = "0.14.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.11", features = ["env-filter", "fmt"] }
 

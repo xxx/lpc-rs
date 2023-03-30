@@ -13,6 +13,7 @@ use lpc_rs_function_support::{
 };
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
+use string_interner::StringInterner;
 
 use crate::{
     compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
@@ -53,7 +54,7 @@ pub struct CompilationContext {
     pub pragmas: PragmaFlags,
 
     /// Strings table
-    pub strings: IndexSet<String>,
+    pub strings: StringInterner,
 
     /// All of the inherited functions, keyed by their mangled name.
     pub inherited_functions: IndexMap<String, Rc<ProgramFunction>>,
@@ -280,7 +281,7 @@ impl Default for CompilationContext {
             default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
-            strings: IndexSet::new(),
+            strings: StringInterner::with_capacity(32),
             inherits: vec![],
             inherit_names: HashMap::new(),
             inherited_functions: IndexMap::new(),
