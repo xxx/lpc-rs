@@ -24,6 +24,7 @@ use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use string_interner::{DefaultSymbol, Symbol};
 use tracing::{instrument, trace};
+use ustr::ustr;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -401,7 +402,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
                 let (pf, efun) = {
-                    let name = process.ro(cell_key).program.strings.resolve(Self::index_symbol(name_idx)).unwrap();
+                    let name = process
+                        .ro(cell_key)
+                        .program
+                        .strings
+                        .resolve(Self::index_symbol(name_idx))
+                        .unwrap();
                     let prototype = EFUN_PROTOTYPES.get(name).unwrap();
                     // TODO: get rid of this clone. The efun Functions should be cached.
                     let pf = ProgramFunction::new(prototype.clone(), 0);
@@ -868,7 +874,11 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let func = {
             let borrowed = process.ro(cell_key);
 
-            let name = &borrowed.program.strings.resolve(Self::index_symbol(name_idx)).unwrap();
+            let name = &borrowed
+                .program
+                .strings
+                .resolve(Self::index_symbol(name_idx))
+                .unwrap();
             let function = borrowed.as_ref().lookup_function(name);
             if let Some(func) = function {
                 func.clone()
@@ -1442,9 +1452,9 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let func_name = func_name.clone();
 
         let address = match receiver {
-            FunctionReceiver::Efun => FunctionAddress::Efun(func_name.to_owned()),
-            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name.to_owned()),
-            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name.to_owned()),
+            FunctionReceiver::Efun => FunctionAddress::Efun(ustr(func_name)),
+            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(ustr(func_name)),
+            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(ustr(func_name)),
             FunctionReceiver::Local => {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
@@ -4205,7 +4215,9 @@ mod tests {
                     labels: Default::default(),
                     local_variables: Default::default(),
                     arg_locations: Default::default(),
-                    strings: OnceCell::with_value(StringInterner::from_iter(["Hello, world!"].into_iter()).into()),
+                    strings: OnceCell::with_value(
+                        StringInterner::from_iter(["Hello, world!"].into_iter()).into(),
+                    ),
                 }
                 .into();
 

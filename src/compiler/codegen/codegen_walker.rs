@@ -1063,7 +1063,11 @@ impl TreeWalker for CodegenWalker {
                 let name_register = self.register_counter.next().unwrap().as_local();
                 let index = self.context.strings.get_or_intern(&node.name);
 
-                push_instruction!(self, Instruction::SConst(name_register, index.to_usize()), node.span);
+                push_instruction!(
+                    self,
+                    Instruction::SConst(name_register, index.to_usize()),
+                    node.span
+                );
 
                 Instruction::CallOther(receiver_result, name_register)
             } else if node.name == CALL_OTHER {
@@ -1265,10 +1269,7 @@ impl TreeWalker for CodegenWalker {
         self.closure_scope_stack.pop();
         let mut func = self.function_stack.pop().unwrap();
 
-        let name_index = self
-            .context
-            .strings
-            .get_or_intern(&*func.prototype.name);
+        let name_index = self.context.strings.get_or_intern(&*func.prototype.name);
 
         func.num_locals = self.register_counter.number_emitted() - num_args;
         func.num_upvalues = self.function_upvalue_counter.number_emitted();
@@ -1902,7 +1903,11 @@ impl TreeWalker for CodegenWalker {
 
         let index = self.context.strings.get_or_intern(&node.value);
 
-        push_instruction!(self, Instruction::SConst(register, index.to_usize()), node.span);
+        push_instruction!(
+            self,
+            Instruction::SConst(register, index.to_usize()),
+            node.span
+        );
 
         Ok(())
     }

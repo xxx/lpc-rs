@@ -118,7 +118,9 @@ impl TreeWalker for InheritanceWalker {
                         .iter()
                         .map(|(k, v)| (k.clone(), v.clone())),
                 );
-                self.context.strings.extend(program.strings.into_iter().map(|x| x.1));
+                self.context
+                    .strings
+                    .extend(program.strings.into_iter().map(|x| x.1));
 
                 self.context.inherits.push(program);
 

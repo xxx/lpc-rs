@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use factori::factori;
 use qcell::QCellOwner;
+use ustr::ustr;
 
 use crate::interpreter::{
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
@@ -12,7 +13,7 @@ use crate::interpreter::{
 factori!(FunctionPtr, {
     default {
         owner = Rc::downgrade(&Rc::new(QCellOwner::new().cell(Process::default()))),
-        address = FunctionAddress::Efun("dump".to_string()),
+        address = FunctionAddress::Efun(ustr("dump")),
         // arity = FunctionArity::default(),
         partial_args = vec![],
         call_other = false,

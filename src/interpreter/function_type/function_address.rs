@@ -8,6 +8,7 @@ use std::{
 use educe::Educe;
 use lpc_rs_function_support::program_function::ProgramFunction;
 use qcell::{QCell, QCellOwner};
+use ustr::Ustr;
 
 use crate::{
     interpreter::process::Process,
@@ -25,13 +26,13 @@ pub enum FunctionAddress {
     ),
 
     /// The receiver isn't known until called (i.e. the `&->foo()` syntax)
-    Dynamic(String),
+    Dynamic(Ustr),
 
     /// The function being called is an efun, and requires the name.
-    Efun(String),
+    Efun(Ustr),
 
     /// The function being called is a simulated efun, and requires the name.
-    SimulEfun(String),
+    SimulEfun(Ustr),
 }
 
 impl FunctionAddress {
