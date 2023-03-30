@@ -63,12 +63,12 @@ impl TreeWalker for InheritanceWalker {
             LpcPath::Server(_) => self
                 .context
                 .filename
-                .as_in_game(&self.context.config.lib_dir)
+                .as_in_game(&self.context.config.lib_dir.as_str())
                 .into_owned(),
             LpcPath::InGame(x) => x,
         };
 
-        let full_path = LpcPath::new_in_game(&node.path, cwd, &self.context.config.lib_dir);
+        let full_path = LpcPath::new_in_game(&node.path, cwd, &self.context.config.lib_dir.as_str());
 
         let depth = self.context.inherit_depth;
         let compiler = CompilerBuilder::default()

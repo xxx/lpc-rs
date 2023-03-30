@@ -4195,7 +4195,7 @@ mod tests {
             #[test]
             fn stores_the_value_for_strings() {
                 let config = Rc::new(test_config());
-                let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir));
+                let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir));
 
                 let prototype = FunctionPrototypeBuilder::default()
                     .name(INIT_PROGRAM)

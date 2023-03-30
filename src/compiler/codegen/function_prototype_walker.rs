@@ -41,7 +41,7 @@ impl FunctionPrototypeWalker {
             return false;
         };
 
-        self.context.filename.ends_with(simul_efun_file)
+        self.context.filename.ends_with(simul_efun_file.as_str())
     }
 }
 

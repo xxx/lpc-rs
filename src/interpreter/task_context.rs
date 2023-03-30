@@ -149,7 +149,7 @@ impl TaskContext {
         let process = self.process.ro(cell_key);
         let current_cwd = process.cwd();
 
-        match current_cwd.strip_prefix(&self.config.lib_dir) {
+        match current_cwd.strip_prefix(&*self.config.lib_dir) {
             Ok(x) => {
                 if x.as_os_str().is_empty() {
                     PathBuf::from("/")

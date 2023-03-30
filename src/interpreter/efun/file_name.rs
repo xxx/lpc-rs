@@ -27,7 +27,7 @@ pub fn file_name<const N: usize>(
             let path = LpcPath::new_server(&*proc.ro(cell_key).filename());
 
             LpcValue::from(String::from(
-                path.as_in_game(&context.config().lib_dir).to_string_lossy(),
+                path.as_in_game(&*context.config().lib_dir).to_string_lossy(),
             ))
         }
     };

@@ -1110,6 +1110,7 @@ dependencies = [
  "qcell",
  "tracing",
  "tracing-subscriber",
+ "ustr",
 ]
 
 [[package]]
@@ -1145,6 +1146,7 @@ dependencies = [
  "serde",
  "string-interner",
  "tracing",
+ "ustr",
 ]
 
 [[package]]
@@ -1156,6 +1158,7 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-utils",
  "qcell",
+ "ustr",
 ]
 
 [[package]]
@@ -1171,6 +1174,7 @@ dependencies = [
  "readonly",
  "toml",
  "tracing",
+ "ustr",
 ]
 
 [[package]]

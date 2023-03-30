@@ -63,9 +63,9 @@ fn compile_simul_efuns(config: &Rc<Config>, cell_key: &mut QCellOwner) -> Progra
         .build()
         .unwrap();
     let path = LpcPath::new_in_game(
-        config.simul_efun_file.as_ref().unwrap(),
+        config.simul_efun_file.unwrap().as_str(),
         "/",
-        &config.lib_dir,
+        &*config.lib_dir,
     );
     compiler
         .compile_in_game_file(&path, None, cell_key)
@@ -85,7 +85,7 @@ pub fn compile_prog(
         .simul_efuns(Some(se_proc.clone()))
         .build()
         .unwrap();
-    let path = LpcPath::new_in_game("/my_file.c", "/", &config.lib_dir);
+    let path = LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir);
     let program = compiler
         .compile_string(path, code, cell_key)
         .expect("Failed to compile.");

@@ -9,6 +9,7 @@ use lpc_rs::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 use qcell::QCellOwner;
+use ustr::ustr;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -32,7 +33,7 @@ fn main() {
     let config_override = args.config;
 
     let config = ConfigBuilder::default()
-        .path(config_override)
+        .path(config_override.map(|s| ustr(&s)))
         .lib_dir(args.lib_dir)
         .build()
         .unwrap();

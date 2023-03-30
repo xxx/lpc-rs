@@ -82,7 +82,7 @@ impl Vm {
         }
 
         let master_path =
-            LpcPath::new_in_game(&self.config.master_object, "/", &self.config.lib_dir);
+            LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
         self.initialize_file(&master_path, cell_key)
     }
 
@@ -101,7 +101,7 @@ impl Vm {
             return None
         };
 
-        let simul_efun_path = LpcPath::new_in_game(path, "/", &self.config.lib_dir);
+        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
         Some(self.initialize_file(&simul_efun_path, cell_key))
     }
 
@@ -179,7 +179,7 @@ impl Vm {
         P: AsRef<Path>,
         S: AsRef<str>,
     {
-        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &self.config.lib_dir);
+        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
         self.with_compiler(cell_key, |compiler, cell_key| {

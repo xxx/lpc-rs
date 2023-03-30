@@ -27,7 +27,7 @@ fn load_master<const N: usize>(
     let full_path = LpcPath::new_in_game(
         path,
         context.in_game_cwd(cell_key),
-        &context.config().lib_dir,
+        &*context.config().lib_dir,
     );
     let path_str: &str = full_path.as_ref();
 

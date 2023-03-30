@@ -14,6 +14,7 @@ use lpc_rs_function_support::{
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use string_interner::StringInterner;
+use ustr::Ustr;
 
 use crate::{
     compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
@@ -100,7 +101,7 @@ impl CompilationContext {
     }
 
     /// config's system include directories
-    pub fn system_include_dirs(&self) -> &Vec<String> {
+    pub fn system_include_dirs(&self) -> &Vec<Ustr> {
         &self.config.system_include_dirs
     }
 

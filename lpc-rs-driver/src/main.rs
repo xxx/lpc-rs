@@ -3,6 +3,7 @@ use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
+use ustr::ustr;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -22,7 +23,7 @@ fn main() {
 
     let config_override = args.config;
 
-    let built = ConfigBuilder::default().path(config_override).build();
+    let built = ConfigBuilder::default().path(config_override.map(|s| ustr(&s))).build();
 
     let config = match built {
         Ok(c) => c,
@@ -70,7 +71,7 @@ fn init_tracing_subscriber(config: &Config) {
                     tracing::subscriber::set_global_default(
                         tracing_subscriber::fmt()
                             .with_max_level(level)
-                            .with_writer(std::fs::File::create(file).unwrap())
+                            .with_writer(std::fs::File::create(file.as_str()).unwrap())
                             .finish(),
                     )
                     .expect("setting tracing default failed");
