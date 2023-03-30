@@ -399,6 +399,7 @@ impl Default for ScopeWalker {
 mod tests {
     use claim::assert_ok;
     use factori::create;
+    use ustr::ustr;
 
     use super::*;
     use crate::{assert_regex, test_support::factories::*};
@@ -437,6 +438,7 @@ mod tests {
 
     mod test_visit_function_def {
         use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+        use ustr::ustr;
 
         use super::*;
 
@@ -446,7 +448,7 @@ mod tests {
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "marf".to_string(),
+                name: ustr("marf"),
                 flags: FunctionFlags::default().with_ellipsis(true),
                 parameters: vec![],
                 body: vec![],
@@ -472,6 +474,7 @@ mod tests {
 
     mod test_visit_var_init {
         use lpc_rs_core::lpc_type::LpcType;
+        use ustr::ustr;
 
         use super::*;
 
@@ -479,7 +482,7 @@ mod tests {
             let mut walker = ScopeWalker::default();
             let node = VarInitNode {
                 type_: LpcType::Int(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 value: None,
                 array: false,
                 global: false,
@@ -550,7 +553,7 @@ mod tests {
         fn setup() -> (ScopeWalker, VarNode) {
             let walker = ScopeWalker::default();
             let node = VarNode {
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 span: None,
                 global: false,
                 function_name: false,
@@ -597,7 +600,7 @@ mod tests {
         fn allows_closure_positional_arg_vars() {
             let mut cell_key = QCellOwner::new();
             let mut walker = ScopeWalker::default();
-            let mut node = create!(VarNode, name: "$7".to_string());
+            let mut node = create!(VarNode, name: ustr("$7"));
 
             let result = walker.visit_var(&mut node, &mut cell_key);
 
@@ -662,7 +665,7 @@ mod tests {
             let mut walker = ScopeWalker::default();
             let _local_scope = walker.context.scopes.push_new(); // push a non-global scope
 
-            let mut node = create!(VarNode, name: "foo".to_string());
+            let mut node = create!(VarNode, name: ustr("foo"));
 
             let symbol_factory = SymbolFactory::new();
             let sym = symbol_factory.build(|sym| {

@@ -7,6 +7,7 @@ use itertools::Itertools;
 use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -24,7 +25,7 @@ pub const ARGV: &str = "argv";
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub struct FunctionDefNode {
     pub return_type: LpcType,
-    pub name: String,
+    pub name: Ustr,
     pub parameters: Vec<VarInitNode>,
     pub flags: FunctionFlags,
     pub body: Vec<AstNode>,

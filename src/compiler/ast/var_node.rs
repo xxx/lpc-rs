@@ -5,6 +5,7 @@ use std::{
 
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
@@ -15,7 +16,7 @@ use crate::compiler::{
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct VarNode {
     /// The name of the variable.
-    pub name: String,
+    pub name: Ustr,
 
     /// The span of the string in the original file
     pub span: Option<Span>,
@@ -39,7 +40,7 @@ pub struct VarNode {
 impl VarNode {
     pub fn new(name: &str) -> Self {
         Self {
-            name: String::from(name),
+            name: Ustr::from(name),
             span: None,
             global: false,
             function_name: false,

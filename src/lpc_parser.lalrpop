@@ -50,6 +50,8 @@ use crate::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
 
+use ustr::ustr;
+
 grammar<'context>(context: &'context mut CompilationContext);
 
 extern {
@@ -167,7 +169,7 @@ Inherit: InheritNode = {
         Ok(
             InheritNode {
                 path,
-                namespace: namespace.map(|ns| ns.1),
+                namespace: namespace.map(|ns| ustr(&ns.1)),
                 span: Some(span),
             }
         )
@@ -266,7 +268,7 @@ FunctionDef: FunctionDefNode = {
         let flags = FunctionFlags::from(&flag_strs[..]).with_ellipsis(ellipsis);
 
         Ok(FunctionDefNode {
-            name: name.1,
+            name: ustr(&name.1),
             parameters,
             flags,
             body,
@@ -308,7 +310,7 @@ Closure: ExpressionNode = {
         context.closure_count += 1;
 
         Ok(ExpressionNode::Closure(ClosureNode {
-            name,
+            name: ustr(&name),
             return_type: LpcType::Mixed(false),
             parameters,
             flags,
@@ -536,7 +538,7 @@ VarInit: VarInitNode = {
 
         VarInitNode {
             type_: LpcType::Int(false), // placeholder. Corrected in Decl.
-            name: name.1,
+            name: ustr(&name.1),
             value,
             array: array.is_some(),
             global: false,
@@ -945,7 +947,7 @@ Call: CallNode = {
         CallNode {
             receiver: None,
             arguments,
-            name: name.1,
+            name: ustr(&name.1),
             span: Some(Span { file_id, l, r }),
             namespace
         }
@@ -954,10 +956,10 @@ Call: CallNode = {
 
 CallNamespace: (Span, CallNamespace) = {
     <name:"ID"?> <colons:"::"> => {
-        name.map(|nm| (nm.0, CallNamespace::Named(nm.1)))
+        name.map(|nm| (nm.0, CallNamespace::Named(ustr(&nm.1))))
             .unwrap_or_else(|| (colons, CallNamespace::Parent))
     },
-    <name:"efun"> <colons:"::"> => (name, CallNamespace::Named(EFUN.to_string()))
+    <name:"efun"> <colons:"::"> => (name, CallNamespace::Named(ustr(EFUN)))
 };
 
 AssignmentOp: AssignmentOperation = {
@@ -1013,7 +1015,7 @@ Var: ExpressionNode = {
     <name:"ID"> => {
         ExpressionNode::Var(
             VarNode {
-                name: name.1,
+                name: ustr(&name.1),
                 span: Some(name.0),
                 global: false,
                 function_name: false,
@@ -1024,7 +1026,7 @@ Var: ExpressionNode = {
     <var:"ClosureArgVar"> => {
         ExpressionNode::Var(
             VarNode {
-                name: var.1,
+                name: ustr(&var.1),
                 span: Some(var.0),
                 global: false,
                 function_name: false,
@@ -1058,7 +1060,7 @@ String: ExpressionNode = {
     <s:"StringLiteral"> => {
         ExpressionNode::String(
             StringNode {
-                value: s.1,
+                value: ustr(&s.1),
                 span: Some(s.0)
             }
         )
@@ -1072,7 +1074,7 @@ String: ExpressionNode = {
             ExpressionNode::String(node) => {
                 let r = node.span.map(|s| s.r).unwrap_or(l);
                 ExpressionNode::String(StringNode {
-                    value: s1.1 + &node.value,
+                    value: ustr(&(s1.1 + &node.value)),
                     span: Some(Span { file_id, l, r })
                 })
             }
@@ -1086,7 +1088,7 @@ FunctionPointer: ExpressionNode = {
         let ptr_node = FunctionPtrNode {
             receiver,
             arguments,
-            name: std::mem::take(&mut name.1),
+            name: ustr(&std::mem::take(&mut name.1)),
             span: Some(combine_spans(Some(l), Some(r)))
         };
 

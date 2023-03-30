@@ -5,6 +5,7 @@ use std::{
 
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
@@ -14,7 +15,7 @@ use crate::compiler::{
 /// A node representing a string literal
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct StringNode {
-    pub value: String,
+    pub value: Ustr,
 
     /// The span of the string in the original file, including quotes
     pub span: Option<Span>,
@@ -23,7 +24,7 @@ pub struct StringNode {
 impl StringNode {
     pub fn new(value: &str) -> Self {
         Self {
-            value: String::from(value),
+            value: Ustr::from(value),
             span: None,
         }
     }

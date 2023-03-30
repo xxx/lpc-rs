@@ -2,10 +2,10 @@ use decorum::Total;
 use indextree::NodeId;
 
 pub mod call_namespace;
-pub mod function_receiver;
 pub mod function_arity;
 #[allow(clippy::identity_op)]
 pub mod function_flags;
+pub mod function_receiver;
 #[allow(clippy::identity_op)]
 pub mod global_var_flags;
 pub mod lpc_path;

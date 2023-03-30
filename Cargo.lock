@@ -1097,6 +1097,7 @@ dependencies = [
  "once_cell",
  "path-absolutize",
  "serde",
+ "ustr",
 ]
 
 [[package]]
@@ -2095,6 +2096,7 @@ dependencies = [
  "byteorder",
  "lazy_static",
  "parking_lot 0.11.2",
+ "serde",
 ]
 
 [[package]]

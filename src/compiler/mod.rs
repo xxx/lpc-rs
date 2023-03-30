@@ -17,6 +17,7 @@ use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
 use qcell::{QCell, QCellOwner};
 use tracing::instrument;
+use ustr::ustr;
 
 use crate::{
     compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
@@ -248,7 +249,7 @@ impl Compiler {
             let lpc_dir = LpcPath::new_in_game(dir.as_str(), "/", &*self.config.lib_dir);
             if lpc_dir != lpc_path {
                 let node = InheritNode {
-                    path: dir.to_string(),
+                    path: ustr(dir),
                     namespace: None,
                     span: None,
                 };

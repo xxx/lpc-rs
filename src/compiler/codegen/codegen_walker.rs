@@ -27,6 +27,7 @@ use qcell::QCellOwner;
 use string_interner::{DefaultSymbol, Symbol as StringInternerSymbol};
 use tracing::{instrument, trace};
 use tree_walker::TreeWalker;
+use ustr::ustr;
 
 use crate::{
     compiler::{
@@ -1166,7 +1167,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_closure(&mut self, node: &mut ClosureNode, cell_key: &mut QCellOwner) -> Result<()> {
-        let Some(prototype) = self.context.function_prototypes.get(&node.name) else {
+        let Some(prototype) = self.context.function_prototypes.get(&*node.name) else {
             return Err(LpcError::new(format!(
                 "closure prototype for {} not found",
                 node.name
@@ -1522,7 +1523,7 @@ impl TreeWalker for CodegenWalker {
     ) -> Result<()> {
         // Note we don't look to inherited files at all for this -
         // We're generating code for a function defined _in this object_
-        let prototype = match self.context.function_prototypes.get(&node.name) {
+        let prototype = match self.context.function_prototypes.get(&*node.name) {
             Some(p) => p,
             None => {
                 return Err(LpcError::new(format!(
@@ -1831,7 +1832,7 @@ impl TreeWalker for CodegenWalker {
             let mut call = CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: CREATE_FUNCTION.to_string(),
+                name: ustr(CREATE_FUNCTION),
                 span: None,
                 namespace: CallNamespace::Local,
             };
@@ -2490,7 +2491,7 @@ mod tests {
 
             let mut node = AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode {
-                    name: "marf".to_string(),
+                    name: ustr("marf"),
                     span: None,
                     global: true,
                     function_name: false,
@@ -2655,7 +2656,7 @@ mod tests {
                 l: Box::new(ExpressionNode::Float(FloatNode::new(123.45))),
                 r: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::Var(VarNode {
-                        name: "foo".to_string(),
+                        name: ustr("foo"),
                         span: None,
                         global: false,
                         function_name: false,
@@ -4113,7 +4114,7 @@ mod tests {
                 body: Box::new(AstNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("body")],
-                    name: "dump".to_string(),
+                    name: ustr("dump"),
                     span: None,
                     namespace: CallNamespace::default(),
                 })),
@@ -4151,7 +4152,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
 
             let var = VarNode {
-                name: "i".to_string(),
+                name: ustr("i"),
                 span: None,
                 global: false,
                 function_name: false,
@@ -4161,7 +4162,7 @@ mod tests {
             let mut node = ForNode {
                 initializer: Box::new(Some(AstNode::VarInit(VarInitNode {
                     type_: LpcType::Int(false),
-                    name: "i".to_string(),
+                    name: ustr("i"),
                     value: Some(ExpressionNode::from(10)),
                     array: false,
                     global: false,
@@ -4183,7 +4184,7 @@ mod tests {
                     body: vec![AstNode::Call(CallNode {
                         receiver: None,
                         arguments: vec![ExpressionNode::Var(var)],
-                        name: "dump".to_string(),
+                        name: ustr("dump"),
                         span: None,
                         namespace: CallNamespace::default(),
                     })],
@@ -4338,7 +4339,7 @@ mod tests {
 
             let mut node = FunctionPtrNode {
                 receiver: None,
-                name: "dump".to_string(),
+                name: ustr("dump"),
                 arguments: None,
                 span: None,
             };
@@ -4364,7 +4365,7 @@ mod tests {
 
             let mut node = FunctionPtrNode {
                 receiver: None,
-                name: "simul_efun".to_string(),
+                name: ustr("simul_efun"),
                 arguments: None,
                 span: None,
             };
@@ -4407,14 +4408,14 @@ mod tests {
                 body: Box::new(AstNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("true")],
-                    name: "dump".to_string(),
+                    name: ustr("dump"),
                     span: None,
                     namespace: CallNamespace::default(),
                 })),
                 else_clause: Box::new(Some(AstNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("false")],
-                    name: "dump".to_string(),
+                    name: ustr("dump"),
                     span: None,
                     namespace: CallNamespace::default(),
                 }))),
@@ -4946,7 +4947,7 @@ mod tests {
             );
 
             let mut node = VarNode {
-                name: "marf".to_string(),
+                name: ustr("marf"),
                 span: None,
                 global: true,
                 function_name: false,
@@ -5059,7 +5060,7 @@ mod tests {
 
             let mut node = VarInitNode {
                 type_,
-                name: "muffins".to_string(),
+                name: ustr("muffins"),
                 value: Some(ExpressionNode::Var(VarNode::new("marf"))),
                 array: false,
                 global: false,
@@ -5082,7 +5083,7 @@ mod tests {
         ) {
             let mut node = VarInitNode {
                 type_,
-                name: "muffins".to_string(),
+                name: ustr("muffins"),
                 value: Some(value),
                 array: false,
                 global: false,
@@ -5278,11 +5279,11 @@ mod tests {
 
             let mut node = VarInitNode {
                 type_: LpcType::Object(false),
-                name: "muffins".to_string(),
+                name: ustr("muffins"),
                 value: Some(ExpressionNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
-                    name: "clone_object".to_string(),
+                    name: ustr("clone_object"),
                     span: None,
                     namespace: CallNamespace::default(),
                 })),
@@ -5320,7 +5321,7 @@ mod tests {
 
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
-                name: "arr".to_string(),
+                name: ustr("arr"),
                 value: Some(ExpressionNode::from(vec![
                     ExpressionNode::from(12),
                     ExpressionNode::from(4.3),
@@ -5341,7 +5342,7 @@ mod tests {
 
             let mut node2 = VarInitNode {
                 type_: LpcType::Mixed(true),
-                name: "str".to_string(),
+                name: ustr("str"),
                 value: Some(ExpressionNode::from("sup")),
                 array: false,
                 global: true,
@@ -5401,8 +5402,8 @@ mod tests {
 
             let mut node = create!(
                 VarInitNode,
-                name: "a".to_string(),
-                value: Some(ExpressionNode::from(create!(VarNode, name: existing_name.to_string()))),
+                name: ustr("a"),
+                value: Some(ExpressionNode::from(create!(VarNode, name: ustr(existing_name)))),
             );
 
             let mut sym = Symbol::from(&mut node.clone());
@@ -5432,7 +5433,7 @@ mod tests {
 
             let mut node = create!(
                 VarInitNode,
-                name: "a".to_string(),
+                name: ustr("a"),
                 value: Some(ExpressionNode::from(666))
             );
 
@@ -5469,7 +5470,7 @@ mod tests {
                 body: Box::new(AstNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("body")],
-                    name: "dump".to_string(),
+                    name: ustr("dump"),
                     span: None,
                     namespace: CallNamespace::default(),
                 })),

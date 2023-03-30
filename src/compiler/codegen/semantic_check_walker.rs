@@ -196,7 +196,9 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         if let CallNamespace::Named(namespace) = &node.namespace {
-            if !self.context.inherit_names.contains_key(namespace) && namespace != EFUN {
+            if !self.context.inherit_names.contains_key(namespace.as_str())
+                && namespace.as_str() != EFUN
+            {
                 let e =
                     LpcError::new(format!("unknown namespace `{namespace}`")).with_span(node.span);
                 self.context.errors.push(e);
@@ -752,6 +754,7 @@ mod tests {
     };
     use lpc_rs_errors::LpcErrorSeverity;
     use lpc_rs_function_support::symbol::Symbol;
+    use ustr::ustr;
 
     use super::*;
     use crate::{
@@ -889,7 +892,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut init_node = VarInitNode {
                 type_: LpcType::Mixed(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
                 global: false,
@@ -929,7 +932,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 value: Some(ExpressionNode::from(324)),
                 array: false,
                 global: false,
@@ -974,7 +977,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(true),
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 value: Some(ExpressionNode::from(vec![324])),
                 array: false,
                 global: false,
@@ -1174,7 +1177,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1210,7 +1213,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1247,7 +1250,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1284,7 +1287,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
                 namespace: CallNamespace::Parent,
             });
@@ -1321,7 +1324,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
                 namespace: CallNamespace::Parent,
             });
@@ -1363,9 +1366,9 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
-                namespace: CallNamespace::Named("parent".to_string()),
+                namespace: CallNamespace::Named(ustr("parent")),
             });
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -1403,9 +1406,9 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "this_object".to_string(),
+                name: ustr("this_object"),
                 span: None,
-                namespace: CallNamespace::Named("efun".to_string()),
+                namespace: CallNamespace::Named(ustr("efun")),
             });
 
             let context = CompilationContext::default();
@@ -1422,9 +1425,9 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
-                namespace: CallNamespace::Named("parent".to_string()),
+                namespace: CallNamespace::Named(ustr("parent")),
             });
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -1467,9 +1470,9 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
-                namespace: CallNamespace::Named("unknown_namespace".to_string()),
+                namespace: CallNamespace::Named(ustr("unknown_namespace")),
             });
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -1508,7 +1511,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1550,7 +1553,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
-                name: "dump".to_string(),
+                name: ustr("dump"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1568,7 +1571,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
-                name: "my_function_pointer".to_string(),
+                name: ustr("my_function_pointer"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1594,7 +1597,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
-                name: "my_mixed_function_pointer".to_string(),
+                name: ustr("my_mixed_function_pointer"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1620,7 +1623,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
-                name: "my_non_function_pointer".to_string(),
+                name: ustr("my_non_function_pointer"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1650,7 +1653,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "unknown".to_string(),
+                name: ustr("unknown"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1667,7 +1670,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "dump".to_string(),
+                name: ustr("dump"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1690,7 +1693,7 @@ mod tests {
                     ExpressionNode::from(111),
                     ExpressionNode::from("sha256"),
                 ], // `call_other` is specified as having 2 arguments, but we're passing more
-                name: "call_other".to_string(),
+                name: ustr("call_other"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1707,7 +1710,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "my_function".to_string(),
+                name: ustr("my_function"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1756,7 +1759,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![],
-                name: "my_func".to_string(),
+                name: ustr("my_func"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1798,7 +1801,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![ExpressionNode::from(123)],
-                name: "my_func".to_string(),
+                name: ustr("my_func"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1835,7 +1838,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: None,
                 arguments: vec![ExpressionNode::from(0)],
-                name: "my_func".to_string(),
+                name: ustr("my_func"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1872,7 +1875,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: Some(Box::new(ExpressionNode::from(23))),
                 arguments: vec![],
-                name: "dump".to_string(),
+                name: ustr("dump"),
                 span: None,
                 namespace: CallNamespace::default(),
             });
@@ -1889,7 +1892,7 @@ mod tests {
             let mut node = ExpressionNode::from(CallNode {
                 receiver: Some(Box::new(ExpressionNode::from(23))),
                 arguments: vec![],
-                name: "dump".to_string(),
+                name: ustr("dump"),
                 span: None,
                 namespace: CallNamespace::Parent,
             });
@@ -1999,7 +2002,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let _global = VarInitNode {
                 type_: LpcType::Int(false),
-                name: "a".to_string(),
+                name: ustr("a"),
                 value: Some(ExpressionNode::from(1)),
                 array: false,
                 global: true,
@@ -2009,7 +2012,7 @@ mod tests {
 
             let param1 = VarInitNode {
                 type_: LpcType::String(false),
-                name: "a".to_string(),
+                name: ustr("a"),
                 value: Some(ExpressionNode::from("foo")),
                 array: false,
                 global: false,
@@ -2019,7 +2022,7 @@ mod tests {
 
             let param2 = VarInitNode {
                 type_: LpcType::Int(true),
-                name: "a".to_string(),
+                name: ustr("a"),
                 value: Some(ExpressionNode::from(vec![1, 2, 3, 4])),
                 array: true,
                 global: false,
@@ -2029,14 +2032,14 @@ mod tests {
 
             let mut function_def1 = FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 parameters: vec![param1],
                 flags: FunctionFlags::default(),
                 body: vec![AstNode::from(ExpressionNode::BinaryOp(BinaryOpNode {
                     op: BinaryOperation::Add,
                     l: Box::new(ExpressionNode::from("foo")),
                     r: Box::new(ExpressionNode::Var(VarNode {
-                        name: "a".to_string(),
+                        name: ustr("a"),
                         span: None,
                         global: false,
                         function_name: false,
@@ -2049,7 +2052,7 @@ mod tests {
 
             let mut function_def2 = FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "snuh".to_string(),
+                name: ustr("snuh"),
                 parameters: vec![param2],
                 flags: FunctionFlags::default(),
                 body: vec![],
@@ -2075,7 +2078,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "while".to_string(),
+                name: ustr("while"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),
                 body: vec![],
@@ -2097,7 +2100,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "duplicate".to_string(),
+                name: ustr("duplicate"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),
                 body: vec![],
@@ -2153,7 +2156,7 @@ mod tests {
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: None,
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
             });
 
@@ -2189,7 +2192,7 @@ mod tests {
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: None,
-                name: "known".to_string(),
+                name: ustr("known"),
                 span: None,
             });
 
@@ -2230,7 +2233,7 @@ mod tests {
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: Some(vec![Some(ExpressionNode::from(IntNode::new(12)))]),
-                name: "dump".to_string(),
+                name: ustr("dump"),
                 span: None,
             });
 
@@ -2294,7 +2297,7 @@ mod tests {
                 inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
                     type_: LpcType::String(false),
-                    name: "mapping".to_string(),
+                    name: ustr("mapping"),
                     value: None,
                     array: false,
                     global: false,
@@ -2431,13 +2434,13 @@ mod tests {
             let void_function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Void,
-                name: "foo".to_string()
+                name: ustr("foo")
             );
 
             let int_function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Int(false),
-                name: "snuh".to_string()
+                name: ustr("snuh")
             );
 
             let function_prototypes = HashMap::new();
@@ -2484,7 +2487,7 @@ mod tests {
             let void_function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Void,
-                name: "foo".to_string()
+                name: ustr("foo")
             );
 
             let function_prototypes = HashMap::new();
@@ -2514,7 +2517,7 @@ mod tests {
             let function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Mixed(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
             );
 
             let context = CompilationContext::default();
@@ -2532,7 +2535,7 @@ mod tests {
             let function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Float(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
             );
 
             let mut node = ReturnNode {
@@ -2679,7 +2682,7 @@ mod tests {
         #[test]
         fn disallows_closure_arg_vars_outside_of_closures() {
             let mut cell_key = QCellOwner::new();
-            let mut node = create!(VarNode,name: "$2".to_string());
+            let mut node = create!(VarNode,name: ustr("$2"));
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             let _ = node.visit(&mut walker, &mut cell_key);
@@ -2699,7 +2702,7 @@ mod tests {
         #[test]
         fn disallows_closure_arg_vars_beyond_limit() {
             let mut cell_key = QCellOwner::new();
-            let mut node = create!(VarNode,name: "$65".to_string());
+            let mut node = create!(VarNode,name: ustr("$65"));
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             walker.closure_depth = 1;
@@ -2713,7 +2716,7 @@ mod tests {
 
             walker.context.errors = vec![];
 
-            let mut node = create!(VarNode,name: "$64".to_string());
+            let mut node = create!(VarNode,name: ustr("$64"));
 
             let _ = node.visit(&mut walker, &mut cell_key);
             assert!(walker.context.errors.is_empty());
@@ -2729,7 +2732,7 @@ mod tests {
         fn validates_both_sides() {
             let mut cell_key = QCellOwner::new();
             let mut node = VarInitNode {
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 type_: LpcType::Int(false),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
@@ -2750,7 +2753,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 value: Some(ExpressionNode::from(0)),
                 array: false,
                 global: false,
@@ -2770,7 +2773,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
-                name: "foo".to_string(),
+                name: ustr("foo"),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
@@ -2796,7 +2799,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
-                name: "switch".to_string(),
+                name: ustr("switch"),
                 value: Some(ExpressionNode::from(123)),
                 array: false,
                 global: false,
@@ -2820,7 +2823,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
-                name: "argv".to_string(),
+                name: ustr("argv"),
                 value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
                 array: false,
                 global: false,
@@ -2834,7 +2837,7 @@ mod tests {
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "moop".to_string(),
+                name: ustr("moop"),
                 parameters: vec![],
                 flags: FunctionFlags::default().with_ellipsis(true),
                 body: vec![],
@@ -2857,7 +2860,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
-                name: "argv".to_string(),
+                name: ustr("argv"),
                 value: Some(ExpressionNode::from(vec![ExpressionNode::from(11)])),
                 array: false,
                 global: false,
@@ -2871,7 +2874,7 @@ mod tests {
             // Fake it, as if we're currently walking a function def
             walker.current_function = Some(FunctionDefNode {
                 return_type: LpcType::Void,
-                name: "moop".to_string(),
+                name: ustr("moop"),
                 parameters: vec![],
                 flags: FunctionFlags::default(),
                 body: vec![],

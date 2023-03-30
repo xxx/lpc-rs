@@ -569,7 +569,8 @@ impl Preprocessor {
 
             let config = self.context.config.clone();
             for dir in &config.system_include_dirs {
-                let to_include = LpcPath::new_in_game(matched.as_str(), dir.as_str(), &*config.lib_dir);
+                let to_include =
+                    LpcPath::new_in_game(matched.as_str(), dir.as_str(), &*config.lib_dir);
                 return match self.include_local_file(&to_include, Some(token.0)) {
                     Ok(included) => {
                         for spanned in included {

@@ -1,13 +1,14 @@
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+use ustr::Ustr;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
 pub enum CallNamespace {
     #[default]
     Local,
     Parent,
-    Named(String),
+    Named(Ustr),
 }
 
 impl CallNamespace {
@@ -15,7 +16,7 @@ impl CallNamespace {
         match self {
             CallNamespace::Local => "",
             CallNamespace::Parent => "::",
-            CallNamespace::Named(name) => name,
+            CallNamespace::Named(name) => &*name,
         }
     }
 }

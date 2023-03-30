@@ -7,6 +7,7 @@ use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -37,7 +38,7 @@ impl Display for FunctionPtrReceiver {
 pub struct FunctionPtrNode {
     pub receiver: Option<FunctionPtrReceiver>,
     pub arguments: Option<Vec<Option<ExpressionNode>>>,
-    pub name: String,
+    pub name: Ustr,
 
     /// The span of the string in the original file
     pub span: Option<Span>,

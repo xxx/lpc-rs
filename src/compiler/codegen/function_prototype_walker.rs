@@ -93,9 +93,9 @@ impl TreeWalker for FunctionPrototypeWalker {
         }
 
         self.context.function_prototypes.insert(
-            node.name.clone(),
+            node.name.to_owned(),
             FunctionPrototypeBuilder::default()
-                .name(node.name.clone())
+                .name(node.name.to_owned())
                 .filename(self.context.filename.clone())
                 .return_type(node.return_type)
                 .arity(FunctionArity {
@@ -136,9 +136,9 @@ impl TreeWalker for FunctionPrototypeWalker {
             .map(|parm| parm.type_)
             .collect::<Vec<_>>();
         self.context.function_prototypes.insert(
-            node.name.clone(),
+            node.name.to_owned(),
             FunctionPrototypeBuilder::default()
-                .name(node.name.clone())
+                .name(node.name.to_owned())
                 .filename(self.context.filename.clone())
                 .return_type(node.return_type)
                 .kind(kind)
@@ -191,6 +191,7 @@ mod tests {
     use std::sync::Arc;
 
     use lpc_rs_core::{function_flags::FunctionFlags, lpc_path::LpcPath, lpc_type::LpcType};
+    use ustr::ustr;
 
     use super::*;
     use crate::compiler::ast::{
@@ -203,7 +204,7 @@ mod tests {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
             return_type: LpcType::Mixed(false),
-            name: "marf".to_string(),
+            name: ustr("marf"),
             flags: FunctionFlags::default(),
             parameters: vec![
                 VarInitNode::new("foo", LpcType::Int(false)),

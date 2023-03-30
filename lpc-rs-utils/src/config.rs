@@ -6,7 +6,7 @@ use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use toml::{value::Index, Value};
-use ustr::{Ustr, ustr};
+use ustr::{ustr, Ustr};
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;

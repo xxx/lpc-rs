@@ -8,6 +8,7 @@ use lazy_format::lazy_format;
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -27,7 +28,7 @@ pub struct CallNode {
     pub arguments: Vec<ExpressionNode>,
 
     /// The name of the function being called
-    pub name: String,
+    pub name: Ustr,
 
     /// The text span in the original file that this node represents. Used for
     /// error messages.

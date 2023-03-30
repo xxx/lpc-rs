@@ -26,6 +26,7 @@ impl Display for GlobalVarFlags {
 }
 
 impl GlobalVarFlags {
+    /// validate a list of strings, returning a list of invalid strings.
     pub fn validate<'a>(strs: &'_ [&'a str]) -> Vec<&'a str> {
         let mut invalid = vec![];
         for s in strs.iter() {

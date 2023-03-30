@@ -31,13 +31,13 @@ impl InheritanceWalker {
         }
 
         if let Some(namespace) = &node.namespace {
-            if namespace == EFUN {
+            if namespace.as_str() == EFUN {
                 return Err(
                     LpcError::new("inheritance namespace `efun` is reserved").with_span(node.span)
                 );
             }
 
-            if self.context.inherit_names.contains_key(namespace) {
+            if self.context.inherit_names.contains_key(namespace.as_str()) {
                 return Err(LpcError::new(format!(
                     "inheritance namespace `{namespace}` is already defined"
                 ))
@@ -68,7 +68,8 @@ impl TreeWalker for InheritanceWalker {
             LpcPath::InGame(x) => x,
         };
 
-        let full_path = LpcPath::new_in_game(&node.path, cwd, &self.context.config.lib_dir.as_str());
+        let full_path =
+            LpcPath::new_in_game(&*node.path, cwd, &self.context.config.lib_dir.as_str());
 
         let depth = self.context.inherit_depth;
         let compiler = CompilerBuilder::default()
@@ -106,7 +107,7 @@ impl TreeWalker for InheritanceWalker {
                 if let Some(namespace) = &node.namespace {
                     self.context
                         .inherit_names
-                        .insert(namespace.clone(), self.context.inherits.len());
+                        .insert(namespace.to_owned(), self.context.inherits.len());
                 }
 
                 self.context.num_globals += program.num_globals;
@@ -155,6 +156,7 @@ mod tests {
 
     mod test_visit_inherit {
         use claim::assert_ok;
+        use ustr::ustr;
 
         use super::*;
 
@@ -164,7 +166,7 @@ mod tests {
             let mut walker = walker();
 
             let mut node = InheritNode {
-                path: "/grandparent.c".to_string(),
+                path: ustr("/grandparent.c"),
                 namespace: None,
                 span: None,
             };
@@ -186,8 +188,8 @@ mod tests {
                 .insert("grandparent".to_string(), 0);
 
             let mut node = InheritNode {
-                path: "/grandparent.c".to_string(),
-                namespace: Some("grandparent".to_string()),
+                path: ustr("/grandparent.c"),
+                namespace: Some(ustr("grandparent")),
                 span: None,
             };
 
@@ -205,7 +207,7 @@ mod tests {
             let mut walker = walker();
 
             let mut node = InheritNode {
-                path: "/no_inherit.c".to_string(),
+                path: ustr("/no_inherit.c"),
                 namespace: None,
                 span: None,
             };
@@ -224,8 +226,8 @@ mod tests {
             let mut walker = walker();
 
             let mut node = InheritNode {
-                path: "/grandparent.c".to_string(),
-                namespace: Some("efun".to_string()),
+                path: ustr("/grandparent.c"),
+                namespace: Some(ustr("efun")),
                 span: None,
             };
 

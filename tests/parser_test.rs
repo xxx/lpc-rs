@@ -28,6 +28,7 @@ use lpc_rs_core::{
     global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloat, LpcInt,
 };
 use lpc_rs_errors::{span::Span, Result};
+use ustr::{ustr, Ustr};
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -70,7 +71,7 @@ fn program_global_vars() {
                 type_: LpcType::Int(false),
                 initializations: vec![VarInitNode {
                     type_: LpcType::Int(false),
-                    name: "i".to_string(),
+                    name: ustr("i"),
                     value: Some(ExpressionNode::Int(IntNode {
                         value: 123,
                         span: Some(Span {
@@ -93,10 +94,10 @@ fn program_global_vars() {
                 type_: LpcType::Int(false),
                 initializations: vec![VarInitNode {
                     type_: LpcType::Int(false),
-                    name: "j".to_string(),
+                    name: ustr("j"),
                     value: Some(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(VarNode {
-                            name: "i".to_string(),
+                            name: ustr("i"),
                             span: Some(Span {
                                 file_id: 0,
                                 l: 29,
@@ -135,7 +136,7 @@ fn program_global_vars() {
                 type_: LpcType::String(true),
                 initializations: vec![VarInitNode {
                     type_: LpcType::String(true),
-                    name: "k".to_string(),
+                    name: ustr("k"),
                     value: None,
                     array: true,
                     global: true,
@@ -238,7 +239,7 @@ fn string_literal_concat() {
     };
 
     let expected = ExpressionNode::String(StringNode {
-        value: String::from("foobarbazquux"),
+        value: Ustr::from("foobarbazquux"),
         span: Some(Span {
             file_id: 0,
             l: 16,
@@ -274,7 +275,7 @@ fn string_literal_repeat() {
         panic!("Expected an expression");
     };
     let expected = ExpressionNode::String(StringNode {
-        value: String::from("foofoofoo"),
+        value: Ustr::from("foofoofoo"),
         span: Some(Span {
             file_id: 0,
             l: 16,
@@ -299,7 +300,7 @@ fn string_literal_repeat() {
     };
 
     let expected = ExpressionNode::String(StringNode {
-        value: String::from(""),
+        value: Ustr::from(""),
         span: Some(Span {
             file_id: 0,
             l: 16,
@@ -335,7 +336,7 @@ fn compound_assignment_decompose() {
 
     let expected = ExpressionNode::Assignment(AssignmentNode {
         lhs: Box::new(ExpressionNode::Var(VarNode {
-            name: "a".to_string(),
+            name: ustr("a"),
             span: Some(Span {
                 l: 16,
                 r: 17,
@@ -347,7 +348,7 @@ fn compound_assignment_decompose() {
         })),
         rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(ExpressionNode::Var(VarNode {
-                name: "a".to_string(),
+                name: ustr("a"),
                 span: Some(Span {
                     l: 16,
                     r: 17,

@@ -7,6 +7,7 @@ use itertools::Itertools;
 use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType, ScopeId};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -19,7 +20,7 @@ use crate::compiler::{
 /// A node representation a function definition
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq)]
 pub struct ClosureNode {
-    pub name: String,
+    pub name: Ustr,
     pub return_type: LpcType,
     pub parameters: Option<Vec<VarInitNode>>,
     pub flags: FunctionFlags,

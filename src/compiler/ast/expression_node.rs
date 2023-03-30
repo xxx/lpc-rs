@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -185,7 +186,7 @@ impl From<BaseFloat> for ExpressionNode {
 impl From<&str> for ExpressionNode {
     fn from(value: &str) -> Self {
         Self::String(StringNode {
-            value: String::from(value),
+            value: Ustr::from(value),
             span: None,
         })
     }
@@ -227,8 +228,8 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 
 #[cfg(test)]
 mod tests {
-
     use lpc_rs_core::{call_namespace::CallNamespace, LpcFloat};
+    use ustr::ustr;
 
     use super::*;
     use crate::compiler::ast::binary_op_node::BinaryOperation;
@@ -277,7 +278,7 @@ mod tests {
         let node = CallNode {
             receiver: None,
             arguments: vec![],
-            name: "foo".to_string(),
+            name: ustr("foo"),
             span: None,
             namespace: CallNamespace::default(),
         };
@@ -333,7 +334,7 @@ mod tests {
         assert_eq!(
             ExpressionNode::from(s),
             ExpressionNode::String(StringNode {
-                value: String::from(s),
+                value: Ustr::from(s),
                 span: None
             })
         );

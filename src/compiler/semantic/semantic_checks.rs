@@ -437,6 +437,7 @@ mod tests {
     use factori::create;
     use lpc_rs_core::call_namespace::CallNamespace;
     use lpc_rs_function_support::symbol::Symbol;
+    use ustr::ustr;
 
     use super::*;
     use crate::test_support::factories::*;
@@ -1906,7 +1907,7 @@ mod tests {
                 let node = ExpressionNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
-                    name: "clone_object".to_string(),
+                    name: ustr("clone_object"),
                     span: None,
                     namespace: CallNamespace::default(),
                 });
@@ -1935,7 +1936,7 @@ mod tests {
                 let node = ExpressionNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
-                    name: "clone_object".to_string(),
+                    name: ustr("clone_object"),
                     span: None,
                     namespace: CallNamespace::Named(EFUN.into()),
                 });
@@ -1985,7 +1986,7 @@ mod tests {
                 });
 
                 let l = ExpressionNode::Var(VarNode {
-                    name: "foo".to_string(),
+                    name: ustr("foo"),
                     span: None,
                     global: true,
                     function_name: false,
@@ -2044,7 +2045,7 @@ mod tests {
                 });
 
                 let l = ExpressionNode::Var(VarNode {
-                    name: "foo".to_string(),
+                    name: ustr("foo"),
                     span: None,
                     global: true,
                     function_name: false,
@@ -2082,7 +2083,7 @@ mod tests {
                 let node = ExpressionNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![],
-                    name: "this_object".to_string(),
+                    name: ustr("this_object"),
                     span: None,
                     namespace: Default::default(),
                 });
@@ -2126,7 +2127,7 @@ mod tests {
                 let node = ExpressionNode::Call(CallNode {
                     receiver: None,
                     arguments: vec![],
-                    name: "foo".to_string(),
+                    name: ustr("foo"),
                     span: None,
                     namespace: Default::default(),
                 });

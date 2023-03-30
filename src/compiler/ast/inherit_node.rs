@@ -5,6 +5,7 @@ use std::{
 
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
@@ -14,9 +15,9 @@ use crate::compiler::{
 /// A node representing an `inherit` statement.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct InheritNode {
-    pub path: String,
+    pub path: Ustr,
 
-    pub namespace: Option<String>,
+    pub namespace: Option<Ustr>,
 
     /// The span of the string in the original file
     pub span: Option<Span>,

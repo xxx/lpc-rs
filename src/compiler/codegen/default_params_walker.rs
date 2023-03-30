@@ -1,5 +1,6 @@
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
+use ustr::ustr;
 
 use crate::compiler::{
     ast::{
@@ -45,7 +46,7 @@ impl ContextHolder for DefaultParamsWalker {
 impl TreeWalker for DefaultParamsWalker {
     fn visit_closure(&mut self, node: &mut ClosureNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if let Some(parameters) = &node.parameters {
-            self.insert_params(&node.name, parameters);
+            self.insert_params(&*node.name, parameters);
         }
 
         Ok(())
@@ -56,7 +57,7 @@ impl TreeWalker for DefaultParamsWalker {
         node: &mut FunctionDefNode,
         _cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        self.insert_params(&node.name, &node.parameters);
+        self.insert_params(&*node.name, &node.parameters);
 
         Ok(())
     }
@@ -83,19 +84,19 @@ mod tests {
             create!(
                 VarInitNode,
                 type_: LpcType::Int(false),
-                name: "i".to_string(),
+                name: ustr("i"),
             ),
             create!(
                 VarInitNode,
                 type_: LpcType::String(false),
-                name: "s".to_string(),
+                name: ustr("s"),
                 value: Some(ExpressionNode::from("marf")),
             ),
         ];
 
         let mut node = create!(
             ClosureNode,
-            name: "foo".to_string(),
+            name: ustr("foo"),
             parameters: Some(parameters),
         );
 
@@ -119,7 +120,7 @@ mod tests {
         let parameters = vec![
             VarInitNode {
                 type_: LpcType::Int(false),
-                name: "i".to_string(),
+                name: ustr("i"),
                 value: None,
                 array: false,
                 global: false,
@@ -128,7 +129,7 @@ mod tests {
             },
             VarInitNode {
                 type_: LpcType::String(false),
-                name: "s".to_string(),
+                name: ustr("s"),
                 value: Some(ExpressionNode::from("marf")),
                 array: false,
                 global: false,
@@ -139,7 +140,7 @@ mod tests {
 
         let mut node = FunctionDefNode {
             return_type: LpcType::Void,
-            name: "foo".to_string(),
+            name: ustr("foo"),
             parameters,
             flags: FunctionFlags::default(),
             body: vec![],

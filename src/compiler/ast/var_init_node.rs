@@ -7,6 +7,7 @@ use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
 use lpc_rs_errors::{span::Span, Result};
 use lpc_rs_function_support::symbol::Symbol;
 use qcell::QCellOwner;
+use ustr::{ustr, Ustr};
 
 use crate::compiler::{
     ast::{
@@ -23,7 +24,7 @@ pub struct VarInitNode {
     pub type_: LpcType,
 
     /// The var name
-    pub name: String,
+    pub name: Ustr,
 
     /// The initialization value. When missing, defaults to 0.
     pub value: Option<ExpressionNode>,
@@ -45,7 +46,7 @@ pub struct VarInitNode {
 impl VarInitNode {
     pub fn new(name: &str, type_: LpcType) -> Self {
         Self {
-            name: name.to_string(),
+            name: ustr(name),
             type_,
             value: None,
             array: false,
@@ -121,7 +122,7 @@ mod tests {
     fn test_update_type_maintains_the_array_state() {
         let mut node = VarInitNode {
             type_: LpcType::Void,
-            name: "marf".to_string(),
+            name: ustr("marf"),
             value: None,
             array: true,
             global: false,
