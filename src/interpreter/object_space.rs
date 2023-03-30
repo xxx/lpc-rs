@@ -5,7 +5,7 @@ use delegate::delegate;
 use educe::Educe;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, global_config};
 use qcell::{QCell, QCellOwner};
 
 use crate::{
@@ -29,9 +29,6 @@ pub struct ObjectSpace {
 
     /// How many clones have been created so far?
     clone_count: usize,
-
-    /// Our configuration
-    config: Rc<Config>,
 }
 
 fn processes_debug(
@@ -56,14 +53,8 @@ impl ObjectSpace {
     }
 
     /// Create a new [`ObjectSpace`] with the passed [`Config`]
-    pub fn new<T>(config: T) -> Self
-    where
-        T: Into<Rc<Config>>,
-    {
-        Self {
-            config: config.into(),
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     // /// Create a [`Process`] from a [`Program`], and add add it to the process
@@ -114,7 +105,8 @@ impl ObjectSpace {
     }
 
     fn prepare_filename(&self, process: &Process) -> String {
-        let name = process.localized_filename(&self.config.lib_dir);
+        let config = global_config();
+        let name = process.localized_filename(&config.lib_dir);
         let name = name
             .strip_suffix(".c")
             .map(ToString::to_string)
@@ -148,7 +140,6 @@ impl Default for ObjectSpace {
         Self {
             processes,
             clone_count: 0,
-            config: Config::default().into(),
         }
     }
 }
@@ -181,7 +172,6 @@ impl<'a> Keyable<'a> for ObjectSpace {
             .collect::<IndexMap<_, _>>();
         write!(f, "ObjectSpace {{ processes: {:?}", processes)?;
         write!(f, ", clone_count: {:?}", self.clone_count)?;
-        write!(f, ", config: {:?}", self.config)?;
         write!(f, " }}")
     }
 
@@ -203,7 +193,7 @@ mod tests {
     use std::{cell::RefCell, sync::Arc};
 
     use lpc_rs_core::lpc_path::LpcPath;
-    use lpc_rs_utils::config::ConfigBuilder;
+    use lpc_rs_utils::config::{ConfigBuilder, set_global_config};
     use qcell::QCellOwner;
     use refpool::{Pool, PoolRef};
 
@@ -260,7 +250,8 @@ mod tests {
             .lib_dir("./tests/fixtures/code/")
             .build()
             .unwrap();
-        let space = ObjectSpace::new(config);
+        set_global_config(config);
+        let space = ObjectSpace::new();
 
         let mut prog: Program = Program::default();
         let filename: Arc<LpcPath> = Arc::new("./tests/fixtures/code/foo/bar/baz.c".into());
@@ -279,7 +270,8 @@ mod tests {
     fn test_mark() {
         let _cell_key = QCellOwner::new();
         let config = Config::default();
-        let mut space = ObjectSpace::new(config);
+        set_global_config(config);
+        let mut space = ObjectSpace::new();
 
         let cell_key = QCellOwner::new();
         let pool = Pool::new(5);
