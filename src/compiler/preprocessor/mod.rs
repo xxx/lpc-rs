@@ -213,7 +213,7 @@ impl Preprocessor {
         let mut output = existing_output.unwrap_or_default();
 
         let file_id = {
-            let server_path = lpc_path.as_server(&self.context.config.lib_dir.as_str());
+            let server_path = lpc_path.as_server(self.context.config.lib_dir.as_str());
             let mut cache = FILE_CACHE.write();
             if Path::exists(&server_path) {
                 cache.add(server_path.to_string_lossy())
@@ -237,7 +237,7 @@ impl Preprocessor {
                     match token {
                         Token::LocalInclude(t) => {
                             let cwd = lpc_path
-                                .as_in_game(&self.context.config.lib_dir.as_str())
+                                .as_in_game(self.context.config.lib_dir.as_str())
                                 .parent()
                                 .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();
@@ -245,7 +245,7 @@ impl Preprocessor {
                         }
                         Token::SysInclude(t) => {
                             let cwd = lpc_path
-                                .as_in_game(&self.context.config.lib_dir.as_str())
+                                .as_in_game(self.context.config.lib_dir.as_str())
                                 .parent()
                                 .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();

@@ -1460,7 +1460,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 let process = frame.process.clone();
 
                 let borrowed_proc = process.ro(cell_key);
-                let Some(func) = borrowed_proc.as_ref().lookup_function(&func_name) else {
+                let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
                     return Err(self.runtime_error(format!(
                         "Unable to find function `{}` in local process `{}`.",
                         func_name,
@@ -1480,7 +1480,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                         let process = process.clone();
 
                         let borrowed_proc = process.ro(cell_key);
-                        let Some(func) = borrowed_proc.as_ref().lookup_function(&func_name) else {
+                        let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
                             return Err(self.runtime_error(format!(
                                 "Unable to find function `{}` in remote process `{}`.",
                                 func_name,

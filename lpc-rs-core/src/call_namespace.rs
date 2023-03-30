@@ -16,7 +16,7 @@ impl CallNamespace {
         match self {
             CallNamespace::Local => "",
             CallNamespace::Parent => "::",
-            CallNamespace::Named(name) => &*name,
+            CallNamespace::Named(name) => name,
         }
     }
 }

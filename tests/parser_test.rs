@@ -250,7 +250,7 @@ fn string_literal_concat() {
     assert_eq!(node, expected);
 
     // test overflow
-    let expr = r##"void create() { ("f" * 1_000_000_000) + ("b" * 1_000_000_000) }"##;
+    let expr = r##"void create() { ("f" * 650_000_000) + ("b" * 650_000_000); }"##;
     let lexer = LexWrapper::new(expr);
     let error = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)

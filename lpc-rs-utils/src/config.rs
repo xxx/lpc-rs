@@ -290,9 +290,9 @@ impl Config {
         path: &'a LpcPath,
         span: Option<Span>,
     ) -> Result<Cow<'a, Path>> {
-        let true_path = path.as_server(&self.lib_dir.as_str());
+        let true_path = path.as_server(self.lib_dir.as_str());
 
-        if path.as_os_str().is_empty() || !true_path.starts_with(&self.lib_dir.as_str()) {
+        if path.as_os_str().is_empty() || !true_path.starts_with(self.lib_dir.as_str()) {
             return Err(LpcError::new(format!(
                 "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
@@ -348,7 +348,7 @@ where
     P: AsRef<Path>,
 {
     match fs::canonicalize(path) {
-        Ok(y) => Ok(ustr(&*y.to_string_lossy())),
+        Ok(y) => Ok(ustr(&y.to_string_lossy())),
         Err(e) => Err(LpcError::new(e.to_string())),
     }
 }

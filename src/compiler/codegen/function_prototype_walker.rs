@@ -175,7 +175,7 @@ impl TreeWalker for FunctionPrototypeWalker {
 
     fn visit_var(&mut self, node: &mut VarNode, _cell_key: &mut QCellOwner) -> Result<()> {
         if node.is_closure_arg_var() {
-            let idx = closure_arg_number(&node.name)?;
+            let idx = closure_arg_number(node.name)?;
 
             if idx > self.max_closure_arg_reference {
                 self.max_closure_arg_reference = idx;

@@ -119,12 +119,12 @@ impl TreeWalker for ScopeWalker {
         }
 
         if_chain! {
-            if let Some(symbol) = self.context.lookup_var(&node.name);
+            if let Some(symbol) = self.context.lookup_var(node.name);
             if symbol.type_.matches_type(LpcType::Function(false));
             if self.should_upvalue_symbol(symbol);
             then {
                 trace!("upvaluing called function var {}", &node.name);
-                let mut symbol = self.context.lookup_var_mut(&node.name).unwrap();
+                let mut symbol = self.context.lookup_var_mut(node.name).unwrap();
                 symbol.upvalue = true;
             }
         }
@@ -292,7 +292,7 @@ impl TreeWalker for ScopeWalker {
 
         let is_local = self.context.scopes.lookup(&node.name).is_some();
 
-        let Some(symbol) = self.context.lookup_var(&node.name) else {
+        let Some(symbol) = self.context.lookup_var(node.name) else {
             // check for functions (i.e. declaring function pointers with no arguments)
             if self
                 .context
@@ -336,7 +336,7 @@ impl TreeWalker for ScopeWalker {
         // check for, and handle upvalues
         if self.should_upvalue_symbol(symbol) {
             trace!("upvaluing {}", &node.name);
-            let mut symbol = self.context.lookup_var_mut(&node.name).unwrap();
+            let mut symbol = self.context.lookup_var_mut(node.name).unwrap();
             // *any* capture requires the symbol to be upvalued
             symbol.upvalue = true;
             // we also mark this specific reference as a non-local capture

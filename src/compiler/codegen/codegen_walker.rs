@@ -321,7 +321,7 @@ impl CodegenWalker {
             ExpressionNode::Call(node) => {
                 if let Some(func) =
                     self.context
-                        .lookup_function_complete(&node.name, &node.namespace, cell_key)
+                        .lookup_function_complete(node.name, &node.namespace, cell_key)
                 {
                     match func.prototype().return_type {
                         LpcType::Int(_) | LpcType::Float(_) => OperationType::Register,
@@ -357,7 +357,7 @@ impl CodegenWalker {
                 }
             }
             ExpressionNode::Var(v) => {
-                match self.context.lookup_var(&v.name) {
+                match self.context.lookup_var(v.name) {
                     Some(Symbol { type_: ty, .. }) => match ty {
                         LpcType::Int(false) => OperationType::Register,
                         LpcType::Float(false) => OperationType::Register,
@@ -450,7 +450,7 @@ impl CodegenWalker {
     fn visit_parameter(&mut self, node: &VarInitNode) -> RegisterVariant {
         let loc = self.assign_sym_location(&node.name);
 
-        if let Some(sym) = self.context.lookup_var(&node.name) {
+        if let Some(sym) = self.context.lookup_var(node.name) {
             if matches!(loc, RegisterVariant::Upvalue(_)) {
                 // increment the counter for parameters that are captured by closures
                 self.function_upvalue_counter.next().unwrap();
@@ -1082,13 +1082,13 @@ impl TreeWalker for CodegenWalker {
                 Instruction::CallOther(receiver, name_index)
             } else {
                 if_chain! {
-                    if let Some(x) = self.context.lookup_var(&node.name);
+                    if let Some(x) = self.context.lookup_var(node.name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
                         Instruction::CallFp(x.location.unwrap())
                     } else {
                         let Some(func) =
-                            self.context.lookup_function_complete(&node.name, &node.namespace, cell_key) else {
+                            self.context.lookup_function_complete(node.name, &node.namespace, cell_key) else {
                             return Err(LpcError::new_bug(
                                 format!("Cannot find function during code gen: {}", node.name)
                             ).with_span(node.span));
@@ -1130,7 +1130,7 @@ impl TreeWalker for CodegenWalker {
         // Take care of the result after the call returns.
         if let Some(func) =
             self.context
-                .lookup_function_complete(&node.name, &node.namespace, cell_key)
+                .lookup_function_complete(node.name, &node.namespace, cell_key)
         {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
@@ -1140,7 +1140,7 @@ impl TreeWalker for CodegenWalker {
         } else if let Some(Symbol {
             type_: LpcType::Function(false) | LpcType::Mixed(false),
             ..
-        }) = self.context.lookup_var(&node.name)
+        }) = self.context.lookup_var(node.name)
         {
             push_copy(self);
         } else if node.receiver.is_some()
@@ -2122,7 +2122,7 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     fn visit_var(&mut self, node: &mut VarNode, cell_key: &mut QCellOwner) -> Result<()> {
         if node.is_closure_arg_var() {
-            let idx = closure_arg_number(&node.name)?;
+            let idx = closure_arg_number(node.name)?;
             let loc = self
                 .closure_arg_locations
                 .last()
@@ -2138,14 +2138,14 @@ impl TreeWalker for CodegenWalker {
             let mut fptr_node = FunctionPtrNode {
                 receiver: None,
                 arguments: None,
-                name: node.name.clone(),
+                name: node.name,
                 span: node.span,
             };
 
             return self.visit_function_ptr(&mut fptr_node, cell_key);
         }
 
-        let Some(sym) = self.context.lookup_var(&node.name) else {
+        let Some(sym) = self.context.lookup_var(node.name) else {
             return Err(
                 LpcError::new(format!("Unable to find symbol `{}`", node.name))
                     .with_span(node.span),
@@ -2166,7 +2166,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_var_init(&mut self, node: &mut VarInitNode, cell_key: &mut QCellOwner) -> Result<()> {
-        let symbol = self.context.lookup_var(&node.name);
+        let symbol = self.context.lookup_var(node.name);
 
         let Some(sym) = symbol else {
             return Err(LpcError::new(format!(
@@ -2230,7 +2230,7 @@ impl TreeWalker for CodegenWalker {
 
         self.current_result = current_register;
 
-        if let Some(sym) = self.context.lookup_var_mut(&node.name) {
+        if let Some(sym) = self.context.lookup_var_mut(node.name) {
             sym.location = Some(current_register);
 
             if let Some(func) = self.function_stack.last_mut() {

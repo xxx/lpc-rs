@@ -1,6 +1,6 @@
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
-use ustr::ustr;
+
 
 use crate::compiler::{
     ast::{
@@ -73,6 +73,8 @@ mod tests {
         compiler::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
         test_support::factories::*,
     };
+
+    use ustr::ustr;
 
     #[test]
     fn test_visit_closure_populates_the_functions() {

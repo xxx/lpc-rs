@@ -224,7 +224,7 @@ impl TreeWalker for SemanticCheckWalker {
         // Further checks require access to the function prototype for error messaging
         let proto_opt =
             self.context
-                .lookup_function_complete(&node.name, &node.namespace, cell_key);
+                .lookup_function_complete(node.name, &node.namespace, cell_key);
 
         let mut errors = vec![];
 
@@ -398,11 +398,11 @@ impl TreeWalker for SemanticCheckWalker {
         node: &mut FunctionDefNode,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        is_keyword(&node.name)?;
+        is_keyword(node.name)?;
 
         let proto_opt =
             self.context
-                .lookup_function_complete(&node.name, &CallNamespace::default(), cell_key);
+                .lookup_function_complete(node.name, &CallNamespace::default(), cell_key);
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
             if prototype.flags.nomask() {
@@ -439,7 +439,7 @@ impl TreeWalker for SemanticCheckWalker {
     ) -> Result<()> {
         let proto_opt =
             self.context
-                .lookup_function_complete(&node.name, &CallNamespace::default(), cell_key);
+                .lookup_function_complete(node.name, &CallNamespace::default(), cell_key);
 
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
@@ -667,7 +667,7 @@ impl TreeWalker for SemanticCheckWalker {
                 self.context.errors.push(e);
             }
 
-            if closure_arg_number(&node.name)? > MAX_CLOSURE_ARG_REFERENCE {
+            if closure_arg_number(node.name)? > MAX_CLOSURE_ARG_REFERENCE {
                 let e = LpcError::new(format!(
                     "positional argument variables can only be used up to `${MAX_CLOSURE_ARG_REFERENCE}`"
                 ))
@@ -680,7 +680,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     fn visit_var_init(&mut self, node: &mut VarInitNode, cell_key: &mut QCellOwner) -> Result<()> {
-        is_keyword(&node.name)?;
+        is_keyword(node.name)?;
 
         if_chain! {
             if node.name == ARGV;
