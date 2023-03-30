@@ -28,7 +28,7 @@ use lpc_rs_core::{
     global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloat, LpcInt,
 };
 use lpc_rs_errors::{span::Span, Result};
-use ustr::{ustr, Ustr};
+use ustr::ustr;
 
 // just a helper for a very common pattern
 fn assert_int(value: LpcInt, expr: &str) {
@@ -239,7 +239,7 @@ fn string_literal_concat() {
     };
 
     let expected = ExpressionNode::String(StringNode {
-        value: Ustr::from("foobarbazquux"),
+        value: "foobarbazquux".into(),
         span: Some(Span {
             file_id: 0,
             l: 16,
@@ -275,7 +275,7 @@ fn string_literal_repeat() {
         panic!("Expected an expression");
     };
     let expected = ExpressionNode::String(StringNode {
-        value: Ustr::from("foofoofoo"),
+        value: "foofoofoo".into(),
         span: Some(Span {
             file_id: 0,
             l: 16,
@@ -300,7 +300,7 @@ fn string_literal_repeat() {
     };
 
     let expected = ExpressionNode::String(StringNode {
-        value: Ustr::from(""),
+        value: "".into(),
         span: Some(Span {
             file_id: 0,
             l: 16,

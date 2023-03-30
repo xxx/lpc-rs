@@ -168,7 +168,7 @@ Inherit: InheritNode = {
 
         Ok(
             InheritNode {
-                path,
+                path: ustr(&path),
                 namespace: namespace.map(|ns| ustr(&ns.1)),
                 span: Some(span),
             }
@@ -1060,7 +1060,7 @@ String: ExpressionNode = {
     <s:"StringLiteral"> => {
         ExpressionNode::String(
             StringNode {
-                value: ustr(&s.1),
+                value: s.1,
                 span: Some(s.0)
             }
         )
@@ -1074,7 +1074,7 @@ String: ExpressionNode = {
             ExpressionNode::String(node) => {
                 let r = node.span.map(|s| s.r).unwrap_or(l);
                 ExpressionNode::String(StringNode {
-                    value: ustr(&(s1.1 + &node.value)),
+                    value: s1.1 + &node.value,
                     span: Some(Span { file_id, l, r })
                 })
             }

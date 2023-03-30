@@ -1449,8 +1449,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
-        let func_name = func_name.clone();
-
         let address = match receiver {
             FunctionReceiver::Efun => FunctionAddress::Efun(ustr(func_name)),
             FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(ustr(func_name)),

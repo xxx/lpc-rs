@@ -2,7 +2,6 @@ use lalrpop_util::ParseError;
 use lpc_rs_core::LpcInt;
 use lpc_rs_errors::{span::Span, LpcError};
 use lpc_rs_utils::{string, string::concatenate_strings};
-use ustr::ustr;
 
 use crate::compiler::{
     ast::{
@@ -66,7 +65,7 @@ fn collapse_add(
                     .map_err(|e| e.with_span(Some(span)))?;
 
                 ExpressionNode::String(StringNode {
-                    value: ustr(&value),
+                    value,
                     span: Some(span),
                 })
             }
@@ -80,7 +79,7 @@ fn collapse_add(
                         .map_err(|e| e.with_span(Some(span)))?;
 
                     ExpressionNode::String(StringNode {
-                        value: ustr(&value),
+                        value,
                         span: Some(span),
                     })
                 }
@@ -90,7 +89,7 @@ fn collapse_add(
                         .map_err(|e| e.with_span(Some(span)))?;
 
                     ExpressionNode::String(StringNode {
-                        value: ustr(&value),
+                        value,
                         span: Some(span),
                     })
                 }
@@ -136,9 +135,7 @@ fn collapse_mul(
                 span: Some(span),
             }),
             // 3 * "string" = "stringstringstring"
-            ExpressionNode::String(node2) => {
-                collapse_repeat_string(node2.value.to_owned(), node.value, span)?
-            }
+            ExpressionNode::String(node2) => collapse_repeat_string(node2.value, node.value, span)?,
             _ => non_collapse(op, l, r, span),
         },
         ExpressionNode::String(node) => {
@@ -305,7 +302,7 @@ fn collapse_repeat_string(
     let value =
         string::repeat_string(string.as_str(), amount).map_err(|e| e.with_span(Some(span)))?;
     let node = ExpressionNode::String(StringNode {
-        value: ustr(&value),
+        value,
         span: Some(span),
     });
 
@@ -435,7 +432,7 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             ExpressionNode::String(StringNode {
-                value: ustr("123hello"),
+                value: "123hello".into(),
                 span: Some(span)
             })
         );
@@ -453,7 +450,7 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             ExpressionNode::String(StringNode {
-                value: ustr("hello123"),
+                value: "hello123".into(),
                 span: Some(span)
             })
         );
@@ -471,7 +468,7 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             ExpressionNode::String(StringNode {
-                value: ustr("hellohellohellohello"),
+                value: "hellohellohellohello".into(),
                 span: Some(span)
             })
         );
@@ -489,7 +486,7 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             ExpressionNode::String(StringNode {
-                value: ustr("hellohellohellohello"),
+                value: "hellohellohellohello".into(),
                 span: Some(span)
             })
         );

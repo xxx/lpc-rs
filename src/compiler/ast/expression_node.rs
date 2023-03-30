@@ -7,7 +7,6 @@ use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::{span::Span, Result};
 use qcell::QCellOwner;
-use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -186,7 +185,7 @@ impl From<BaseFloat> for ExpressionNode {
 impl From<&str> for ExpressionNode {
     fn from(value: &str) -> Self {
         Self::String(StringNode {
-            value: Ustr::from(value),
+            value: String::from(value),
             span: None,
         })
     }
@@ -334,7 +333,7 @@ mod tests {
         assert_eq!(
             ExpressionNode::from(s),
             ExpressionNode::String(StringNode {
-                value: Ustr::from(s),
+                value: String::from(s),
                 span: None
             })
         );
