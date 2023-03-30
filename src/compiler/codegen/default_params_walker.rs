@@ -1,7 +1,6 @@
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
 
-
 use crate::compiler::{
     ast::{
         closure_node::ClosureNode, function_def_node::FunctionDefNode, var_init_node::VarInitNode,
@@ -67,14 +66,13 @@ impl TreeWalker for DefaultParamsWalker {
 mod tests {
     use factori::create;
     use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+    use ustr::ustr;
 
     use super::*;
     use crate::{
         compiler::ast::{expression_node::ExpressionNode, var_init_node::VarInitNode},
         test_support::factories::*,
     };
-
-    use ustr::ustr;
 
     #[test]
     fn test_visit_closure_populates_the_functions() {

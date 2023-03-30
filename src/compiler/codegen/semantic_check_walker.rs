@@ -222,9 +222,9 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         // Further checks require access to the function prototype for error messaging
-        let proto_opt =
-            self.context
-                .lookup_function_complete(node.name, &node.namespace, cell_key);
+        let proto_opt = self
+            .context
+            .lookup_function_complete(node.name, &node.namespace, cell_key);
 
         let mut errors = vec![];
 

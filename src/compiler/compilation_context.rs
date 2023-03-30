@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use derive_builder::Builder;
 use educe::Educe;
-use indexmap::{IndexMap};
+use indexmap::IndexMap;
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
