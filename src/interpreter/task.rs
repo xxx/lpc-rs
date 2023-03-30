@@ -13,7 +13,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
-    function::FunctionReceiver,
+    function_receiver::FunctionReceiver,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
     LpcInt,

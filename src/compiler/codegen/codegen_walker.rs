@@ -9,7 +9,7 @@ use lpc_rs_asm::{
 };
 use lpc_rs_core::{
     call_namespace::CallNamespace,
-    function::FunctionReceiver,
+    function_receiver::FunctionReceiver,
     lpc_type::LpcType,
     mangle::Mangle,
     register::{Register, RegisterVariant},

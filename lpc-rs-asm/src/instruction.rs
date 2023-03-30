@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{function::FunctionReceiver, register::RegisterVariant, LpcFloat, LpcInt};
+use lpc_rs_core::{function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
 
