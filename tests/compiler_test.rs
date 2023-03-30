@@ -12,7 +12,7 @@ use lpc_rs::{
     util::keyable::Keyable,
 };
 use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_utils::config::{Config, ConfigBuilder};
+use lpc_rs_utils::config::{Config, ConfigBuilder, set_global_config};
 use qcell::QCellOwner;
 
 use crate::support::{run_prog, test_config, test_config_builder};
@@ -248,7 +248,8 @@ fn test_positional_vars_into_argv() {
 #[test]
 fn test_inherited_create_called_when_not_overridden() {
     let mut cell_key = QCellOwner::new();
-    let mut vm = Vm::new(test_config(), &cell_key);
+    set_global_config(test_config());
+    let mut vm = Vm::new(&cell_key);
     let grandparent = indoc! { r#"
         void create() {
             dump("grandparent create");
@@ -326,8 +327,9 @@ fn test_calls_simul_efuns() {
         .simul_efun_file("/secure/simul_efuns.c")
         .build()
         .unwrap();
+    set_global_config(config);
 
-    let mut vm = Vm::new(config, &cell_key);
+    let mut vm = Vm::new(&cell_key);
     vm.initialize_simul_efuns(&mut cell_key)
         .expect("no simul efuns?")
         .expect("init error");

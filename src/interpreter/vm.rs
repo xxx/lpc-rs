@@ -4,7 +4,7 @@ use bit_set::BitSet;
 use educe::Educe;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
-use lpc_rs_utils::config::Config;
+use lpc_rs_utils::config::{Config, global_config};
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
@@ -41,22 +41,15 @@ pub struct Vm {
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
     #[educe(Debug(method = "qcell_debug"))]
     pub upvalues: Rc<QCell<GcRefBank>>,
-
-    /// The [`Config`] that's in use for this [`Vm`]
-    config: Rc<Config>,
 }
 
 impl Vm {
     /// Create a new [`Vm`].
-    pub fn new<C>(config: C, cell_key: &QCellOwner) -> Self
-    where
-        C: Into<Rc<Config>>,
-    {
+    pub fn new(cell_key: &QCellOwner) -> Self {
         let object_space = ObjectSpace::default();
         Self {
             object_space: Rc::new(cell_key.cell(object_space)),
             memory: Memory::default(),
-            config: config.into(),
             upvalues: Rc::new(cell_key.cell(GcBank::default())),
         }
     }
@@ -80,9 +73,10 @@ impl Vm {
             e.emit_diagnostics();
             return Err(e);
         }
+        let config = global_config();
 
         let master_path =
-            LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
+            LpcPath::new_in_game(config.master_object.as_str(), "/", &*config.lib_dir);
         self.initialize_file(&master_path, cell_key)
     }
 
@@ -97,11 +91,11 @@ impl Vm {
         &mut self,
         cell_key: &mut QCellOwner,
     ) -> Option<Result<TaskContext>> {
-        let Some(path) = &self.config.simul_efun_file else {
+        let Some(path) = global_config().simul_efun_file else {
             return None
         };
 
-        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
+        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*global_config().lib_dir);
         Some(self.initialize_file(&simul_efun_path, cell_key))
     }
 
@@ -158,7 +152,7 @@ impl Vm {
     /// use qcell::QCellOwner;
     ///
     /// let mut cell_key = QCellOwner::new();
-    /// let mut vm = Vm::new(Config::default(), &cell_key);
+    /// let mut vm = Vm::new(&cell_key);
     /// let ctx = vm
     ///     .initialize_string("int x = 5;", "test.c", &mut cell_key)
     ///     .unwrap();
@@ -179,8 +173,8 @@ impl Vm {
         P: AsRef<Path>,
         S: AsRef<str>,
     {
-        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
-        self.config.validate_in_game_path(&lpc_path, None)?;
+        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*global_config().lib_dir);
+        global_config().validate_in_game_path(&lpc_path, None)?;
 
         self.with_compiler(cell_key, |compiler, cell_key| {
             compiler.compile_string(lpc_path, code, cell_key)
@@ -199,8 +193,8 @@ impl Vm {
     {
         let object_space = self.object_space.ro(cell_key);
         let compiler = CompilerBuilder::default()
-            .config(self.config.clone())
-            .simul_efuns(get_simul_efuns(&self.config, object_space))
+            .config(global_config().clone())
+            .simul_efuns(get_simul_efuns(global_config(), object_space))
             .build()?;
         f(compiler, cell_key)
     }
@@ -215,7 +209,7 @@ impl Vm {
 
         task.initialize_program(
             program,
-            self.config.clone(),
+            global_config().clone(),
             self.object_space.clone(),
             cell_key,
         )
@@ -259,7 +253,7 @@ impl<'a> Keyable<'a> for Vm {
             self.object_space.ro(cell_key).with_key(cell_key),
             self.memory,
             self.upvalues.ro(cell_key),
-            self.config
+            global_config()
         )
     }
 
@@ -279,6 +273,7 @@ impl<'a> Keyable<'a> for Vm {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_utils::config::set_global_config;
 
     use super::*;
     use crate::test_support::test_config;
@@ -286,7 +281,8 @@ mod tests {
     #[test]
     fn test_gc() {
         let mut cell_key = QCellOwner::new();
-        let mut vm = Vm::new(test_config(), &cell_key);
+        set_global_config(test_config());
+        let mut vm = Vm::new(&cell_key);
         let storage = indoc! { r#"
             function *storage = ({});
 

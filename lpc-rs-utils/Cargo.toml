@@ -13,6 +13,7 @@ lpc-rs-errors = { path = "../lpc-rs-errors"}
 derive_builder = "0.12.0"
 fs-err = "2.6.0"
 if_chain = "1.0.1"
+once_cell = { version = "1.17.1", features = ["parking_lot"] }
 readonly = "0.2.3"
 toml = "0.7.2"
 tracing = "0.1"

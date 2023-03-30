@@ -1,7 +1,7 @@
 use clap::Parser;
 use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
-use lpc_rs_utils::config::{Config, ConfigBuilder};
+use lpc_rs_utils::config::{Config, ConfigBuilder, set_global_config};
 use qcell::QCellOwner;
 use ustr::ustr;
 
@@ -37,10 +37,12 @@ fn main() {
 
     init_tracing_subscriber(&config);
 
+    set_global_config(config);
+
     // This is the key that will be used for everything.
     let mut cell_key = QCellOwner::new();
 
-    let mut vm = Vm::new(config, &cell_key);
+    let mut vm = Vm::new(&cell_key);
 
     vm.boot(&mut cell_key).unwrap_or_else(|e| {
         eprintln!("unable to initialize VM: {e:?}");
