@@ -3,28 +3,10 @@ use std::{borrow::Cow, path::Path, str::FromStr};
 use derive_builder::Builder;
 use fs_err as fs;
 use if_chain::if_chain;
-use once_cell::sync::OnceCell;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use toml::{value::Index, Value};
 use ustr::{ustr, Ustr};
-
-static CONFIG: OnceCell<Config> = OnceCell::new();
-
-/// Get the global configuration.
-#[inline]
-pub fn global_config() -> &'static Config {
-    CONFIG.get_or_init(|| {
-        Config::default()
-    })
-}
-
-/// Set the global configuration.
-/// Panics if it's already been set.
-#[inline]
-pub fn set_global_config(config: Config) {
-    CONFIG.set(config).unwrap();
-}
 
 const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -42,8 +24,7 @@ const DRIVER_LOG_LEVEL: &[&str] = &["driver", "log_level"];
 const DRIVER_LOG_FILE: &[&str] = &["driver", "log_file"];
 
 /// The main struct that handles runtime use configurations.
-// TODO: remove Clone derive once config is fully globalized
-#[derive(Debug, Builder, Clone)]
+#[derive(Debug, Builder)]
 #[builder(build_fn(name = "real_build", error = "lpc_rs_errors::LpcError"))]
 #[readonly::make]
 pub struct Config {
