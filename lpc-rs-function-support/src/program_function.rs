@@ -4,6 +4,7 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use std::sync::Arc;
 
 use derive_builder::Builder;
 use lpc_rs_asm::{
@@ -71,7 +72,7 @@ pub struct ProgramFunction {
     #[builder(default)]
     #[serde(serialize_with = "lpc_rs_core::serialize::serialize_once_cell")]
     #[serde(deserialize_with = "lpc_rs_core::serialize::deserialize_once_cell")]
-    pub strings: OnceCell<Rc<StringInterner>>,
+    pub strings: OnceCell<Arc<StringInterner>>,
 }
 
 impl ProgramFunction {

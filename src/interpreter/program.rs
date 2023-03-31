@@ -54,7 +54,7 @@ pub struct Program {
 
     /// Interned strings
     #[builder(setter(into))]
-    pub strings: Rc<StringInterner>,
+    pub strings: Arc<StringInterner>,
 }
 
 impl<'a> Program {

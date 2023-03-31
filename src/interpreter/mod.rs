@@ -17,3 +17,4 @@ pub mod program;
 pub mod task;
 pub mod task_context;
 pub mod vm;
+pub mod call_outs;

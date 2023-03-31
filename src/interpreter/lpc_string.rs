@@ -4,6 +4,7 @@ use std::{
     hash::{Hash, Hasher},
     rc::Rc,
 };
+use std::sync::Arc;
 
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
@@ -11,7 +12,7 @@ use string_interner::{DefaultSymbol, StringInterner, Symbol};
 #[derive(Debug, Clone)]
 pub enum LpcString {
     /// A static string, indexing into its twinned string set.
-    Static(usize, Rc<StringInterner>),
+    Static(usize, Arc<StringInterner>),
 
     /// A dynamically created string.
     Dynamic(String),

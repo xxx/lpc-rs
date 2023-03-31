@@ -1,4 +1,5 @@
 use std::{collections::HashMap, ops::Range, rc::Rc};
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use if_chain::if_chain;
@@ -243,7 +244,7 @@ impl CodegenWalker {
         let global_variables =
             std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
 
-        let strings = Rc::new(self.context.strings);
+        let strings = Arc::new(self.context.strings);
         for func in self.functions.values() {
             func.strings.set(strings.clone()).unwrap();
         }
