@@ -9,7 +9,9 @@ pub fn this_object<const N: usize>(
     context: &mut EfunContext<N>,
     _cell_key: &mut QCellOwner,
 ) -> Result<()> {
-    let proc = context.process().clone();
+    // let proc = context.process().clone();
+    let proc = context.frame().process.clone();
+
     let v = LpcValue::Object(proc);
     let result = context.value_to_ref(v);
 
