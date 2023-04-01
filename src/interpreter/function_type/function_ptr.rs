@@ -33,8 +33,6 @@ pub struct FunctionPtr {
     /// Address of the function, in either the receiver or owner
     pub address: FunctionAddress,
 
-    // /// The arity of the function being pointed to
-    // pub arity: FunctionArity,
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.

@@ -48,6 +48,7 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::call_outs::CallOuts;
 use crate::interpreter::vm_op::VmOp;
 
 macro_rules! pop_frame {
@@ -242,6 +243,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         program: P,
         config: C,
         object_space: O,
+        call_outs: Rc<QCell<CallOuts>>,
         tx: Sender<VmOp>,
         cell_key: &mut QCellOwner,
     ) -> Result<TaskContext>
@@ -264,6 +266,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             process.clone(),
             object_space,
             self.vm_upvalues.clone(),
+            call_outs,
             tx,
             cell_key,
         );
@@ -337,6 +340,98 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
 
         Ok(task_context)
+    }
+
+    /// Evaluate `f` to completion, or an error
+    ///
+    /// # Arguments
+    /// `f` - the function to call
+    /// `args` - the slice of arguments to pass to the function
+    /// `task_context` the [`TaskContext`] that will be used for this evaluation
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`]
+    #[instrument(skip_all)]
+    pub fn eval_ptr<F>(
+        &mut self,
+        f: &FunctionPtr,
+        args: &[LpcRef],
+        task_context: TaskContext,
+        cell_key: &mut QCellOwner,
+    ) -> Result<TaskContext>
+    where
+        F: Into<Rc<ProgramFunction>>,
+    {
+        panic!("aksldnf");
+        // let (function, process) = match &f.address {
+        //     FunctionAddress::Local(process, function) => {
+        //         let process = process.clone().unwrap();
+        //         (function.clone(), process)
+        //     }
+        //     FunctionAddress::Dynamic(loc) => {
+        //         if args.len() < 1 {
+        //             return Err(
+        //                 LpcError::new("no receiver for function pointer call")
+        //                 .with_note("when calling a `&->foo()`-style function pointer, the first argument will be used as the receiving object")
+        //             );
+        //         }
+        //         match args[0] {
+        //             LpcRef::Object(obj) => {
+        //                 let function = obj.get_function(loc, cell_key)?;
+        //                 (function, obj.process())
+        //             },
+        //
+        //         }
+        //     }
+        //     FunctionAddress::Efun(_) => {}
+        //     FunctionAddress::SimulEfun(_) => {}
+        // };
+        //
+        // // let function = f.into();
+        // // let process = task_context.process();
+        //
+        // let mut frame = CallFrame::new(
+        //     process,
+        //     function,
+        //     args.len(),
+        //     None,
+        //     task_context.upvalues().clone(),
+        //     cell_key,
+        // );
+        // if !args.is_empty() {
+        //     frame.registers[1..=args.len()].clone_from_slice(args);
+        // }
+        //
+        // self.stack.push(frame)?;
+        //
+        // let mut halted = false;
+        //
+        // while !halted {
+        //     halted = match self.eval_one_instruction(&task_context, cell_key) {
+        //         Ok(x) => x,
+        //         Err(e) => {
+        //             if !self.catch_points.is_empty() {
+        //                 self.catch_error(e, cell_key)?;
+        //                 false
+        //             } else {
+        //                 let stack_trace = self.stack.stack_trace();
+        //                 return Err(e.with_stack_trace(stack_trace));
+        //             }
+        //         }
+        //     };
+        //
+        //     // gc stress testing
+        //     // let mut marked = BitSet::with_capacity(64);
+        //     // let mut processed = HashSet::new();
+        //     // for frame in self.stack.iter() {
+        //     //     frame.mark(&mut marked, &mut processed, cell_key)?;
+        //     // }
+        //     //
+        //     // self.vm_upvalues.rw(cell_key).keyless_sweep(&marked)?;
+        // }
+        //
+        // Ok(task_context)
     }
 
     /// Evaluate the instruction at the current value of the PC
@@ -1010,8 +1105,6 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = dynamic_receiver as usize;
         let adjusted_num_args = num_args - (dynamic_receiver as usize);
-        let _interim_max_arg_length =
-            Self::calculate_max_arg_length(adjusted_num_args, partial_args);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public()
@@ -1521,7 +1614,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             address,
             partial_args,
             call_other,
-            // Function pointers inherit the creating function's upvalues
+            // Function pointers inherit the creating funfction's upvalues
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
             // upvalue_ptrs: self.capture_environment(cell_key)?,
             unique_id: UniqueId::new(),
@@ -1975,6 +2068,7 @@ mod tests {
         collections::HashMap,
         fmt::Formatter,
         hash::{Hash, Hasher},
+        sync::mpsc,
     };
 
     use indoc::indoc;
@@ -2415,6 +2509,7 @@ mod tests {
         }
 
         mod test_call_fp {
+            use std::sync::mpsc;
             use claim::assert_ok;
 
             use super::*;
@@ -2666,15 +2761,16 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let object_space = ObjectSpace::default();
                 let upvalues = GcBank::default();
+                let (tx, _) = mpsc::channel();
+                let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
                 let mut task: Task<MAX_CALL_STACK_SIZE> =
                     Task::new(Memory::default(), cell_key.cell(upvalues));
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
-                let _name = program.filename.clone();
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
-                let result = task.initialize_program(program, config, space_cell, &mut cell_key);
+                let result = task.initialize_program(program, config, space_cell, call_outs.clone(), tx.clone(), &mut cell_key);
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2696,7 +2792,7 @@ mod tests {
                 let object_space = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&object_space, process, &mut cell_key);
 
-                let result = task.initialize_program(program, config, object_space, &mut cell_key);
+                let result = task.initialize_program(program, config, object_space, call_outs.clone(), tx.clone(), &mut cell_key);
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2718,7 +2814,7 @@ mod tests {
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
-                let result = task.initialize_program(program, config, space_cell, &mut cell_key);
+                let result = task.initialize_program(program, config, space_cell, call_outs, tx, &mut cell_key);
 
                 assert_ok!(result);
             }
@@ -3315,10 +3411,15 @@ mod tests {
                 let mut task: Task<10> =
                     Task::new(Memory::default(), cell_key.cell(GcBank::default()));
                 let (program, _, _) = compile_prog(code, &mut cell_key);
+                let (tx, _) = mpsc::channel();
+                let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+
                 let r = task.initialize_program(
                     program,
                     Config::default(),
                     cell_key.cell(ObjectSpace::default()),
+                    call_outs,
+                    tx,
                     &mut cell_key,
                 );
 
@@ -3367,10 +3468,15 @@ mod tests {
                 let vm_upvalues = cell_key.cell(GcBank::default());
                 let mut task: Task<10> = Task::new(Memory::default(), vm_upvalues);
                 let (program, _, _) = compile_prog(code, &mut cell_key);
+                let (tx, _) = mpsc::channel();
+                let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+
                 let r = task.initialize_program(
                     program,
                     Config::default(),
                     cell_key.cell(ObjectSpace::default()),
+                    call_outs,
+                    tx,
                     &mut cell_key,
                 );
 
@@ -4236,9 +4342,11 @@ mod tests {
                 let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default(), vm_upvalues);
 
                 let object_space = ObjectSpace::default();
+                let (tx, _) = mpsc::channel();
+                let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let _ctx = task
-                    .initialize_program(program, config, cell_key.cell(object_space), &mut cell_key)
+                    .initialize_program(program, config, cell_key.cell(object_space), call_outs, tx, &mut cell_key)
                     .expect("failed to initialize");
 
                 let registers = &task.stack.last().unwrap().registers;
@@ -4339,10 +4447,15 @@ mod tests {
             let vm_upvalues = cell_key.cell(GcBank::default());
             let mut task: Task<5> = Task::new(Memory::default(), vm_upvalues);
             let (program, _, _) = compile_prog(code, &mut cell_key);
+            let (tx, _) = mpsc::channel();
+            let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+
             let r = task.initialize_program(
                 program,
                 Config::default(),
                 cell_key.cell(ObjectSpace::default()),
+                call_outs,
+                tx,
                 &mut cell_key,
             );
 
@@ -4366,10 +4479,15 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let vm_upvalues = cell_key.cell(GcBank::default());
             let mut task: Task<5> = Task::new(Memory::default(), vm_upvalues);
+            let (tx, _) = mpsc::channel();
+            let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+
             let r = task.initialize_program(
                 program,
                 config,
                 cell_key.cell(ObjectSpace::default()),
+                call_outs,
+                tx,
                 &mut cell_key,
             );
 

@@ -7,7 +7,6 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
-use slab::Slab;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -50,7 +49,8 @@ pub struct Vm {
     config: Rc<Config>,
 
     /// Enqueued call outs
-    call_outs: CallOuts,
+    #[educe(Debug(method = "qcell_debug"))]
+    call_outs: Rc<QCell<CallOuts>>,
 
     /// The channel used to send [`VmOp`]s to this [`Vm`]
     tx: Sender<VmOp>,
@@ -67,13 +67,13 @@ impl Vm {
     {
         let object_space = ObjectSpace::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let call_outs = CallOuts::new(tx.clone());
+        let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
         Self {
             object_space: Rc::new(cell_key.cell(object_space)),
             memory: Memory::default(),
             config: config.into(),
             upvalues: Rc::new(cell_key.cell(GcBank::default())),
-            call_outs,
+            call_outs: Rc::new(call_outs),
             rx,
             tx
         }
@@ -81,18 +81,33 @@ impl Vm {
 
     /// The main initialization method for the VM.
     ///
-    /// This method will load the master object and simul_efun file, and add
-    /// the master object to the object space.
+    /// This method will load the master object and simul_efun file, add
+    /// the master object to the object space, and then start the main loop.
     ///
     /// # Arguments
     ///
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system. Don't lose this key.
     ///
+    pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+        self.bootstrap(cell_key)?;
+
+        self.run(cell_key);
+
+        Ok(())
+    }
+
+    /// Load and initialize the master object and simul_efuns.
+    ///
+    /// # Arguments
+    ///
+    /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
+    ///                in the system.
+    ///
     /// # Returns
-    ///    /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
-    /// * `Err(LpcError)` - If there was an error loading the master object or simul_efun file.
-    pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<TaskContext> {
+    /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
+    /// * `Err(LpcError)` - If there was an error.
+    pub fn bootstrap(&mut self, cell_key: &mut QCellOwner) -> Result<TaskContext> {
         if let Some(Err(e)) = self.initialize_simul_efuns(cell_key) {
             e.emit_diagnostics();
             return Err(e);
@@ -103,14 +118,21 @@ impl Vm {
         self.initialize_file(&master_path, cell_key)
     }
 
+    /// Run the [`Vm`]'s main loop.
     /// Assumes `boot()` has already been called.
-    pub fn run(&mut self) {
+    /// # Arguments
+    ///
+    /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
+    ///                in the system.
+    pub fn run(&mut self, cell_key: &mut QCellOwner) {
         loop {
             match self.rx.recv() {
                 Ok(op) => {
+                    println!("Received VmOp: {:?}", op);
+
                     match op {
                         VmOp::RunTask(idx) => {
-                            let task = self.call_outs.get(idx);
+                            let task = self.call_outs.ro(cell_key).get(idx);
                             println!("Running task at index {}: {:?}", idx, task);
                         }
                     }
@@ -179,7 +201,7 @@ impl Vm {
     ///
     /// * `code` - The code to compile and initialize
     /// * `filename` - The filename to assign to the code. It's assumed to be an in-game path,
-    ///                with [`lib_dir`](lpc_rs_utils::config::Config) as the root.
+    ///                with [`lib_dir`](Config) as the root.
     /// * `cell_key` - The [`QCellOwner`] that will be used to create any necessary [`QCell`]s
     ///
     /// # Returns
@@ -256,6 +278,7 @@ impl Vm {
             program,
             self.config.clone(),
             self.object_space.clone(),
+            self.call_outs.clone(),
             tx,
             cell_key,
         )

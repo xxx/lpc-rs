@@ -16,6 +16,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::call_outs::CallOuts;
 use crate::interpreter::vm_op::VmOp;
 
 /// A struct to carry context during a single function's evaluation.
@@ -50,6 +51,11 @@ pub struct TaskContext {
     #[educe(Debug(method = "qcell_debug"))]
     vm_upvalues: Rc<QCell<GcRefBank>>,
 
+    /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
+    #[educe(Debug(method = "qcell_debug"))]
+    call_outs: Rc<QCell<CallOuts>>,
+
+    /// The tx channel to send messaages back to the [`Vm`](crate::interpreter::vm::Vm).
     tx: Sender<VmOp>,
 }
 
@@ -72,6 +78,7 @@ impl TaskContext {
         process: P,
         object_space: O,
         vm_upvalues: U,
+        call_outs: Rc<QCell<CallOuts>>,
         tx: Sender<VmOp>,
         cell_key: &QCellOwner,
     ) -> Self
@@ -97,6 +104,7 @@ impl TaskContext {
             result: OnceCell::new(),
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
+            call_outs,
             tx,
         }
     }
@@ -221,6 +229,12 @@ impl TaskContext {
         self.result.get()
     }
 
+    /// Get the [`CallOuts`] for this task
+    #[inline]
+    pub fn call_outs(&self) -> &Rc<QCell<CallOuts>> {
+        &self.call_outs
+    }
+
     /// Get the `tx` channel for this task
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {
@@ -252,11 +266,13 @@ mod tests {
         let process = Process::new(program);
         let upvalues = cell_key.cell(GcBank::default());
         let (tx, _rx) = mpsc::channel();
+        let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
         let context = TaskContext::new(
             config,
             cell_key.cell(process),
             space,
             upvalues,
+            call_outs.into(),
             tx,
             &cell_key
         );

@@ -14,6 +14,7 @@ use crate::interpreter::{
 };
 use mpsc::Sender;
 use crate::interpreter::vm_op::VmOp;
+use crate::interpreter::call_outs::CallOuts;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
@@ -63,6 +64,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
             pub fn vm_upvalues(&self) -> &Rc<QCell<GcRefBank>>;
+
+            /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
+            pub fn call_outs(&self) -> &Rc<QCell<CallOuts>>;
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;

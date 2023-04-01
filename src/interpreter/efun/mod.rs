@@ -1,5 +1,6 @@
 pub mod efun_context;
 
+pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod debug;
 pub(crate) mod dump;
@@ -26,6 +27,7 @@ use crate::interpreter::efun::efun_context::EfunContext;
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>, cell_key: &mut QCellOwner) -> Result<()>;
 
+pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
 pub const CLONE_OBJECT: &str = "clone_object";
@@ -39,6 +41,7 @@ pub const THROW: &str = "throw";
 /// A blanket to get a compile-time constant map of efuns regardless of stack size.
 pub trait HasEfuns<const STACKSIZE: usize> {
     const EFUNS: phf::Map<&'static str, Efun<STACKSIZE>> = phf_map! {
+        "call_out" => call_out::call_out as Efun<STACKSIZE>,
         "clone_object" => clone_object::clone_object as Efun<STACKSIZE>,
         "debug" => debug::debug as Efun<STACKSIZE>,
         "dump" => dump::dump as Efun<STACKSIZE>,
@@ -52,6 +55,27 @@ pub trait HasEfuns<const STACKSIZE: usize> {
 pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
     let mut m = HashMap::new();
 
+    m.insert(
+        CALL_OUT,
+        FunctionPrototypeBuilder::default()
+            .name(CALL_OUT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 2,
+                num_default_args: 0,
+                varargs: false,
+                ellipsis: true,
+            })
+            .arg_types(vec![
+                LpcType::Function(false),
+                LpcType::Int(false) | LpcType::Float(false),
+            ])
+            .flags(FunctionFlags::default().with_ellipsis(false))
+            .build()
+            .expect("failed to build call_out")
+    );
     m.insert(
         CALL_OTHER,
         FunctionPrototypeBuilder::default()

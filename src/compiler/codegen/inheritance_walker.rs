@@ -112,7 +112,6 @@ impl TreeWalker for InheritanceWalker {
 
                 self.context.num_globals += program.num_globals;
                 self.context.num_init_registers += program.num_init_registers;
-                println!("inheriting functions: {:?}", program.functions.keys());
                 self.context.inherited_functions.extend(
                     program
                         .functions

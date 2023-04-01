@@ -47,8 +47,6 @@ fn main() {
         std::process::exit(1);
     });
 
-    vm.run();
-
     // println!(
     //     "space: {:#?}",
     //     vm.object_space.ro(&cell_key).with_key(&cell_key)
