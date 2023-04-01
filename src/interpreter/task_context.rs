@@ -1,4 +1,6 @@
 use std::{path::PathBuf, rc::Rc};
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 
 use delegate::delegate;
 use educe::Educe;
@@ -14,6 +16,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::vm_op::VmOp;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -46,6 +49,8 @@ pub struct TaskContext {
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
     vm_upvalues: Rc<QCell<GcRefBank>>,
+
+    tx: Sender<VmOp>,
 }
 
 impl TaskContext {
@@ -67,6 +72,7 @@ impl TaskContext {
         process: P,
         object_space: O,
         vm_upvalues: U,
+        tx: Sender<VmOp>,
         cell_key: &QCellOwner,
     ) -> Self
     where
@@ -91,6 +97,7 @@ impl TaskContext {
             result: OnceCell::new(),
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
+            tx,
         }
     }
 
@@ -213,10 +220,17 @@ impl TaskContext {
     pub fn result(&self) -> Option<&LpcRef> {
         self.result.get()
     }
+
+    /// Get the `tx` channel for this task
+    #[inline]
+    pub fn tx(&self) -> Sender<VmOp> {
+        self.tx.clone()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
 
@@ -237,7 +251,15 @@ mod tests {
             .unwrap();
         let process = Process::new(program);
         let upvalues = cell_key.cell(GcBank::default());
-        let context = TaskContext::new(config, cell_key.cell(process), space, upvalues, &cell_key);
+        let (tx, _rx) = mpsc::channel();
+        let context = TaskContext::new(
+            config,
+            cell_key.cell(process),
+            space,
+            upvalues,
+            tx,
+            &cell_key
+        );
 
         assert_eq!(context.in_game_cwd(&cell_key).to_str().unwrap(), "/foo/bar");
     }

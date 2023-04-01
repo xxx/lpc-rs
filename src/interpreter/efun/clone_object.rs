@@ -138,11 +138,13 @@ mod tests {
     ) -> TaskContext {
         let process = Process::new(program);
 
+        let (tx, _) = std::sync::mpsc::channel();
         TaskContext::new(
             config,
             cell_key.cell(process),
             cell_key.cell(ObjectSpace::default()),
             cell_key.cell(GcBank::default()),
+            tx,
             cell_key,
         )
     }

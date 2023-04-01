@@ -1,4 +1,5 @@
 use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc};
+use std::sync::mpsc;
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
@@ -11,6 +12,8 @@ use crate::interpreter::{
     lpc_value::LpcValue, memory::Memory, process::Process, program::Program, task::get_location,
     task_context::TaskContext,
 };
+use mpsc::Sender;
+use crate::interpreter::vm_op::VmOp;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
@@ -60,6 +63,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
             pub fn vm_upvalues(&self) -> &Rc<QCell<GcRefBank>>;
+
+            /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
+            pub fn tx(&self) -> Sender<VmOp>;
         }
 
         to self.memory {

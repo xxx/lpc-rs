@@ -1,5 +1,6 @@
 pub mod bank;
 pub mod call_frame;
+pub mod call_outs;
 pub mod call_stack;
 pub mod efun;
 pub mod function_type;
@@ -17,4 +18,4 @@ pub mod program;
 pub mod task;
 pub mod task_context;
 pub mod vm;
-pub mod call_outs;
+pub mod vm_op;

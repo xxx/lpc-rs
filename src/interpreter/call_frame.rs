@@ -50,7 +50,7 @@ pub struct CallFrame {
     #[builder(setter(into))]
     pub process: Rc<QCell<Process>>,
 
-    /// The function that this frame is a call to
+    /// The function that this frame is a call to.
     #[builder(setter(into))]
     pub function: Rc<ProgramFunction>,
 

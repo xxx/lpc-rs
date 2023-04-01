@@ -1,4 +1,5 @@
 use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
+use std::sync::mpsc::{Receiver, Sender};
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -6,6 +7,7 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
+use slab::Slab;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -25,6 +27,8 @@ use crate::{
     },
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::call_outs::CallOuts;
+use crate::interpreter::vm_op::VmOp;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -44,6 +48,15 @@ pub struct Vm {
 
     /// The [`Config`] that's in use for this [`Vm`]
     config: Rc<Config>,
+
+    /// Enqueued call outs
+    call_outs: CallOuts,
+
+    /// The channel used to send [`VmOp`]s to this [`Vm`]
+    tx: Sender<VmOp>,
+
+    /// The channel used to receive [`VmOp`]s from other locations
+    rx: Receiver<VmOp>
 }
 
 impl Vm {
@@ -53,11 +66,16 @@ impl Vm {
         C: Into<Rc<Config>>,
     {
         let object_space = ObjectSpace::default();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let call_outs = CallOuts::new(tx.clone());
         Self {
             object_space: Rc::new(cell_key.cell(object_space)),
             memory: Memory::default(),
             config: config.into(),
             upvalues: Rc::new(cell_key.cell(GcBank::default())),
+            call_outs,
+            rx,
+            tx
         }
     }
 
@@ -72,8 +90,7 @@ impl Vm {
     ///                in the system. Don't lose this key.
     ///
     /// # Returns
-    ///
-    /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
+    ///    /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
     /// * `Err(LpcError)` - If there was an error loading the master object or simul_efun file.
     pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<TaskContext> {
         if let Some(Err(e)) = self.initialize_simul_efuns(cell_key) {
@@ -84,6 +101,25 @@ impl Vm {
         let master_path =
             LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
         self.initialize_file(&master_path, cell_key)
+    }
+
+    /// Assumes `boot()` has already been called.
+    pub fn run(&mut self) {
+        loop {
+            match self.rx.recv() {
+                Ok(op) => {
+                    match op {
+                        VmOp::RunTask(idx) => {
+                            let task = self.call_outs.get(idx);
+                            println!("Running task at index {}: {:?}", idx, task);
+                        }
+                    }
+                }
+                Err(e) => {
+                    panic!("Error receiving from channel: {}", e);
+                }
+            }
+        }
     }
 
     /// Initialize the simulated efuns file, if it is configured.
@@ -124,11 +160,12 @@ impl Vm {
         cell_key: &mut QCellOwner,
     ) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
+        let tx = self.tx.clone();
 
         self.with_compiler(cell_key, |compiler, cell_key| {
             compiler.compile_in_game_file(filename, None, cell_key)
         })
-        .and_then(|program| self.create_and_initialize_task(program, cell_key))
+        .and_then(|program| self.create_and_initialize_task(program, tx, cell_key))
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -181,11 +218,12 @@ impl Vm {
     {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
+        let tx = self.tx.clone();
 
         self.with_compiler(cell_key, |compiler, cell_key| {
             compiler.compile_string(lpc_path, code, cell_key)
         })
-        .and_then(|program| self.create_and_initialize_task(program, cell_key))
+        .and_then(|program| self.create_and_initialize_task(program, tx, cell_key))
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -209,6 +247,7 @@ impl Vm {
     fn create_and_initialize_task(
         &mut self,
         program: Program,
+        tx: Sender<VmOp>,
         cell_key: &mut QCellOwner,
     ) -> Result<TaskContext> {
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
@@ -217,6 +256,7 @@ impl Vm {
             program,
             self.config.clone(),
             self.object_space.clone(),
+            tx,
             cell_key,
         )
         .map(|ctx| {

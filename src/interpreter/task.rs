@@ -3,6 +3,7 @@ use std::{
     fmt::{Debug, Display},
     rc::Rc,
 };
+use std::sync::mpsc::Sender;
 
 use bit_set::BitSet;
 use decorum::Total;
@@ -47,6 +48,7 @@ use crate::{
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::vm_op::VmOp;
 
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
@@ -240,6 +242,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         program: P,
         config: C,
         object_space: O,
+        tx: Sender<VmOp>,
         cell_key: &mut QCellOwner,
     ) -> Result<TaskContext>
     where
@@ -261,6 +264,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             process.clone(),
             object_space,
             self.vm_upvalues.clone(),
+            tx,
             cell_key,
         );
         context.insert_process(process, cell_key);
