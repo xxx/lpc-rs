@@ -11,10 +11,10 @@ use crate::{
     interpreter::{
         call_outs::CallOuts, gc::gc_bank::GcRefBank, instruction_counter::InstructionCounter,
         lpc_ref::LpcRef, object_space::ObjectSpace, process::Process, program::Program,
-        vm_op::VmOp,
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::vm::vm_op::VmOp;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]

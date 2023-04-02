@@ -7,7 +7,8 @@ use lpc_rs_errors::Result;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
 
-use crate::interpreter::{lpc_ref::LpcRef, vm_op::VmOp};
+use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::vm::vm_op::VmOp;
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
 #[derive(Educe)]

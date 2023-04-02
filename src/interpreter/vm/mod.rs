@@ -16,12 +16,13 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
+use vm_op::VmOp;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::{Compiler, CompilerBuilder},
     interpreter::{
-        call_outs::{CallOuts},
+        call_outs::CallOuts,
         efun::EFUN_PROTOTYPES,
         function_type::function_address::FunctionAddress,
         gc::{
@@ -37,11 +38,12 @@ use crate::{
         program::Program,
         task::Task,
         task_context::TaskContext,
-        vm_op::VmOp,
     },
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
+
+pub mod vm_op;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -51,7 +53,7 @@ pub struct Vm {
     #[educe(Debug(method = "qcell_debug"))]
     pub object_space: Rc<QCell<ObjectSpace>>,
 
-    /// Shared VM memory
+    /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
     memory: Memory,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s

@@ -1,4 +1,4 @@
-use lpc_rs_errors::{Result};
+use lpc_rs_errors::Result;
 use qcell::QCellOwner;
 
 use crate::{
@@ -45,7 +45,7 @@ mod tests {
     use crate::{
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task, vm_op::VmOp,
+            task::Task,
         },
         test_support::compile_prog,
     };
