@@ -3,4 +3,8 @@
 pub enum VmOp {
     /// Run a CallOut function, identified by its index in the [`CallOuts`](crate::interpreter::call_outs::CallOuts) list
     RunCallOut(usize),
+
+    /// Let the currently-running `Task` yield, allowing us to check if
+    /// others things need to be addressed (other scheduled tasks, new connections, etc.)
+    Yield,
 }

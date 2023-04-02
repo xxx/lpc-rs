@@ -37,20 +37,12 @@ fn main() {
 
     init_tracing_subscriber(&config);
 
-    // This is the key that will be used for everything.
-    let mut cell_key = QCellOwner::new();
+    let mut vm = Vm::new(config);
 
-    let mut vm = Vm::new(config, &cell_key);
-
-    vm.boot(&mut cell_key).unwrap_or_else(|e| {
+    vm.boot().unwrap_or_else(|e| {
         eprintln!("unable to initialize VM: {e:?}");
         std::process::exit(1);
     });
-
-    // println!(
-    //     "space: {:#?}",
-    //     vm.object_space.ro(&cell_key).with_key(&cell_key)
-    // );
 }
 
 fn init_tracing_subscriber(config: &Config) {

@@ -248,7 +248,7 @@ fn test_positional_vars_into_argv() {
 #[test]
 fn test_inherited_create_called_when_not_overridden() {
     let mut cell_key = QCellOwner::new();
-    let mut vm = Vm::new(test_config(), &cell_key);
+    let mut vm = Vm::new_with_key(test_config(), cell_key);
     let grandparent = indoc! { r#"
         void create() {
             dump("grandparent create");
@@ -276,28 +276,28 @@ fn test_inherited_create_called_when_not_overridden() {
     "# };
 
     let _grandparent_ctx = vm
-        .initialize_string(grandparent, "test_grandparent.c", &mut cell_key)
+        .initialize_string(grandparent, "test_grandparent.c")
         .map_err(|e| {
             e.emit_diagnostics();
             e
         })
         .unwrap();
     let _parent_ctx = vm
-        .initialize_string(parent, "test_parent.c", &mut cell_key)
+        .initialize_string(parent, "test_parent.c")
         .map_err(|e| {
             e.emit_diagnostics();
             e
         })
         .unwrap();
     let _parent2_ctx = vm
-        .initialize_string(parent, "test_parent2.c", &mut cell_key)
+        .initialize_string(parent, "test_parent2.c")
         .map_err(|e| {
             e.emit_diagnostics();
             e
         })
         .unwrap();
     let child_ctx = vm
-        .initialize_string(child, "test_child.c", &mut cell_key)
+        .initialize_string(child, "test_child.c")
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -306,7 +306,7 @@ fn test_inherited_create_called_when_not_overridden() {
 
     let init = child_ctx
         .process()
-        .ro(&cell_key)
+        .ro(&vm.cell_key)
         .program
         .initializer
         .clone()
@@ -327,8 +327,8 @@ fn test_calls_simul_efuns() {
         .build()
         .unwrap();
 
-    let mut vm = Vm::new(config, &cell_key);
-    vm.initialize_simul_efuns(&mut cell_key)
+    let mut vm = Vm::new_with_key(config, cell_key);
+    vm.initialize_simul_efuns()
         .expect("no simul efuns?")
         .expect("init error");
 
@@ -337,7 +337,7 @@ fn test_calls_simul_efuns() {
             simul_efun("cool!");
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"this is a simul_efun: cool!\"", val.to_string());
 
@@ -350,7 +350,7 @@ fn test_calls_simul_efuns() {
             simul_efun("cool!");
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"local simul_efun: cool!\"", val.to_string());
 
@@ -360,7 +360,7 @@ fn test_calls_simul_efuns() {
             f();
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"this is a simul_efun: pointed!\"", val.to_string());
 
@@ -374,7 +374,7 @@ fn test_calls_simul_efuns() {
             f();
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c", &mut cell_key).unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"local simul_efun: pointed!\"", val.to_string());
 }

@@ -70,11 +70,23 @@ pub struct Vm {
 
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
+
+    /// The key used to create all [`QCell`]s
+    #[educe(Debug(method = "qcell_debug"))]
+    pub cell_key: QCellOwner,
 }
 
 impl Vm {
     /// Create a new [`Vm`].
-    pub fn new<C>(config: C, cell_key: &QCellOwner) -> Self
+    pub fn new<C>(config: C) -> Self
+    where
+        C: Into<Rc<Config>>,
+    {
+        Self::new_with_key(config, QCellOwner::new())
+    }
+
+    /// Create a new [`Vm`], using the specified [`QCellOwner`].
+    pub fn new_with_key<C>(config: C, cell_key: QCellOwner) -> Self
     where
         C: Into<Rc<Config>>,
     {
@@ -89,6 +101,7 @@ impl Vm {
             call_outs: Rc::new(call_outs),
             rx,
             tx,
+            cell_key,
         }
     }
 
@@ -101,33 +114,28 @@ impl Vm {
     ///
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system. Don't lose this key.
-    pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
-        self.bootstrap(cell_key)?;
+    pub fn boot(&mut self) -> Result<()> {
+        self.bootstrap()?;
 
-        self.run(cell_key)?;
+        self.run()?;
 
         Ok(())
     }
 
     /// Load and initialize the master object and simul_efuns.
     ///
-    /// # Arguments
-    ///
-    /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
-    ///                in the system.
-    ///
     /// # Returns
     /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
     /// * `Err(LpcError)` - If there was an error.
-    pub fn bootstrap(&mut self, cell_key: &mut QCellOwner) -> Result<TaskContext> {
-        if let Some(Err(e)) = self.initialize_simul_efuns(cell_key) {
+    pub fn bootstrap(&mut self) -> Result<TaskContext> {
+        if let Some(Err(e)) = self.initialize_simul_efuns() {
             e.emit_diagnostics();
             return Err(e);
         }
 
         let master_path =
             LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
-        self.initialize_file(&master_path, cell_key)
+        self.initialize_file(&master_path)
     }
 
     /// Run the [`Vm`]'s main loop.
@@ -137,7 +145,7 @@ impl Vm {
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system.
     #[instrument(skip_all)]
-    pub fn run(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+    pub fn run(&mut self) -> Result<()> {
         loop {
             match self.rx.recv() {
                 Ok(op) => {
@@ -145,7 +153,10 @@ impl Vm {
 
                     match op {
                         VmOp::RunCallOut(idx) => {
-                            self.op_run_call_out(idx, cell_key)?;
+                            self.op_run_call_out(idx)?;
+                        },
+                        VmOp::Yield => {
+                            todo!()
                         }
                     }
                 }
@@ -170,15 +181,15 @@ impl Vm {
     /// * `Ok(Some(TaskContext)))` - If the call out was run successfully
     /// * `Ok(None)` - If the call out was not found (e.g. has been removed)
     /// * `Err(LpcError)` - If there was an error running the call out
-    fn op_run_call_out(&mut self, idx: usize, cell_key: &mut QCellOwner) -> Result<Option<TaskContext>> {
-        if self.call_outs.ro(cell_key).get(idx).is_none() {
+    fn op_run_call_out(&mut self, idx: usize) -> Result<Option<TaskContext>> {
+        if self.call_outs.ro(&self.cell_key).get(idx).is_none() {
             return Ok(None);
         }
 
         let repeating: bool;
 
         let (process, function, args) = if_chain! {
-            let call_out = self.call_outs.ro(cell_key).get(idx).unwrap();
+            let call_out = self.call_outs.ro(&self.cell_key).get(idx).unwrap();
             if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
                 repeating = call_out.is_repeating();
@@ -203,13 +214,13 @@ impl Vm {
                         ));
                     },
                     FunctionAddress::SimulEfun(name) => {
-                        let Some(simul_efuns) = get_simul_efuns(&self.config, self.object_space.ro(cell_key)) else {
+                        let Some(simul_efuns) = get_simul_efuns(&self.config, self.object_space.ro(&self.cell_key)) else {
                             return Err(LpcError::new_bug(
                                 "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
                             ));
                         };
 
-                        let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name) else {
+                        let Some(function) = simul_efuns.ro(&self.cell_key).program.lookup_function(name) else {
                             return Err(LpcError::new(format!("call to unknown simul_efun `{name}`")));
                         };
 
@@ -220,7 +231,7 @@ impl Vm {
                         // TODO: prototypes should be in Rcs so this clone is cheap
                         let pf = ProgramFunction::new(prototype.clone(), 0);
 
-                        (Rc::new(cell_key.cell(Process::default())), Rc::new(pf), args)
+                        (Rc::new(self.cell_key.cell(Process::default())), Rc::new(pf), args)
                     }
                 }
             }
@@ -238,13 +249,13 @@ impl Vm {
             self.upvalues.clone(),
             self.call_outs.clone(),
             self.tx.clone(),
-            cell_key,
+            &self.cell_key,
         );
 
-        let result = task.eval(function, &args, task_context, cell_key);
+        let result = task.eval(function, &args, task_context, &mut self.cell_key);
         trace!(?result, "call out run finished");
 
-        let call_outs = self.call_outs.rw(cell_key);
+        let call_outs = self.call_outs.rw(&mut self.cell_key);
         if repeating {
             call_outs.get_mut(idx).unwrap().refresh();
         } else {
@@ -263,41 +274,39 @@ impl Vm {
     /// * `None` - If there is no simul_efun file configured
     pub fn initialize_simul_efuns(
         &mut self,
-        cell_key: &mut QCellOwner,
     ) -> Option<Result<TaskContext>> {
         let Some(path) = &self.config.simul_efun_file else {
             return None
         };
 
         let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
-        Some(self.initialize_file(&simul_efun_path, cell_key))
+        Some(self.initialize_file(&simul_efun_path))
     }
 
     /// Do a full garbage collection cycle.
     #[instrument(skip_all)]
-    pub fn gc(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+    pub fn gc(&mut self) -> Result<()> {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed, cell_key).unwrap();
+        self.mark(&mut marked, &mut processed, &self.cell_key).unwrap();
 
         trace!("Marked {} objects", marked.len());
 
-        self.sweep(&marked, cell_key)
+        self.keyless_sweep(&marked)
     }
 
     /// Compile and initialize code from the passed file.
     fn initialize_file(
         &mut self,
         filename: &LpcPath,
-        cell_key: &mut QCellOwner,
     ) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
         let tx = self.tx.clone();
 
-        self.with_compiler(cell_key, |compiler, cell_key| {
+        self.with_compiler(|compiler, cell_key| {
             compiler.compile_in_game_file(filename, None, cell_key)
         })
-        .and_then(|program| self.create_and_initialize_task(program, tx, cell_key))
+        .and_then(|program| self.create_and_initialize_task(program, tx))
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -326,23 +335,21 @@ impl Vm {
     /// use lpc_rs_utils::config::Config;
     /// use qcell::QCellOwner;
     ///
-    /// let mut cell_key = QCellOwner::new();
-    /// let mut vm = Vm::new(Config::default(), &cell_key);
+    /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm
-    ///     .initialize_string("int x = 5;", "test.c", &mut cell_key)
+    ///     .initialize_string("int x = 5;", "test.c")
     ///     .unwrap();
     ///
     /// assert_eq!(
-    ///     ctx.process().ro(&cell_key).globals.registers[0],
+    ///     ctx.process().ro(&vm.cell_key).globals.registers[0],
     ///     LpcRef::Int(5)
     /// );
-    /// assert!(vm.object_space.ro(&cell_key).lookup("/test").is_some());
+    /// assert!(vm.object_space.ro(&vm.cell_key).lookup("/test").is_some());
     /// ```
     pub fn initialize_string<P, S>(
         &mut self,
         code: S,
         filename: P,
-        cell_key: &mut QCellOwner,
     ) -> Result<TaskContext>
     where
         P: AsRef<Path>,
@@ -352,10 +359,10 @@ impl Vm {
         self.config.validate_in_game_path(&lpc_path, None)?;
         let tx = self.tx.clone();
 
-        self.with_compiler(cell_key, |compiler, cell_key| {
+        self.with_compiler(|compiler, cell_key| {
             compiler.compile_string(lpc_path, code, cell_key)
         })
-        .and_then(|program| self.create_and_initialize_task(program, tx, cell_key))
+        .and_then(|program| self.create_and_initialize_task(program, tx))
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -363,16 +370,16 @@ impl Vm {
     }
 
     /// Run a callback with a new, initialized [`Compiler`].
-    fn with_compiler<F, T>(&self, cell_key: &mut QCellOwner, f: F) -> Result<T>
+    fn with_compiler<F, T>(&mut self, f: F) -> Result<T>
     where
         F: FnOnce(Compiler, &mut QCellOwner) -> Result<T>,
     {
-        let object_space = self.object_space.ro(cell_key);
+        let object_space = self.object_space.ro(&self.cell_key);
         let compiler = CompilerBuilder::default()
             .config(self.config.clone())
             .simul_efuns(get_simul_efuns(&self.config, object_space))
             .build()?;
-        f(compiler, cell_key)
+        f(compiler, &mut self.cell_key)
     }
 
     /// Create a new [`Task`] and initialize it with the given [`Program`].
@@ -380,7 +387,6 @@ impl Vm {
         &mut self,
         program: Program,
         tx: Sender<VmOp>,
-        cell_key: &mut QCellOwner,
     ) -> Result<TaskContext> {
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
 
@@ -390,11 +396,11 @@ impl Vm {
             self.object_space.clone(),
             self.call_outs.clone(),
             tx,
-            cell_key,
+            &mut self.cell_key,
         )
         .map(|ctx| {
             let process = ctx.process();
-            ObjectSpace::insert_process(&self.object_space, process, cell_key);
+            ObjectSpace::insert_process(&self.object_space, process, &mut self.cell_key);
 
             ctx
         })
@@ -416,11 +422,11 @@ impl Mark for Vm {
     }
 }
 
-impl Sweep for Vm {
-    #[instrument(skip(self, cell_key))]
+impl KeylessSweep for Vm {
+    #[instrument(skip(self))]
     #[inline]
-    fn sweep(&mut self, marked: &BitSet, cell_key: &mut QCellOwner) -> Result<()> {
-        self.upvalues.rw(cell_key).keyless_sweep(marked)
+    fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
+        self.upvalues.rw(&mut self.cell_key).keyless_sweep(marked)
     }
 }
 
@@ -459,7 +465,7 @@ mod tests {
     #[test]
     fn test_gc() {
         let mut cell_key = QCellOwner::new();
-        let mut vm = Vm::new(test_config(), &cell_key);
+        let mut vm = Vm::new_with_key(test_config(), cell_key);
         let storage = indoc! { r#"
             function *storage = ({});
 
@@ -495,30 +501,30 @@ mod tests {
         "# };
 
         let ctx1 = vm
-            .initialize_string(storage, "storage", &mut cell_key)
+            .initialize_string(storage, "storage")
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
             })
             .unwrap();
         let _ctx2 = vm
-            .initialize_string(runner, "runner", &mut cell_key)
+            .initialize_string(runner, "runner")
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
             })
             .unwrap();
 
-        assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 1);
+        assert_eq!(ctx1.upvalues().ro(&vm.cell_key).len(), 1);
 
-        vm.gc(&mut cell_key).unwrap();
+        vm.gc().unwrap();
 
-        assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 1);
+        assert_eq!(ctx1.upvalues().ro(&vm.cell_key).len(), 1);
 
-        vm.object_space.rw(&mut cell_key).clear();
+        vm.object_space.rw(&mut vm.cell_key).clear();
 
-        vm.gc(&mut cell_key).unwrap();
+        vm.gc().unwrap();
 
-        assert_eq!(ctx1.upvalues().ro(&cell_key).len(), 0);
+        assert_eq!(ctx1.upvalues().ro(&vm.cell_key).len(), 0);
     }
 }
