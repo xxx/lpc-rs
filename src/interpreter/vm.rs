@@ -3,38 +3,38 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use bit_set::BitSet;
 use educe::Educe;
+use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
-use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::{Compiler, CompilerBuilder},
-    interpreter::{
-        gc::{
-            gc_bank::{GcBank, GcRefBank},
-            mark::Mark,
-            sweep::{KeylessSweep, Sweep},
-        },
-        memory::Memory,
-        object_space::ObjectSpace,
-        program::Program,
-        task::Task,
-        task_context::TaskContext,
+use crate::{compile_time_config::MAX_CALL_STACK_SIZE, compiler::{Compiler, CompilerBuilder}, interpreter::{
+    gc::{
+        gc_bank::{GcBank, GcRefBank},
+        mark::Mark,
+        sweep::{KeylessSweep, Sweep},
     },
-    util::{get_simul_efuns, keyable::Keyable, qcell_debug},
-};
-use crate::interpreter::call_outs::CallOuts;
+    memory::Memory,
+    object_space::ObjectSpace,
+    program::Program,
+    task::Task,
+    task_context::TaskContext,
+}, try_extract_value, util::{get_simul_efuns, keyable::Keyable, qcell_debug}};
+use crate::interpreter::call_outs::{CallOut, CallOuts};
+use crate::interpreter::lpc_ref::LpcRef;
 use crate::interpreter::vm_op::VmOp;
+use crate::interpreter::lpc_value::LpcValue;
+use lpc_rs_errors::LpcError;
+use crate::interpreter::function_type::function_address::FunctionAddress;
+use crate::interpreter::process::Process;
 
 #[derive(Educe)]
 #[educe(Debug)]
 #[readonly::make]
 pub struct Vm {
-    /// Our object space, which stores all of the system objects (masters and
-    /// clones)
+    /// Our object space, which stores all of the system objects (masters and clones)
     #[educe(Debug(method = "qcell_debug"))]
     pub object_space: Rc<QCell<ObjectSpace>>,
 
@@ -92,7 +92,7 @@ impl Vm {
     pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
         self.bootstrap(cell_key)?;
 
-        self.run(cell_key);
+        self.run(cell_key)?;
 
         Ok(())
     }
@@ -124,16 +124,15 @@ impl Vm {
     ///
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system.
-    pub fn run(&mut self, cell_key: &mut QCellOwner) {
+    pub fn run(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
         loop {
             match self.rx.recv() {
                 Ok(op) => {
                     println!("Received VmOp: {:?}", op);
 
                     match op {
-                        VmOp::RunTask(idx) => {
-                            let task = self.call_outs.ro(cell_key).get(idx);
-                            println!("Running task at index {}: {:?}", idx, task);
+                        VmOp::RunCallOut(idx) => {
+                            self.op_run_call_out(idx, cell_key)?;
                         }
                     }
                 }
@@ -142,6 +141,65 @@ impl Vm {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn op_run_call_out(&mut self, idx: usize, cell_key: &mut QCellOwner) -> Result<()> {
+        panic!("aslkdfj");
+        // let (process, function) = if_chain! {
+        //     if let Some(CallOut { func_ref, .. }) = self.call_outs.ro(cell_key).get(idx);
+        //     if let LpcRef::Function(func) = func_ref;
+        //     then {
+        //         let b = func.borrow();
+        //         let ptr = try_extract_value!(&*b, LpcValue::Function);
+        //
+        //         match ptr.address {
+        //             FunctionAddress::Local(ref process, ref func) => (process.clone(), func.clone()),
+        //             FunctionAddress::Dynamic(_) => {
+        //                 return Err(LpcError::new(
+        //                     format!("function with dynamic receiver passed to call_out"),
+        //                 ));
+        //             },
+        //             FunctionAddress::SimulEfun(_) => {
+        //                 let Some(simul_efuns) = get_simul_efuns(&*self.config, &self.object_space.ro(cell_key)) else {
+        //                     return Err(LpcError::new_bug(
+        //                         format!("function pointer to simul_efun passed, but no simul_efuns?"),
+        //                     ));
+        //                 };
+        //
+        //                 (simul_efuns,
+        //             },
+        //             FunctionAddress::Efun(_) => {
+        //                 Rc::new(cell_key.cell(Process::default()))
+        //             }
+        //         };
+        //     }
+        //     else {
+        //         return Err(LpcError::new("invalid function sent to `call_out`"));
+        //     }
+        // };
+        //
+        // let task_context = TaskContext::new(
+        //     self.config.clone(),
+        //     process,
+        //     self.object_space.clone(),
+        //     self.upvalues.clone(),
+        //     self.call_outs.clone(),
+        //     self.tx.clone(),
+        //     cell_key,
+        // );
+        //
+        // let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
+        // task.eval(ptr, &[], task_context, cell_key)?;
+        // // if !repeating {
+        // let _ = self.call_outs.ro(cell_key).remove(idx);
+        // // }
+        // // println!("Running function at index {}: {:?}", idx, ptr);
+        //
+        //
+        //
+        // Ok(())
     }
 
     /// Initialize the simulated efuns file, if it is configured.

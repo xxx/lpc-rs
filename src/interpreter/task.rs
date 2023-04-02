@@ -213,6 +213,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
 }
 
 impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
+    /// Create a new Task
     #[instrument(skip_all)]
     pub fn new<T, U>(memory: T, vm_upvalues: U) -> Self
     where
@@ -284,7 +285,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     ///
     /// # Returns
     ///
-    /// A [`Result`]
+    /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     pub fn eval<F>(
         &mut self,
@@ -299,98 +300,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let function = f.into();
         let process = task_context.process();
 
-        let mut frame = CallFrame::new(
-            process,
-            function,
-            args.len(),
-            None,
-            task_context.upvalues().clone(),
-            cell_key,
-        );
-        if !args.is_empty() {
-            frame.registers[1..=args.len()].clone_from_slice(args);
-        }
-
-        self.stack.push(frame)?;
-
-        let mut halted = false;
-
-        while !halted {
-            halted = match self.eval_one_instruction(&task_context, cell_key) {
-                Ok(x) => x,
-                Err(e) => {
-                    if !self.catch_points.is_empty() {
-                        self.catch_error(e, cell_key)?;
-                        false
-                    } else {
-                        let stack_trace = self.stack.stack_trace();
-                        return Err(e.with_stack_trace(stack_trace));
-                    }
-                }
-            };
-
-            // gc stress testing
-            // let mut marked = BitSet::with_capacity(64);
-            // let mut processed = HashSet::new();
-            // for frame in self.stack.iter() {
-            //     frame.mark(&mut marked, &mut processed, cell_key)?;
-            // }
-            //
-            // self.vm_upvalues.rw(cell_key).keyless_sweep(&marked)?;
-        }
-
-        Ok(task_context)
-    }
-
-    /// Evaluate `f` to completion, or an error
-    ///
-    /// # Arguments
-    /// `f` - the function to call
-    /// `args` - the slice of arguments to pass to the function
-    /// `task_context` the [`TaskContext`] that will be used for this evaluation
-    ///
-    /// # Returns
-    ///
-    /// A [`Result`]
-    #[instrument(skip_all)]
-    pub fn eval_ptr<F>(
-        &mut self,
-        f: &FunctionPtr,
-        args: &[LpcRef],
-        task_context: TaskContext,
-        cell_key: &mut QCellOwner,
-    ) -> Result<TaskContext>
-    where
-        F: Into<Rc<ProgramFunction>>,
-    {
-        panic!("aksldnf");
-        // let (function, process) = match &f.address {
-        //     FunctionAddress::Local(process, function) => {
-        //         let process = process.clone().unwrap();
-        //         (function.clone(), process)
-        //     }
-        //     FunctionAddress::Dynamic(loc) => {
-        //         if args.len() < 1 {
-        //             return Err(
-        //                 LpcError::new("no receiver for function pointer call")
-        //                 .with_note("when calling a `&->foo()`-style function pointer, the first argument will be used as the receiving object")
-        //             );
-        //         }
-        //         match args[0] {
-        //             LpcRef::Object(obj) => {
-        //                 let function = obj.get_function(loc, cell_key)?;
-        //                 (function, obj.process())
-        //             },
-        //
-        //         }
-        //     }
-        //     FunctionAddress::Efun(_) => {}
-        //     FunctionAddress::SimulEfun(_) => {}
-        // };
-        //
-        // // let function = f.into();
-        // // let process = task_context.process();
-        //
+        self.eval_function(process, function, args, task_context, cell_key)
         // let mut frame = CallFrame::new(
         //     process,
         //     function,
@@ -432,6 +342,84 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         // }
         //
         // Ok(task_context)
+    }
+
+    /// Evaluate `f` to completion, or an error
+    ///
+    /// # Arguments
+    /// `f` - the function to call
+    /// `args` - the slice of arguments to pass to the function
+    /// `task_context` the [`TaskContext`] that will be used for this evaluation
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
+    #[instrument(skip_all)]
+    pub fn eval_ptr(
+        &mut self,
+        f: &FunctionPtr,
+        args: &[LpcRef],
+        task_context: TaskContext,
+        cell_key: &mut QCellOwner,
+    ) -> Result<TaskContext> {
+        let Some((process, function)) = self.extract_process_and_function(f, &task_context, cell_key)? else {
+            return Err(self.runtime_error("function pointer not found for eval_ptr"));
+        };
+
+        self.eval_function(process, function, args, task_context, cell_key)
+    }
+
+    /// Evaluate `f` to completion, or an error, in the contextof an arbitrary process
+    ///
+    /// # Arguments
+    /// `process`: the process that owns the function to call
+    /// `f` - the function to call
+    /// `args` - the slice of arguments to pass to the function
+    /// `task_context` the [`TaskContext`] that will be used for this evaluation
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
+    pub fn eval_function(
+        &mut self,
+        process: Rc<QCell<Process>>,
+        f: Rc<ProgramFunction>,
+        args: &[LpcRef],
+        mut task_context: TaskContext,
+        cell_key: &mut QCellOwner) -> Result<TaskContext>
+    {
+        let mut frame = CallFrame::new(
+            process,
+            f,
+            args.len(),
+            None,
+            task_context.upvalues().clone(),
+            cell_key,
+        );
+        if !args.is_empty() {
+            frame.registers[1..=args.len()].clone_from_slice(args);
+        }
+
+        self.stack.push(frame)?;
+
+        let mut halted = false;
+
+        while !halted {
+            halted = match self.eval_one_instruction(&task_context, cell_key) {
+                Ok(x) => x,
+                Err(e) => {
+                    if !self.catch_points.is_empty() {
+                        self.catch_error(e, cell_key)?;
+                        false
+                    } else {
+                        let stack_trace = self.stack.stack_trace();
+                        return Err(e.with_stack_trace(stack_trace));
+                    }
+                }
+            };
+        }
+
+        Ok(task_context)
     }
 
     /// Evaluate the instruction at the current value of the PC
@@ -1115,52 +1103,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let (proc, function) = match &ptr.address {
-            FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
-            FunctionAddress::Dynamic(name) => {
-                let LpcRef::Object(lpc_ref) = &*get_loc!(self, self.args[0], cell_key)? else {
-                    return Err(self.runtime_error("non-object receiver to function pointer call"));
-                };
-
-                let pair_opt = {
-                    let b = lpc_ref.borrow();
-                    let cell = try_extract_value!(*b, LpcValue::Object);
-                    let proc = cell.ro(cell_key);
-                    proc.as_ref()
-                        .lookup_function(name)
-                        .map(|func| (cell.clone(), func.clone()))
-                };
-
-                // short-circuit a 0 return if doing a call_other to a non-existent function
-                let Some(pair) = pair_opt else {
-                    let frame = self.stack.current_frame_mut()?;
-                    frame.registers[0] = NULL;
-                    return Ok(());
-                    // return Err(self.runtime_error(format!("call to unknown function `{name}`")));
-                };
-
-                pair
-            }
-            FunctionAddress::Efun(name) => {
-                // unwrap is safe because this should have been checked in an earlier step
-                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                let pf = ProgramFunction::new(prototype.clone(), 0);
-
-                let frame = self.stack.current_frame()?;
-
-                (frame.process.clone(), Rc::new(pf))
-            }
-            FunctionAddress::SimulEfun(name) => {
-                let Some(simul_efuns) = task_context.simul_efuns() else {
-                    return Err(self.runtime_bug("simul_efun called without simul_efuns"));
-                };
-
-                let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name) else {
-                    return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
-                };
-
-                (simul_efuns.clone(), function.clone())
-            }
+        let Some((proc, function)) = self.extract_process_and_function(&ptr, task_context, cell_key)? else {
+            return Ok(())
         };
 
         let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
@@ -1274,6 +1218,57 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         }
 
         Ok(())
+    }
+
+    fn extract_process_and_function(&mut self, ptr: &FunctionPtr, task_context: &TaskContext, cell_key: &QCellOwner) -> Result<Option<(Rc<QCell<Process>>, Rc<ProgramFunction>)>> {
+        let (proc, function) = match &ptr.address {
+            FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
+            FunctionAddress::Dynamic(name) => {
+                let LpcRef::Object(lpc_ref) = &*get_loc!(self, self.args[0], cell_key)? else {
+                    return Err(self.runtime_error("non-object receiver to function pointer call"));
+                };
+
+                let pair_opt = {
+                    let b = lpc_ref.borrow();
+                    let cell = try_extract_value!(*b, LpcValue::Object);
+                    let proc = cell.ro(cell_key);
+                    proc.as_ref()
+                        .lookup_function(name)
+                        .map(|func| (cell.clone(), func.clone()))
+                };
+
+                // short-circuit a 0 return if doing a call_other to a non-existent function
+                let Some(pair) = pair_opt else {
+                    let frame = self.stack.current_frame_mut()?;
+                    frame.registers[0] = NULL;
+                    return Ok(None);
+                    // return Err(self.runtime_error(format!("call to unknown function `{name}`")));
+                };
+
+                pair
+            }
+            FunctionAddress::Efun(name) => {
+                // unwrap is safe because this should have been checked in an earlier step
+                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                let pf = ProgramFunction::new(prototype.clone(), 0);
+
+                let frame = self.stack.current_frame()?;
+
+                (frame.process.clone(), Rc::new(pf))
+            }
+            FunctionAddress::SimulEfun(name) => {
+                let Some(simul_efuns) = task_context.simul_efuns() else {
+                    return Err(self.runtime_bug("simul_efun called without simul_efuns"));
+                };
+
+                let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name) else {
+                    return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
+                };
+
+                (simul_efuns.clone(), function.clone())
+            }
+        };
+        Ok(Some((proc, function)))
     }
 
     /// handle runtime type-checks for function pointer calls

@@ -1176,6 +1176,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "slab",
+ "stable-vec",
  "string-interner",
  "timer",
  "tracing",
@@ -1346,6 +1347,12 @@ name = "new_debug_unreachable"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
+
+[[package]]
+name = "no-std-compat"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df270209a7f04d62459240d890ecb792714d5db12c92937823574a09930276b4"
 
 [[package]]
 name = "nu-ansi-term"
@@ -1932,6 +1939,15 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "stable-vec"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80dfb7bb28f3d2fa50566793349d633b33f938543154be8071610ea9f590d8ca"
+dependencies = [
+ "no-std-compat",
+]
 
 [[package]]
 name = "static_assertions"
