@@ -4,8 +4,8 @@
 
 #### Alternate Syntax (preferred)
 * `ob->name(...)`
-* `obs->name(...)`
-* `map->name(...)`
+* `({ <array items> })->name(...)`
+* `([ <mapping items> ])->name(...)`
 * etc...
 
 Call a function contained within another object, or a collection of objects.
