@@ -1,0 +1,31 @@
+# call_out
+
+`mixed call_out(function f, int | float seconds_delay, [int | float seconds_repeat = 0])`
+
+Call a function after a delay, and possibly repeating on a regular interval.
+
+If `seconds_delay` is 0 or negative, the function will be called immediately upon
+completion of the current function. 
+
+If `seconds_repeat` is positive, the function will be called repeatedly at that
+interval, after the initial delay.
+
+If `seconds_repeat` is 0 or negative, the function will only be called once.
+
+When `seconds_delay` or `seconds_repeat` are floating point numbers, they will be
+accurate to millisecond precision.
+
+### Examples
+
+```c
+object ob = clone_object("/lib/test/test_object");
+int call_out_id = call_out(&dump("i'm on a delay!", 5));
+
+// Any function pointer can be passed to call_out, including closures.
+int call_out_id1 = call_out(&ob->add_two(4, 6), 1.5));
+int call_out_id3 = call_out(&call_other(ob, "add_two", 4, 6), 1.5));
+int call_out_id2 = call_out((: ob->add_two(4, 6) :), 1.5));
+
+// Composed functions work as well.
+int call_out_combo_id = call_out(dump @ (: ob->add_two(4, 6) :), 2.45));
+```
