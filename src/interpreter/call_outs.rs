@@ -1,11 +1,14 @@
 use std::sync::mpsc::Sender;
+use bit_set::BitSet;
 
 use chrono::Duration;
 use delegate::delegate;
 use educe::Educe;
+use qcell::QCellOwner;
 use lpc_rs_errors::Result;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
+use crate::interpreter::gc::mark::Mark;
 
 use crate::interpreter::lpc_ref::LpcRef;
 use crate::interpreter::vm::vm_op::VmOp;
@@ -15,7 +18,6 @@ use crate::interpreter::vm::vm_op::VmOp;
 #[educe(Debug)]
 pub struct CallOut {
     /// The reference to the function that will be run.
-    // TODO: need to GC this
     pub func_ref: LpcRef,
 
     /// How often does this call out repeat?
@@ -53,6 +55,12 @@ impl CallOut {
         } else {
             Some(self.next_run - now)
         }
+    }
+}
+
+impl Mark for CallOut {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet, cell_key: &QCellOwner) -> Result<()> {
+        self.func_ref.mark(marked, processed, cell_key)
     }
 }
 
@@ -125,5 +133,15 @@ impl CallOuts {
         });
 
         Ok(index)
+    }
+}
+
+impl Mark for CallOuts {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet, cell_key: &QCellOwner) -> Result<()> {
+        for (_idx, call_out) in &self.queue {
+            call_out.mark(marked, processed, cell_key)?;
+        }
+
+        Ok(())
     }
 }

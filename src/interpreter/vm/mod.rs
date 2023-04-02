@@ -420,6 +420,10 @@ impl Mark for Vm {
         // TODO: mark all tasks
         self.object_space
             .ro(cell_key)
+            .mark(marked, processed, cell_key)?;
+
+        self.call_outs
+            .ro(cell_key)
             .mark(marked, processed, cell_key)
     }
 }
