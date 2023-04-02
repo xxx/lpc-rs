@@ -3,11 +3,13 @@ use std::rc::Rc;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lpc_rs::{
     compiler::Compiler,
-    interpreter::{gc::gc_bank::GcRefBank, memory::Memory, object_space::ObjectSpace, task::Task},
+    interpreter::{
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, memory::Memory, object_space::ObjectSpace,
+        task::Task,
+    },
 };
 use lpc_rs_utils::config::Config;
 use qcell::QCellOwner;
-use lpc_rs::interpreter::call_outs::CallOuts;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut cell_key = QCellOwner::new();

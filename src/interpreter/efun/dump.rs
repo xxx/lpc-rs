@@ -158,17 +158,17 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOw
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+
     use lpc_rs_utils::config::Config;
     use qcell::QCellOwner;
 
     use crate::{
         compiler::Compiler,
         interpreter::{
-            gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, program::Program,
-            task::Task,
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            program::Program, task::Task,
         },
     };
-    use crate::interpreter::call_outs::CallOuts;
 
     fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
         let compiler = Compiler::default();

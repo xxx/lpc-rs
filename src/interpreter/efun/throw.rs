@@ -17,14 +17,17 @@ pub fn throw<const N: usize>(
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+
     use lpc_rs_utils::config::Config;
 
     use super::*;
     use crate::{
-        interpreter::{gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, task::Task},
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task,
+        },
         test_support::compile_prog,
     };
-    use crate::interpreter::call_outs::CallOuts;
 
     #[test]
     fn test_throw() {

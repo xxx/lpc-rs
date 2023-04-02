@@ -1,36 +1,47 @@
-use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, rc::Rc};
-use std::sync::mpsc::{Receiver, Sender};
+use std::{
+    cmp::Ordering,
+    fmt::Formatter,
+    hash::Hasher,
+    path::Path,
+    rc::Rc,
+    sync::mpsc::{Receiver, Sender},
+};
 
 use bit_set::BitSet;
 use educe::Educe;
 use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
-use crate::interpreter::efun::EFUN_PROTOTYPES;
 
-use crate::{compile_time_config::MAX_CALL_STACK_SIZE, compiler::{Compiler, CompilerBuilder}, interpreter::{
-    gc::{
-        gc_bank::{GcBank, GcRefBank},
-        mark::Mark,
-        sweep::{KeylessSweep, Sweep},
+use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    compiler::{Compiler, CompilerBuilder},
+    interpreter::{
+        call_outs::{CallOut, CallOuts},
+        efun::EFUN_PROTOTYPES,
+        function_type::function_address::FunctionAddress,
+        gc::{
+            gc_bank::{GcBank, GcRefBank},
+            mark::Mark,
+            sweep::{KeylessSweep, Sweep},
+        },
+        lpc_ref::{LpcRef, NULL},
+        lpc_value::LpcValue,
+        memory::Memory,
+        object_space::ObjectSpace,
+        process::Process,
+        program::Program,
+        task::Task,
+        task_context::TaskContext,
+        vm_op::VmOp,
     },
-    memory::Memory,
-    object_space::ObjectSpace,
-    program::Program,
-    task::Task,
-    task_context::TaskContext,
-}, try_extract_value, util::{get_simul_efuns, keyable::Keyable, qcell_debug}};
-use crate::interpreter::call_outs::{CallOut, CallOuts};
-use crate::interpreter::lpc_ref::{LpcRef, NULL};
-use crate::interpreter::vm_op::VmOp;
-use crate::interpreter::lpc_value::LpcValue;
-use lpc_rs_errors::LpcError;
-use crate::interpreter::function_type::function_address::FunctionAddress;
-use crate::interpreter::process::Process;
-use lpc_rs_function_support::program_function::ProgramFunction;
+    try_extract_value,
+    util::{get_simul_efuns, keyable::Keyable, qcell_debug},
+};
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -58,7 +69,7 @@ pub struct Vm {
     tx: Sender<VmOp>,
 
     /// The channel used to receive [`VmOp`]s from other locations
-    rx: Receiver<VmOp>
+    rx: Receiver<VmOp>,
 }
 
 impl Vm {
@@ -77,7 +88,7 @@ impl Vm {
             upvalues: Rc::new(cell_key.cell(GcBank::default())),
             call_outs: Rc::new(call_outs),
             rx,
-            tx
+            tx,
         }
     }
 
@@ -90,7 +101,6 @@ impl Vm {
     ///
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system. Don't lose this key.
-    ///
     pub fn boot(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
         self.bootstrap(cell_key)?;
 

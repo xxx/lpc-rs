@@ -1,6 +1,4 @@
-use std::{path::PathBuf, rc::Rc};
-
-use std::sync::mpsc::Sender;
+use std::{path::PathBuf, rc::Rc, sync::mpsc::Sender};
 
 use delegate::delegate;
 use educe::Educe;
@@ -11,13 +9,12 @@ use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{
-        gc::gc_bank::GcRefBank, instruction_counter::InstructionCounter, lpc_ref::LpcRef,
-        object_space::ObjectSpace, process::Process, program::Program,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, instruction_counter::InstructionCounter,
+        lpc_ref::LpcRef, object_space::ObjectSpace, process::Process, program::Program,
+        vm_op::VmOp,
     },
     util::{get_simul_efuns, qcell_debug},
 };
-use crate::interpreter::call_outs::CallOuts;
-use crate::interpreter::vm_op::VmOp;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -245,6 +242,7 @@ impl TaskContext {
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
+
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
 
@@ -274,7 +272,7 @@ mod tests {
             upvalues,
             call_outs.into(),
             tx,
-            &cell_key
+            &cell_key,
         );
 
         assert_eq!(context.in_game_cwd(&cell_key).to_str().unwrap(), "/foo/bar");

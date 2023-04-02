@@ -1,12 +1,13 @@
 use std::sync::mpsc::Sender;
+
 use chrono::Duration;
 use delegate::delegate;
 use educe::Educe;
+use lpc_rs_errors::Result;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
-use crate::interpreter::vm_op::VmOp;
-use lpc_rs_errors::Result;
-use crate::interpreter::lpc_ref::LpcRef;
+
+use crate::interpreter::{lpc_ref::LpcRef, vm_op::VmOp};
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
 #[derive(Educe)]
@@ -19,7 +20,7 @@ pub struct CallOut {
     /// The RAII object that determines if the callback runs, or not.
     /// If the [`Guard`](Guard) is dropped, the callback will not run.
     #[educe(Debug(ignore))]
-    _guard: Guard
+    _guard: Guard,
 }
 
 /// The handlers for scheduled [`Task`](crate::interpreter::task::Task)s
@@ -68,14 +69,14 @@ impl CallOuts {
     pub fn schedule_task(&mut self, func_ref: LpcRef, delay: Duration) -> Result<usize> {
         let index = self.queue.next_push_index();
         let tx = self.tx.clone();
-        let guard = self.timer.schedule_with_delay(delay, move || {
-            match tx.send(VmOp::RunCallOut(index)) {
-                Ok(_) => {},
-                Err(e) => {
-                    panic!("Failed to send task to VM: {}", e);
-                }
-            }
-        });
+        let guard =
+            self.timer
+                .schedule_with_delay(delay, move || match tx.send(VmOp::RunCallOut(index)) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        panic!("Failed to send task to VM: {}", e);
+                    }
+                });
 
         self.queue.push(CallOut {
             func_ref,

@@ -1,20 +1,17 @@
-use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc};
-use std::sync::mpsc;
+use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc, sync::mpsc};
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
+use mpsc::Sender;
 use qcell::{QCell, QCellOwner};
 
 use crate::interpreter::{
-    call_frame::CallFrame, call_stack::CallStack, gc::gc_bank::GcRefBank, lpc_ref::LpcRef,
-    lpc_value::LpcValue, memory::Memory, process::Process, program::Program, task::get_location,
-    task_context::TaskContext,
+    call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
+    lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory, process::Process, program::Program,
+    task::get_location, task_context::TaskContext, vm_op::VmOp,
 };
-use mpsc::Sender;
-use crate::interpreter::vm_op::VmOp;
-use crate::interpreter::call_outs::CallOuts;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called

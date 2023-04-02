@@ -2,8 +2,8 @@ use std::{
     cmp::Ordering,
     fmt::Display,
     hash::{Hash, Hasher},
+    sync::Arc,
 };
-use std::sync::Arc;
 
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 

@@ -3,8 +3,8 @@ use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
     rc::Rc,
+    sync::Arc,
 };
-use std::sync::Arc;
 
 use derive_builder::Builder;
 use lpc_rs_asm::{

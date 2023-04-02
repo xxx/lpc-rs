@@ -75,7 +75,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             ])
             .flags(FunctionFlags::default().with_ellipsis(false))
             .build()
-            .expect("failed to build call_out")
+            .expect("failed to build call_out"),
     );
     m.insert(
         CALL_OTHER,

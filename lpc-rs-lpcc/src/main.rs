@@ -4,13 +4,15 @@ use clap::Parser;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
-    interpreter::{gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, task::Task},
+    interpreter::{
+        call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+        task::Task,
+    },
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 use qcell::QCellOwner;
 use ustr::ustr;
-use lpc_rs::interpreter::call_outs::CallOuts;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -59,16 +61,14 @@ fn main() {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory, upvalues);
-            if let Err(e) =
-                task.initialize_program(
-                    program,
-                    config,
-                    cell_key.cell(object_space),
-                    call_outs,
-                    tx,
-                    &mut cell_key
-                )
-            {
+            if let Err(e) = task.initialize_program(
+                program,
+                config,
+                cell_key.cell(object_space),
+                call_outs,
+                tx,
+                &mut cell_key,
+            ) {
                 e.emit_diagnostics();
             }
         }

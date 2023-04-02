@@ -1,11 +1,13 @@
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
 use qcell::QCellOwner;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::try_extract_value;
-use lpc_rs_errors::LpcError;
-use crate::interpreter::function_type::function_address::FunctionAddress;
+use crate::{
+    interpreter::{
+        efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
+        lpc_ref::LpcRef, lpc_value::LpcValue,
+    },
+    try_extract_value,
+};
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub fn call_out<const N: usize>(
@@ -22,7 +24,9 @@ pub fn call_out<const N: usize>(
         let func = func.borrow();
         let func = try_extract_value!(&*func, LpcValue::Function);
         if let FunctionAddress::Dynamic(_) = func.address {
-            return Err(LpcError::new("cannot `call_out` to a function with a dynamic receiver"));
+            return Err(LpcError::new(
+                "cannot `call_out` to a function with a dynamic receiver",
+            ));
         }
     }
 
@@ -39,7 +43,7 @@ pub fn call_out<const N: usize>(
                 m.into_inner() as i64
             };
             chrono::Duration::milliseconds(millis)
-        },
+        }
         _ => return Err(context.runtime_error("invalid duration sent to `call_out`")),
     };
 
@@ -56,15 +60,17 @@ pub fn call_out<const N: usize>(
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::interpreter::vm_op::VmOp;
-    use crate::test_support::compile_prog;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task, vm_op::VmOp,
+        },
+        test_support::compile_prog,
+    };
 
     #[test]
     fn test_disallows_dynamic_receiver() {
@@ -93,7 +99,10 @@ mod tests {
             &mut cell_key,
         );
 
-        assert_eq!(result.unwrap_err().to_string(), "cannot `call_out` to a function with a dynamic receiver");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "cannot `call_out` to a function with a dynamic receiver"
+        );
     }
 
     #[test]

@@ -125,12 +125,11 @@ mod tests {
     use crate::{
         assert_regex,
         interpreter::{
-            gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, program::Program,
-            task_context::TaskContext,
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            program::Program, task_context::TaskContext,
         },
         test_support::compile_prog,
     };
-    use crate::interpreter::call_outs::CallOuts;
 
     fn task_context_fixture(
         program: Program,

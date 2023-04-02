@@ -2,8 +2,8 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     rc::Rc,
+    sync::mpsc::Sender,
 };
-use std::sync::mpsc::Sender;
 
 use bit_set::BitSet;
 use decorum::Total;
@@ -32,6 +32,7 @@ use crate::{
     interpreter::{
         bank::RefBank,
         call_frame::CallFrame,
+        call_outs::CallOuts,
         call_stack::CallStack,
         efun::{efun_context::EfunContext, Efun, HasEfuns, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
@@ -44,12 +45,11 @@ use crate::{
         process::Process,
         program::Program,
         task_context::TaskContext,
+        vm_op::VmOp,
     },
     try_extract_value,
     util::{keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::call_outs::CallOuts;
-use crate::interpreter::vm_op::VmOp;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Rc<QCell<Process>>, Rc<ProgramFunction>);
@@ -323,8 +323,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         f: Rc<ProgramFunction>,
         args: &[LpcRef],
         task_context: TaskContext,
-        cell_key: &mut QCellOwner) -> Result<TaskContext>
-    {
+        cell_key: &mut QCellOwner,
+    ) -> Result<TaskContext> {
         let mut frame = CallFrame::new(
             process,
             f.clone(),
@@ -1171,7 +1171,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 
     /// An extracted helper to handle pulling the [`Process`] and [`ProgramFunction`] out of a [`FunctionPtr`].
-    pub fn extract_process_and_function(&mut self, ptr: &FunctionPtr, task_context: &TaskContext, cell_key: &QCellOwner) -> Result<Option<ProcessFunctionPair>> {
+    pub fn extract_process_and_function(
+        &mut self,
+        ptr: &FunctionPtr,
+        task_context: &TaskContext,
+        cell_key: &QCellOwner,
+    ) -> Result<Option<ProcessFunctionPair>> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
@@ -2457,6 +2462,7 @@ mod tests {
 
         mod test_call_fp {
             use std::sync::mpsc;
+
             use claim::assert_ok;
 
             use super::*;
@@ -2717,7 +2723,14 @@ mod tests {
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
-                let result = task.initialize_program(program, config, space_cell, call_outs.clone(), tx.clone(), &mut cell_key);
+                let result = task.initialize_program(
+                    program,
+                    config,
+                    space_cell,
+                    call_outs.clone(),
+                    tx.clone(),
+                    &mut cell_key,
+                );
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2739,7 +2752,14 @@ mod tests {
                 let object_space = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&object_space, process, &mut cell_key);
 
-                let result = task.initialize_program(program, config, object_space, call_outs.clone(), tx.clone(), &mut cell_key);
+                let result = task.initialize_program(
+                    program,
+                    config,
+                    object_space,
+                    call_outs.clone(),
+                    tx.clone(),
+                    &mut cell_key,
+                );
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2761,7 +2781,14 @@ mod tests {
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
-                let result = task.initialize_program(program, config, space_cell, call_outs, tx, &mut cell_key);
+                let result = task.initialize_program(
+                    program,
+                    config,
+                    space_cell,
+                    call_outs,
+                    tx,
+                    &mut cell_key,
+                );
 
                 assert_ok!(result);
             }
@@ -4293,7 +4320,14 @@ mod tests {
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let _ctx = task
-                    .initialize_program(program, config, cell_key.cell(object_space), call_outs, tx, &mut cell_key)
+                    .initialize_program(
+                        program,
+                        config,
+                        cell_key.cell(object_space),
+                        call_outs,
+                        tx,
+                        &mut cell_key,
+                    )
                     .expect("failed to initialize");
 
                 let registers = &task.stack.last().unwrap().registers;
