@@ -16,6 +16,7 @@ pub fn throw<const N: usize>(
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use lpc_rs_utils::config::Config;
 
     use super::*;
@@ -23,6 +24,7 @@ mod tests {
         interpreter::{gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace, task::Task},
         test_support::compile_prog,
     };
+    use crate::interpreter::call_outs::CallOuts;
 
     #[test]
     fn test_throw() {
@@ -34,12 +36,15 @@ mod tests {
             }
         "##;
 
+        let (tx, _) = std::sync::mpsc::channel();
         let (program, _, _) = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
         let result = task.initialize_program(
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
+            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            tx,
             &mut cell_key,
         );
 

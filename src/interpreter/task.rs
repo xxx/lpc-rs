@@ -301,78 +301,12 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         let process = task_context.process();
 
         self.eval_function(process, function, args, task_context, cell_key)
-        // let mut frame = CallFrame::new(
-        //     process,
-        //     function,
-        //     args.len(),
-        //     None,
-        //     task_context.upvalues().clone(),
-        //     cell_key,
-        // );
-        // if !args.is_empty() {
-        //     frame.registers[1..=args.len()].clone_from_slice(args);
-        // }
-        //
-        // self.stack.push(frame)?;
-        //
-        // let mut halted = false;
-        //
-        // while !halted {
-        //     halted = match self.eval_one_instruction(&task_context, cell_key) {
-        //         Ok(x) => x,
-        //         Err(e) => {
-        //             if !self.catch_points.is_empty() {
-        //                 self.catch_error(e, cell_key)?;
-        //                 false
-        //             } else {
-        //                 let stack_trace = self.stack.stack_trace();
-        //                 return Err(e.with_stack_trace(stack_trace));
-        //             }
-        //         }
-        //     };
-        //
-        //     // gc stress testing
-        //     // let mut marked = BitSet::with_capacity(64);
-        //     // let mut processed = HashSet::new();
-        //     // for frame in self.stack.iter() {
-        //     //     frame.mark(&mut marked, &mut processed, cell_key)?;
-        //     // }
-        //     //
-        //     // self.vm_upvalues.rw(cell_key).keyless_sweep(&marked)?;
-        // }
-        //
-        // Ok(task_context)
     }
 
-    /// Evaluate `f` to completion, or an error
+    /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
     ///
     /// # Arguments
-    /// `f` - the function to call
-    /// `args` - the slice of arguments to pass to the function
-    /// `task_context` the [`TaskContext`] that will be used for this evaluation
-    ///
-    /// # Returns
-    ///
-    /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
-    #[instrument(skip_all)]
-    pub fn eval_ptr(
-        &mut self,
-        f: &FunctionPtr,
-        args: &[LpcRef],
-        task_context: TaskContext,
-        cell_key: &mut QCellOwner,
-    ) -> Result<TaskContext> {
-        let Some((process, function)) = self.extract_process_and_function(f, &task_context, cell_key)? else {
-            return Err(self.runtime_error("function pointer not found for eval_ptr"));
-        };
-
-        self.eval_function(process, function, args, task_context, cell_key)
-    }
-
-    /// Evaluate `f` to completion, or an error, in the contextof an arbitrary process
-    ///
-    /// # Arguments
-    /// `process`: the process that owns the function to call
+    /// `process`: the process that owns the function to call.
     /// `f` - the function to call
     /// `args` - the slice of arguments to pass to the function
     /// `task_context` the [`TaskContext`] that will be used for this evaluation
@@ -390,7 +324,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     {
         let mut frame = CallFrame::new(
             process,
-            f,
+            f.clone(),
             args.len(),
             None,
             task_context.upvalues().clone(),
@@ -402,29 +336,42 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
 
         self.stack.push(frame)?;
 
-        let mut halted = false;
+        if f.prototype.is_efun() {
+            let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(f.name()).unwrap();
+            self.prepare_and_call_efun(efun, &task_context, cell_key)?;
+        } else {
+            let mut halted = false;
 
-        while !halted {
-            halted = match self.eval_one_instruction(&task_context, cell_key) {
-                Ok(x) => x,
-                Err(e) => {
-                    if !self.catch_points.is_empty() {
-                        self.catch_error(e, cell_key)?;
-                        false
-                    } else {
-                        let stack_trace = self.stack.stack_trace();
-                        return Err(e.with_stack_trace(stack_trace));
+            while !halted {
+                halted = match self.eval_one_instruction(&task_context, cell_key) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        if !self.catch_points.is_empty() {
+                            self.catch_error(e, cell_key)?;
+                            false
+                        } else {
+                            let stack_trace = self.stack.stack_trace();
+                            return Err(e.with_stack_trace(stack_trace));
+                        }
                     }
-                }
-            };
+                };
+            }
         }
 
         Ok(task_context)
     }
 
-    /// Evaluate the instruction at the current value of the PC
-    /// The boolean represents whether we are at the end of input (i.e. we
-    /// should halt the machine)
+    /// Evaluate the instruction at the current value of the program counter.
+    /// This is the main interpretation function for the VM.
+    ///
+    /// # Arguments
+    ///
+    /// `task_context` - the [`TaskContext`] that will be used for this evaluation.
+    /// `cell_key` - the [`QCellOwner`] that will be used for this evaluation.
+    ///
+    /// # Returns
+    ///
+    /// A [`Result`], with a boolean indicating whether we are at the end of input
     #[instrument(skip_all)]
     #[inline]
     fn eval_one_instruction(
@@ -1220,7 +1167,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Ok(())
     }
 
-    fn extract_process_and_function(&mut self, ptr: &FunctionPtr, task_context: &TaskContext, cell_key: &QCellOwner) -> Result<Option<(Rc<QCell<Process>>, Rc<ProgramFunction>)>> {
+    pub fn extract_process_and_function(&mut self, ptr: &FunctionPtr, task_context: &TaskContext, cell_key: &QCellOwner) -> Result<Option<(Rc<QCell<Process>>, Rc<ProgramFunction>)>> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
@@ -1250,6 +1197,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             FunctionAddress::Efun(name) => {
                 // unwrap is safe because this should have been checked in an earlier step
                 let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
+                // TODO: prototypes should be in Rcs so this clone is cheap
                 let pf = ProgramFunction::new(prototype.clone(), 0);
 
                 let frame = self.stack.current_frame()?;

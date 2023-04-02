@@ -27,6 +27,8 @@ use crate::{
 #[educe(Debug)]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
+    /// *note* This is *not* necessarily the object that the function is
+    ///        defined within.
     #[educe(Debug(method = "qcell_process_debug"))]
     pub owner: Weak<QCell<Process>>,
 

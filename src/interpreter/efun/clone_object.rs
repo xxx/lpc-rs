@@ -130,6 +130,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::call_outs::CallOuts;
 
     fn task_context_fixture(
         program: Program,
@@ -144,6 +145,7 @@ mod tests {
             cell_key.cell(process),
             cell_key.cell(ObjectSpace::default()),
             cell_key.cell(GcBank::default()),
+            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx,
             cell_key,
         )

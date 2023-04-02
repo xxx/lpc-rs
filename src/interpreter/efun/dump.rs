@@ -157,6 +157,7 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOw
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use lpc_rs_utils::config::Config;
     use qcell::QCellOwner;
 
@@ -167,6 +168,7 @@ mod tests {
             task::Task,
         },
     };
+    use crate::interpreter::call_outs::CallOuts;
 
     fn compile_prog(code: &str, cell_key: &mut QCellOwner) -> Program {
         let compiler = Compiler::default();
@@ -187,12 +189,15 @@ mod tests {
             }
         "##;
 
+        let (tx, _) = std::sync::mpsc::channel();
         let program = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
         let result = task.initialize_program(
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
+            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            tx.clone(),
             &mut cell_key,
         );
 
@@ -216,6 +221,8 @@ mod tests {
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
+            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            tx,
             &mut cell_key,
         );
 

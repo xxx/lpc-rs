@@ -111,7 +111,10 @@ impl CallFrame {
         P: Into<Rc<QCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
-        let reg_len = function.arity().num_args + function.num_locals + 1;
+        let reg_len = std::cmp::max(
+            function.arity().num_args,
+            called_with_num_args
+        ) + function.num_locals + 1;
         let process = process.into();
         let ups = upvalue_ptrs.cloned().unwrap_or_default();
 

@@ -8,9 +8,18 @@ use crate::interpreter::vm_op::VmOp;
 use lpc_rs_errors::Result;
 use crate::interpreter::lpc_ref::LpcRef;
 
+/// A single call out to a function, to be run at a later time, potentially on an interval.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct CallOut {
+    /// The reference to the function that will be run.
+    // TODO: need to GC this
     pub func_ref: LpcRef,
-    guard: Guard
+
+    /// The RAII object that determines if the callback runs, or not.
+    /// If the [`Guard`](Guard) is dropped, the callback will not run.
+    #[educe(Debug(ignore))]
+    _guard: Guard
 }
 
 /// The handlers for scheduled [`Task`](crate::interpreter::task::Task)s
@@ -18,7 +27,6 @@ pub struct CallOut {
 #[educe(Debug)]
 pub struct CallOuts {
     /// The collection of call out data
-    #[educe(Debug(ignore))]
     queue: StableVec<CallOut>,
 
     /// A channel to talk to the [`Vm`](crate::interpreter::vm::Vm)
@@ -61,7 +69,6 @@ impl CallOuts {
         let index = self.queue.next_push_index();
         let tx = self.tx.clone();
         let guard = self.timer.schedule_with_delay(delay, move || {
-            println!("in callback");
             match tx.send(VmOp::RunCallOut(index)) {
                 Ok(_) => {},
                 Err(e) => {
@@ -72,7 +79,7 @@ impl CallOuts {
 
         self.queue.push(CallOut {
             func_ref,
-            guard,
+            _guard: guard,
         });
 
         Ok(index)

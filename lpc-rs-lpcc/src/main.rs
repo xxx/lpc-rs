@@ -10,6 +10,7 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 use qcell::QCellOwner;
 use ustr::ustr;
+use lpc_rs::interpreter::call_outs::CallOuts;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -48,6 +49,8 @@ fn main() {
     let lpc_path = LpcPath::new_server(&args.filename);
 
     let mut cell_key = QCellOwner::new();
+    let (tx, _rx) = std::sync::mpsc::channel();
+    let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
     let upvalues = cell_key.cell(GcBank::default());
 
@@ -57,7 +60,14 @@ fn main() {
             let object_space = ObjectSpace::default();
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory, upvalues);
             if let Err(e) =
-                task.initialize_program(program, config, cell_key.cell(object_space), &mut cell_key)
+                task.initialize_program(
+                    program,
+                    config,
+                    cell_key.cell(object_space),
+                    call_outs,
+                    tx,
+                    &mut cell_key
+                )
             {
                 e.emit_diagnostics();
             }

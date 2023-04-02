@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
@@ -9,6 +10,7 @@ use lpc_rs::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use qcell::QCellOwner;
+use lpc_rs::interpreter::call_outs::CallOuts;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -58,6 +60,8 @@ where
     P: Into<LpcPath>,
 {
     let upvalues = cell_key.cell(GcBank::default());
+    let (tx, _) = std::sync::mpsc::channel();
+    let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let mut task = Task::new(Memory::default(), upvalues);
     let program = compile_prog_custom(code, path, config, cell_key);
     let ctx = task
@@ -65,6 +69,8 @@ where
             program,
             test_config(),
             cell_key.cell(ObjectSpace::default()),
+            call_outs,
+            tx,
             cell_key,
         )
         .unwrap_or_else(|e| {
