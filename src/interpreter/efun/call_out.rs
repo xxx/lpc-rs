@@ -1,3 +1,5 @@
+use chrono::Duration;
+use lpc_rs_core::LpcFloat;
 use lpc_rs_errors::{LpcError, Result};
 use qcell::QCellOwner;
 
@@ -32,29 +34,54 @@ pub fn call_out<const N: usize>(
 
     let duration_ref = context.resolve_local_register(2_usize);
     let duration = match duration_ref {
-        LpcRef::Int(x) => chrono::Duration::seconds(x),
-        LpcRef::Float(x) => {
-            let m = x * 1000.0;
-            let millis = if m > i64::MAX as f64 {
-                i64::MAX
-            } else if m < i64::MIN as f64 {
-                i64::MIN
-            } else {
-                m.into_inner() as i64
-            };
-            chrono::Duration::milliseconds(millis)
-        }
+        LpcRef::Int(x) => Duration::seconds(x),
+        LpcRef::Float(x) => to_millis(x),
         _ => return Err(context.runtime_error("invalid duration sent to `call_out`")),
     };
 
+    let repeat_ref = context.try_resolve_local_register(3_usize);
+    let repeat = if let Some(repeat_ref) = repeat_ref {
+        match repeat_ref {
+            LpcRef::Int(x) => {
+                if x <= 0 {
+                    None
+                } else {
+                    Some(Duration::seconds(x))
+                }
+            }
+            LpcRef::Float(x) => {
+                if x <= 0.0 {
+                    None
+                } else {
+                    Some(to_millis(x))
+                }
+            }
+            _ => return Err(context.runtime_error("invalid repeat sent to `call_out`")),
+        }
+    } else {
+        None
+    };
+
     let call_outs = context.call_outs().rw(cell_key);
-    let index = call_outs.schedule_task(func_ref, duration)?;
+    let index = call_outs.schedule_task(func_ref, duration, repeat)?;
 
     // TODO: limit the max number of call outs so we don't overflow this
     let result = LpcRef::Int(index as i64);
     context.return_efun_result(result);
 
     Ok(())
+}
+
+fn to_millis(x: LpcFloat) -> Duration {
+    let m = x * 1000.0;
+    let millis = if m > i64::MAX as f64 {
+        i64::MAX
+    } else if m < i64::MIN as f64 {
+        i64::MIN
+    } else {
+        m.into_inner() as i64
+    };
+    chrono::Duration::milliseconds(millis)
 }
 
 #[cfg(test)]

@@ -160,10 +160,12 @@ impl Vm {
 
     /// Handler for [`VmOp::RunCallOut`]
     fn op_run_call_out(&mut self, idx: usize, cell_key: &mut QCellOwner) -> Result<TaskContext> {
+        let mut repeating = false;
         let (process, function, args) = if_chain! {
-            if let Some(CallOut { func_ref, .. }) = self.call_outs.ro(cell_key).get(idx);
-            if let LpcRef::Function(func) = func_ref;
+            if let Some(call_out) = self.call_outs.ro(cell_key).get(idx);
+            if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
+                repeating = call_out.repeating;
                 let b = func.borrow();
                 let ptr = try_extract_value!(&*b, LpcValue::Function);
 
@@ -223,10 +225,11 @@ impl Vm {
         );
 
         let result = task.eval(function, &args, task_context, cell_key);
-        println!("call out result: {:?}", result);
-        // if !repeating {
-        let _ = self.call_outs.rw(cell_key).remove(idx);
-        // }
+        trace!(?result, "call out finished");
+
+        if !repeating {
+            let _ = self.call_outs.rw(cell_key).remove(idx);
+        }
 
         result
     }

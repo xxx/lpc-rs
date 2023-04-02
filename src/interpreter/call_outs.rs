@@ -6,6 +6,7 @@ use educe::Educe;
 use lpc_rs_errors::Result;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
+use tracing::warn;
 
 use crate::interpreter::{lpc_ref::LpcRef, vm_op::VmOp};
 
@@ -16,6 +17,9 @@ pub struct CallOut {
     /// The reference to the function that will be run.
     // TODO: need to GC this
     pub func_ref: LpcRef,
+
+    /// Is this a repeating function?
+    pub repeating: bool,
 
     /// The RAII object that determines if the callback runs, or not.
     /// If the [`Guard`](Guard) is dropped, the callback will not run.
@@ -66,20 +70,27 @@ impl CallOuts {
     }
 
     /// Schedule a [`Task`](crate::interpreter::task::Task) to be run after a given delay
-    pub fn schedule_task(&mut self, func_ref: LpcRef, delay: Duration) -> Result<usize> {
+    pub fn schedule_task(
+        &mut self,
+        func_ref: LpcRef,
+        delay: Duration,
+        repeat: Option<Duration>,
+    ) -> Result<usize> {
         let index = self.queue.next_push_index();
         let tx = self.tx.clone();
-        let guard =
-            self.timer
-                .schedule_with_delay(delay, move || match tx.send(VmOp::RunCallOut(index)) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        panic!("Failed to send task to VM: {}", e);
-                    }
-                });
+        let date = chrono::Utc::now() + delay;
+        let guard = self.timer.schedule(date, repeat, move || {
+            match tx.send(VmOp::RunCallOut(index)) {
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Failed to send task to VM: {}", e);
+                }
+            }
+        });
 
         self.queue.push(CallOut {
             func_ref,
+            repeating: repeat.is_some(),
             _guard: guard,
         });
 

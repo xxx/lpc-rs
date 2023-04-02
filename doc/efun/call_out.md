@@ -18,8 +18,9 @@ accurate to millisecond precision.
 ### Examples
 
 ```c
-object ob = clone_object("/lib/test/test_object");
 int call_out_id = call_out(&dump("i'm on a delay!", 5));
+
+object ob = clone_object("/lib/test/test_object");
 
 // Any function pointer can be passed to call_out, including closures.
 int call_out_id1 = call_out(&ob->add_two(4, 6), 1.5));
@@ -29,3 +30,11 @@ int call_out_id2 = call_out((: ob->add_two(4, 6) :), 1.5));
 // Composed functions work as well.
 int call_out_combo_id = call_out(dump @ (: ob->add_two(4, 6) :), 2.45));
 ```
+
+Note that function pointers will evaluate their arguments immediately, while functions
+called within closures will not. Make sure that values of things like this_player()
+are what you expect!
+
+### See Also
+
+`remove_call_out`, `get_call_out`, `get_call_outs`
