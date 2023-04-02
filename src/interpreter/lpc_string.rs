@@ -2,7 +2,6 @@ use std::{
     cmp::Ordering,
     fmt::Display,
     hash::{Hash, Hasher},
-    rc::Rc,
 };
 use std::sync::Arc;
 

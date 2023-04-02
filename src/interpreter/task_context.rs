@@ -1,5 +1,5 @@
 use std::{path::PathBuf, rc::Rc};
-use std::sync::mpsc;
+
 use std::sync::mpsc::Sender;
 
 use delegate::delegate;

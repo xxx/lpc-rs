@@ -170,13 +170,13 @@ impl Vm {
                     FunctionAddress::Local(ref proc, ref function) => (proc.clone(), function.clone(), args),
                     FunctionAddress::Dynamic(_) => {
                         return Err(LpcError::new(
-                            format!("function with dynamic receiver passed to call_out"),
+                            "function with dynamic receiver passed to call_out".to_string(),
                         ));
                     },
                     FunctionAddress::SimulEfun(name) => {
-                        let Some(simul_efuns) = get_simul_efuns(&*self.config, &self.object_space.ro(cell_key)) else {
+                        let Some(simul_efuns) = get_simul_efuns(&self.config, self.object_space.ro(cell_key)) else {
                             return Err(LpcError::new_bug(
-                                format!("function pointer to simul_efun passed, but no simul_efuns?"),
+                                "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
                             ));
                         };
 

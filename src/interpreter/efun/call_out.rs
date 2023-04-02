@@ -88,7 +88,7 @@ mod tests {
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
-            call_outs.clone(),
+            call_outs,
             tx,
             &mut cell_key,
         );
@@ -118,7 +118,7 @@ mod tests {
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
-            call_outs.clone(),
+            call_outs,
             tx,
             &mut cell_key,
         );

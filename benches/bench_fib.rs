@@ -7,6 +7,7 @@ use lpc_rs::{
 };
 use lpc_rs_utils::config::Config;
 use qcell::QCellOwner;
+use lpc_rs::interpreter::call_outs::CallOuts;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut cell_key = QCellOwner::new();
@@ -32,7 +33,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let program = Rc::new(program);
     let memory = Memory::default();
     let upvalues = GcRefBank::default();
+    let (tx, _) = std::sync::mpsc::channel();
+    let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let task = Task::<64>::new(memory, cell_key.cell(upvalues));
+
+    let tx2 = tx.clone();
 
     c.bench_function("fib 20", |b| {
         b.iter(|| {
@@ -41,6 +46,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 program.clone(),
                 black_box(Config::default()),
                 cell_key.cell(ObjectSpace::default()),
+                call_outs,
+                tx2,
                 &mut cell_key,
             );
         })

@@ -51,6 +51,9 @@ use crate::{
 use crate::interpreter::call_outs::CallOuts;
 use crate::interpreter::vm_op::VmOp;
 
+// this is just to shut clippy up
+type ProcessFunctionPair = (Rc<QCell<Process>>, Rc<ProgramFunction>);
+
 macro_rules! pop_frame {
     ($task:expr, $context:expr) => {{
         let opt = $task.pop_frame();
@@ -319,7 +322,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         process: Rc<QCell<Process>>,
         f: Rc<ProgramFunction>,
         args: &[LpcRef],
-        mut task_context: TaskContext,
+        task_context: TaskContext,
         cell_key: &mut QCellOwner) -> Result<TaskContext>
     {
         let mut frame = CallFrame::new(
@@ -1050,7 +1053,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
             }
         }
 
-        let Some((proc, function)) = self.extract_process_and_function(&ptr, task_context, cell_key)? else {
+        let Some((proc, function)) = self.extract_process_and_function(ptr, task_context, cell_key)? else {
             return Ok(())
         };
 
@@ -1167,7 +1170,8 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         Ok(())
     }
 
-    pub fn extract_process_and_function(&mut self, ptr: &FunctionPtr, task_context: &TaskContext, cell_key: &QCellOwner) -> Result<Option<(Rc<QCell<Process>>, Rc<ProgramFunction>)>> {
+    /// An extracted helper to handle pulling the [`Process`] and [`ProgramFunction`] out of a [`FunctionPtr`].
+    pub fn extract_process_and_function(&mut self, ptr: &FunctionPtr, task_context: &TaskContext, cell_key: &QCellOwner) -> Result<Option<ProcessFunctionPair>> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
