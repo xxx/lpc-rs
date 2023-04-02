@@ -85,17 +85,13 @@ pub struct FunctionPrototype {
     /// The flags that are set when the function was declared
     #[builder(default)]
     pub flags: FunctionFlags,
-
-    /// Is this function an efun?
-    #[builder(default)]
-    pub is_efun: bool,
 }
 
 impl FunctionPrototype {
     /// Is this the prototype for an efun?
     #[inline]
     pub fn is_efun(&self) -> bool {
-        self.is_efun
+        self.kind == FunctionKind::Efun
     }
 }
 

@@ -343,6 +343,13 @@ impl CallFrame {
             .with_span(self.current_debug_span())
     }
 
+    /// a convenience method to generate a runtime bug
+    #[inline]
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        LpcError::new_bug(format!("runtime bug: {}", msg.as_ref()))
+            .with_span(self.current_debug_span())
+    }
+
     /// get a string representation of the frame's current current location
     #[inline]
     pub fn to_stack_trace_format(&self) -> String {

@@ -5,6 +5,7 @@ pub(crate) mod clone_object;
 pub(crate) mod debug;
 pub(crate) mod dump;
 pub(crate) mod file_name;
+pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
 
@@ -34,6 +35,7 @@ pub const CLONE_OBJECT: &str = "clone_object";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
+pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THROW: &str = "throw";
@@ -46,6 +48,7 @@ pub trait HasEfuns<const STACKSIZE: usize> {
         "debug" => debug::debug as Efun<STACKSIZE>,
         "dump" => dump::dump as Efun<STACKSIZE>,
         "file_name" => file_name::file_name as Efun<STACKSIZE>,
+        "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
         "this_object" => this_object::this_object as Efun<STACKSIZE>,
         "throw" => throw::throw as Efun<STACKSIZE>,
     };
@@ -61,7 +64,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CALL_OUT)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Int(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 2,
@@ -83,7 +85,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CALL_OTHER)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 2,
@@ -113,7 +114,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CATCH)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Mixed(false) | LpcType::Void])
@@ -127,7 +127,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(CLONE_OBJECT)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Object(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::String(false)])
@@ -141,7 +140,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(DEBUG)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 2,
@@ -160,7 +158,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(DUMP)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Void)
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity {
                 num_args: 1,
@@ -180,12 +177,24 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(FILE_NAME)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::String(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Object(false)])
             .build()
             .expect("failed to build file_name"),
+    );
+
+    m.insert(
+        REMOVE_CALL_OUT,
+        FunctionPrototypeBuilder::default()
+            .name(REMOVE_CALL_OUT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Int(false)])
+            .build()
+            .expect("failed to build remove_call_out"),
     );
 
     // sizeof is handled with its own instruction, but is typechecked as normal
@@ -195,7 +204,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(SIZEOF)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Int(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Mixed(true) | LpcType::Mapping(false)])
@@ -209,7 +217,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(THIS_OBJECT)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Object(false))
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .build()
             .expect("failed to build this_object"),
@@ -221,7 +228,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .name(THROW)
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Void)
-            .is_efun(true)
             .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(1))
             .arg_types(vec![LpcType::Mixed(false)])

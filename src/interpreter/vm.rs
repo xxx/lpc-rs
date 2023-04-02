@@ -21,7 +21,7 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::{Compiler, CompilerBuilder},
     interpreter::{
-        call_outs::{CallOut, CallOuts},
+        call_outs::{CallOuts},
         efun::EFUN_PROTOTYPES,
         function_type::function_address::FunctionAddress,
         gc::{
@@ -158,19 +158,36 @@ impl Vm {
         // Ok(())
     }
 
-    /// Handler for [`VmOp::RunCallOut`]
-    fn op_run_call_out(&mut self, idx: usize, cell_key: &mut QCellOwner) -> Result<TaskContext> {
-        let mut repeating = false;
+    /// Handler for [`VmOp::RunCallOut`].
+    ///
+    /// # Arguments
+    ///
+    /// * `idx` - The index of the call out to run
+    /// * `cell_key` - The [`QCellOwner`] that will be used to access [`QCell`]s
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(TaskContext)))` - If the call out was run successfully
+    /// * `Ok(None)` - If the call out was not found (e.g. has been removed)
+    /// * `Err(LpcError)` - If there was an error running the call out
+    fn op_run_call_out(&mut self, idx: usize, cell_key: &mut QCellOwner) -> Result<Option<TaskContext>> {
+        if self.call_outs.ro(cell_key).get(idx).is_none() {
+            return Ok(None);
+        }
+
+        let repeating: bool;
+
         let (process, function, args) = if_chain! {
-            if let Some(call_out) = self.call_outs.ro(cell_key).get(idx);
+            let call_out = self.call_outs.ro(cell_key).get(idx).unwrap();
             if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
-                repeating = call_out.repeating;
+                repeating = call_out.is_repeating();
                 let b = func.borrow();
                 let ptr = try_extract_value!(&*b, LpcValue::Function);
 
                 // call outs don't get any additional args passed to them, so just set up the partial args.
                 // use int 0 for any that were not applied at the time the pointer was created
+                // TODO: error instead of int 0?
                 let args = ptr.partial_args.iter().map(|arg| {
                     match arg {
                         Some(lpc_ref) => lpc_ref.clone(),
@@ -225,13 +242,16 @@ impl Vm {
         );
 
         let result = task.eval(function, &args, task_context, cell_key);
-        trace!(?result, "call out finished");
+        trace!(?result, "call out run finished");
 
-        if !repeating {
-            let _ = self.call_outs.rw(cell_key).remove(idx);
+        let call_outs = self.call_outs.rw(cell_key);
+        if repeating {
+            call_outs.get_mut(idx).unwrap().refresh();
+        } else {
+            call_outs.remove(idx);
         }
 
-        result
+        result.map(Some)
     }
 
     /// Initialize the simulated efuns file, if it is configured.

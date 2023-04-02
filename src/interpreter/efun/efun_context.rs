@@ -102,6 +102,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.frame().runtime_error(msg)
     }
 
+    #[inline]
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+        self.frame().runtime_bug(msg)
+    }
+
     /// Resolve a local register
     #[inline]
     pub fn resolve_local_register<I>(&self, register: I) -> LpcRef
