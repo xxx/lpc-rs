@@ -55,20 +55,20 @@ pub fn run_prog_custom<P>(
     path: P,
     config: Config,
     cell_key: &mut QCellOwner,
-) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext)
+) -> Task<MAX_CALL_STACK_SIZE>
 where
     P: Into<LpcPath>,
 {
     let upvalues = cell_key.cell(GcBank::default());
     let (tx, _) = std::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
-    let mut task = Task::new(Memory::default(), upvalues);
     let program = compile_prog_custom(code, path, config, cell_key);
-    let ctx = task
-        .initialize_program(
+    let task = Task::initialize_program(
             program,
             test_config(),
             cell_key.cell(ObjectSpace::default()),
+            Memory::default(),
+            upvalues,
             call_outs,
             tx,
             cell_key,
@@ -78,9 +78,9 @@ where
             panic!("failed to initialize");
         });
 
-    (task, ctx)
+    task
 }
 
-pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {
     run_prog_custom(code, "/my_file.c", test_config(), cell_key)
 }

@@ -191,11 +191,12 @@ mod tests {
 
         let (tx, _) = std::sync::mpsc::channel();
         let program = compile_prog(code, &mut cell_key);
-        let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
-        let result = task.initialize_program(
+        let result = Task::<10>::initialize_program(
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
+            Memory::default(),
+            cell_key.cell(GcBank::default()),
             Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx.clone(),
             &mut cell_key,
@@ -216,11 +217,12 @@ mod tests {
         "##;
 
         let program = compile_prog(code, &mut cell_key);
-        let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
-        let result = task.initialize_program(
+        let result = Task::<5>::initialize_program(
             program,
             Config::default(),
             cell_key.cell(ObjectSpace::default()),
+            Memory::default(),
+            cell_key.cell(GcBank::default()),
             Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx,
             &mut cell_key,

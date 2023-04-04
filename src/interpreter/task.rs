@@ -55,13 +55,13 @@ use crate::{
 type ProcessFunctionPair = (Rc<QCell<Process>>, Rc<ProgramFunction>);
 
 macro_rules! pop_frame {
-    ($task:expr, $context:expr) => {{
+    ($task:expr) => {{
         let opt = $task.pop_frame();
         if let Some(ref frame) = opt {
             $task.stack.copy_result(&frame)?;
 
             if $task.stack.is_empty() {
-                $context.set_result(frame.registers[0].clone())?;
+                $task.task_context.set_result(frame.registers[0].clone())?;
             }
         }
 
@@ -183,15 +183,12 @@ struct CatchPoint {
 /// function. It represents a single thread of execution
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-pub struct Task<const STACKSIZE: usize> {
+pub struct Task<const STACKSIZE: usize = MAX_CALL_STACK_SIZE> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
     /// Stack of [`CatchPoint`]s
     catch_points: Vec<CatchPoint>,
-
-    /// A pointer to a memory pool to allocate new values from
-    memory: Rc<Memory>,
 
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
     pub args: Vec<RegisterVariant>,
@@ -202,9 +199,8 @@ pub struct Task<const STACKSIZE: usize> {
     /// The vector used to collect members of a soon-to-be-created array
     array_items: Vec<RegisterVariant>,
 
-    /// The upvalues from the [`Vm`](crate::interpreter::vm::Vm)
-    #[educe(Debug(method = "qcell_debug"))]
-    vm_upvalues: Rc<QCell<GcRefBank>>,
+    /// The context of this task
+    pub task_context: TaskContext,
 
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
@@ -218,19 +214,14 @@ pub struct Task<const STACKSIZE: usize> {
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Create a new Task
     #[instrument(skip_all)]
-    pub fn new<T, U>(memory: T, vm_upvalues: U) -> Self
-    where
-        T: Into<Rc<Memory>> + Debug,
-        U: Into<Rc<QCell<GcRefBank>>>,
-    {
+    pub fn new(task_context: TaskContext) -> Self {
         Self {
-            memory: memory.into(),
             stack: CallStack::default(),
             catch_points: vec![],
             args: Vec::with_capacity(10),
             partial_args: Vec::with_capacity(10),
             array_items: Vec::with_capacity(10),
-            vm_upvalues: vm_upvalues.into(),
+            task_context,
 
             #[cfg(test)]
             popped_frame: None,
@@ -242,19 +233,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Convenience helper to get a Program initialized.
     #[instrument(skip_all)]
-    pub fn initialize_program<P, C, O>(
-        &mut self,
+    pub fn initialize_program<P, C, O, M, U, A>(
         program: P,
         config: C,
         object_space: O,
-        call_outs: Rc<QCell<CallOuts>>,
+        memory: M,
+        vm_upvalues: U,
+        call_outs: A,
         tx: Sender<VmOp>,
         cell_key: &mut QCellOwner,
-    ) -> Result<TaskContext>
+    ) -> Result<Task<STACKSIZE>>
     where
         P: Into<Rc<Program>>,
         C: Into<Rc<Config>> + Debug,
         O: Into<Rc<QCell<ObjectSpace>>>,
+        M: Into<Rc<Memory>>,
+        U: Into<Rc<QCell<GcRefBank>>>,
+        A: Into<Rc<QCell<CallOuts>>>,
     {
         let program = program.into();
         let init_function = {
@@ -269,14 +264,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             config,
             process.clone(),
             object_space,
-            self.vm_upvalues.clone(),
+            memory.into(),
+            vm_upvalues,
             call_outs,
             tx,
             cell_key,
         );
         context.insert_process(process, cell_key);
 
-        self.eval(init_function, &[], context, cell_key)
+        let mut task = Task::new( context);
+
+        task.eval(init_function, &[], cell_key)?;
+
+        Ok(task)
     }
 
     /// Evaluate `f` to completion, or an error
@@ -294,16 +294,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         f: F,
         args: &[LpcRef],
-        task_context: TaskContext,
         cell_key: &mut QCellOwner,
-    ) -> Result<TaskContext>
+    ) -> Result<()>
     where
         F: Into<Rc<ProgramFunction>>,
     {
         let function = f.into();
-        let process = task_context.process();
+        let process = self.task_context.process();
 
-        self.eval_function(process, function, args, task_context, cell_key)
+        self.eval_function(process, function, args, cell_key)
     }
 
     /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
@@ -322,15 +321,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         process: Rc<QCell<Process>>,
         f: Rc<ProgramFunction>,
         args: &[LpcRef],
-        task_context: TaskContext,
         cell_key: &mut QCellOwner,
-    ) -> Result<TaskContext> {
+    ) -> Result<()> {
         let mut frame = CallFrame::new(
             process,
             f.clone(),
             args.len(),
             None,
-            task_context.upvalues().clone(),
+            self.task_context.upvalues().clone(),
             cell_key,
         );
         if !args.is_empty() {
@@ -339,14 +337,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         self.stack.push(frame)?;
 
+        self.resume(cell_key)
+    }
+
+    pub fn resume(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+        let f = &self.stack.current_frame()?.function;
         if f.prototype.is_efun() {
             let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(f.name()).unwrap();
-            self.prepare_and_call_efun(efun, &task_context, cell_key)?;
+            self.prepare_and_call_efun(efun, cell_key)?;
         } else {
             let mut halted = false;
 
             while !halted {
-                halted = match self.eval_one_instruction(&task_context, cell_key) {
+                halted = match self.eval_one_instruction(cell_key) {
                     Ok(x) => x,
                     Err(e) => {
                         if !self.catch_points.is_empty() {
@@ -361,7 +364,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
-        Ok(task_context)
+        Ok(())
     }
 
     /// Evaluate the instruction at the current value of the program counter.
@@ -379,14 +382,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     fn eval_one_instruction(
         &mut self,
-        task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<bool> {
         if self.stack.is_empty() {
             return Ok(true);
         }
 
-        task_context.increment_instruction_count(1)?;
+        self.task_context.increment_instruction_count(1)?;
 
         let instruction = {
             let frame = match self.stack.current_frame() {
@@ -424,7 +426,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let lpc_ref = &*get_loc!(self, r1, cell_key)?;
                 match lpc_ref.bitnot(cell_key) {
                     Ok(result) => {
-                        let var = self.memory.value_to_ref(result);
+                        let var = self.task_context.memory().value_to_ref(result);
 
                         set_loc!(self, r2, var, cell_key)?;
                     }
@@ -434,7 +436,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Call(name) => {
-                self.handle_call(name, task_context, cell_key)?;
+                self.handle_call(name, cell_key)?;
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
@@ -454,20 +456,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_frame =
-                    self.prepare_new_call_frame(task_context, cell_key, process, pf.into())?;
+                    self.prepare_new_call_frame(cell_key, process, pf.into())?;
 
                 self.stack.push(new_frame)?;
 
-                self.prepare_and_call_efun(efun, task_context, cell_key)?;
+                self.prepare_and_call_efun(efun, cell_key)?;
             }
             Instruction::CallFp(location) => {
-                self.handle_call_fp(task_context, location, cell_key)?;
+                self.handle_call_fp(location, cell_key)?;
             }
             Instruction::CallOther(receiver, name) => {
-                self.handle_call_other(receiver, name, task_context, cell_key)?;
+                self.handle_call_other(receiver, name, cell_key)?;
             }
             Instruction::CallSimulEfun(name_idx) => {
-                self.handle_call_simul_efun(task_context, name_idx, cell_key)?;
+                self.handle_call_simul_efun(name_idx, cell_key)?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -511,7 +513,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 receiver,
                 name_index: name,
             } => {
-                self.handle_functionptrconst(task_context, location, receiver, name, cell_key)?;
+                self.handle_functionptrconst(location, receiver, name, cell_key)?;
             }
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x > y, cell_key)?;
@@ -522,7 +524,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::IAdd(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => {
-                        let out = self.memory.value_to_ref(result);
+                        let out = self.task_context.memory().value_to_ref(result);
 
                         set_loc!(self, r3, out, cell_key)?;
                     }
@@ -543,7 +545,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IDiv(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -552,7 +554,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IMod(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -561,7 +563,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IMul(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -573,7 +575,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::ISub(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.memory.value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -633,7 +635,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     );
                 }
 
-                let new_ref = self.memory.value_to_ref(LpcValue::from(register_map));
+                let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(register_map));
 
                 set_loc!(self, r, new_ref, cell_key)?;
             }
@@ -679,7 +681,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_ref = self.memory.value_to_ref(LpcValue::from(refs));
+                let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(refs));
 
                 set_location(&mut self.stack, r, new_ref, cell_key)?;
             }
@@ -812,10 +814,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_val = { get_new_value(&self.stack)? };
-                return_value(new_val, &self.memory, &mut self.stack, cell_key)?;
+                return_value(new_val, &self.task_context.memory(), &mut self.stack, cell_key)?;
             }
             Instruction::Ret => {
-                pop_frame!(self, task_context).map(|frame| {
+                pop_frame!(self).map(|frame| {
                     trace!("Returning from function: {}", frame.function.name());
                 });
 
@@ -851,7 +853,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let lpc_ref = self.memory.value_to_ref(value);
+                let lpc_ref = self.task_context.memory().value_to_ref(value);
 
                 set_loc!(self, r2, lpc_ref, cell_key)?;
             }
@@ -894,7 +896,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .iter()
             .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
-        let new_ref = self.memory.value_to_ref(LpcValue::from(vars));
+        let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(vars));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -903,7 +905,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn handle_call<'task>(
         &mut self,
         name_idx: usize,
-        task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let current_frame = self.stack.current_frame()?;
@@ -931,7 +932,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 if_chain! {
                     // See if there is a simul efun with this name
-                    if let Some(func) = task_context.simul_efuns();
+                    if let Some(func) = self.task_context.simul_efuns();
                     let b = func.ro(cell_key);
                     if let Some(func) = b.as_ref().lookup_function(name);
                     then {
@@ -944,7 +945,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let new_frame = self.prepare_new_call_frame(task_context, cell_key, process, func)?;
+        let new_frame = self.prepare_new_call_frame(cell_key, process, func)?;
 
         trace!("pushing new frame");
 
@@ -956,7 +957,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
     fn prepare_new_call_frame(
         &mut self,
-        task_context: &TaskContext,
         cell_key: &mut QCellOwner,
         process: Rc<QCell<Process>>,
         func: Rc<ProgramFunction>,
@@ -968,7 +968,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             num_args,
             num_args,
             None, // static functions do not inherit upvalues from the calling function
-            task_context.upvalues().clone(),
+            self.task_context.upvalues().clone(),
             cell_key,
         );
 
@@ -1008,7 +1008,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     fn handle_call_fp(
         &mut self,
-        task_context: &TaskContext,
         location: RegisterVariant,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
@@ -1047,13 +1046,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public()
                 && !pf.is_closure()
-                && (ptr.call_other || !Rc::ptr_eq(&task_context.process(), receiver))
+                && (ptr.call_other || !Rc::ptr_eq(&self.task_context.process(), receiver))
             {
                 return set_loc!(self, Register(0).as_local(), NULL, cell_key);
             }
         }
 
-        let Some((proc, function)) = self.extract_process_and_function(ptr, task_context, cell_key)? else {
+        let Some((proc, function)) = self.extract_process_and_function(ptr, cell_key)? else {
             return Ok(())
         };
 
@@ -1074,7 +1073,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             passed_args_count,
             new_registers,
             upvalues,
-            task_context.upvalues().clone(),
+            self.task_context.upvalues().clone(),
             cell_key,
         );
 
@@ -1164,7 +1163,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if function_is_efun {
             let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(pf.name()).unwrap();
-            self.prepare_and_call_efun(efun, task_context, cell_key)?;
+            self.prepare_and_call_efun(efun, cell_key)?;
         }
 
         Ok(())
@@ -1174,7 +1173,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn extract_process_and_function(
         &mut self,
         ptr: &FunctionPtr,
-        task_context: &TaskContext,
+        // task_context: &TaskContext,
         cell_key: &QCellOwner,
     ) -> Result<Option<ProcessFunctionPair>> {
         let (proc, function) = match &ptr.address {
@@ -1214,7 +1213,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 (frame.process.clone(), Rc::new(pf))
             }
             FunctionAddress::SimulEfun(name) => {
-                let Some(simul_efuns) = task_context.simul_efuns() else {
+                let Some(simul_efuns) = self.task_context.simul_efuns() else {
                     return Err(self.runtime_bug("simul_efun called without simul_efuns"));
                 };
 
@@ -1257,10 +1256,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn prepare_and_call_efun(
         &mut self,
         efun: Efun<STACKSIZE>,
-        task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let mut ctx = EfunContext::new(&mut self.stack, task_context, self.memory.clone());
+        let mut ctx = EfunContext::new(&mut self.stack, &self.task_context, self.task_context.memory().clone());
 
         efun(&mut ctx, cell_key)?;
 
@@ -1271,7 +1269,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
-        pop_frame!(self, task_context);
+        pop_frame!(self);
 
         Ok(())
     }
@@ -1282,7 +1280,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         receiver: RegisterVariant,
         name_location: RegisterVariant,
-        task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
         // set up result_ref in a block, as `registers` is a long-lived reference that
@@ -1315,7 +1312,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 function_name: &LpcString,
                 args: &[LpcRef],
                 task_context: &TaskContext,
-                memory: &Rc<Memory>,
                 cell_key: &mut QCellOwner,
             ) -> Result<LpcRef> {
                 let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
@@ -1329,10 +1325,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let value = LpcValue::from(pr);
                     let result = match value {
                         LpcValue::Object(receiver) => {
-                            let mut task: Task<MAX_CALL_STACK_SIZE> =
-                                Task::new(memory.clone(), task_context.upvalues().clone());
-
                             let new_context = task_context.clone().with_process(receiver.clone());
+                            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
                             // unwrap() is ok because resolve_call_other_receiver() checks
                             // for the function's presence.
                             let function = receiver
@@ -1343,13 +1337,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 .clone();
 
                             if function.public() {
-                                let eval_context =
-                                    task.eval(function, args, new_context, cell_key)?;
+                                task.eval(function, args, cell_key)?;
                                 task_context.increment_instruction_count(
-                                    eval_context.instruction_count(),
+                                    task.task_context.instruction_count(),
                                 )?;
 
-                                let Some(r) = eval_context.into_result() else {
+                            let Some(r) = task.task_context.into_result() else {
                                     return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
                                 };
 
@@ -1378,8 +1371,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     receiver_ref,
                     function_name,
                     &args,
-                    task_context,
-                    &self.memory,
+                    &self.task_context,
                     cell_key,
                 )?,
                 LpcRef::Array(r) => {
@@ -1393,15 +1385,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 lpc_ref,
                                 function_name,
                                 &args,
-                                task_context,
-                                &self.memory,
+                                &self.task_context,
                                 cell_key,
                             )
                             .unwrap_or(NULL)
                         })
                         .collect::<Vec<_>>()
                         .into();
-                    self.memory.value_to_ref(array_value)
+                    self.task_context.memory().value_to_ref(array_value)
                 }
                 LpcRef::Mapping(m) => {
                     let b = m.borrow();
@@ -1416,8 +1407,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     value_ref,
                                     function_name,
                                     &args,
-                                    task_context,
-                                    &self.memory,
+                                    &self.task_context,
                                     cell_key,
                                 )
                                 .unwrap_or(NULL),
@@ -1426,7 +1416,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .collect::<IndexMap<_, _>>()
                         .into();
 
-                    self.memory.value_to_ref(with_results)
+                    self.task_context.memory().value_to_ref(with_results)
                 }
                 _ => {
                     return Err(self.runtime_error(format!(
@@ -1446,7 +1436,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     fn handle_call_simul_efun(
         &mut self,
-        task_context: &TaskContext,
         name_idx: usize,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
@@ -1454,7 +1443,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
-        let Some(simul_efuns) = task_context.simul_efuns() else {
+        let Some(simul_efuns) = self.task_context.simul_efuns() else {
             // This could be legitimately hit in the case an object was compiled with simul_efuns,
             // cached to disk, and then later executed without them.
             // tl;dr objects are dynamically linked.
@@ -1472,7 +1461,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let new_frame = self.prepare_new_call_frame(task_context, cell_key, simul_efuns, func)?;
+        let new_frame = self.prepare_new_call_frame(cell_key, simul_efuns, func)?;
 
         self.stack.push(new_frame)?;
 
@@ -1483,7 +1472,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     fn handle_functionptrconst(
         &mut self,
-        _task_context: &TaskContext,
         location: RegisterVariant,
         receiver: FunctionReceiver,
         name_idx: usize,
@@ -1572,7 +1560,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             unique_id: UniqueId::new(),
         };
 
-        let new_ref = self.memory.value_to_ref(LpcValue::from(fp));
+        let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(fp));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -1580,7 +1568,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     fn capture_environment(&mut self, cell_key: &mut QCellOwner) -> Result<Vec<Register>> {
         let frame = self.stack.current_frame_mut()?;
-        let upvalues = self.vm_upvalues.rw(cell_key);
+        let upvalues = self.task_context.upvalues().rw(cell_key);
 
         trace!("ptrs: {:?}", frame.upvalue_ptrs);
         trace!("upvalues: {:?}", upvalues);
@@ -1746,7 +1734,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         trace!(?lpc_string, "Storing static string");
 
-        let new_ref = self.memory.value_to_ref(LpcValue::from(lpc_string));
+        let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(lpc_string));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -1882,7 +1870,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // set up the catch point's return value
         let value = LpcValue::from(error.to_string());
-        let lpc_ref = self.memory.value_to_ref(value);
+        let lpc_ref = self.task_context.memory().value_to_ref(value);
         set_loc!(self, Register(result_index).as_local(), lpc_ref, cell_key)?;
         let frame = self.stack.current_frame_mut()?;
 
@@ -1909,7 +1897,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match operation(ref1, ref2, cell_key) {
             Ok(result) => {
-                let var = self.memory.value_to_ref(result);
+                let var = self.task_context.memory().value_to_ref(result);
 
                 set_loc!(self, r3, var, cell_key)?;
             }
@@ -2224,7 +2212,7 @@ mod tests {
         use crate::interpreter::task::tests::BareVal::*;
 
         fn snapshot_registers(code: &str, cell_key: &mut QCellOwner) -> RefBank {
-            let (mut task, _) = run_prog(code, cell_key);
+            let mut task = run_prog(code, cell_key);
             let mut stack = task.snapshots.pop().unwrap();
 
             // The top of the stack in the snapshot is the object initialization frame,
@@ -2244,7 +2232,7 @@ mod tests {
                     mixed *a = ({ 12, 4.3, "hello", ({ 1, 2, 3 }) });
                 "##};
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2279,7 +2267,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(11), Int(0), Int(0)];
@@ -2300,7 +2288,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(333), Int(333), Int(0), Int(0)];
@@ -2321,7 +2309,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(-1), Int(7), Int(-8)];
@@ -2341,7 +2329,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(666), Int(666)];
@@ -2362,7 +2350,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
@@ -2386,7 +2375,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
@@ -2408,7 +2398,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
@@ -2428,7 +2419,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Object("/my_file".into()), Object("/my_file".into())];
@@ -2447,7 +2438,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2464,6 +2455,7 @@ mod tests {
             use std::sync::mpsc;
 
             use claim::assert_ok;
+            use crate::test_support::test_config;
 
             use super::*;
 
@@ -2476,7 +2468,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2500,7 +2492,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2529,7 +2521,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2554,7 +2546,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2588,7 +2580,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2630,7 +2622,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2661,7 +2653,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2693,7 +2685,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(4), Function("tacos".into(), vec![]), Int(4), Int(4)];
@@ -2716,17 +2708,18 @@ mod tests {
                 let upvalues = GcBank::default();
                 let (tx, _) = mpsc::channel();
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
-                let mut task: Task<MAX_CALL_STACK_SIZE> =
-                    Task::new(Memory::default(), cell_key.cell(upvalues));
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
                 let space_cell = cell_key.cell(object_space).into();
-                ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
+                ObjectSpace::insert_process(&space_cell, process.clone(), &mut cell_key);
+                let vm_upvalues = Rc::new(cell_key.cell(upvalues));
 
-                let result = task.initialize_program(
+                let result = Task::<32>::initialize_program(
                     program,
                     config,
-                    space_cell,
+                    space_cell.clone(),
+                    Memory::default(),
+                    vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
                     &mut cell_key,
@@ -2749,13 +2742,15 @@ mod tests {
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
                 let object_space = ObjectSpace::default();
-                let object_space = cell_key.cell(object_space).into();
-                ObjectSpace::insert_process(&object_space, process, &mut cell_key);
+                let object_space = cell_key.cell(object_space);
+                ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
-                let result = task.initialize_program(
+                let result = Task::<10>::initialize_program(
                     program,
                     config,
                     object_space,
+                    Memory::default(),
+                    vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
                     &mut cell_key,
@@ -2781,10 +2776,12 @@ mod tests {
                 let space_cell = cell_key.cell(object_space).into();
                 ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
 
-                let result = task.initialize_program(
+                let result = Task::<20>::initialize_program(
                     program,
                     config,
                     space_cell,
+                    Memory::default(),
+                    vm_upvalues,
                     call_outs,
                     tx,
                     &mut cell_key,
@@ -2805,7 +2802,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2826,7 +2823,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2847,7 +2844,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2932,7 +2929,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
 
                 assert!(task.catch_points.is_empty());
             }
@@ -2968,7 +2965,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let expected = vec![Int(4), Int(4)];
 
@@ -3015,7 +3013,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let expected = vec![Int(4), Int(5)];
 
@@ -3040,7 +3039,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(2), Int(2), Int(1)];
@@ -3059,7 +3058,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Float(4.13.into())];
@@ -3078,7 +3077,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Function("dump".to_string(), vec![])];
@@ -3093,7 +3092,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Function("simul_efun".to_string(), vec![])];
@@ -3112,7 +3111,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3135,7 +3134,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3159,7 +3158,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3187,7 +3186,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3211,7 +3210,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3243,7 +3242,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3275,7 +3274,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3300,7 +3299,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(666)];
@@ -3319,7 +3318,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(0)];
@@ -3338,7 +3337,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(1)];
@@ -3359,7 +3358,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3382,16 +3381,16 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let mut task: Task<10> =
-                    Task::new(Memory::default(), cell_key.cell(GcBank::default()));
                 let (program, _, _) = compile_prog(code, &mut cell_key);
                 let (tx, _) = mpsc::channel();
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
-                let r = task.initialize_program(
+                let r = Task::<10>::initialize_program(
                     program,
                     Config::default(),
                     cell_key.cell(ObjectSpace::default()),
+                    Memory::default(),
+                    Rc::new(cell_key.cell(GcBank::default())),
                     call_outs,
                     tx,
                     &mut cell_key,
@@ -3416,7 +3415,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3440,15 +3439,16 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let vm_upvalues = cell_key.cell(GcBank::default());
-                let mut task: Task<10> = Task::new(Memory::default(), vm_upvalues);
                 let (program, _, _) = compile_prog(code, &mut cell_key);
                 let (tx, _) = mpsc::channel();
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
-                let r = task.initialize_program(
+                let r = Task::<20>::initialize_program(
                     program,
                     Config::default(),
                     cell_key.cell(ObjectSpace::default()),
+                    Memory::default(),
+                    Rc::new(vm_upvalues),
                     call_outs,
                     tx,
                     &mut cell_key,
@@ -3473,7 +3473,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(32), Int(-48), Int(-1536)];
@@ -3512,7 +3512,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let expected = vec![Int(1), Int(1)];
 
@@ -3559,7 +3560,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
 
                 let expected = vec![Int(6), Int(5)];
 
@@ -3586,7 +3588,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(14), Int(16), Int(-2)];
@@ -3682,7 +3684,7 @@ mod tests {
                         "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3710,7 +3712,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3739,7 +3741,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3771,7 +3773,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3804,7 +3806,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut hashmap = HashMap::new();
@@ -3836,7 +3838,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3862,7 +3864,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3887,7 +3889,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3921,7 +3923,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3956,7 +3958,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(31), Int(0), Int(31)];
@@ -3977,7 +3979,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(123), Int(0), Int(0), Int(123)];
@@ -4047,7 +4049,8 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (_task, ctx) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
+                let ctx = task.task_context;
                 Array(vec![]).assert_equal(ctx.result().unwrap(), &cell_key);
             }
         }
@@ -4104,7 +4107,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4133,7 +4136,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(4)];
@@ -4152,7 +4155,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4175,7 +4178,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(790080), Int(0), Int(0)];
@@ -4195,7 +4198,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(192), Int(0), Int(0)];
@@ -4223,7 +4226,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4245,7 +4248,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut mapping = HashMap::new();
@@ -4313,17 +4316,16 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let vm_upvalues = cell_key.cell(GcBank::default());
-                let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Memory::default(), vm_upvalues);
-
                 let object_space = ObjectSpace::default();
                 let (tx, _) = mpsc::channel();
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
-                let _ctx = task
-                    .initialize_program(
+                let task = Task::<20>::initialize_program(
                         program,
                         config,
                         cell_key.cell(object_space),
+                        Memory::default(),
+                        Rc::new(vm_upvalues),
                         call_outs,
                         tx,
                         &mut cell_key,
@@ -4381,7 +4383,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), String("lolwut".into())];
@@ -4401,7 +4403,7 @@ mod tests {
                 "##};
 
                 let mut cell_key = QCellOwner::new();
-                let (task, _) = run_prog(code, &mut cell_key);
+                let task = run_prog(code, &mut cell_key);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(20), Int(0), Int(20)];
@@ -4426,15 +4428,16 @@ mod tests {
 
             let mut cell_key = QCellOwner::new();
             let vm_upvalues = cell_key.cell(GcBank::default());
-            let mut task: Task<5> = Task::new(Memory::default(), vm_upvalues);
             let (program, _, _) = compile_prog(code, &mut cell_key);
             let (tx, _) = mpsc::channel();
             let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
-            let r = task.initialize_program(
+            let r = Task::<20>::initialize_program(
                 program,
                 Config::default(),
                 cell_key.cell(ObjectSpace::default()),
+                Memory::default(),
+                vm_upvalues,
                 call_outs,
                 tx,
                 &mut cell_key,
@@ -4459,14 +4462,15 @@ mod tests {
             let (program, _, _) = compile_prog(code, &mut cell_key);
             let mut cell_key = QCellOwner::new();
             let vm_upvalues = cell_key.cell(GcBank::default());
-            let mut task: Task<5> = Task::new(Memory::default(), vm_upvalues);
             let (tx, _) = mpsc::channel();
             let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
-            let r = task.initialize_program(
+            let r = Task::<20>::initialize_program(
                 program,
                 config,
                 cell_key.cell(ObjectSpace::default()),
+                Memory::default(),
+                Rc::new(vm_upvalues),
                 call_outs,
                 tx,
                 &mut cell_key,
@@ -4493,7 +4497,7 @@ mod tests {
             "##};
 
             let mut cell_key = QCellOwner::new();
-            let (task, ctx) = run_prog(code, &mut cell_key);
+            let task = run_prog(code, &mut cell_key);
             let registers = task.popped_frame.unwrap().registers;
 
             let expected = vec![
@@ -4506,7 +4510,7 @@ mod tests {
 
             BareVal::assert_vec_equal(&expected, &registers, &cell_key);
 
-            let proc = ctx.process();
+            let proc = task.task_context.process();
             let proc = proc.ro(&cell_key);
 
             let expected = vec![
@@ -4528,7 +4532,7 @@ mod tests {
             T: Into<BareVal> + Clone,
         {
             let mut cell_key = QCellOwner::new();
-            let (mut task, _ctx) = run_prog(code, &mut cell_key);
+            let mut task = run_prog(code, &mut cell_key);
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4562,7 +4566,7 @@ mod tests {
             T: Into<BareVal> + Clone,
         {
             let mut cell_key = QCellOwner::new();
-            let (mut task, _ctx) = run_prog(code, &mut cell_key);
+            let mut task = run_prog(code, &mut cell_key);
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4592,7 +4596,7 @@ mod tests {
             T: Into<Register> + Copy,
         {
             let mut cell_key = QCellOwner::new();
-            let (mut task, _ctx) = run_prog(code, &mut cell_key);
+            let mut task = run_prog(code, &mut cell_key);
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4889,7 +4893,8 @@ mod tests {
                 }
             "##};
 
-            let (task, ctx) = run_prog(code, &mut cell_key);
+            let task = run_prog(code, &mut cell_key);
+            let ctx = &task.task_context;
             assert!(!ctx.upvalues().ro(&cell_key).is_empty());
 
             let mut marked = BitSet::new();

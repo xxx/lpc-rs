@@ -33,19 +33,17 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .expect("Failed to compile.");
 
     let program = Rc::new(program);
-    let memory = Memory::default();
-    let upvalues = GcRefBank::default();
+    let upvalues = Rc::new(cell_key.cell(GcRefBank::default()));
     let (tx, _) = std::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
-    let task = Task::<64>::new(memory, cell_key.cell(upvalues));
 
     c.bench_function("fib 20", |b| {
         b.iter(|| {
-            let mut t = task.clone();
-            let _ = t.initialize_program(
+            let _ = Task::initialize_program(
                 program.clone(),
                 black_box(Config::default()),
                 cell_key.cell(ObjectSpace::default()),
+                upvalues.clone(),
                 call_outs.clone(),
                 tx.clone(),
                 &mut cell_key,

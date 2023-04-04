@@ -15,6 +15,7 @@ use crate::{
     },
     util::{get_simul_efuns, qcell_debug},
 };
+use crate::interpreter::memory::Memory;
 
 /// A struct to carry context during a single function's evaluation.
 #[derive(Educe, Clone)]
@@ -52,8 +53,11 @@ pub struct TaskContext {
     #[educe(Debug(method = "qcell_debug"))]
     call_outs: Rc<QCell<CallOuts>>,
 
-    /// The tx channel to send messaages back to the [`Vm`](crate::interpreter::vm::Vm).
+    /// The tx channel to send messages back to the [`Vm`](crate::interpreter::vm::Vm).
     tx: Sender<VmOp>,
+
+    /// A pointer to a memory pool to allocate new values from
+    memory: Rc<Memory>,
 }
 
 impl TaskContext {
@@ -70,12 +74,13 @@ impl TaskContext {
     }
 
     /// Create a new [`TaskContext`]
-    pub fn new<C, P, O, U>(
+    pub fn new<C, P, O, M, U, A>(
         config: C,
         process: P,
         object_space: O,
+        memory: M,
         vm_upvalues: U,
-        call_outs: Rc<QCell<CallOuts>>,
+        call_outs: A,
         tx: Sender<VmOp>,
         cell_key: &QCellOwner,
     ) -> Self
@@ -83,7 +88,9 @@ impl TaskContext {
         C: Into<Rc<Config>>,
         P: Into<Rc<QCell<Process>>>,
         O: Into<Rc<QCell<ObjectSpace>>>,
+        M: Into<Rc<Memory>>,
         U: Into<Rc<QCell<GcRefBank>>>,
+        A: Into<Rc<QCell<CallOuts>>>,
     {
         let config = config.into();
         let object_space = object_space.into();
@@ -97,11 +104,12 @@ impl TaskContext {
             config,
             process: process.into(),
             object_space,
+            memory: memory.into(),
             instruction_counter,
             result: OnceCell::new(),
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
-            call_outs,
+            call_outs: call_outs.into(),
             tx,
         }
     }
@@ -214,6 +222,12 @@ impl TaskContext {
         &self.object_space
     }
 
+    /// Return the [`Memory`]
+    #[inline]
+    pub fn memory(&self) -> &Rc<Memory> {
+        &self.memory
+    }
+
     /// Return the `upvalues`
     #[inline]
     pub fn upvalues(&self) -> &Rc<QCell<GcRefBank>> {
@@ -269,8 +283,9 @@ mod tests {
             config,
             cell_key.cell(process),
             space,
+            Memory::default(),
             upvalues,
-            call_outs.into(),
+            call_outs,
             tx,
             &cell_key,
         );

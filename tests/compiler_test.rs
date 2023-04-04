@@ -63,7 +63,8 @@ fn test_inheritance() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let task = run_prog(code, &mut cell_key);
+    let ctx = task.task_context;
     let proc = ctx.process();
     let prog = &proc.ro(&cell_key).program;
 
@@ -86,7 +87,8 @@ fn test_dynamic_receiver() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let task = run_prog(code, &mut cell_key);
+    let ctx = task.task_context;
     let proc = ctx.process();
     let prog = &proc.ro(&cell_key).program;
 
@@ -121,7 +123,8 @@ fn test_duffs_device() {
         mixed b = copy(a, 6);
     "## };
 
-    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let task = run_prog(code, &mut cell_key);
+    let ctx = task.task_context;
     let proc = ctx.process();
     let borrowed = proc.ro(&cell_key);
     let b = &borrowed.globals[1];
@@ -171,7 +174,8 @@ fn test_closures() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let task = run_prog(code, &mut cell_key);
+    let ctx = task.task_context;
     let proc = ctx.process();
     let borrowed = proc.ro(&cell_key);
 
@@ -201,7 +205,8 @@ fn test_multi_dimensional_arrays() {
         string *x = arr[1][5][1..];
     "## };
 
-    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let task = run_prog(code, &mut cell_key);
+    let ctx = task.task_context;
     let pr = ctx.process();
     let proc = pr.ro(&cell_key);
     let x_ref = proc.globals.last().unwrap();
@@ -241,7 +246,8 @@ fn test_positional_vars_into_argv() {
         }
     "## };
 
-    let (_task, ctx) = run_prog(code, &mut cell_key);
+    let task = run_prog(code, &mut cell_key);
+    let ctx = task.task_context;
     assert_eq!(&LpcRef::Int(777), ctx.result().unwrap());
 }
 

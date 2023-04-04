@@ -42,6 +42,7 @@ use crate::{
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::vm::task_queue::TaskQueue;
 
 pub mod task_queue;
 pub mod vm_op;
@@ -77,6 +78,9 @@ pub struct Vm {
     /// The key used to create all [`QCell`]s
     #[educe(Debug(method = "qcell_debug"))]
     pub cell_key: QCellOwner,
+
+    /// The queue for [`Task`]s.
+    pub task_queue: TaskQueue,
 }
 
 impl Vm {
@@ -104,6 +108,7 @@ impl Vm {
             call_outs: Rc::new(call_outs),
             rx,
             tx,
+            task_queue: TaskQueue::new(),
             cell_key,
         }
     }
@@ -181,10 +186,10 @@ impl Vm {
     ///
     /// # Returns
     ///
-    /// * `Ok(Some(TaskContext)))` - If the call out was run successfully
+    /// * `Ok(Some(Task)))` - If the call out was run successfully
     /// * `Ok(None)` - If the call out was not found (e.g. has been removed)
     /// * `Err(LpcError)` - If there was an error running the call out
-    fn op_run_call_out(&mut self, idx: usize) -> Result<Option<TaskContext>> {
+    fn op_run_call_out(&mut self, idx: usize) -> Result<Option<Task>> {
         if self.call_outs.ro(&self.cell_key).get(idx).is_none() {
             return Ok(None);
         }
@@ -243,21 +248,20 @@ impl Vm {
             }
         };
 
-        let mut task: Task<MAX_CALL_STACK_SIZE> =
-            Task::new(self.memory.clone(), self.upvalues.clone());
-
         let task_context = TaskContext::new(
             self.config.clone(),
             process,
             self.object_space.clone(),
+            self.memory.clone(),
             self.upvalues.clone(),
             self.call_outs.clone(),
             self.tx.clone(),
             &self.cell_key,
         );
 
-        let result = task.eval(function, &args, task_context, &mut self.cell_key);
-        trace!(?result, "call out run finished");
+        let mut task: Task = Task::new(task_context);
+
+        task.eval(function, &args, &mut self.cell_key)?;
 
         let call_outs = self.call_outs.rw(&mut self.cell_key);
         if repeating {
@@ -266,7 +270,7 @@ impl Vm {
             call_outs.remove(idx);
         }
 
-        result.map(Some)
+        Ok(Some(task))
     }
 
     /// Initialize the simulated efuns file, if it is configured.
@@ -301,12 +305,11 @@ impl Vm {
     /// Compile and initialize code from the passed file.
     fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
-        let tx = self.tx.clone();
 
         self.with_compiler(|compiler, cell_key| {
             compiler.compile_in_game_file(filename, None, cell_key)
         })
-        .and_then(|program| self.create_and_initialize_task(program, tx))
+        .and_then(|program| self.create_and_initialize_task(program))
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -351,10 +354,9 @@ impl Vm {
     {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
-        let tx = self.tx.clone();
 
         self.with_compiler(|compiler, cell_key| compiler.compile_string(lpc_path, code, cell_key))
-            .and_then(|program| self.create_and_initialize_task(program, tx))
+            .and_then(|program| self.create_and_initialize_task(program))
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
@@ -378,24 +380,22 @@ impl Vm {
     fn create_and_initialize_task(
         &mut self,
         program: Program,
-        tx: Sender<VmOp>,
     ) -> Result<TaskContext> {
-        let mut task: Task<MAX_CALL_STACK_SIZE> =
-            Task::new(self.memory.clone(), self.upvalues.clone());
-
-        task.initialize_program(
+        Task::<MAX_CALL_STACK_SIZE>::initialize_program(
             program,
             self.config.clone(),
             self.object_space.clone(),
+            self.memory.clone(),
+            self.upvalues.clone(),
             self.call_outs.clone(),
-            tx,
+            self.tx.clone(),
             &mut self.cell_key,
         )
-        .map(|ctx| {
-            let process = ctx.process();
+        .map(|task| {
+            let process = task.task_context.process();
             ObjectSpace::insert_process(&self.object_space, process, &mut self.cell_key);
 
-            ctx
+            task.task_context
         })
     }
 }

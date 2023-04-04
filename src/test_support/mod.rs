@@ -93,9 +93,7 @@ pub fn compile_prog(
     (program, config, se_proc)
 }
 
-pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
-    let upvalues = GcBank::default();
-    let mut task = Task::new(Memory::default(), cell_key.cell(upvalues));
+pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {
     let (program, config, se_proc) = compile_prog(code, cell_key);
 
     let object_space = ObjectSpace::default();
@@ -104,13 +102,21 @@ pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> (Task<MAX_CALL_STACK_S
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     ObjectSpace::insert_process(&object_space, se_proc, cell_key);
 
-    let ctx = task
-        .initialize_program(program, config, object_space, call_outs, tx, cell_key)
+    let task = Task::initialize_program(
+        program,
+        config,
+        object_space,
+        Memory::default(),
+        cell_key.cell(GcBank::default()),
+        call_outs,
+        tx,
+        cell_key,
+    )
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             eprintln!("{:?}", e);
             panic!("failed to initialize");
         });
 
-    (task, ctx)
+    task
 }

@@ -60,11 +60,12 @@ fn main() {
         Ok(program) => {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
-            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Rc::new(memory), upvalues);
-            if let Err(e) = task.initialize_program(
+            if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_program(
                 program,
                 config,
                 cell_key.cell(object_space),
+                memory,
+                upvalues,
                 call_outs,
                 tx,
                 &mut cell_key,

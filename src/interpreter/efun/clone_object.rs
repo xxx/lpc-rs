@@ -41,15 +41,14 @@ fn load_master<const N: usize>(
                         return Err(LpcError::new("Init function not found on master?"));
                     };
                     let upvalues = context.vm_upvalues().clone();
-                    let mut task: Task<MAX_CALL_STACK_SIZE> =
-                        Task::new(context.memory().clone(), upvalues);
                     let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
 
                     let new_context = context.clone_task_context().with_process(process.clone());
-                    let eval_context = task.eval(prog_function, &[], new_context, cell_key)?;
+                    let mut task: Task = Task::new(new_context);
+                    task.eval(prog_function, &[], cell_key)?;
 
-                    context.increment_instruction_count(eval_context.instruction_count())?;
+                    context.increment_instruction_count(task.task_context.instruction_count())?;
 
                     Ok(process)
                 }
@@ -95,12 +94,11 @@ pub fn clone_object<const N: usize>(
         let new_clone = context.insert_clone(new_prog, cell_key);
         let upvalues = context.vm_upvalues().clone();
 
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory().clone(), upvalues);
-
         let new_context = context.clone_task_context().with_process(new_clone.clone());
-        let eval_context = task.eval(initializer, &[], new_context, cell_key)?;
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
+        task.eval(initializer, &[], cell_key)?;
 
-        context.increment_instruction_count(eval_context.instruction_count())?;
+        context.increment_instruction_count(task.task_context.instruction_count())?;
 
         // Set up the return value
         let v = LpcValue::Object(new_clone);
@@ -144,15 +142,12 @@ mod tests {
             config,
             cell_key.cell(process),
             cell_key.cell(ObjectSpace::default()),
+            Memory::new(10),
             cell_key.cell(GcBank::default()),
             Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx,
             cell_key,
         )
-    }
-
-    fn fixture(cell_key: &QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {
-        Task::new(Memory::new(10), Rc::new(cell_key.cell(GcBank::default())))
     }
 
     #[test]
@@ -165,15 +160,17 @@ mod tests {
         let (program, config, _) = compile_prog(prog, &mut cell_key);
         let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, &cell_key);
-        let mut task = fixture(&cell_key);
 
-        task.eval(func.clone(), &[], context.clone(), &mut cell_key)
+        let mut task = Task::<10>::new(context.clone());
+        task.eval(func.clone(), &[], &mut cell_key)
             .expect("first task failed");
-        task.eval(func, &[], context.clone(), &mut cell_key)
+
+        let mut task = Task::<10>::new(context);
+        task.eval(func, &[], &mut cell_key)
             .expect("second task failed");
 
         // procs are /example, /example#0, /example#1
-        assert_eq!(context.object_space().ro(&cell_key).len(), 3);
+        assert_eq!(task.task_context.object_space().ro(&cell_key).len(), 3);
     }
 
     #[test]
@@ -187,9 +184,9 @@ mod tests {
         let func = program.initializer.clone().expect("no init found?");
         let mut cell_key = QCellOwner::new();
         let context = task_context_fixture(program, config, &cell_key);
-        let mut task = fixture(&cell_key);
+        let mut task = Task::<10>::new(context);
 
-        let result = task.eval(func, &[], context, &mut cell_key);
+        let result = task.eval(func, &[], &mut cell_key);
 
         assert_regex!(
             result.as_ref().unwrap_err().as_ref(),
