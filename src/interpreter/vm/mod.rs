@@ -28,7 +28,7 @@ use crate::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
             mark::Mark,
-            sweep::{KeylessSweep, Sweep},
+            sweep::{KeylessSweep},
         },
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
@@ -471,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_gc() {
-        let mut cell_key = QCellOwner::new();
+        let cell_key = QCellOwner::new();
         let mut vm = Vm::new_with_key(test_config(), cell_key);
         let storage = indoc! { r#"
             function *storage = ({});

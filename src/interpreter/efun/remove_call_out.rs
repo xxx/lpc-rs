@@ -15,7 +15,7 @@ pub fn remove_call_out<const N: usize>(
     cell_key: &mut QCellOwner,
 ) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
-        return Err(context.runtime_bug(format!("non-int call out ID sent to `remove_call_out`")));
+        return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
 
     if idx < 0 {
@@ -66,7 +66,7 @@ mod tests {
             }
         "##;
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, _rx) = std::sync::mpsc::channel();
         let (program, _, _) = compile_prog(code, &mut cell_key);
         let mut task: Task<5> = Task::new(Memory::new(10), cell_key.cell(GcBank::default()));
         let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
@@ -80,6 +80,6 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        assert!(call_outs.ro(&mut cell_key).is_empty());
+        assert!(call_outs.ro(&cell_key).is_empty());
     }
 }

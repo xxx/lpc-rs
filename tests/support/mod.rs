@@ -50,7 +50,7 @@ where
         .expect("Failed to compile.")
 }
 
-pub fn run_prog_custom<'a, P>(
+pub fn run_prog_custom<P>(
     code: &str,
     path: P,
     config: Config,
@@ -81,7 +81,7 @@ where
     (task, ctx)
 }
 
-pub fn run_prog<'a>(
+pub fn run_prog(
     code: &str,
     cell_key: &mut QCellOwner,
 ) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {

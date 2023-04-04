@@ -12,10 +12,7 @@ pub struct TaskQueue<const STACKSIZE: usize = MAX_CALL_STACK_SIZE> {
 impl<const STACKSIZE: usize> TaskQueue<STACKSIZE> {
     /// Create a new, empty [`TaskQueue`]
     pub fn new() -> Self {
-        Self {
-            current: None,
-            ready: VecDeque::with_capacity(32),
-        }
+        Self::default()
     }
     //
     // delegate! {
@@ -36,7 +33,7 @@ impl<const STACKSIZE: usize> TaskQueue<STACKSIZE> {
     }
 
     /// Pause the current Task, and switch to the next one in the ready queue.
-    pub fn next(&mut self) -> Option<&Task<STACKSIZE>> {
+    pub fn execute_next(&mut self) -> Option<&Task<STACKSIZE>> {
         if let Some(task) = self.current.take() {
             self.ready.push_back(task);
         };
@@ -44,5 +41,14 @@ impl<const STACKSIZE: usize> TaskQueue<STACKSIZE> {
         self.current = self.ready.pop_front();
 
         self.current.as_ref()
+    }
+}
+
+impl<const STACKSIZE: usize> Default for TaskQueue<STACKSIZE> {
+    fn default() -> Self {
+        Self {
+            current: None,
+            ready: VecDeque::with_capacity(32),
+        }
     }
 }

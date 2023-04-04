@@ -247,7 +247,7 @@ fn test_positional_vars_into_argv() {
 
 #[test]
 fn test_inherited_create_called_when_not_overridden() {
-    let mut cell_key = QCellOwner::new();
+    let cell_key = QCellOwner::new();
     let mut vm = Vm::new_with_key(test_config(), cell_key);
     let grandparent = indoc! { r#"
         void create() {
@@ -320,7 +320,7 @@ fn test_inherited_create_called_when_not_overridden() {
 
 #[test]
 fn test_calls_simul_efuns() {
-    let mut cell_key = QCellOwner::new();
+    let cell_key = QCellOwner::new();
 
     let config = test_config_builder()
         .simul_efun_file("/secure/simul_efuns.c")

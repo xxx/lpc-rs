@@ -39,8 +39,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let task = Task::<64>::new(memory, cell_key.cell(upvalues));
 
-    let tx2 = tx.clone();
-
     c.bench_function("fib 20", |b| {
         b.iter(|| {
             let mut t = task.clone();
@@ -48,8 +46,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 program.clone(),
                 black_box(Config::default()),
                 cell_key.cell(ObjectSpace::default()),
-                call_outs,
-                tx2,
+                call_outs.clone(),
+                tx.clone(),
                 &mut cell_key,
             );
         })
