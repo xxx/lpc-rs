@@ -48,7 +48,7 @@ use crate::{
         vm::vm_op::VmOp,
     },
     try_extract_value,
-    util::{keyable::Keyable, qcell_debug},
+    util::{keyable::Keyable},
 };
 
 // this is just to shut clippy up
@@ -232,6 +232,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Convenience helper to get a Program initialized.
+    #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all)]
     pub fn initialize_program<P, C, O, M, U, A>(
         program: P,
@@ -325,7 +326,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> Result<()> {
         let mut frame = CallFrame::new(
             process,
-            f.clone(),
+            f,
             args.len(),
             None,
             self.task_context.upvalues().clone(),
@@ -814,7 +815,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_val = { get_new_value(&self.stack)? };
-                return_value(new_val, &self.task_context.memory(), &mut self.stack, cell_key)?;
+                return_value(new_val, self.task_context.memory(), &mut self.stack, cell_key)?;
             }
             Instruction::Ret => {
                 pop_frame!(self).map(|frame| {
@@ -2455,7 +2456,7 @@ mod tests {
             use std::sync::mpsc;
 
             use claim::assert_ok;
-            use crate::test_support::test_config;
+            
 
             use super::*;
 
@@ -2711,7 +2712,7 @@ mod tests {
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
                 let space_cell = cell_key.cell(object_space).into();
-                ObjectSpace::insert_process(&space_cell, process.clone(), &mut cell_key);
+                ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
                 let vm_upvalues = Rc::new(cell_key.cell(upvalues));
 
                 let result = Task::<32>::initialize_program(

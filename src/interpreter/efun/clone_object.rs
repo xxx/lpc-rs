@@ -40,7 +40,7 @@ fn load_master<const N: usize>(
                     let Some(prog_function) = prog.initializer.clone() else {
                         return Err(LpcError::new("Init function not found on master?"));
                     };
-                    let upvalues = context.vm_upvalues().clone();
+                    let _upvalues = context.vm_upvalues().clone();
                     let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
 
@@ -92,7 +92,7 @@ pub fn clone_object<const N: usize>(
         };
 
         let new_clone = context.insert_clone(new_prog, cell_key);
-        let upvalues = context.vm_upvalues().clone();
+        let _upvalues = context.vm_upvalues().clone();
 
         let new_context = context.clone_task_context().with_process(new_clone.clone());
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);

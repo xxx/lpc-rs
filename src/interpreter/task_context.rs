@@ -74,6 +74,7 @@ impl TaskContext {
     }
 
     /// Create a new [`TaskContext`]
+    #[allow(clippy::too_many_arguments)]
     pub fn new<C, P, O, M, U, A>(
         config: C,
         process: P,

@@ -9,7 +9,7 @@ use crate::{
     compiler::CompilerBuilder,
     interpreter::{
         call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-        process::Process, program::Program, task::Task, task_context::TaskContext,
+        process::Process, program::Program, task::Task,
     },
 };
 
@@ -102,7 +102,9 @@ pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SI
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     ObjectSpace::insert_process(&object_space, se_proc, cell_key);
 
-    let task = Task::initialize_program(
+    
+
+    Task::initialize_program(
         program,
         config,
         object_space,
@@ -116,7 +118,5 @@ pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SI
             e.emit_diagnostics();
             eprintln!("{:?}", e);
             panic!("failed to initialize");
-        });
-
-    task
+        })
 }

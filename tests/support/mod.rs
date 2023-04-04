@@ -5,7 +5,7 @@ use lpc_rs::{
     compiler::CompilerBuilder,
     interpreter::{
         call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-        program::Program, task::Task, task_context::TaskContext,
+        program::Program, task::Task,
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;
@@ -63,7 +63,9 @@ where
     let (tx, _) = std::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let program = compile_prog_custom(code, path, config, cell_key);
-    let task = Task::initialize_program(
+    
+
+    Task::initialize_program(
             program,
             test_config(),
             cell_key.cell(ObjectSpace::default()),
@@ -76,9 +78,7 @@ where
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             panic!("failed to initialize");
-        });
-
-    task
+        })
 }
 
 pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {

@@ -36,13 +36,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let upvalues = Rc::new(cell_key.cell(GcRefBank::default()));
     let (tx, _) = std::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+    let memory = Rc::new(Memory::default());
 
     c.bench_function("fib 20", |b| {
         b.iter(|| {
-            let _ = Task::initialize_program(
+            let _ = Task::<64>::initialize_program(
                 program.clone(),
                 black_box(Config::default()),
                 cell_key.cell(ObjectSpace::default()),
+                memory.clone(),
                 upvalues.clone(),
                 call_outs.clone(),
                 tx.clone(),
