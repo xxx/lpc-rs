@@ -1,13 +1,14 @@
 use std::sync::mpsc::Sender;
 
 use bit_set::BitSet;
-use chrono::Duration;
+use chrono::{Duration, DateTime, Utc};
 use delegate::delegate;
 use educe::Educe;
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
+
 
 use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, vm::vm_op::VmOp};
 
@@ -22,7 +23,7 @@ pub struct CallOut {
     repeat_duration: Option<Duration>,
 
     /// When does this call out run next?
-    next_run: chrono::DateTime<chrono::Utc>,
+    next_run: DateTime<Utc>,
 
     /// The RAII object that determines if the callback runs, or not.
     /// If the [`Guard`](Guard) is dropped, the callback will not run.
