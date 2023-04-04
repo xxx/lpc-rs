@@ -55,7 +55,7 @@ pub fn run_prog_custom<'a, P>(
     path: P,
     config: Config,
     cell_key: &mut QCellOwner,
-) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext)
+) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext)
 where
     P: Into<LpcPath>,
 {
@@ -84,6 +84,6 @@ where
 pub fn run_prog<'a>(
     code: &str,
     cell_key: &mut QCellOwner,
-) -> (Task<'a, MAX_CALL_STACK_SIZE>, TaskContext) {
+) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
     run_prog_custom(code, "/my_file.c", test_config(), cell_key)
 }

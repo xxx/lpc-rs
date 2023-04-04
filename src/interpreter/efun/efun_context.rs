@@ -20,7 +20,7 @@ use crate::interpreter::vm::vm_op::VmOp;
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
-    memory: &'task Memory,
+    memory: Rc<Memory>,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -32,7 +32,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     pub fn new(
         stack: &'task mut CallStack<N>,
         task_context: &'task TaskContext,
-        memory: &'task Memory,
+        memory: Rc<Memory>,
     ) -> Self {
         Self {
             stack,
@@ -83,8 +83,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     #[inline]
-    pub fn memory(&self) -> &Memory {
-        self.memory
+    pub fn memory(&self) -> &Rc<Memory> {
+        &self.memory
     }
 
     #[inline]

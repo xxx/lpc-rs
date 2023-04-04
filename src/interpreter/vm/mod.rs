@@ -44,6 +44,7 @@ use crate::{
 };
 
 pub mod vm_op;
+pub mod task_queue;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -54,7 +55,7 @@ pub struct Vm {
     pub object_space: Rc<QCell<ObjectSpace>>,
 
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    memory: Memory,
+    memory: Rc<Memory>,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
     #[educe(Debug(method = "qcell_debug"))]
@@ -97,7 +98,7 @@ impl Vm {
         let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
         Self {
             object_space: Rc::new(cell_key.cell(object_space)),
-            memory: Memory::default(),
+            memory: Rc::new(Memory::default()),
             config: config.into(),
             upvalues: Rc::new(cell_key.cell(GcBank::default())),
             call_outs: Rc::new(call_outs),
@@ -242,7 +243,7 @@ impl Vm {
             }
         };
 
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(self.memory.clone(), self.upvalues.clone());
 
         let task_context = TaskContext::new(
             self.config.clone(),
@@ -390,7 +391,7 @@ impl Vm {
         program: Program,
         tx: Sender<VmOp>,
     ) -> Result<TaskContext> {
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&self.memory, self.upvalues.clone());
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(self.memory.clone(), self.upvalues.clone());
 
         task.initialize_program(
             program,

@@ -41,7 +41,7 @@ fn load_master<const N: usize>(
                         return Err(LpcError::new("Init function not found on master?"));
                     };
                     let upvalues = context.vm_upvalues().clone();
-                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
+                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory().clone(), upvalues);
                     let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
 
@@ -94,7 +94,7 @@ pub fn clone_object<const N: usize>(
         let new_clone = context.insert_clone(new_prog, cell_key);
         let upvalues = context.vm_upvalues().clone();
 
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory(), upvalues);
+        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory().clone(), upvalues);
 
         let new_context = context.clone_task_context().with_process(new_clone.clone());
         let eval_context = task.eval(initializer, &[], new_context, cell_key)?;
@@ -150,7 +150,7 @@ mod tests {
         )
     }
 
-    fn fixture<'pool>(cell_key: &QCellOwner) -> Task<'pool, MAX_CALL_STACK_SIZE> {
+    fn fixture(cell_key: &QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {
         Task::new(Memory::new(10), Rc::new(cell_key.cell(GcBank::default())))
     }
 

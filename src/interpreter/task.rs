@@ -183,7 +183,7 @@ struct CatchPoint {
 /// function. It represents a single thread of execution
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-pub struct Task<'pool, const STACKSIZE: usize> {
+pub struct Task<const STACKSIZE: usize> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
@@ -191,7 +191,7 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     catch_points: Vec<CatchPoint>,
 
     /// A pointer to a memory pool to allocate new values from
-    memory: Cow<'pool, Memory>,
+    memory: Rc<Memory>,
 
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
     pub args: Vec<RegisterVariant>,
@@ -215,12 +215,12 @@ pub struct Task<'pool, const STACKSIZE: usize> {
     pub snapshots: Vec<CallStack<STACKSIZE>>,
 }
 
-impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
+impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Create a new Task
     #[instrument(skip_all)]
     pub fn new<T, U>(memory: T, vm_upvalues: U) -> Self
     where
-        T: Into<Cow<'pool, Memory>> + Debug,
+        T: Into<Rc<Memory>> + Debug,
         U: Into<Rc<QCell<GcRefBank>>>,
     {
         Self {
@@ -1260,7 +1260,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
         task_context: &TaskContext,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let mut ctx = EfunContext::new(&mut self.stack, task_context, &self.memory);
+        let mut ctx = EfunContext::new(&mut self.stack, task_context, self.memory.clone());
 
         efun(&mut ctx, cell_key)?;
 
@@ -1315,7 +1315,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                 function_name: &LpcString,
                 args: &[LpcRef],
                 task_context: &TaskContext,
-                memory: &Memory,
+                memory: &Rc<Memory>,
                 cell_key: &mut QCellOwner,
             ) -> Result<LpcRef> {
                 let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
@@ -1330,7 +1330,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
                     let result = match value {
                         LpcValue::Object(receiver) => {
                             let mut task: Task<MAX_CALL_STACK_SIZE> =
-                                Task::new(memory, task_context.upvalues().clone());
+                                Task::new(memory.clone(), task_context.upvalues().clone());
 
                             let new_context = task_context.clone().with_process(receiver.clone());
                             // unwrap() is ok because resolve_call_other_receiver() checks
@@ -2001,7 +2001,7 @@ impl<'pool, const STACKSIZE: usize> Task<'pool, STACKSIZE> {
     }
 }
 
-impl<'pool, const STACKSIZE: usize> Mark for Task<'pool, STACKSIZE> {
+impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
     fn mark(
         &self,
         marked: &mut BitSet,
@@ -2012,7 +2012,7 @@ impl<'pool, const STACKSIZE: usize> Mark for Task<'pool, STACKSIZE> {
     }
 }
 
-impl<'pool, const STACKSIZE: usize> HasEfuns<STACKSIZE> for Task<'pool, STACKSIZE> {}
+impl<const STACKSIZE: usize> HasEfuns<STACKSIZE> for Task<STACKSIZE> {}
 
 #[cfg(test)]
 mod tests {

@@ -60,7 +60,7 @@ fn main() {
         Ok(program) => {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
-            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(&memory, upvalues);
+            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(Rc::new(memory), upvalues);
             if let Err(e) = task.initialize_program(
                 program,
                 config,
