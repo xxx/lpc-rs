@@ -1,17 +1,15 @@
 use std::sync::mpsc::Sender;
-use bit_set::BitSet;
 
+use bit_set::BitSet;
 use chrono::Duration;
 use delegate::delegate;
 use educe::Educe;
-use qcell::QCellOwner;
 use lpc_rs_errors::Result;
+use qcell::QCellOwner;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
-use crate::interpreter::gc::mark::Mark;
 
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::vm::vm_op::VmOp;
+use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, vm::vm_op::VmOp};
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
 #[derive(Educe)]
@@ -59,7 +57,12 @@ impl CallOut {
 }
 
 impl Mark for CallOut {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet, cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut BitSet,
+        cell_key: &QCellOwner,
+    ) -> Result<()> {
         self.func_ref.mark(marked, processed, cell_key)
     }
 }
@@ -137,7 +140,12 @@ impl CallOuts {
 }
 
 impl Mark for CallOuts {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet, cell_key: &QCellOwner) -> Result<()> {
+    fn mark(
+        &self,
+        marked: &mut BitSet,
+        processed: &mut BitSet,
+        cell_key: &QCellOwner,
+    ) -> Result<()> {
         for (_idx, call_out) in &self.queue {
             call_out.mark(marked, processed, cell_key)?;
         }

@@ -81,9 +81,6 @@ where
     (task, ctx)
 }
 
-pub fn run_prog(
-    code: &str,
-    cell_key: &mut QCellOwner,
-) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
     run_prog_custom(code, "/my_file.c", test_config(), cell_key)
 }

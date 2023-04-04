@@ -41,7 +41,8 @@ fn load_master<const N: usize>(
                         return Err(LpcError::new("Init function not found on master?"));
                     };
                     let upvalues = context.vm_upvalues().clone();
-                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context.memory().clone(), upvalues);
+                    let mut task: Task<MAX_CALL_STACK_SIZE> =
+                        Task::new(context.memory().clone(), upvalues);
                     let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
 

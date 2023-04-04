@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc, sync::mpsc};
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use mpsc::Sender;
 use qcell::{QCell, QCellOwner};
@@ -10,9 +10,8 @@ use qcell::{QCell, QCellOwner};
 use crate::interpreter::{
     call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
     lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory, process::Process, program::Program,
-    task::get_location, task_context::TaskContext,
+    task::get_location, task_context::TaskContext, vm::vm_op::VmOp,
 };
-use crate::interpreter::vm::vm_op::VmOp;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called

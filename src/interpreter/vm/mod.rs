@@ -28,7 +28,7 @@ use crate::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
             mark::Mark,
-            sweep::{KeylessSweep},
+            sweep::KeylessSweep,
         },
         lpc_ref::{LpcRef, NULL},
         lpc_value::LpcValue,
@@ -43,8 +43,8 @@ use crate::{
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
 
-pub mod vm_op;
 pub mod task_queue;
+pub mod vm_op;
 
 #[derive(Educe)]
 #[educe(Debug)]
@@ -157,7 +157,7 @@ impl Vm {
                     match op {
                         VmOp::RunCallOut(idx) => {
                             self.op_run_call_out(idx)?;
-                        },
+                        }
                         VmOp::Yield => {
                             todo!()
                         }
@@ -243,7 +243,8 @@ impl Vm {
             }
         };
 
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(self.memory.clone(), self.upvalues.clone());
+        let mut task: Task<MAX_CALL_STACK_SIZE> =
+            Task::new(self.memory.clone(), self.upvalues.clone());
 
         let task_context = TaskContext::new(
             self.config.clone(),
@@ -275,9 +276,7 @@ impl Vm {
     /// * `Some(Ok(TaskContext))` - The [`TaskContext`] for the simul_efun file
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
-    pub fn initialize_simul_efuns(
-        &mut self,
-    ) -> Option<Result<TaskContext>> {
+    pub fn initialize_simul_efuns(&mut self) -> Option<Result<TaskContext>> {
         let Some(path) = &self.config.simul_efun_file else {
             return None
         };
@@ -291,7 +290,8 @@ impl Vm {
     pub fn gc(&mut self) -> Result<()> {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed, &self.cell_key).unwrap();
+        self.mark(&mut marked, &mut processed, &self.cell_key)
+            .unwrap();
 
         trace!("Marked {} objects", marked.len());
 
@@ -299,10 +299,7 @@ impl Vm {
     }
 
     /// Compile and initialize code from the passed file.
-    fn initialize_file(
-        &mut self,
-        filename: &LpcPath,
-    ) -> Result<TaskContext> {
+    fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
         let tx = self.tx.clone();
 
@@ -339,9 +336,7 @@ impl Vm {
     /// use qcell::QCellOwner;
     ///
     /// let mut vm = Vm::new(Config::default());
-    /// let ctx = vm
-    ///     .initialize_string("int x = 5;", "test.c")
-    ///     .unwrap();
+    /// let ctx = vm.initialize_string("int x = 5;", "test.c").unwrap();
     ///
     /// assert_eq!(
     ///     ctx.process().ro(&vm.cell_key).globals.registers[0],
@@ -349,11 +344,7 @@ impl Vm {
     /// );
     /// assert!(vm.object_space.ro(&vm.cell_key).lookup("/test").is_some());
     /// ```
-    pub fn initialize_string<P, S>(
-        &mut self,
-        code: S,
-        filename: P,
-    ) -> Result<TaskContext>
+    pub fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
     where
         P: AsRef<Path>,
         S: AsRef<str>,
@@ -362,14 +353,12 @@ impl Vm {
         self.config.validate_in_game_path(&lpc_path, None)?;
         let tx = self.tx.clone();
 
-        self.with_compiler(|compiler, cell_key| {
-            compiler.compile_string(lpc_path, code, cell_key)
-        })
-        .and_then(|program| self.create_and_initialize_task(program, tx))
-        .map_err(|e| {
-            e.emit_diagnostics();
-            e
-        })
+        self.with_compiler(|compiler, cell_key| compiler.compile_string(lpc_path, code, cell_key))
+            .and_then(|program| self.create_and_initialize_task(program, tx))
+            .map_err(|e| {
+                e.emit_diagnostics();
+                e
+            })
     }
 
     /// Run a callback with a new, initialized [`Compiler`].
@@ -391,7 +380,8 @@ impl Vm {
         program: Program,
         tx: Sender<VmOp>,
     ) -> Result<TaskContext> {
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(self.memory.clone(), self.upvalues.clone());
+        let mut task: Task<MAX_CALL_STACK_SIZE> =
+            Task::new(self.memory.clone(), self.upvalues.clone());
 
         task.initialize_program(
             program,

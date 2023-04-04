@@ -93,10 +93,7 @@ pub fn compile_prog(
     (program, config, se_proc)
 }
 
-pub fn run_prog(
-    code: &str,
-    cell_key: &mut QCellOwner,
-) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
+pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> (Task<MAX_CALL_STACK_SIZE>, TaskContext) {
     let upvalues = GcBank::default();
     let mut task = Task::new(Memory::default(), cell_key.cell(upvalues));
     let (program, config, se_proc) = compile_prog(code, cell_key);

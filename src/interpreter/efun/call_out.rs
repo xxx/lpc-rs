@@ -94,11 +94,10 @@ mod tests {
     use crate::{
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
+            task::Task, vm::vm_op::VmOp,
         },
         test_support::compile_prog,
     };
-    use crate::interpreter::vm::vm_op::VmOp;
 
     #[test]
     fn test_disallows_dynamic_receiver() {

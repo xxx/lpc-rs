@@ -1,12 +1,7 @@
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
 
-use crate::{
-    interpreter::{
-        efun::efun_context::EfunContext,
-        lpc_ref::LpcRef,
-    },
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `remove_call_out`, an efun for removing a call out.
 /// This will cancel both upcoming and repeating call outs.
@@ -19,15 +14,21 @@ pub fn remove_call_out<const N: usize>(
     };
 
     if idx < 0 {
-        return Err(context.runtime_error(format!("invalid call out ID `{idx}` sent to `remove_call_out`")));
+        return Err(context.runtime_error(format!(
+            "invalid call out ID `{idx}` sent to `remove_call_out`"
+        )));
     }
 
     let call_outs = context.call_outs().rw(cell_key);
-    let ret = call_outs.remove(idx as usize).map(|call_out| {
-        call_out.time_remaining().map(|duration| {
-            duration.num_milliseconds()
-        }).unwrap_or(0)
-    }).unwrap_or(-1);
+    let ret = call_outs
+        .remove(idx as usize)
+        .map(|call_out| {
+            call_out
+                .time_remaining()
+                .map(|duration| duration.num_milliseconds())
+                .unwrap_or(0)
+        })
+        .unwrap_or(-1);
 
     let result = LpcRef::Int(ret);
     context.return_efun_result(result);
