@@ -16,7 +16,6 @@ pub fn throw<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    
 
     use lpc_rs_utils::config::Config;
 

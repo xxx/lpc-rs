@@ -38,11 +38,11 @@ use crate::{
         program::Program,
         task::Task,
         task_context::TaskContext,
+        vm::task_queue::TaskQueue,
     },
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::vm::task_queue::TaskQueue;
 
 pub mod task_queue;
 pub mod vm_op;
@@ -377,10 +377,7 @@ impl Vm {
     }
 
     /// Create a new [`Task`] and initialize it with the given [`Program`].
-    fn create_and_initialize_task(
-        &mut self,
-        program: Program,
-    ) -> Result<TaskContext> {
+    fn create_and_initialize_task(&mut self, program: Program) -> Result<TaskContext> {
         Task::<MAX_CALL_STACK_SIZE>::initialize_program(
             program,
             self.config.clone(),

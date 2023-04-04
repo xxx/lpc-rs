@@ -48,7 +48,7 @@ use crate::{
         vm::vm_op::VmOp,
     },
     try_extract_value,
-    util::{keyable::Keyable},
+    util::keyable::Keyable,
 };
 
 // this is just to shut clippy up
@@ -273,7 +273,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         );
         context.insert_process(process, cell_key);
 
-        let mut task = Task::new( context);
+        let mut task = Task::new(context);
 
         task.eval(init_function, &[], cell_key)?;
 
@@ -291,12 +291,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ///
     /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
-    pub fn eval<F>(
-        &mut self,
-        f: F,
-        args: &[LpcRef],
-        cell_key: &mut QCellOwner,
-    ) -> Result<()>
+    pub fn eval<F>(&mut self, f: F, args: &[LpcRef], cell_key: &mut QCellOwner) -> Result<()>
     where
         F: Into<Rc<ProgramFunction>>,
     {
@@ -381,10 +376,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// A [`Result`], with a boolean indicating whether we are at the end of input
     #[instrument(skip_all)]
     #[inline]
-    fn eval_one_instruction(
-        &mut self,
-        cell_key: &mut QCellOwner,
-    ) -> Result<bool> {
+    fn eval_one_instruction(&mut self, cell_key: &mut QCellOwner) -> Result<bool> {
         if self.stack.is_empty() {
             return Ok(true);
         }
@@ -456,8 +448,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (pf, efun)
                 };
 
-                let new_frame =
-                    self.prepare_new_call_frame(cell_key, process, pf.into())?;
+                let new_frame = self.prepare_new_call_frame(cell_key, process, pf.into())?;
 
                 self.stack.push(new_frame)?;
 
@@ -546,7 +537,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IDiv(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(
+                        self,
+                        r3,
+                        self.task_context.memory().value_to_ref(result),
+                        cell_key
+                    )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -555,7 +551,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IMod(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(
+                        self,
+                        r3,
+                        self.task_context.memory().value_to_ref(result),
+                        cell_key
+                    )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -564,7 +565,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IMul(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(
+                        self,
+                        r3,
+                        self.task_context.memory().value_to_ref(result),
+                        cell_key
+                    )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -576,7 +582,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::ISub(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?, cell_key) {
-                    Ok(result) => set_loc!(self, r3, self.task_context.memory().value_to_ref(result), cell_key)?,
+                    Ok(result) => set_loc!(
+                        self,
+                        r3,
+                        self.task_context.memory().value_to_ref(result),
+                        cell_key
+                    )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
                         return Err(e.with_span(frame.current_debug_span()));
@@ -636,7 +647,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     );
                 }
 
-                let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(register_map));
+                let new_ref = self
+                    .task_context
+                    .memory()
+                    .value_to_ref(LpcValue::from(register_map));
 
                 set_loc!(self, r, new_ref, cell_key)?;
             }
@@ -682,7 +696,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(refs));
+                let new_ref = self
+                    .task_context
+                    .memory()
+                    .value_to_ref(LpcValue::from(refs));
 
                 set_location(&mut self.stack, r, new_ref, cell_key)?;
             }
@@ -815,7 +832,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_val = { get_new_value(&self.stack)? };
-                return_value(new_val, self.task_context.memory(), &mut self.stack, cell_key)?;
+                return_value(
+                    new_val,
+                    self.task_context.memory(),
+                    &mut self.stack,
+                    cell_key,
+                )?;
             }
             Instruction::Ret => {
                 pop_frame!(self).map(|frame| {
@@ -897,17 +919,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .iter()
             .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
-        let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(vars));
+        let new_ref = self
+            .task_context
+            .memory()
+            .value_to_ref(LpcValue::from(vars));
 
         set_loc!(self, location, new_ref, cell_key)
     }
 
     #[instrument(skip_all)]
-    fn handle_call<'task>(
-        &mut self,
-        name_idx: usize,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
+    fn handle_call<'task>(&mut self, name_idx: usize, cell_key: &mut QCellOwner) -> Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
@@ -1259,7 +1280,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         efun: Efun<STACKSIZE>,
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let mut ctx = EfunContext::new(&mut self.stack, &self.task_context, self.task_context.memory().clone());
+        let mut ctx = EfunContext::new(
+            &mut self.stack,
+            &self.task_context,
+            self.task_context.memory().clone(),
+        );
 
         efun(&mut ctx, cell_key)?;
 
@@ -1343,7 +1368,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     task.task_context.instruction_count(),
                                 )?;
 
-                            let Some(r) = task.task_context.into_result() else {
+                                let Some(r) = task.task_context.into_result() else {
                                     return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
                                 };
 
@@ -1435,11 +1460,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_call_simul_efun(
-        &mut self,
-        name_idx: usize,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
+    fn handle_call_simul_efun(&mut self, name_idx: usize, cell_key: &mut QCellOwner) -> Result<()> {
         let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
@@ -1735,7 +1756,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         trace!(?lpc_string, "Storing static string");
 
-        let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(lpc_string));
+        let new_ref = self
+            .task_context
+            .memory()
+            .value_to_ref(LpcValue::from(lpc_string));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -2456,7 +2480,6 @@ mod tests {
             use std::sync::mpsc;
 
             use claim::assert_ok;
-            
 
             use super::*;
 
@@ -4322,16 +4345,16 @@ mod tests {
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let task = Task::<20>::initialize_program(
-                        program,
-                        config,
-                        cell_key.cell(object_space),
-                        Memory::default(),
-                        Rc::new(vm_upvalues),
-                        call_outs,
-                        tx,
-                        &mut cell_key,
-                    )
-                    .expect("failed to initialize");
+                    program,
+                    config,
+                    cell_key.cell(object_space),
+                    Memory::default(),
+                    Rc::new(vm_upvalues),
+                    call_outs,
+                    tx,
+                    &mut cell_key,
+                )
+                .expect("failed to initialize");
 
                 let registers = &task.stack.last().unwrap().registers;
 
