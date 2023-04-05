@@ -1,6 +1,7 @@
 use std::{path::PathBuf, rc::Rc, sync::mpsc::Sender};
 
 use delegate::delegate;
+use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
@@ -17,46 +18,55 @@ use crate::{
 };
 
 /// A struct to carry context during a single function's evaluation.
-#[derive(Educe, Clone)]
+#[derive(Educe, Clone, Builder)]
 #[educe(Debug)]
 pub struct TaskContext {
     /// The [`Config`] that's in use for the
     /// [`Task`](crate::interpreter::task::Task).
+    #[builder(setter(into))]
     config: Rc<Config>,
 
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
     #[educe(Debug(method = "qcell_debug"))]
+    #[builder(setter(into))]
     process: Rc<QCell<Process>>,
 
     /// The global [`ObjectSpace`]
     #[educe(Debug(method = "qcell_debug"))]
+    #[builder(setter(into))]
     object_space: Rc<QCell<ObjectSpace>>,
-
-    /// A counter, to ensure that too-long-evaluations do not occur
-    instruction_counter: InstructionCounter,
-
-    /// The final result of the original function that was called
-    result: OnceCell<LpcRef>,
 
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
+    #[builder(default, setter(strip_option))]
     simul_efuns: Option<Rc<QCell<Process>>>,
 
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
+    #[builder(setter(into))]
     vm_upvalues: Rc<QCell<GcRefBank>>,
 
     /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
+    #[builder(setter(into))]
     call_outs: Rc<QCell<CallOuts>>,
 
     /// The tx channel to send messages back to the [`Vm`](crate::interpreter::vm::Vm).
     tx: Sender<VmOp>,
 
     /// A pointer to a memory pool to allocate new values from
+    #[builder(default, setter(into))]
     memory: Rc<Memory>,
+
+    /// A counter, to ensure that too-long-evaluations do not occur
+    #[builder(default)]
+    instruction_counter: InstructionCounter,
+
+    /// The final result of the original function that was called
+    #[builder(default)]
+    result: OnceCell<LpcRef>,
 }
 
 impl TaskContext {
