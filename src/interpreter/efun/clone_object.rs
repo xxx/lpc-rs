@@ -47,7 +47,7 @@ fn load_master<const N: usize>(
                     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
                     task.eval(prog_function, &[], cell_key)?;
 
-                    context.set_instruction_count(task.task_context.instruction_count())?;
+                    context.set_instruction_count(task.context.instruction_count())?;
 
                     Ok(process)
                 }
@@ -96,7 +96,7 @@ pub fn clone_object<const N: usize>(
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
         task.eval(initializer, &[], cell_key)?;
 
-        context.set_instruction_count(task.task_context.instruction_count())?;
+        context.set_instruction_count(task.context.instruction_count())?;
 
         // Set up the return value
         let v = LpcValue::Object(new_clone);
@@ -168,7 +168,7 @@ mod tests {
             .expect("second task failed");
 
         // procs are /example, /example#0, /example#1
-        assert_eq!(task.task_context.object_space().ro(&cell_key).len(), 3);
+        assert_eq!(task.context.object_space().ro(&cell_key).len(), 3);
     }
 
     #[test]

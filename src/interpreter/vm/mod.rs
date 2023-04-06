@@ -441,10 +441,10 @@ impl Vm {
             &mut self.cell_key,
         )
         .map(|task| {
-            let process = task.task_context.process();
+            let process = task.context.process();
             ObjectSpace::insert_process(&self.object_space, process, &mut self.cell_key);
 
-            task.task_context
+            task.context
         })
     }
 }

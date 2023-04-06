@@ -65,7 +65,7 @@ macro_rules! pop_frame {
             $task.stack.copy_result(&frame)?;
 
             if $task.stack.is_empty() {
-                $task.task_context.set_result(frame.registers[0].clone())?;
+                $task.context.set_result(frame.registers[0].clone())?;
             }
         }
 
@@ -206,7 +206,7 @@ pub struct Task<const STACKSIZE: usize> {
     array_items: Vec<RegisterVariant>,
 
     /// The context of this task
-    pub task_context: TaskContext,
+    pub context: TaskContext,
 
     /// The current state of the task
     pub state: TaskState,
@@ -231,7 +231,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             args: Vec::with_capacity(10),
             partial_args: Vec::with_capacity(10),
             array_items: Vec::with_capacity(10),
-            task_context,
+            context: task_context,
             state: TaskState::New,
 
             #[cfg(test)]
@@ -307,7 +307,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         F: Into<Rc<ProgramFunction>>,
     {
         let function = f.into();
-        let process = self.task_context.process();
+        let process = self.context.process();
 
         self.eval_function(process, function, args, cell_key)
     }
@@ -348,7 +348,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             f,
             args.len(),
             None,
-            self.task_context.upvalues().clone(),
+            self.context.upvalues().clone(),
             cell_key,
         );
         if !args.is_empty() {
@@ -421,7 +421,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(true);
         }
 
-        self.task_context.increment_instruction_count(1)?;
+        self.context.increment_instruction_count(1)?;
 
         let instruction = {
             let frame = match self.stack.current_frame() {
@@ -464,7 +464,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let lpc_ref = &*get_loc!(self, r1, cell_key)?;
                 match lpc_ref.bitnot(cell_key) {
                     Ok(result) => {
-                        let var = self.task_context.memory().value_to_ref(result);
+                        let var = self.context.memory().value_to_ref(result);
 
                         set_loc!(self, r2, var, cell_key)?;
                     }
@@ -561,7 +561,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::IAdd(r1, r2, r3) => {
                 match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?, cell_key) {
                     Ok(result) => {
-                        let out = self.task_context.memory().value_to_ref(result);
+                        let out = self.context.memory().value_to_ref(result);
 
                         set_loc!(self, r3, out, cell_key)?;
                     }
@@ -585,7 +585,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.task_context.memory().value_to_ref(result),
+                        self.context.memory().value_to_ref(result),
                         cell_key
                     )?,
                     Err(e) => {
@@ -599,7 +599,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.task_context.memory().value_to_ref(result),
+                        self.context.memory().value_to_ref(result),
                         cell_key
                     )?,
                     Err(e) => {
@@ -613,7 +613,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.task_context.memory().value_to_ref(result),
+                        self.context.memory().value_to_ref(result),
                         cell_key
                     )?,
                     Err(e) => {
@@ -630,7 +630,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.task_context.memory().value_to_ref(result),
+                        self.context.memory().value_to_ref(result),
                         cell_key
                     )?,
                     Err(e) => {
@@ -693,7 +693,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
 
                 let new_ref = self
-                    .task_context
+                    .context
                     .memory()
                     .value_to_ref(LpcValue::from(register_map));
 
@@ -748,7 +748,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_ref = self
-                    .task_context
+                    .context
                     .memory()
                     .value_to_ref(LpcValue::from(refs));
 
@@ -885,7 +885,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let new_val = { get_new_value(&self.stack)? };
                 return_value(
                     new_val,
-                    self.task_context.memory(),
+                    self.context.memory(),
                     &mut self.stack,
                     cell_key,
                 )?;
@@ -928,7 +928,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let lpc_ref = self.task_context.memory().value_to_ref(value);
+                let lpc_ref = self.context.memory().value_to_ref(value);
 
                 set_loc!(self, r2, lpc_ref, cell_key)?;
             }
@@ -972,7 +972,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
         let new_ref = self
-            .task_context
+            .context
             .memory()
             .value_to_ref(LpcValue::from(vars));
 
@@ -1006,7 +1006,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 if_chain! {
                     // See if there is a simul efun with this name
-                    if let Some(func) = self.task_context.simul_efuns();
+                    if let Some(func) = self.context.simul_efuns();
                     let b = func.ro(cell_key);
                     if let Some(func) = b.as_ref().lookup_function(name);
                     then {
@@ -1042,7 +1042,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             num_args,
             num_args,
             None, // static functions do not inherit upvalues from the calling function
-            self.task_context.upvalues().clone(),
+            self.context.upvalues().clone(),
             cell_key,
         );
 
@@ -1120,7 +1120,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public()
                 && !pf.is_closure()
-                && (ptr.call_other || !Rc::ptr_eq(&self.task_context.process(), receiver))
+                && (ptr.call_other || !Rc::ptr_eq(&self.context.process(), receiver))
             {
                 return set_loc!(self, Register(0).as_local(), NULL, cell_key);
             }
@@ -1147,7 +1147,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             passed_args_count,
             new_registers,
             upvalues,
-            self.task_context.upvalues().clone(),
+            self.context.upvalues().clone(),
             cell_key,
         );
 
@@ -1287,7 +1287,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 (frame.process.clone(), Rc::new(pf))
             }
             FunctionAddress::SimulEfun(name) => {
-                let Some(simul_efuns) = self.task_context.simul_efuns() else {
+                let Some(simul_efuns) = self.context.simul_efuns() else {
                     return Err(self.runtime_bug("simul_efun called without simul_efuns"));
                 };
 
@@ -1334,8 +1334,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> Result<()> {
         let mut ctx = EfunContext::new(
             &mut self.stack,
-            &self.task_context,
-            self.task_context.memory().clone(),
+            &self.context,
+            self.context.memory().clone(),
         );
 
         efun(&mut ctx, cell_key)?;
@@ -1417,10 +1417,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             if function.public() {
                                 task.eval(function, args, cell_key)?;
                                 task_context.increment_instruction_count(
-                                    task.task_context.instruction_count(),
+                                    task.context.instruction_count(),
                                 )?;
 
-                                let Some(r) = task.task_context.into_result() else {
+                                let Some(r) = task.context.into_result() else {
                                     return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
                                 };
 
@@ -1449,7 +1449,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     receiver_ref,
                     function_name,
                     &args,
-                    &self.task_context,
+                    &self.context,
                     cell_key,
                 )?,
                 LpcRef::Array(r) => {
@@ -1463,14 +1463,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 lpc_ref,
                                 function_name,
                                 &args,
-                                &self.task_context,
+                                &self.context,
                                 cell_key,
                             )
                             .unwrap_or(NULL)
                         })
                         .collect::<Vec<_>>()
                         .into();
-                    self.task_context.memory().value_to_ref(array_value)
+                    self.context.memory().value_to_ref(array_value)
                 }
                 LpcRef::Mapping(m) => {
                     let b = m.borrow();
@@ -1485,7 +1485,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     value_ref,
                                     function_name,
                                     &args,
-                                    &self.task_context,
+                                    &self.context,
                                     cell_key,
                                 )
                                 .unwrap_or(NULL),
@@ -1494,7 +1494,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .collect::<IndexMap<_, _>>()
                         .into();
 
-                    self.task_context.memory().value_to_ref(with_results)
+                    self.context.memory().value_to_ref(with_results)
                 }
                 _ => {
                     return Err(self.runtime_error(format!(
@@ -1517,7 +1517,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
-        let Some(simul_efuns) = self.task_context.simul_efuns() else {
+        let Some(simul_efuns) = self.context.simul_efuns() else {
             // This could be legitimately hit in the case an object was compiled with simul_efuns,
             // cached to disk, and then later executed without them.
             // tl;dr objects are dynamically linked.
@@ -1634,7 +1634,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             unique_id: UniqueId::new(),
         };
 
-        let new_ref = self.task_context.memory().value_to_ref(LpcValue::from(fp));
+        let new_ref = self.context.memory().value_to_ref(LpcValue::from(fp));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -1642,7 +1642,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     fn capture_environment(&mut self, cell_key: &mut QCellOwner) -> Result<Vec<Register>> {
         let frame = self.stack.current_frame_mut()?;
-        let upvalues = self.task_context.upvalues().rw(cell_key);
+        let upvalues = self.context.upvalues().rw(cell_key);
 
         trace!("ptrs: {:?}", frame.upvalue_ptrs);
         trace!("upvalues: {:?}", upvalues);
@@ -1809,7 +1809,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         trace!(?lpc_string, "Storing static string");
 
         let new_ref = self
-            .task_context
+            .context
             .memory()
             .value_to_ref(LpcValue::from(lpc_string));
 
@@ -1947,7 +1947,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // set up the catch point's return value
         let value = LpcValue::from(error.to_string());
-        let lpc_ref = self.task_context.memory().value_to_ref(value);
+        let lpc_ref = self.context.memory().value_to_ref(value);
         set_loc!(self, Register(result_index).as_local(), lpc_ref, cell_key)?;
         let frame = self.stack.current_frame_mut()?;
 
@@ -1974,7 +1974,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match operation(ref1, ref2, cell_key) {
             Ok(result) => {
-                let var = self.task_context.memory().value_to_ref(result);
+                let var = self.context.memory().value_to_ref(result);
 
                 set_loc!(self, r3, var, cell_key)?;
             }
@@ -2067,7 +2067,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[inline]
     pub fn result(&self) -> Option<&LpcRef> {
-        self.task_context.result()
+        self.context.result()
     }
 }
 
@@ -2433,7 +2433,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
@@ -2458,7 +2458,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
@@ -2481,7 +2481,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let proc = ctx.process();
                 let borrowed = proc.ro(&cell_key);
@@ -3047,7 +3047,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let expected = vec![Int(4), Int(4)];
 
@@ -3095,7 +3095,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let expected = vec![Int(4), Int(5)];
 
@@ -3594,7 +3594,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let expected = vec![Int(1), Int(1)];
 
@@ -3642,7 +3642,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
 
                 let expected = vec![Int(6), Int(5)];
 
@@ -4131,7 +4131,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let task = run_prog(code, &mut cell_key);
-                let ctx = task.task_context;
+                let ctx = task.context;
                 Array(vec![]).assert_equal(ctx.result().unwrap(), &cell_key);
             }
         }
@@ -4591,7 +4591,7 @@ mod tests {
 
             BareVal::assert_vec_equal(&expected, &registers, &cell_key);
 
-            let proc = task.task_context.process();
+            let proc = task.context.process();
             let proc = proc.ro(&cell_key);
 
             let expected = vec![
@@ -4975,7 +4975,7 @@ mod tests {
             "##};
 
             let task = run_prog(code, &mut cell_key);
-            let ctx = &task.task_context;
+            let ctx = &task.context;
             assert!(!ctx.upvalues().ro(&cell_key).is_empty());
 
             let mut marked = BitSet::new();
