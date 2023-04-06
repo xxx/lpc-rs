@@ -10,7 +10,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
-use tracing::{instrument, trace, warn};
+use tracing::{error, instrument, trace, warn};
 use vm_op::VmOp;
 
 use crate::{
@@ -166,7 +166,7 @@ impl Vm {
                             }
                             TaskState::New
                             | TaskState::Running => {
-                                panic!("Task returned from resume() in an invalid state: {:?}", task.state);
+                                error!("Task {} returned from resume() in an invalid state: {}", task.id, task.state);
                                 self.task_queue.switch_to_next();
                             }
                         }

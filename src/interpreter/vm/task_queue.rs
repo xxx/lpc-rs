@@ -80,26 +80,53 @@ impl<const STACKSIZE: usize> Default for TaskQueue<STACKSIZE> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::interpreter::task_context::TaskContext;
-//     use super::*;
-//
-//     #[test]
-//     fn test_task_queue() {
-//         let mut queue = TaskQueue::new();
-//         assert!(queue.current().is_none());
-//         assert!(queue.current_mut().is_none());
-//
-//         let task = Task::new(TaskContext::);
-//         queue.push(task);
-//         assert!(queue.current().is_some());
-//         assert!(queue.current_mut().is_some());
-//
-//         queue.finish_current();
-//         assert_eq!(queue.ready_len(), 0);
-//         assert!(queue.is_empty());
-//         assert!(queue.current().is_none());
-//         assert!(queue.current_mut().is_none());
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use qcell::QCellOwner;
+    use crate::interpreter::call_outs::CallOuts;
+    use crate::interpreter::gc::gc_bank::GcRefBank;
+    use crate::interpreter::object_space::ObjectSpace;
+    use crate::interpreter::process::Process;
+    use crate::interpreter::task_context::{TaskContext, TaskContextBuilder};
+    use crate::test_support::test_config;
+    use super::*;
+
+    #[test]
+    fn test_task_queue() {
+        let mut queue = TaskQueue::<1>::new();
+
+        assert!(queue.current().is_none());
+
+        let mut cell_key = QCellOwner::new();
+
+        let (tx, _) = std::sync::mpsc::channel();
+
+        let ctx = TaskContextBuilder::default().
+            config(test_config())
+            .process(cell_key.cell(Process::default()))
+            .object_space(cell_key.cell(ObjectSpace::default()))
+            .vm_upvalues(cell_key.cell(GcRefBank::default()))
+            .call_outs(cell_key.cell(CallOuts::new(tx.clone())))
+            .tx(tx.clone())
+            .build().unwrap();
+
+        let task = Task::new(ctx.clone());
+        let id = task.id;
+        let task2 = Task::new(ctx);
+        let id2 = task2.id;
+
+        queue.push(task);
+        queue.push_front(task2);
+        assert_eq!(queue.current().unwrap().id, id2);
+
+        queue.current_mut().unwrap().state = TaskState::Paused; // avoid an assertion failure
+        queue.switch_to_next();
+        assert_eq!(queue.current().unwrap().id, id);
+
+        queue.finish_current();
+        assert_eq!(queue.current().unwrap().id, id2);
+
+        queue.finish_current();
+        assert!(queue.current().is_none());
+    }
+}
