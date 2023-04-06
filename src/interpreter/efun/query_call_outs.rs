@@ -61,6 +61,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::lpc_array::LpcArray;
 
     #[test]
     fn test_query_call_out() {
