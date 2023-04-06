@@ -190,9 +190,9 @@ impl Vm {
                         // VmOp::Yield => {
                         //     self.op_yield_task()?;
                         // }
-                        VmOp::FinishTask(_task_id) => {
-                            self.op_finish_task()?;
-                        }
+                        // VmOp::FinishTask(task_id) => {
+                        //     self.op_finish_task()?;
+                        // }
                     }
                 }
                 Err(e) => {
