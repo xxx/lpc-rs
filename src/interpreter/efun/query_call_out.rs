@@ -36,7 +36,8 @@ pub fn query_call_out<const N: usize>(
     Ok(())
 }
 
-fn call_out_array_ref<const N: usize>(context: &EfunContext<N>, call_out: &CallOut) -> Result<LpcRef> {
+/// get the result Array reference to returning from `query_call_out` and `query_call_outs`
+pub fn call_out_array_ref<const N: usize>(context: &EfunContext<N>, call_out: &CallOut) -> Result<LpcRef> {
     let mut arr = Vec::new();
     let LpcRef::Function(f) = &call_out.func_ref else {
         return Err(context.runtime_bug("call out function is not a function. This shouldn't be reachable."));
@@ -56,4 +57,68 @@ fn call_out_array_ref<const N: usize>(context: &EfunContext<N>, call_out: &CallO
 
     let result = context.value_to_ref(LpcValue::Array(LpcArray::new(arr)));
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+    use if_chain::if_chain;
+    use lpc_rs_utils::config::Config;
+    use crate::interpreter::call_outs::CallOuts;
+    use crate::interpreter::gc::gc_bank::GcBank;
+    use crate::interpreter::memory::Memory;
+    use crate::interpreter::object_space::ObjectSpace;
+    use crate::interpreter::task::Task;
+    use crate::test_support::compile_prog;
+    use super::*;
+
+    #[test]
+    fn test_query_call_out() {
+        let mut cell_key = QCellOwner::new();
+
+        let code = r##"
+            mixed create() {
+                int id = call_out(call_out_test, 100);
+
+                mixed *result = query_call_out(id);
+
+                remove_call_out(id);
+
+                return result;
+            }
+
+            void call_out_test() {
+                dump("foobar");
+            }
+        "##;
+
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let (program, _, _) = compile_prog(code, &mut cell_key);
+        let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let task = Task::<10>::initialize_program(
+            program,
+            Config::default(),
+            cell_key.cell(ObjectSpace::default()),
+            Memory::default(),
+            cell_key.cell(GcBank::default()),
+            call_outs.clone(),
+            tx,
+            &mut cell_key,
+        ).unwrap();
+
+        if_chain! {
+            if let LpcRef::Array(arr) = task.result().unwrap();
+            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.borrow();
+            then {
+                assert_eq!(array.len(), 4);
+                assert!(matches!(array[0], LpcRef::Object(_)));
+                assert!(matches!(array[1], LpcRef::Function(_)));
+                assert!(matches!(array[2], LpcRef::Int(_)));
+                assert_eq!(array[3], LpcRef::Int(0));
+            }
+            else {
+                panic!("result is not an array");
+            }
+        }
+    }
 }
