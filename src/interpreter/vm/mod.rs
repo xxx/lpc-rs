@@ -1,6 +1,11 @@
-use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, rc::Rc, sync::mpsc::{Receiver, Sender}};
-use std::sync::mpsc::{RecvTimeoutError};
-
+use std::{
+    cmp::Ordering,
+    fmt::Formatter,
+    hash::Hasher,
+    path::Path,
+    rc::Rc,
+    sync::mpsc::{Receiver, RecvTimeoutError, Sender},
+};
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -31,14 +36,13 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::Task,
+        task::{task_state::TaskState, Task},
         task_context::TaskContext,
         vm::task_queue::TaskQueue,
     },
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
-use crate::interpreter::task::task_state::TaskState;
 
 pub mod task_queue;
 pub mod vm_op;
@@ -155,22 +159,21 @@ impl Vm {
             // println!("looping");
             if let Some(task) = self.task_queue.current_mut() {
                 match task.resume(&mut self.cell_key) {
-                    Ok(()) => {
-                        match task.state {
-                            TaskState::Complete
-                            | TaskState::Error => {
-                                self.task_queue.finish_current();
-                            }
-                            TaskState::Paused => {
-                                self.task_queue.switch_to_next();
-                            }
-                            TaskState::New
-                            | TaskState::Running => {
-                                error!("Task {} returned from resume() in an invalid state: {}", task.id, task.state);
-                                self.task_queue.switch_to_next();
-                            }
+                    Ok(()) => match task.state {
+                        TaskState::Complete | TaskState::Error => {
+                            self.task_queue.finish_current();
                         }
-                    }
+                        TaskState::Paused => {
+                            self.task_queue.switch_to_next();
+                        }
+                        TaskState::New | TaskState::Running => {
+                            error!(
+                                "Task {} returned from resume() in an invalid state: {}",
+                                task.id, task.state
+                            );
+                            self.task_queue.switch_to_next();
+                        }
+                    },
                     Err(e) => {
                         e.emit_diagnostics();
                         self.task_queue.finish_current();
@@ -186,13 +189,12 @@ impl Vm {
                     match op {
                         VmOp::PrioritizeCallOut(idx) => {
                             self.op_prioritize_call_out(idx)?;
-                        }
-                        // VmOp::Yield => {
-                        //     self.op_yield_task()?;
-                        // }
-                        // VmOp::FinishTask(task_id) => {
-                        //     self.op_finish_task()?;
-                        // }
+                        } /* VmOp::Yield => {
+                           *     self.op_yield_task()?;
+                           * }
+                           * VmOp::FinishTask(task_id) => {
+                           *     self.op_finish_task()?;
+                           * } */
                     }
                 }
                 Err(e) => {

@@ -9,7 +9,6 @@ use std::{
 };
 
 use bit_set::BitSet;
-
 use decorum::Total;
 use educe::Educe;
 use hash_hasher::HashBuildHasher;
@@ -48,14 +47,13 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
+        task::{task_id::TaskId, task_state::TaskState},
         task_context::TaskContext,
         vm::vm_op::VmOp,
     },
     try_extract_value,
     util::keyable::Keyable,
 };
-use crate::interpreter::task::task_id::TaskId;
-use crate::interpreter::task::task_state::TaskState;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Rc<QCell<Process>>, Rc<ProgramFunction>);
@@ -338,7 +336,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
-    pub fn prepare_function_call(&mut self, process: Rc<QCell<Process>>, f: Rc<ProgramFunction>, args: &[LpcRef], cell_key: &mut QCellOwner) -> Result<()> {
+    pub fn prepare_function_call(
+        &mut self,
+        process: Rc<QCell<Process>>,
+        f: Rc<ProgramFunction>,
+        args: &[LpcRef],
+        cell_key: &mut QCellOwner,
+    ) -> Result<()> {
         let mut frame = CallFrame::new(
             process,
             f,
@@ -385,7 +389,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-
                 // if !halted && Utc::now() > breaker {
                 //     println!("pausing");
                 //     self.state = TaskState::Paused;
@@ -427,7 +430,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     self.state = TaskState::Error;
                     warn!("Expected to get an instruction, but there are no more frames.");
                     return Ok(true);
-                },
+                }
             };
 
             let Some(instruction) = frame.instruction() else {

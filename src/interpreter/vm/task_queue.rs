@@ -1,9 +1,8 @@
 use std::collections::VecDeque;
 
-use crate::compile_time_config::MAX_CALL_STACK_SIZE;
 // use delegate::delegate;
 use crate::interpreter::task::Task;
-use crate::interpreter::task::task_state::TaskState;
+use crate::{compile_time_config::MAX_CALL_STACK_SIZE, interpreter::task::task_state::TaskState};
 
 #[derive(Debug)]
 pub struct TaskQueue<const STACKSIZE: usize = MAX_CALL_STACK_SIZE> {
@@ -83,13 +82,15 @@ impl<const STACKSIZE: usize> Default for TaskQueue<STACKSIZE> {
 #[cfg(test)]
 mod tests {
     use qcell::QCellOwner;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcRefBank;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::process::Process;
-    use crate::interpreter::task_context::{TaskContextBuilder};
-    use crate::test_support::test_config;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcRefBank, object_space::ObjectSpace,
+            process::Process, task_context::TaskContextBuilder,
+        },
+        test_support::test_config,
+    };
 
     #[test]
     fn test_task_queue() {
@@ -101,14 +102,15 @@ mod tests {
 
         let (tx, _) = std::sync::mpsc::channel();
 
-        let ctx = TaskContextBuilder::default().
-            config(test_config())
+        let ctx = TaskContextBuilder::default()
+            .config(test_config())
             .process(cell_key.cell(Process::default()))
             .object_space(cell_key.cell(ObjectSpace::default()))
             .vm_upvalues(cell_key.cell(GcRefBank::default()))
             .call_outs(cell_key.cell(CallOuts::new(tx.clone())))
             .tx(tx)
-            .build().unwrap();
+            .build()
+            .unwrap();
 
         let task = Task::new(ctx.clone());
         let id = task.id;
