@@ -2,7 +2,7 @@
 
 `int remove_call_out(int id)`
 
-Remove a call_out by its ID.
+Remove a call out by its ID.
 
 If the call out was successfully removed, milliseconds left before the call
 would have been made are returned. If the call out was not found, or already removed,
@@ -22,4 +22,4 @@ call_out(&remove_call_out(call_out_id), 0.5);
 
 ### See Also
 
-`call_out`, `get_call_out`, `get_call_outs`
+`call_out`, `query_call_out`, `query_call_outs`

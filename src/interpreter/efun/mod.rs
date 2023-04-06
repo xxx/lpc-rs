@@ -5,6 +5,7 @@ pub(crate) mod clone_object;
 pub(crate) mod debug;
 pub(crate) mod dump;
 pub(crate) mod file_name;
+pub(crate) mod query_call_out;
 pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
@@ -35,6 +36,7 @@ pub const CLONE_OBJECT: &str = "clone_object";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
+pub const QUERY_CALL_OUT: &str = "query_call_out";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
@@ -48,6 +50,7 @@ pub trait HasEfuns<const STACKSIZE: usize> {
         "debug" => debug::debug as Efun<STACKSIZE>,
         "dump" => dump::dump as Efun<STACKSIZE>,
         "file_name" => file_name::file_name as Efun<STACKSIZE>,
+        "query_call_out" => query_call_out::query_call_out as Efun<STACKSIZE>,
         "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
         "this_object" => this_object::this_object as Efun<STACKSIZE>,
         "throw" => throw::throw as Efun<STACKSIZE>,
@@ -182,6 +185,19 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .arg_types(vec![LpcType::Object(false)])
             .build()
             .expect("failed to build file_name"),
+    );
+
+    m.insert(
+        QUERY_CALL_OUT,
+        FunctionPrototypeBuilder::default()
+            .name(QUERY_CALL_OUT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Mixed(true))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Int(false)])
+            .build()
+            .expect("failed to build query_call_out"),
     );
 
     m.insert(

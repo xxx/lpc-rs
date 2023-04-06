@@ -62,8 +62,9 @@ pub fn call_out<const N: usize>(
         None
     };
 
+    let process = context.frame().process.clone();
     let call_outs = context.call_outs().rw(cell_key);
-    let index = call_outs.schedule_task(func_ref, duration, repeat)?;
+    let index = call_outs.schedule_task(process, func_ref, duration, repeat)?;
 
     // TODO: limit the max number of call outs so we don't overflow this
     let result = LpcRef::Int(index as i64);

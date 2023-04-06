@@ -147,7 +147,7 @@ impl Vm {
     }
 
     /// Run the [`Vm`]'s main loop.
-    /// Assumes `boot()` has already been called.
+    /// Assumes `bootstrap()` has already been called.
     /// # Arguments
     ///
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s

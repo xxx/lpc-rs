@@ -37,4 +37,4 @@ are what you expect!
 
 ### See Also
 
-`remove_call_out`, `get_call_out`, `get_call_outs`
+`remove_call_out`, `query_call_out`, `query_call_outs`

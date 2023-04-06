@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
 use bit_set::BitSet;
@@ -5,16 +6,21 @@ use chrono::{DateTime, Duration, Utc};
 use delegate::delegate;
 use educe::Educe;
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
+use qcell::{QCell, QCellOwner};
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
 
 use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, vm::vm_op::VmOp};
+use crate::interpreter::process::Process;
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct CallOut {
+    /// The process where `call_out` was called from.
+    #[educe(Debug(ignore))]
+    process: Rc<QCell<Process>>,
+
     /// The reference to the function that will be run.
     pub func_ref: LpcRef,
 
@@ -44,6 +50,11 @@ impl CallOut {
         }
     }
 
+    #[inline]
+    pub fn repeat_duration(&self) -> Option<Duration> {
+        self.repeat_duration
+    }
+
     /// How much time is left until this call out runs?
     /// If the call out has already run and will not repeat, this will return `None`.
     pub fn time_remaining(&self) -> Option<Duration> {
@@ -53,6 +64,12 @@ impl CallOut {
         } else {
             Some(self.next_run - now)
         }
+    }
+
+    /// Get the process that owns this call out
+    #[inline]
+    pub fn process(&self) -> &Rc<QCell<Process>> {
+        &self.process
     }
 }
 
@@ -116,6 +133,7 @@ impl CallOuts {
     /// Schedule a [`CallOut`] to be run after a given delay
     pub fn schedule_task(
         &mut self,
+        process: Rc<QCell<Process>>,
         func_ref: LpcRef,
         delay: Duration,
         repeat: Option<Duration>,
@@ -129,6 +147,7 @@ impl CallOuts {
         });
 
         self.queue.push(CallOut {
+            process,
             func_ref,
             repeat_duration: repeat,
             next_run: date,
