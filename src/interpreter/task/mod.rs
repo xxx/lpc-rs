@@ -721,6 +721,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 set_loc!(self, r2, matched, cell_key)?;
             }
+            Instruction::NotEq(r1, r2, r3) => {
+                let out =
+                    (get_loc!(self, r1, cell_key)? != get_loc!(self, r2, cell_key)?) as LpcInt;
+
+                set_loc!(self, r3, LpcRef::Int(out), cell_key)?;
+            }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitor(y, cell_key), cell_key)?;
             }
@@ -2057,6 +2063,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     fn index_symbol(index: usize) -> DefaultSymbol {
         DefaultSymbol::try_from_usize(index).unwrap()
+    }
+
+    #[inline]
+    pub fn result(&self) -> Option<&LpcRef> {
+        self.task_context.result()
     }
 }
 

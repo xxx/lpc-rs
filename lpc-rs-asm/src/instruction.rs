@@ -165,6 +165,10 @@ pub enum Instruction {
     /// Check if x.0 is equal to 0
     Not(RegisterVariant, RegisterVariant),
 
+    /// `!=` comparison
+    /// x.2 = x.0 != x.1
+    NotEq(RegisterVariant, RegisterVariant, RegisterVariant),
+
     /// bitwise | comparison.
     /// x.2 = x.0 | x.1
     Or(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -394,6 +398,9 @@ impl Display for Instruction {
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "not {r1}, {r2}")
+            }
+            Instruction::NotEq(r1, r2, r3) => {
+                write!(f, "not_eq {r1}, {r2}, {r3}")
             }
             Instruction::Or(r1, r2, r3) => {
                 write!(f, "or {r1}, {r2}, {r3}")

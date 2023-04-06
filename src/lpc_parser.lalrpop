@@ -989,6 +989,7 @@ MultiplicitiveBinaryOp: BinaryOperation = {
 
 EqualityOp: BinaryOperation = {
     "==" => BinaryOperation::EqEq,
+    "!=" => BinaryOperation::NotEq,
 };
 
 RelationalOp: BinaryOperation = {

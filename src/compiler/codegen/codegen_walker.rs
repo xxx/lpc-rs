@@ -411,6 +411,7 @@ impl CodegenWalker {
             BinaryOperation::Or => Instruction::Or(reg_left, reg_right, reg_result),
             BinaryOperation::Xor => Instruction::Xor(reg_left, reg_right, reg_result),
             BinaryOperation::EqEq => Instruction::EqEq(reg_left, reg_right, reg_result),
+            BinaryOperation::NotEq => Instruction::NotEq(reg_left, reg_right, reg_result),
             BinaryOperation::Lt => Instruction::Lt(reg_left, reg_right, reg_result),
             BinaryOperation::Lte => Instruction::Lte(reg_left, reg_right, reg_result),
             BinaryOperation::Gt => Instruction::Gt(reg_left, reg_right, reg_result),

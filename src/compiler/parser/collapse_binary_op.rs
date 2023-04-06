@@ -39,6 +39,7 @@ pub fn collapse_binary_op(
         BinaryOperation::Shr => collapse_shr(op, l, r, span),
         BinaryOperation::Index
         | BinaryOperation::EqEq
+        | BinaryOperation::NotEq
         | BinaryOperation::Lt
         | BinaryOperation::Lte
         | BinaryOperation::Gt
