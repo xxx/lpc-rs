@@ -1,20 +1,25 @@
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 /// A struct to hold data about a function's expected arity at call time.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Builder)]
 pub struct FunctionArity {
     /// The number of explicitly-specified parameters
     /// For partial applications, this is the arity of the underlying function,
     /// without taking partial parameters into account.
+    #[builder(default)]
     pub num_args: usize,
 
     /// The number of arguments that defaults were specified for
+    #[builder(default)]
     pub num_default_args: usize,
 
     /// Has an ellipsis arg been declared for this function?
+    #[builder(default)]
     pub ellipsis: bool,
 
     /// Is the function `varargs`?
+    #[builder(default)]
     pub varargs: bool,
 }
 

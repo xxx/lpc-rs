@@ -8,7 +8,7 @@ use crate::interpreter::lpc_array::LpcArray;
 use crate::interpreter::lpc_ref::LpcRef;
 use crate::interpreter::process::Process;
 
-/// `query_call_out`, an efun for return information about a single call out.
+/// `query_call_out`, an efun for returning information about a single call out.
 pub fn query_call_out<const N: usize>(
     context: &mut EfunContext<N>,
     cell_key: &mut QCellOwner,

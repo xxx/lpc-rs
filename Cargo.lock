@@ -1201,6 +1201,7 @@ version = "0.1.0"
 dependencies = [
  "bstr",
  "decorum",
+ "derive_builder",
  "fs-err",
  "indextree",
  "modular-bitfield",

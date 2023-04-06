@@ -7,6 +7,7 @@ use delegate::delegate;
 use educe::Educe;
 use lpc_rs_errors::Result;
 use qcell::{QCell, QCellOwner};
+use stable_vec::core::DefaultCore;
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
 
@@ -128,6 +129,15 @@ impl CallOuts {
             /// Remove a [`CallOut`] by its index
             pub fn remove(&mut self, index: usize) -> Option<CallOut>;
         }
+    }
+
+    /// Get a reference to the underlying [`StableVec`]
+    /// This is only used for iterating, as StableVec's
+    /// Iter type is private, so we can't even declare it
+    /// as a return type.
+    #[inline]
+    pub fn queue(&self) -> &StableVec<CallOut> {
+        &self.queue
     }
 
     /// Schedule a [`CallOut`] to be run after a given delay

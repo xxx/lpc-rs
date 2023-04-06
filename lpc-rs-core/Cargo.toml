@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 bstr = "1.3.0"
 decorum = "0.3.1"
+derive_builder = "0.12.0"
 fs-err = "2.6.0"
 indextree = { version = "4.3.1", features = ["deser"] }
 modular-bitfield = "0.11.2"

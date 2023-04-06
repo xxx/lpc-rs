@@ -9,6 +9,7 @@ pub(crate) mod query_call_out;
 pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
+pub(crate) mod query_call_outs;
 
 use std::collections::HashMap;
 
@@ -23,6 +24,7 @@ use lpc_rs_function_support::function_prototype::{
 use once_cell::sync::Lazy;
 use phf::phf_map;
 use qcell::QCellOwner;
+use lpc_rs_core::function_arity::FunctionArityBuilder;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
@@ -37,6 +39,7 @@ pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
+pub const QUERY_CALL_OUTS: &str = "query_call_outs";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
@@ -51,6 +54,7 @@ pub trait HasEfuns<const STACKSIZE: usize> {
         "dump" => dump::dump as Efun<STACKSIZE>,
         "file_name" => file_name::file_name as Efun<STACKSIZE>,
         "query_call_out" => query_call_out::query_call_out as Efun<STACKSIZE>,
+        "query_call_outs" => query_call_outs::query_call_outs as Efun<STACKSIZE>,
         "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
         "this_object" => this_object::this_object as Efun<STACKSIZE>,
         "throw" => throw::throw as Efun<STACKSIZE>,
@@ -198,6 +202,19 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .arg_types(vec![LpcType::Int(false)])
             .build()
             .expect("failed to build query_call_out"),
+    );
+
+    m.insert(
+        QUERY_CALL_OUTS,
+        FunctionPrototypeBuilder::default()
+            .name(QUERY_CALL_OUTS)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Mixed(true))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArityBuilder::default().num_args(1).num_default_args(1).build().unwrap())
+            .arg_types(vec![LpcType::Object(false)])
+            .build()
+            .expect("failed to build query_call_out_info"),
     );
 
     m.insert(
