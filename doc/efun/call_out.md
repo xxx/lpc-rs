@@ -22,7 +22,7 @@ int call_out_id = call_out(&dump("i'm on a delay!", 5));
 
 object ob = clone_object("/lib/test/test_object");
 
-// Any function pointer can be passed to call_out, including closures.
+// Any function pointer (with a known receiver) can be passed to call_out, including closures.
 int call_out_id1 = call_out(&ob->add_two(4, 6), 1.5));
 int call_out_id3 = call_out(&call_other(ob, "add_two", 4, 6), 1.5));
 int call_out_id2 = call_out((: ob->add_two(4, 6) :), 1.5));
