@@ -4,8 +4,8 @@
 
 Call a function after a delay, and possibly repeating on a regular interval.
 
-If `seconds_delay` is 0 or negative, the function will be called immediately upon
-completion of the current function. 
+If `seconds_delay` is 0 or negative, the function will be immediately prioritized
+for calling when the current Task yields.
 
 If `seconds_repeat` is positive, the function will be called repeatedly at that
 interval, after the initial delay.
