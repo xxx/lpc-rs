@@ -307,23 +307,23 @@ impl Vm {
         Ok(true)
     }
 
-    /// Handler for [`VmOp::Yield`].
-    /// Yield the current task, and switch to the next one in the queue.
-    #[inline]
-    pub fn op_yield_task(&mut self) -> Result<()> {
-        self.task_queue.switch_to_next();
-
-        Ok(())
-    }
-
-    /// Handler for [`VmOp::Finish`].
-    /// Finish the current task, and switch to the next one in the queue.
-    #[inline]
-    pub fn op_finish_task(&mut self) -> Result<()> {
-        self.task_queue.finish_current();
-
-        Ok(())
-    }
+    // /// Handler for [`VmOp::Yield`].
+    // /// Yield the current task, and switch to the next one in the queue.
+    // #[inline]
+    // pub fn op_yield_task(&mut self) -> Result<()> {
+    //     self.task_queue.switch_to_next();
+    //
+    //     Ok(())
+    // }
+    //
+    // /// Handler for [`VmOp::Finish`].
+    // /// Finish the current task, and switch to the next one in the queue.
+    // #[inline]
+    // pub fn op_finish_task(&mut self) -> Result<()> {
+    //     self.task_queue.finish_current();
+    //
+    //     Ok(())
+    // }
 
     /// Initialize the simulated efuns file, if it is configured.
     ///
