@@ -1,3 +1,4 @@
+pub mod task_id;
 pub mod task_state;
 
 use std::{
@@ -53,6 +54,7 @@ use crate::{
     try_extract_value,
     util::keyable::Keyable,
 };
+use crate::interpreter::task::task_id::TaskId;
 use crate::interpreter::task::task_state::TaskState;
 
 // this is just to shut clippy up
@@ -188,6 +190,8 @@ struct CatchPoint {
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 pub struct Task<const STACKSIZE: usize> {
+    pub id: TaskId,
+
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
@@ -223,6 +227,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     pub fn new(task_context: TaskContext) -> Self {
         Self {
+            id: TaskId::new(),
             stack: CallStack::default(),
             catch_points: vec![],
             args: Vec::with_capacity(10),
