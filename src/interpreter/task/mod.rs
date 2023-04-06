@@ -1,3 +1,5 @@
+pub mod task_state;
+
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
@@ -24,7 +26,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use string_interner::{DefaultSymbol, Symbol};
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 use ustr::ustr;
 
 use crate::{
@@ -50,6 +52,7 @@ use crate::{
     try_extract_value,
     util::keyable::Keyable,
 };
+use crate::interpreter::task::task_state::TaskState;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Rc<QCell<Process>>, Rc<ProgramFunction>);
@@ -183,7 +186,7 @@ struct CatchPoint {
 /// function. It represents a single thread of execution
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-pub struct Task<const STACKSIZE: usize = MAX_CALL_STACK_SIZE> {
+pub struct Task<const STACKSIZE: usize> {
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
@@ -201,6 +204,9 @@ pub struct Task<const STACKSIZE: usize = MAX_CALL_STACK_SIZE> {
 
     /// The context of this task
     pub task_context: TaskContext,
+
+    /// The current state of the task
+    pub state: TaskState,
 
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
@@ -222,6 +228,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             partial_args: Vec::with_capacity(10),
             array_items: Vec::with_capacity(10),
             task_context,
+            state: TaskState::New,
 
             #[cfg(test)]
             popped_frame: None,
@@ -319,6 +326,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         args: &[LpcRef],
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
+        self.prepare_function_call(process, f, args, cell_key)?;
+
+        self.resume(cell_key)
+    }
+
+    /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
+    pub fn prepare_function_call(&mut self, process: Rc<QCell<Process>>, f: Rc<ProgramFunction>, args: &[LpcRef], cell_key: &mut QCellOwner) -> Result<()> {
         let mut frame = CallFrame::new(
             process,
             f,
@@ -331,18 +345,35 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
 
-        self.stack.push(frame)?;
-
-        self.resume(cell_key)
+        self.stack.push(frame)
     }
 
+    /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
     pub fn resume(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+        self.state = TaskState::Running;
+
         let f = &self.stack.current_frame()?.function;
         if f.prototype.is_efun() {
             let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(f.name()).unwrap();
+            // call the efun, then we're done with this Task
             self.prepare_and_call_efun(efun, cell_key)?;
+            debug_assert!(self.stack.is_empty());
+            self.state = TaskState::Complete;
         } else {
             let mut halted = false;
+
+            // // halt at the end of all input
+            // if self.stack.is_empty() {
+            //     self.state = TaskState::Complete;
+            //     self.task_context.tx().send(VmOp::FinishTask(69)).unwrap();
+            // } else {
+            //     // Yield to another Task
+            //     self.state = TaskState::Paused;
+            //     // self.task_context.tx().send(VmOp::Yield).unwrap();
+            //     // return Ok(true);
+            // }
+            //
+            // return Ok(true);
 
             while !halted {
                 halted = match self.eval_one_instruction(cell_key) {
@@ -360,6 +391,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
+        self.state = TaskState::Complete;
         Ok(())
     }
 
@@ -378,6 +410,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     fn eval_one_instruction(&mut self, cell_key: &mut QCellOwner) -> Result<bool> {
         if self.stack.is_empty() {
+            self.state = TaskState::Complete;
+
             return Ok(true);
         }
 
@@ -386,11 +420,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let instruction = {
             let frame = match self.stack.current_frame() {
                 Ok(x) => x,
-                Err(_) => return Ok(true),
+                Err(_) => {
+                    self.state = TaskState::Error;
+                    warn!("Expected to get an instruction, but there are no more frames.");
+                    return Ok(true);
+                },
             };
 
             let Some(instruction) = frame.instruction() else {
-                trace!("No more instructions");
+                self.state = TaskState::Error;
+                warn!("No more instructions. Missing Ret instruction?");
                 return Ok(true);
             };
             trace!("about to evaluate: {}", instruction);
@@ -846,6 +885,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 // halt at the end of all input
                 if self.stack.is_empty() {
+                    self.state = TaskState::Complete;
                     return Ok(true);
                 }
             }

@@ -164,6 +164,6 @@ mod tests {
         assert!(result.is_ok());
 
         let msg = rx.recv().unwrap();
-        assert_eq!(msg, VmOp::RunCallOut(0));
+        assert_eq!(msg, VmOp::PrioritizeCallOut(0));
     }
 }

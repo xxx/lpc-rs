@@ -122,10 +122,10 @@ impl CallOuts {
     ) -> Result<usize> {
         let index = self.queue.next_push_index();
         let tx = self.tx.clone();
-        let date = chrono::Utc::now() + delay;
+        let date = Utc::now() + delay;
         let guard = self.timer.schedule(date, repeat, move || {
             // This needs to run as fast as possible, and not fail.
-            let _ = tx.send(VmOp::RunCallOut(index));
+            let _ = tx.send(VmOp::PrioritizeCallOut(index));
         });
 
         self.queue.push(CallOut {

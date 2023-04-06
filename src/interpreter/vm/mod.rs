@@ -1,11 +1,6 @@
-use std::{
-    cmp::Ordering,
-    fmt::Formatter,
-    hash::Hasher,
-    path::Path,
-    rc::Rc,
-    sync::mpsc::{Receiver, Sender},
-};
+use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, hint, path::Path, rc::Rc, sync::mpsc::{Receiver, Sender}};
+use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
+use std::thread::sleep;
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -15,7 +10,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 use vm_op::VmOp;
 
 use crate::{
@@ -43,6 +38,7 @@ use crate::{
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
+use crate::interpreter::task::task_state::TaskState;
 
 pub mod task_queue;
 pub mod vm_op;
@@ -155,29 +151,63 @@ impl Vm {
     #[instrument(skip_all)]
     pub fn run(&mut self) -> Result<()> {
         loop {
-            match self.rx.recv() {
+            // Run some code for a bit
+            // println!("looping");
+            if let Some(task) = self.task_queue.current_mut() {
+                match task.resume(&mut self.cell_key) {
+                    Ok(()) => {
+                        match task.state {
+                            TaskState::Complete
+                            | TaskState::Error => {
+                                self.task_queue.finish_current();
+                            }
+                            TaskState::Paused => {
+                                self.task_queue.switch_to_next();
+                            }
+                            TaskState::New
+                            | TaskState::Running => {
+                                panic!("Task returned from resume() in an invalid state: {:?}", task.state);
+                                self.task_queue.switch_to_next();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        e.emit_diagnostics();
+                        self.task_queue.finish_current();
+                    }
+                }
+            }
+
+            // Check for bus messages
+            match self.rx.recv_timeout(std::time::Duration::from_millis(100)) {
                 Ok(op) => {
                     trace!(?op, "Received VmOp");
 
                     match op {
-                        VmOp::RunCallOut(idx) => {
-                            self.op_run_call_out(idx)?;
+                        VmOp::PrioritizeCallOut(idx) => {
+                            self.op_prioritize_call_out(idx)?;
                         }
-                        VmOp::Yield => {
-                            todo!()
+                        // VmOp::Yield => {
+                        //     self.op_yield_task()?;
+                        // }
+                        VmOp::FinishTask(_task_id) => {
+                            self.op_finish_task()?;
                         }
                     }
                 }
                 Err(e) => {
-                    panic!("Error receiving from channel: {}", e);
+                    if e == RecvTimeoutError::Timeout {
+                        // No messages
+                    } else {
+                        // Something went wrong
+                        panic!("Error receiving from channel: {}", e);
+                    }
                 }
             }
         }
-        //
-        // Ok(())
     }
 
-    /// Handler for [`VmOp::RunCallOut`].
+    /// Handler for [`VmOp::PrioritizeCallOut`].
     ///
     /// # Arguments
     ///
@@ -186,12 +216,12 @@ impl Vm {
     ///
     /// # Returns
     ///
-    /// * `Ok(Some(Task)))` - If the call out was run successfully
-    /// * `Ok(None)` - If the call out was not found (e.g. has been removed)
-    /// * `Err(LpcError)` - If there was an error running the call out
-    fn op_run_call_out(&mut self, idx: usize) -> Result<Option<Task>> {
+    /// * `Ok(true))` - If the call out was prioritized successfully
+    /// * `Ok(false)` - If the call out was not found (e.g. has been removed)
+    /// * `Err(LpcError)` - If there was an error prioritizing the call out
+    fn op_prioritize_call_out(&mut self, idx: usize) -> Result<bool> {
         if self.call_outs.ro(&self.cell_key).get(idx).is_none() {
-            return Ok(None);
+            return Ok(false);
         }
 
         let repeating: bool;
@@ -248,9 +278,16 @@ impl Vm {
             }
         };
 
+        let call_outs = self.call_outs.rw(&mut self.cell_key);
+        if repeating {
+            call_outs.get_mut(idx).unwrap().refresh();
+        } else {
+            call_outs.remove(idx);
+        }
+
         let task_context = TaskContext::new(
             self.config.clone(),
-            process,
+            process.clone(),
             self.object_space.clone(),
             self.memory.clone(),
             self.upvalues.clone(),
@@ -259,18 +296,31 @@ impl Vm {
             &self.cell_key,
         );
 
-        let mut task: Task = Task::new(task_context);
+        let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
 
-        task.eval(function, &args, &mut self.cell_key)?;
+        task.prepare_function_call(process, function, &args, &mut self.cell_key)?;
 
-        let call_outs = self.call_outs.rw(&mut self.cell_key);
-        if repeating {
-            call_outs.get_mut(idx).unwrap().refresh();
-        } else {
-            call_outs.remove(idx);
-        }
+        self.task_queue.push(task);
 
-        Ok(Some(task))
+        Ok(true)
+    }
+
+    /// Handler for [`VmOp::Yield`].
+    /// Yield the current task, and switch to the next one in the queue.
+    #[inline]
+    pub fn op_yield_task(&mut self) -> Result<()> {
+        self.task_queue.switch_to_next();
+
+        Ok(())
+    }
+
+    /// Handler for [`VmOp::Finish`].
+    /// Finish the current task, and switch to the next one in the queue.
+    #[inline]
+    pub fn op_finish_task(&mut self) -> Result<()> {
+        self.task_queue.finish_current();
+
+        Ok(())
     }
 
     /// Initialize the simulated efuns file, if it is configured.

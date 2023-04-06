@@ -76,6 +76,10 @@ impl TaskContext {
             #[call(increment)]
             pub fn increment_instruction_count(&self, amount: usize) -> Result<usize>;
 
+            /// Set the current task instruction count, checking for too-long-evaluations
+            #[call(set)]
+            pub fn set_instruction_count(&self, amount: usize) -> Result<usize>;
+
             /// Get the current instruction count
             #[call(count)]
             pub fn instruction_count(&self) -> usize;

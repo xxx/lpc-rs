@@ -54,6 +54,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Increment the current task instruction count, checking for too-long-evaluations
             pub fn increment_instruction_count(&self, amount: usize) -> Result<usize>;
 
+            /// Set the current task instruction count, checking for too-long-evaluations
+            pub fn set_instruction_count(&self, amount: usize) -> Result<usize>;
+
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
             pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>>;

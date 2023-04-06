@@ -6,7 +6,6 @@ use crate::interpreter::task::Task;
 
 #[derive(Debug)]
 pub struct TaskQueue<const STACKSIZE: usize = MAX_CALL_STACK_SIZE> {
-    current: Option<Task<STACKSIZE>>,
     ready: VecDeque<Task<STACKSIZE>>,
 }
 
@@ -27,28 +26,44 @@ impl<const STACKSIZE: usize> TaskQueue<STACKSIZE> {
     //     }
     // }
 
-    pub fn push(&mut self, task: Task<STACKSIZE>) -> &mut Task<STACKSIZE> {
-        self.ready.push_back(task);
+    /// Get a reference to the current [`Task`]
+    #[inline]
+    pub fn current(&self) -> Option<&Task<STACKSIZE>> {
+        self.ready.front()
+    }
 
-        self.ready.back_mut().unwrap()
+    /// Get a mutable reference to the current [`Task`]
+    #[inline]
+    pub fn current_mut(&mut self) -> Option<&mut Task<STACKSIZE>> {
+        self.ready.front_mut()
+    }
+
+    /// Push a new value onto the ready queue. Returns the index of the new value.
+    pub fn push(&mut self, task: Task<STACKSIZE>) {
+        self.ready.push_back(task);
+    }
+
+    /// Push a new value onto the front of the ready queue.
+    pub fn push_front(&mut self, task: Task<STACKSIZE>) {
+        self.ready.push_front(task);
     }
 
     /// Pause the current Task, and switch to the next one in the ready queue.
-    pub fn execute_next(&mut self) -> Option<&Task<STACKSIZE>> {
-        if let Some(task) = self.current.take() {
-            self.ready.push_back(task);
-        };
+    pub fn switch_to_next(&mut self) {
+        if self.ready.len() > 1 {
+            self.ready.rotate_left(1);
+        }
+    }
 
-        self.current = self.ready.pop_front();
-
-        self.current.as_ref()
+    /// Remove the current Task and make the next one current
+    pub fn finish_current(&mut self) {
+        self.ready.pop_front();
     }
 }
 
 impl<const STACKSIZE: usize> Default for TaskQueue<STACKSIZE> {
     fn default() -> Self {
         Self {
-            current: None,
             ready: VecDeque::with_capacity(32),
         }
     }

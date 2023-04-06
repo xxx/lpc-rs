@@ -23,6 +23,11 @@ impl InstructionCounter {
     /// Increment the counter by `amount`
     pub fn increment(&self, amount: usize) -> Result<usize> {
         let new_val = self.count.get() + amount;
+        self.set(new_val)
+    }
+
+    /// Set the counter to `new_val`
+    pub fn set(&self, new_val: usize) -> Result<usize> {
         self.count.set(new_val);
 
         if self.max_instructions > 0 && new_val > self.max_instructions {
