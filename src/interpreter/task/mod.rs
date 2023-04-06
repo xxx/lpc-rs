@@ -8,6 +8,7 @@ use std::{
 };
 
 use bit_set::BitSet;
+use chrono::{Duration, Utc};
 use decorum::Total;
 use educe::Educe;
 use hash_hasher::HashBuildHasher;
@@ -349,6 +350,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
+    #[instrument(skip_all)]
     pub fn resume(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
         self.state = TaskState::Running;
 
@@ -362,18 +364,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         } else {
             let mut halted = false;
 
-            // // halt at the end of all input
-            // if self.stack.is_empty() {
-            //     self.state = TaskState::Complete;
-            //     self.task_context.tx().send(VmOp::FinishTask(69)).unwrap();
-            // } else {
-            //     // Yield to another Task
-            //     self.state = TaskState::Paused;
-            //     // self.task_context.tx().send(VmOp::Yield).unwrap();
-            //     // return Ok(true);
-            // }
-            //
-            // return Ok(true);
+            // let breaker = Utc::now() + Duration::milliseconds(2);
 
             while !halted {
                 halted = match self.eval_one_instruction(cell_key) {
@@ -388,6 +379,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                     }
                 };
+
+
+                // if !halted && Utc::now() > breaker {
+                //     println!("pausing");
+                //     self.state = TaskState::Paused;
+                //     return Ok(());
+                // }
             }
         }
 
