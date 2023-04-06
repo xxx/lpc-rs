@@ -7,7 +7,7 @@ use delegate::delegate;
 use educe::Educe;
 use lpc_rs_errors::Result;
 use qcell::{QCell, QCellOwner};
-use stable_vec::core::DefaultCore;
+
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
 

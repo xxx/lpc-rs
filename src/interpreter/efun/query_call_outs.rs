@@ -1,13 +1,13 @@
-use std::rc::{Rc, Weak};
+use std::rc::{Rc};
 use lpc_rs_errors::Result;
-use qcell::{QCell, QCellOwner};
+use qcell::{QCellOwner};
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
-use crate::interpreter::call_outs::CallOut;
+
 use crate::interpreter::efun::query_call_out::call_out_array_ref;
-use crate::interpreter::lpc_array::LpcArray;
+
 use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::process::Process;
+
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub fn query_call_outs<const N: usize>(
@@ -27,9 +27,9 @@ pub fn query_call_outs<const N: usize>(
         _ => return Err(context.runtime_bug("non-object sent to `query_call_outs`")),
     };
 
-    let vec = context.call_outs().ro(cell_key).queue().iter().filter_map(|(idx, call_out)| {
+    let vec = context.call_outs().ro(cell_key).queue().iter().filter_map(|(_idx, call_out)| {
         if Rc::ptr_eq(call_out.process(), &owner) {
-            Some(call_out_array_ref(context, &call_out).unwrap())
+            Some(call_out_array_ref(context, call_out).unwrap())
         } else {
             None
         }
@@ -86,7 +86,7 @@ mod tests {
             cell_key.cell(ObjectSpace::default()),
             Memory::default(),
             cell_key.cell(GcBank::default()),
-            call_outs.clone(),
+            call_outs,
             tx,
             &mut cell_key,
         ).unwrap();

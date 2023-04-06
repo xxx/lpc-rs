@@ -1,12 +1,12 @@
-use std::rc::Weak;
+
 use lpc_rs_errors::Result;
-use qcell::{QCell, QCellOwner};
+use qcell::{QCellOwner};
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
 use crate::interpreter::call_outs::CallOut;
 use crate::interpreter::lpc_array::LpcArray;
 use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::process::Process;
+
 
 /// `query_call_out`, an efun for returning information about a single call out.
 pub fn query_call_out<const N: usize>(
@@ -25,7 +25,7 @@ pub fn query_call_out<const N: usize>(
 
     match context.call_outs().ro(cell_key).get(idx as usize) {
         Some(call_out) => {
-            let result = call_out_array_ref(context, &call_out)?;
+            let result = call_out_array_ref(context, call_out)?;
             context.return_efun_result(result);
         }
         None => {
@@ -101,7 +101,7 @@ mod tests {
             cell_key.cell(ObjectSpace::default()),
             Memory::default(),
             cell_key.cell(GcBank::default()),
-            call_outs.clone(),
+            call_outs,
             tx,
             &mut cell_key,
         ).unwrap();
