@@ -1,13 +1,13 @@
-use std::rc::{Rc};
+use std::rc::Rc;
+
 use lpc_rs_errors::Result;
-use qcell::{QCellOwner};
+use qcell::QCellOwner;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
-
-use crate::interpreter::efun::query_call_out::call_out_array_ref;
-
-use crate::interpreter::lpc_ref::LpcRef;
-
+use crate::interpreter::{
+    efun::{efun_context::EfunContext, query_call_out::call_out_array_ref},
+    lpc_ref::LpcRef,
+    lpc_value::LpcValue,
+};
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub fn query_call_outs<const N: usize>(
@@ -20,20 +20,24 @@ pub fn query_call_outs<const N: usize>(
                 return Err(context.runtime_bug("object in `query_call_outs` is not an object? This shouldn't be reachable."));
             };
             process.clone()
-        },
-        LpcRef::Int(0) => {
-            context.frame().process.clone()
-        },
+        }
+        LpcRef::Int(0) => context.frame().process.clone(),
         _ => return Err(context.runtime_bug("non-object sent to `query_call_outs`")),
     };
 
-    let vec = context.call_outs().ro(cell_key).queue().iter().filter_map(|(_idx, call_out)| {
-        if Rc::ptr_eq(call_out.process(), &owner) {
-            Some(call_out_array_ref(context, call_out).unwrap())
-        } else {
-            None
-        }
-    }).collect::<Vec<_>>();
+    let vec = context
+        .call_outs()
+        .ro(cell_key)
+        .queue()
+        .iter()
+        .filter_map(|(_idx, call_out)| {
+            if Rc::ptr_eq(call_out.process(), &owner) {
+                Some(call_out_array_ref(context, call_out).unwrap())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
 
     let result = context.value_to_ref(LpcValue::from(vec));
 
@@ -45,15 +49,18 @@ pub fn query_call_outs<const N: usize>(
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+
     use if_chain::if_chain;
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::test_support::compile_prog;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task,
+        },
+        test_support::compile_prog,
+    };
 
     #[test]
     fn test_query_call_out() {
@@ -89,7 +96,8 @@ mod tests {
             call_outs,
             tx,
             &mut cell_key,
-        ).unwrap();
+        )
+        .unwrap();
 
         if_chain! {
             if let LpcRef::Array(arr) = task.result().unwrap();

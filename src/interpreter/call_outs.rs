@@ -1,5 +1,4 @@
-use std::rc::Rc;
-use std::sync::mpsc::Sender;
+use std::{rc::Rc, sync::mpsc::Sender};
 
 use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
@@ -7,12 +6,10 @@ use delegate::delegate;
 use educe::Educe;
 use lpc_rs_errors::Result;
 use qcell::{QCell, QCellOwner};
-
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
 
-use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, vm::vm_op::VmOp};
-use crate::interpreter::process::Process;
+use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::vm_op::VmOp};
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
 #[derive(Educe)]

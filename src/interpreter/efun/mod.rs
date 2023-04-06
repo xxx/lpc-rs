@@ -6,15 +6,17 @@ pub(crate) mod debug;
 pub(crate) mod dump;
 pub(crate) mod file_name;
 pub(crate) mod query_call_out;
+pub(crate) mod query_call_outs;
 pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
-pub(crate) mod query_call_outs;
 
 use std::collections::HashMap;
 
 use lpc_rs_core::{
-    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
+    function_arity::{FunctionArity, FunctionArityBuilder},
+    function_flags::FunctionFlags,
+    lpc_path::LpcPath,
     lpc_type::LpcType,
 };
 use lpc_rs_errors::Result;
@@ -24,7 +26,6 @@ use lpc_rs_function_support::function_prototype::{
 use once_cell::sync::Lazy;
 use phf::phf_map;
 use qcell::QCellOwner;
-use lpc_rs_core::function_arity::FunctionArityBuilder;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
@@ -211,7 +212,13 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .filename(LpcPath::InGame("".into()))
             .return_type(LpcType::Mixed(true))
             .kind(FunctionKind::Efun)
-            .arity(FunctionArityBuilder::default().num_args(1).num_default_args(1).build().unwrap())
+            .arity(
+                FunctionArityBuilder::default()
+                    .num_args(1)
+                    .num_default_args(1)
+                    .build()
+                    .unwrap(),
+            )
             .arg_types(vec![LpcType::Object(false)])
             .build()
             .expect("failed to build query_call_out_info"),

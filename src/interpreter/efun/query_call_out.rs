@@ -1,12 +1,10 @@
-
 use lpc_rs_errors::Result;
-use qcell::{QCellOwner};
+use qcell::QCellOwner;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
-use crate::interpreter::call_outs::CallOut;
-use crate::interpreter::lpc_array::LpcArray;
-use crate::interpreter::lpc_ref::LpcRef;
-
+use crate::interpreter::{
+    call_outs::CallOut, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef,
+    lpc_value::LpcValue,
+};
 
 /// `query_call_out`, an efun for returning information about a single call out.
 pub fn query_call_out<const N: usize>(
@@ -37,7 +35,10 @@ pub fn query_call_out<const N: usize>(
 }
 
 /// get the result Array reference to returning from `query_call_out` and `query_call_outs`
-pub fn call_out_array_ref<const N: usize>(context: &EfunContext<N>, call_out: &CallOut) -> Result<LpcRef> {
+pub fn call_out_array_ref<const N: usize>(
+    context: &EfunContext<N>,
+    call_out: &CallOut,
+) -> Result<LpcRef> {
     let mut arr = Vec::new();
     let LpcRef::Function(f) = &call_out.func_ref else {
         return Err(context.runtime_bug("call out function is not a function. This shouldn't be reachable."));
@@ -50,10 +51,20 @@ pub fn call_out_array_ref<const N: usize>(context: &EfunContext<N>, call_out: &C
     arr.push(LpcRef::Function(f.clone()));
 
     // push the number of milliseconds remaining until the function runs
-    arr.push(LpcRef::Int(call_out.time_remaining().map(|duration| duration.num_milliseconds()).unwrap_or(0)));
+    arr.push(LpcRef::Int(
+        call_out
+            .time_remaining()
+            .map(|duration| duration.num_milliseconds())
+            .unwrap_or(0),
+    ));
 
     // push the number of milliseconds between repeats
-    arr.push(LpcRef::Int(call_out.repeat_duration().map(|duration| duration.num_milliseconds()).unwrap_or(0)));
+    arr.push(LpcRef::Int(
+        call_out
+            .repeat_duration()
+            .map(|duration| duration.num_milliseconds())
+            .unwrap_or(0),
+    ));
 
     let result = context.value_to_ref(LpcValue::Array(LpcArray::new(arr)));
     Ok(result)
@@ -62,15 +73,18 @@ pub fn call_out_array_ref<const N: usize>(context: &EfunContext<N>, call_out: &C
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+
     use if_chain::if_chain;
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::test_support::compile_prog;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task,
+        },
+        test_support::compile_prog,
+    };
 
     #[test]
     fn test_query_call_out() {
@@ -104,7 +118,8 @@ mod tests {
             call_outs,
             tx,
             &mut cell_key,
-        ).unwrap();
+        )
+        .unwrap();
 
         if_chain! {
             if let LpcRef::Array(arr) = task.result().unwrap();
