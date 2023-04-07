@@ -10,5 +10,12 @@ pub mod util;
 #[cfg(test)]
 pub mod test_support;
 
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 lalrpop_mod!(#[allow(clippy::all)] pub lpc_parser);
 lalrpop_mod!(#[allow(clippy::all)] pub preprocessor_parser);
