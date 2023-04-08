@@ -64,6 +64,29 @@ impl FunctionPtr {
     pub fn arity(&self) -> usize {
         self.partial_args.iter().filter(|x| x.is_none()).count()
     }
+
+    /// Get a clone of this function pointer, with a new unique ID.
+    #[inline]
+    pub fn clone_with_new_id(&self) -> Self {
+        Self {
+            unique_id: UniqueId::new(),
+            ..self.clone()
+        }
+    }
+
+    /// partially apply this function pointer to the passed arguments, filling in any existing
+    /// holes first, then appending to the end of the list.
+    pub fn partially_apply(&mut self, args: &[LpcRef]) {
+        let mut arg_iter = args.iter();
+
+        for arg in self.partial_args.iter_mut() {
+            if arg.is_none() {
+                *arg = arg_iter.next().cloned();
+            }
+        }
+
+        self.partial_args.extend(arg_iter.cloned().map(Some));
+    }
 }
 
 impl Mark for FunctionPtr {

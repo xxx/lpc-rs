@@ -172,43 +172,6 @@ impl CallFrame {
         }
     }
 
-    /// Create a new [`CallFrame`] instance, using the passed [`RefBank`]
-    /// as the registers
-    ///
-    /// # Arguments
-    ///
-    /// * `process` - The process that owns the function being called
-    /// * `function` - The function being called
-    /// * `called_with_num_args` - how many arguments were explicitly passed in
-    ///   the call to this function?
-    /// * `registers` - The registers that the CallFrame will use
-    /// * `upvalue_ptrs` - The pointers to upvalued data from the calling Function (i.e. Frame)
-    /// * `vm_upvalues` - The upvalued data from the [`Vm`](crate::interpreter::vm::Vm)
-    pub fn with_registers<P>(
-        process: P,
-        function: Rc<ProgramFunction>,
-        called_with_num_args: usize,
-        registers: RefBank,
-        upvalue_ptrs: Option<&Vec<Register>>,
-        vm_upvalues: Rc<QCell<GcRefBank>>,
-        cell_key: &mut QCellOwner,
-    ) -> Self
-    where
-        P: Into<Rc<QCell<Process>>>,
-    {
-        Self {
-            registers,
-            ..Self::new(
-                process,
-                function,
-                called_with_num_args,
-                upvalue_ptrs,
-                vm_upvalues,
-                cell_key,
-            )
-        }
-    }
-
     /// Reserve space for the upvalues that this call will initialize
     /// Returns the index in the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues` array where the
     ///   newly-populated upvalues will be stored
@@ -492,42 +455,6 @@ mod tests {
             );
 
             assert_eq!(frame.registers.len(), 12);
-            assert!(frame.registers.iter().all(|r| r == &NULL));
-        }
-    }
-
-    mod test_with_registers {
-        use super::*;
-
-        #[test]
-        fn uses_the_passed_registers() {
-            let mut cell_key = QCellOwner::new();
-            let process = Process::default();
-
-            let prototype = FunctionPrototypeBuilder::default()
-                .name("my_function")
-                .filename(Arc::new("my_function".into()))
-                .return_type(LpcType::Void)
-                .arity(FunctionArity::new(4))
-                .build()
-                .unwrap();
-
-            let fs = ProgramFunction::new(prototype, 7);
-
-            let registers = RefBank::new(vec![NULL; 21]);
-            let vm_upvalues = cell_key.cell(GcBank::default());
-
-            let frame = CallFrame::with_registers(
-                cell_key.cell(process),
-                Rc::new(fs),
-                4,
-                registers,
-                None,
-                vm_upvalues.into(),
-                &mut cell_key,
-            );
-
-            assert_eq!(frame.registers.len(), 21);
             assert!(frame.registers.iter().all(|r| r == &NULL));
         }
     }

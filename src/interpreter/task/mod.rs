@@ -1131,7 +1131,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
-        let new_registers = RefBank::initialized_for_function(&function, max_arg_length);
+        let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
 
         let upvalues = if function.is_closure() {
             Some(&ptr.upvalue_ptrs)
@@ -1141,11 +1141,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             None
         };
 
-        let mut new_frame = CallFrame::with_registers(
+        let mut new_frame = CallFrame::with_minimum_arg_capacity(
             proc,
             function.clone(),
             passed_args_count,
-            new_registers,
+            max_arg_length,
             upvalues,
             self.context.upvalues().clone(),
             cell_key,

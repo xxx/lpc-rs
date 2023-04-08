@@ -5,6 +5,7 @@ pub(crate) mod clone_object;
 pub(crate) mod debug;
 pub(crate) mod dump;
 pub(crate) mod file_name;
+pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod remove_call_out;
@@ -39,6 +40,7 @@ pub const CLONE_OBJECT: &str = "clone_object";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
+pub const PAPPLYV: &str = "papplyv";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
 pub const QUERY_CALL_OUTS: &str = "query_call_outs";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
@@ -54,6 +56,7 @@ pub trait HasEfuns<const STACKSIZE: usize> {
         "debug" => debug::debug as Efun<STACKSIZE>,
         "dump" => dump::dump as Efun<STACKSIZE>,
         "file_name" => file_name::file_name as Efun<STACKSIZE>,
+        "papplyv" => papplyv::papplyv as Efun<STACKSIZE>,
         "query_call_out" => query_call_out::query_call_out as Efun<STACKSIZE>,
         "query_call_outs" => query_call_outs::query_call_outs as Efun<STACKSIZE>,
         "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
@@ -190,6 +193,28 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .arg_types(vec![LpcType::Object(false)])
             .build()
             .expect("failed to build file_name"),
+    );
+
+    m.insert(
+        PAPPLYV,
+        FunctionPrototypeBuilder::default()
+            .name(PAPPLYV)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Function(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 2,
+                num_default_args: 0,
+                varargs: false,
+                ellipsis: false,
+            })
+            .arg_types(vec![
+                LpcType::Function(false),
+                LpcType::Mixed(true),
+            ])
+            .flags(FunctionFlags::default())
+            .build()
+            .expect("failed to build papplyv"),
     );
 
     m.insert(
