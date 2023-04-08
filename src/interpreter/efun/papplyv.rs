@@ -25,7 +25,7 @@ pub fn papplyv<const N: usize>(
 
     // TODO: this clone is unnecessarily heavy
     let mut ptr = func.clone_with_new_id();
-    ptr.partially_apply(&arr);
+    ptr.partially_apply(arr);
 
     let v = LpcValue::Function(ptr);
     let result = context.value_to_ref(v);

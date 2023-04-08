@@ -33,7 +33,6 @@ use ustr::ustr;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        bank::RefBank,
         call_frame::CallFrame,
         call_outs::CallOuts,
         call_stack::CallStack,
@@ -2290,6 +2289,7 @@ mod tests {
     }
 
     mod test_instructions {
+        use crate::interpreter::bank::RefBank;
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 

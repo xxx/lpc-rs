@@ -8,7 +8,6 @@ use crate::compiler::{
         assignment_node::AssignmentNode,
         ast_node::SpannedNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
-        call_node::CallNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,

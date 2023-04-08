@@ -90,7 +90,7 @@ impl ScopeWalker {
     }
 
     fn visit_call_root(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
-        let CallChain::Root { receiver, name, namespace } = &mut node.chain else {
+        let CallChain::Root { receiver, name, namespace: _ } = &mut node.chain else {
             return Err(LpcError::new("CallNode::chain was not a CallChain::Root").with_span(node.span));
         };
 

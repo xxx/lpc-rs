@@ -229,8 +229,8 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 mod tests {
     use factori::create;
     use crate::test_support::factories::*;
-    use lpc_rs_core::{call_namespace::CallNamespace, LpcFloat};
-    use ustr::ustr;
+    use lpc_rs_core::{LpcFloat};
+    
 
     use super::*;
     use crate::compiler::ast::binary_op_node::BinaryOperation;

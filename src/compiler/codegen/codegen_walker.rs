@@ -321,13 +321,13 @@ impl CodegenWalker {
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs, cell_key),
             ExpressionNode::Call(node) => {
                 if_chain! {
-                    if let CallChain::Root { receiver, name, namespace } = &node.chain;
+                    if let CallChain::Root { receiver: _, name, namespace } = &node.chain;
                     if let Some(func) = self.context.lookup_function_complete(name, namespace, cell_key);
                     if let LpcType::Int(_) | LpcType::Float(_) = func.prototype().return_type;
                     then {
-                        return OperationType::Register;
+                        OperationType::Register
                     } else {
-                        return OperationType::Memory;
+                        OperationType::Memory
                     }
                 }
                 // match &node.chain {
@@ -926,13 +926,13 @@ impl CodegenWalker {
                 Instruction::CallOther(receiver, name_index)
             } else {
                 if_chain! {
-                    if let Some(x) = self.context.lookup_var(&name);
+                    if let Some(x) = self.context.lookup_var(name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
                         Instruction::CallFp(x.location.unwrap())
                     } else {
                         let Some(func) =
-                            self.context.lookup_function_complete(&name, namespace, cell_key) else {
+                            self.context.lookup_function_complete(name, namespace, cell_key) else {
                             return Err(LpcError::new_bug(
                                 format!("Cannot find function during code gen: {}", name)
                             ).with_span(node.span));
@@ -3674,18 +3674,18 @@ mod tests {
             let mut cell_key = QCellOwner::new();
 
             // do a stupid dance to get the efuns into the context
-            let mut walker = default_walker(&mut cell_key);
+            let walker = default_walker(&mut cell_key);
 
             let mut ctx = walker.into_context();
             let mut node = get_call_node(call, &mut ctx);
 
             // This walk by Scope Walker will actually populate the efuns.
             let mut walker = ScopeWalker::new(ctx);
-            let _ = walker.visit_call(&mut node, &mut cell_key).unwrap();
+            walker.visit_call(&mut node, &mut cell_key).unwrap();
 
-            let mut ctx = walker.into_context();
+            let ctx = walker.into_context();
             let mut walker = CodegenWalker::new(ctx);
-            let _ = walker.visit_call(&mut node, &mut cell_key).unwrap();
+            walker.visit_call(&mut node, &mut cell_key).unwrap();
 
             let expected = vec![
                 ClearPartialArgs,
@@ -4522,11 +4522,11 @@ mod tests {
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("true")]
                 ))),
-                else_clause: Box::new(Some(AstNode::Call(create!(CallNode,
+                else_clause: Box::new(Some(AstNode::Call(CallNode {
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("false")],
                     span: None
-                )))),
+                }))),
                 scope_id: None,
                 span: None,
             };
@@ -5388,11 +5388,11 @@ mod tests {
             let mut node = VarInitNode {
                 type_: LpcType::Object(false),
                 name: ustr("muffins"),
-                value: Some(ExpressionNode::Call(create!(CallNode,
+                value: Some(ExpressionNode::Call(CallNode {
                     chain: create!(CallChain, name: ustr("clone_object")),
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
                     span: None,
-                ))),
+                })),
                 array: false,
                 global: false,
                 span: None,
@@ -5573,11 +5573,11 @@ mod tests {
                     op: BinaryOperation::EqEq,
                     span: None,
                 }),
-                body: Box::new(AstNode::Call(create!(CallNode,
+                body: Box::new(AstNode::Call(CallNode {
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("body")],
                     span: None,
-                ))),
+                })),
                 scope_id: None,
                 span: None,
             };
