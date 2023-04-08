@@ -417,7 +417,9 @@ impl CodegenWalker {
             BinaryOperation::Gte => Instruction::Gte(reg_left, reg_right, reg_result),
             BinaryOperation::Shl => Instruction::Shl(reg_left, reg_right, reg_result),
             BinaryOperation::Shr => Instruction::Shr(reg_left, reg_right, reg_result),
-            BinaryOperation::Compose => unimplemented!("Composition takes multiple instructions, so this is done elsewhere."),
+            BinaryOperation::Compose => unimplemented!(
+                "Composition takes multiple instructions, so this is done elsewhere."
+            ),
         }
     }
 
@@ -1179,10 +1181,15 @@ impl TreeWalker for CodegenWalker {
                 push_instruction!(self, Instruction::ClearArgs, node.span);
                 push_instruction!(self, Instruction::PushArg(reg_left), node.span);
                 push_instruction!(self, Instruction::PushArg(reg_right), node.span);
-                push_instruction!(self, Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("compose").unwrap()), node.span);
+                push_instruction!(
+                    self,
+                    Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("compose").unwrap()),
+                    node.span
+                );
 
                 let reg_result = self.register_counter.next().unwrap().as_local();
-                let instruction = Instruction::Copy(RegisterVariant::Local(Register(0)), reg_result);
+                let instruction =
+                    Instruction::Copy(RegisterVariant::Local(Register(0)), reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 self.current_result = reg_result;
@@ -2382,8 +2389,7 @@ impl Default for CodegenWalker {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, sync::Arc};
-    use std::rc::Rc;
+    use std::{collections::VecDeque, rc::Rc, sync::Arc};
 
     use claim::assert_some;
     use factori::create;
@@ -2998,13 +3004,13 @@ mod tests {
                 FunctionPtrConst {
                     location: RegisterVariant::Local(Register(1)),
                     name_index: 0,
-                    receiver: FunctionReceiver::Efun
+                    receiver: FunctionReceiver::Efun,
                 },
                 ClearPartialArgs,
                 FunctionPtrConst {
                     location: RegisterVariant::Local(Register(2)),
                     name_index: 1,
-                    receiver: FunctionReceiver::Efun
+                    receiver: FunctionReceiver::Efun,
                 },
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),

@@ -214,9 +214,11 @@ pub fn check_binary_operation_types(
                 | (LpcType::String(false), LpcType::String(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
             }
-        },
+        }
         BinaryOperation::Compose => {
-            if tuple.0.matches_type(LpcType::Function(false)) && tuple.1.matches_type(LpcType::Function(false)) {
+            if tuple.0.matches_type(LpcType::Function(false))
+                && tuple.1.matches_type(LpcType::Function(false))
+            {
                 Ok(())
             } else {
                 Err(create_error(
