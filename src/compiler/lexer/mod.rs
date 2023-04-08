@@ -178,7 +178,8 @@ pub enum Token {
     LeftShiftEq(Span),
     #[token(">>=", track_slice)]
     RightShiftEq(Span),
-
+    #[token("@", track_slice)]
+    Compose(Span),
     #[token("if", track_slice)]
     If(Span),
     #[token("else", track_slice)]
@@ -484,6 +485,7 @@ impl HasSpan for Token {
             | Token::OrOrEq(x)
             | Token::LeftShiftEq(x)
             | Token::RightShiftEq(x)
+            | Token::Compose(x)
             | Token::If(x)
             | Token::Else(x)
             | Token::While(x)
@@ -590,6 +592,7 @@ impl Token {
             | Token::OrOrEq(x)
             | Token::LeftShiftEq(x)
             | Token::RightShiftEq(x)
+            | Token::Compose(x)
             | Token::If(x)
             | Token::Else(x)
             | Token::While(x)
@@ -710,6 +713,7 @@ impl Display for Token {
             Token::OrOrEq(_) => "||=",
             Token::LeftShiftEq(_) => "<<=",
             Token::RightShiftEq(_) => ">>=",
+            Token::Compose(_) => "@",
 
             Token::If(_) => "if",
             Token::Else(_) => "else",

@@ -95,6 +95,7 @@ extern {
         "||=" => Token::OrOrEq(<Span>),
         "<<=" => Token::LeftShiftEq(<Span>),
         ">>=" => Token::RightShiftEq(<Span>),
+        "@" => Token::Compose(<Span>),
 
         "if" => Token::If(<Span>),
         "else" => Token::Else(<Span>),
@@ -713,11 +714,21 @@ CastExpression: ExpressionNode = {
 }
 
 MultiplicitiveExpression: ExpressionNode = {
+    #[precedence(level="0")]
     <CastExpression>,
+    #[precedence(level="0")]
     <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> =>? {
         let span = combine_spans(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
+    },
+    #[precedence(level="1")]
+    #[assoc(side="right")]
+    // note the recursive term is on the right side of the operator in this rule.
+    <l:CastExpression> "@" <r:MultiplicitiveExpression> =>? {
+        let span = combine_spans(l.span(), r.span());
+
+        collapse_binary_op(BinaryOperation::Compose, l, r, span)
     },
 };
 

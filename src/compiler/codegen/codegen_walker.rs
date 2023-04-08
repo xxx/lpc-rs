@@ -320,7 +320,7 @@ impl CodegenWalker {
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs, cell_key),
             ExpressionNode::Call(node) => {
                 if_chain! {
-                    if let CallChain::Root { receiver: _, name, namespace } = &node.chain;
+                    if let CallChain::Root { name, namespace, .. } = &node.chain;
                     if let Some(func) = self.context.lookup_function_complete(name, namespace, cell_key);
                     if let LpcType::Int(_) | LpcType::Float(_) = func.prototype().return_type;
                     then {
@@ -329,25 +329,6 @@ impl CodegenWalker {
                         OperationType::Memory
                     }
                 }
-                // match &node.chain {
-                //     CallChain::Root {
-                //         receiver,
-                //         name,
-                //         namespace
-                //     } => {
-                //         if let Some(func) =
-                //             self.context.lookup_function_complete(name, namespace, cell_key)
-                //         {
-                //             match func.prototype().return_type {
-                //                 LpcType::Int(_) | LpcType::Float(_) => OperationType::Register,
-                //                 _ => OperationType::Memory,
-                //             }
-                //         } else {
-                //             OperationType::Memory
-                //         }
-                //     }
-                //     CallChain::Node(_) => OperationType::Memory
-                // }
             }
             ExpressionNode::BinaryOp(node) => {
                 let left_type = self.to_operation_type(&node.l, cell_key);
@@ -436,6 +417,7 @@ impl CodegenWalker {
             BinaryOperation::Gte => Instruction::Gte(reg_left, reg_right, reg_result),
             BinaryOperation::Shl => Instruction::Shl(reg_left, reg_right, reg_result),
             BinaryOperation::Shr => Instruction::Shr(reg_left, reg_right, reg_result),
+            BinaryOperation::Compose => unimplemented!("Composition takes multiple instructions, so this is done elsewhere."),
         }
     }
 
@@ -1133,6 +1115,7 @@ impl TreeWalker for CodegenWalker {
         node.l.visit(self, cell_key)?;
         let reg_left = self.current_result;
 
+        // special handling for ops that require more than a single instruction
         match node.op {
             BinaryOperation::Index => {
                 // Ranges need special handling that complicates this function otherwise, due to
@@ -1187,7 +1170,23 @@ impl TreeWalker for CodegenWalker {
 
                 return Ok(());
             }
-            _ => {}
+            BinaryOperation::Compose => {
+                node.r.visit(self, cell_key)?;
+                let reg_right = self.current_result;
+
+                push_instruction!(self, Instruction::PushArg(reg_left), node.span);
+                push_instruction!(self, Instruction::PushArg(reg_right), node.span);
+                push_instruction!(self, Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("compose").unwrap()), node.span);
+
+                let reg_result = self.register_counter.next().unwrap().as_local();
+                let instruction = Instruction::Copy(RegisterVariant::Local(Register(0)), reg_result);
+                push_instruction!(self, instruction, node.span);
+
+                self.current_result = reg_result;
+
+                return Ok(());
+            }
+            _ => { /* fallthrough */ }
         }
 
         node.r.visit(self, cell_key)?;
