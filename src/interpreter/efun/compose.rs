@@ -106,6 +106,9 @@ pub fn compose<const N: usize>(
         return Err(context.runtime_error("non-function sent as second argument to `compose`"));
     };
 
+    // This will just create and return a pointer to the `COMPOSE_EXECUTOR` function,
+    // which, which called, takes care of actually calling one function, and
+    // passing the result to the other.
     let pf = COMPOSE_EXECUTOR.clone();
 
     let ptr = FunctionPtr {

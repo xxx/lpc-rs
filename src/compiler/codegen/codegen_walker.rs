@@ -1171,9 +1171,12 @@ impl TreeWalker for CodegenWalker {
                 return Ok(());
             }
             BinaryOperation::Compose => {
+                // This literally just sets up a call to the compose() efun, and
+                // puts the result of it into a register.
                 node.r.visit(self, cell_key)?;
                 let reg_right = self.current_result;
 
+                push_instruction!(self, Instruction::ClearArgs, node.span);
                 push_instruction!(self, Instruction::PushArg(reg_left), node.span);
                 push_instruction!(self, Instruction::PushArg(reg_right), node.span);
                 push_instruction!(self, Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("compose").unwrap()), node.span);
@@ -2960,6 +2963,57 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                 ),
                 // end is here
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+
+        #[test]
+        fn populates_the_instructions_for_function_composition() {
+            let mut cell_key = QCellOwner::new();
+            let mut walker = default_walker(&mut cell_key);
+            walker.backpatch_maps.push(HashMap::new());
+
+            let mut node = BinaryOpNode {
+                l: Box::new(ExpressionNode::FunctionPtr(FunctionPtrNode {
+                    receiver: None,
+                    arguments: None,
+                    name: ustr("dump"),
+                    span: None,
+                })),
+                r: Box::new(ExpressionNode::FunctionPtr(FunctionPtrNode {
+                    receiver: None,
+                    arguments: None,
+                    name: ustr("this_object"),
+                    span: None,
+                })),
+                op: BinaryOperation::Compose,
+                span: None,
+            };
+
+            let _ = walker.visit_binary_op(&mut node, &mut cell_key);
+
+            let expected = vec![
+                ClearPartialArgs,
+                FunctionPtrConst {
+                    location: RegisterVariant::Local(Register(1)),
+                    name_index: 0,
+                    receiver: FunctionReceiver::Efun
+                },
+                ClearPartialArgs,
+                FunctionPtrConst {
+                    location: RegisterVariant::Local(Register(2)),
+                    name_index: 1,
+                    receiver: FunctionReceiver::Efun
+                },
+                ClearArgs,
+                PushArg(RegisterVariant::Local(Register(1))),
+                PushArg(RegisterVariant::Local(Register(2))),
+                CallEfun(4),
+                Copy(
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(3)),
+                ),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
