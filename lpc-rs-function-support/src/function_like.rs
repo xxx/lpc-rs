@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 
 use lpc_rs_core::mangle::Mangle;
@@ -70,7 +69,8 @@ mod tests {
         let function_like = FunctionLike::from(&prototype);
         assert_eq!(function_like.prototype(), &prototype);
 
-        let function_like = FunctionLike::from(Arc::new(ProgramFunction::new(prototype.clone(), 0)));
+        let function_like =
+            FunctionLike::from(Arc::new(ProgramFunction::new(prototype.clone(), 0)));
         assert_eq!(function_like.prototype(), &prototype);
     }
 }

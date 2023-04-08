@@ -5,9 +5,8 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     rc::Rc,
-    sync::mpsc::Sender,
+    sync::{mpsc::Sender, Arc},
 };
-use std::sync::Arc;
 
 use bit_set::BitSet;
 use decorum::Total;

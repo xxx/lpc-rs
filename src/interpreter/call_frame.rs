@@ -3,8 +3,8 @@ use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
     rc::Rc,
+    sync::Arc,
 };
-use std::sync::Arc;
 
 use bit_set::BitSet;
 use derive_builder::Builder;

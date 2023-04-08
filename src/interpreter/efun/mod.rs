@@ -13,9 +13,7 @@ pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
 
-
-use indexmap::{IndexMap};
-
+use indexmap::IndexMap;
 use lpc_rs_core::{
     function_arity::{FunctionArity, FunctionArityBuilder},
     function_flags::FunctionFlags,
@@ -158,10 +156,7 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .return_type(LpcType::Function(false))
             .kind(FunctionKind::Efun)
             .arity(FunctionArity::new(2))
-            .arg_types(vec![
-                LpcType::Function(false),
-                LpcType::Function(false),
-            ])
+            .arg_types(vec![LpcType::Function(false), LpcType::Function(false)])
             .build()
             .expect("failed to build compose"),
     );

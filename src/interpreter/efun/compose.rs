@@ -1,26 +1,28 @@
-use std::rc::Rc;
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
+
+use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_core::{
+    function_arity::FunctionArityBuilder,
+    function_flags::FunctionFlags,
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+};
+use lpc_rs_errors::Result;
+use lpc_rs_function_support::{
+    function_prototype::FunctionPrototypeBuilder,
+    program_function::{ProgramFunction, ProgramFunctionBuilder},
+};
 // use logos::Span;
 use once_cell::sync::{Lazy, OnceCell};
-use lpc_rs_errors::Result;
 use qcell::QCellOwner;
-use string_interner::{StringInterner};
-use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_core::function_arity::{FunctionArityBuilder};
-use lpc_rs_core::function_flags::FunctionFlags;
-use lpc_rs_core::lpc_type::LpcType;
-use lpc_rs_core::register::{Register, RegisterVariant};
-
-use lpc_rs_function_support::function_prototype::{FunctionPrototypeBuilder};
-use lpc_rs_function_support::program_function::{ProgramFunction, ProgramFunctionBuilder};
+use string_interner::StringInterner;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_ref::LpcRef,
+    efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
+    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    lpc_ref::LpcRef,
     lpc_value::LpcValue,
 };
-use crate::interpreter::efun::EFUN_PROTOTYPES;
-use crate::interpreter::function_type::function_address::FunctionAddress;
-use crate::interpreter::function_type::function_ptr::FunctionPtr;
 
 /// The static composed function handler.
 /// It's just a pre-compiled (and slightly optimized) version of:
@@ -34,7 +36,13 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
         .name("compose-executor")
         .filename(Arc::new(Default::default()))
         .return_type(LpcType::Mixed(false))
-        .arity(FunctionArityBuilder::default().num_args(2).ellipsis(true).build().unwrap())
+        .arity(
+            FunctionArityBuilder::default()
+                .num_args(2)
+                .ellipsis(true)
+                .build()
+                .unwrap(),
+        )
         .arg_types(vec![LpcType::Function(false), LpcType::Function(false)])
         .flags(FunctionFlags::default().with_ellipsis(true))
         .build()
@@ -46,10 +54,16 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
         Instruction::PushArg(RegisterVariant::Local(Register(2))),
         Instruction::PushArg(RegisterVariant::Local(Register(3))),
         Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("papplyv").unwrap()), // papplyv()
-        Instruction::Copy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(4))),
+        Instruction::Copy(
+            RegisterVariant::Local(Register(0)),
+            RegisterVariant::Local(Register(4)),
+        ),
         Instruction::ClearArgs,
         Instruction::CallFp(RegisterVariant::Local(Register(4))), // g(argv)
-        Instruction::Copy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(5))),
+        Instruction::Copy(
+            RegisterVariant::Local(Register(0)),
+            RegisterVariant::Local(Register(5)),
+        ),
         Instruction::ClearArgs,
         Instruction::PushArg(RegisterVariant::Local(Register(5))),
         Instruction::CallFp(RegisterVariant::Local(Register(1))), // f(g(argv))
@@ -66,7 +80,10 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
         .debug_spans(debug_spans)
         .labels(Default::default())
         .local_variables(vec![])
-        .arg_locations(vec![RegisterVariant::Local(Register(1)), RegisterVariant::Local(Register(2))])
+        .arg_locations(vec![
+            RegisterVariant::Local(Register(1)),
+            RegisterVariant::Local(Register(2)),
+        ])
         .strings(OnceCell::with_value(Arc::new(StringInterner::default())))
         .build()
         .unwrap();

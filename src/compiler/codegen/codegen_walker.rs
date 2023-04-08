@@ -5692,10 +5692,7 @@ mod tests {
                     .into_iter()
                     .map(|(_, b)| b)
                     .collect::<Vec<_>>(),
-                &vec![
-                    "create__i____pb__".to_string(),
-                    "sup dawg".to_string(),
-                ]
+                &vec!["create__i____pb__".to_string(), "sup dawg".to_string(),]
             );
         }
     }

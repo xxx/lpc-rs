@@ -4,9 +4,11 @@ use std::{
     hash::Hasher,
     path::Path,
     rc::Rc,
-    sync::mpsc::{Receiver, RecvTimeoutError, Sender},
+    sync::{
+        mpsc::{Receiver, RecvTimeoutError, Sender},
+        Arc,
+    },
 };
-use std::sync::Arc;
 
 use bit_set::BitSet;
 use educe::Educe;

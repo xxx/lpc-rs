@@ -3,8 +3,8 @@ use std::{
     fmt::{Display, Formatter},
     hash::Hasher,
     rc::Rc,
+    sync::Arc,
 };
-use std::sync::Arc;
 
 use educe::Educe;
 use lpc_rs_function_support::program_function::ProgramFunction;
