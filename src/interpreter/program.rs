@@ -25,18 +25,18 @@ pub struct Program {
     pub filename: Arc<LpcPath>,
 
     /// function mapping of (mangled) name to the function
-    pub functions: IndexMap<String, Rc<ProgramFunction>>,
+    pub functions: IndexMap<String, Arc<ProgramFunction>>,
 
     /// Function mapping of unmangled name to the function.
     /// This is needed for `call_other`.
     /// Due to unmangled names not being unique, only the last-defined
     /// function with a given unmangled name is referenced here.
-    pub unmangled_functions: IndexMap<String, Rc<ProgramFunction>>,
+    pub unmangled_functions: IndexMap<String, Arc<ProgramFunction>>,
 
     /// The function that is called when the program is first loaded,
     /// which initializes the global variables. This function is
     /// the combined initializer of all of the inherited programs.
-    pub initializer: Option<Rc<ProgramFunction>>,
+    pub initializer: Option<Arc<ProgramFunction>>,
 
     /// The map of global variables in this program.
     pub global_variables: HashMap<String, Symbol>,
@@ -78,7 +78,7 @@ impl<'a> Program {
     /// Look up a function by its name, starting from this program,
     /// and searching all of its inherited-from programs, last-declared-inherit
     /// first.
-    pub fn lookup_function<T>(&self, name: T) -> Option<&Rc<ProgramFunction>>
+    pub fn lookup_function<T>(&self, name: T) -> Option<&Arc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
@@ -102,7 +102,7 @@ impl<'a> Program {
     /// Call the passed callback, passing the function reference if found.
     pub fn with_function<F, T>(&self, name: &str, callback: F) -> Option<T>
     where
-        F: FnOnce(&Rc<ProgramFunction>) -> T,
+        F: FnOnce(&Arc<ProgramFunction>) -> T,
     {
         self.lookup_function(name).map(callback)
     }

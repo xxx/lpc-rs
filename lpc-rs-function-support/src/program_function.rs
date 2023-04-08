@@ -189,7 +189,7 @@ impl AsRef<FunctionPrototype> for ProgramFunction {
     }
 }
 
-impl AsRef<FunctionPrototype> for Rc<ProgramFunction> {
+impl AsRef<FunctionPrototype> for Arc<ProgramFunction> {
     #[inline]
     fn as_ref(&self) -> &FunctionPrototype {
         &self.prototype

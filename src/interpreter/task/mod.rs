@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
     sync::mpsc::Sender,
 };
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use decorum::Total;
@@ -55,7 +56,7 @@ use crate::{
 };
 
 // this is just to shut clippy up
-type ProcessFunctionPair = (Rc<QCell<Process>>, Rc<ProgramFunction>);
+type ProcessFunctionPair = (Rc<QCell<Process>>, Arc<ProgramFunction>);
 
 macro_rules! pop_frame {
     ($task:expr) => {{
@@ -303,7 +304,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     pub fn eval<F>(&mut self, f: F, args: &[LpcRef], cell_key: &mut QCellOwner) -> Result<()>
     where
-        F: Into<Rc<ProgramFunction>>,
+        F: Into<Arc<ProgramFunction>>,
     {
         let function = f.into();
         let process = self.context.process();
@@ -325,7 +326,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn eval_function(
         &mut self,
         process: Rc<QCell<Process>>,
-        f: Rc<ProgramFunction>,
+        f: Arc<ProgramFunction>,
         args: &[LpcRef],
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
@@ -338,7 +339,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn prepare_function_call(
         &mut self,
         process: Rc<QCell<Process>>,
-        f: Rc<ProgramFunction>,
+        f: Arc<ProgramFunction>,
         args: &[LpcRef],
         cell_key: &mut QCellOwner,
     ) -> Result<()> {
@@ -478,13 +479,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
                 let (pf, efun) = {
-                    let name = process
-                        .ro(cell_key)
-                        .program
-                        .strings
-                        .resolve(Self::index_symbol(name_idx))
-                        .unwrap();
-                    let prototype = EFUN_PROTOTYPES.get(name).unwrap();
+                    let (name, prototype) = EFUN_PROTOTYPES.get_index(name_idx).unwrap();
                     // TODO: get rid of this clone. The efun Functions should be cached.
                     let pf = ProgramFunction::new(prototype.clone(), 0);
                     let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(name).unwrap();
@@ -1021,7 +1016,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         cell_key: &mut QCellOwner,
         process: Rc<QCell<Process>>,
-        func: Rc<ProgramFunction>,
+        func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
         let num_args = self.args.len();
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
@@ -1272,7 +1267,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let frame = self.stack.current_frame()?;
 
-                (frame.process.clone(), Rc::new(pf))
+                (frame.process.clone(), Arc::new(pf))
             }
             FunctionAddress::SimulEfun(name) => {
                 let Some(simul_efuns) = self.context.simul_efuns() else {

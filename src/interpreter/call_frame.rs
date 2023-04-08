@@ -4,6 +4,7 @@ use std::{
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use derive_builder::Builder;
@@ -52,7 +53,7 @@ pub struct CallFrame {
 
     /// The function that this frame is a call to.
     #[builder(setter(into))]
-    pub function: Rc<ProgramFunction>,
+    pub function: Arc<ProgramFunction>,
 
     /// The actual locations of all arguments that were passed-in.
     /// Necessary for populating `argv` in ellipsis functions, e.g.
@@ -101,7 +102,7 @@ impl CallFrame {
     /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     pub fn new<P>(
         process: P,
-        function: Rc<ProgramFunction>,
+        function: Arc<ProgramFunction>,
         called_with_num_args: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
         vm_upvalues: Rc<QCell<GcRefBank>>,
@@ -149,7 +150,7 @@ impl CallFrame {
     /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     pub fn with_minimum_arg_capacity<P>(
         process: P,
-        function: Rc<ProgramFunction>,
+        function: Arc<ProgramFunction>,
         called_with_num_args: usize,
         arg_capacity: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
@@ -384,7 +385,7 @@ mod tests {
 
         let frame = CallFrame::new(
             cell_key.cell(process),
-            Rc::new(fs),
+            Arc::new(fs),
             4,
             None,
             vm_upvalues.into(),
@@ -416,7 +417,7 @@ mod tests {
 
             let frame = CallFrame::with_minimum_arg_capacity(
                 cell_key.cell(process),
-                Rc::new(fs),
+                Arc::new(fs),
                 4,
                 30,
                 None,
@@ -446,7 +447,7 @@ mod tests {
 
             let frame = CallFrame::with_minimum_arg_capacity(
                 cell_key.cell(process),
-                Rc::new(fs),
+                Arc::new(fs),
                 4,
                 2,
                 None,
@@ -491,7 +492,7 @@ mod tests {
             let vm_upvalues = Rc::new(cell_key.cell(GcBank::default()));
             let frame = CallFrame::new(
                 cell_key.cell(process),
-                Rc::new(pf),
+                Arc::new(pf),
                 0,
                 None,
                 vm_upvalues.clone(),
@@ -527,7 +528,7 @@ mod tests {
 
             let frame = CallFrame::new(
                 frame.process,
-                Rc::new(pf),
+                Arc::new(pf),
                 0,
                 None,
                 vm_upvalues,
@@ -561,7 +562,7 @@ mod tests {
 
             let frame = CallFrameBuilder::default()
                 .process(cell_key.cell(process))
-                .function(Rc::new(fs))
+                .function(Arc::new(fs))
                 .vm_upvalues(vm_upvalues)
                 .upvalue_ptrs(vec![Register(2), Register(5)])
                 .build()

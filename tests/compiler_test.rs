@@ -318,7 +318,7 @@ fn test_inherited_create_called_when_not_overridden() {
         .clone()
         .unwrap();
 
-    let expected = vec![Instruction::Call(5), Instruction::Ret];
+    let expected = vec![Instruction::Call(4), Instruction::Ret];
 
     let inst = &init.instructions;
     assert_eq!(&inst[(inst.len() - 2)..], &expected);

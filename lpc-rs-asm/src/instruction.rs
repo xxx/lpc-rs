@@ -31,9 +31,7 @@ pub enum Instruction {
     /// TODO: make this index directly into the list of functions
     Call(usize),
 
-    /// Call an Efun. x.0 is the index into the caller's `strings` table.
-    // TODO: maybe index directly into a collection of efuns, which saves 1 lookup.
-    //       This can potentially break programs that have been pre-compiled and cached to disk.
+    /// Call an Efun. x.0 is the index into the `EFUN_PROTOTYPES` map.
     CallEfun(usize),
 
     /// Call a simulated efun. x.0 is the index into the caller's `strings` table.

@@ -2,6 +2,7 @@ pub mod efun_context;
 
 pub(crate) mod call_out;
 pub(crate) mod clone_object;
+pub(crate) mod compose;
 pub(crate) mod debug;
 pub(crate) mod dump;
 pub(crate) mod file_name;
@@ -13,6 +14,7 @@ pub(crate) mod this_object;
 pub(crate) mod throw;
 
 use std::collections::HashMap;
+use indexmap::{IndexMap, IndexSet};
 
 use lpc_rs_core::{
     function_arity::{FunctionArity, FunctionArityBuilder},
@@ -37,6 +39,7 @@ pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
 pub const CLONE_OBJECT: &str = "clone_object";
+pub const COMPOSE: &str = "compose";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
@@ -53,6 +56,7 @@ pub trait HasEfuns<const STACKSIZE: usize> {
     const EFUNS: phf::Map<&'static str, Efun<STACKSIZE>> = phf_map! {
         "call_out" => call_out::call_out as Efun<STACKSIZE>,
         "clone_object" => clone_object::clone_object as Efun<STACKSIZE>,
+        "compose" => compose::compose as Efun<STACKSIZE>,
         "debug" => debug::debug as Efun<STACKSIZE>,
         "dump" => dump::dump as Efun<STACKSIZE>,
         "file_name" => file_name::file_name as Efun<STACKSIZE>,
@@ -65,9 +69,11 @@ pub trait HasEfuns<const STACKSIZE: usize> {
     };
 }
 
-/// Global static mapping of all efun names to their prototype
-pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
-    let mut m = HashMap::new();
+/// Global static mapping of all efun names to their prototype.
+/// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun) indexes into this map,
+/// so changes to the insert order will invalidate previously-compiled code, and break tests.
+pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
+    let mut m = IndexMap::new();
 
     m.insert(
         CALL_OUT,
@@ -86,7 +92,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
                 LpcType::Function(false),
                 LpcType::Int(false) | LpcType::Float(false),
             ])
-            .flags(FunctionFlags::default().with_ellipsis(false))
             .build()
             .expect("failed to build call_out"),
     );
@@ -143,6 +148,22 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
             .arg_types(vec![LpcType::String(false)])
             .build()
             .expect("failed to build clone_object"),
+    );
+
+    m.insert(
+        COMPOSE,
+        FunctionPrototypeBuilder::default()
+            .name(COMPOSE)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Function(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![
+                LpcType::Function(false),
+                LpcType::Function(false),
+            ])
+            .build()
+            .expect("failed to build compose"),
     );
 
     m.insert(
@@ -209,7 +230,6 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
                 ellipsis: false,
             })
             .arg_types(vec![LpcType::Function(false), LpcType::Mixed(true)])
-            .flags(FunctionFlags::default())
             .build()
             .expect("failed to build papplyv"),
     );

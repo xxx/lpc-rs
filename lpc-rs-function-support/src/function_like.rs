@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use lpc_rs_core::mangle::Mangle;
 
@@ -8,7 +9,7 @@ use crate::{function_prototype::FunctionPrototype, program_function::ProgramFunc
 #[derive(Debug, PartialEq)]
 pub enum FunctionLike<'a> {
     Prototype(&'a FunctionPrototype),
-    Compiled(Rc<ProgramFunction>),
+    Compiled(Arc<ProgramFunction>),
 }
 
 impl<'a> FunctionLike<'a> {
@@ -43,8 +44,8 @@ impl<'a> From<&'a FunctionPrototype> for FunctionLike<'a> {
     }
 }
 
-impl<'a> From<Rc<ProgramFunction>> for FunctionLike<'a> {
-    fn from(func: Rc<ProgramFunction>) -> Self {
+impl<'a> From<Arc<ProgramFunction>> for FunctionLike<'a> {
+    fn from(func: Arc<ProgramFunction>) -> Self {
         FunctionLike::Compiled(func)
     }
 }
@@ -69,7 +70,7 @@ mod tests {
         let function_like = FunctionLike::from(&prototype);
         assert_eq!(function_like.prototype(), &prototype);
 
-        let function_like = FunctionLike::from(Rc::new(ProgramFunction::new(prototype.clone(), 0)));
+        let function_like = FunctionLike::from(Arc::new(ProgramFunction::new(prototype.clone(), 0)));
         assert_eq!(function_like.prototype(), &prototype);
     }
 }

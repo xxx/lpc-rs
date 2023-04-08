@@ -58,7 +58,7 @@ pub struct CompilationContext {
     pub strings: StringInterner,
 
     /// All of the inherited functions, keyed by their mangled name.
-    pub inherited_functions: IndexMap<String, Rc<ProgramFunction>>,
+    pub inherited_functions: IndexMap<String, Arc<ProgramFunction>>,
 
     /// All of my Inherited parent objects
     /// The ordering of this field can be assumed to be in the order of

@@ -4,6 +4,7 @@ use std::{
     hash::Hasher,
     rc::Rc,
 };
+use std::sync::Arc;
 
 use educe::Educe;
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -22,7 +23,7 @@ pub enum FunctionAddress {
     /// The function being called is located in an object.
     Local(
         #[educe(Debug(method = "qcell_process_debug"))] Rc<QCell<Process>>,
-        Rc<ProgramFunction>,
+        Arc<ProgramFunction>,
     ),
 
     /// The receiver isn't known until called (i.e. the `&->foo()` syntax)

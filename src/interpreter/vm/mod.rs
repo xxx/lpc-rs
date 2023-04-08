@@ -6,6 +6,7 @@ use std::{
     rc::Rc,
     sync::mpsc::{Receiver, RecvTimeoutError, Sender},
 };
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -271,7 +272,7 @@ impl Vm {
                         // TODO: prototypes should be in Rcs so this clone is cheap
                         let pf = ProgramFunction::new(prototype.clone(), 0);
 
-                        (Rc::new(self.cell_key.cell(Process::default())), Rc::new(pf), args)
+                        (Rc::new(self.cell_key.cell(Process::default())), Arc::new(pf), args)
                     }
                 }
             }
