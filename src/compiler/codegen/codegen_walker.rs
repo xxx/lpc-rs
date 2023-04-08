@@ -2381,6 +2381,7 @@ impl Default for CodegenWalker {
 #[cfg(test)]
 mod tests {
     use std::{collections::VecDeque, sync::Arc};
+    use std::rc::Rc;
 
     use claim::assert_some;
     use factori::create;
