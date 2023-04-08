@@ -56,12 +56,11 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
+            call_outs::CallOuts, gc::gc_bank::GcBank, lpc_array::LpcArray, memory::Memory,
+            object_space::ObjectSpace, task::Task,
         },
         test_support::compile_prog,
     };
-    use crate::interpreter::lpc_array::LpcArray;
 
     #[test]
     fn test_query_call_out() {

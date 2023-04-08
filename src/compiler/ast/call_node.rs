@@ -51,7 +51,9 @@ pub struct CallNode {
 impl CallNode {
     pub fn set_receiver(&mut self, new_receiver: ExpressionNode) {
         match &mut self.chain {
-            CallChain::Root { ref mut receiver, .. } => {
+            CallChain::Root {
+                ref mut receiver, ..
+            } => {
                 *receiver = Some(Box::new(new_receiver));
             }
             CallChain::Node(node) => {
@@ -81,7 +83,11 @@ impl Display for CallNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let args = self.arguments.iter().map(|a| a.to_string()).join(" ,");
         match &self.chain {
-            CallChain::Root { receiver, name, namespace } => {
+            CallChain::Root {
+                receiver,
+                name,
+                namespace,
+            } => {
                 let fmt = lazy_format!(
                     if let Some(rcvr) = receiver => ("{}->{}{}({})", rcvr, namespace, name, args)
                     else => ("{}({})", name, args)

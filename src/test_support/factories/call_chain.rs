@@ -1,11 +1,12 @@
 use factori::factori;
 use fake::Fake;
 use lpc_rs_core::call_namespace::CallNamespace;
-use ustr::ustr;
-use ustr::Ustr;
+use ustr::{ustr, Ustr};
 
-use crate::compiler::ast::call_node::{CallChain, CallNode};
-use crate::compiler::ast::expression_node::ExpressionNode;
+use crate::compiler::ast::{
+    call_node::{CallChain, CallNode},
+    expression_node::ExpressionNode,
+};
 
 factori!(CallChain, {
     default {

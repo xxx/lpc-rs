@@ -38,7 +38,7 @@ use crate::{
             binary_op_node::{BinaryOpNode, BinaryOperation},
             block_node::BlockNode,
             break_node::BreakNode,
-            call_node::CallNode,
+            call_node::{CallChain, CallNode},
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             decl_node::DeclNode,
@@ -72,7 +72,6 @@ use crate::{
         program::Program,
     },
 };
-use crate::compiler::ast::call_node::CallChain;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -972,9 +971,9 @@ impl CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) =
-            self.context
-                .lookup_function_complete(name, namespace, cell_key)
+        if let Some(func) = self
+            .context
+            .lookup_function_complete(name, namespace, cell_key)
         {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
@@ -982,9 +981,9 @@ impl CodegenWalker {
                 push_copy(self);
             }
         } else if let Some(Symbol {
-                               type_: LpcType::Function(false) | LpcType::Mixed(false),
-                               ..
-                           }) = self.context.lookup_var(name)
+            type_: LpcType::Function(false) | LpcType::Mixed(false),
+            ..
+        }) = self.context.lookup_var(name)
         {
             push_copy(self);
         } else if has_receiver
@@ -1003,7 +1002,7 @@ impl CodegenWalker {
                 something very broken in the semantic checks, or that I'm not looking hard enough.",
                 name
             ))
-                .with_span(node.span));
+            .with_span(node.span));
         }
 
         Ok(())
@@ -3704,10 +3703,16 @@ mod tests {
                 PushArg(RegisterVariant::Local(Register(1))),
                 PushArg(RegisterVariant::Local(Register(4))),
                 CallEfun(2),
-                Copy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(5))),
+                Copy(
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(5)),
+                ),
                 ClearArgs,
                 CallFp(RegisterVariant::Local(Register(5))),
-                Copy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(6))),
+                Copy(
+                    RegisterVariant::Local(Register(0)),
+                    RegisterVariant::Local(Register(6)),
+                ),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4229,7 +4234,8 @@ mod tests {
                     op: BinaryOperation::EqEq,
                     span: None,
                 }),
-                body: Box::new(AstNode::Call(create!(CallNode,
+                body: Box::new(AstNode::Call(create!(
+                    CallNode,
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("body")],
                 ))),
@@ -4518,14 +4524,15 @@ mod tests {
                     op: BinaryOperation::EqEq,
                     span: None,
                 }),
-                body: Box::new(AstNode::Call(create!(CallNode,
+                body: Box::new(AstNode::Call(create!(
+                    CallNode,
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("true")]
                 ))),
                 else_clause: Box::new(Some(AstNode::Call(CallNode {
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("false")],
-                    span: None
+                    span: None,
                 }))),
                 scope_id: None,
                 span: None,

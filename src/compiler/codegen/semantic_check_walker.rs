@@ -13,7 +13,7 @@ use crate::{
             binary_op_node::BinaryOpNode,
             block_node::BlockNode,
             break_node::BreakNode,
-            call_node::CallNode,
+            call_node::{CallChain, CallNode},
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             do_while_node::DoWhileNode,
@@ -41,7 +41,6 @@ use crate::{
         },
     },
 };
-use crate::compiler::ast::call_node::CallChain;
 
 struct BreakAllowed(bool);
 struct ContinueAllowed(bool);
@@ -144,8 +143,8 @@ impl SemanticCheckWalker {
             // check for function pointers & closures
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
-            let e = LpcError::new(format!("call to unknown function `{}`", name))
-                .with_span(node.span);
+            let e =
+                LpcError::new(format!("call to unknown function `{}`", name)).with_span(node.span);
             self.context.errors.push(e);
             // Non-fatal. Continue.
         }
@@ -161,10 +160,10 @@ impl SemanticCheckWalker {
             let prototype = function_like.as_ref();
             if prototype.flags.private()
                 && !self
-                .context
-                .function_prototypes
-                .values()
-                .any(|val| val == prototype)
+                    .context
+                    .function_prototypes
+                    .values()
+                    .any(|val| val == prototype)
             {
                 let e = LpcError::new(format!("call to private function `{}`", name))
                     .with_span(node.span)
@@ -180,8 +179,8 @@ impl SemanticCheckWalker {
                     "incorrect argument count in call to `{}`: expected: {}, received: {}",
                     name, arity.num_args, arg_len
                 ))
-                    .with_span(node.span)
-                    .with_label("defined here", prototype.span);
+                .with_span(node.span)
+                .with_label("defined here", prototype.span);
                 errors.push(e);
             }
 
@@ -1200,7 +1199,8 @@ mod tests {
         #[test]
         fn allows_known_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("known"))
             ));
 
@@ -1232,7 +1232,8 @@ mod tests {
         #[test]
         fn allows_local_private_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("known"))
             ));
 
@@ -1265,7 +1266,8 @@ mod tests {
         #[test]
         fn allows_known_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("known"))
             ));
 
@@ -1298,7 +1300,8 @@ mod tests {
         #[test]
         fn allows_parent_namespaced_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Parent),
             ));
 
@@ -1331,7 +1334,8 @@ mod tests {
         #[test]
         fn disallows_private_parent_namespaced_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Parent),
             ));
 
@@ -1369,8 +1373,10 @@ mod tests {
         #[test]
         fn allows_named_namespaced_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
-                chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Named(ustr("parent"))),
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain:
+                    create!(CallChain, name: ustr("known"), namespace: CallNamespace::Named(ustr("parent"))),
             ));
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -1406,8 +1412,10 @@ mod tests {
         fn allows_efun_namespaced_functions() {
             let mut cell_key = QCellOwner::new();
 
-            let mut node = ExpressionNode::from(create!(CallNode,
-                chain: create!(CallChain, name: ustr("this_object"), namespace: CallNamespace::Named(ustr("efun"))),
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain:
+                    create!(CallChain, name: ustr("this_object"), namespace: CallNamespace::Named(ustr("efun"))),
             ));
 
             let context = CompilationContext::default();
@@ -1421,8 +1429,10 @@ mod tests {
         #[test]
         fn disallows_private_named_namespaced_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
-                chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Named(ustr("parent"))),
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain:
+                    create!(CallChain, name: ustr("known"), namespace: CallNamespace::Named(ustr("parent"))),
             ));
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -1462,8 +1472,10 @@ mod tests {
         #[test]
         fn disallows_unknown_named_namespaced_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
-                chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Named(ustr("unknown_namespace"))),
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain:
+                    create!(CallChain, name: ustr("known"), namespace: CallNamespace::Named(ustr("unknown_namespace"))),
             ));
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -1499,7 +1511,8 @@ mod tests {
         #[test]
         fn disallows_private_inherited_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("known")),
             ));
 
@@ -1537,7 +1550,8 @@ mod tests {
         #[test]
         fn allows_known_efuns() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("dump")),
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
             ));
@@ -1552,7 +1566,8 @@ mod tests {
         #[test]
         fn allows_function_pointers() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_function_pointer")),
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
             ));
@@ -1575,7 +1590,8 @@ mod tests {
         #[test]
         fn allows_mixed_function_pointers() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_mixed_function_pointer")),
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
             ));
@@ -1598,7 +1614,8 @@ mod tests {
         #[test]
         fn disallows_pointers_to_non_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_non_function_pointer")),
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
             ));
@@ -1625,7 +1642,8 @@ mod tests {
         #[test]
         fn disallows_unknown_functions() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("unknown")),
             ));
 
@@ -1638,7 +1656,8 @@ mod tests {
         #[test]
         fn disallows_incorrect_function_arity() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("dump")),
             ));
 
@@ -1651,15 +1670,17 @@ mod tests {
         #[test]
         fn handles_ellipsis_argument_arity() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("call_other")),
-                arguments: vec![
-                    ExpressionNode::from("bar.c"),
-                    ExpressionNode::from("my_function"),
-                    ExpressionNode::from(123),
-                    ExpressionNode::from(111),
-                    ExpressionNode::from("sha256"),
-                ], // `call_other` is specified as having 2 arguments, but we're passing more
+                arguments:
+                    vec![
+                        ExpressionNode::from("bar.c"),
+                        ExpressionNode::from("my_function"),
+                        ExpressionNode::from(123),
+                        ExpressionNode::from(111),
+                        ExpressionNode::from("sha256"),
+                    ], // `call_other` is specified as having 2 arguments, but we're passing more
             ));
 
             let context = empty_context();
@@ -1672,7 +1693,8 @@ mod tests {
         fn handles_varargs_argument_arity() {
             let mut cell_key = QCellOwner::new();
 
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_function")),
             ));
 
@@ -1717,7 +1739,8 @@ mod tests {
         #[test]
         fn understands_argument_defaults() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
             ));
 
@@ -1755,7 +1778,8 @@ mod tests {
         #[test]
         fn disallows_invalid_arg_types() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
                 arguments: vec![ExpressionNode::from(123)],
             ));
@@ -1789,7 +1813,8 @@ mod tests {
         #[test]
         fn allows_0() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
                 arguments: vec![ExpressionNode::from(0)],
             ));
@@ -1823,8 +1848,10 @@ mod tests {
         #[test]
         fn allows_bad_data_with_call_other() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
-                chain: create!(CallChain, receiver: Some(Box::new(ExpressionNode::from(23))), name: ustr("dump")),
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain:
+                    create!(CallChain, receiver: Some(Box::new(ExpressionNode::from(23))), name: ustr("dump")),
                 arguments: vec![],
             ));
 
@@ -1837,12 +1864,14 @@ mod tests {
         #[test]
         fn disallows_non_local_namespace_with_call_other() {
             let mut cell_key = QCellOwner::new();
-            let mut node = ExpressionNode::from(create!(CallNode,
-                chain: create!(CallChain,
-                    receiver: Some(Box::new(ExpressionNode::from(23))),
-                    name: ustr("dump"),
-                    namespace: CallNamespace::Parent
-                ),
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain:
+                    create!(CallChain,
+                        receiver: Some(Box::new(ExpressionNode::from(23))),
+                        name: ustr("dump"),
+                        namespace: CallNamespace::Parent
+                    ),
                 arguments: vec![],
             ));
 

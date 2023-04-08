@@ -12,7 +12,7 @@ use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
         block_node::BlockNode,
-        call_node::CallNode,
+        call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
         do_while_node::DoWhileNode,
         for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
@@ -28,7 +28,6 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::semantic_checks::check_var_redefinition,
 };
-use crate::compiler::ast::call_node::CallChain;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -154,7 +153,7 @@ impl TreeWalker for ScopeWalker {
     fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
         match &node.chain {
             CallChain::Root { .. } => self.visit_call_root(node, cell_key),
-            CallChain::Node(_) => self.visit_call_chain(node, cell_key)
+            CallChain::Node(_) => self.visit_call_chain(node, cell_key),
         }
     }
 

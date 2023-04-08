@@ -9,7 +9,7 @@ use crate::compiler::{
         binary_op_node::BinaryOpNode,
         block_node::BlockNode,
         break_node::BreakNode,
-        call_node::CallNode,
+        call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
@@ -38,7 +38,6 @@ use crate::compiler::{
     },
     compilation_context::CompilationContext,
 };
-use crate::compiler::ast::call_node::CallChain;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -114,7 +113,9 @@ pub trait TreeWalker {
         Self: Sized,
     {
         match &mut node.chain {
-            CallChain::Root { ref mut receiver, .. } => {
+            CallChain::Root {
+                ref mut receiver, ..
+            } => {
                 if let Some(rcvr) = receiver {
                     rcvr.visit(self, cell_key)?;
                 }

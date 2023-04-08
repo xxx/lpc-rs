@@ -1,8 +1,7 @@
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
-use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue};
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
 pub fn papplyv<const N: usize>(
@@ -38,14 +37,17 @@ pub fn papplyv<const N: usize>(
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::test_support::compile_prog;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task,
+        },
+        test_support::compile_prog,
+    };
 
     #[test]
     fn test_papplyv() {
@@ -85,8 +87,14 @@ mod tests {
         assert_eq!(func.name(), "dump");
 
         assert_eq!(
-            func.partial_args.iter().map(|a| a.as_ref().unwrap().to_string()).collect::<Vec<_>>(),
-            vec!["\"foo\"", "\"bar\""].iter().map(ToString::to_string).collect::<Vec<_>>()
+            func.partial_args
+                .iter()
+                .map(|a| a.as_ref().unwrap().to_string())
+                .collect::<Vec<_>>(),
+            vec!["\"foo\"", "\"bar\""]
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
         );
     }
 }

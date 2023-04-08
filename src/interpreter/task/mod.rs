@@ -746,10 +746,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_ref = self
-                    .context
-                    .memory()
-                    .value_to_ref(LpcValue::from(refs));
+                let new_ref = self.context.memory().value_to_ref(LpcValue::from(refs));
 
                 set_location(&mut self.stack, r, new_ref, cell_key)?;
             }
@@ -882,12 +879,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_val = { get_new_value(&self.stack)? };
-                return_value(
-                    new_val,
-                    self.context.memory(),
-                    &mut self.stack,
-                    cell_key,
-                )?;
+                return_value(new_val, self.context.memory(), &mut self.stack, cell_key)?;
             }
             Instruction::Ret => {
                 pop_frame!(self).map(|frame| {
@@ -970,10 +962,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .iter()
             .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
-        let new_ref = self
-            .context
-            .memory()
-            .value_to_ref(LpcValue::from(vars));
+        let new_ref = self.context.memory().value_to_ref(LpcValue::from(vars));
 
         set_loc!(self, location, new_ref, cell_key)
     }
@@ -1444,13 +1433,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .collect::<Result<Vec<_>>>()?;
 
             match &receiver_ref {
-                LpcRef::String(_) | LpcRef::Object(_) => resolve_result(
-                    receiver_ref,
-                    function_name,
-                    &args,
-                    &self.context,
-                    cell_key,
-                )?,
+                LpcRef::String(_) | LpcRef::Object(_) => {
+                    resolve_result(receiver_ref, function_name, &args, &self.context, cell_key)?
+                }
                 LpcRef::Array(r) => {
                     let b = r.borrow();
                     let array = try_extract_value!(*b, LpcValue::Array);
@@ -1458,14 +1443,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let array_value: LpcValue = array
                         .iter()
                         .map(|lpc_ref| {
-                            resolve_result(
-                                lpc_ref,
-                                function_name,
-                                &args,
-                                &self.context,
-                                cell_key,
-                            )
-                            .unwrap_or(NULL)
+                            resolve_result(lpc_ref, function_name, &args, &self.context, cell_key)
+                                .unwrap_or(NULL)
                         })
                         .collect::<Vec<_>>()
                         .into();
@@ -2289,9 +2268,8 @@ mod tests {
     }
 
     mod test_instructions {
-        use crate::interpreter::bank::RefBank;
         use super::*;
-        use crate::interpreter::task::tests::BareVal::*;
+        use crate::interpreter::{bank::RefBank, task::tests::BareVal::*};
 
         fn snapshot_registers(code: &str, cell_key: &mut QCellOwner) -> RefBank {
             let mut task = run_prog(code, cell_key);

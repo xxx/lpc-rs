@@ -228,12 +228,10 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 #[cfg(test)]
 mod tests {
     use factori::create;
-    use crate::test_support::factories::*;
-    use lpc_rs_core::{LpcFloat};
-    
+    use lpc_rs_core::LpcFloat;
 
     use super::*;
-    use crate::compiler::ast::binary_op_node::BinaryOperation;
+    use crate::{compiler::ast::binary_op_node::BinaryOperation, test_support::factories::*};
 
     #[test]
     fn test_from_binary_op_node() {

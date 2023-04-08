@@ -208,10 +208,7 @@ pub static EFUN_PROTOTYPES: Lazy<HashMap<&'static str, FunctionPrototype>> = Laz
                 varargs: false,
                 ellipsis: false,
             })
-            .arg_types(vec![
-                LpcType::Function(false),
-                LpcType::Mixed(true),
-            ])
+            .arg_types(vec![LpcType::Function(false), LpcType::Mixed(true)])
             .flags(FunctionFlags::default())
             .build()
             .expect("failed to build papplyv"),

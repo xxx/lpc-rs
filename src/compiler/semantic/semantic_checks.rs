@@ -8,6 +8,7 @@ use crate::compiler::{
         assignment_node::AssignmentNode,
         ast_node::SpannedNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
+        call_node::CallChain,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
@@ -19,7 +20,6 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::local_scope::LocalScope,
 };
-use crate::compiler::ast::call_node::CallChain;
 
 /// Utility functions for doing various semantic checks.
 
@@ -300,7 +300,9 @@ pub fn node_type(
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context, cell_key),
         ExpressionNode::Call(call_node) => {
             match &call_node.chain {
-                CallChain::Root { name, namespace, .. } => {
+                CallChain::Root {
+                    name, namespace, ..
+                } => {
                     // first check to see if we're calling a function pointer that's
                     // overridden the function with this name
                     let or_else = || {
@@ -324,9 +326,7 @@ pub fn node_type(
                             }
                         })
                 }
-                CallChain::Node(_) => {
-                    Ok(LpcType::Mixed(false))
-                }
+                CallChain::Node(_) => Ok(LpcType::Mixed(false)),
             }
         }
         ExpressionNode::Closure(ClosureNode { return_type, .. }) => Ok(*return_type),
@@ -1909,7 +1909,8 @@ mod tests {
                 let cell_key = QCellOwner::new();
                 let context = CompilationContext::default();
 
-                let node = ExpressionNode::Call(create!(CallNode,
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
                     chain: create!(CallChain, name: ustr("clone_object")),
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
                 ));
@@ -1935,8 +1936,10 @@ mod tests {
                     .function_prototypes
                     .insert("clone_object".into(), proto);
 
-                let node = ExpressionNode::Call(create!(CallNode,
-                    chain: create!(CallChain, name: ustr("clone_object"), namespace: CallNamespace::Named(EFUN.into())),
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
+                    chain:
+                        create!(CallChain, name: ustr("clone_object"), namespace: CallNamespace::Named(EFUN.into())),
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
                 ));
 
@@ -1951,7 +1954,10 @@ mod tests {
                 let cell_key = QCellOwner::new();
                 let context = CompilationContext::default();
 
-                let node = create!(CallNode, chain: create!(CallChain, node: Some(create!(CallNode))));
+                let node = create!(
+                    CallNode,
+                    chain: create!(CallChain, node: Some(create!(CallNode)))
+                );
                 // )
                 // let node = ExpressionNode::Call(CallNode {
                 //     chain
@@ -2102,7 +2108,8 @@ mod tests {
             fn is_return_type_for_normal_functions() {
                 let cell_key = QCellOwner::new();
 
-                let node = ExpressionNode::Call(create!(CallNode,
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
                     chain: create!(CallChain, name: ustr("this_object")),
                 ));
 
@@ -2119,7 +2126,8 @@ mod tests {
                 let cell_key = QCellOwner::new();
                 let node = ExpressionNode::Call(create!(
                     CallNode,
-                    chain: create!(CallChain, receiver: Some(Box::new(ExpressionNode::from(12345666)))),
+                    chain:
+                        create!(CallChain, receiver: Some(Box::new(ExpressionNode::from(12345666)))),
                 ));
 
                 let context = CompilationContext::default();
