@@ -38,6 +38,7 @@ use crate::compiler::{
     },
     compilation_context::CompilationContext,
 };
+use crate::compiler::ast::call_node::CallChain;
 
 pub trait ContextHolder {
     /// Consume this walker, and return its `Context`.
@@ -112,8 +113,15 @@ pub trait TreeWalker {
     where
         Self: Sized,
     {
-        if let Some(rcvr) = &mut node.receiver {
-            rcvr.visit(self, cell_key)?;
+        match &mut node.chain {
+            CallChain::Root { ref mut receiver, .. } => {
+                if let Some(rcvr) = receiver {
+                    rcvr.visit(self, cell_key)?;
+                }
+            }
+            CallChain::Node(ref mut node) => {
+                node.visit(self, cell_key)?;
+            }
         }
 
         for argument in &mut node.arguments {

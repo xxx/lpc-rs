@@ -28,13 +28,14 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::semantic_checks::check_var_redefinition,
 };
+use crate::compiler::ast::call_node::CallChain;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
 #[derive(Debug)]
 pub struct ScopeWalker {
     /// The compilation context
-    context: CompilationContext,
+    pub context: CompilationContext,
 
     /// track the scope IDs of each closure, to help determine if
     /// a variable needs to be upvalued or not.
@@ -87,6 +88,47 @@ impl ScopeWalker {
             }
         }
     }
+
+    fn visit_call_root(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
+        let CallChain::Root { receiver, name, namespace } = &mut node.chain else {
+            return Err(LpcError::new("CallNode::chain was not a CallChain::Root").with_span(node.span));
+        };
+
+        if let Some(rcvr) = receiver {
+            rcvr.visit(self, cell_key)?;
+        }
+
+        for argument in &mut node.arguments {
+            argument.visit(self, cell_key)?;
+        }
+
+        if_chain! {
+            if let Some(symbol) = self.context.lookup_var(&name);
+            if symbol.type_.matches_type(LpcType::Function(false));
+            if self.should_upvalue_symbol(symbol);
+            then {
+                trace!("upvaluing called function var {}", name);
+                let mut symbol = self.context.lookup_var_mut(name).unwrap();
+                symbol.upvalue = true;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn visit_call_chain(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
+        let CallChain::Node(chain_node) = &mut node.chain else {
+            return Err(LpcError::new("CallNode::chain was not a CallChain::Root").with_span(node.span));
+        };
+
+        chain_node.visit(self, cell_key)?;
+
+        for argument in &mut node.arguments {
+            argument.visit(self, cell_key)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl ContextHolder for ScopeWalker {
@@ -110,26 +152,10 @@ impl TreeWalker for ScopeWalker {
     }
 
     fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
-        if let Some(rcvr) = &mut node.receiver {
-            rcvr.visit(self, cell_key)?;
+        match &node.chain {
+            CallChain::Root { .. } => self.visit_call_root(node, cell_key),
+            CallChain::Node(_) => self.visit_call_chain(node, cell_key)
         }
-
-        for argument in &mut node.arguments {
-            argument.visit(self, cell_key)?;
-        }
-
-        if_chain! {
-            if let Some(symbol) = self.context.lookup_var(node.name);
-            if symbol.type_.matches_type(LpcType::Function(false));
-            if self.should_upvalue_symbol(symbol);
-            then {
-                trace!("upvaluing called function var {}", &node.name);
-                let mut symbol = self.context.lookup_var_mut(node.name).unwrap();
-                symbol.upvalue = true;
-            }
-        }
-
-        Ok(())
     }
 
     fn visit_closure(&mut self, node: &mut ClosureNode, cell_key: &mut QCellOwner) -> Result<()> {

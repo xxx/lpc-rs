@@ -18,24 +18,47 @@ use crate::compiler::{
     codegen::tree_walker::TreeWalker,
 };
 
+/// Help handle chained calls, like foo("bar")("baz");
+#[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
+pub enum CallChain {
+    Root {
+        /// The receiver, for the case of `call_other`
+        receiver: Option<Box<ExpressionNode>>,
+
+        /// When searching for this function, where do we start?
+        namespace: CallNamespace,
+
+        /// The name of the function being called
+        name: Ustr,
+    },
+    Node(Box<CallNode>),
+}
+
 /// Representation of a function call.
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
 pub struct CallNode {
-    /// The receiver, for the case of `call_other`
-    pub receiver: Option<Box<ExpressionNode>>,
+    /// Is this call chained off of another call?
+    pub chain: CallChain,
 
     /// The list of function arguments being passed.
     pub arguments: Vec<ExpressionNode>,
 
-    /// The name of the function being called
-    pub name: Ustr,
-
     /// The text span in the original file that this node represents. Used for
     /// error messages.
     pub span: Option<Span>,
+}
 
-    /// When searching for this function, where do we start?
-    pub namespace: CallNamespace,
+impl CallNode {
+    pub fn set_receiver(&mut self, new_receiver: ExpressionNode) {
+        match &mut self.chain {
+            CallChain::Root { ref mut receiver, .. } => {
+                *receiver = Some(Box::new(new_receiver));
+            }
+            CallChain::Node(node) => {
+                node.set_receiver(new_receiver);
+            }
+        }
+    }
 }
 
 impl SpannedNode for CallNode {
@@ -57,10 +80,20 @@ impl AstNodeTrait for CallNode {
 impl Display for CallNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let args = self.arguments.iter().map(|a| a.to_string()).join(" ,");
-        let fmt = lazy_format!(
-            if let Some(e) = &self.receiver => ("{}->{}{}({})", e, self.namespace, self.name, args)
-            else => ("{}({})", self.name, args)
-        );
-        write!(f, "{fmt}")
+        match &self.chain {
+            CallChain::Root { receiver, name, namespace } => {
+                let fmt = lazy_format!(
+                    if let Some(rcvr) = receiver => ("{}->{}{}({})", rcvr, namespace, name, args)
+                    else => ("{}({})", name, args)
+                );
+
+                write!(f, "{fmt}")
+            }
+            CallChain::Node(node) => {
+                let fmt = lazy_format!("{}({})", node, args);
+
+                write!(f, "{fmt}")
+            }
+        }
     }
 }

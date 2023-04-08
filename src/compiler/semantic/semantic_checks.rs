@@ -20,6 +20,7 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::local_scope::LocalScope,
 };
+use crate::compiler::ast::call_node::CallChain;
 
 /// Utility functions for doing various semantic checks.
 
@@ -298,31 +299,36 @@ pub fn node_type(
 ) -> Result<LpcType> {
     match node {
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context, cell_key),
-        ExpressionNode::Call(CallNode {
-            name, namespace, ..
-        }) => {
-            // first check to see if we're calling a function pointer that's
-            // overridden the function with this name
-            let or_else = || {
-                context
-                    .lookup_function_complete(name.as_str(), namespace, cell_key)
-                    // This `or` clause is where call_other checks end up
-                    .map_or(Ok(LpcType::Mixed(false)), |function_like| {
-                        Ok(function_like.as_ref().return_type)
-                    })
-            };
+        ExpressionNode::Call(call_node) => {
+            match &call_node.chain {
+                CallChain::Root { name, namespace, .. } => {
+                    // first check to see if we're calling a function pointer that's
+                    // overridden the function with this name
+                    let or_else = || {
+                        context
+                            .lookup_function_complete(name.as_str(), namespace, cell_key)
+                            // This `or` clause is where call_other checks end up
+                            .map_or(Ok(LpcType::Mixed(false)), |function_like| {
+                                Ok(function_like.as_ref().return_type)
+                            })
+                    };
 
-            context
-                .lookup_var(name.as_str())
-                .map_or_else(or_else, |var| {
-                    if var.type_.matches_type(LpcType::Function(false)) {
-                        or_else()
-                    } else {
-                        Err(LpcError::new(format!(
-                            "invalid call: `{name}` is not a function"
-                        )))
-                    }
-                })
+                    context
+                        .lookup_var(name.as_str())
+                        .map_or_else(or_else, |var| {
+                            if var.type_.matches_type(LpcType::Function(false)) {
+                                or_else()
+                            } else {
+                                Err(LpcError::new(format!(
+                                    "invalid call: `{name}` is not a function"
+                                )))
+                            }
+                        })
+                }
+                CallChain::Node(_) => {
+                    Ok(LpcType::Mixed(false))
+                }
+            }
         }
         ExpressionNode::Closure(ClosureNode { return_type, .. }) => Ok(*return_type),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
@@ -1904,13 +1910,10 @@ mod tests {
                 let cell_key = QCellOwner::new();
                 let context = CompilationContext::default();
 
-                let node = ExpressionNode::Call(CallNode {
-                    receiver: None,
+                let node = ExpressionNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("clone_object")),
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
-                    name: ustr("clone_object"),
-                    span: None,
-                    namespace: CallNamespace::default(),
-                });
+                ));
 
                 assert_eq!(
                     node_type(&node, &context, &cell_key).unwrap(),
@@ -1933,17 +1936,36 @@ mod tests {
                     .function_prototypes
                     .insert("clone_object".into(), proto);
 
-                let node = ExpressionNode::Call(CallNode {
-                    receiver: None,
+                let node = ExpressionNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("clone_object"), namespace: CallNamespace::Named(EFUN.into())),
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
-                    name: ustr("clone_object"),
-                    span: None,
-                    namespace: CallNamespace::Named(EFUN.into()),
-                });
+                ));
 
                 assert_eq!(
                     node_type(&node, &context, &cell_key).unwrap(),
                     LpcType::Object(false)
+                );
+            }
+
+            #[test]
+            fn chained_call_is_mixed() {
+                let cell_key = QCellOwner::new();
+                let context = CompilationContext::default();
+
+                let node = create!(CallNode, chain: create!(CallChain, node: Some(create!(CallNode))));
+                // )
+                // let node = ExpressionNode::Call(CallNode {
+                //     chain
+                //     receiver: Some(Box::new(ExpressionNode::from(123))),
+                //     arguments: vec![],
+                //     name: ustr("clone_object"),
+                //     span: None,
+                //     namespace: CallNamespace::default(),
+                // });
+
+                assert_eq!(
+                    node_type(&ExpressionNode::Call(node), &context, &cell_key).unwrap(),
+                    LpcType::Mixed(false)
                 );
             }
 
@@ -2080,13 +2102,10 @@ mod tests {
             #[test]
             fn is_return_type_for_normal_functions() {
                 let cell_key = QCellOwner::new();
-                let node = ExpressionNode::Call(CallNode {
-                    receiver: None,
-                    arguments: vec![],
-                    name: ustr("this_object"),
-                    span: None,
-                    namespace: Default::default(),
-                });
+
+                let node = ExpressionNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("this_object")),
+                ));
 
                 let context = CompilationContext::default();
 
@@ -2101,7 +2120,7 @@ mod tests {
                 let cell_key = QCellOwner::new();
                 let node = ExpressionNode::Call(create!(
                     CallNode,
-                    receiver: Some(Box::new(ExpressionNode::from(12345666))),
+                    chain: create!(CallChain, receiver: Some(Box::new(ExpressionNode::from(12345666)))),
                 ));
 
                 let context = CompilationContext::default();
@@ -2124,13 +2143,10 @@ mod tests {
                     ..Default::default()
                 });
 
-                let node = ExpressionNode::Call(CallNode {
-                    receiver: None,
-                    arguments: vec![],
-                    name: ustr("foo"),
-                    span: None,
-                    namespace: Default::default(),
-                });
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
+                    chain: create!(CallChain, name: ustr("foo")),
+                ));
 
                 let context = CompilationContext {
                     scopes: scope_tree,

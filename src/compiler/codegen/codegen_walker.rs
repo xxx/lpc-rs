@@ -72,6 +72,7 @@ use crate::{
         program::Program,
     },
 };
+use crate::compiler::ast::call_node::CallChain;
 
 macro_rules! push_instruction {
     ($slf:expr, $inst:expr, $span:expr) => {
@@ -319,17 +320,35 @@ impl CodegenWalker {
             | ExpressionNode::FunctionPtr(_) => OperationType::Memory,
             ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs, cell_key),
             ExpressionNode::Call(node) => {
-                if let Some(func) =
-                    self.context
-                        .lookup_function_complete(node.name, &node.namespace, cell_key)
-                {
-                    match func.prototype().return_type {
-                        LpcType::Int(_) | LpcType::Float(_) => OperationType::Register,
-                        _ => OperationType::Memory,
+                if_chain! {
+                    if let CallChain::Root { receiver, name, namespace } = &node.chain;
+                    if let Some(func) = self.context.lookup_function_complete(name, namespace, cell_key);
+                    if let LpcType::Int(_) | LpcType::Float(_) = func.prototype().return_type;
+                    then {
+                        return OperationType::Register;
+                    } else {
+                        return OperationType::Memory;
                     }
-                } else {
-                    OperationType::Memory
                 }
+                // match &node.chain {
+                //     CallChain::Root {
+                //         receiver,
+                //         name,
+                //         namespace
+                //     } => {
+                //         if let Some(func) =
+                //             self.context.lookup_function_complete(name, namespace, cell_key)
+                //         {
+                //             match func.prototype().return_type {
+                //                 LpcType::Int(_) | LpcType::Float(_) => OperationType::Register,
+                //                 _ => OperationType::Memory,
+                //             }
+                //         } else {
+                //             OperationType::Memory
+                //         }
+                //     }
+                //     CallChain::Node(_) => OperationType::Memory
+                // }
             }
             ExpressionNode::BinaryOp(node) => {
                 let left_type = self.to_operation_type(&node.l, cell_key);
@@ -846,6 +865,187 @@ impl CodegenWalker {
             .map(|parameter| self.visit_parameter(parameter))
             .collect::<Vec<_>>()
     }
+
+    fn visit_call_root(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
+        let node_span = node.span();
+        let CallChain::Root { ref mut receiver, ref name, ref namespace } = &mut node.chain else {
+            return Err(LpcError::new_bug("Invalid call chain").with_span(node.span));
+        };
+        let has_receiver = receiver.is_some();
+
+        if name.as_str() == CATCH {
+            return self.emit_catch(node, cell_key);
+        }
+
+        let argument_len = node.arguments.len();
+        let mut arg_results = Vec::with_capacity(argument_len);
+
+        for argument in &mut node.arguments {
+            argument.visit(self, cell_key)?;
+            arg_results.push(self.current_result);
+        }
+
+        if name.as_str() == SIZEOF {
+            let result = self.register_counter.next().unwrap().as_local();
+            let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
+            push_instruction!(self, instruction, node.span);
+
+            return Ok(());
+        }
+
+        let instruction = {
+            push_instruction!(self, Instruction::ClearArgs, node.span);
+
+            // populate the args vector
+            for result in &arg_results {
+                push_instruction!(self, Instruction::PushArg(*result), node.span);
+            }
+
+            if let Some(rcvr) = receiver {
+                rcvr.visit(self, cell_key)?;
+                let receiver_result = self.current_result;
+
+                let name_register = self.register_counter.next().unwrap().as_local();
+                let index = self.context.strings.get_or_intern(name);
+
+                push_instruction!(
+                    self,
+                    Instruction::SConst(name_register, index.to_usize()),
+                    node.span
+                );
+
+                Instruction::CallOther(receiver_result, name_register)
+            } else if name.as_str() == CALL_OTHER {
+                debug_assert!(
+                    arg_results.len() >= 2,
+                    "CallOther requires at least 2 arguments, for the receiver and function name"
+                );
+                let receiver = arg_results[0];
+                let name_index = arg_results[1];
+
+                Instruction::CallOther(receiver, name_index)
+            } else {
+                if_chain! {
+                    if let Some(x) = self.context.lookup_var(&name);
+                    if x.type_.matches_type(LpcType::Function(false));
+                    then {
+                        Instruction::CallFp(x.location.unwrap())
+                    } else {
+                        let Some(func) =
+                            self.context.lookup_function_complete(&name, namespace, cell_key) else {
+                            return Err(LpcError::new_bug(
+                                format!("Cannot find function during code gen: {}", name)
+                            ).with_span(node.span));
+                        };
+
+                        match func.prototype().kind {
+                            FunctionKind::Local => {
+                                let idx = self.context.strings.get_or_intern(func.mangle());
+                                Instruction::Call(idx.to_usize())
+                            }
+                            FunctionKind::Efun => {
+                                let idx = self.context.strings.get_or_intern(name);
+                                Instruction::CallEfun(idx.to_usize())
+                            }
+                            FunctionKind::SimulEfun => {
+                                let idx = self.context.strings.get_or_intern(name);
+                                Instruction::CallSimulEfun(idx.to_usize())
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        push_instruction!(self, instruction, node.span);
+
+        let push_copy = |walker: &mut Self| {
+            let next_register = walker.register_counter.next().unwrap().as_local();
+
+            push_instruction!(
+                walker,
+                Instruction::Copy(Register(0).as_local(), next_register),
+                node_span
+            );
+
+            walker.current_result = next_register;
+        };
+
+        // Take care of the result after the call returns.
+        if let Some(func) =
+            self.context
+                .lookup_function_complete(name, namespace, cell_key)
+        {
+            if func.as_ref().return_type == LpcType::Void {
+                self.current_result = Register(0).as_local();
+            } else {
+                push_copy(self);
+            }
+        } else if let Some(Symbol {
+                               type_: LpcType::Function(false) | LpcType::Mixed(false),
+                               ..
+                           }) = self.context.lookup_var(name)
+        {
+            push_copy(self);
+        } else if has_receiver
+            || matches!(
+                self.context.scopes.lookup(name),
+                Some(Symbol {
+                    type_: LpcType::Function(false),
+                    ..
+                })
+            )
+        {
+            push_copy(self);
+        } else {
+            return Err(LpcError::new_bug(format!(
+                "Unable to find the return type for `{}`. This is a weird issue that indicates \
+                something very broken in the semantic checks, or that I'm not looking hard enough.",
+                name
+            ))
+                .with_span(node.span));
+        }
+
+        Ok(())
+    }
+
+    fn visit_call_chain(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
+        let CallChain::Node(chain_node) = &mut node.chain else {
+            return Err(LpcError::new_bug("Invalid call chain").with_span(node.span));
+        };
+
+        chain_node.visit(self, cell_key)?;
+        let fp_loc = self.current_result;
+
+        let argument_len = node.arguments.len();
+        let mut arg_results = Vec::with_capacity(argument_len);
+
+        for argument in &mut node.arguments {
+            argument.visit(self, cell_key)?;
+            arg_results.push(self.current_result);
+        }
+
+        push_instruction!(self, Instruction::ClearArgs, node.span);
+
+        // populate the args vector
+        for result in &arg_results {
+            push_instruction!(self, Instruction::PushArg(*result), node.span);
+        }
+
+        push_instruction!(self, Instruction::CallFp(fp_loc), node.span);
+
+        let next_register = self.register_counter.next().unwrap().as_local();
+
+        push_instruction!(
+            self,
+            Instruction::Copy(Register(0).as_local(), next_register),
+            node.span()
+        );
+
+        self.current_result = next_register;
+
+        Ok(())
+    }
 }
 
 impl ContextHolder for CodegenWalker {
@@ -1030,140 +1230,10 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
-        if node.name == CATCH {
-            return self.emit_catch(node, cell_key);
+        match &node.chain {
+            CallChain::Root { .. } => self.visit_call_root(node, cell_key),
+            CallChain::Node(_) => self.visit_call_chain(node, cell_key),
         }
-
-        let argument_len = node.arguments.len();
-        let mut arg_results = Vec::with_capacity(argument_len);
-
-        for argument in &mut node.arguments {
-            argument.visit(self, cell_key)?;
-            arg_results.push(self.current_result);
-        }
-
-        if node.name == SIZEOF {
-            let result = self.register_counter.next().unwrap().as_local();
-            let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
-            push_instruction!(self, instruction, node.span);
-
-            return Ok(());
-        }
-
-        let instruction = {
-            push_instruction!(self, Instruction::ClearArgs, node.span);
-
-            // populate the args vector
-            for result in &arg_results {
-                push_instruction!(self, Instruction::PushArg(*result), node.span);
-            }
-
-            if let Some(rcvr) = &mut node.receiver {
-                rcvr.visit(self, cell_key)?;
-                let receiver_result = self.current_result;
-
-                let name_register = self.register_counter.next().unwrap().as_local();
-                let index = self.context.strings.get_or_intern(&node.name);
-
-                push_instruction!(
-                    self,
-                    Instruction::SConst(name_register, index.to_usize()),
-                    node.span
-                );
-
-                Instruction::CallOther(receiver_result, name_register)
-            } else if node.name == CALL_OTHER {
-                debug_assert!(
-                    arg_results.len() >= 2,
-                    "CallOther requires at least 2 arguments, for the receiver and function name"
-                );
-                let receiver = arg_results[0];
-                let name_index = arg_results[1];
-
-                Instruction::CallOther(receiver, name_index)
-            } else {
-                if_chain! {
-                    if let Some(x) = self.context.lookup_var(node.name);
-                    if x.type_.matches_type(LpcType::Function(false));
-                    then {
-                        Instruction::CallFp(x.location.unwrap())
-                    } else {
-                        let Some(func) =
-                            self.context.lookup_function_complete(node.name, &node.namespace, cell_key) else {
-                            return Err(LpcError::new_bug(
-                                format!("Cannot find function during code gen: {}", node.name)
-                            ).with_span(node.span));
-                        };
-
-                        match func.prototype().kind {
-                            FunctionKind::Local => {
-                                let idx = self.context.strings.get_or_intern(func.mangle());
-                                Instruction::Call(idx.to_usize())
-                            }
-                            FunctionKind::Efun => {
-                                let idx = self.context.strings.get_or_intern(&node.name);
-                                Instruction::CallEfun(idx.to_usize())
-                            }
-                            FunctionKind::SimulEfun => {
-                                let idx = self.context.strings.get_or_intern(&node.name);
-                                Instruction::CallSimulEfun(idx.to_usize())
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        push_instruction!(self, instruction, node.span);
-
-        let push_copy = |walker: &mut Self| {
-            let next_register = walker.register_counter.next().unwrap().as_local();
-
-            push_instruction!(
-                walker,
-                Instruction::Copy(Register(0).as_local(), next_register),
-                node.span()
-            );
-
-            walker.current_result = next_register;
-        };
-
-        // Take care of the result after the call returns.
-        if let Some(func) =
-            self.context
-                .lookup_function_complete(node.name, &node.namespace, cell_key)
-        {
-            if func.as_ref().return_type == LpcType::Void {
-                self.current_result = Register(0).as_local();
-            } else {
-                push_copy(self);
-            }
-        } else if let Some(Symbol {
-            type_: LpcType::Function(false) | LpcType::Mixed(false),
-            ..
-        }) = self.context.lookup_var(node.name)
-        {
-            push_copy(self);
-        } else if node.receiver.is_some()
-            || matches!(
-                self.context.scopes.lookup(&node.name),
-                Some(Symbol {
-                    type_: LpcType::Function(false),
-                    ..
-                })
-            )
-        {
-            push_copy(self);
-        } else {
-            return Err(LpcError::new_bug(format!(
-                "Unable to find the return type for `{}`. This is a weird issue that indicates \
-                something very broken in the semantic checks, or that I'm not looking hard enough.",
-                node.name
-            ))
-            .with_span(node.span));
-        }
-
-        Ok(())
     }
 
     #[instrument(skip_all)]
@@ -1831,11 +1901,13 @@ impl TreeWalker for CodegenWalker {
             .is_some()
         {
             let mut call = CallNode {
-                receiver: None,
+                chain: CallChain::Root {
+                    receiver: None,
+                    name: ustr(CREATE_FUNCTION),
+                    namespace: CallNamespace::Local,
+                },
                 arguments: vec![],
-                name: ustr(CREATE_FUNCTION),
                 span: None,
-                namespace: CallNamespace::Local,
             };
             call.visit(self, cell_key)?;
         }
@@ -3595,6 +3667,51 @@ mod tests {
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
+
+        #[test]
+        fn handles_chained_calls() {
+            let call = "mixed m = papplyv(dump, ({ \"foo\", 25 }))();";
+            let mut cell_key = QCellOwner::new();
+
+            // do a stupid dance to get the efuns into the context
+            let mut walker = default_walker(&mut cell_key);
+
+            let mut ctx = walker.into_context();
+            let mut node = get_call_node(call, &mut ctx);
+
+            // This walk by Scope Walker will actually populate the efuns.
+            let mut walker = ScopeWalker::new(ctx);
+            let _ = walker.visit_call(&mut node, &mut cell_key).unwrap();
+
+            let mut ctx = walker.into_context();
+            let mut walker = CodegenWalker::new(ctx);
+            let _ = walker.visit_call(&mut node, &mut cell_key).unwrap();
+
+            let expected = vec![
+                ClearPartialArgs,
+                FunctionPtrConst {
+                    location: RegisterVariant::Local(Register(1)),
+                    receiver: FunctionReceiver::Efun,
+                    name_index: 0,
+                },
+                SConst(RegisterVariant::Local(Register(2)), 1),
+                IConst(RegisterVariant::Local(Register(3)), 25),
+                ClearArrayItems,
+                PushArrayItem(RegisterVariant::Local(Register(2))),
+                PushArrayItem(RegisterVariant::Local(Register(3))),
+                AConst(RegisterVariant::Local(Register(4))),
+                ClearArgs,
+                PushArg(RegisterVariant::Local(Register(1))),
+                PushArg(RegisterVariant::Local(Register(4))),
+                CallEfun(2),
+                Copy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(5))),
+                ClearArgs,
+                CallFp(RegisterVariant::Local(Register(5))),
+                Copy(RegisterVariant::Local(Register(0)), RegisterVariant::Local(Register(6))),
+            ];
+
+            assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
     }
 
     mod test_visit_block {
@@ -4112,13 +4229,10 @@ mod tests {
                     op: BinaryOperation::EqEq,
                     span: None,
                 }),
-                body: Box::new(AstNode::Call(CallNode {
-                    receiver: None,
+                body: Box::new(AstNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("body")],
-                    name: ustr("dump"),
-                    span: None,
-                    namespace: CallNamespace::default(),
-                })),
+                ))),
                 scope_id: None,
                 span: None,
             };
@@ -4183,11 +4297,9 @@ mod tests {
                 })),
                 body: Box::new(AstNode::Block(BlockNode {
                     body: vec![AstNode::Call(CallNode {
-                        receiver: None,
+                        chain: create!(CallChain, name: ustr("dump")),
                         arguments: vec![ExpressionNode::Var(var)],
-                        name: ustr("dump"),
                         span: None,
-                        namespace: CallNamespace::default(),
                     })],
                     scope_id: None,
                 })),
@@ -4406,20 +4518,15 @@ mod tests {
                     op: BinaryOperation::EqEq,
                     span: None,
                 }),
-                body: Box::new(AstNode::Call(CallNode {
-                    receiver: None,
-                    arguments: vec![ExpressionNode::from("true")],
-                    name: ustr("dump"),
-                    span: None,
-                    namespace: CallNamespace::default(),
-                })),
-                else_clause: Box::new(Some(AstNode::Call(CallNode {
-                    receiver: None,
+                body: Box::new(AstNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("dump")),
+                    arguments: vec![ExpressionNode::from("true")]
+                ))),
+                else_clause: Box::new(Some(AstNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("false")],
-                    name: ustr("dump"),
-                    span: None,
-                    namespace: CallNamespace::default(),
-                }))),
+                    span: None
+                )))),
                 scope_id: None,
                 span: None,
             };
@@ -5281,13 +5388,11 @@ mod tests {
             let mut node = VarInitNode {
                 type_: LpcType::Object(false),
                 name: ustr("muffins"),
-                value: Some(ExpressionNode::Call(CallNode {
-                    receiver: None,
+                value: Some(ExpressionNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("clone_object")),
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
-                    name: ustr("clone_object"),
                     span: None,
-                    namespace: CallNamespace::default(),
-                })),
+                ))),
                 array: false,
                 global: false,
                 span: None,
@@ -5468,13 +5573,11 @@ mod tests {
                     op: BinaryOperation::EqEq,
                     span: None,
                 }),
-                body: Box::new(AstNode::Call(CallNode {
-                    receiver: None,
+                body: Box::new(AstNode::Call(create!(CallNode,
+                    chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("body")],
-                    name: ustr("dump"),
                     span: None,
-                    namespace: CallNamespace::default(),
-                })),
+                ))),
                 scope_id: None,
                 span: None,
             };

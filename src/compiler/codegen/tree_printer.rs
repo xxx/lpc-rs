@@ -16,6 +16,7 @@ use crate::compiler::{
     },
     codegen::tree_walker,
 };
+use crate::compiler::ast::call_node::CallChain;
 
 /// A tree walker for pretty-printing an AST
 ///
@@ -111,21 +112,35 @@ impl TreeWalker for TreePrinter {
     }
 
     fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()> {
-        if let Some(rcvr) = &node.receiver {
-            self.println_indented("Call Other");
-            self.indent += 2;
-            self.println_indented(&format!("receiver: {rcvr}"));
-        } else {
-            self.println_indented("Call");
-            self.indent += 2;
+        match &mut node.chain {
+            CallChain::Root { receiver, name, .. } => {
+                if let Some(rcvr) = receiver {
+                    self.println_indented("Call Other");
+                    self.indent += 2;
+                    self.println_indented(&format!("receiver: {rcvr}"));
+                } else {
+                    self.println_indented("Call");
+                    self.indent += 2;
+                }
+                self.println_indented(&format!("name: {}", name));
+                self.println_indented("args:");
+                self.indent += 2;
+                for arg in &mut node.arguments {
+                    arg.visit(self, cell_key)?;
+                }
+                self.indent -= 4;
+            }
+            CallChain::Node(ref mut chain_node) => {
+                chain_node.visit(self, cell_key)?;
+                self.indent += 2;
+                self.println_indented("chain args:");
+                self.indent += 2;
+                for arg in &mut node.arguments {
+                    arg.visit(self, cell_key)?;
+                }
+                self.indent -= 4;
+            }
         }
-        self.println_indented(&format!("name: {}", node.name));
-        self.println_indented("args:");
-        self.indent += 2;
-        for arg in &mut node.arguments {
-            arg.visit(self, cell_key)?;
-        }
-        self.indent -= 4;
 
         Ok(())
     }

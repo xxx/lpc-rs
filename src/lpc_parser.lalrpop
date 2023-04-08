@@ -8,7 +8,7 @@ use crate::compiler::ast::array_node::ArrayNode;
 use crate::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::compiler::ast::block_node::BlockNode;
 use crate::compiler::ast::break_node::BreakNode;
-use crate::compiler::ast::call_node::CallNode;
+use crate::compiler::ast::call_node::{CallChain, CallNode};
 use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
 use crate::compiler::ast::continue_node::ContinueNode;
@@ -655,7 +655,7 @@ PostfixExpression: ExpressionNode = {
     <e:(<PostfixExpression> "->")?> <mut c:Call> => {
         if let Some(rcvr) = e {
             let span = Span::combine(rcvr.span(), c.span);
-            c.receiver = Some(Box::new(rcvr));
+            c.set_receiver(rcvr);
             c.span = span;
 
             ExpressionNode::from(c)
@@ -945,11 +945,24 @@ Call: CallNode = {
         let r = right.r;
 
         CallNode {
-            receiver: None,
+            chain: CallChain::Root {
+                receiver: None,
+                name: ustr(&name.1),
+                namespace
+            },
             arguments,
-            name: ustr(&name.1),
             span: Some(Span { file_id, l, r }),
-            namespace
+        }
+    },
+    <expr:Call> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> => {
+         let arguments = list.unwrap_or_else(|| vec![]);
+
+        let left = expr.span().unwrap_or(lparen);
+        let l = left.l;
+        CallNode {
+            chain: CallChain::Node(Box::new(expr)),
+            arguments,
+            span: Some(Span { file_id: left.file_id, l, r: right.r }),
         }
     }
 };
