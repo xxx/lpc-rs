@@ -13,8 +13,8 @@ pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
 
-use std::collections::HashMap;
-use indexmap::{IndexMap, IndexSet};
+
+use indexmap::{IndexMap};
 
 use lpc_rs_core::{
     function_arity::{FunctionArity, FunctionArityBuilder},

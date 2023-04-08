@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     fmt::{Display, Formatter},
-    rc::Rc,
     sync::Arc,
 };
 

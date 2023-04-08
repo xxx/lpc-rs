@@ -4,18 +4,18 @@ use std::sync::Arc;
 use once_cell::sync::{Lazy, OnceCell};
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
-use string_interner::{StringInterner, Symbol};
+use string_interner::{StringInterner};
 use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_core::function_arity::{FunctionArity, FunctionArityBuilder};
+use lpc_rs_core::function_arity::{FunctionArityBuilder};
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_core::register::{Register, RegisterVariant};
-use lpc_rs_errors::span::Span;
-use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototype, FunctionPrototypeBuilder};
+
+use lpc_rs_function_support::function_prototype::{FunctionPrototypeBuilder};
 use lpc_rs_function_support::program_function::{ProgramFunction, ProgramFunctionBuilder};
 
 use crate::interpreter::{
-    call_outs::CallOut, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef,
+    efun::efun_context::EfunContext, lpc_ref::LpcRef,
     lpc_value::LpcValue,
 };
 use crate::interpreter::efun::EFUN_PROTOTYPES;
@@ -77,7 +77,7 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
 /// `compose`, an efun for composing two functions into a new function.
 pub fn compose<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
+    _cell_key: &mut QCellOwner,
 ) -> Result<()> {
     let a = context.resolve_local_register(1_usize);
     if !matches!(a, LpcRef::Function(_)) {
