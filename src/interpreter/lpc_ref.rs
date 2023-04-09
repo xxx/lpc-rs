@@ -645,14 +645,14 @@ impl<'a> Keyable<'a> for HashedLpcRef {
 mod tests {
     use claim::assert_err;
     use factori::create;
-    use shared_arena::Arena;
+    use shared_arena::SharedArena;
 
     use super::*;
     use crate::{interpreter::lpc_array::LpcArray, test_support::factories::*};
 
     mod test_add {
         use indexmap::IndexMap;
-        use shared_arena::Arena;
+        use shared_arena::SharedArena;
 
         use super::*;
 
@@ -685,7 +685,7 @@ mod tests {
         #[test]
         fn string_string() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let string1 = value_to_ref!(LpcValue::String("foo".into()), pool);
             let string2 = value_to_ref!(LpcValue::String("bar".into()), pool);
             let result = string1.add(&string2, &cell_key);
@@ -699,7 +699,7 @@ mod tests {
         #[test]
         fn string_int() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(123);
             let result = string.add(&int, &cell_key);
@@ -713,7 +713,7 @@ mod tests {
         #[test]
         fn int_string() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(123);
             let result = int.add(&string, &cell_key);
@@ -769,7 +769,7 @@ mod tests {
         #[test]
         fn array_array() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(20);
+            let pool = SharedArena::with_capacity(20);
             let array = LpcValue::from(vec![LpcRef::Int(123)]);
             let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
             let result =
@@ -795,7 +795,7 @@ mod tests {
         #[test]
         fn mapping_mapping() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(20);
+            let pool = SharedArena::with_capacity(20);
             let key1 = value_to_ref!(LpcValue::from("key1"), pool);
             let value1 = value_to_ref!(LpcValue::from("value1"), pool);
             let key2 = value_to_ref!(LpcValue::from("key2"), pool);
@@ -826,7 +826,7 @@ mod tests {
         #[test]
         fn mapping_mapping_duplicate_keys() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(20);
+            let pool = SharedArena::with_capacity(20);
             let key1 = value_to_ref!(LpcValue::from("key"), pool);
             let value1 = value_to_ref!(LpcValue::from("value1"), pool);
             let key2 = value_to_ref!(LpcValue::from("key"), pool);
@@ -856,7 +856,7 @@ mod tests {
         #[test]
         fn add_mismatched() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let int = LpcRef::Int(123);
             let array = value_to_ref!(LpcValue::Array(LpcArray::new(vec![])), pool);
             let result = int.add(&array, &cell_key);
@@ -924,7 +924,7 @@ mod tests {
         #[test]
         fn array_array() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(10);
+            let pool = SharedArena::with_capacity(10);
             let to_ref = LpcRef::Int;
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
@@ -960,7 +960,7 @@ mod tests {
         #[test]
         fn string_int() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(4);
             let result = string.mul(&int, &cell_key);
@@ -974,7 +974,7 @@ mod tests {
         #[test]
         fn int_string() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(4);
             let result = int.mul(&string, &cell_key);
@@ -988,7 +988,7 @@ mod tests {
         #[test]
         fn string_int_overflow_does_not_panic() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("1234567890abcdef".into()), pool);
             let int = LpcRef::Int(LpcInt::MAX);
             let result = string.mul(&int, &cell_key);
@@ -1304,7 +1304,7 @@ mod tests {
 
         #[test]
         fn fails_other_types() {
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let mut string = value_to_ref!(LpcValue::String("foobar".into()), pool);
             assert_err!(string.inc());
         }
@@ -1329,7 +1329,7 @@ mod tests {
 
         #[test]
         fn fails_other_types() {
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let mut string = value_to_ref!(LpcValue::String("foobar".into()), pool);
             assert_err!(string.dec());
         }
@@ -1344,7 +1344,7 @@ mod tests {
         #[test]
         fn test_array() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let array = LpcArray::new(vec![LpcRef::Int(1), LpcRef::Int(2), LpcRef::Int(3)]);
             let array_id = array.unique_id;
             let array = value_to_ref!(LpcValue::Array(array), pool);
@@ -1360,7 +1360,7 @@ mod tests {
         #[test]
         fn test_mapping() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
             let mapping = LpcMapping::new(IndexMap::new());
             let mapping_id = mapping.unique_id;
             let mapping = value_to_ref!(LpcValue::Mapping(mapping), pool);
@@ -1378,7 +1378,7 @@ mod tests {
         #[test]
         fn test_function() {
             let cell_key = QCellOwner::new();
-            let pool = Arena::with_capacity(5);
+            let pool = SharedArena::with_capacity(5);
 
             let ptr = create!(FunctionPtr);
             let ptr_id = ptr.unique_id;

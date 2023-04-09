@@ -66,7 +66,7 @@ pub struct CallFrame {
 
     /// Track where the program counter is pointing in this frame's function's instructions.
     #[builder(default, setter(into))]
-    pc: Cell<usize>,
+    pc: usize,
 
     /// How many explicit arguments were passed to the call that created this
     /// frame? This will include partially-applied arguments in the case
@@ -122,7 +122,7 @@ impl CallFrame {
             function,
             arg_locations: Vec::with_capacity(called_with_num_args),
             registers: RefBank::new(vec![NULL; reg_len]),
-            pc: 0.into(),
+            pc: 0,
             called_with_num_args,
             upvalue_ptrs: ups,
             vm_upvalues,
@@ -257,36 +257,36 @@ impl CallFrame {
     pub fn current_debug_span(&self) -> Option<Span> {
         // subtract 1, because we increment the pc just after fetching
         // an instruction, but before evaluating it.
-        let idx = self.pc.get().saturating_sub(1);
+        let idx = self.pc.saturating_sub(1);
         self.function.debug_spans.get(idx).and_then(|s| *s)
     }
 
     /// set the pc to a specific value
     #[inline]
-    pub fn set_pc<T>(&self, new_val: T)
+    pub fn set_pc<T>(&mut self, new_val: T)
     where
         T: Into<usize>,
     {
-        self.pc.replace(new_val.into());
+        self.pc = new_val.into();
     }
 
     /// increment the pc
     #[inline]
-    pub fn inc_pc(&self) {
-        self.pc.replace(self.pc.get() + 1);
+    pub fn inc_pc(&mut self) {
+        self.pc += 1;
     }
 
     /// get the pc value
     #[inline]
     pub fn pc(&self) -> usize {
-        self.pc.get()
+        self.pc
     }
 
     /// get the current instruction
     #[inline]
     #[instrument(skip(self))]
     pub fn instruction(&self) -> Option<Instruction> {
-        self.function.instructions.get(self.pc.get()).copied()
+        self.function.instructions.get(self.pc).copied()
     }
 
     /// lookup a label's address by name

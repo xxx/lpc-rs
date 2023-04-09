@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use shared_arena::Arena;
+use shared_arena::{Arena, SharedArena};
 use parking_lot::RwLock;
 
 use crate::{
@@ -16,7 +16,7 @@ const MEMORY_SIZE: usize = 100_000;
 pub struct Memory {
     /// Where things are actually stored. Only reference types use any space
     /// from this pool.
-    pool: Arena<RwLock<LpcValue>>,
+    pool: SharedArena<RwLock<LpcValue>>,
 }
 
 impl Memory {
@@ -24,7 +24,7 @@ impl Memory {
     /// In practice, only reference types use the memory pool.
     pub fn new(size: usize) -> Self {
         Self {
-            pool: Arena::with_capacity(size),
+            pool: SharedArena::with_capacity(size),
         }
     }
 

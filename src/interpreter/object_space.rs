@@ -206,7 +206,7 @@ mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
     use qcell::QCellOwner;
-    use shared_arena::Arena;
+    use shared_arena::SharedArena;
 
     use super::*;
     use crate::{
@@ -283,7 +283,7 @@ mod tests {
         let mut space = ObjectSpace::new(config);
 
         let cell_key = QCellOwner::new();
-        let pool = Arena::with_capacity(5);
+        let pool = SharedArena::with_capacity(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
         let lpc_ref = value_to_ref!(LpcValue::Array(array), pool);

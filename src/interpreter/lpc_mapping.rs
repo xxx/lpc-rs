@@ -191,7 +191,7 @@ mod tests {
 
     use factori::create;
     use lpc_rs_core::register::Register;
-    use shared_arena::Arena;
+    use shared_arena::SharedArena;
 
     use super::*;
     use crate::{test_support::factories::*, value_to_ref};
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn test_mark() {
         let cell_key = QCellOwner::new();
-        let pool = Arena::with_capacity(5);
+        let pool = SharedArena::with_capacity(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
         let key_id = *ptr.unique_id.as_ref();

@@ -424,7 +424,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.context.increment_instruction_count(1)?;
 
         let instruction = {
-            let frame = match self.stack.current_frame() {
+            let frame = match self.stack.current_frame_mut() {
                 Ok(x) => x,
                 Err(_) => {
                     self.state = TaskState::Error;
@@ -634,7 +634,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Jmp(address) => {
-                let frame = self.stack.current_frame()?;
+                let frame = self.stack.current_frame_mut()?;
                 frame.set_pc(address);
             }
             Instruction::Jnz(r1, address) => {
@@ -642,7 +642,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 // TODO: re-decide of 0.0 floats should match here and with Jz
                 if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
-                    let frame = self.stack.current_frame()?;
+                    let frame = self.stack.current_frame_mut()?;
                     frame.set_pc(address);
                 }
             }
@@ -650,7 +650,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let v = &*get_loc!(self, r1, cell_key)?;
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
-                    let frame = self.stack.current_frame()?;
+                    let frame = self.stack.current_frame_mut()?;
                     frame.set_pc(address);
                 }
             }
@@ -747,7 +747,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::PopulateDefaults => {
                 // let default_addresses = &self.defaults;
-                let frame = self.stack.current_frame()?;
+                let frame = self.stack.current_frame_mut()?;
                 let func = &frame.function;
                 let num_args = func.arity().num_args;
                 let num_default_args = func.arity().num_default_args;

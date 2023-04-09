@@ -94,9 +94,9 @@ pub struct CallOuts {
     /// A channel to talk to the [`Vm`](crate::interpreter::vm::Vm)
     tx: Sender<VmOp>,
 
-    /// stored timer object
-    #[educe(Debug(ignore))]
-    timer: Timer,
+    // /// stored timer object
+    // #[educe(Debug(ignore))]
+    // timer: Timer,
 }
 
 impl CallOuts {
@@ -105,7 +105,7 @@ impl CallOuts {
         Self {
             queue: StableVec::with_capacity(64),
             tx,
-            timer: Timer::new(),
+            // timer: Timer::new(),
         }
     }
 
@@ -146,24 +146,25 @@ impl CallOuts {
         delay: Duration,
         repeat: Option<Duration>,
     ) -> Result<usize> {
-        let index = self.queue.next_push_index();
-        let tx = self.tx.clone();
-        let date = Utc::now() + delay;
-        let guard = self.timer.schedule(date, repeat, move || {
-            // This needs to run as fast as possible, and not fail.
-            // TODO: this needs to be awaited
-            let _ = tx.send(VmOp::PrioritizeCallOut(index));
-        });
-
-        self.queue.push(CallOut {
-            process,
-            func_ref,
-            repeat_duration: repeat,
-            next_run: date,
-            _guard: guard,
-        });
-
-        Ok(index)
+        todo!("update this to immediately spawn a task that sleeps for the correct duration, then immediately runs");
+        // let index = self.queue.next_push_index();
+        // let tx = self.tx.clone();
+        // let date = Utc::now() + delay;
+        // let guard = self.timer.schedule(date, repeat, move || {
+        //     // This needs to run as fast as possible, and not fail.
+        //     // TODO: this needs to be awaited
+        //     let _ = tx.send(VmOp::PrioritizeCallOut(index));
+        // });
+        //
+        // self.queue.push(CallOut {
+        //     process,
+        //     func_ref,
+        //     repeat_duration: repeat,
+        //     next_run: date,
+        //     _guard: guard,
+        // });
+        //
+        // Ok(index)
     }
 }
 
