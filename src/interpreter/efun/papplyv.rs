@@ -36,7 +36,7 @@ pub fn papplyv<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    
+
     use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;

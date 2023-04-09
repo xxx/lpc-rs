@@ -1,4 +1,4 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{

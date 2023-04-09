@@ -87,7 +87,7 @@ fn to_millis(x: LpcFloat) -> Duration {
 
 #[cfg(test)]
 mod tests {
-    
+
     use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;

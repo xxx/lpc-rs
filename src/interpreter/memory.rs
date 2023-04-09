@@ -1,4 +1,5 @@
-use std::{cell::RefCell};
+use std::cell::RefCell;
+
 use shared_arena::Arena;
 
 use crate::{

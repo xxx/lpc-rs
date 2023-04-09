@@ -1,8 +1,8 @@
 use std::{
     fmt,
     fmt::{Display, Formatter},
+    sync::Arc,
 };
-use std::sync::Arc;
 
 use educe::Educe;
 use indexmap::IndexMap;

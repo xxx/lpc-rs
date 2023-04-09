@@ -36,18 +36,12 @@ macro_rules! value_to_ref {
         match $r {
             LpcValue::Float(x) => LpcRef::Float(x),
             LpcValue::Int(x) => LpcRef::Int(x),
-            LpcValue::String(x) => {
-                LpcRef::String($m.alloc_arc(RefCell::new(LpcValue::String(x))))
-            }
-            LpcValue::Array(x) => {
-                LpcRef::Array($m.alloc_arc(RefCell::new(LpcValue::Array(x))))
-            }
+            LpcValue::String(x) => LpcRef::String($m.alloc_arc(RefCell::new(LpcValue::String(x)))),
+            LpcValue::Array(x) => LpcRef::Array($m.alloc_arc(RefCell::new(LpcValue::Array(x)))),
             LpcValue::Mapping(x) => {
                 LpcRef::Mapping($m.alloc_arc(RefCell::new(LpcValue::Mapping(x))))
             }
-            LpcValue::Object(x) => {
-                LpcRef::Object($m.alloc_arc(RefCell::new(LpcValue::Object(x))))
-            }
+            LpcValue::Object(x) => LpcRef::Object($m.alloc_arc(RefCell::new(LpcValue::Object(x)))),
             LpcValue::Function(x) => {
                 LpcRef::Function($m.alloc_arc(RefCell::new(LpcValue::Function(x))))
             }

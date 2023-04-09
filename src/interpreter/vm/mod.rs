@@ -1,16 +1,4 @@
-use std::{
-    cmp::Ordering,
-    fmt::Formatter,
-    hash::Hasher,
-    path::Path,
-    sync::{
-        Arc,
-    },
-};
-
-use tokio::sync::{
-    mpsc::{Receiver, Sender}
-};
+use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, sync::Arc};
 
 use bit_set::BitSet;
 use educe::Educe;
@@ -20,11 +8,12 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
+use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, instrument, trace, warn};
 use vm_op::VmOp;
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
+    compile_time_config::{MAX_CALL_STACK_SIZE, VM_CHANNEL_CAPACITY},
     compiler::{Compiler, CompilerBuilder},
     interpreter::{
         call_outs::CallOuts,
@@ -48,7 +37,6 @@ use crate::{
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
-use crate::compile_time_config::VM_CHANNEL_CAPACITY;
 
 pub mod task_queue;
 pub mod vm_op;

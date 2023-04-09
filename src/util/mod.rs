@@ -1,7 +1,6 @@
 pub mod keyable;
 
-use std::{fmt::Formatter};
-use std::sync::Arc;
+use std::{fmt::Formatter, sync::Arc};
 
 use lpc_rs_utils::config::Config;
 use qcell::QCell;

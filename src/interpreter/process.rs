@@ -3,8 +3,8 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display, Formatter},
     path::Path,
+    sync::Arc,
 };
-use std::sync::Arc;
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -130,6 +130,7 @@ impl Mark for Process {
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, sync::Arc};
+
     use shared_arena::Arena;
 
     use super::*;

@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
@@ -117,6 +116,7 @@ pub fn clone_object<const N: usize>(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+
     use indoc::indoc;
     use lpc_rs_utils::config::Config;
 

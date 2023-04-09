@@ -1,5 +1,4 @@
-use std::{path::PathBuf};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use delegate::delegate;
 use derive_builder::Builder;
@@ -271,10 +270,9 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
-    use tokio::sync::mpsc;
-
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
+    use tokio::sync::mpsc;
 
     use super::*;
     use crate::interpreter::{gc::gc_bank::GcBank, program::ProgramBuilder};

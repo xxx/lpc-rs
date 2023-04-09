@@ -1,5 +1,4 @@
-use std::{borrow::Cow, fmt::Debug, path::PathBuf};
-use std::sync::Arc;
+use std::{borrow::Cow, fmt::Debug, path::PathBuf, sync::Arc};
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;

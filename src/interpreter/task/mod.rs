@@ -4,7 +4,7 @@ pub mod task_state;
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
-    sync::{Arc},
+    sync::Arc,
 };
 
 use bit_set::BitSet;
@@ -2506,9 +2506,8 @@ mod tests {
         }
 
         mod test_call_fp {
-            use tokio::sync::mpsc;
-
             use claim::assert_ok;
+            use tokio::sync::mpsc;
 
             use super::*;
 

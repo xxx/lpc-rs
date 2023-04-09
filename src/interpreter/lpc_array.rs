@@ -245,8 +245,8 @@ mod tests {
     use std::cell::RefCell;
 
     use factori::create;
-    use shared_arena::Arena;
     use lpc_rs_core::register::Register;
+    use shared_arena::Arena;
 
     use super::*;
     use crate::{test_support::factories::*, value_to_ref};
