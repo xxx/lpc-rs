@@ -29,7 +29,7 @@ pub const NULL: LpcRef = LpcRef::Int(0);
 ///
 /// # Arguments
 /// `r` - The expression to be wrapped.
-/// `m` - The memory pool to declare the [`PoolRef`]s from.
+/// `m` - The arena to use as the heap.
 #[macro_export]
 macro_rules! value_to_ref {
     ($r:expr, $m:expr) => {
