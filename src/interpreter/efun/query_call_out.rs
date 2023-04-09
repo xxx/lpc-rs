@@ -124,7 +124,7 @@ mod tests {
 
         if_chain! {
             if let LpcRef::Array(arr) = task.result().unwrap();
-            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.borrow();
+            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.read();
             then {
                 assert_eq!(array.len(), 4);
                 assert!(matches!(array[0], LpcRef::Object(_)));

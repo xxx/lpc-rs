@@ -11,14 +11,14 @@ pub fn papplyv<const N: usize>(
     let LpcRef::Function(f) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
-    let LpcValue::Function(func) = &*f.borrow() else {
+    let LpcValue::Function(func) = &*f.read() else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
 
     let LpcRef::Array(a) = context.resolve_local_register(2_usize) else {
         return Err(context.runtime_error("non-array argument sent to `papplyv`"));
     };
-    let LpcValue::Array(arr) = &*a.borrow() else {
+    let LpcValue::Array(arr) = &*a.read() else {
         return Err(context.runtime_error("non-array argument sent to `papplyv`"));
     };
 
@@ -81,7 +81,7 @@ mod tests {
             panic!("expected function ref");
         };
 
-        let LpcValue::Function(func) = &*f.borrow() else {
+        let LpcValue::Function(func) = &*f.read() else {
             panic!("expected function value");
         };
 

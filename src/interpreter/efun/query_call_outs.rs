@@ -16,7 +16,7 @@ pub fn query_call_outs<const N: usize>(
 ) -> Result<()> {
     let owner = match context.resolve_local_register(1_usize) {
         LpcRef::Object(object) => {
-            let LpcValue::Object(process) = &*object.borrow() else {
+            let LpcValue::Object(process) = &*object.read() else {
                 return Err(context.runtime_bug("object in `query_call_outs` is not an object? This shouldn't be reachable."));
             };
             process.clone()
@@ -100,14 +100,14 @@ mod tests {
 
         if_chain! {
             if let LpcRef::Array(arr) = task.result().unwrap();
-            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.borrow();
+            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.read();
             then {
                 assert_eq!(array.len(), 2);
 
                 for call_out in array {
                     if_chain! {
                         if let LpcRef::Array(call_out) = call_out;
-                        if let LpcValue::Array(LpcArray { array: call_out, ..}) = &*call_out.borrow();
+                        if let LpcValue::Array(LpcArray { array: call_out, ..}) = &*call_out.read();
                         then {
                             assert_eq!(call_out.len(), 4);
                             assert!(matches!(call_out[0], LpcRef::Object(_)));

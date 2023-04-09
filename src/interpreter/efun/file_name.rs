@@ -22,7 +22,7 @@ pub fn file_name<const N: usize>(
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => LpcValue::from(0),
         LpcRef::Object(x) => {
-            let b = x.borrow();
+            let b = x.read();
             let proc = try_extract_value!(*b, LpcValue::Object);
             let path = LpcPath::new_server(&*proc.ro(cell_key).filename());
 

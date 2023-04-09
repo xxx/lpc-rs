@@ -29,6 +29,7 @@ use string_interner::{DefaultSymbol, Symbol};
 use tokio::sync::mpsc::Sender;
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
+use parking_lot::RwLock;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -798,7 +799,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     match lpc_ref {
                         LpcRef::Array(v_ref) => {
-                            let value = v_ref.borrow();
+                            let value = v_ref.read();
                             let vec = try_extract_value!(*value, LpcValue::Array);
 
                             if vec.is_empty() {
@@ -828,7 +829,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             }
                         }
                         LpcRef::String(v_ref) => {
-                            let value = v_ref.borrow();
+                            let value = v_ref.read();
                             let string = try_extract_value!(*value, LpcValue::String).to_str();
 
                             if string.is_empty() {
@@ -891,19 +892,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let value = match lpc_ref {
                     LpcRef::Array(x) => {
-                        let borrowed = x.borrow();
+                        let borrowed = x.read();
                         let vec = try_extract_value!(*borrowed, LpcValue::Array);
 
                         LpcValue::from(vec.len() as LpcInt)
                     }
                     LpcRef::Mapping(x) => {
-                        let borrowed = x.borrow();
+                        let borrowed = x.read();
                         let map = try_extract_value!(*borrowed, LpcValue::Mapping);
 
                         LpcValue::from(map.len() as LpcInt)
                     }
                     LpcRef::String(x) => {
-                        let borrowed = x.borrow();
+                        let borrowed = x.read();
                         let string = try_extract_value!(*borrowed, LpcValue::String);
 
                         LpcValue::from(string.len() as LpcInt)
@@ -1083,7 +1084,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // TODO: reduce the amount of time this borrow is live
         //       This might be ok because functions are only borrowed immutably at this time.
-        let borrowed = func.borrow();
+        let borrowed = func.read();
         let ptr = try_extract_value!(*borrowed, LpcValue::Function);
 
         trace!("Calling function ptr: {}", ptr.with_key(cell_key));
@@ -1166,7 +1167,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut from_slice_index = 0;
         let mut next_index = 1;
-        let b = func.borrow();
+        let b = func.read();
         let ptr = try_extract_value!(&*b, LpcValue::Function);
         let arg_locations = match &ptr.address {
             FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
@@ -1240,7 +1241,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let pair_opt = {
-                    let b = lpc_ref.borrow();
+                    let b = lpc_ref.read();
                     let cell = try_extract_value!(*b, LpcValue::Object);
                     let proc = cell.ro(cell_key);
                     proc.as_ref()
@@ -1357,7 +1358,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 );
                 return Err(self.runtime_error(str));
             };
-            let borrowed = pool_ref.borrow();
+            let borrowed = pool_ref.read();
             let function_name = try_extract_value!(*borrowed, LpcValue::String);
 
             trace!(
@@ -1431,7 +1432,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     resolve_result(receiver_ref, function_name, &args, &self.context, cell_key)?
                 }
                 LpcRef::Array(r) => {
-                    let b = r.borrow();
+                    let b = r.read();
                     let array = try_extract_value!(*b, LpcValue::Array);
 
                     let array_value: LpcValue = array
@@ -1445,7 +1446,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     self.context.memory().value_to_ref(array_value)
                 }
                 LpcRef::Mapping(m) => {
-                    let b = m.borrow();
+                    let b = m.read();
                     let map = try_extract_value!(*b, LpcValue::Mapping);
 
                     let with_results: LpcValue = map
@@ -1556,7 +1557,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let receiver_ref = &*get_loc!(self, location, cell_key)?;
                 match receiver_ref {
                     LpcRef::Object(x) => {
-                        let b = x.borrow();
+                        let b = x.read();
                         let process = try_extract_value!(*b, LpcValue::Object);
                         let process = process.clone();
 
@@ -1644,7 +1645,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match container_ref {
             LpcRef::Array(vec_ref) => {
-                let value = vec_ref.borrow();
+                let value = vec_ref.read();
                 let vec = try_extract_value!(*value, LpcValue::Array);
 
                 if let LpcRef::Int(i) = lpc_ref {
@@ -1666,7 +1667,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::String(string_ref) => {
-                let value = string_ref.borrow();
+                let value = string_ref.read();
                 let string = try_extract_value!(*value, LpcValue::String).to_str();
 
                 if let LpcRef::Int(i) = lpc_ref {
@@ -1696,7 +1697,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::Mapping(map_ref) => {
-                let value = map_ref.borrow();
+                let value = map_ref.read();
                 let map = try_extract_value!(*value, LpcValue::Mapping);
 
                 let var = if let Some(v) = map.get(&lpc_ref.into_hashed(cell_key)) {
@@ -1731,7 +1732,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match container_ref {
                 LpcRef::Mapping(map_ref) => {
-                    let value = map_ref.borrow();
+                    let value = map_ref.read();
                     let map = try_extract_value!(*value, LpcValue::Mapping);
 
                     let index = match lpc_ref {
@@ -1803,7 +1804,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match container {
             LpcRef::Array(vec_ref) => {
-                let mut r = vec_ref.borrow_mut();
+                let mut r = vec_ref.write();
                 let vec = match *r {
                     LpcValue::Array(ref mut v) => v,
                     _ => return Err(self.runtime_bug(
@@ -1829,7 +1830,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::Mapping(ref mut map_ref) => {
-                let mut r = map_ref.borrow_mut();
+                let mut r = map_ref.write();
                 let map = match *r {
                     LpcValue::Mapping(ref mut m) => m,
                     _ => return Err(self.runtime_bug(
@@ -1860,7 +1861,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> Option<Arc<QCell<Process>>> {
         let process = match receiver_ref {
             LpcRef::String(s) => {
-                let r = s.borrow();
+                let r = s.read();
                 let str = if let LpcValue::String(ref s) = *r {
                     s
                 } else {
@@ -1873,7 +1874,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             LpcRef::Object(o) => {
-                let r = o.borrow();
+                let r = o.read();
                 if let LpcValue::Object(ref proc) = *r {
                     proc.clone()
                 } else {
@@ -2130,12 +2131,12 @@ mod tests {
                 LpcRef::Float(x) => BareVal::Float(*x),
                 LpcRef::Int(x) => BareVal::Int(*x),
                 LpcRef::String(x) => {
-                    let xb = x.borrow();
+                    let xb = x.read();
                     let s = extract_value!(&*xb, LpcValue::String);
                     BareVal::String(s.to_string())
                 }
                 LpcRef::Array(x) => {
-                    let xb = x.borrow();
+                    let xb = x.read();
                     let a = extract_value!(&*xb, LpcValue::Array);
                     let array = a
                         .iter()
@@ -2144,7 +2145,7 @@ mod tests {
                     BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
-                    let xb = x.borrow();
+                    let xb = x.read();
                     let m = extract_value!(&*xb, LpcValue::Mapping);
                     let mapping = m
                         .iter()
@@ -2158,13 +2159,13 @@ mod tests {
                     BareVal::Mapping(mapping)
                 }
                 LpcRef::Object(x) => {
-                    let xb = x.borrow();
+                    let xb = x.read();
                     let o = extract_value!(&*xb, LpcValue::Object);
                     let filename = o.ro(cell_key).filename().into_owned();
                     BareVal::Object(filename)
                 }
                 LpcRef::Function(x) => {
-                    let xb = x.borrow();
+                    let xb = x.read();
                     let fp = extract_value!(&*xb, LpcValue::Function);
                     let args = fp
                         .partial_args

@@ -1189,6 +1189,7 @@ dependencies = [
  "lpc-rs-function-support",
  "lpc-rs-utils",
  "once_cell",
+ "parking_lot 0.12.1",
  "phf",
  "qcell",
  "readonly",

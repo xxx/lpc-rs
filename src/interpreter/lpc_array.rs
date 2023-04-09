@@ -10,6 +10,7 @@ use delegate::delegate;
 use if_chain::if_chain;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
+use parking_lot::RwLock;
 
 use crate::{
     interpreter::{
@@ -60,7 +61,7 @@ where
         }
         if_chain! {
             if let LpcRef::Array(other) = item;
-            if let LpcValue::Array(other) = &*other.borrow();
+            if let LpcValue::Array(other) = &*other.read();
             if other == array;
             then {
                 result.push_str("({ self })");

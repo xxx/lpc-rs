@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 use shared_arena::Arena;
+use parking_lot::RwLock;
 
 use crate::{
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},
@@ -15,7 +16,7 @@ const MEMORY_SIZE: usize = 100_000;
 pub struct Memory {
     /// Where things are actually stored. Only reference types use any space
     /// from this pool.
-    pool: Arena<RefCell<LpcValue>>,
+    pool: Arena<RwLock<LpcValue>>,
 }
 
 impl Memory {

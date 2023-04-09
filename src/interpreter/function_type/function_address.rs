@@ -67,7 +67,7 @@ impl Display for FunctionAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FunctionAddress::Local(_owner, _x) => {
-                // write!(f, "{}::{}", owner.borrow(), x)
+                // write!(f, "{}::{}", owner.read(), x)
                 write!(f, "<QCell local>")
             }
             FunctionAddress::Dynamic(x) => write!(f, "dynamic::{x}"),

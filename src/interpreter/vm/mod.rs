@@ -271,7 +271,7 @@ impl Vm {
             if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
                 repeating = call_out.is_repeating();
-                let b = func.borrow();
+                let b = func.read();
                 let ptr = try_extract_value!(&*b, LpcValue::Function);
 
                 // call outs don't get any additional args passed to them, so just set up the partial args.

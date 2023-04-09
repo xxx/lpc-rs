@@ -131,7 +131,7 @@ fn test_duffs_device() {
 
     if_chain! {
         if let LpcRef::Array(pool_ref) = b;
-        let b = pool_ref.borrow();
+        let b = pool_ref.read();
         if let LpcValue::Array(arr) = &*b;
         then {
             assert_eq!(
@@ -213,7 +213,7 @@ fn test_multi_dimensional_arrays() {
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
     };
-    let ab = arr.borrow();
+    let ab = arr.read();
     let lpc_array = extract_value!(*ab, LpcValue::Array);
 
     let vals = lpc_array
@@ -223,7 +223,7 @@ fn test_multi_dimensional_arrays() {
             let LpcRef::String(s) = a else {
             panic!("this shouldn't be reachable.");
         };
-            s.borrow().clone()
+            s.read().clone()
         })
         .collect::<Vec<_>>();
 

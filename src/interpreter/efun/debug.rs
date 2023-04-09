@@ -17,7 +17,7 @@ pub fn debug<const N: usize>(
 ) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1_usize);
     if let LpcRef::String(x) = lpc_ref {
-        let b = x.borrow();
+        let b = x.read();
         let str = try_extract_value!(*b, LpcValue::String).to_str();
 
         match str {

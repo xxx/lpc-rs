@@ -88,7 +88,7 @@ impl Display for LpcValue {
             LpcValue::Array(x) => write!(f, "{x}"),
             LpcValue::Mapping(x) => write!(f, "{x}"),
             LpcValue::Object(_x) => write!(f, "< object (QCell data) >"),
-            // LpcValue::Object(x) => write!(f, "< {} >", x.borrow()),
+            // LpcValue::Object(x) => write!(f, "< {} >", x.read()),
             LpcValue::Function(x) => write!(f, "{x}"),
         }
     }

@@ -69,7 +69,7 @@ pub fn clone_object<const N: usize>(
     let arg = context.resolve_local_register(1_usize);
 
     if let LpcRef::String(s) = arg {
-        let r = s.borrow();
+        let r = s.read();
         let path = try_extract_value!(*r, LpcValue::String);
         let path = path.to_str();
 

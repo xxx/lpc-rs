@@ -9,6 +9,7 @@ use std::{
 };
 
 use bit_set::BitSet;
+use parking_lot::RwLock;
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
@@ -36,14 +37,14 @@ macro_rules! value_to_ref {
         match $r {
             LpcValue::Float(x) => LpcRef::Float(x),
             LpcValue::Int(x) => LpcRef::Int(x),
-            LpcValue::String(x) => LpcRef::String($m.alloc_arc(RefCell::new(LpcValue::String(x)))),
-            LpcValue::Array(x) => LpcRef::Array($m.alloc_arc(RefCell::new(LpcValue::Array(x)))),
+            LpcValue::String(x) => LpcRef::String($m.alloc_arc(RwLock::new(LpcValue::String(x)))),
+            LpcValue::Array(x) => LpcRef::Array($m.alloc_arc(RwLock::new(LpcValue::Array(x)))),
             LpcValue::Mapping(x) => {
-                LpcRef::Mapping($m.alloc_arc(RefCell::new(LpcValue::Mapping(x))))
+                LpcRef::Mapping($m.alloc_arc(RwLock::new(LpcValue::Mapping(x))))
             }
-            LpcValue::Object(x) => LpcRef::Object($m.alloc_arc(RefCell::new(LpcValue::Object(x)))),
+            LpcValue::Object(x) => LpcRef::Object($m.alloc_arc(RwLock::new(LpcValue::Object(x)))),
             LpcValue::Function(x) => {
-                LpcRef::Function($m.alloc_arc(RefCell::new(LpcValue::Function(x))))
+                LpcRef::Function($m.alloc_arc(RwLock::new(LpcValue::Function(x))))
             }
         }
     };
@@ -71,21 +72,21 @@ pub enum LpcRef {
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    String(ArenaArc<RefCell<LpcValue>>),
+    String(ArenaArc<RwLock<LpcValue>>),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    Array(ArenaArc<RefCell<LpcValue>>),
+    Array(ArenaArc<RwLock<LpcValue>>),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    Mapping(ArenaArc<RefCell<LpcValue>>),
+    Mapping(ArenaArc<RwLock<LpcValue>>),
 
     /// Reference type, pointing to an LPC `object`
-    Object(ArenaArc<RefCell<LpcValue>>),
+    Object(ArenaArc<RwLock<LpcValue>>),
 
     /// Reference type, a function pointer or closure
-    Function(ArenaArc<RefCell<LpcValue>>),
+    Function(ArenaArc<RwLock<LpcValue>>),
 }
 
 impl LpcRef {
@@ -195,7 +196,7 @@ impl LpcRef {
                 LpcRef::String(s) => Ok(LpcValue::String(
                     concatenate_strings(
                         i.to_string(),
-                        try_extract_value!(*s.borrow(), LpcValue::String).to_str(),
+                        try_extract_value!(*s.read(), LpcValue::String).to_str(),
                     )?
                     .into(),
                 )),
@@ -204,14 +205,14 @@ impl LpcRef {
             LpcRef::String(s) => match rhs {
                 LpcRef::String(s2) => Ok(LpcValue::String(
                     concatenate_strings(
-                        try_extract_value!(*s.borrow(), LpcValue::String).to_string(),
-                        try_extract_value!(*s2.borrow(), LpcValue::String).to_str(),
+                        try_extract_value!(*s.read(), LpcValue::String).to_string(),
+                        try_extract_value!(*s2.read(), LpcValue::String).to_str(),
                     )?
                     .into(),
                 )),
                 LpcRef::Int(i) => Ok(LpcValue::String(
                     concatenate_strings(
-                        try_extract_value!(*s.borrow(), LpcValue::String).to_string(),
+                        try_extract_value!(*s.read(), LpcValue::String).to_string(),
                         i.to_string(),
                     )?
                     .into(),
@@ -220,8 +221,8 @@ impl LpcRef {
             },
             LpcRef::Array(vec) => match rhs {
                 LpcRef::Array(vec2) => {
-                    let mut new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
-                    let added_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
+                    let mut new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
+                    let added_vec = try_extract_value!(*vec2.read(), LpcValue::Array).clone();
                     new_vec.extend(added_vec.into_iter());
                     Ok(LpcValue::Array(new_vec))
                 }
@@ -229,8 +230,8 @@ impl LpcRef {
             },
             LpcRef::Mapping(map) => match rhs {
                 LpcRef::Mapping(map2) => {
-                    let mut new_map = try_extract_value!(*map.borrow(), LpcValue::Mapping).clone();
-                    let added_map = try_extract_value!(*map2.borrow(), LpcValue::Mapping).clone();
+                    let mut new_map = try_extract_value!(*map.read(), LpcValue::Mapping).clone();
+                    let added_map = try_extract_value!(*map2.read(), LpcValue::Mapping).clone();
                     new_map.extend(added_map.into_iter());
                     Ok(LpcValue::Mapping(new_map))
                 }
@@ -251,8 +252,8 @@ impl LpcRef {
                 Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) - *y))
             }
             (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
-                let new_vec = try_extract_value!(*vec.borrow(), LpcValue::Array).clone();
-                let removed_vec = try_extract_value!(*vec2.borrow(), LpcValue::Array).clone();
+                let new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
+                let removed_vec = try_extract_value!(*vec2.read(), LpcValue::Array).clone();
 
                 let result = new_vec
                     .into_iter()
@@ -273,14 +274,14 @@ impl LpcRef {
                 Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) * *y))
             }
             (LpcRef::String(x), LpcRef::Int(y)) => {
-                let b = x.borrow();
+                let b = x.read();
                 let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(
                     string::repeat_string(string.to_str(), *y)?.into(),
                 ))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
-                let b = y.borrow();
+                let b = y.read();
                 let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(
                     string::repeat_string(string.to_str(), *x)?.into(),
@@ -435,17 +436,17 @@ impl Mark for LpcRef {
         match self {
             LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => Ok(()),
             LpcRef::Array(arr) => {
-                let arr = arr.borrow();
+                let arr = arr.read();
                 let arr = try_extract_value!(&*arr, LpcValue::Array);
                 arr.mark(marked, processed, cell_key)
             }
             LpcRef::Mapping(map) => {
-                let map = map.borrow();
+                let map = map.read();
                 let map = try_extract_value!(&*map, LpcValue::Mapping);
                 map.mark(marked, processed, cell_key)
             }
             LpcRef::Function(fun) => {
-                let fun = fun.borrow();
+                let fun = fun.read();
                 let fun = try_extract_value!(&*fun, LpcValue::Function);
 
                 fun.mark(marked, processed, cell_key)
@@ -474,7 +475,7 @@ impl Hash for LpcRef {
         match self {
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
-            LpcRef::String(x) => extract_value!(*x.borrow(), LpcValue::String).hash(state),
+            LpcRef::String(x) => extract_value!(*x.read(), LpcValue::String).hash(state),
             LpcRef::Array(x) => ptr::hash(&**x, state),
             LpcRef::Mapping(x) => ptr::hash(&**x, state),
             LpcRef::Object(x) => ptr::hash(&**x, state),
@@ -490,12 +491,12 @@ impl PartialEq for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
             (LpcRef::String(x), LpcRef::String(y)) => {
-                extract_value!(*x.borrow(), LpcValue::String)
-                    == extract_value!(*y.borrow(), LpcValue::String)
+                extract_value!(*x.read(), LpcValue::String)
+                    == extract_value!(*y.read(), LpcValue::String)
             }
-            (LpcRef::Array(x), LpcRef::Array(y)) => x.as_ptr() == y.as_ptr(),
-            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => x.as_ptr() == y.as_ptr(),
-            (LpcRef::Function(x), LpcRef::Function(y)) => x.as_ptr() == y.as_ptr(),
+            (LpcRef::Array(x), LpcRef::Array(y)) => std::ptr::eq(&**x, &**y),
+            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => std::ptr::eq(&**x, &**y),
+            (LpcRef::Function(x), LpcRef::Function(y)) => std::ptr::eq(&**x, &**y),
             _ => false,
         }
     }
@@ -510,8 +511,8 @@ impl PartialOrd for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
             (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
             (LpcRef::String(x), LpcRef::String(y)) => {
-                let xb = x.borrow();
-                let yb = y.borrow();
+                let xb = x.read();
+                let yb = y.read();
                 let a = extract_value!(*xb, LpcValue::String);
                 let b = extract_value!(*yb, LpcValue::String);
                 Some(a.cmp(b))
@@ -531,7 +532,7 @@ impl Display for LpcRef {
             | LpcRef::Mapping(x)
             | LpcRef::Object(x)
             | LpcRef::Function(x) => {
-                write!(f, "{}", x.borrow())
+                write!(f, "{}", x.read())
             }
         }
     }
@@ -547,7 +548,7 @@ impl Debug for LpcRef {
             | LpcRef::Mapping(x)
             | LpcRef::Object(x)
             | LpcRef::Function(x) => {
-                write!(f, "{:?}", x.borrow())
+                write!(f, "{:?}", x.read())
             }
         }
     }

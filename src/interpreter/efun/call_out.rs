@@ -23,7 +23,7 @@ pub fn call_out<const N: usize>(
         let LpcRef::Function(func) = func_ref.clone() else {
             return Err(context.runtime_error("invalid function sent to `call_out`"));
         };
-        let func = func.borrow();
+        let func = func.read();
         let func = try_extract_value!(&*func, LpcValue::Function);
         if let FunctionAddress::Dynamic(_) = func.address {
             return Err(LpcError::new(

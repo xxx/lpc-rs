@@ -36,7 +36,7 @@ fn format_ref<const N: usize>(
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::String(x) => {
-            let xb = x.borrow();
+            let xb = x.read();
             let s = try_extract_value!(*xb, LpcValue::String).to_str();
 
             Ok(format!("{:width$}{}", "", s, width = indent))
@@ -44,22 +44,22 @@ fn format_ref<const N: usize>(
         LpcRef::Object(x) => Ok(format!(
             "{:width$}{}",
             "",
-            try_extract_value!(*x.borrow(), LpcValue::Object).ro(cell_key),
+            try_extract_value!(*x.read(), LpcValue::Object).ro(cell_key),
             width = indent
         )),
         LpcRef::Function(x) => Ok(format!(
             "{:width$}{}",
             "",
-            try_extract_value!(*x.borrow(), LpcValue::Function).with_key(cell_key),
+            try_extract_value!(*x.read(), LpcValue::Function).with_key(cell_key),
             width = indent
         )),
         LpcRef::Array(x) => {
-            let xb = x.borrow();
+            let xb = x.read();
             let arr = try_extract_value!(*xb, LpcValue::Array);
             format_array(arr, context, indent, recurse_level + 1, cell_key)
         }
         LpcRef::Mapping(x) => {
-            let xb = x.borrow();
+            let xb = x.read();
             let map = try_extract_value!(*xb, LpcValue::Mapping);
             format_mapping(map, context, indent, recurse_level + 1, cell_key)
         }

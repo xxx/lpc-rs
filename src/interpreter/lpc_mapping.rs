@@ -10,6 +10,7 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use qcell::QCellOwner;
 use tracing::{instrument, trace};
+use parking_lot::RwLock;
 
 use crate::{
     interpreter::{
@@ -65,7 +66,7 @@ where
         }
         if_chain! {
             if let LpcRef::Mapping(other) = &key.value;
-            if let LpcValue::Mapping(other) = &*other.borrow();
+            if let LpcValue::Mapping(other) = &*other.read();
             if other == mapping;
             then {
                 result.push_str("([ this ])");
@@ -79,7 +80,7 @@ where
 
         if_chain! {
             if let LpcRef::Mapping(other) = &value;
-            if let LpcValue::Mapping(other) = &*other.borrow();
+            if let LpcValue::Mapping(other) = &*other.read();
             if other == mapping;
             then {
                 result.push_str("([ this ])");
