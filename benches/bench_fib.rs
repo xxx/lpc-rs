@@ -34,7 +34,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let program = Rc::new(program);
     let upvalues = Rc::new(cell_key.cell(GcRefBank::default()));
-    let (tx, _) = std::sync::mpsc::channel();
+    let (tx, _) = tokio::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let memory = Rc::new(Memory::default());
 

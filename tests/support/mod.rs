@@ -60,7 +60,7 @@ where
     P: Into<LpcPath>,
 {
     let upvalues = cell_key.cell(GcBank::default());
-    let (tx, _) = std::sync::mpsc::channel();
+    let (tx, _) = tokio::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let program = compile_prog_custom(code, path, config, cell_key);
 

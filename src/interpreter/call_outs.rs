@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::mpsc::Sender};
+use std::{rc::Rc};
 
 use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
@@ -8,6 +8,7 @@ use lpc_rs_errors::Result;
 use qcell::{QCell, QCellOwner};
 use stable_vec::StableVec;
 use timer::{Guard, Timer};
+use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::vm_op::VmOp};
 

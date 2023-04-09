@@ -24,7 +24,7 @@ fn init() {
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::INFO)
             .with_writer(std::io::stdout)
-            // .with_env_filter("lpc_rs::interpreter::vm=trace")
+            .with_env_filter("lpc_rs::interpreter::vm=trace")
             // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
             .finish(),
     )
@@ -98,7 +98,7 @@ pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SI
 
     let object_space = ObjectSpace::default();
     let object_space: Rc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
-    let (tx, _) = std::sync::mpsc::channel();
+    let (tx, _) = tokio::sync::mpsc::channel();
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
     ObjectSpace::insert_process(&object_space, se_proc, cell_key);
 

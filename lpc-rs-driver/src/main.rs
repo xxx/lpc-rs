@@ -17,7 +17,8 @@ struct Args {
     config: Option<String>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
 
     let config_override = args.config;
@@ -38,7 +39,7 @@ fn main() {
 
     let mut vm = Vm::new(config);
 
-    vm.boot().unwrap_or_else(|e| {
+    vm.boot().await.unwrap_or_else(|e| {
         eprintln!("unable to boot VM: {e:?}");
         std::process::exit(1);
     });

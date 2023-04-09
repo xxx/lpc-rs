@@ -1,4 +1,4 @@
-use std::{path::PathBuf, rc::Rc, sync::mpsc::Sender};
+use std::{path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use derive_builder::Builder;
@@ -7,6 +7,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
 use qcell::{QCell, QCellOwner};
+use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
@@ -269,7 +270,7 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
+    use tokio::sync::mpsc;
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
@@ -291,7 +292,7 @@ mod tests {
             .unwrap();
         let process = Process::new(program);
         let upvalues = cell_key.cell(GcBank::default());
-        let (tx, _rx) = mpsc::channel();
+        let (tx, _rx) = mpsc::channel(100);
         let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
         let context = TaskContext::new(
             config,

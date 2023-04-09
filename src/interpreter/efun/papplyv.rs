@@ -59,7 +59,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _) = std::sync::mpsc::channel();
+        let (tx, _) = tokio::sync::mpsc::channel();
         let (program, _, _) = compile_prog(code, &mut cell_key);
         let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
         let result = Task::<5>::initialize_program(

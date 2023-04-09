@@ -5,7 +5,7 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     rc::Rc,
-    sync::{mpsc::Sender, Arc},
+    sync::{Arc},
 };
 
 use bit_set::BitSet;
@@ -27,6 +27,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use qcell::{QCell, QCellOwner};
 use string_interner::{DefaultSymbol, Symbol};
+use tokio::sync::mpsc::Sender;
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
 
@@ -2506,7 +2507,7 @@ mod tests {
         }
 
         mod test_call_fp {
-            use std::sync::mpsc;
+            use tokio::sync::mpsc;
 
             use claim::assert_ok;
 

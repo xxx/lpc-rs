@@ -9,3 +9,7 @@ pub const MAX_CALL_STACK_SIZE: usize = 64;
 /// allocated. Note that declared arguments can go beyond this number, as it
 /// requires intent to do so.
 pub const MAX_CLOSURE_ARG_REFERENCE: usize = 64;
+
+/// The maximum number of queued Tasks that can be waiting to be executed.
+/// Any more than that will be dropped.
+pub const VM_CHANNEL_CAPACITY: usize = 1024;

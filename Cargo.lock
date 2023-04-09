@@ -1200,6 +1200,7 @@ dependencies = [
  "stable-vec",
  "string-interner",
  "timer",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "ustr",
@@ -1241,6 +1242,7 @@ dependencies = [
  "lpc-rs",
  "lpc-rs-utils",
  "qcell",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "ustr",
@@ -1332,6 +1334,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mio"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b9d9a46eff5b4ff64b45a9e316a6d1e0bc719ef429cbec4dc630684212bfdf9"
+dependencies = [
+ "libc",
+ "log",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1963,6 +1977,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
+name = "socket2"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64a4a911eed85daf18834cfaa86a79b7d266ff93ff5ba14005426219480ed662"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "stable-vec"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2130,8 +2154,14 @@ version = "1.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c51a52ed6686dd62c320f9b89299e9dfb46f730c7a48e635c19f21d116cb1439"
 dependencies = [
+ "libc",
+ "mio",
+ "num_cpus",
+ "once_cell",
  "pin-project-lite",
+ "socket2",
  "tokio-macros",
+ "winapi",
 ]
 
 [[package]]

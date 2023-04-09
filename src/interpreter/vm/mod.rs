@@ -5,9 +5,12 @@ use std::{
     path::Path,
     rc::Rc,
     sync::{
-        mpsc::{Receiver, RecvTimeoutError, Sender},
         Arc,
     },
+};
+
+use tokio::sync::{
+    mpsc::{Receiver, Sender}
 };
 
 use bit_set::BitSet;
@@ -46,6 +49,7 @@ use crate::{
     try_extract_value,
     util::{get_simul_efuns, keyable::Keyable, qcell_debug},
 };
+use crate::compile_time_config::VM_CHANNEL_CAPACITY;
 
 pub mod task_queue;
 pub mod vm_op;
@@ -101,7 +105,7 @@ impl Vm {
         C: Into<Rc<Config>>,
     {
         let object_space = ObjectSpace::default();
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);
         let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
         Self {
             object_space: Rc::new(cell_key.cell(object_space)),
@@ -125,10 +129,10 @@ impl Vm {
     ///
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system. Don't lose this key.
-    pub fn boot(&mut self) -> Result<()> {
+    pub async fn boot(&mut self) -> Result<()> {
         self.bootstrap()?;
 
-        self.run()?;
+        self.run().await?;
 
         Ok(())
     }
@@ -156,37 +160,12 @@ impl Vm {
     /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
     ///                in the system.
     #[instrument(skip_all)]
-    pub fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         loop {
             // Run some code for a bit
-            // println!("looping");
-            if let Some(task) = self.task_queue.current_mut() {
-                match task.resume(&mut self.cell_key) {
-                    Ok(()) => match task.state {
-                        TaskState::Complete | TaskState::Error => {
-                            self.task_queue.finish_current();
-                        }
-                        TaskState::Paused => {
-                            self.task_queue.switch_to_next();
-                        }
-                        TaskState::New | TaskState::Running => {
-                            error!(
-                                "Task {} returned from resume() in an invalid state: {}",
-                                task.id, task.state
-                            );
-                            self.task_queue.switch_to_next();
-                        }
-                    },
-                    Err(e) => {
-                        e.emit_diagnostics();
-                        self.task_queue.finish_current();
-                    }
-                }
-            }
-
-            // Check for bus messages
-            match self.rx.recv_timeout(std::time::Duration::from_millis(100)) {
-                Ok(op) => {
+            println!("looping");
+            tokio::select! {
+                Some(op) = self.rx.recv() => {
                     trace!(?op, "Received VmOp");
 
                     match op {
@@ -200,15 +179,84 @@ impl Vm {
                            * } */
                     }
                 }
-                Err(e) => {
-                    if e == RecvTimeoutError::Timeout {
-                        // No messages
-                    } else {
-                        // Something went wrong
-                        panic!("Error receiving from channel: {}", e);
+
+                Some(task) = async {self.task_queue.current_mut()} => {
+                    trace!("resuming task {:?}", task);
+                    match task.resume(&mut self.cell_key) {
+                        Ok(()) => match task.state {
+                            TaskState::Complete | TaskState::Error => {
+                                self.task_queue.finish_current();
+                            }
+                            TaskState::Paused => {
+                                self.task_queue.switch_to_next();
+                            }
+                            TaskState::New | TaskState::Running => {
+                                error!(
+                                    "Task {} returned from resume() in an invalid state: {}",
+                                    task.id, task.state
+                                );
+                                self.task_queue.switch_to_next();
+                            }
+                        },
+                        Err(e) => {
+                            e.emit_diagnostics();
+                            self.task_queue.finish_current();
+                        }
                     }
-                }
+                },
+
+                // _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
             }
+
+            // if let Some(task) = self.task_queue.current_mut() {
+            //     match task.resume(&mut self.cell_key) {
+            //         Ok(()) => match task.state {
+            //             TaskState::Complete | TaskState::Error => {
+            //                 self.task_queue.finish_current();
+            //             }
+            //             TaskState::Paused => {
+            //                 self.task_queue.switch_to_next();
+            //             }
+            //             TaskState::New | TaskState::Running => {
+            //                 error!(
+            //                     "Task {} returned from resume() in an invalid state: {}",
+            //                     task.id, task.state
+            //                 );
+            //                 self.task_queue.switch_to_next();
+            //             }
+            //         },
+            //         Err(e) => {
+            //             e.emit_diagnostics();
+            //             self.task_queue.finish_current();
+            //         }
+            //     }
+            // }
+
+            // Check for bus messages
+            // match self.rx.recv() {
+            //     Ok(op) => {
+            //         trace!(?op, "Received VmOp");
+            //
+            //         match op {
+            //             VmOp::PrioritizeCallOut(idx) => {
+            //                 self.op_prioritize_call_out(idx)?;
+            //             } /* VmOp::Yield => {
+            //                *     self.op_yield_task()?;
+            //                * }
+            //                * VmOp::FinishTask(task_id) => {
+            //                *     self.op_finish_task()?;
+            //                * } */
+            //         }
+            //     }
+            //     Err(e) => {
+            //         if e == RecvTimeoutError::Timeout {
+            //             // No messages
+            //         } else {
+            //             // Something went wrong
+            //             panic!("Error receiving from channel: {}", e);
+            //         }
+            //     }
+            // }
         }
     }
 

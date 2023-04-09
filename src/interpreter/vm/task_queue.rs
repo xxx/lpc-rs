@@ -100,7 +100,7 @@ mod tests {
 
         let cell_key = QCellOwner::new();
 
-        let (tx, _) = std::sync::mpsc::channel();
+        let (tx, _) = tokio::sync::mpsc::channel(128);
 
         let ctx = TaskContextBuilder::default()
             .config(test_config())

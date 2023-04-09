@@ -1,11 +1,11 @@
-use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc, sync::mpsc};
+use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc};
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
-use mpsc::Sender;
 use qcell::{QCell, QCellOwner};
+use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,

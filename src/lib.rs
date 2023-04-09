@@ -5,6 +5,7 @@ use lalrpop_util::lalrpop_mod;
 pub mod compile_time_config;
 pub mod compiler;
 pub mod interpreter;
+pub mod telnet;
 pub mod util;
 
 #[cfg(test)]
