@@ -66,7 +66,7 @@ mod tests {
             .build()
             .unwrap();
         let proc = Process::new(prog);
-        let space_cell: Rc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
+        let space_cell: Arc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
         ObjectSpace::insert_process(&space_cell, cell_key.cell(proc), &mut cell_key);
 
         let object_space = space_cell.ro(&cell_key);

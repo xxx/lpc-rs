@@ -82,7 +82,7 @@ pub struct CallFrame {
     /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    pub vm_upvalues: Rc<QCell<GcRefBank>>,
+    pub vm_upvalues: Arc<QCell<GcRefBank>>,
 
     /// This object's unique ID, for garbage collection purposes
     #[builder(default)]
@@ -105,7 +105,7 @@ impl CallFrame {
         function: Arc<ProgramFunction>,
         called_with_num_args: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
-        vm_upvalues: Rc<QCell<GcRefBank>>,
+        vm_upvalues: Arc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -154,7 +154,7 @@ impl CallFrame {
         called_with_num_args: usize,
         arg_capacity: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
-        vm_upvalues: Rc<QCell<GcRefBank>>,
+        vm_upvalues: Arc<QCell<GcRefBank>>,
         cell_key: &mut QCellOwner,
     ) -> Self
     where
@@ -489,7 +489,7 @@ mod tests {
             pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
 
-            let vm_upvalues = Rc::new(cell_key.cell(GcBank::default()));
+            let vm_upvalues = Arc::new(cell_key.cell(GcBank::default()));
             let frame = CallFrame::new(
                 cell_key.cell(process),
                 Arc::new(pf),

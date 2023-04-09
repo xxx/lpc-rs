@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -61,7 +62,7 @@ where
 {
     let upvalues = cell_key.cell(GcBank::default());
     let (tx, _) = tokio::sync::mpsc::channel(128);
-    let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
     let program = compile_prog_custom(code, path, config, cell_key);
 
     Task::initialize_program(

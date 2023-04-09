@@ -60,21 +60,21 @@ pub mod vm_op;
 pub struct Vm {
     /// Our object space, which stores all of the system objects (masters and clones)
     #[educe(Debug(method = "qcell_debug"))]
-    pub object_space: Rc<QCell<ObjectSpace>>,
+    pub object_space: Arc<QCell<ObjectSpace>>,
 
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    memory: Rc<Memory>,
+    memory: Arc<Memory>,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
     #[educe(Debug(method = "qcell_debug"))]
-    pub upvalues: Rc<QCell<GcRefBank>>,
+    pub upvalues: Arc<QCell<GcRefBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]
     config: Arc<Config>,
 
     /// Enqueued call outs
     #[educe(Debug(method = "qcell_debug"))]
-    call_outs: Rc<QCell<CallOuts>>,
+    call_outs: Arc<QCell<CallOuts>>,
 
     /// The channel used to send [`VmOp`]s to this [`Vm`]
     tx: Sender<VmOp>,
@@ -108,11 +108,11 @@ impl Vm {
         let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);
         let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
         Self {
-            object_space: Rc::new(cell_key.cell(object_space)),
-            memory: Rc::new(Memory::default()),
+            object_space: Arc::new(cell_key.cell(object_space)),
+            memory: Arc::new(Memory::default()),
             config: config.into(),
-            upvalues: Rc::new(cell_key.cell(GcBank::default())),
-            call_outs: Rc::new(call_outs),
+            upvalues: Arc::new(cell_key.cell(GcBank::default())),
+            call_outs: Arc::new(call_outs),
             rx,
             tx,
             task_queue: TaskQueue::new(),

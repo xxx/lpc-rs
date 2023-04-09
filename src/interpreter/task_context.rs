@@ -37,7 +37,7 @@ pub struct TaskContext {
     /// The global [`ObjectSpace`]
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    object_space: Rc<QCell<ObjectSpace>>,
+    object_space: Arc<QCell<ObjectSpace>>,
 
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
@@ -48,19 +48,19 @@ pub struct TaskContext {
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    vm_upvalues: Rc<QCell<GcRefBank>>,
+    vm_upvalues: Arc<QCell<GcRefBank>>,
 
     /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    call_outs: Rc<QCell<CallOuts>>,
+    call_outs: Arc<QCell<CallOuts>>,
 
     /// The tx channel to send messages back to the [`Vm`](crate::interpreter::vm::Vm).
     tx: Sender<VmOp>,
 
     /// A pointer to a memory pool to allocate new values from
     #[builder(default, setter(into))]
-    memory: Rc<Memory>,
+    memory: Arc<Memory>,
 
     /// A counter, to ensure that too-long-evaluations do not occur
     #[builder(default)]
@@ -103,10 +103,10 @@ impl TaskContext {
     where
         C: Into<Arc<Config>>,
         P: Into<Arc<QCell<Process>>>,
-        O: Into<Rc<QCell<ObjectSpace>>>,
-        M: Into<Rc<Memory>>,
-        U: Into<Rc<QCell<GcRefBank>>>,
-        A: Into<Rc<QCell<CallOuts>>>,
+        O: Into<Arc<QCell<ObjectSpace>>>,
+        M: Into<Arc<Memory>>,
+        U: Into<Arc<QCell<GcRefBank>>>,
+        A: Into<Arc<QCell<CallOuts>>>,
     {
         let config = config.into();
         let object_space = object_space.into();
@@ -167,7 +167,7 @@ impl TaskContext {
     #[inline]
     pub fn insert_clone(
         &self,
-        program: Rc<Program>,
+        program: Arc<Program>,
         cell_key: &mut QCellOwner,
     ) -> Arc<QCell<Process>> {
         ObjectSpace::insert_clone(
@@ -234,19 +234,19 @@ impl TaskContext {
 
     /// Return the [`ObjectSpace`]
     #[inline]
-    pub fn object_space(&self) -> &Rc<QCell<ObjectSpace>> {
+    pub fn object_space(&self) -> &Arc<QCell<ObjectSpace>> {
         &self.object_space
     }
 
     /// Return the [`Memory`]
     #[inline]
-    pub fn memory(&self) -> &Rc<Memory> {
+    pub fn memory(&self) -> &Arc<Memory> {
         &self.memory
     }
 
     /// Return the `upvalues`
     #[inline]
-    pub fn upvalues(&self) -> &Rc<QCell<GcRefBank>> {
+    pub fn upvalues(&self) -> &Arc<QCell<GcRefBank>> {
         &self.vm_upvalues
     }
 
@@ -258,7 +258,7 @@ impl TaskContext {
 
     /// Get the [`CallOuts`] for this task
     #[inline]
-    pub fn call_outs(&self) -> &Rc<QCell<CallOuts>> {
+    pub fn call_outs(&self) -> &Arc<QCell<CallOuts>> {
         &self.call_outs
     }
 

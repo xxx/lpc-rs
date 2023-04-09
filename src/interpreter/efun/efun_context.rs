@@ -20,7 +20,7 @@ use crate::interpreter::{
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
-    memory: Rc<Memory>,
+    memory: Arc<Memory>,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -32,7 +32,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     pub fn new(
         stack: &'task mut CallStack<N>,
         task_context: &'task TaskContext,
-        memory: Rc<Memory>,
+        memory: Arc<Memory>,
     ) -> Self {
         Self {
             stack,
@@ -60,14 +60,14 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
-            pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Arc<QCell<Process>>;
+            pub fn insert_clone(&self, program: Arc<Program>, cell_key: &mut QCellOwner) -> Arc<QCell<Process>>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
-            pub fn vm_upvalues(&self) -> &Rc<QCell<GcRefBank>>;
+            pub fn vm_upvalues(&self) -> &Arc<QCell<GcRefBank>>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
-            pub fn call_outs(&self) -> &Rc<QCell<CallOuts>>;
+            pub fn call_outs(&self) -> &Arc<QCell<CallOuts>>;
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
@@ -86,7 +86,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     #[inline]
-    pub fn memory(&self) -> &Rc<Memory> {
+    pub fn memory(&self) -> &Arc<Memory> {
         &self.memory
     }
 

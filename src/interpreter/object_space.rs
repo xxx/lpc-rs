@@ -81,8 +81,8 @@ impl ObjectSpace {
 
     /// Insert a clone of the passed [`Program`] into the space.
     pub fn insert_clone(
-        space_cell: &Rc<QCell<Self>>,
-        program: Rc<Program>,
+        space_cell: &Arc<QCell<Self>>,
+        program: Arc<Program>,
         cell_key: &mut QCellOwner,
     ) -> Arc<QCell<Process>> {
         let clone = {
@@ -102,7 +102,7 @@ impl ObjectSpace {
 
     /// Directly insert the passed [`Process`] into the space, with in-game
     /// local filename.
-    pub fn insert_process<P>(space_cell: &Rc<QCell<Self>>, process: P, cell_key: &mut QCellOwner)
+    pub fn insert_process<P>(space_cell: &Arc<QCell<Self>>, process: P, cell_key: &mut QCellOwner)
     where
         P: Into<Arc<QCell<Process>>>,
     {
@@ -230,7 +230,7 @@ mod tests {
     fn test_insert_clone() {
         let mut cell_key = QCellOwner::new();
         let space = ObjectSpace::default();
-        let prog: Rc<Program> = Program::default().into();
+        let prog: Arc<Program> = Program::default().into();
         let filename = prog.filename.to_str().unwrap();
 
         let mut prog2: Program = Program::default();

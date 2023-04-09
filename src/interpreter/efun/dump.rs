@@ -158,6 +158,7 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOw
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+    use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;
     use qcell::QCellOwner;
@@ -197,7 +198,7 @@ mod tests {
             cell_key.cell(ObjectSpace::default()),
             Memory::default(),
             cell_key.cell(GcBank::default()),
-            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            Arc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx.clone(),
             &mut cell_key,
         );
@@ -223,7 +224,7 @@ mod tests {
             cell_key.cell(ObjectSpace::default()),
             Memory::default(),
             cell_key.cell(GcBank::default()),
-            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            Arc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx,
             &mut cell_key,
         );

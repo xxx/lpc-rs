@@ -39,6 +39,7 @@ pub fn remove_call_out<const N: usize>(
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+    use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;
 
@@ -69,7 +70,7 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
         let result = Task::<10>::initialize_program(
             program,
             Config::default(),

@@ -53,7 +53,7 @@ fn main() {
 
     let mut cell_key = QCellOwner::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1024);
-    let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
     let upvalues = cell_key.cell(GcBank::default());
 

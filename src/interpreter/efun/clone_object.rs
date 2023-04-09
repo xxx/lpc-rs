@@ -144,7 +144,7 @@ mod tests {
             cell_key.cell(ObjectSpace::default()),
             Memory::new(10),
             cell_key.cell(GcBank::default()),
-            Rc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            Arc::new(cell_key.cell(CallOuts::new(tx.clone()))),
             tx,
             cell_key,
         )

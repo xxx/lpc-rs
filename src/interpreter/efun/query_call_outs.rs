@@ -87,7 +87,7 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
         let task = Task::<10>::initialize_program(
             program,
             Config::default(),

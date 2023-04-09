@@ -5,6 +5,7 @@ use std::{
     path::Path,
     rc::Rc,
 };
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -22,7 +23,7 @@ use crate::interpreter::{
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct Process {
     /// The [`Program`] that this process is running.
-    pub program: Rc<Program>,
+    pub program: Arc<Program>,
 
     /// The stored global variable data for this instance.
     pub globals: RefBank,
@@ -36,7 +37,7 @@ impl Process {
     /// Create a new [`Process`] from the passed [`Program`].
     pub fn new<T>(prog: T) -> Self
     where
-        T: Into<Rc<Program>>,
+        T: Into<Arc<Program>>,
     {
         let program = prog.into();
         let num_globals = program.num_globals;
@@ -50,7 +51,7 @@ impl Process {
 
     /// Create a new [`Process`] from the passed [`Program`], with the passed
     /// clone ID.
-    pub fn new_clone(program: Rc<Program>, clone_id: usize) -> Self {
+    pub fn new_clone(program: Arc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
 
         Self {
