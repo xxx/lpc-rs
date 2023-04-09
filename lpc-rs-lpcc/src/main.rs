@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use clap::Parser;
 use lpc_rs::{
@@ -41,7 +42,7 @@ fn main() {
         .build()
         .unwrap();
 
-    let config = Rc::new(config);
+    let config = Arc::new(config);
 
     let compiler = CompilerBuilder::default()
         .config(config.clone())

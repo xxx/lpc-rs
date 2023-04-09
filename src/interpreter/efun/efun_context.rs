@@ -1,4 +1,5 @@
 use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc};
+use std::sync::Arc;
 
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
@@ -49,7 +50,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             pub fn in_game_cwd(&self, cell_key: &QCellOwner) -> PathBuf;
 
             /// Get pointer to the current [`Config`] that's in-use
-            pub fn config(&self) -> Rc<Config>;
+            pub fn config(&self) -> Arc<Config>;
 
             /// Increment the current task instruction count, checking for too-long-evaluations
             pub fn increment_instruction_count(&self, amount: usize) -> Result<usize>;

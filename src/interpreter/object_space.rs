@@ -1,4 +1,5 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, rc::Rc};
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -31,7 +32,7 @@ pub struct ObjectSpace {
     clone_count: usize,
 
     /// Our configuration
-    config: Rc<Config>,
+    config: Arc<Config>,
 }
 
 fn processes_debug(
@@ -58,7 +59,7 @@ impl ObjectSpace {
     /// Create a new [`ObjectSpace`] with the passed [`Config`]
     pub fn new<T>(config: T) -> Self
     where
-        T: Into<Rc<Config>>,
+        T: Into<Arc<Config>>,
     {
         Self {
             config: config.into(),

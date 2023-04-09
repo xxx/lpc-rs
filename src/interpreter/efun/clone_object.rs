@@ -115,6 +115,7 @@ pub fn clone_object<const N: usize>(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use indoc::indoc;
     use lpc_rs_utils::config::Config;
 
@@ -130,7 +131,7 @@ mod tests {
 
     fn task_context_fixture(
         program: Program,
-        config: Rc<Config>,
+        config: Arc<Config>,
         cell_key: &QCellOwner,
     ) -> TaskContext {
         let process = Process::new(program);

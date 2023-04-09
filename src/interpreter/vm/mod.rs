@@ -70,7 +70,7 @@ pub struct Vm {
     pub upvalues: Rc<QCell<GcRefBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]
-    config: Rc<Config>,
+    config: Arc<Config>,
 
     /// Enqueued call outs
     #[educe(Debug(method = "qcell_debug"))]
@@ -94,7 +94,7 @@ impl Vm {
     /// Create a new [`Vm`].
     pub fn new<C>(config: C) -> Self
     where
-        C: Into<Rc<Config>>,
+        C: Into<Arc<Config>>,
     {
         Self::new_with_key(config, QCellOwner::new())
     }
@@ -102,7 +102,7 @@ impl Vm {
     /// Create a new [`Vm`], using the specified [`QCellOwner`].
     pub fn new_with_key<C>(config: C, cell_key: QCellOwner) -> Self
     where
-        C: Into<Rc<Config>>,
+        C: Into<Arc<Config>>,
     {
         let object_space = ObjectSpace::default();
         let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);

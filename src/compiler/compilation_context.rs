@@ -36,7 +36,7 @@ pub struct CompilationContext {
 
     /// The configuration being used for this compilation.
     #[builder(setter(into))]
-    pub config: Rc<Config>,
+    pub config: Arc<Config>,
 
     /// Our collection of scopes
     pub scopes: ScopeTree,
@@ -276,7 +276,7 @@ impl Default for CompilationContext {
     fn default() -> Self {
         Self {
             filename: LpcPath::default().into(),
-            config: Rc::new(Config::default()),
+            config: Arc::new(Config::default()),
             errors: vec![],
             scopes: ScopeTree::default(),
             default_function_params: HashMap::new(),

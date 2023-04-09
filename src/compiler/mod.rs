@@ -76,7 +76,7 @@ macro_rules! apply_walker {
 pub struct Compiler {
     /// The configuration to be used for this instance of the compiler
     #[builder(setter(into))]
-    config: Rc<Config>,
+    config: Arc<Config>,
 
     /// The current depth in the inheritance chain of this compiler
     #[builder(default)]
@@ -361,7 +361,7 @@ mod tests {
         #[test]
         fn disallows_going_outside_the_root() {
             let mut cell_key = QCellOwner::new();
-            let config: Rc<Config> = ConfigBuilder::default()
+            let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests")
                 .build()
                 .unwrap()
@@ -395,7 +395,7 @@ mod tests {
         #[test]
         fn uses_auto_inherit_if_specified() {
             let mut cell_key = QCellOwner::new();
-            let config: Rc<Config> = ConfigBuilder::default()
+            let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .auto_inherit_file("/std/auto.c")
                 .build()
@@ -425,7 +425,7 @@ mod tests {
         #[test]
         fn skips_auto_inherit_if_not_specified() {
             let mut cell_key = QCellOwner::new();
-            let config: Rc<Config> = ConfigBuilder::default()
+            let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .build()
                 .unwrap()

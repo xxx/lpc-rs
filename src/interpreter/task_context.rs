@@ -1,4 +1,5 @@
 use std::{path::PathBuf, rc::Rc};
+use std::sync::Arc;
 
 use delegate::delegate;
 use derive_builder::Builder;
@@ -25,7 +26,7 @@ pub struct TaskContext {
     /// The [`Config`] that's in use for the
     /// [`Task`](crate::interpreter::task::Task).
     #[builder(setter(into))]
-    config: Rc<Config>,
+    config: Arc<Config>,
 
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
@@ -100,7 +101,7 @@ impl TaskContext {
         cell_key: &QCellOwner,
     ) -> Self
     where
-        C: Into<Rc<Config>>,
+        C: Into<Arc<Config>>,
         P: Into<Rc<QCell<Process>>>,
         O: Into<Rc<QCell<ObjectSpace>>>,
         M: Into<Rc<Memory>>,
@@ -214,7 +215,7 @@ impl TaskContext {
 
     /// Return the [`Config`] used for the task
     #[inline]
-    pub fn config(&self) -> Rc<Config> {
+    pub fn config(&self) -> Arc<Config> {
         self.config.clone()
     }
 

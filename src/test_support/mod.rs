@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -57,7 +58,7 @@ pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
 }
 
-fn compile_simul_efuns(config: &Rc<Config>, cell_key: &mut QCellOwner) -> Program {
+fn compile_simul_efuns(config: &Arc<Config>, cell_key: &mut QCellOwner) -> Program {
     let compiler = CompilerBuilder::default()
         .config(config.clone())
         .build()
@@ -75,8 +76,8 @@ fn compile_simul_efuns(config: &Rc<Config>, cell_key: &mut QCellOwner) -> Progra
 pub fn compile_prog(
     code: &str,
     cell_key: &mut QCellOwner,
-) -> (Program, Rc<Config>, Rc<QCell<Process>>) {
-    let config = Rc::new(test_config());
+) -> (Program, Arc<Config>, Rc<QCell<Process>>) {
+    let config = Arc::new(test_config());
     let simul_efuns = compile_simul_efuns(&config, cell_key);
     let se_proc = Rc::new(cell_key.cell(Process::new(simul_efuns)));
 

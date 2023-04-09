@@ -1,6 +1,7 @@
 mod support;
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use claim::assert_err;
 use if_chain::if_chain;
@@ -29,7 +30,7 @@ use crate::support::{run_prog, test_config, test_config_builder};
 // }
 
 fn default_compiler() -> Compiler {
-    let config: Rc<Config> = ConfigBuilder::default()
+    let config: Arc<Config> = ConfigBuilder::default()
         .lib_dir("tests/fixtures/code")
         .build()
         .unwrap()
