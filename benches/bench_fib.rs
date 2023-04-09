@@ -9,10 +9,9 @@ use lpc_rs::{
     },
 };
 use lpc_rs_utils::config::Config;
-use qcell::QCellOwner;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut cell_key = QCellOwner::new();
+
 
     let code = r#"
         int fib(int n) {
@@ -29,13 +28,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     "#;
 
     let program = Compiler::default()
-        .compile_string("~/my_file.c", code, &mut cell_key)
+        .compile_string("~/my_file.c", code)
         .expect("Failed to compile.");
 
     let program = Arc::new(program);
-    let upvalues = Arc::new(cell_key.cell(GcRefBank::default()));
+    let upvalues = Arc::new(RwLock::new(GcRefBank::default()));
     let (tx, _) = tokio::sync::mpsc::channel(1024);
-    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+    let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     let memory = Arc::new(Memory::default());
 
     c.bench_function("fib 20", |b| {
@@ -43,7 +42,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             let _ = Task::<64>::initialize_program(
                 program.clone(),
                 black_box(Config::default()),
-                cell_key.cell(ObjectSpace::default()),
+                RwLock::new(ObjectSpace::default()),
                 memory.clone(),
                 upvalues.clone(),
                 call_outs.clone(),

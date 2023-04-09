@@ -1,15 +1,12 @@
 use std::{
-    cmp::Ordering,
     fmt::{Display, Formatter},
-    hash::Hasher,
     sync::Weak,
 };
 
 use bit_set::BitSet;
-use educe::Educe;
 use itertools::Itertools;
+use parking_lot::RwLock;
 use lpc_rs_core::register::Register;
-use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -19,18 +16,15 @@ use crate::{
         lpc_ref::LpcRef,
         process::Process,
     },
-    util::{keyable::Keyable, qcell_process_debug},
 };
 
 /// A pointer to a function, created with the `&` syntax.
-#[derive(Educe, Clone)]
-#[educe(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
     /// *note* This is *not* necessarily the object that the function is
     ///        defined within.
-    #[educe(Debug(method = "qcell_process_debug"))]
-    pub owner: Weak<QCell<Process>>,
+    pub owner: Weak<RwLock<Process>>,
 
     /// Address of the function, in either the receiver or owner
     pub address: FunctionAddress,
@@ -90,12 +84,11 @@ impl FunctionPtr {
 }
 
 impl Mark for FunctionPtr {
-    #[instrument(skip(self, _cell_key))]
+    #[instrument(skip(self))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        _cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         trace!("marking function ptr");
 
@@ -116,14 +109,15 @@ impl Display for FunctionPtr {
         let mut s = String::new();
 
         s.push_str("FunctionPtr { ");
-        s.push_str("owner: <QCell data>");
+        // TODO: get the owner printed again
+        s.push_str(&format!("owner: {}", "todo"));
         s.push_str(&format!("address: {}, ", self.address));
 
         let partial_args = &self
             .partial_args
             .iter()
             .map(|arg| match arg {
-                Some(_a) => "<QCell LpcRef>".to_string(),
+                Some(a) => a.to_string(),
                 None => "<None>".to_string(),
             })
             .join(", ");
@@ -138,52 +132,6 @@ impl Display for FunctionPtr {
     }
 }
 
-impl<'a> Keyable<'a> for FunctionPtr {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(f, "FunctionPtr {{ ")?;
-        match self.owner.upgrade() {
-            Some(owner) => write!(f, "owner: {:?}, ", owner.ro(cell_key))?,
-            None => write!(f, "owner: <dropped>, ")?,
-        }
-        write!(f, "address: {:?}, ", self.address.with_key(cell_key))?;
-        write!(f, "partial_args: [")?;
-        for arg in &self.partial_args {
-            match arg {
-                Some(arg) => write!(f, "{:?}, ", arg.with_key(cell_key))?,
-                None => write!(f, "<None>, ")?,
-            }
-        }
-        write!(f, "], ")?;
-        write!(f, "upvalue_ptrs: {:?}", &self.upvalue_ptrs)?;
-        write!(f, "unique_id: {:?}, ", self.unique_id)?;
-        write!(f, "}}")
-    }
-
-    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(f, "{}", self.address.with_key(cell_key))?;
-        write!(f, "(")?;
-        for arg in &self.partial_args {
-            match arg {
-                Some(arg) => write!(f, "{}, ", arg.with_key(cell_key))?,
-                None => write!(f, ", ")?,
-            }
-        }
-        write!(f, ")")
-    }
-
-    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
-        unimplemented!()
-    }
-
-    fn keyable_eq(&self, _other: &Self, _cell_key: &QCellOwner) -> bool {
-        unimplemented!()
-    }
-
-    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
-        unimplemented!()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -195,10 +143,10 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let cell_key = QCellOwner::new();
+
         let mut ptr = create!(
             FunctionPtr,
-            owner: Arc::downgrade(&Arc::new(cell_key.cell(Process::default()))),
+            owner: Arc::downgrade(&Arc::new(RwLock::new(Process::default()))),
         );
 
         ptr.upvalue_ptrs.push(Register(3));
@@ -206,7 +154,7 @@ mod tests {
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        ptr.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        ptr.mark(&mut marked, &mut processed).unwrap();
         assert_eq!(marked.len(), 2);
         assert!(marked.contains(3));
         assert!(marked.contains(5));
@@ -216,7 +164,7 @@ mod tests {
 
         marked.clear();
 
-        ptr.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        ptr.mark(&mut marked, &mut processed).unwrap();
 
         assert_eq!(marked.len(), 0);
     }

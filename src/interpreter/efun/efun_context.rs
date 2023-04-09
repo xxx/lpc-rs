@@ -4,8 +4,8 @@ use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
-use qcell::{QCell, QCellOwner};
 use tokio::sync::mpsc::Sender;
+use parking_lot::RwLock;
 
 use crate::interpreter::{
     call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
@@ -46,7 +46,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     delegate! {
         to self.task_context {
             /// Get the in-game directory of the current process
-            pub fn in_game_cwd(&self, cell_key: &QCellOwner) -> PathBuf;
+            pub fn in_game_cwd(&self) -> PathBuf;
 
             /// Get pointer to the current [`Config`] that's in-use
             pub fn config(&self) -> Arc<Config>;
@@ -59,14 +59,14 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
-            pub fn insert_clone(&self, program: Arc<Program>, cell_key: &mut QCellOwner) -> Arc<QCell<Process>>;
+            pub fn insert_clone(&self, program: Arc<Program>) -> Arc<RwLock<Process>>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
-            pub fn vm_upvalues(&self) -> &Arc<QCell<GcRefBank>>;
+            pub fn vm_upvalues(&self) -> &Arc<RwLock<GcRefBank>>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
-            pub fn call_outs(&self) -> &Arc<QCell<CallOuts>>;
+            pub fn call_outs(&self) -> &Arc<RwLock<CallOuts>>;
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
@@ -133,18 +133,17 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     pub fn resolve_register_variant(
         &self,
         variant: RegisterVariant,
-        cell_key: &QCellOwner,
     ) -> Result<Cow<LpcRef>> {
-        get_location(self.stack, variant, cell_key)
+        get_location(self.stack, variant)
     }
 
     /// Lookup the process with the passed path.
     #[inline]
-    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Arc<QCell<Process>>>
+    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<RwLock<Process>>>
     where
         T: AsRef<str>,
     {
-        self.task_context.lookup_process(path, cell_key)
+        self.task_context.lookup_process(path)
     }
 
     /// Get a clone of the task context
@@ -155,18 +154,18 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get a reference to the [`Process`] that contains the call to this efun
     #[inline]
-    pub fn process(&self) -> &Arc<QCell<Process>> {
+    pub fn process(&self) -> &Arc<RwLock<Process>> {
         &self.frame().process
     }
 
     /// Directly insert the passed [`Process`] into the object space, with
     /// in-game local filename.
     #[inline]
-    pub fn insert_process<P>(&self, process: P, cell_key: &mut QCellOwner)
+    pub fn insert_process<P>(&self, process: P)
     where
-        P: Into<Arc<QCell<Process>>>,
+        P: Into<Arc<RwLock<Process>>>,
     {
-        self.task_context.insert_process(process, cell_key);
+        self.task_context.insert_process(process);
     }
 
     /// Return a clone of the current stack, for snapshotting

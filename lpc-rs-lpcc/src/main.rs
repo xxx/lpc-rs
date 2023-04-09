@@ -11,7 +11,6 @@ use lpc_rs::{
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
-use qcell::QCellOwner;
 use ustr::ustr;
 
 #[derive(Parser, Debug)]
@@ -50,20 +49,19 @@ fn main() {
 
     let lpc_path = LpcPath::new_server(&args.filename);
 
-    let mut cell_key = QCellOwner::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1024);
-    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+    let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-    let upvalues = cell_key.cell(GcBank::default());
+    let upvalues = RwLock::new(GcBank::default());
 
-    match compiler.compile_in_game_file(&lpc_path, None, &mut cell_key) {
+    match compiler.compile_in_game_file(&lpc_path, None) {
         Ok(program) => {
             let memory = Memory::default();
             let object_space = ObjectSpace::default();
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_program(
                 program,
                 config,
-                cell_key.cell(object_space),
+                RwLock::new(object_space),
                 memory,
                 upvalues,
                 call_outs,

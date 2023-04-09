@@ -278,6 +278,12 @@ impl From<&LpcError> for Diagnostic<usize> {
     }
 }
 
+impl<T> From<tokio::sync::mpsc::error::SendError<T>> for LpcError {
+    fn from(e: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        Self::new(e.to_string())
+    }
+}
+
 fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteColor) {
     let files = FILE_CACHE.read();
 

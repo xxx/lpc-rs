@@ -6,7 +6,6 @@ use std::{
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcInt};
 use lpc_rs_errors::{span::Span, Result};
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -67,10 +66,10 @@ pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         impl AstNodeTrait for ExpressionNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner) -> Result<()> {
+            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
                 match self {
                 $(
-                    $x(y) => y.visit(tree_walker, cell_key),
+                    $x(y) => y.visit(tree_walker),
                 )*
                 }
             }

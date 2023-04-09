@@ -10,12 +10,12 @@ use codegen::{
 use compilation_context::CompilationContext;
 use derive_builder::Builder;
 use educe::Educe;
+use parking_lot::RwLock;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
-use qcell::{QCell, QCellOwner};
 use tracing::instrument;
 use ustr::ustr;
 
@@ -23,7 +23,6 @@ use crate::{
     compiler::{ast::inherit_node::InheritNode, compilation_context::CompilationContextBuilder},
     interpreter::{process::Process, program::Program},
     lpc_parser,
-    util::qcell_process_option_debug,
 };
 
 pub mod ast;
@@ -36,9 +35,9 @@ pub mod semantic;
 
 #[macro_export]
 macro_rules! apply_walker {
-    ($walker:ty, $program:expr, $context:expr, $cell_key:expr, $fatal:expr) => {{
+    ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {{
         let mut walker = <$walker>::new($context);
-        let result = $program.visit(&mut walker, $cell_key);
+        let result = $program.visit(&mut walker);
 
         let mut context = walker.into_context();
 
@@ -84,8 +83,7 @@ pub struct Compiler {
 
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]
-    #[educe(Debug(method = "qcell_process_option_debug"))]
-    simul_efuns: Option<Arc<QCell<Process>>>,
+    simul_efuns: Option<Arc<RwLock<Process>>>,
 }
 
 impl Compiler {
@@ -98,16 +96,13 @@ impl Compiler {
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
-    /// use qcell::QCellOwner;
-    ///
-    /// let compiler = Compiler::default();
-    /// let mut cell_key = QCellOwner::new();
-    /// let prog = compiler
-    ///     .compile_file("tests/fixtures/code/example.c", &mut cell_key)
+    ///     ///
+    /// let prog =  Compiler::default()
+    ///     .compile_file("tests/fixtures/code/example.c")
     ///     .expect("Unable to compile.");
     /// ```
-    #[instrument(skip(self, cell_key))]
-    pub fn compile_file<T>(&self, path: T, cell_key: &mut QCellOwner) -> Result<Program>
+    #[instrument(skip(self))]
+    pub fn compile_file<T>(&self, path: T) -> Result<Program>
     where
         T: Into<LpcPath> + Debug,
     {
@@ -128,7 +123,7 @@ impl Compiler {
                         }
 
                         let dot_c = lpc_path.with_extension("c");
-                        self.compile_file(dot_c, cell_key)
+                        self.compile_file(dot_c)
                     }
                     _ => Err(LpcError::new(format!(
                         "Cannot read file `{}`: {}",
@@ -139,20 +134,19 @@ impl Compiler {
             }
         };
 
-        self.compile_string(lpc_path, file_content, cell_key)
+        self.compile_string(lpc_path, file_content)
     }
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
-    #[instrument(skip(self, cell_key))]
+    #[instrument(skip(self))]
     pub fn compile_in_game_file(
         &self,
         path: &LpcPath,
         span: Option<Span>,
-        cell_key: &mut QCellOwner,
-    ) -> Result<Program> {
+            ) -> Result<Program> {
         self.config.validate_in_game_path(path, span)?;
 
-        self.compile_file(path, cell_key)
+        self.compile_file(path)
     }
 
     /// Take a str and preprocess it into a vector of Span tuples, and also
@@ -214,8 +208,7 @@ impl Compiler {
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
-    /// use qcell::QCellOwner;
-    ///
+    ///     ///
     /// let code = r#"
     ///     int j = 123;
     ///
@@ -225,9 +218,8 @@ impl Compiler {
     /// "#;
     ///
     /// let compiler = Compiler::default();
-    /// let mut cell_key = QCellOwner::new();
     /// let prog = compiler
-    ///     .compile_string("~/my_file.c", code, &mut cell_key)
+    ///     .compile_string("~/my_file.c", code)
     ///     .expect("Failed to compile.");
     /// ```
     #[instrument(skip_all)]
@@ -235,8 +227,7 @@ impl Compiler {
         &self,
         path: T,
         code: U,
-        cell_key: &mut QCellOwner,
-    ) -> Result<Program>
+            ) -> Result<Program>
     where
         T: Into<LpcPath>,
         U: AsRef<str>,
@@ -262,21 +253,21 @@ impl Compiler {
         // let mut printer = TreePrinter::new();
         // let _ = program.visit(&mut printer);
 
-        let context = apply_walker!(InheritanceWalker, program_node, context, cell_key, true);
+        let context = apply_walker!(InheritanceWalker, program_node, context, true);
         let context = apply_walker!(
             FunctionPrototypeWalker,
             program_node,
             context,
-            cell_key,
+           
             false
         );
-        let context = apply_walker!(ScopeWalker, program_node, context, cell_key, false);
-        let context = apply_walker!(DefaultParamsWalker, program_node, context, cell_key, false);
-        let context = apply_walker!(SemanticCheckWalker, program_node, context, cell_key, true);
+        let context = apply_walker!(ScopeWalker, program_node, context, false);
+        let context = apply_walker!(DefaultParamsWalker, program_node, context, false);
+        let context = apply_walker!(SemanticCheckWalker, program_node, context, true);
 
         let mut asm_walker = CodegenWalker::new(context);
 
-        program_node.visit(&mut asm_walker, cell_key)?;
+        program_node.visit(&mut asm_walker)?;
 
         // emit warnings
         asm_walker
@@ -344,11 +335,10 @@ mod tests {
 
         #[test]
         fn tries_dot_c() {
-            let mut cell_key = QCellOwner::new();
             let compiler = Compiler::default();
 
             assert!(compiler
-                .compile_file("tests/fixtures/code/example", &mut cell_key)
+                .compile_file("tests/fixtures/code/example")
                 .is_ok());
         }
     }
@@ -360,8 +350,7 @@ mod tests {
 
         #[test]
         fn disallows_going_outside_the_root() {
-            let mut cell_key = QCellOwner::new();
-            let config: Arc<Config> = ConfigBuilder::default()
+                        let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests")
                 .build()
                 .unwrap()
@@ -374,13 +363,13 @@ mod tests {
             let in_game_path = LpcPath::new_in_game("../../secure.c", "/", &*config.lib_dir);
 
             assert!(compiler
-                .compile_in_game_file(&server_path, None, &mut cell_key)
+                .compile_in_game_file(&server_path, None)
                 .unwrap_err()
                 .to_string()
                 .starts_with("attempt to access a file outside of lib_dir"));
 
             assert!(compiler
-                .compile_in_game_file(&in_game_path, None, &mut cell_key)
+                .compile_in_game_file(&in_game_path, None)
                 .unwrap_err()
                 .to_string()
                 .starts_with("attempt to access a file outside of lib_dir"));
@@ -394,8 +383,7 @@ mod tests {
 
         #[test]
         fn uses_auto_inherit_if_specified() {
-            let mut cell_key = QCellOwner::new();
-            let config: Arc<Config> = ConfigBuilder::default()
+                        let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .auto_inherit_file("/std/auto.c")
                 .build()
@@ -408,7 +396,7 @@ mod tests {
                 string foo = auto_inherited();
             "#;
             let prog = compiler
-                .compile_string("my_file.c", code, &mut cell_key)
+                .compile_string("my_file.c", code)
                 .unwrap();
             println!("{:?}", prog.functions.keys().collect::<Vec<_>>());
             let inherited = prog
@@ -424,8 +412,7 @@ mod tests {
 
         #[test]
         fn skips_auto_inherit_if_not_specified() {
-            let mut cell_key = QCellOwner::new();
-            let config: Arc<Config> = ConfigBuilder::default()
+                        let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .build()
                 .unwrap()
@@ -437,7 +424,7 @@ mod tests {
                 string foo = auto_inherited();
             "#;
             let err = compiler
-                .compile_string("my_file.c", code, &mut cell_key)
+                .compile_string("my_file.c", code)
                 .unwrap_err();
             assert_eq!(
                 &err.to_string(),

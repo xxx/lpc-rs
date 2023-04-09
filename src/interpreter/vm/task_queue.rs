@@ -81,7 +81,6 @@ impl<const STACKSIZE: usize> Default for TaskQueue<STACKSIZE> {
 
 #[cfg(test)]
 mod tests {
-    use qcell::QCellOwner;
 
     use super::*;
     use crate::{
@@ -98,16 +97,15 @@ mod tests {
 
         assert!(queue.current().is_none());
 
-        let cell_key = QCellOwner::new();
 
         let (tx, _) = tokio::sync::mpsc::channel(128);
 
         let ctx = TaskContextBuilder::default()
             .config(test_config())
-            .process(cell_key.cell(Process::default()))
-            .object_space(cell_key.cell(ObjectSpace::default()))
-            .vm_upvalues(cell_key.cell(GcRefBank::default()))
-            .call_outs(cell_key.cell(CallOuts::new(tx.clone())))
+            .process(RwLock::new(Process::default()))
+            .object_space(RwLock::new(ObjectSpace::default()))
+            .vm_upvalues(RwLock::new(GcRefBank::default()))
+            .call_outs(RwLock::new(CallOuts::new(tx.clone())))
             .tx(tx)
             .build()
             .unwrap();

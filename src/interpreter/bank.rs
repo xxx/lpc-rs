@@ -10,7 +10,6 @@ use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
-use qcell::QCellOwner;
 
 use crate::interpreter::{
     gc::mark::Mark,
@@ -97,10 +96,9 @@ where
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         for register in self.registers.iter() {
-            register.mark(marked, processed, cell_key)?;
+            register.mark(marked, processed)?;
         }
         Ok(())
     }

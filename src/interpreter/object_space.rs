@@ -1,17 +1,14 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, sync::Arc};
-use parking_lot::RwLock;
+use std::{collections::HashMap, fmt::Formatter, sync::Arc};
 
 use bit_set::BitSet;
 use delegate::delegate;
 use educe::Educe;
-use indexmap::IndexMap;
 use itertools::Itertools;
+use parking_lot::RwLock;
 use lpc_rs_utils::config::Config;
-use qcell::{QCell, QCellOwner};
 
 use crate::{
     interpreter::{gc::mark::Mark, process::Process, program::Program},
-    util::keyable::Keyable,
 };
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
@@ -26,7 +23,7 @@ const OBJECT_SPACE_SIZE: usize = 100_000;
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
     #[educe(Debug(method = "processes_debug"))]
-    processes: HashMap<String, Arc<QCell<Process>>>,
+    processes: HashMap<String, Arc<RwLock<Process>>>,
 
     /// How many clones have been created so far?
     clone_count: usize,
@@ -36,7 +33,7 @@ pub struct ObjectSpace {
 }
 
 fn processes_debug(
-    processes: &HashMap<String, Arc<QCell<Process>>>,
+    processes: &HashMap<String, Arc<RwLock<Process>>>,
     f: &mut Formatter<'_>,
 ) -> std::fmt::Result {
     write!(f, "{}", processes.keys().join(", "))
@@ -71,30 +68,29 @@ impl ObjectSpace {
     // /// table. If a new program with the same filename as an existing one is
     // /// added, the new will overwrite the old in the table.
     // /// Storage keys are the in-game filename
-    // pub fn insert_master(&mut self, program: Program, cell_key: &QCellOwner) ->
-    // Arc<QCell<Process>> {     let new = Process::new(program);
-    //     let process: Arc<QCell<Process>> = cell_key.cell(new).into();
-    //     let name = self.prepare_filename(&process, &cell_key);
+    // pub fn insert_master(&mut self, program: Program) ->
+    // Arc<RwLock<Process>> {     let new = Process::new(program);
+    //     let process: Arc<RwLock<Process>> = RwLock::new(new).into();
+    //     let name = self.prepare_filename(&process);
     //     self.insert_process_directly(name, process.clone());
     //     process
     // }
 
     /// Insert a clone of the passed [`Program`] into the space.
     pub fn insert_clone(
-        space_cell: &Arc<QCell<Self>>,
+        space_cell: &Arc<RwLock<Self>>,
         program: Arc<Program>,
-        cell_key: &mut QCellOwner,
-    ) -> Arc<QCell<Process>> {
+    ) -> Arc<RwLock<Process>> {
         let clone = {
-            let object_space = space_cell.ro(cell_key);
+            let object_space = space_cell.read();
             Process::new_clone(program, object_space.clone_count)
         };
 
-        let name = space_cell.ro(cell_key).prepare_filename(&clone);
+        let name = space_cell.read().prepare_filename(&clone);
 
-        let process: Arc<QCell<Process>> = cell_key.cell(clone).into();
+        let process: Arc<RwLock<Process>> = RwLock::new(clone).into();
 
-        let space = space_cell.rw(cell_key);
+        let mut space = space_cell.write();
         space.clone_count += 1;
         space.insert_process_directly(name, process.clone());
         process
@@ -102,15 +98,15 @@ impl ObjectSpace {
 
     /// Directly insert the passed [`Process`] into the space, with in-game
     /// local filename.
-    pub fn insert_process<P>(space_cell: &Arc<QCell<Self>>, process: P, cell_key: &mut QCellOwner)
+    pub fn insert_process<P>(space_cell: &Arc<RwLock<Self>>, process: P)
     where
-        P: Into<Arc<QCell<Process>>>,
+        P: Into<Arc<RwLock<Process>>>,
     {
         let process = process.into();
-        let space = space_cell.ro(cell_key);
-        let name = space.prepare_filename(process.ro(cell_key));
+        let space = space_cell.read();
+        let name = space.prepare_filename(&*process.read());
 
-        let space = space_cell.rw(cell_key);
+        let mut space = space_cell.write();
         space.insert_process_directly(name, process);
     }
 
@@ -127,14 +123,14 @@ impl ObjectSpace {
     #[inline]
     fn insert_process_directly<P, S>(&mut self, name: S, process: P)
     where
-        P: Into<Arc<QCell<Process>>>,
+        P: Into<Arc<RwLock<Process>>>,
         S: Into<String>,
     {
         self.processes.insert(name.into(), process.into());
     }
 
     /// Lookup a process from its path.
-    pub fn lookup<T>(&self, path: T) -> Option<&Arc<QCell<Process>>>
+    pub fn lookup<T>(&self, path: T) -> Option<&Arc<RwLock<Process>>>
     where
         T: AsRef<str>,
     {
@@ -160,42 +156,12 @@ impl Mark for ObjectSpace {
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         for process in self.processes.values() {
-            process.ro(cell_key).mark(marked, processed, cell_key)?;
+            process.read().mark(marked, processed)?;
         }
 
         Ok(())
-    }
-}
-
-impl<'a> Keyable<'a> for ObjectSpace {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        let processes = self
-            .processes
-            .iter()
-            .map(|(k, v)| {
-                let v = v.ro(cell_key);
-                (k, v)
-            })
-            .collect::<IndexMap<_, _>>();
-        write!(f, "ObjectSpace {{ processes: {:?}", processes)?;
-        write!(f, ", clone_count: {:?}", self.clone_count)?;
-        write!(f, ", config: {:?}", self.config)?;
-        write!(f, " }}")
-    }
-
-    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
-        unimplemented!()
-    }
-
-    fn keyable_eq(&self, _other: &Self, _cell_key: &QCellOwner) -> bool {
-        unimplemented!()
-    }
-
-    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
-        unimplemented!()
     }
 }
 
@@ -205,7 +171,6 @@ mod tests {
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
-    use qcell::QCellOwner;
     use shared_arena::SharedArena;
 
     use super::*;
@@ -216,10 +181,9 @@ mod tests {
 
     // #[test]
     // fn test_insert_master() {
-    //     let cell_key = QCellOwner::new();
     //     let mut space = ObjectSpace::default();
     //     let prog = Program::default();
-    //     space.insert_master(prog.clone(), &cell_key);
+    //     space.insert_master(prog.clone());
     //     let filename = prog.filename.to_str().unwrap();
     //
     //     assert_eq!(space.len(), 1);
@@ -228,7 +192,6 @@ mod tests {
 
     #[test]
     fn test_insert_clone() {
-        let mut cell_key = QCellOwner::new();
         let space = ObjectSpace::default();
         let prog: Arc<Program> = Program::default().into();
         let filename = prog.filename.to_str().unwrap();
@@ -237,14 +200,14 @@ mod tests {
         let filename2: Arc<LpcPath> = Arc::new("/foo/bar/baz".into());
         prog2.filename = filename2.clone();
 
-        let object_space = cell_key.cell(space).into();
+        let object_space = RwLock::new(space).into();
 
-        ObjectSpace::insert_clone(&object_space, prog.clone(), &mut cell_key);
-        ObjectSpace::insert_clone(&object_space, prog.clone(), &mut cell_key);
-        ObjectSpace::insert_clone(&object_space, prog2.into(), &mut cell_key);
-        ObjectSpace::insert_clone(&object_space, prog.clone(), &mut cell_key);
+        ObjectSpace::insert_clone(&object_space, prog.clone());
+        ObjectSpace::insert_clone(&object_space, prog.clone());
+        ObjectSpace::insert_clone(&object_space, prog2.into());
+        ObjectSpace::insert_clone(&object_space, prog.clone());
 
-        let space = object_space.ro(&cell_key);
+        let space = object_space.read();
         assert_eq!(space.len(), 4);
         assert!(space.processes.contains_key(&format!("{}#{}", filename, 0)));
         assert!(space.processes.contains_key(&format!("{}#{}", filename, 1)));
@@ -256,7 +219,6 @@ mod tests {
 
     #[test]
     fn test_insert_process() {
-        let mut cell_key = QCellOwner::new();
         let config = ConfigBuilder::default()
             .lib_dir("./tests/fixtures/code/")
             .build()
@@ -268,21 +230,19 @@ mod tests {
         prog.filename = filename;
 
         let process = Process::new(prog);
-        let space_cell = cell_key.cell(space).into();
-        ObjectSpace::insert_process(&space_cell, cell_key.cell(process), &mut cell_key);
+        let space_cell = RwLock::new(space).into();
+        ObjectSpace::insert_process(&space_cell, RwLock::new(process));
 
-        let space = space_cell.ro(&cell_key);
+        let space = space_cell.read();
         assert_eq!(space.len(), 1);
         assert!(space.processes.contains_key("/foo/bar/baz"));
     }
 
     #[test]
     fn test_mark() {
-        let _cell_key = QCellOwner::new();
         let config = Config::default();
         let mut space = ObjectSpace::new(config);
 
-        let cell_key = QCellOwner::new();
         let pool = SharedArena::with_capacity(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
@@ -291,11 +251,11 @@ mod tests {
         let mut process = Process::default();
         process.globals.push(lpc_ref);
 
-        space.insert_process_directly("process", cell_key.cell(process));
+        space.insert_process_directly("process", RwLock::new(process));
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        space.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        space.mark(&mut marked, &mut processed).unwrap();
 
         assert!(processed.contains(*array_id.as_ref()));
     }

@@ -13,6 +13,5 @@ lpc-rs-core = { path = "../lpc-rs-core" }
 lpc-rs-utils = { path = "../lpc-rs-utils" }
 
 clap = { version = "4.1.6", features = ["derive"] }
-qcell = "0.5.3"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
 ustr = "0.9.0"

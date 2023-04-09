@@ -1,6 +1,4 @@
-use std::cell::RefCell;
-
-use shared_arena::{Arena, SharedArena};
+use shared_arena::{SharedArena};
 use parking_lot::RwLock;
 
 use crate::{

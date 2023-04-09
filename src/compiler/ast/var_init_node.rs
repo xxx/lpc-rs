@@ -6,7 +6,6 @@ use std::{
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
 use lpc_rs_errors::{span::Span, Result};
 use lpc_rs_function_support::symbol::Symbol;
-use qcell::QCellOwner;
 use ustr::{ustr, Ustr};
 
 use crate::compiler::{
@@ -84,9 +83,8 @@ impl AstNodeTrait for VarInitNode {
     fn visit(
         &mut self,
         tree_walker: &mut impl TreeWalker,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
-        tree_walker.visit_var_init(self, cell_key)
+            ) -> Result<()> {
+        tree_walker.visit_var_init(self)
     }
 }
 

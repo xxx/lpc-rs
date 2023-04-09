@@ -1,10 +1,8 @@
 use lpc_rs_errors::{LpcError, Result};
-use qcell::QCellOwner;
 
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
     try_extract_value,
-    util::keyable::Keyable,
 };
 
 const SNAPSHOT_STACK: &str = "snapshot_stack";
@@ -13,8 +11,7 @@ const SNAPSHOT_STACK: &str = "snapshot_stack";
 /// information from, or debugging the vm itself.
 pub fn debug<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1_usize);
     if let LpcRef::String(x) = lpc_ref {
         let b = x.read();
@@ -39,7 +36,7 @@ pub fn debug<const N: usize>(
     } else {
         Err(context.runtime_error(format!(
             "Unexpected argument `{}` passed to `debug()`.",
-            lpc_ref.with_key(cell_key)
+            lpc_ref
         )))
     }
 }

@@ -1,16 +1,13 @@
 use std::{
-    cmp::Ordering,
     fmt::{Debug, Display, Formatter},
-    hash::{Hash, Hasher},
+    hash::{Hash},
     ops::{Deref, Index, IndexMut, Range, RangeInclusive},
 };
 
 use bit_set::BitSet;
 use delegate::delegate;
 use if_chain::if_chain;
-use qcell::QCellOwner;
 use tracing::{instrument, trace};
-use parking_lot::RwLock;
 
 use crate::{
     interpreter::{
@@ -18,7 +15,6 @@ use crate::{
         lpc_ref::LpcRef,
         lpc_value::LpcValue,
     },
-    util::keyable::Keyable,
 };
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
@@ -93,12 +89,11 @@ impl Display for LpcArray {
 }
 
 impl Mark for LpcArray {
-    #[instrument(skip(self, cell_key))]
+    #[instrument(skip(self))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         trace!("marking array");
 
@@ -107,63 +102,10 @@ impl Mark for LpcArray {
         }
 
         for item in &self.array {
-            item.mark(marked, processed, cell_key)?;
+            item.mark(marked, processed)?;
         }
 
         Ok(())
-    }
-}
-
-impl<'a> Keyable<'a> for LpcArray {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(f, "LpcArray {{ ")?;
-        write!(f, "unique_id: {:?}, ", self.unique_id)?;
-        write!(f, "array: [")?;
-        f.write_str(&format_array(self, |item| {
-            format!("{:?}", item.with_key(cell_key))
-        }))?;
-        write!(f, "] }}")
-    }
-
-    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(f, "[")?;
-        f.write_str(&format_array(self, |item| {
-            format!("{}", item.with_key(cell_key))
-        }))?;
-        write!(f, "]")
-    }
-
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
-        self.unique_id.hash(state);
-        for item in &self.array {
-            item.with_key(cell_key).hash(state);
-        }
-    }
-
-    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
-        self.unique_id == other.unique_id
-            && self
-                .array
-                .iter()
-                .zip(other.array.iter())
-                .all(|(a, b)| a.with_key(cell_key) == b.with_key(cell_key))
-    }
-
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
-        self.unique_id
-            .partial_cmp(&other.unique_id)
-            .and_then(|ord| {
-                if ord == Ordering::Equal {
-                    self.array
-                        .iter()
-                        .zip(other.array.iter())
-                        .map(|(a, b)| a.with_key(cell_key).partial_cmp(&b.with_key(cell_key)))
-                        .find(|ord| ord != &Some(Ordering::Equal))
-                        .unwrap_or(Some(Ordering::Equal))
-                } else {
-                    Some(ord)
-                }
-            })
     }
 }
 
@@ -254,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let cell_key = QCellOwner::new();
+
         let pool = SharedArena::with_capacity(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
@@ -267,7 +209,7 @@ mod tests {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
 
-        array.mark(&mut marked, &mut processed, &cell_key).unwrap();
+        array.mark(&mut marked, &mut processed).unwrap();
 
         let mut marked_expected = BitSet::new();
         marked_expected.extend([4_usize, 33_usize].into_iter());

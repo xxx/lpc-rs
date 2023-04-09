@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
     fmt,
@@ -13,7 +12,6 @@ use parking_lot::RwLock;
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
-use qcell::{QCell, QCellOwner};
 use shared_arena::ArenaArc;
 use tracing::{instrument, trace};
 
@@ -21,7 +19,6 @@ use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{gc::mark::Mark, lpc_value::LpcValue},
     try_extract_value,
-    util::keyable::Keyable,
 };
 
 pub const NULL: LpcRef = LpcRef::Int(0);
@@ -103,22 +100,22 @@ impl LpcRef {
         }
     }
 
-    fn to_error(&self, op: BinaryOperation, right: &LpcRef, cell_key: &QCellOwner) -> LpcError {
+    fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
         LpcError::new(format!(
             "runtime error: mismatched types: {} ({}) {} {} ({})",
-            self.with_key(cell_key),
+            self,
             self.type_name(),
             op,
-            right.with_key(cell_key),
+            right,
             right.type_name()
         ))
     }
 
-    fn to_unary_op_error(&self, op: UnaryOperation, cell_key: &QCellOwner) -> LpcError {
+    fn to_unary_op_error(&self, op: UnaryOperation) -> LpcError {
         LpcError::new(format!(
             "runtime error: mismatched types: {} {} ({})",
             op,
-            self.with_key(cell_key),
+            self,
             self.type_name()
         ))
     }
@@ -162,33 +159,32 @@ impl LpcRef {
 
     /// Convert this [`LpcRef`] into a [`HashedLpcRef`], for use in a
     /// [`HashMap`](std::collections::HashMap).
-    pub fn into_hashed(self, cell_key: &QCellOwner) -> HashedLpcRef {
-        HashedLpcRef::new(self, cell_key)
+    pub fn into_hashed(self) -> HashedLpcRef {
+        HashedLpcRef::new(self)
     }
 
     /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
     /// wrapped in QCells.
     pub fn binary_op<F, T>(
-        left: &QCell<Self>,
-        right: &QCell<Self>,
-        cell_key: &QCellOwner,
+        left: &RwLock<Self>,
+        right: &RwLock<Self>,
         op: F,
     ) -> T
     where
         F: Fn(&LpcRef, &LpcRef) -> T,
     {
-        let left = cell_key.ro(left);
-        let right = cell_key.ro(right);
+        let left = &*left.read();
+        let right = &*right.read();
 
         op(left, right)
     }
 
-    pub fn add(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn add(&self, rhs: &Self) -> Result<LpcValue> {
         match self {
             LpcRef::Float(f) => match rhs {
                 LpcRef::Float(f2) => Ok(LpcValue::Float(*f + *f2)),
                 LpcRef::Int(i) => Ok(LpcValue::Float(*f + *i as BaseFloat)),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Int(i) => match rhs {
                 LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
@@ -200,7 +196,7 @@ impl LpcRef {
                     )?
                     .into(),
                 )),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
                 LpcRef::String(s2) => Ok(LpcValue::String(
@@ -217,7 +213,7 @@ impl LpcRef {
                     )?
                     .into(),
                 )),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Array(vec) => match rhs {
                 LpcRef::Array(vec2) => {
@@ -226,7 +222,7 @@ impl LpcRef {
                     new_vec.extend(added_vec.into_iter());
                     Ok(LpcValue::Array(new_vec))
                 }
-                _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Mapping(map) => match rhs {
                 LpcRef::Mapping(map2) => {
@@ -235,15 +231,15 @@ impl LpcRef {
                     new_map.extend(added_map.into_iter());
                     Ok(LpcValue::Mapping(new_map))
                 }
-                _ => Err(self.to_error(BinaryOperation::Add, rhs, cell_key)),
+                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Object(_) | LpcRef::Function(_) => {
-                Err(self.to_error(BinaryOperation::Add, rhs, cell_key))
+                Err(self.to_error(BinaryOperation::Add, rhs))
             }
         }
     }
 
-    pub fn sub(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn sub(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(*y))),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
@@ -261,11 +257,11 @@ impl LpcRef {
                     .collect();
                 Ok(LpcValue::Array(result))
             }
-            _ => Err(self.to_error(BinaryOperation::Sub, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
     }
 
-    pub fn mul(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn mul(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_mul(*y))),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
@@ -287,11 +283,11 @@ impl LpcRef {
                     string::repeat_string(string.to_str(), *x)?.into(),
                 ))
             }
-            _ => Err(self.to_error(BinaryOperation::Mul, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
     }
 
-    pub fn div(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn div(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 if y == &0 {
@@ -321,11 +317,11 @@ impl LpcRef {
                     Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
                 }
             }
-            _ => Err(self.to_error(BinaryOperation::Div, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
 
-    pub fn rem(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn rem(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 if y == &0 {
@@ -355,32 +351,32 @@ impl LpcRef {
                     Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) % *y))
                 }
             }
-            _ => Err(self.to_error(BinaryOperation::Mod, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
         }
     }
 
-    pub fn bitand(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn bitand(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x & *y)),
-            _ => Err(self.to_error(BinaryOperation::And, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::And, rhs)),
         }
     }
 
-    pub fn bitor(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn bitor(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x | *y)),
-            _ => Err(self.to_error(BinaryOperation::Or, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Or, rhs)),
         }
     }
 
-    pub fn bitxor(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn bitxor(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
-            _ => Err(self.to_error(BinaryOperation::Xor, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
         }
     }
 
-    pub fn shl(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn shl(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
@@ -393,11 +389,11 @@ impl LpcRef {
 
                 Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
             }
-            _ => Err(self.to_error(BinaryOperation::Shl, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
         }
     }
 
-    pub fn shr(&self, rhs: &Self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn shr(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
@@ -410,26 +406,25 @@ impl LpcRef {
 
                 Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
             }
-            _ => Err(self.to_error(BinaryOperation::Shr, rhs, cell_key)),
+            _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
         }
     }
 
     /// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
-    pub fn bitnot(&self, cell_key: &QCellOwner) -> Result<LpcValue> {
+    pub fn bitnot(&self) -> Result<LpcValue> {
         match &self {
             LpcRef::Int(x) => Ok(LpcValue::Int(!*x)),
-            _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot, cell_key)),
+            _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
         }
     }
 }
 
 impl Mark for LpcRef {
-    #[instrument(skip(self, cell_key))]
+    #[instrument(skip(self))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> Result<()> {
         trace!("marking lpc ref of {type}", type = self.as_lpc_type());
 
@@ -438,18 +433,18 @@ impl Mark for LpcRef {
             LpcRef::Array(arr) => {
                 let arr = arr.read();
                 let arr = try_extract_value!(&*arr, LpcValue::Array);
-                arr.mark(marked, processed, cell_key)
+                arr.mark(marked, processed)
             }
             LpcRef::Mapping(map) => {
                 let map = map.read();
                 let map = try_extract_value!(&*map, LpcValue::Mapping);
-                map.mark(marked, processed, cell_key)
+                map.mark(marked, processed)
             }
             LpcRef::Function(fun) => {
                 let fun = fun.read();
                 let fun = try_extract_value!(&*fun, LpcValue::Function);
 
-                fun.mark(marked, processed, cell_key)
+                fun.mark(marked, processed)
             }
         }
     }
@@ -561,28 +556,6 @@ impl Default for LpcRef {
     }
 }
 
-impl<'a> Keyable<'a> for LpcRef {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, _cell_key: &QCellOwner) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-
-    fn keyable_display(&self, f: &mut Formatter<'_>, _cell_key: &QCellOwner) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, _cell_key: &QCellOwner) {
-        self.hash(state)
-    }
-
-    fn keyable_eq(&self, other: &Self, _cell_key: &QCellOwner) -> bool {
-        self.eq(other)
-    }
-
-    fn keyable_partial_cmp(&self, other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
-        self.partial_cmp(other)
-    }
-}
-
 /// A structure that contains a pre-calculated hash, as LpcRef requires access
 /// to [`QCell`]s to calculate the hash.
 #[derive(Clone, Debug)]
@@ -593,7 +566,7 @@ pub struct HashedLpcRef {
 }
 
 impl HashedLpcRef {
-    pub fn new(value: LpcRef, _cell_key: &QCellOwner) -> Self {
+    pub fn new(value: LpcRef) -> Self {
         let mut hasher = DefaultHasher::new();
         value.hash(&mut hasher);
         Self {
@@ -619,28 +592,6 @@ impl PartialEq for HashedLpcRef {
 
 impl Eq for HashedLpcRef {}
 
-impl<'a> Keyable<'a> for HashedLpcRef {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> fmt::Result {
-        self.value.keyable_debug(f, cell_key)
-    }
-
-    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> fmt::Result {
-        self.value.keyable_display(f, cell_key)
-    }
-
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
-        self.value.keyable_hash(state, cell_key)
-    }
-
-    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
-        self.value.keyable_eq(&other.value, cell_key)
-    }
-
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
-        self.value.keyable_partial_cmp(&other.value, cell_key)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use claim::assert_err;
@@ -658,10 +609,9 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
             let int1 = LpcRef::Int(123);
             let int2 = LpcRef::Int(456);
-            let result = int1.add(&int2, &cell_key);
+            let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
@@ -671,10 +621,9 @@ mod tests {
 
         #[test]
         fn int_int_overflow_wraps() {
-            let cell_key = QCellOwner::new();
             let int1 = LpcRef::Int(LpcInt::MAX);
             let int2 = LpcRef::Int(1);
-            let result = int1.add(&int2, &cell_key);
+            let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, LpcInt::MIN)
             } else {
@@ -684,11 +633,10 @@ mod tests {
 
         #[test]
         fn string_string() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(5);
             let string1 = value_to_ref!(LpcValue::String("foo".into()), pool);
             let string2 = value_to_ref!(LpcValue::String("bar".into()), pool);
-            let result = string1.add(&string2, &cell_key);
+            let result = string1.add(&string2);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foobar"))
             } else {
@@ -698,11 +646,10 @@ mod tests {
 
         #[test]
         fn string_int() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(123);
-            let result = string.add(&int, &cell_key);
+            let result = string.add(&int);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foo123"))
             } else {
@@ -712,11 +659,10 @@ mod tests {
 
         #[test]
         fn int_string() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(123);
-            let result = int.add(&string, &cell_key);
+            let result = int.add(&string);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("123foo"))
             } else {
@@ -726,10 +672,9 @@ mod tests {
 
         #[test]
         fn float_int() {
-            let cell_key = QCellOwner::new();
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = float.add(&int, &cell_key);
+            let result = float.add(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -739,18 +684,16 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::Int(1);
-            assert!((float.add(&int, &cell_key)).is_ok());
+            assert!((float.add(&int)).is_ok());
         }
 
         #[test]
         fn int_float() {
-            let cell_key = QCellOwner::new();
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = int.add(&float, &cell_key);
+            let result = int.add(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -760,20 +703,18 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
             let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(1.0);
-            assert!((int.add(&float, &cell_key)).is_ok());
+            assert!((int.add(&float)).is_ok());
         }
 
         #[test]
         fn array_array() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(20);
             let array = LpcValue::from(vec![LpcRef::Int(123)]);
             let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
             let result =
-                value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool), &cell_key);
+                value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool));
 
             match &result {
                 Ok(v) => {
@@ -794,7 +735,6 @@ mod tests {
 
         #[test]
         fn mapping_mapping() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(20);
             let key1 = value_to_ref!(LpcValue::from("key1"), pool);
             let value1 = value_to_ref!(LpcValue::from("value1"), pool);
@@ -802,19 +742,19 @@ mod tests {
             let value2 = value_to_ref!(LpcValue::from(666), pool);
 
             let mut hash1 = IndexMap::new();
-            hash1.insert(key1.clone().into_hashed(&cell_key), value1.clone());
+            hash1.insert(key1.clone().into_hashed(), value1.clone());
 
             let mut hash2 = IndexMap::new();
-            hash2.insert(key2.clone().into_hashed(&cell_key), value2.clone());
+            hash2.insert(key2.clone().into_hashed(), value2.clone());
 
             let map = value_to_ref!(LpcValue::from(hash1), pool);
             let map2 = value_to_ref!(LpcValue::from(hash2), pool);
 
-            let result = map.add(&map2, &cell_key);
+            let result = map.add(&map2);
 
             let mut expected = IndexMap::new();
-            expected.insert(key1.into_hashed(&cell_key), value1);
-            expected.insert(key2.into_hashed(&cell_key), value2);
+            expected.insert(key1.into_hashed(), value1);
+            expected.insert(key2.into_hashed(), value2);
 
             if let Ok(LpcValue::Mapping(m)) = result {
                 assert_eq!(m, expected)
@@ -825,7 +765,6 @@ mod tests {
 
         #[test]
         fn mapping_mapping_duplicate_keys() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(20);
             let key1 = value_to_ref!(LpcValue::from("key"), pool);
             let value1 = value_to_ref!(LpcValue::from("value1"), pool);
@@ -833,18 +772,18 @@ mod tests {
             let value2 = value_to_ref!(LpcValue::from(666), pool);
 
             let mut hash1 = IndexMap::new();
-            hash1.insert(key1.into_hashed(&cell_key), value1);
+            hash1.insert(key1.into_hashed(), value1);
 
             let mut hash2 = IndexMap::new();
-            hash2.insert(key2.clone().into_hashed(&cell_key), value2.clone());
+            hash2.insert(key2.clone().into_hashed(), value2.clone());
 
             let map = value_to_ref!(LpcValue::from(hash1), pool);
             let map2 = value_to_ref!(LpcValue::from(hash2), pool);
 
-            let result = map.add(&map2, &cell_key);
+            let result = map.add(&map2);
 
             let mut expected = IndexMap::new();
-            expected.insert(key2.into_hashed(&cell_key), value2);
+            expected.insert(key2.into_hashed(), value2);
 
             if let Ok(LpcValue::Mapping(m)) = result {
                 assert_eq!(m, expected)
@@ -855,11 +794,10 @@ mod tests {
 
         #[test]
         fn add_mismatched() {
-            let cell_key = QCellOwner::new();
             let pool = SharedArena::with_capacity(5);
             let int = LpcRef::Int(123);
             let array = value_to_ref!(LpcValue::Array(LpcArray::new(vec![])), pool);
-            let result = int.add(&array, &cell_key);
+            let result = int.add(&array);
 
             assert!(result.is_err());
         }
@@ -870,19 +808,17 @@ mod tests {
 
         #[test]
         fn int_int_underflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
             let int = LpcRef::Int(LpcInt::MIN);
             let int2 = LpcRef::Int(1);
-            let result = int.sub(&int2, &cell_key);
+            let result = int.sub(&int2);
             assert!(result.is_ok());
         }
 
         #[test]
         fn float_int() {
-            let cell_key = QCellOwner::new();
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = float.sub(&int, &cell_key);
+            let result = float.sub(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 543.66)
             } else {
@@ -892,19 +828,17 @@ mod tests {
 
         #[test]
         fn float_int_underflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
             let float = LpcRef::from(BaseFloat::MIN);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = float.sub(&int, &cell_key);
+            let result = float.sub(&int);
             assert!(result.is_ok());
         }
 
         #[test]
         fn int_float() {
-            let cell_key = QCellOwner::new();
             let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = int.sub(&float, &cell_key);
+            let result = int.sub(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, -543.66)
             } else {
@@ -914,17 +848,15 @@ mod tests {
 
         #[test]
         fn int_float_underflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(LpcInt::MIN);
+                        let int = LpcRef::Int(LpcInt::MIN);
             let float = LpcRef::from(1.0);
-            let result = int.sub(&float, &cell_key);
+            let result = int.sub(&float);
             assert!(result.is_ok());
         }
 
         #[test]
         fn array_array() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(10);
+                        let pool = SharedArena::with_capacity(10);
             let to_ref = LpcRef::Int;
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
@@ -934,7 +866,7 @@ mod tests {
             let a1 = value_to_ref!(LpcValue::from(v1), pool);
             let a2 = value_to_ref!(LpcValue::from(v2), pool);
 
-            let result = a1.sub(&a2, &cell_key);
+            let result = a1.sub(&a2);
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
 
             if let Ok(LpcValue::Array(x)) = result {
@@ -950,20 +882,18 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(LpcInt::MAX);
+                        let int = LpcRef::Int(LpcInt::MAX);
             let int2 = LpcRef::Int(2);
-            let result = int.mul(&int2, &cell_key);
+            let result = int.mul(&int2);
             assert!(result.is_ok());
         }
 
         #[test]
         fn string_int() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(5);
+                        let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(4);
-            let result = string.mul(&int, &cell_key);
+            let result = string.mul(&int);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
@@ -973,11 +903,10 @@ mod tests {
 
         #[test]
         fn int_string() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(5);
+                        let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
             let int = LpcRef::Int(4);
-            let result = int.mul(&string, &cell_key);
+            let result = int.mul(&string);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
             } else {
@@ -987,11 +916,10 @@ mod tests {
 
         #[test]
         fn string_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(5);
+                        let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("1234567890abcdef".into()), pool);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = string.mul(&int, &cell_key);
+            let result = string.mul(&int);
             assert_err!(result.clone());
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
@@ -1001,10 +929,9 @@ mod tests {
 
         #[test]
         fn float_int() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(666.66);
+                        let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = float.mul(&int, &cell_key);
+            let result = float.mul(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -1014,19 +941,17 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(BaseFloat::MAX);
+                        let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::Int(2);
-            let result = float.mul(&int, &cell_key);
+            let result = float.mul(&int);
             assert!(result.is_ok());
         }
 
         #[test]
         fn int_float() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(666.66);
+                        let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = int.mul(&float, &cell_key);
+            let result = int.mul(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -1036,10 +961,9 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(LpcInt::MAX);
+                        let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(200.0);
-            let result = int.mul(&float, &cell_key);
+            let result = int.mul(&float);
             assert!(result.is_ok());
         }
     }
@@ -1049,19 +973,17 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(-1);
+                        let int = LpcRef::Int(-1);
             let int2 = LpcRef::Int(LpcInt::MAX);
-            let result = int.div(&int2, &cell_key);
+            let result = int.div(&int2);
             assert!(result.is_ok());
         }
 
         #[test]
         fn float_int() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(666.66);
+                        let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = float.div(&int, &cell_key);
+            let result = float.div(&int);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 5.42)
@@ -1072,21 +994,19 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            // I'm not sure it's possible to cause an overflow here?
+                        // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = float.div(&int, &cell_key);
+            let result = float.div(&int);
 
             assert!(result.is_ok());
         }
 
         #[test]
         fn int_float() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(666.66);
+                        let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = int.div(&float, &cell_key);
+            let result = int.div(&float);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 0.18450184501845018)
@@ -1097,20 +1017,18 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(-1);
+                        let int = LpcRef::Int(-1);
             let float = LpcRef::from(BaseFloat::MAX);
-            let result = int.div(&float, &cell_key);
+            let result = int.div(&float);
 
             assert!(result.is_ok());
         }
 
         #[test]
         fn div_by_zero() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(123);
+                        let int = LpcRef::Int(123);
 
-            assert!((int.div(&NULL, &cell_key)).is_err());
+            assert!((int.div(&NULL)).is_err());
         }
     }
 
@@ -1119,19 +1037,17 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(-1);
+                        let int = LpcRef::Int(-1);
             let int2 = LpcRef::Int(LpcInt::MAX);
-            let result = int.rem(&int2, &cell_key);
+            let result = int.rem(&int2);
             assert!(result.is_ok());
         }
 
         #[test]
         fn float_int() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(666.66);
+                        let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = float.rem(&int, &cell_key);
+            let result = float.rem(&int);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 51.65999999999997)
@@ -1142,21 +1058,19 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            // I'm not sure it's possible to cause an overflow here?
+                        // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = float.rem(&int, &cell_key);
+            let result = float.rem(&int);
 
             assert!(result.is_ok());
         }
 
         #[test]
         fn int_float() {
-            let cell_key = QCellOwner::new();
-            let float = LpcRef::from(666.66);
+                        let float = LpcRef::from(666.66);
             let int = LpcRef::Int(123);
-            let result = int.rem(&float, &cell_key);
+            let result = int.rem(&float);
 
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 123.0)
@@ -1167,20 +1081,18 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(-1);
+                        let int = LpcRef::Int(-1);
             let float = LpcRef::from(BaseFloat::MAX);
-            let result = int.rem(&float, &cell_key);
+            let result = int.rem(&float);
 
             assert!(result.is_ok());
         }
 
         #[test]
         fn div_by_zero() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(123);
+                        let int = LpcRef::Int(123);
 
-            assert!((int.rem(&NULL, &cell_key)).is_err());
+            assert!((int.rem(&NULL)).is_err());
         }
     }
 
@@ -1189,10 +1101,9 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(8);
+                        let int = LpcRef::Int(8);
             let int2 = LpcRef::Int(15);
-            let result = int.bitand(&int2, &cell_key);
+            let result = int.bitand(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
@@ -1206,10 +1117,9 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(7);
+                        let int = LpcRef::Int(7);
             let int2 = LpcRef::Int(16);
-            let result = int.bitor(&int2, &cell_key);
+            let result = int.bitor(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 23)
             } else {
@@ -1223,10 +1133,9 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(7);
+                        let int = LpcRef::Int(7);
             let int2 = LpcRef::Int(15);
-            let result = int.bitxor(&int2, &cell_key);
+            let result = int.bitxor(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
@@ -1240,10 +1149,9 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(12345);
+                        let int = LpcRef::Int(12345);
             let int2 = LpcRef::Int(6);
-            let result = int.shl(&int2, &cell_key);
+            let result = int.shl(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 790_080)
             } else {
@@ -1257,10 +1165,9 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(12345);
+                        let int = LpcRef::Int(12345);
             let int2 = LpcRef::Int(6);
-            let result = int.shr(&int2, &cell_key);
+            let result = int.shr(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 192)
             } else {
@@ -1274,9 +1181,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let cell_key = QCellOwner::new();
-            let int = LpcRef::Int(12345);
-            let result = int.bitnot(&cell_key);
+                        let int = LpcRef::Int(12345);
+            let result = int.bitnot();
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, -12346) // one's complement
             } else {
@@ -1343,8 +1249,7 @@ mod tests {
 
         #[test]
         fn test_array() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(5);
+                        let pool = SharedArena::with_capacity(5);
             let array = LpcArray::new(vec![LpcRef::Int(1), LpcRef::Int(2), LpcRef::Int(3)]);
             let array_id = array.unique_id;
             let array = value_to_ref!(LpcValue::Array(array), pool);
@@ -1352,15 +1257,14 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
 
-            array.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            array.mark(&mut marked, &mut processed).unwrap();
 
             assert!(processed.contains(*array_id.as_ref()));
         }
 
         #[test]
         fn test_mapping() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(5);
+                        let pool = SharedArena::with_capacity(5);
             let mapping = LpcMapping::new(IndexMap::new());
             let mapping_id = mapping.unique_id;
             let mapping = value_to_ref!(LpcValue::Mapping(mapping), pool);
@@ -1369,7 +1273,7 @@ mod tests {
             let mut processed = BitSet::new();
 
             mapping
-                .mark(&mut marked, &mut processed, &cell_key)
+                .mark(&mut marked, &mut processed)
                 .unwrap();
 
             assert!(processed.contains(*mapping_id.as_ref()));
@@ -1377,8 +1281,7 @@ mod tests {
 
         #[test]
         fn test_function() {
-            let cell_key = QCellOwner::new();
-            let pool = SharedArena::with_capacity(5);
+                        let pool = SharedArena::with_capacity(5);
 
             let ptr = create!(FunctionPtr);
             let ptr_id = ptr.unique_id;
@@ -1387,7 +1290,7 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
 
-            ptr.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            ptr.mark(&mut marked, &mut processed).unwrap();
 
             assert!(processed.contains(*ptr_id.as_ref()));
         }

@@ -8,8 +8,6 @@ use std::{
 
 use bit_set::BitSet;
 use delegate::delegate;
-use qcell::QCellOwner;
-use parking_lot::RwLock;
 
 use crate::interpreter::{
     bank::RefBank,
@@ -121,9 +119,8 @@ impl Mark for Process {
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
-        self.globals.mark(marked, processed, cell_key)?;
+        self.globals.mark(marked, processed)?;
         Ok(())
     }
 }
@@ -166,7 +163,6 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let cell_key = QCellOwner::new();
         let pool = SharedArena::with_capacity(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
@@ -178,7 +174,7 @@ mod tests {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
         process
-            .mark(&mut marked, &mut processed, &cell_key)
+            .mark(&mut marked, &mut processed)
             .unwrap();
 
         assert!(processed.contains(*array_id.as_ref()));

@@ -1,6 +1,5 @@
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
-use qcell::QCellOwner;
 
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
@@ -11,8 +10,7 @@ use crate::{
 /// object
 pub fn file_name<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1_usize);
     let value = match lpc_ref {
         LpcRef::Float(_)
@@ -24,7 +22,7 @@ pub fn file_name<const N: usize>(
         LpcRef::Object(x) => {
             let b = x.read();
             let proc = try_extract_value!(*b, LpcValue::Object);
-            let path = LpcPath::new_server(&*proc.ro(cell_key).filename());
+            let path = LpcPath::new_server(&*proc.read().filename());
 
             LpcValue::from(String::from(
                 path.as_in_game(&*context.config().lib_dir)

@@ -1,16 +1,12 @@
 use std::{
-    cmp::Ordering,
     fmt::{Debug, Display, Formatter},
-    hash::{Hash, Hasher},
 };
 
 use bit_set::BitSet;
 use delegate::delegate;
 use if_chain::if_chain;
 use indexmap::IndexMap;
-use qcell::QCellOwner;
 use tracing::{instrument, trace};
-use parking_lot::RwLock;
 
 use crate::{
     interpreter::{
@@ -18,7 +14,6 @@ use crate::{
         lpc_ref::{HashedLpcRef, LpcRef},
         lpc_value::LpcValue,
     },
-    util::keyable::Keyable,
 };
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
@@ -111,12 +106,11 @@ impl Debug for LpcMapping {
 }
 
 impl Mark for LpcMapping {
-    #[instrument(skip(self, cell_key))]
+    #[instrument(skip(self))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()> {
         trace!("marking mapping");
 
@@ -125,47 +119,11 @@ impl Mark for LpcMapping {
         }
 
         for (key, value) in &self.mapping {
-            key.value.mark(marked, processed, cell_key)?;
-            value.mark(marked, processed, cell_key)?;
+            key.value.mark(marked, processed)?;
+            value.mark(marked, processed)?;
         }
 
         Ok(())
-    }
-}
-
-impl<'a> Keyable<'a> for LpcMapping {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(f, "LpcMapping {{")?;
-        f.write_str(&format_mapping(self, |value| {
-            format!("{:?}", value.with_key(cell_key))
-        }))?;
-        write!(f, " }}")
-    }
-
-    fn keyable_display(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(f, "([")?;
-        f.write_str(&format_mapping(self, |value| {
-            format!("{}", value.with_key(cell_key))
-        }))?;
-        write!(f, " ])")
-    }
-
-    fn keyable_hash<H: Hasher>(&self, state: &mut H, cell_key: &QCellOwner) {
-        self.unique_id.hash(state);
-        self.mapping.keyable_hash(state, cell_key);
-    }
-
-    fn keyable_eq(&self, other: &Self, cell_key: &QCellOwner) -> bool {
-        self.unique_id == other.unique_id && self.mapping.keyable_eq(&other.mapping, cell_key)
-    }
-
-    fn keyable_partial_cmp(&self, other: &Self, cell_key: &QCellOwner) -> Option<Ordering> {
-        self.unique_id
-            .partial_cmp(&other.unique_id)
-            .and_then(|order| match order {
-                Ordering::Equal => self.mapping.keyable_partial_cmp(&other.mapping, cell_key),
-                _ => Some(order),
-            })
     }
 }
 
@@ -198,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let cell_key = QCellOwner::new();
+
         let pool = SharedArena::with_capacity(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
@@ -211,13 +169,13 @@ mod tests {
 
         let mut mapping = LpcMapping::new(IndexMap::new());
 
-        mapping.insert(HashedLpcRef::new(key_ref, &cell_key), value_ref);
+        mapping.insert(HashedLpcRef::new(key_ref), value_ref);
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
 
         mapping
-            .mark(&mut marked, &mut processed, &cell_key)
+            .mark(&mut marked, &mut processed)
             .unwrap();
 
         let mut marked_expected = BitSet::new();

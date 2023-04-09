@@ -1,7 +1,6 @@
 use chrono::Duration;
 use lpc_rs_core::LpcFloat;
 use lpc_rs_errors::{LpcError, Result};
-use qcell::QCellOwner;
 
 use crate::{
     interpreter::{
@@ -14,8 +13,7 @@ use crate::{
 /// `call_out`, an efun for calling a function at some future point in time
 pub fn call_out<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let func_ref = context.resolve_local_register(1_usize);
 
     // Some validations
@@ -63,7 +61,7 @@ pub fn call_out<const N: usize>(
     };
 
     let process = context.frame().process.clone();
-    let call_outs = context.call_outs().rw(cell_key);
+    let mut call_outs = context.call_outs().write();
     let index = call_outs.schedule_task(process, func_ref, duration, repeat)?;
 
     // TODO: limit the max number of call outs so we don't overflow this
@@ -103,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_disallows_dynamic_receiver() {
-        let mut cell_key = QCellOwner::new();
+
 
         let code = r##"
             void create() {
@@ -116,14 +114,14 @@ mod tests {
         "##;
 
         let (tx, _) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let (program, _, _) = compile_prog(code);
+        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
         let result = Task::<10>::initialize_program(
             program,
             Config::default(),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(ObjectSpace::default()),
             Memory::default(),
-            cell_key.cell(GcBank::default()),
+            RwLock::new(GcBank::default()),
             call_outs,
             tx,
             &mut cell_key,
@@ -152,14 +150,14 @@ mod tests {
         // "##;
         //
         // let (tx, rx) = tokio::sync::mpsc::channel(128);
-        // let (program, _, _) = compile_prog(code, &mut cell_key);
-        // let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        // let (program, _, _) = compile_prog(code);
+        // let call_outs = Rc::new(RwLock::new(CallOuts::new(tx.clone())));
         // let result = Task::<5>::initialize_program(
         //     program,
         //     Config::default(),
-        //     cell_key.cell(ObjectSpace::default()),
+        //     RwLock::new(ObjectSpace::default()),
         //     Memory::default(),
-        //     cell_key.cell(GcBank::default()),
+        //     RwLock::new(GcBank::default()),
         //     call_outs,
         //     tx,
         //     &mut cell_key,

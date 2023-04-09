@@ -1,5 +1,4 @@
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
 
@@ -7,8 +6,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
 /// within.
 pub fn this_object<const N: usize>(
     context: &mut EfunContext<N>,
-    _cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let proc = context.frame().process.clone();
 
     let v = LpcValue::Object(proc);

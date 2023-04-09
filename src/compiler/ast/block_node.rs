@@ -5,7 +5,6 @@ use std::{
 
 use indextree::NodeId;
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::ast_node::{AstNode, AstNodeTrait},
@@ -32,9 +31,8 @@ impl AstNodeTrait for BlockNode {
     fn visit(
         &mut self,
         tree_walker: &mut impl TreeWalker,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
-        tree_walker.visit_block(self, cell_key)
+            ) -> Result<()> {
+        tree_walker.visit_block(self)
     }
 }
 

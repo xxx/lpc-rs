@@ -8,7 +8,6 @@ use expression_node::ExpressionNode;
 use int_node::IntNode;
 use lpc_rs_errors::{span::Span, Result};
 use program_node::ProgramNode;
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -50,7 +49,7 @@ pub enum AstNode {
 #[auto_impl(&mut)]
 pub trait AstNodeTrait {
     /// This is the double-dispatch endpoint for tree-walking
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker, cell_key: &mut QCellOwner)
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker)
         -> Result<()>;
 }
 
@@ -70,26 +69,25 @@ impl AstNodeTrait for AstNode {
     fn visit(
         &mut self,
         tree_walker: &mut impl TreeWalker,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         match self {
-            AstNode::Block(y) => y.visit(tree_walker, cell_key),
-            AstNode::Break(y) => y.visit(tree_walker, cell_key),
-            AstNode::Call(y) => y.visit(tree_walker, cell_key),
-            AstNode::Continue(y) => y.visit(tree_walker, cell_key),
-            AstNode::Decl(y) => y.visit(tree_walker, cell_key),
-            AstNode::DoWhile(y) => y.visit(tree_walker, cell_key),
-            AstNode::Expression(y) => y.visit(tree_walker, cell_key),
-            AstNode::For(y) => y.visit(tree_walker, cell_key),
-            AstNode::ForEach(y) => y.visit(tree_walker, cell_key),
-            AstNode::FunctionDef(y) => y.visit(tree_walker, cell_key),
-            AstNode::If(y) => y.visit(tree_walker, cell_key),
-            AstNode::LabeledStatement(y) => y.visit(tree_walker, cell_key),
-            AstNode::Program(y) => y.visit(tree_walker, cell_key),
-            AstNode::Return(y) => y.visit(tree_walker, cell_key),
-            AstNode::Switch(y) => y.visit(tree_walker, cell_key),
-            AstNode::VarInit(y) => y.visit(tree_walker, cell_key),
-            AstNode::While(y) => y.visit(tree_walker, cell_key),
+            AstNode::Block(y) => y.visit(tree_walker),
+            AstNode::Break(y) => y.visit(tree_walker),
+            AstNode::Call(y) => y.visit(tree_walker),
+            AstNode::Continue(y) => y.visit(tree_walker),
+            AstNode::Decl(y) => y.visit(tree_walker),
+            AstNode::DoWhile(y) => y.visit(tree_walker),
+            AstNode::Expression(y) => y.visit(tree_walker),
+            AstNode::For(y) => y.visit(tree_walker),
+            AstNode::ForEach(y) => y.visit(tree_walker),
+            AstNode::FunctionDef(y) => y.visit(tree_walker),
+            AstNode::If(y) => y.visit(tree_walker),
+            AstNode::LabeledStatement(y) => y.visit(tree_walker),
+            AstNode::Program(y) => y.visit(tree_walker),
+            AstNode::Return(y) => y.visit(tree_walker),
+            AstNode::Switch(y) => y.visit(tree_walker),
+            AstNode::VarInit(y) => y.visit(tree_walker),
+            AstNode::While(y) => y.visit(tree_walker),
             AstNode::NoOp => Ok(()),
         }
     }

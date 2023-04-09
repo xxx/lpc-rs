@@ -1,15 +1,14 @@
-use std::{cmp::Ordering, fmt::Formatter, hash::Hasher, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use bit_set::BitSet;
-use educe::Educe;
 use if_chain::if_chain;
+use parking_lot::RwLock;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
-use qcell::{QCell, QCellOwner};
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{error, instrument, trace, warn};
+use tracing::{instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
@@ -30,48 +29,40 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{task_state::TaskState, Task},
+        task::{Task},
         task_context::TaskContext,
         vm::task_queue::TaskQueue,
     },
     try_extract_value,
-    util::{get_simul_efuns, keyable::Keyable, qcell_debug},
+    util::{get_simul_efuns},
 };
 
 pub mod task_queue;
 pub mod vm_op;
 
-#[derive(Educe)]
-#[educe(Debug)]
+#[derive(Debug)]
 #[readonly::make]
 pub struct Vm {
     /// Our object space, which stores all of the system objects (masters and clones)
-    #[educe(Debug(method = "qcell_debug"))]
-    pub object_space: Arc<QCell<ObjectSpace>>,
+    pub object_space: Arc<RwLock<ObjectSpace>>,
 
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
     memory: Arc<Memory>,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
-    #[educe(Debug(method = "qcell_debug"))]
-    pub upvalues: Arc<QCell<GcRefBank>>,
+    pub upvalues: Arc<RwLock<GcRefBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]
     config: Arc<Config>,
 
     /// Enqueued call outs
-    #[educe(Debug(method = "qcell_debug"))]
-    call_outs: Arc<QCell<CallOuts>>,
+    call_outs: Arc<RwLock<CallOuts>>,
 
     /// The channel used to send [`VmOp`]s to this [`Vm`]
     tx: Sender<VmOp>,
 
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
-
-    /// The key used to create all [`QCell`]s
-    #[educe(Debug(method = "qcell_debug"))]
-    pub cell_key: QCellOwner,
 
     /// The queue for [`Task`]s.
     pub task_queue: TaskQueue,
@@ -83,27 +74,18 @@ impl Vm {
     where
         C: Into<Arc<Config>>,
     {
-        Self::new_with_key(config, QCellOwner::new())
-    }
-
-    /// Create a new [`Vm`], using the specified [`QCellOwner`].
-    pub fn new_with_key<C>(config: C, cell_key: QCellOwner) -> Self
-    where
-        C: Into<Arc<Config>>,
-    {
         let object_space = ObjectSpace::default();
         let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);
-        let call_outs = cell_key.cell(CallOuts::new(tx.clone()));
+        let call_outs = RwLock::new(CallOuts::new(tx.clone()));
         Self {
-            object_space: Arc::new(cell_key.cell(object_space)),
+            object_space: Arc::new(RwLock::new(object_space)),
             memory: Arc::new(Memory::default()),
             config: config.into(),
-            upvalues: Arc::new(cell_key.cell(GcBank::default())),
+            upvalues: Arc::new(RwLock::new(GcBank::default())),
             call_outs: Arc::new(call_outs),
             rx,
             tx,
             task_queue: TaskQueue::new(),
-            cell_key,
         }
     }
 
@@ -158,38 +140,41 @@ impl Vm {
                     match op {
                         VmOp::PrioritizeCallOut(idx) => {
                             self.op_prioritize_call_out(idx)?;
-                        } /* VmOp::Yield => {
-                           *     self.op_yield_task()?;
-                           * }
-                           * VmOp::FinishTask(task_id) => {
-                           *     self.op_finish_task()?;
-                           * } */
+                        }
+                        VmOp::TaskComplete(task_id) => {
+                            println!("task {task_id} complete");
+                            // self.op_task_complete(task_id)?;
+                        }
                     }
                 }
 
                 Some(task) = async {self.task_queue.current_mut()} => {
-                    trace!("resuming task {:?}", task);
-                    match task.resume(&mut self.cell_key) {
-                        Ok(()) => match task.state {
-                            TaskState::Complete | TaskState::Error => {
-                                self.task_queue.finish_current();
-                            }
-                            TaskState::Paused => {
-                                self.task_queue.switch_to_next();
-                            }
-                            TaskState::New | TaskState::Running => {
-                                error!(
-                                    "Task {} returned from resume() in an invalid state: {}",
-                                    task.id, task.state
-                                );
-                                self.task_queue.switch_to_next();
-                            }
-                        },
-                        Err(e) => {
-                            e.emit_diagnostics();
-                            self.task_queue.finish_current();
-                        }
-                    }
+                    trace!("ready to run task {:?}", task);
+                    tokio::spawn(async move {
+                        trace!("about to resume");
+                        task.resume().await
+                    });
+                    // match task.resume(&mut self.cell_key) {
+                    //     Ok(()) => match task.state {
+                    //         TaskState::Complete | TaskState::Error => {
+                    //             self.task_queue.finish_current();
+                    //         }
+                    //         TaskState::Paused => {
+                    //             self.task_queue.switch_to_next();
+                    //         }
+                    //         TaskState::New | TaskState::Running => {
+                    //             error!(
+                    //                 "Task {} returned from resume() in an invalid state: {}",
+                    //                 task.id, task.state
+                    //             );
+                    //             self.task_queue.switch_to_next();
+                    //         }
+                    //     },
+                    //     Err(e) => {
+                    //         e.emit_diagnostics();
+                    //         self.task_queue.finish_current();
+                    //     }
+                    // }
                 },
 
                 // _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
@@ -260,14 +245,14 @@ impl Vm {
     /// * `Ok(false)` - If the call out was not found (e.g. has been removed)
     /// * `Err(LpcError)` - If there was an error prioritizing the call out
     fn op_prioritize_call_out(&mut self, idx: usize) -> Result<bool> {
-        if self.call_outs.ro(&self.cell_key).get(idx).is_none() {
+        if self.call_outs.read().get(idx).is_none() {
             return Ok(false);
         }
 
         let repeating: bool;
 
         let (process, function, args) = if_chain! {
-            let call_out = self.call_outs.ro(&self.cell_key).get(idx).unwrap();
+            let call_out = self.call_outs.read().get(idx).unwrap();
             if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
                 repeating = call_out.is_repeating();
@@ -292,13 +277,13 @@ impl Vm {
                         ));
                     },
                     FunctionAddress::SimulEfun(name) => {
-                        let Some(simul_efuns) = get_simul_efuns(&self.config, self.object_space.ro(&self.cell_key)) else {
+                        let Some(simul_efuns) = get_simul_efuns(&self.config, &*self.object_space.read()) else {
                             return Err(LpcError::new_bug(
                                 "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
                             ));
                         };
 
-                        let Some(function) = simul_efuns.ro(&self.cell_key).program.lookup_function(name) else {
+                        let Some(function) = simul_efuns.read().program.lookup_function(name) else {
                             return Err(LpcError::new(format!("call to unknown simul_efun `{name}`")));
                         };
 
@@ -309,7 +294,7 @@ impl Vm {
                         // TODO: prototypes should be in Rcs so this clone is cheap
                         let pf = ProgramFunction::new(prototype.clone(), 0);
 
-                        (Arc::new(self.cell_key.cell(Process::default())), Arc::new(pf), args)
+                        (Arc::new(RwLock::new(Process::default())), Arc::new(pf), args)
                     }
                 }
             }
@@ -318,11 +303,13 @@ impl Vm {
             }
         };
 
-        let call_outs = self.call_outs.rw(&mut self.cell_key);
-        if repeating {
-            call_outs.get_mut(idx).unwrap().refresh();
-        } else {
-            call_outs.remove(idx);
+        {
+            let mut call_outs = self.call_outs.write();
+            if repeating {
+                call_outs.get_mut(idx).unwrap().refresh();
+            } else {
+                call_outs.remove(idx);
+            }
         }
 
         let task_context = TaskContext::new(
@@ -333,12 +320,11 @@ impl Vm {
             self.upvalues.clone(),
             self.call_outs.clone(),
             self.tx.clone(),
-            &self.cell_key,
         );
 
         let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
 
-        task.prepare_function_call(process, function, &args, &mut self.cell_key)?;
+        task.prepare_function_call(process, function, &args)?;
 
         self.task_queue.push(task);
 
@@ -384,7 +370,7 @@ impl Vm {
     pub fn gc(&mut self) -> Result<()> {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed, &self.cell_key)
+        self.mark(&mut marked, &mut processed)
             .unwrap();
 
         trace!("Marked {} objects", marked.len());
@@ -396,10 +382,10 @@ impl Vm {
     fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
 
-        self.with_compiler(|compiler, cell_key| {
-            compiler.compile_in_game_file(filename, None, cell_key)
+        self.with_compiler(|compiler| {
+            compiler.compile_in_game_file(filename, None)
         })
-        .and_then(|program| self.create_and_initialize_task(program))
+        .and_then(|program| async { self.create_and_initialize_task(program).await })
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -426,8 +412,7 @@ impl Vm {
     /// ```
     /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
-    /// use qcell::QCellOwner;
-    ///
+    ///     ///
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").unwrap();
     ///
@@ -445,8 +430,8 @@ impl Vm {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
-        self.with_compiler(|compiler, cell_key| compiler.compile_string(lpc_path, code, cell_key))
-            .and_then(|program| self.create_and_initialize_task(program))
+        self.with_compiler(|compiler| compiler.compile_string(lpc_path, code))
+            .and_then(|program| async { self.create_and_initialize_task(program).await })
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
@@ -456,18 +441,18 @@ impl Vm {
     /// Run a callback with a new, initialized [`Compiler`].
     fn with_compiler<F, T>(&mut self, f: F) -> Result<T>
     where
-        F: FnOnce(Compiler, &mut QCellOwner) -> Result<T>,
+        F: FnOnce(Compiler) -> Result<T>,
     {
-        let object_space = self.object_space.ro(&self.cell_key);
+        let object_space = self.object_space.read();
         let compiler = CompilerBuilder::default()
             .config(self.config.clone())
-            .simul_efuns(get_simul_efuns(&self.config, object_space))
+            .simul_efuns(get_simul_efuns(&self.config, &*object_space))
             .build()?;
-        f(compiler, &mut self.cell_key)
+        f(compiler)
     }
 
     /// Create a new [`Task`] and initialize it with the given [`Program`].
-    fn create_and_initialize_task(&mut self, program: Program) -> Result<TaskContext> {
+    async fn create_and_initialize_task(&mut self, program: Program) -> Result<TaskContext> {
         Task::<MAX_CALL_STACK_SIZE>::initialize_program(
             program,
             self.config.clone(),
@@ -476,11 +461,11 @@ impl Vm {
             self.upvalues.clone(),
             self.call_outs.clone(),
             self.tx.clone(),
-            &mut self.cell_key,
         )
+        .await
         .map(|task| {
             let process = task.context.process();
-            ObjectSpace::insert_process(&self.object_space, process, &mut self.cell_key);
+            ObjectSpace::insert_process(&self.object_space, process);
 
             task.context
         })
@@ -488,21 +473,20 @@ impl Vm {
 }
 
 impl Mark for Vm {
-    #[instrument(skip(self, cell_key))]
+    #[instrument(skip(self))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> Result<()> {
         // TODO: mark all tasks
         self.object_space
-            .ro(cell_key)
-            .mark(marked, processed, cell_key)?;
+            .read()
+            .mark(marked, processed)?;
 
         self.call_outs
-            .ro(cell_key)
-            .mark(marked, processed, cell_key)
+            .read()
+            .mark(marked, processed)
     }
 }
 
@@ -510,32 +494,7 @@ impl KeylessSweep for Vm {
     #[instrument(skip(self))]
     #[inline]
     fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
-        self.upvalues.rw(&mut self.cell_key).keyless_sweep(marked)
-    }
-}
-
-impl<'a> Keyable<'a> for Vm {
-    fn keyable_debug(&self, f: &mut Formatter<'_>, cell_key: &QCellOwner) -> std::fmt::Result {
-        write!(
-            f,
-            "Vm {{ object_space: {:?}, memory {:?}, upvalues: {:?}, config: {:?} }}",
-            self.object_space.ro(cell_key).with_key(cell_key),
-            self.memory,
-            self.upvalues.ro(cell_key),
-            self.config
-        )
-    }
-
-    fn keyable_hash<H: Hasher>(&self, _state: &mut H, _cell_key: &QCellOwner) {
-        unimplemented!()
-    }
-
-    fn keyable_eq(&self, _other: &Self, _cell_key: &QCellOwner) -> bool {
-        unimplemented!()
-    }
-
-    fn keyable_partial_cmp(&self, _other: &Self, _cell_key: &QCellOwner) -> Option<Ordering> {
-        unimplemented!()
+        self.upvalues.write().keyless_sweep(marked)
     }
 }
 
@@ -548,8 +507,7 @@ mod tests {
 
     #[test]
     fn test_gc() {
-        let cell_key = QCellOwner::new();
-        let mut vm = Vm::new_with_key(test_config(), cell_key);
+        let mut vm = Vm::new(test_config());
         let storage = indoc! { r#"
             function *storage = ({});
 
@@ -599,16 +557,16 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(ctx1.upvalues().ro(&vm.cell_key).len(), 1);
+        assert_eq!(ctx1.upvalues().read().len(), 1);
 
         vm.gc().unwrap();
 
-        assert_eq!(ctx1.upvalues().ro(&vm.cell_key).len(), 1);
+        assert_eq!(ctx1.upvalues().read().len(), 1);
 
-        vm.object_space.rw(&mut vm.cell_key).clear();
+        vm.object_space.write().clear();
 
         vm.gc().unwrap();
 
-        assert_eq!(ctx1.upvalues().ro(&vm.cell_key).len(), 0);
+        assert_eq!(ctx1.upvalues().read().len(), 0);
     }
 }

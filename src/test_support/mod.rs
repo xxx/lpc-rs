@@ -1,8 +1,8 @@
 use std::sync::Arc;
+use parking_lot::RwLock;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use qcell::{QCell, QCellOwner};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -57,7 +57,7 @@ pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
 }
 
-fn compile_simul_efuns(config: &Arc<Config>, cell_key: &mut QCellOwner) -> Program {
+fn compile_simul_efuns(config: &Arc<Config>) -> Program {
     let compiler = CompilerBuilder::default()
         .config(config.clone())
         .build()
@@ -68,17 +68,16 @@ fn compile_simul_efuns(config: &Arc<Config>, cell_key: &mut QCellOwner) -> Progr
         &*config.lib_dir,
     );
     compiler
-        .compile_in_game_file(&path, None, cell_key)
+        .compile_in_game_file(&path, None)
         .unwrap()
 }
 
 pub fn compile_prog(
     code: &str,
-    cell_key: &mut QCellOwner,
-) -> (Program, Arc<Config>, Arc<QCell<Process>>) {
+    ) -> (Program, Arc<Config>, Arc<RwLock<Process>>) {
     let config = Arc::new(test_config());
-    let simul_efuns = compile_simul_efuns(&config, cell_key);
-    let se_proc = Arc::new(cell_key.cell(Process::new(simul_efuns)));
+    let simul_efuns = compile_simul_efuns(&config);
+    let se_proc = Arc::new(RwLock::new(Process::new(simul_efuns)));
 
     let compiler = CompilerBuilder::default()
         .config(config.clone())
@@ -87,31 +86,31 @@ pub fn compile_prog(
         .unwrap();
     let path = LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir);
     let program = compiler
-        .compile_string(path, code, cell_key)
+        .compile_string(path, code)
         .expect("Failed to compile.");
 
     (program, config, se_proc)
 }
 
-pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {
-    let (program, config, se_proc) = compile_prog(code, cell_key);
+pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
+    let (program, config, se_proc) = compile_prog(code);
 
     let object_space = ObjectSpace::default();
-    let object_space: Arc<QCell<ObjectSpace>> = cell_key.cell(object_space).into();
+    let object_space: Arc<RwLock<ObjectSpace>> = RwLock::new(object_space).into();
     let (tx, _) = tokio::sync::mpsc::channel(128);
-    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
-    ObjectSpace::insert_process(&object_space, se_proc, cell_key);
+    let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
+    ObjectSpace::insert_process(&object_space, se_proc);
 
     Task::initialize_program(
         program,
         config,
         object_space,
         Memory::default(),
-        cell_key.cell(GcBank::default()),
+        RwLock::new(GcBank::default()),
         call_outs,
         tx,
-        cell_key,
     )
+    .await
     .unwrap_or_else(|e| {
         e.emit_diagnostics();
         eprintln!("{:?}", e);

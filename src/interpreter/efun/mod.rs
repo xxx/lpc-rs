@@ -26,12 +26,11 @@ use lpc_rs_function_support::function_prototype::{
 };
 use once_cell::sync::Lazy;
 use phf::phf_map;
-use qcell::QCellOwner;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
 /// Signature for Efuns
-pub type Efun<const N: usize> = fn(&mut EfunContext<N>, cell_key: &mut QCellOwner) -> Result<()>;
+pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
 
 pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
@@ -53,7 +52,7 @@ pub const THROW: &str = "throw";
 pub trait HasEfuns<const STACKSIZE: usize> {
     const EFUNS: phf::Map<&'static str, Efun<STACKSIZE>> = phf_map! {
         "call_out" => call_out::call_out as Efun<STACKSIZE>,
-        "clone_object" => clone_object::clone_object as Efun<STACKSIZE>,
+        "clone_object" => clone_object::clone_object,
         "compose" => compose::compose as Efun<STACKSIZE>,
         "debug" => debug::debug as Efun<STACKSIZE>,
         "dump" => dump::dump as Efun<STACKSIZE>,

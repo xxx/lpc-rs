@@ -4,7 +4,6 @@ use std::{
 };
 
 use lpc_rs_errors::{span::Span, Result};
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::ast_node::{AstNodeTrait, SpannedNode},
@@ -34,9 +33,8 @@ impl AstNodeTrait for ContinueNode {
     fn visit(
         &mut self,
         tree_walker: &mut impl TreeWalker,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
-        tree_walker.visit_continue(self, cell_key)
+            ) -> Result<()> {
+        tree_walker.visit_continue(self)
     }
 }
 

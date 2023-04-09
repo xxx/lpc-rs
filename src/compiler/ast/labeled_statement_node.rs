@@ -4,7 +4,6 @@ use std::{
 };
 
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -35,10 +34,9 @@ impl AstNodeTrait for LabeledStatementNode {
     fn visit(
         &mut self,
         tree_walker: &mut impl TreeWalker,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
-        self.label.visit(tree_walker, cell_key)?;
-        self.node.visit(tree_walker, cell_key)
+            ) -> Result<()> {
+        self.label.visit(tree_walker)?;
+        self.node.visit(tree_walker)
     }
 }
 

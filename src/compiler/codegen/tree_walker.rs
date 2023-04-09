@@ -1,5 +1,4 @@
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -50,12 +49,12 @@ pub trait ContextHolder {
 /// A trait for types that can walk abstract syntax trees
 pub trait TreeWalker {
     /// Visit an array literal node
-    fn visit_array(&mut self, node: &mut ArrayNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()>
     where
         Self: Sized,
     {
         for node in &mut node.value {
-            node.visit(self, cell_key)?;
+            node.visit(self)?;
         }
 
         Ok(())
@@ -65,42 +64,41 @@ pub trait TreeWalker {
     fn visit_assignment(
         &mut self,
         node: &mut AssignmentNode,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()>
+            ) -> Result<()>
     where
         Self: Sized,
     {
-        node.lhs.visit(self, cell_key)?;
-        node.rhs.visit(self, cell_key)?;
+        node.lhs.visit(self)?;
+        node.rhs.visit(self)?;
 
         Ok(())
     }
 
     /// Visit a binary operation node
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()>
     where
         Self: Sized,
     {
-        node.l.visit(self, cell_key)?;
-        node.r.visit(self, cell_key)?;
+        node.l.visit(self)?;
+        node.r.visit(self)?;
 
         Ok(())
     }
 
     /// Visit a code block
-    fn visit_block(&mut self, node: &mut BlockNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()>
     where
         Self: Sized,
     {
         for expr in &mut node.body {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a break node
-    fn visit_break(&mut self, _node: &mut BreakNode, _cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_break(&mut self, _node: &mut BreakNode) -> Result<()>
     where
         Self: Sized,
     {
@@ -108,7 +106,7 @@ pub trait TreeWalker {
     }
 
     /// Visit a function call node
-    fn visit_call(&mut self, node: &mut CallNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_call(&mut self, node: &mut CallNode) -> Result<()>
     where
         Self: Sized,
     {
@@ -117,34 +115,34 @@ pub trait TreeWalker {
                 ref mut receiver, ..
             } => {
                 if let Some(rcvr) = receiver {
-                    rcvr.visit(self, cell_key)?;
+                    rcvr.visit(self)?;
                 }
             }
             CallChain::Node(ref mut node) => {
-                node.visit(self, cell_key)?;
+                node.visit(self)?;
             }
         }
 
         for argument in &mut node.arguments {
-            argument.visit(self, cell_key)?;
+            argument.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a closure node
-    fn visit_closure(&mut self, node: &mut ClosureNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
-                param.visit(self, cell_key)?;
+                param.visit(self)?;
             }
         }
 
         for expression in &mut node.body {
-            expression.visit(self, cell_key)?;
+            expression.visit(self)?;
         }
 
         Ok(())
@@ -154,20 +152,19 @@ pub trait TreeWalker {
     fn visit_comma_expression(
         &mut self,
         node: &mut CommaExpressionNode,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()>
+            ) -> Result<()>
     where
         Self: Sized,
     {
         for expr in &mut node.value {
-            let _ = expr.visit(self, cell_key);
+            let _ = expr.visit(self);
         }
 
         Ok(())
     }
 
     /// Visit a continue node
-    fn visit_continue(&mut self, _node: &mut ContinueNode, _cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_continue(&mut self, _node: &mut ContinueNode) -> Result<()>
     where
         Self: Sized,
     {
@@ -175,73 +172,73 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable declaration node
-    fn visit_decl(&mut self, node: &mut DeclNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()>
     where
         Self: Sized,
     {
         for init in &mut node.initializations {
-            init.visit(self, cell_key)?;
+            init.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a `do {} while` loop
-    fn visit_do_while(&mut self, node: &mut DoWhileNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()>
     where
         Self: Sized,
     {
-        let _ = node.body.visit(self, cell_key);
-        let _ = node.condition.visit(self, cell_key);
+        let _ = node.body.visit(self);
+        let _ = node.condition.visit(self);
 
         Ok(())
     }
 
     /// Visit a float (literal) node
-    fn visit_float(&mut self, _node: &mut FloatNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_float(&mut self, _node: &mut FloatNode) -> Result<()> {
         Ok(())
     }
 
     /// Visit a `for` loop
-    fn visit_for(&mut self, node: &mut ForNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_for(&mut self, node: &mut ForNode) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(n) = &mut *node.initializer {
-            let _ = n.visit(self, cell_key);
+            let _ = n.visit(self);
         }
         if let Some(n) = &mut node.condition {
-            let _ = n.visit(self, cell_key);
+            let _ = n.visit(self);
         }
 
-        let _ = node.body.visit(self, cell_key);
+        let _ = node.body.visit(self);
 
         if let Some(n) = &mut node.incrementer {
-            let _ = n.visit(self, cell_key);
+            let _ = n.visit(self);
         }
 
         Ok(())
     }
 
     /// Visit a `foreach` loop
-    fn visit_foreach(&mut self, node: &mut ForEachNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()>
     where
         Self: Sized,
     {
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
-                let _ = init.visit(self, cell_key);
+                let _ = init.visit(self);
             }
             ForEachInit::Mapping {
                 ref mut key,
                 ref mut value,
             } => {
-                let _ = key.visit(self, cell_key);
-                let _ = value.visit(self, cell_key);
+                let _ = key.visit(self);
+                let _ = value.visit(self);
             }
         }
-        let _ = node.collection.visit(self, cell_key);
-        let _ = node.body.visit(self, cell_key);
+        let _ = node.collection.visit(self);
+        let _ = node.body.visit(self);
 
         Ok(())
     }
@@ -250,17 +247,16 @@ pub trait TreeWalker {
     fn visit_function_def(
         &mut self,
         node: &mut FunctionDefNode,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()>
+            ) -> Result<()>
     where
         Self: Sized,
     {
         for parameter in &mut node.parameters {
-            parameter.visit(self, cell_key)?;
+            parameter.visit(self)?;
         }
 
         for expression in &mut node.body {
-            expression.visit(self, cell_key)?;
+            expression.visit(self)?;
         }
 
         Ok(())
@@ -270,18 +266,17 @@ pub trait TreeWalker {
     fn visit_function_ptr(
         &mut self,
         node: &mut FunctionPtrNode,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()>
+            ) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(FunctionPtrReceiver::Static(rcvr)) = &mut node.receiver {
-            rcvr.visit(self, cell_key)?;
+            rcvr.visit(self)?;
         }
 
         if let Some(args) = &mut node.arguments {
             for argument in args.iter_mut().flatten() {
-                argument.visit(self, cell_key)?;
+                argument.visit(self)?;
             }
         }
 
@@ -289,136 +284,136 @@ pub trait TreeWalker {
     }
 
     /// Visit an `if` statement
-    fn visit_if(&mut self, node: &mut IfNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_if(&mut self, node: &mut IfNode) -> Result<()>
     where
         Self: Sized,
     {
-        let _ = node.condition.visit(self, cell_key);
-        let _ = node.body.visit(self, cell_key);
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
         if let Some(n) = &mut *node.else_clause {
-            let _ = n.visit(self, cell_key);
+            let _ = n.visit(self);
         }
 
         Ok(())
     }
 
     /// Visit an `inherit` statement
-    fn visit_inherit(&mut self, _node: &mut InheritNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_inherit(&mut self, _node: &mut InheritNode) -> Result<()> {
         Ok(())
     }
 
     /// Visit an int (literal) node
-    fn visit_int(&mut self, _node: &mut IntNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_int(&mut self, _node: &mut IntNode) -> Result<()> {
         Ok(())
     }
 
     /// Visit a case label
-    fn visit_label(&mut self, node: &mut LabelNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(expr) = &mut node.case {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a mapping literal node
-    fn visit_mapping(&mut self, node: &mut MappingNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()>
     where
         Self: Sized,
     {
         for (key, value) in &mut node.value {
-            key.visit(self, cell_key)?;
-            value.visit(self, cell_key)?;
+            key.visit(self)?;
+            value.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a program node. This is the top-level translation unit.
-    fn visit_program(&mut self, node: &mut ProgramNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()>
     where
         Self: Sized,
     {
         for expr in &mut node.inherits {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         for expr in &mut node.body {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a range literal
-    fn visit_range(&mut self, node: &mut RangeNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(expr) = &mut *node.l {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         if let Some(expr) = &mut *node.r {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a function return node
-    fn visit_return(&mut self, node: &mut ReturnNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(expression) = &mut node.value {
-            expression.visit(self, cell_key)?;
+            expression.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a string (literal) node
-    fn visit_string(&mut self, _node: &mut StringNode, _cell_key: &mut QCellOwner) -> Result<()> {
+    fn visit_string(&mut self, _node: &mut StringNode) -> Result<()> {
         Ok(())
     }
 
     /// Visit a `switch` statement
-    fn visit_switch(&mut self, node: &mut SwitchNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()>
     where
         Self: Sized,
     {
-        node.expression.visit(self, cell_key)?;
-        node.body.visit(self, cell_key)
+        node.expression.visit(self)?;
+        node.body.visit(self)
     }
 
     /// Visit a ternary expression
-    fn visit_ternary(&mut self, node: &mut TernaryNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()>
     where
         Self: Sized,
     {
-        let _ = node.condition.visit(self, cell_key);
-        let _ = node.body.visit(self, cell_key);
-        let _ = node.else_clause.visit(self, cell_key);
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
+        let _ = node.else_clause.visit(self);
 
         Ok(())
     }
 
     /// Visit a unary operation node
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()>
     where
         Self: Sized,
     {
-        node.expr.visit(self, cell_key)?;
+        node.expr.visit(self)?;
 
         Ok(())
     }
 
     /// Visit a variable use node
-    fn visit_var(&mut self, _node: &mut VarNode, _cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_var(&mut self, _node: &mut VarNode) -> Result<()>
     where
         Self: Sized,
     {
@@ -426,24 +421,24 @@ pub trait TreeWalker {
     }
 
     /// Visit a variable initialization node
-    fn visit_var_init(&mut self, node: &mut VarInitNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()>
     where
         Self: Sized,
     {
         if let Some(expr) = &mut node.value {
-            expr.visit(self, cell_key)?;
+            expr.visit(self)?;
         }
 
         Ok(())
     }
 
     /// Visit a `while` loop
-    fn visit_while(&mut self, node: &mut WhileNode, cell_key: &mut QCellOwner) -> Result<()>
+    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()>
     where
         Self: Sized,
     {
-        let _ = node.condition.visit(self, cell_key);
-        let _ = node.body.visit(self, cell_key);
+        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self);
 
         Ok(())
     }

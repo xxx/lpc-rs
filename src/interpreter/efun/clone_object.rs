@@ -1,8 +1,8 @@
 use std::sync::Arc;
+use parking_lot::RwLock;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
-use qcell::{QCell, QCellOwner};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -12,40 +12,38 @@ use crate::{
         task::Task,
     },
     try_extract_value,
-    util::keyable::Keyable,
 };
 
-fn load_master<const N: usize>(
-    context: &mut EfunContext<N>,
+async fn load_master<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     path: &str,
-    cell_key: &mut QCellOwner,
-) -> Result<Arc<QCell<Process>>> {
+    ) -> Result<Arc<RwLock<Process>>> {
     let full_path = LpcPath::new_in_game(
         path,
-        context.in_game_cwd(cell_key),
+        context.in_game_cwd(),
         &*context.config().lib_dir,
     );
     let path_str: &str = full_path.as_ref();
 
-    match context.lookup_process(path_str, cell_key) {
+    match context.lookup_process(path_str) {
         Some(proc) => Ok(proc),
         None => {
             let compiler = CompilerBuilder::default()
                 .config(context.config())
                 .build()?;
 
-            match compiler.compile_in_game_file(&full_path, context.current_debug_span(), cell_key)
+            match compiler.compile_in_game_file(&full_path, context.current_debug_span())
             {
                 Ok(prog) => {
                     let Some(prog_function) = prog.initializer.clone() else {
                         return Err(LpcError::new("Init function not found on master?"));
                     };
-                    let process: Arc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
-                    context.insert_process(process.clone(), cell_key);
+                    let process: Arc<RwLock<Process>> = RwLock::new(Process::new(prog)).into();
+                    context.insert_process(process.clone());
 
                     let new_context = context.clone_task_context().with_process(process.clone());
                     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
-                    task.eval(prog_function, &[], cell_key)?;
+                    task.eval(prog_function, &[]).await?;
 
                     context.set_instruction_count(task.context.instruction_count())?;
 
@@ -62,10 +60,9 @@ fn load_master<const N: usize>(
 }
 
 /// `clone_object`, the efun for creating new object instances.
-pub fn clone_object<const N: usize>(
-    context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+pub async fn clone_object<const N: usize>(
+    context: &mut EfunContext<'_, N>,
+    ) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
     if let LpcRef::String(s) = arg {
@@ -73,10 +70,10 @@ pub fn clone_object<const N: usize>(
         let path = try_extract_value!(*r, LpcValue::String);
         let path = path.to_str();
 
-        let master = load_master(context, path, cell_key)?;
+        let master = load_master(context, path).await?;
 
         {
-            let borrowed = master.ro(cell_key);
+            let borrowed = master.read();
             if borrowed.program.pragmas.no_clone() {
                 return Err(context.runtime_error(format!(
                     "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
@@ -85,16 +82,16 @@ pub fn clone_object<const N: usize>(
             }
         }
 
-        let new_prog = master.ro(cell_key).program.clone();
+        let new_prog = master.read().program.clone();
         let Some(initializer) = new_prog.initializer.clone() else {
             return Err(LpcError::new("Init function not found on clone?"));
         };
 
-        let new_clone = context.insert_clone(new_prog, cell_key);
+        let new_clone = context.insert_clone(new_prog);
 
         let new_context = context.clone_task_context().with_process(new_clone.clone());
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
-        task.eval(initializer, &[], cell_key)?;
+        task.eval(initializer, &[]).await?;
 
         context.set_instruction_count(task.context.instruction_count())?;
 
@@ -106,7 +103,7 @@ pub fn clone_object<const N: usize>(
     } else {
         return Err(context.runtime_error(format!(
             "invalid argument passed to `clone_object`: {}",
-            arg.with_key(cell_key)
+            arg
         )));
     }
 
@@ -140,11 +137,11 @@ mod tests {
         let (tx, _) = tokio::sync::mpsc::channel(128);
         TaskContext::new(
             config,
-            cell_key.cell(process),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(process),
+            RwLock::new(ObjectSpace::default()),
             Memory::new(10),
-            cell_key.cell(GcBank::default()),
-            Arc::new(cell_key.cell(CallOuts::new(tx.clone()))),
+            RwLock::new(GcBank::default()),
+            Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx,
             cell_key,
         )
@@ -156,37 +153,36 @@ mod tests {
             object foo = clone_object("./example");
         "# };
 
-        let mut cell_key = QCellOwner::new();
-        let (program, config, _) = compile_prog(prog, &mut cell_key);
+        let (program, config, _) = compile_prog(prog);
         let func = program.initializer.clone().expect("no init found?");
-        let context = task_context_fixture(program, config, &cell_key);
+        let context = task_context_fixture(program, config);
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[], &mut cell_key)
+        task.eval(func.clone(), &[])
             .expect("first task failed");
 
         let mut task = Task::<10>::new(context);
-        task.eval(func, &[], &mut cell_key)
+        task.eval(func, &[])
             .expect("second task failed");
 
         // procs are /example, /example#0, /example#1
-        assert_eq!(task.context.object_space().ro(&cell_key).len(), 3);
+        assert_eq!(task.context.object_space().read().len(), 3);
     }
 
     #[test]
     fn returns_error_if_no_clone() {
-        let mut cell_key = QCellOwner::new();
+
         let prog = indoc! { r#"
             object foo = clone_object("./no_clone.c");
         "# };
 
-        let (program, config, _) = compile_prog(prog, &mut cell_key);
+        let (program, config, _) = compile_prog(prog);
         let func = program.initializer.clone().expect("no init found?");
-        let mut cell_key = QCellOwner::new();
-        let context = task_context_fixture(program, config, &cell_key);
+
+        let context = task_context_fixture(program, config);
         let mut task = Task::<10>::new(context);
 
-        let result = task.eval(func, &[], &mut cell_key);
+        let result = task.eval(func, &[]);
 
         assert_regex!(
             result.as_ref().unwrap_err().as_ref(),

@@ -1,5 +1,4 @@
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::interpreter::{
     call_outs::CallOut, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef,
@@ -9,8 +8,7 @@ use crate::interpreter::{
 /// `query_call_out`, an efun for returning information about a single call out.
 pub fn query_call_out<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
@@ -21,7 +19,7 @@ pub fn query_call_out<const N: usize>(
         )));
     }
 
-    match context.call_outs().ro(cell_key).get(idx as usize) {
+    match context.call_outs().read().get(idx as usize) {
         Some(call_out) => {
             let result = call_out_array_ref(context, call_out)?;
             context.return_efun_result(result);
@@ -89,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_query_call_out() {
-        let mut cell_key = QCellOwner::new();
+
 
         let code = r##"
             mixed create() {
@@ -108,14 +106,14 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let (program, _, _) = compile_prog(code);
+        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
         let task = Task::<10>::initialize_program(
             program,
             Config::default(),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(ObjectSpace::default()),
             Memory::default(),
-            cell_key.cell(GcBank::default()),
+            RwLock::new(GcBank::default()),
             call_outs,
             tx,
             &mut cell_key,

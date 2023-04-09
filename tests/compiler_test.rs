@@ -13,7 +13,6 @@ use lpc_rs::{
 };
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use qcell::QCellOwner;
 
 use crate::support::{run_prog, test_config, test_config_builder};
 
@@ -39,18 +38,18 @@ fn default_compiler() -> Compiler {
 
 #[test]
 fn errors_on_max_inherit_depth() {
-    let mut cell_key = QCellOwner::new();
+
     let code = r#"inherit "/std/inherit_loop1";"#;
 
     let compiler = default_compiler();
-    let result = compiler.compile_string("foo.c", code, &mut cell_key);
+    let result = compiler.compile_string("foo.c", code);
 
     assert_err!(result, "maximum inheritance depth of 10 reached reached");
 }
 
 #[test]
 fn test_inheritance() {
-    let mut cell_key = QCellOwner::new();
+
     let code = indoc! { r##"
         inherit "/parent";
 
@@ -63,10 +62,10 @@ fn test_inheritance() {
         }
     "## };
 
-    let task = run_prog(code, &mut cell_key);
+    let task = run_prog(code);
     let ctx = task.context;
     let proc = ctx.process();
-    let prog = &proc.ro(&cell_key).program;
+    let prog = &proc.read().program;
 
     assert_eq!(prog.num_globals, 5);
     assert_eq!(prog.num_init_registers, 6);
@@ -74,7 +73,7 @@ fn test_inheritance() {
 
 #[test]
 fn test_dynamic_receiver() {
-    let mut cell_key = QCellOwner::new();
+
     let code = indoc! { r##"
         void create() {
             function f = &->tacos();
@@ -87,10 +86,10 @@ fn test_dynamic_receiver() {
         }
     "## };
 
-    let task = run_prog(code, &mut cell_key);
+    let task = run_prog(code);
     let ctx = task.context;
     let proc = ctx.process();
-    let prog = &proc.ro(&cell_key).program;
+    let prog = &proc.read().program;
 
     assert_eq!(prog.num_globals, 0);
     assert_eq!(prog.num_init_registers, 1);
@@ -98,7 +97,7 @@ fn test_dynamic_receiver() {
 
 #[test]
 fn test_duffs_device() {
-    let mut cell_key = QCellOwner::new();
+
     let code = indoc! { r##"
         int *copy(int *array, int count) {
             int n = (count + 7) / 8, idx = 0;
@@ -123,10 +122,10 @@ fn test_duffs_device() {
         mixed b = copy(a, 6);
     "## };
 
-    let task = run_prog(code, &mut cell_key);
+    let task = run_prog(code);
     let ctx = task.context;
     let proc = ctx.process();
-    let borrowed = proc.ro(&cell_key);
+    let borrowed = proc.read();
     let b = &borrowed.globals[1];
 
     if_chain! {
@@ -135,7 +134,7 @@ fn test_duffs_device() {
         if let LpcValue::Array(arr) = &*b;
         then {
             assert_eq!(
-                &arr.iter().map(|x| { x.with_key(&cell_key) }).collect::<Vec<_>>(),
+                &arr,
                 &[
                     LpcRef::Int(0),
                     LpcRef::Int(2),
@@ -145,7 +144,7 @@ fn test_duffs_device() {
                     LpcRef::Int(6),
                     LpcRef::Int(7),
                     LpcRef::Int(0),
-                ].iter().map(|x| { x.with_key(&cell_key) }).collect::<Vec<_>>()
+                ]
             );
         } else {
             panic!("expected array");
@@ -155,7 +154,6 @@ fn test_duffs_device() {
 
 #[test]
 fn test_closures() {
-    let mut cell_key = QCellOwner::new();
 
     let code = indoc! { r##"
         function f = (:
@@ -174,10 +172,10 @@ fn test_closures() {
         }
     "## };
 
-    let task = run_prog(code, &mut cell_key);
+    let task = run_prog(code);
     let ctx = task.context;
     let proc = ctx.process();
-    let borrowed = proc.ro(&cell_key);
+    let borrowed = proc.read();
 
     assert_eq!(borrowed.globals.len(), 2);
     assert_eq!(
@@ -185,7 +183,6 @@ fn test_closures() {
             .globals
             .last()
             .unwrap()
-            .with_key(&cell_key)
             .to_string(),
         r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
     );
@@ -193,7 +190,7 @@ fn test_closures() {
 
 #[test]
 fn test_multi_dimensional_arrays() {
-    let mut cell_key = QCellOwner::new();
+
     let code = indoc! { r##"
         int *a = ({ 1, 2, 3, 4, 5, 6, 7, 8 });
         mixed *b = ({ 9, 10, 11, 12, 13, ({ "14a", "14b", "14c" }), 15, 16 });
@@ -205,10 +202,10 @@ fn test_multi_dimensional_arrays() {
         string *x = arr[1][5][1..];
     "## };
 
-    let task = run_prog(code, &mut cell_key);
+    let task = run_prog(code);
     let ctx = task.context;
     let pr = ctx.process();
-    let proc = pr.ro(&cell_key);
+    let proc = pr.read();
     let x_ref = proc.globals.last().unwrap();
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
@@ -238,7 +235,7 @@ fn test_multi_dimensional_arrays() {
 
 #[test]
 fn test_positional_vars_into_argv() {
-    let mut cell_key = QCellOwner::new();
+
     let code = indoc! { r##"
         void create() {
             function f = (: [...] $2 :);
@@ -246,15 +243,14 @@ fn test_positional_vars_into_argv() {
         }
     "## };
 
-    let task = run_prog(code, &mut cell_key);
+    let task = run_prog(code);
     let ctx = task.context;
     assert_eq!(&LpcRef::Int(777), ctx.result().unwrap());
 }
 
 #[test]
 fn test_inherited_create_called_when_not_overridden() {
-    let cell_key = QCellOwner::new();
-    let mut vm = Vm::new_with_key(test_config(), cell_key);
+    let mut vm = Vm::new(test_config());
     let grandparent = indoc! { r#"
         void create() {
             dump("grandparent create");
@@ -312,7 +308,7 @@ fn test_inherited_create_called_when_not_overridden() {
 
     let init = child_ctx
         .process()
-        .ro(&vm.cell_key)
+        .read()
         .program
         .initializer
         .clone()
@@ -326,14 +322,12 @@ fn test_inherited_create_called_when_not_overridden() {
 
 #[test]
 fn test_calls_simul_efuns() {
-    let cell_key = QCellOwner::new();
-
     let config = test_config_builder()
         .simul_efun_file("/secure/simul_efuns.c")
         .build()
         .unwrap();
 
-    let mut vm = Vm::new_with_key(config, cell_key);
+    let mut vm = Vm::new(config);
     vm.initialize_simul_efuns()
         .expect("no simul efuns?")
         .expect("init error");

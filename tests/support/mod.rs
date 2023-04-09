@@ -10,7 +10,6 @@ use lpc_rs::{
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use qcell::QCellOwner;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -39,14 +38,13 @@ pub fn compile_prog_custom<P>(
     code: &str,
     path: P,
     config: Config,
-    cell_key: &mut QCellOwner,
-) -> Program
+    ) -> Program
 where
     P: Into<LpcPath>,
 {
     let compiler = CompilerBuilder::default().config(config).build().unwrap();
     compiler
-        .compile_string(path, code, cell_key)
+        .compile_string(path, code)
         .expect("Failed to compile.")
 }
 
@@ -54,20 +52,19 @@ pub fn run_prog_custom<P>(
     code: &str,
     path: P,
     config: Config,
-    cell_key: &mut QCellOwner,
-) -> Task<MAX_CALL_STACK_SIZE>
+    ) -> Task<MAX_CALL_STACK_SIZE>
 where
     P: Into<LpcPath>,
 {
-    let upvalues = cell_key.cell(GcBank::default());
+    let upvalues = RwLock::new(GcBank::default());
     let (tx, _) = tokio::sync::mpsc::channel(128);
-    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
-    let program = compile_prog_custom(code, path, config, cell_key);
+    let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
+    let program = compile_prog_custom(code, path, config);
 
     Task::initialize_program(
         program,
         test_config(),
-        cell_key.cell(ObjectSpace::default()),
+        RwLock::new(ObjectSpace::default()),
         Memory::default(),
         upvalues,
         call_outs,
@@ -80,6 +77,6 @@ where
     })
 }
 
-pub fn run_prog(code: &str, cell_key: &mut QCellOwner) -> Task<MAX_CALL_STACK_SIZE> {
-    run_prog_custom(code, "/my_file.c", test_config(), cell_key)
+pub fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
+    run_prog_custom(code, "/my_file.c", test_config())
 }

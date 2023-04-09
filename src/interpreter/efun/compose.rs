@@ -14,7 +14,6 @@ use lpc_rs_function_support::{
 };
 // use logos::Span;
 use once_cell::sync::{Lazy, OnceCell};
-use qcell::QCellOwner;
 use string_interner::StringInterner;
 
 use crate::interpreter::{
@@ -94,8 +93,7 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
 /// `compose`, an efun for composing two functions into a new function.
 pub fn compose<const N: usize>(
     context: &mut EfunContext<N>,
-    _cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let a = context.resolve_local_register(1_usize);
     if !matches!(a, LpcRef::Function(_)) {
         return Err(context.runtime_error("non-function sent as first argument to `compose`"));

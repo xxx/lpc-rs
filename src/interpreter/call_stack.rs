@@ -4,7 +4,6 @@ use arrayvec::ArrayVec;
 use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_errors::{span::Span, LpcError, Result};
-use qcell::QCellOwner;
 
 use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef};
 
@@ -122,10 +121,9 @@ impl<const STACKSIZE: usize> Mark for CallStack<STACKSIZE> {
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> Result<()> {
         for frame in self.stack.iter() {
-            frame.mark(marked, processed, cell_key)?
+            frame.mark(marked, processed)?
         }
 
         Ok(())

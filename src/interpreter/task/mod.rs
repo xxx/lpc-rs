@@ -1,19 +1,18 @@
 pub mod task_id;
 pub mod task_state;
 
-use std::{
-    borrow::Cow,
-    fmt::{Debug, Display},
-    sync::Arc,
-};
+use std::{borrow::Cow, fmt::{Debug, Display}, sync::Arc};
 
+use async_recursion::async_recursion;
 use bit_set::BitSet;
 use decorum::Total;
 use educe::Educe;
+use futures::future::join_all;
 use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use parking_lot::RwLock;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
     function_receiver::FunctionReceiver,
@@ -24,12 +23,10 @@ use lpc_rs_core::{
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
-use qcell::{QCell, QCellOwner};
 use string_interner::{DefaultSymbol, Symbol};
 use tokio::sync::mpsc::Sender;
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
-use parking_lot::RwLock;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -52,11 +49,10 @@ use crate::{
         vm::vm_op::VmOp,
     },
     try_extract_value,
-    util::keyable::Keyable,
 };
 
 // this is just to shut clippy up
-type ProcessFunctionPair = (Arc<QCell<Process>>, Arc<ProgramFunction>);
+type ProcessFunctionPair = (Arc<RwLock<Process>>, Arc<ProgramFunction>);
 
 macro_rules! pop_frame {
     ($task:expr) => {{
@@ -78,20 +74,18 @@ macro_rules! pop_frame {
 pub fn get_location<'a, const N: usize>(
     stack: &'a CallStack<N>,
     location: RegisterVariant,
-    cell_key: &QCellOwner,
 ) -> Result<Cow<'a, LpcRef>> {
     let frame = stack.current_frame()?;
 
-    get_location_in_frame(frame, location, cell_key)
+    get_location_in_frame(frame, location)
 }
 
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
-#[instrument(skip(frame, cell_key))]
+#[instrument(skip(frame))]
 #[inline]
 pub fn get_location_in_frame<'a>(
     frame: &'a CallFrame,
     location: RegisterVariant,
-    cell_key: &QCellOwner,
 ) -> Result<Cow<'a, LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
@@ -99,14 +93,14 @@ pub fn get_location_in_frame<'a>(
             Ok(Cow::Borrowed(&registers[reg]))
         }
         RegisterVariant::Global(reg) => {
-            let proc = frame.process.ro(cell_key);
+            let proc = frame.process.read();
             Ok(Cow::Owned(proc.globals[reg].clone()))
         }
         RegisterVariant::Upvalue(upv) => {
             let upvalues = &frame.upvalue_ptrs;
             let idx = upvalues[upv.index()];
 
-            let vm_upvalues = &frame.vm_upvalues.ro(cell_key);
+            let vm_upvalues = &frame.vm_upvalues.read();
             trace!("upvalue data: idx = {}, len = {}", idx, vm_upvalues.len());
             Ok(Cow::Owned(vm_upvalues[idx].clone()))
         }
@@ -118,10 +112,9 @@ fn set_location<const N: usize>(
     stack: &mut CallStack<N>,
     location: RegisterVariant,
     lpc_ref: LpcRef,
-    cell_key: &mut QCellOwner,
 ) -> Result<()> {
     let frame = stack.current_frame_mut()?;
-    frame.set_location(location, lpc_ref, cell_key);
+    frame.set_location(location, lpc_ref);
     Ok(())
 }
 
@@ -130,7 +123,6 @@ fn apply_in_location<F, const N: usize>(
     stack: &mut CallStack<N>,
     location: RegisterVariant,
     func: F,
-    cell_key: &mut QCellOwner,
 ) -> Result<()>
 where
     F: FnOnce(&mut LpcRef) -> Result<()>,
@@ -144,7 +136,7 @@ where
         RegisterVariant::Global(reg) => {
             let frame = stack.current_frame()?;
 
-            let proc = frame.process.rw(cell_key);
+            let proc = frame.process.write();
             func(&mut proc.globals[reg])
         }
         RegisterVariant::Upvalue(reg) => {
@@ -152,21 +144,21 @@ where
             let upvalues = &frame.upvalue_ptrs;
             let idx = upvalues[reg.index()];
 
-            let vm_upvalues = &mut frame.vm_upvalues.rw(cell_key);
+            let vm_upvalues = &mut frame.vm_upvalues.write();
             func(&mut vm_upvalues[idx])
         }
     }
 }
 
 macro_rules! get_loc {
-    ($self:expr, $loc:expr, $cell_key:expr) => {{
-        get_location(&$self.stack, $loc, $cell_key)
+    ($self:expr, $loc:expr) => {{
+        get_location(&$self.stack, $loc)
     }};
 }
 
 macro_rules! set_loc {
-    ($self:expr, $loc:expr, $val:expr, $cell_key:expr) => {{
-        set_location(&mut $self.stack, $loc, $val, $cell_key)
+    ($self:expr, $loc:expr, $val:expr) => {{
+        set_location(&mut $self.stack, $loc, $val)
     }};
 }
 
@@ -245,7 +237,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Convenience helper to get a Program initialized.
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all)]
-    pub fn initialize_program<P, C, O, M, U, A>(
+    pub async fn initialize_program<P, C, O, M, U, A>(
         program: P,
         config: C,
         object_space: O,
@@ -253,15 +245,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         vm_upvalues: U,
         call_outs: A,
         tx: Sender<VmOp>,
-        cell_key: &mut QCellOwner,
     ) -> Result<Task<STACKSIZE>>
     where
         P: Into<Arc<Program>>,
         C: Into<Arc<Config>> + Debug,
-        O: Into<Arc<QCell<ObjectSpace>>>,
+        O: Into<Arc<RwLock<ObjectSpace>>>,
         M: Into<Arc<Memory>>,
-        U: Into<Arc<QCell<GcRefBank>>>,
-        A: Into<Arc<QCell<CallOuts>>>,
+        U: Into<Arc<RwLock<GcRefBank>>>,
+        A: Into<Arc<RwLock<CallOuts>>>,
     {
         let program = program.into();
         let init_function = {
@@ -271,7 +262,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             function.clone()
         };
-        let process: Arc<QCell<Process>> = cell_key.cell(Process::new(program)).into();
+        let process: Arc<RwLock<Process>> = RwLock::new(Process::new(program)).into();
         let context = TaskContext::new(
             config,
             process.clone(),
@@ -280,13 +271,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             vm_upvalues,
             call_outs,
             tx,
-            cell_key,
         );
-        context.insert_process(process, cell_key);
+        context.insert_process(process);
 
         let mut task = Task::new(context);
 
-        task.eval(init_function, &[], cell_key)?;
+        task.eval(init_function, &[]).await?;
 
         Ok(task)
     }
@@ -302,14 +292,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ///
     /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
-    pub fn eval<F>(&mut self, f: F, args: &[LpcRef], cell_key: &mut QCellOwner) -> Result<()>
+    #[async_recursion]
+    pub async fn eval<F>(&mut self, f: F, args: &[LpcRef]) -> Result<()>
     where
-        F: Into<Arc<ProgramFunction>>,
+        F: Into<Arc<ProgramFunction>> + Send,
     {
         let function = f.into();
         let process = self.context.process();
 
-        self.eval_function(process, function, args, cell_key)
+        self.eval_function(process, function, args).await
     }
 
     /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
@@ -323,25 +314,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// # Returns
     ///
     /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
-    pub fn eval_function(
+    pub async fn eval_function(
         &mut self,
-        process: Arc<QCell<Process>>,
+        process: Arc<RwLock<Process>>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        self.prepare_function_call(process, f, args, cell_key)?;
+        self.prepare_function_call(process, f, args)?;
 
-        self.resume(cell_key)
+        self.resume().await
     }
 
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
     pub fn prepare_function_call(
         &mut self,
-        process: Arc<QCell<Process>>,
+        process: Arc<RwLock<Process>>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let mut frame = CallFrame::new(
             process,
@@ -349,7 +338,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             args.len(),
             None,
             self.context.upvalues().clone(),
-            cell_key,
         );
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
@@ -360,27 +348,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
     #[instrument(skip_all)]
-    pub fn resume(&mut self, cell_key: &mut QCellOwner) -> Result<()> {
+    pub async fn resume(&mut self) -> Result<()> {
         self.state = TaskState::Running;
 
         let f = &self.stack.current_frame()?.function;
         if f.prototype.is_efun() {
             let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(f.name()).unwrap();
             // call the efun, then we're done with this Task
-            self.prepare_and_call_efun(efun, cell_key)?;
+            self.prepare_and_call_efun(efun)?;
             debug_assert!(self.stack.is_empty());
             self.state = TaskState::Complete;
         } else {
             let mut halted = false;
 
-            // let breaker = Utc::now() + Duration::milliseconds(2);
-
             while !halted {
-                halted = match self.eval_one_instruction(cell_key) {
+                halted = match self.eval_one_instruction().await {
                     Ok(x) => x,
                     Err(e) => {
                         if !self.catch_points.is_empty() {
-                            self.catch_error(e, cell_key)?;
+                            self.catch_error(e)?;
                             false
                         } else {
                             let stack_trace = self.stack.stack_trace();
@@ -388,16 +374,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                     }
                 };
-
-                // if !halted && Utc::now() > breaker {
-                //     println!("pausing");
-                //     self.state = TaskState::Paused;
-                //     return Ok(());
-                // }
             }
         }
 
         self.state = TaskState::Complete;
+        self.context.tx.send(VmOp::TaskComplete(self.id)).await?;
         Ok(())
     }
 
@@ -407,14 +388,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// # Arguments
     ///
     /// `task_context` - the [`TaskContext`] that will be used for this evaluation.
-    /// `cell_key` - the [`QCellOwner`] that will be used for this evaluation.
     ///
     /// # Returns
     ///
     /// A [`Result`], with a boolean indicating whether we are at the end of input
     #[instrument(skip_all)]
     #[inline]
-    fn eval_one_instruction(&mut self, cell_key: &mut QCellOwner) -> Result<bool> {
+    async fn eval_one_instruction(&mut self) -> Result<bool> {
         if self.stack.is_empty() {
             self.state = TaskState::Complete;
 
@@ -447,26 +427,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match instruction {
             Instruction::AConst(location) => {
-                self.handle_aconst(location, cell_key)?;
+                self.handle_aconst(location)?;
             }
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(
                     r1,
                     r2,
                     r3,
-                    |x, y, cell_key| x.bitand(y, cell_key),
-                    cell_key,
+                    |x, y| x.bitand(y),
                 )?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
-                let lpc_ref = &*get_loc!(self, r1, cell_key)?;
-                match lpc_ref.bitnot(cell_key) {
+                let lpc_ref = &*get_loc!(self, r1)?;
+                match lpc_ref.bitnot() {
                     Ok(result) => {
                         let var = self.context.memory().value_to_ref(result);
 
-                        set_loc!(self, r2, var, cell_key)?;
+                        set_loc!(self, r2, var)?;
                     }
                     Err(e) => {
                         return Err(e.with_span(debug_span));
@@ -474,7 +453,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Call(name) => {
-                self.handle_call(name, cell_key)?;
+                self.handle_call(name)?;
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
@@ -487,20 +466,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (pf, efun)
                 };
 
-                let new_frame = self.prepare_new_call_frame(cell_key, process, pf.into())?;
+                let new_frame = self.prepare_new_call_frame(process, pf.into())?;
 
                 self.stack.push(new_frame)?;
 
-                self.prepare_and_call_efun(efun, cell_key)?;
+                self.prepare_and_call_efun(efun)?;
             }
             Instruction::CallFp(location) => {
-                self.handle_call_fp(location, cell_key)?;
+                self.handle_call_fp(location)?;
             }
             Instruction::CallOther(receiver, name) => {
-                self.handle_call_other(receiver, name, cell_key)?;
+                self.handle_call_other(receiver, name).await?;
             }
             Instruction::CallSimulEfun(name_idx) => {
-                self.handle_call_simul_efun(name_idx, cell_key)?;
+                self.handle_call_simul_efun(name_idx)?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -524,40 +503,40 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.partial_args.clear();
             }
             Instruction::Copy(r1, r2) => {
-                let new_ref = get_location(&self.stack, r1, cell_key)?.into_owned();
-                set_loc!(self, r2, new_ref, cell_key)?;
+                let new_ref = get_location(&self.stack, r1)?.into_owned();
+                set_loc!(self, r2, new_ref)?;
             }
             Instruction::Dec(r1) => {
-                apply_in_location(&mut self.stack, r1, |x| x.dec(), cell_key)?;
+                apply_in_location(&mut self.stack, r1, |x| x.dec())?;
             }
             Instruction::EqEq(r1, r2, r3) => {
                 let out =
-                    (get_loc!(self, r1, cell_key)? == get_loc!(self, r2, cell_key)?) as LpcInt;
+                    (get_loc!(self, r1)? == get_loc!(self, r2)?) as LpcInt;
 
-                set_loc!(self, r3, LpcRef::Int(out), cell_key)?;
+                set_loc!(self, r3, LpcRef::Int(out))?;
             }
             Instruction::FConst(r, f) => {
-                set_loc!(self, r, LpcRef::Float(f), cell_key)?;
+                set_loc!(self, r, LpcRef::Float(f))?;
             }
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
                 name_index: name,
             } => {
-                self.handle_functionptrconst(location, receiver, name, cell_key)?;
+                self.handle_functionptrconst(location, receiver, name)?;
             }
             Instruction::Gt(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x > y, cell_key)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x > y)?;
             }
             Instruction::Gte(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y, cell_key)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
             Instruction::IAdd(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.add(&*get_loc!(self, r2, cell_key)?, cell_key) {
+                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
                     Ok(result) => {
                         let out = self.context.memory().value_to_ref(result);
 
-                        set_loc!(self, r3, out, cell_key)?;
+                        set_loc!(self, r3, out)?;
                     }
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -566,21 +545,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::IConst(r, i) => {
-                set_loc!(self, r, LpcRef::Int(i), cell_key)?;
+                set_loc!(self, r, LpcRef::Int(i))?;
             }
             Instruction::IConst0(r) => {
-                set_loc!(self, r, LpcRef::Int(0), cell_key)?;
+                set_loc!(self, r, LpcRef::Int(0))?;
             }
             Instruction::IConst1(r) => {
-                set_loc!(self, r, LpcRef::Int(1), cell_key)?;
+                set_loc!(self, r, LpcRef::Int(1))?;
             }
             Instruction::IDiv(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.div(&*get_loc!(self, r2, cell_key)?, cell_key) {
+                match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.context.memory().value_to_ref(result),
-                        cell_key
+                        self.context.memory().value_to_ref(result)
                     )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -589,12 +567,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::IMod(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.rem(&*get_loc!(self, r2, cell_key)?, cell_key) {
+                match get_loc!(self, r1)?.rem(&*get_loc!(self, r2)?) {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.context.memory().value_to_ref(result),
-                        cell_key
+                        self.context.memory().value_to_ref(result)
                     )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -603,12 +580,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::IMul(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.mul(&*get_loc!(self, r2, cell_key)?, cell_key) {
+                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.context.memory().value_to_ref(result),
-                        cell_key
+                        self.context.memory().value_to_ref(result)
                     )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -617,15 +593,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Inc(r1) => {
-                apply_in_location(&mut self.stack, r1, |x| x.inc(), cell_key)?;
+                apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
             Instruction::ISub(r1, r2, r3) => {
-                match get_loc!(self, r1, cell_key)?.sub(&*get_loc!(self, r2, cell_key)?, cell_key) {
+                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
                     Ok(result) => set_loc!(
                         self,
                         r3,
-                        self.context.memory().value_to_ref(result),
-                        cell_key
+                        self.context.memory().value_to_ref(result)
                     )?,
                     Err(e) => {
                         let frame = self.stack.current_frame()?;
@@ -638,7 +613,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 frame.set_pc(address);
             }
             Instruction::Jnz(r1, address) => {
-                let v = &*get_loc!(self, r1, cell_key)?;
+                let v = &*get_loc!(self, r1)?;
 
                 // TODO: re-decide of 0.0 floats should match here and with Jz
                 if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
@@ -647,7 +622,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Jz(r1, address) => {
-                let v = &*get_loc!(self, r1, cell_key)?;
+                let v = &*get_loc!(self, r1)?;
 
                 if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
                     let frame = self.stack.current_frame_mut()?;
@@ -655,19 +630,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Load(container, index, destination) => {
-                self.handle_load(container, index, destination, cell_key)?;
+                self.handle_load(container, index, destination)?;
             }
             Instruction::LoadMappingKey(container, index, destination) => {
-                self.handle_load_mapping_key(container, index, destination, cell_key)?;
+                self.handle_load_mapping_key(container, index, destination)?;
             }
             Instruction::Lt(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x < y, cell_key)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x < y)?;
             }
             Instruction::Lte(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y, cell_key)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.add(y, cell_key), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.add(y))?;
             }
             Instruction::MapConst(r) => {
                 let mut register_map = IndexMap::with_hasher(HashBuildHasher::default());
@@ -679,10 +654,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 for chunk in &self.array_items.iter().copied().chunks(2) {
                     let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
-                        get_loc!(self, key, cell_key)?
+                        get_loc!(self, key)?
                             .into_owned()
-                            .into_hashed(cell_key),
-                        get_loc!(self, value, cell_key)?.into_owned(),
+                            .into_hashed(),
+                        get_loc!(self, value)?.into_owned(),
                     );
                 }
 
@@ -691,16 +666,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .memory()
                     .value_to_ref(LpcValue::from(register_map));
 
-                set_loc!(self, r, new_ref, cell_key)?;
+                set_loc!(self, r, new_ref)?;
             }
             Instruction::MMul(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.mul(y, cell_key), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.mul(y))?;
             }
             Instruction::MSub(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.sub(y, cell_key), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.sub(y))?;
             }
             Instruction::Not(r1, r2) => {
-                let matched = match &*get_loc!(self, r1, cell_key)? {
+                let matched = match &*get_loc!(self, r1)? {
                     LpcRef::Int(x) => LpcRef::Int((*x == 0) as LpcInt),
                     LpcRef::Float(x) => LpcRef::Int((*x == 0.0) as LpcInt),
 
@@ -713,16 +688,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     | LpcRef::Function(_) => LpcRef::Int(0),
                 };
 
-                set_loc!(self, r2, matched, cell_key)?;
+                set_loc!(self, r2, matched)?;
             }
             Instruction::NotEq(r1, r2, r3) => {
                 let out =
-                    (get_loc!(self, r1, cell_key)? != get_loc!(self, r2, cell_key)?) as LpcInt;
+                    (get_loc!(self, r1)? != get_loc!(self, r2)?) as LpcInt;
 
-                set_loc!(self, r3, LpcRef::Int(out), cell_key)?;
+                set_loc!(self, r3, LpcRef::Int(out))?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.bitor(y, cell_key), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitor(y))?;
             }
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
@@ -735,7 +710,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         ellipsis_vars
                             .iter()
                             .map(|x| {
-                                get_location_in_frame(frame, *x, cell_key).map(|v| v.into_owned())
+                                get_location_in_frame(frame, *x).map(|v| v.into_owned())
                             })
                             .collect::<Result<Vec<_>>>()?
                     }
@@ -743,7 +718,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let new_ref = self.context.memory().value_to_ref(LpcValue::from(refs));
 
-                set_location(&mut self.stack, r, new_ref, cell_key)?;
+                set_location(&mut self.stack, r, new_ref)?;
             }
             Instruction::PopulateDefaults => {
                 // let default_addresses = &self.defaults;
@@ -787,15 +762,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (real_start, real_end)
                 };
 
-                let return_value = |value, memory: &Memory, stack, cell_key| -> Result<()> {
+                let return_value = |value, memory: &Memory, stack| -> Result<()> {
                     let new_ref = memory.value_to_ref(value);
-                    set_location(stack, r4, new_ref, cell_key)?;
+                    set_location(stack, r4, new_ref)?;
 
                     Ok(())
                 };
 
                 let get_new_value = |stack| {
-                    let lpc_ref = &*get_location(stack, r1, cell_key)?;
+                    let lpc_ref = &*get_location(stack, r1)?;
 
                     match lpc_ref {
                         LpcRef::Array(v_ref) => {
@@ -806,8 +781,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 return Ok(LpcValue::from(vec![]));
                             }
 
-                            let index1 = &*get_location(stack, r2, cell_key)?;
-                            let index2 = &*get_location(stack, r3, cell_key)?;
+                            let index1 = &*get_location(stack, r2)?;
+                            let index2 = &*get_location(stack, r3)?;
 
                             if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
                                 let (real_start, real_end) = resolve_range(*start, *end, vec.len());
@@ -836,8 +811,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 return Ok(LpcValue::from(""));
                             }
 
-                            let index1 = &*get_location(stack, r2, cell_key)?;
-                            let index2 = &*get_location(stack, r3, cell_key)?;
+                            let index1 = &*get_location(stack, r2)?;
+                            let index2 = &*get_location(stack, r3)?;
 
                             if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
                                 let (real_start, real_end) =
@@ -874,7 +849,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let new_val = { get_new_value(&self.stack)? };
-                return_value(new_val, self.context.memory(), &mut self.stack, cell_key)?;
+                return_value(new_val, self.context.memory(), &mut self.stack)?;
             }
             Instruction::Ret => {
                 pop_frame!(self).map(|frame| {
@@ -888,7 +863,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Sizeof(r1, r2) => {
-                let lpc_ref = &*get_loc!(self, r1, cell_key)?;
+                let lpc_ref = &*get_loc!(self, r1)?;
 
                 let value = match lpc_ref {
                     LpcRef::Array(x) => {
@@ -916,28 +891,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let lpc_ref = self.context.memory().value_to_ref(value);
 
-                set_loc!(self, r2, lpc_ref, cell_key)?;
+                set_loc!(self, r2, lpc_ref)?;
             }
             Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;
-                self.handle_store(value_loc, container_loc, index_loc, cell_key)?;
+                self.handle_store(value_loc, container_loc, index_loc)?;
             }
             Instruction::SConst(location, index) => {
-                self.handle_sconst(location, index, cell_key)?;
+                self.handle_sconst(location, index)?;
             }
             Instruction::Shl(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shl(y, cell_key), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.shl(y))?;
             }
             Instruction::Shr(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, cell_key| x.shr(y, cell_key), cell_key)?;
+                self.binary_operation(r1, r2, r3, |x, y| x.shr(y))?;
             }
             Instruction::Xor(r1, r2, r3) => {
                 self.binary_operation(
                     r1,
                     r2,
                     r3,
-                    |x, y, cell_key| x.bitxor(y, cell_key),
-                    cell_key,
+                    |x, y| x.bitxor(y),
                 )?;
             }
         }
@@ -950,24 +924,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn handle_aconst(
         &mut self,
         location: RegisterVariant,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let items = &self.array_items;
         let vars = items
             .iter()
-            .map(|i| get_loc!(self, *i, cell_key).map(|i| i.into_owned()))
+            .map(|i| get_loc!(self, *i).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
         let new_ref = self.context.memory().value_to_ref(LpcValue::from(vars));
 
-        set_loc!(self, location, new_ref, cell_key)
+        set_loc!(self, location, new_ref)
     }
 
     #[instrument(skip_all)]
-    fn handle_call<'task>(&mut self, name_idx: usize, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_call<'task>(&mut self, name_idx: usize) -> Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
-            let borrowed = process.ro(cell_key);
+            let borrowed = process.read();
 
             let name = &borrowed
                 .program
@@ -990,7 +963,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 if_chain! {
                     // See if there is a simul efun with this name
                     if let Some(func) = self.context.simul_efuns();
-                    let b = func.ro(cell_key);
+                    let b = func.read();
                     if let Some(func) = b.as_ref().lookup_function(name);
                     then {
                         func.clone()
@@ -1002,7 +975,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let new_frame = self.prepare_new_call_frame(cell_key, process, func)?;
+        let new_frame = self.prepare_new_call_frame(process, func)?;
 
         trace!("pushing new frame");
 
@@ -1014,8 +987,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
     fn prepare_new_call_frame(
         &mut self,
-        cell_key: &mut QCellOwner,
-        process: Arc<QCell<Process>>,
+        process: Arc<RwLock<Process>>,
         func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
         let num_args = self.args.len();
@@ -1026,7 +998,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             num_args,
             None, // static functions do not inherit upvalues from the calling function
             self.context.upvalues().clone(),
-            cell_key,
         );
 
         trace!("copying arguments to new frame: {num_args}");
@@ -1043,18 +1014,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
-                let lpc_ref = get_loc!(self, *arg, cell_key).map(|i| i.into_owned())?;
+                let lpc_ref = get_loc!(self, *arg).map(|i| i.into_owned())?;
 
                 trace!(
                     "Copying argument {} ({}) to {}",
                     i,
-                    lpc_ref.with_key(cell_key),
+                    lpc_ref,
                     target_location
                 );
 
                 new_frame.arg_locations.push(target_location);
 
-                new_frame.set_location(target_location, lpc_ref, cell_key)
+                new_frame.set_location(target_location, lpc_ref)
             }
         }
 
@@ -1066,18 +1037,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn handle_call_fp(
         &mut self,
         location: RegisterVariant,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let num_args = self.args.len();
         let func = {
-            let lpc_ref = &*get_loc!(self, location, cell_key)?;
+            let lpc_ref = &*get_loc!(self, location)?;
 
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
             } else {
                 return Err(self.runtime_error(format!(
                     "callfp instruction on non-function: {}",
-                    lpc_ref.with_key(cell_key)
+                    lpc_ref
                 )));
             }
         };
@@ -1087,7 +1057,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let borrowed = func.read();
         let ptr = try_extract_value!(*borrowed, LpcValue::Function);
 
-        trace!("Calling function ptr: {}", ptr.with_key(cell_key));
+        trace!("Calling function ptr: {}", ptr);
 
         let partial_args = &ptr.partial_args;
         let passed_args_count = num_args
@@ -1105,11 +1075,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 && !pf.is_closure()
                 && (ptr.call_other || !Arc::ptr_eq(&self.context.process(), receiver))
             {
-                return set_loc!(self, Register(0).as_local(), NULL, cell_key);
+                return set_loc!(self, Register(0).as_local(), NULL);
             }
         }
 
-        let Some((proc, function)) = self.extract_process_and_function(ptr, cell_key)? else {
+        let Some((proc, function)) = self.extract_process_and_function(ptr)? else {
             return Ok(())
         };
 
@@ -1131,7 +1101,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             max_arg_length,
             upvalues,
             self.context.upvalues().clone(),
-            cell_key,
         );
 
         let from_slice = &self.args[index..(index + adjusted_num_args)];
@@ -1142,7 +1111,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             loc: RegisterVariant,
             r: LpcRef,
             i: usize,
-            cell_key: &mut QCellOwner,
         ) -> Result<()> {
             let prototype = &new_frame.function.prototype;
             task.type_check_call_arg(
@@ -1155,12 +1123,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             trace!(
                 "Copying argument {} ({}) to {}",
                 i,
-                r.with_key(cell_key),
+                r,
                 loc
             );
 
             new_frame.arg_locations.push(loc);
-            new_frame.set_location(loc, r, cell_key);
+            new_frame.set_location(loc, r);
 
             Ok(())
         }
@@ -1194,21 +1162,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     target_location,
                     lpc_ref.clone(),
                     i,
-                    cell_key,
                 )?;
             } else if let Some(location) = from_slice.get(from_slice_index) {
                 // check if the user passed an argument, which will
                 // fill in the next hole in the partial arguments, or
                 // append to the end
 
-                let lpc_ref = get_loc!(self, *location, cell_key)?;
+                let lpc_ref = get_loc!(self, *location)?;
                 type_check_and_assign_location(
                     self,
                     &mut new_frame,
                     target_location,
                     lpc_ref.into_owned(),
                     i,
-                    cell_key,
                 )?;
 
                 from_slice_index += 1;
@@ -1220,7 +1186,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if function_is_efun {
             let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(pf.name()).unwrap();
-            self.prepare_and_call_efun(efun, cell_key)?;
+            self.prepare_and_call_efun(efun)?;
         }
 
         Ok(())
@@ -1231,19 +1197,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         ptr: &FunctionPtr,
         // task_context: &TaskContext,
-        cell_key: &QCellOwner,
     ) -> Result<Option<ProcessFunctionPair>> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
-                let LpcRef::Object(lpc_ref) = &*get_loc!(self, self.args[0], cell_key)? else {
+                let LpcRef::Object(lpc_ref) = &*get_loc!(self, self.args[0])? else {
                     return Err(self.runtime_error("non-object receiver to function pointer call"));
                 };
 
                 let pair_opt = {
                     let b = lpc_ref.read();
                     let cell = try_extract_value!(*b, LpcValue::Object);
-                    let proc = cell.ro(cell_key);
+                    let proc = cell.read();
                     proc.as_ref()
                         .lookup_function(name)
                         .map(|func| (cell.clone(), func.clone()))
@@ -1274,7 +1239,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(self.runtime_bug("simul_efun called without simul_efuns"));
                 };
 
-                let Some(function) = simul_efuns.ro(cell_key).program.lookup_function(name) else {
+                let Some(function) = simul_efuns.read().program.lookup_function(name) else {
                     return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
                 };
 
@@ -1313,7 +1278,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn prepare_and_call_efun(
         &mut self,
         efun: Efun<STACKSIZE>,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let mut ctx = EfunContext::new(
             &mut self.stack,
@@ -1321,7 +1285,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.context.memory().clone(),
         );
 
-        efun(&mut ctx, cell_key)?;
+        efun(&mut ctx)?;
 
         #[cfg(test)]
         {
@@ -1337,24 +1301,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_call_other(
+    async fn handle_call_other(
         &mut self,
         receiver: RegisterVariant,
         name_location: RegisterVariant,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         // set up result_ref in a block, as `registers` is a long-lived reference that
         // doesn't work as mutable, but needs to be written to at the very end.
         let result_ref = {
             // figure out which function we're calling
-            let receiver_ref = &*get_location(&self.stack, receiver, cell_key)?;
-            let name_ref = &*get_location(&self.stack, name_location, cell_key)?;
+            let receiver_ref = &*get_location(&self.stack, receiver)?;
+            let name_ref = &*get_location(&self.stack, name_location)?;
             let pool_ref = if let LpcRef::String(r) = name_ref {
                 r
             } else {
                 let str = format!(
                     "Invalid name passed to `call_other`: {}",
-                    name_ref.with_key(cell_key)
+                    name_ref
                 );
                 return Err(self.runtime_error(str));
             };
@@ -1363,23 +1326,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             trace!(
                 "Calling call_other: {}->{function_name}",
-                receiver_ref.with_key(cell_key)
+                receiver_ref
             );
 
             // An inner helper function to actually calculate the result, for easy re-use
             // when using `call_other` with arrays and mappings.
-            fn resolve_result(
+            async fn resolve_result(
                 receiver_ref: &LpcRef,
                 function_name: &LpcString,
                 args: &[LpcRef],
                 task_context: &TaskContext,
-                cell_key: &mut QCellOwner,
             ) -> Result<LpcRef> {
                 let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
                     receiver_ref,
                     function_name,
                     task_context,
-                    cell_key,
                 );
 
                 if let Some(pr) = resolved {
@@ -1391,14 +1352,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             // unwrap() is ok because resolve_call_other_receiver() checks
                             // for the function's presence.
                             let function = receiver
-                                .ro(cell_key)
+                                .read()
                                 .as_ref()
                                 .lookup_function(function_name)
                                 .unwrap()
                                 .clone();
 
                             if function.public() {
-                                task.eval(function, args, cell_key)?;
+                                task.eval(function, args).await?;
                                 task_context.increment_instruction_count(
                                     task.context.instruction_count(),
                                 )?;
@@ -1424,34 +1385,35 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let args = self
                 .args
                 .iter()
-                .map(|i| get_loc!(self, *i, cell_key).map(|r| r.into_owned()))
+                .map(|i| get_loc!(self, *i).map(|r| r.into_owned()))
                 .collect::<Result<Vec<_>>>()?;
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    resolve_result(receiver_ref, function_name, &args, &self.context, cell_key)?
+                    resolve_result(receiver_ref, function_name, &args, &self.context).await?
                 }
                 LpcRef::Array(r) => {
                     let b = r.read();
                     let array = try_extract_value!(*b, LpcValue::Array);
 
-                    let array_value: LpcValue = array
+                    let futures = array
                         .iter()
-                        .map(|lpc_ref| {
-                            resolve_result(lpc_ref, function_name, &args, &self.context, cell_key)
+                        .map(|lpc_ref| async {
+                            resolve_result(lpc_ref, function_name, &args, &self.context)
+                                .await
                                 .unwrap_or(NULL)
-                        })
-                        .collect::<Vec<_>>()
-                        .into();
+                        });
+
+                    let array_value = join_all(futures).await.into();
                     self.context.memory().value_to_ref(array_value)
                 }
                 LpcRef::Mapping(m) => {
                     let b = m.read();
                     let map = try_extract_value!(*b, LpcValue::Mapping);
 
-                    let with_results: LpcValue = map
+                    let futures = map
                         .iter()
-                        .map(|(key_ref, value_ref)| {
+                        .map(|(key_ref, value_ref)| async {
                             (
                                 key_ref.clone(),
                                 resolve_result(
@@ -1459,11 +1421,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     function_name,
                                     &args,
                                     &self.context,
-                                    cell_key,
                                 )
-                                .unwrap_or(NULL),
+                                    .await
+                                    .unwrap_or(NULL),
                             )
-                        })
+                        });
+
+                    let with_results = join_all(futures)
+                        .await
+                        .into_iter()
                         .collect::<IndexMap<_, _>>()
                         .into();
 
@@ -1485,7 +1451,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_call_simul_efun(&mut self, name_idx: usize, cell_key: &mut QCellOwner) -> Result<()> {
+    fn handle_call_simul_efun(&mut self, name_idx: usize) -> Result<()> {
         let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
@@ -1498,7 +1464,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         let func = {
-            let b = simul_efuns.ro(cell_key);
+            let b = simul_efuns.read();
 
             if let Some(func) = b.as_ref().lookup_function(func_name) {
                 func.clone()
@@ -1508,7 +1474,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let new_frame = self.prepare_new_call_frame(cell_key, simul_efuns, func)?;
+        let new_frame = self.prepare_new_call_frame(simul_efuns, func)?;
 
         self.stack.push(new_frame)?;
 
@@ -1522,7 +1488,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         location: RegisterVariant,
         receiver: FunctionReceiver,
         name_idx: usize,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let call_other = match receiver {
             FunctionReceiver::Var(_) | FunctionReceiver::Dynamic => true,
@@ -1541,12 +1506,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
 
-                let borrowed_proc = process.ro(cell_key);
+                let borrowed_proc = process.read();
                 let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
                     return Err(self.runtime_error(format!(
                         "Unable to find function `{}` in local process `{}`.",
                         func_name,
-                        process.ro(cell_key).filename()
+                        process.read().filename()
                     )));
                 };
 
@@ -1554,19 +1519,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 FunctionAddress::Local(process, func)
             }
             FunctionReceiver::Var(location) => {
-                let receiver_ref = &*get_loc!(self, location, cell_key)?;
+                let receiver_ref = &*get_loc!(self, location)?;
                 match receiver_ref {
                     LpcRef::Object(x) => {
                         let b = x.read();
                         let process = try_extract_value!(*b, LpcValue::Object);
                         let process = process.clone();
 
-                        let borrowed_proc = process.ro(cell_key);
+                        let borrowed_proc = process.read();
                         let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
                             return Err(self.runtime_error(format!(
                                 "Unable to find function `{}` in remote process `{}`.",
                                 func_name,
-                                process.ro(cell_key).filename()
+                                process.read().filename()
                             )));
                         };
 
@@ -1590,7 +1555,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .partial_args
             .iter()
             .map(|arg| {
-                arg.map(|register| Ok(get_loc!(self, register, cell_key)?.into_owned()))
+                arg.map(|register| Ok(get_loc!(self, register)?.into_owned()))
                     .transpose()
             })
             .collect::<Result<Vec<Option<LpcRef>>>>()?;
@@ -1603,19 +1568,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             call_other,
             // Function pointers inherit the creating funfction's upvalues
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
-            // upvalue_ptrs: self.capture_environment(cell_key)?,
+            // upvalue_ptrs: self.capture_environment()?,
             unique_id: UniqueId::new(),
         };
 
         let new_ref = self.context.memory().value_to_ref(LpcValue::from(fp));
 
-        set_loc!(self, location, new_ref, cell_key)
+        set_loc!(self, location, new_ref)
     }
 
     #[instrument(skip_all)]
-    fn capture_environment(&mut self, cell_key: &mut QCellOwner) -> Result<Vec<Register>> {
+    fn capture_environment(&mut self) -> Result<Vec<Register>> {
         let frame = self.stack.current_frame_mut()?;
-        let upvalues = self.context.upvalues().rw(cell_key);
+        let mut upvalues = self.context.upvalues().write();
 
         trace!("ptrs: {:?}", frame.upvalue_ptrs);
         trace!("upvalues: {:?}", upvalues);
@@ -1638,10 +1603,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
         destination: RegisterVariant,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let container_ref = get_loc!(self, container_loc, cell_key)?.into_owned();
-        let lpc_ref = get_loc!(self, index_loc, cell_key)?.into_owned();
+        let container_ref = get_loc!(self, container_loc)?.into_owned();
+        let lpc_ref = get_loc!(self, index_loc)?.into_owned();
 
         match container_ref {
             LpcRef::Array(vec_ref) => {
@@ -1653,7 +1617,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     if idx >= 0 {
                         if let Some(v) = vec.get(idx as usize) {
-                            set_loc!(self, destination, v.clone(), cell_key)?;
+                            set_loc!(self, destination, v.clone())?;
                         } else {
                             return Err(self.array_index_error(idx, vec.len()));
                         }
@@ -1661,7 +1625,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         return Err(self.array_index_error(idx, vec.len()));
                     }
                 } else {
-                    return Err(self.array_index_error(lpc_ref.with_key(cell_key), vec.len()));
+                    return Err(self.array_index_error(lpc_ref, vec.len()));
                 }
 
                 Ok(())
@@ -1679,17 +1643,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     if idx >= 0 {
                         if let Some(v) = string.chars().nth(idx as usize) {
-                            set_loc!(self, destination, LpcRef::Int(v as i64), cell_key)?;
+                            set_loc!(self, destination, LpcRef::Int(v as i64))?;
                         } else {
-                            set_loc!(self, destination, LpcRef::Int(0), cell_key)?;
+                            set_loc!(self, destination, LpcRef::Int(0))?;
                         }
                     } else {
-                        set_loc!(self, destination, LpcRef::Int(0), cell_key)?;
+                        set_loc!(self, destination, LpcRef::Int(0))?;
                     }
                 } else {
                     return Err(self.runtime_error(format!(
                         "Attempting to access index {} in a string of length {}",
-                        lpc_ref.with_key(cell_key),
+                        lpc_ref,
                         string.len()
                     )));
                 }
@@ -1700,19 +1664,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let value = map_ref.read();
                 let map = try_extract_value!(*value, LpcValue::Mapping);
 
-                let var = if let Some(v) = map.get(&lpc_ref.into_hashed(cell_key)) {
+                let var = if let Some(v) = map.get(&lpc_ref.into_hashed()) {
                     v.clone()
                 } else {
                     NULL
                 };
 
-                set_loc!(self, destination, var, cell_key)?;
+                set_loc!(self, destination, var)?;
 
                 Ok(())
             }
             x => Err(self.runtime_error(format!(
                 "Invalid attempt to take index of `{}`",
-                x.with_key(cell_key)
+                x
             ))),
         }
     }
@@ -1724,11 +1688,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
         destination: RegisterVariant,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let var = {
-            let container_ref = &*get_loc!(self, container_loc, cell_key)?;
-            let lpc_ref = &*get_loc!(self, index_loc, cell_key)?;
+            let container_ref = &*get_loc!(self, container_loc)?;
+            let lpc_ref = &*get_loc!(self, index_loc)?;
 
             match container_ref {
                 LpcRef::Mapping(map_ref) => {
@@ -1740,7 +1703,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         _ => {
                             return Err(self.runtime_error(format!(
                                 "Invalid index type: {}",
-                                lpc_ref.with_key(cell_key)
+                                lpc_ref
                             )))
                         }
                     };
@@ -1754,13 +1717,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 x => {
                     return Err(self.runtime_error(format!(
                         "Invalid attempt to take index of `{}`",
-                        x.with_key(cell_key)
+                        x
                     )))
                 }
             }
         };
 
-        set_loc!(self, destination, var, cell_key)
+        set_loc!(self, destination, var)
     }
 
     #[instrument(skip_all)]
@@ -1769,7 +1732,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         location: RegisterVariant,
         index: usize,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
         let function_strings = self.stack.current_frame()?.function.strings.get();
         const MSG: &str = "the `strings` reference was never assigned to the function.";
@@ -1786,7 +1748,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .memory()
             .value_to_ref(LpcValue::from(lpc_string));
 
-        set_loc!(self, location, new_ref, cell_key)
+        set_loc!(self, location, new_ref)
     }
 
     #[instrument(skip_all)]
@@ -1796,10 +1758,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         value_loc: RegisterVariant,
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
-        cell_key: &mut QCellOwner,
     ) -> Result<()> {
-        let mut container = get_loc!(self, container_loc, cell_key)?.into_owned();
-        let index = &*get_loc!(self, index_loc, cell_key)?;
+        let mut container = get_loc!(self, container_loc)?.into_owned();
+        let index = &*get_loc!(self, index_loc)?;
         let array_idx = if let LpcRef::Int(i) = index { *i } else { 0 };
 
         match container {
@@ -1822,7 +1783,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 if idx >= 0 && (idx as usize) < len {
-                    vec[idx as usize] = (*get_loc!(self, value_loc, cell_key)?).clone();
+                    vec[idx as usize] = (*get_loc!(self, value_loc)?).clone();
                 } else {
                     return Err(self.array_index_error(idx, len));
                 }
@@ -1839,15 +1800,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 map.insert(
-                    index.clone().into_hashed(cell_key),
-                    get_loc!(self, value_loc, cell_key)?.into_owned(),
+                    index.clone().into_hashed(),
+                    get_loc!(self, value_loc)?.into_owned(),
                 );
 
                 Ok(())
             }
             x => Err(self.runtime_error(format!(
                 "Invalid attempt to take index of `{}`",
-                x.with_key(cell_key)
+                x
             ))),
         }
     }
@@ -1857,8 +1818,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver_ref: &LpcRef,
         name: &LpcString,
         context: &TaskContext,
-        cell_key: &QCellOwner,
-    ) -> Option<Arc<QCell<Process>>> {
+    ) -> Option<Arc<RwLock<Process>>> {
         let process = match receiver_ref {
             LpcRef::String(s) => {
                 let r = s.read();
@@ -1868,7 +1828,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return None;
                 };
 
-                match context.lookup_process(str, cell_key) {
+                match context.lookup_process(str) {
                     Some(proc) => proc,
                     None => return None,
                 }
@@ -1886,7 +1846,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process.ro(cell_key).as_ref().contains_function(name) {
+        if process.read().as_ref().contains_function(name) {
             Some(process)
         } else {
             None
@@ -1896,7 +1856,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Set the state to handle a caught error.
     /// Panics if there aren't actually any catch points.
     #[instrument(skip_all)]
-    fn catch_error(&mut self, error: LpcError, cell_key: &mut QCellOwner) -> Result<()> {
+    fn catch_error(&mut self, error: LpcError) -> Result<()> {
         let catch_point = self.catch_points.last().unwrap();
         let result_index = catch_point.register.index();
         let frame_index = catch_point.frame_index;
@@ -1921,7 +1881,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // set up the catch point's return value
         let value = LpcValue::from(error.to_string());
         let lpc_ref = self.context.memory().value_to_ref(value);
-        set_loc!(self, Register(result_index).as_local(), lpc_ref, cell_key)?;
+        set_loc!(self, Register(result_index).as_local(), lpc_ref)?;
         let frame = self.stack.current_frame_mut()?;
 
         // jump to the corresponding catchend instruction
@@ -1937,19 +1897,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         r2: RegisterVariant,
         r3: RegisterVariant,
         operation: F,
-        cell_key: &mut QCellOwner,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef, &LpcRef, &mut QCellOwner) -> Result<LpcValue>,
+        F: Fn(&LpcRef, &LpcRef) -> Result<LpcValue>,
     {
-        let ref1 = &*get_location(&self.stack, r1, cell_key)?;
-        let ref2 = &*get_location(&self.stack, r2, cell_key)?;
+        let ref1 = &*get_location(&self.stack, r1)?;
+        let ref2 = &*get_location(&self.stack, r2)?;
 
-        match operation(ref1, ref2, cell_key) {
+        match operation(ref1, ref2) {
             Ok(result) => {
                 let var = self.context.memory().value_to_ref(result);
 
-                set_loc!(self, r3, var, cell_key)?;
+                set_loc!(self, r3, var)?;
             }
             Err(e) => {
                 let frame = self.stack.current_frame()?;
@@ -1968,17 +1927,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         r2: RegisterVariant,
         r3: RegisterVariant,
         operation: F,
-        cell_key: &mut QCellOwner,
     ) -> Result<()>
     where
         F: Fn(&LpcRef, &LpcRef) -> bool,
     {
-        let ref1 = &*get_location(&self.stack, r1, cell_key)?;
-        let ref2 = &*get_location(&self.stack, r2, cell_key)?;
+        let ref1 = &*get_location(&self.stack, r1)?;
+        let ref2 = &*get_location(&self.stack, r2)?;
 
         let out = operation(ref1, ref2) as LpcInt;
 
-        set_loc!(self, r3, LpcRef::Int(out), cell_key)
+        set_loc!(self, r3, LpcRef::Int(out))
     }
 
     /// convenience helper to generate runtime errors
@@ -2049,9 +2007,8 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> Result<()> {
-        self.stack.mark(marked, processed, cell_key)
+        self.stack.mark(marked, processed)
     }
 }
 
@@ -2126,7 +2083,7 @@ mod tests {
     }
 
     impl BareVal {
-        pub fn from_lpc_ref(lpc_ref: &LpcRef, cell_key: &QCellOwner) -> Self {
+        pub fn from_lpc_ref(lpc_ref: &LpcRef) -> Self {
             match lpc_ref {
                 LpcRef::Float(x) => BareVal::Float(*x),
                 LpcRef::Int(x) => BareVal::Int(*x),
@@ -2140,7 +2097,7 @@ mod tests {
                     let a = extract_value!(&*xb, LpcValue::Array);
                     let array = a
                         .iter()
-                        .map(|item| BareVal::from_lpc_ref(item, cell_key))
+                        .map(|item| BareVal::from_lpc_ref(item))
                         .collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
@@ -2151,8 +2108,8 @@ mod tests {
                         .iter()
                         .map(|(k, v)| {
                             (
-                                BareVal::from_lpc_ref(&k.value, cell_key),
-                                BareVal::from_lpc_ref(v, cell_key),
+                                BareVal::from_lpc_ref(&k.value),
+                                BareVal::from_lpc_ref(v),
                             )
                         })
                         .collect::<HashMap<_, _>>();
@@ -2161,7 +2118,7 @@ mod tests {
                 LpcRef::Object(x) => {
                     let xb = x.read();
                     let o = extract_value!(&*xb, LpcValue::Object);
-                    let filename = o.ro(cell_key).filename().into_owned();
+                    let filename = o.ro().filename().into_owned();
                     BareVal::Object(filename)
                 }
                 LpcRef::Function(x) => {
@@ -2170,7 +2127,7 @@ mod tests {
                     let args = fp
                         .partial_args
                         .iter()
-                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(r, cell_key)))
+                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(r)))
                         .collect::<Vec<_>>();
 
                     BareVal::Function(fp.name().into(), args)
@@ -2178,15 +2135,15 @@ mod tests {
             }
         }
 
-        pub fn equal_to_lpc_ref(&self, other: &LpcRef, cell_key: &QCellOwner) -> bool {
-            self == &BareVal::from_lpc_ref(other, cell_key)
+        pub fn equal_to_lpc_ref(&self, other: &LpcRef) -> bool {
+            self == &BareVal::from_lpc_ref(other)
         }
 
-        pub fn assert_equal(&self, other: &LpcRef, cell_key: &QCellOwner) {
-            assert_eq!(self, &BareVal::from_lpc_ref(other, cell_key));
+        pub fn assert_equal(&self, other: &LpcRef) {
+            assert_eq!(self, &BareVal::from_lpc_ref(other));
         }
 
-        pub fn assert_vec_equal(a: &[BareVal], b: &[LpcRef], cell_key: &QCellOwner) {
+        pub fn assert_vec_equal(a: &[BareVal], b: &[LpcRef]) {
             assert_eq!(
                 a.len(),
                 b.len(),
@@ -2195,15 +2152,14 @@ mod tests {
                 b
             );
             for (a, b) in a.iter().zip(b.iter()) {
-                a.assert_equal(b, cell_key);
+                a.assert_equal(b);
             }
         }
     }
 
-    impl PartialEq<(&LpcRef, &QCellOwner)> for BareVal {
-        fn eq(&self, pair: &(&LpcRef, &QCellOwner)) -> bool {
-            let (other, cell_key) = pair;
-            &BareVal::from_lpc_ref(other, cell_key) == self
+    impl PartialEq<&LpcRef> for BareVal {
+        fn eq(&self, lpc_ref: &LpcRef) -> bool {
+            &BareVal::from_lpc_ref(lpc_ref) == self
         }
     }
 
@@ -2266,8 +2222,8 @@ mod tests {
         use super::*;
         use crate::interpreter::{bank::RefBank, task::tests::BareVal::*};
 
-        fn snapshot_registers(code: &str, cell_key: &mut QCellOwner) -> RefBank {
-            let mut task = run_prog(code, cell_key);
+        fn snapshot_registers(code: &str) -> RefBank {
+            let mut task = run_prog(code);
             let mut stack = task.snapshots.pop().unwrap();
 
             // The top of the stack in the snapshot is the object initialization frame,
@@ -2286,8 +2242,7 @@ mod tests {
                 let code = indoc! { r##"
                     mixed *a = ({ 12, 4.3, "hello", ({ 1, 2, 3 }) });
                 "##};
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2307,7 +2262,7 @@ mod tests {
                     ]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2321,13 +2276,12 @@ mod tests {
                     mixed b = 0 & a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(11), Int(0), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2342,13 +2296,12 @@ mod tests {
                     mixed c = b && a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(333), Int(333), Int(0), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2363,13 +2316,12 @@ mod tests {
                     int c = ~b;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(-1), Int(7), Int(-8)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2383,13 +2335,12 @@ mod tests {
                     int tacos() { return 666; }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(666), Int(666)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2404,17 +2355,16 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let proc = ctx.process();
-                let borrowed = proc.ro(&cell_key);
+                let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
                 String("my public_function".into())
-                    .assert_equal(values.get("mine").unwrap(), &cell_key);
+                    .assert_equal(values.get("mine").unwrap());
                 String("/std/object public".into())
-                    .assert_equal(values.get("parents").unwrap(), &cell_key);
+                    .assert_equal(values.get("parents").unwrap());
             }
 
             #[test]
@@ -2429,19 +2379,18 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let proc = ctx.process();
-                let borrowed = proc.ro(&cell_key);
+                let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
                 assert!(
                     String("file_name_override".into())
-                        == (*values.get("this_one").unwrap(), &cell_key)
+                        == (*values.get("this_one").unwrap())
                 );
                 assert!(
-                    String("/std/object#0".into()) == (*values.get("efun_one").unwrap(), &cell_key)
+                    String("/std/object#0".into()) == (*values.get("efun_one").unwrap())
                 );
             }
 
@@ -2452,15 +2401,14 @@ mod tests {
                     string this_one = simul_efun("marf");
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let proc = ctx.process();
-                let borrowed = proc.ro(&cell_key);
+                let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
                 String("this is a simul_efun: marf".into())
-                    .assert_equal(values.get("this_one").unwrap(), &cell_key);
+                    .assert_equal(values.get("this_one").unwrap());
             }
         }
 
@@ -2473,13 +2421,12 @@ mod tests {
                     mixed q = this_object();
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Object("/my_file".into()), Object("/my_file".into())];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2492,8 +2439,7 @@ mod tests {
                     mixed q = simul_efun("marf");
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2502,7 +2448,7 @@ mod tests {
                     String("this is a simul_efun: marf".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2520,8 +2466,7 @@ mod tests {
                     int tacos(int j) { return j + 1; }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2531,7 +2476,7 @@ mod tests {
                     Int(667),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2544,8 +2489,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2560,7 +2504,7 @@ mod tests {
                     String("adding some! 670".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2573,8 +2517,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2584,7 +2527,7 @@ mod tests {
                     String("my_string! awesome!".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2598,8 +2541,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2616,7 +2558,7 @@ mod tests {
                     String("adding some! 223".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2632,8 +2574,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2658,7 +2599,7 @@ mod tests {
                     Int(69),
                     Int(69),
                 ];
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2674,8 +2615,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2691,7 +2631,7 @@ mod tests {
                     String("widget: 42. awesome!".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2705,8 +2645,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2724,7 +2663,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2737,13 +2676,12 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(4), Function("tacos".into(), vec![]), Int(4), Int(4)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2756,16 +2694,15 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let object_space = ObjectSpace::default();
+                                let object_space = ObjectSpace::default();
                 let upvalues = GcBank::default();
                 let (tx, _) = mpsc::channel(128);
-                let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-                let (program, config, process) = compile_prog(code, &mut cell_key);
-                let space_cell = cell_key.cell(object_space).into();
-                ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
-                let vm_upvalues = Arc::new(cell_key.cell(upvalues));
+                let (program, config, process) = compile_prog(code);
+                let space_cell = RwLock::new(object_space).into();
+                ObjectSpace::insert_process(&space_cell, process);
+                let vm_upvalues = Arc::new(RwLock::new(upvalues));
 
                 let result = Task::<32>::initialize_program(
                     program,
@@ -2775,7 +2712,6 @@ mod tests {
                     vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
-                    &mut cell_key,
                 );
 
                 assert_eq!(
@@ -2793,10 +2729,10 @@ mod tests {
                     }
                 "##};
 
-                let (program, config, process) = compile_prog(code, &mut cell_key);
+                let (program, config, process) = compile_prog(code);
                 let object_space = ObjectSpace::default();
-                let object_space = cell_key.cell(object_space);
-                ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
+                let object_space = RwLock::new(object_space);
+                ObjectSpace::insert_process(&space_cell, process);
 
                 let result = Task::<10>::initialize_program(
                     program,
@@ -2806,7 +2742,6 @@ mod tests {
                     vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
-                    &mut cell_key,
                 );
 
                 assert_eq!(
@@ -2824,10 +2759,10 @@ mod tests {
                     }
                 "##};
 
-                let (program, config, process) = compile_prog(code, &mut cell_key);
+                let (program, config, process) = compile_prog(code);
                 let object_space = ObjectSpace::default();
-                let space_cell = cell_key.cell(object_space).into();
-                ObjectSpace::insert_process(&space_cell, process, &mut cell_key);
+                let space_cell = RwLock::new(object_space).into();
+                ObjectSpace::insert_process(&space_cell, process);
 
                 let result = Task::<20>::initialize_program(
                     program,
@@ -2837,7 +2772,6 @@ mod tests {
                     vm_upvalues,
                     call_outs,
                     tx,
-                    &mut cell_key,
                 );
 
                 assert_ok!(result);
@@ -2854,8 +2788,7 @@ mod tests {
                     int tacos() { return 666; }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2865,7 +2798,7 @@ mod tests {
                     Int(666),
                 ];
 
-                BareVal::assert_vec_equal(&expected, registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, registers);
             }
 
             #[test]
@@ -2875,8 +2808,7 @@ mod tests {
                     private int tacos() { return 666; }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2886,7 +2818,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, registers);
             }
 
             #[test]
@@ -2896,8 +2828,7 @@ mod tests {
                     protected int tacos() { return 666; }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2907,7 +2838,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, registers);
             }
         }
 
@@ -2925,8 +2856,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -2938,7 +2868,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -2952,8 +2882,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -2965,7 +2894,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -2981,8 +2910,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
 
                 assert!(task.catch_points.is_empty());
             }
@@ -3002,12 +2930,11 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![Int(0), Int(-1), String("snapshot_stack".into()), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3017,19 +2944,17 @@ mod tests {
                     int k = --j;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let expected = vec![Int(4), Int(4)];
 
                 let proc = ctx.process();
-                let proc = proc.ro(&cell_key);
+                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
                     &proc.globals.iter().cloned().collect::<Vec<_>>(),
-                    &cell_key,
                 );
             }
 
@@ -3044,8 +2969,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -3055,7 +2979,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3065,19 +2989,17 @@ mod tests {
                     int k = j--;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let expected = vec![Int(4), Int(5)];
 
                 let proc = ctx.process();
-                let proc = proc.ro(&cell_key);
+                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
                     &proc.globals.iter().cloned().collect::<Vec<_>>(),
-                    &cell_key,
                 );
             }
         }
@@ -3091,13 +3013,12 @@ mod tests {
                     mixed q = 2 == 2;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(2), Int(2), Int(1)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3110,13 +3031,12 @@ mod tests {
                     float π = 4.13;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Float(4.13.into())];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3129,13 +3049,12 @@ mod tests {
                     function f = dump;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Function("dump".to_string(), vec![])];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3144,13 +3063,12 @@ mod tests {
                     function f = simul_efun;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Function("simul_efun".to_string(), vec![])];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3163,8 +3081,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3173,7 +3090,7 @@ mod tests {
                     Function("tacco".to_string(), vec![]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3186,8 +3103,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3197,7 +3113,7 @@ mod tests {
                     Function("tacco".to_string(), vec![Some(Int(1)), Some(Int(666))]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3210,8 +3126,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3224,7 +3139,7 @@ mod tests {
                     ),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3238,8 +3153,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3247,7 +3161,7 @@ mod tests {
                     Function("closure-0".to_string(), vec![]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3262,8 +3176,7 @@ mod tests {
                     mixed s = 1200 > 1200;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3279,7 +3192,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3294,8 +3207,7 @@ mod tests {
                     mixed s = 1200 >= 1200;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3311,7 +3223,7 @@ mod tests {
                     Int(1),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3326,8 +3238,7 @@ mod tests {
                     int s = q + r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3338,7 +3249,7 @@ mod tests {
                     Int(58),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3351,13 +3262,12 @@ mod tests {
                     mixed q = 666;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(666)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3370,13 +3280,12 @@ mod tests {
                     mixed q = 0;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3389,13 +3298,12 @@ mod tests {
                     mixed q = 1;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(1)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3410,8 +3318,7 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3422,7 +3329,7 @@ mod tests {
                     Int(-2),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3433,20 +3340,18 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let (program, _, _) = compile_prog(code, &mut cell_key);
+                                let (program, _, _) = compile_prog(code);
                 let (tx, _) = mpsc::channel(128);
-                let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
                 let r = Task::<10>::initialize_program(
                     program,
                     Config::default(),
-                    cell_key.cell(ObjectSpace::default()),
+                    RwLock::new(ObjectSpace::default()),
                     Memory::default(),
-                    Arc::new(cell_key.cell(GcBank::default())),
+                    Arc::new(RwLock::new(GcBank::default())),
                     call_outs,
                     tx,
-                    &mut cell_key,
                 );
 
                 assert_eq!(
@@ -3467,8 +3372,7 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3479,7 +3383,7 @@ mod tests {
                     Int(2),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3490,21 +3394,19 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let vm_upvalues = cell_key.cell(GcBank::default());
-                let (program, _, _) = compile_prog(code, &mut cell_key);
+                                let vm_upvalues = RwLock::new(GcBank::default());
+                let (program, _, _) = compile_prog(code);
                 let (tx, _) = mpsc::channel(128);
-                let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
                 let r = Task::<20>::initialize_program(
                     program,
                     Config::default(),
-                    cell_key.cell(ObjectSpace::default()),
+                    RwLock::new(ObjectSpace::default()),
                     Memory::default(),
                     Arc::new(vm_upvalues),
                     call_outs,
                     tx,
-                    &mut cell_key,
                 );
 
                 assert_eq!(
@@ -3525,13 +3427,12 @@ mod tests {
                     int s = q * r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(32), Int(-48), Int(-1536)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3549,12 +3450,11 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![Int(0), Int(1), String("snapshot_stack".into()), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3564,19 +3464,17 @@ mod tests {
                     int k = ++j;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let expected = vec![Int(1), Int(1)];
 
                 let proc = ctx.process();
-                let proc = proc.ro(&cell_key);
+                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
                     &proc.globals.iter().cloned().collect::<Vec<_>>(),
-                    &cell_key,
                 );
             }
 
@@ -3591,8 +3489,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -3602,7 +3499,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -3612,19 +3509,17 @@ mod tests {
                     int k = j++;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
 
                 let expected = vec![Int(6), Int(5)];
 
                 let proc = ctx.process();
-                let proc = proc.ro(&cell_key);
+                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
                     &proc.globals.iter().cloned().collect::<Vec<_>>(),
-                    &cell_key,
                 );
             }
         }
@@ -3640,13 +3535,12 @@ mod tests {
                     int s = q - r;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(14), Int(16), Int(-2)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3671,8 +3565,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -3686,7 +3579,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3708,8 +3601,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -3722,7 +3614,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3736,8 +3628,7 @@ mod tests {
                             int j = i > 12 ? 10 : 1000;
                         "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3750,7 +3641,7 @@ mod tests {
                     Int(1000),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3764,8 +3655,7 @@ mod tests {
                     int j = i[1];
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3778,7 +3668,7 @@ mod tests {
                     Int(2),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3793,8 +3683,7 @@ mod tests {
                     mixed s = 1200 < 1200;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3810,7 +3699,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3825,8 +3714,7 @@ mod tests {
                     mixed s = 1200 <= 1200;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3842,7 +3730,7 @@ mod tests {
                     Int(1),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3858,8 +3746,7 @@ mod tests {
                     ]);
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut hashmap = HashMap::new();
@@ -3875,7 +3762,7 @@ mod tests {
                     Mapping(hashmap),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3890,8 +3777,7 @@ mod tests {
                     mixed c = a + b;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3901,7 +3787,7 @@ mod tests {
                     String("abc123".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3916,8 +3802,7 @@ mod tests {
                     mixed c = a * b;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3927,7 +3812,7 @@ mod tests {
                     String("abcabcabcabc".into()),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3941,8 +3826,7 @@ mod tests {
                     mixed b = a - ({ 1 });
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3957,7 +3841,7 @@ mod tests {
                     Array(vec![Int(2), Int(3)]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -3975,8 +3859,7 @@ mod tests {
                     string f = !"asdf";
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3996,7 +3879,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4010,13 +3893,12 @@ mod tests {
                     mixed b = 0 | a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(31), Int(0), Int(31)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4031,13 +3913,12 @@ mod tests {
                     mixed c = b || a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(123), Int(0), Int(0), Int(123)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4057,8 +3938,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let mut mapping = HashMap::new();
                 mapping.insert(String("a".into()), Int(123));
@@ -4089,7 +3969,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -4101,10 +3981,9 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let ctx = task.context;
-                Array(vec![]).assert_equal(ctx.result().unwrap(), &cell_key);
+                Array(vec![]).assert_equal(ctx.result().unwrap());
             }
         }
 
@@ -4123,8 +4002,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let mut mapping = HashMap::new();
                 mapping.insert(String("a".into()), Int(123));
@@ -4146,7 +4024,7 @@ mod tests {
                     Array(vec![String("a string".into()), Int(3), Float(2.44.into())]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4159,8 +4037,7 @@ mod tests {
                     mixed a = ({ 1, 2, 3 })[1..];
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4174,7 +4051,7 @@ mod tests {
                     Array(vec![Int(2), Int(3)]),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4188,13 +4065,12 @@ mod tests {
                     mixed b = a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(4)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4207,8 +4083,7 @@ mod tests {
                     int create() { return 666; }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4216,7 +4091,7 @@ mod tests {
                     Int(666), // The copy of the call return value into its own register
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4230,13 +4105,12 @@ mod tests {
                     mixed b = 0 << a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(790080), Int(0), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4250,13 +4124,12 @@ mod tests {
                     mixed b = 0 >> a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(192), Int(0), Int(0)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4278,8 +4151,7 @@ mod tests {
                     int a = sizeof(({ 1, 2, 3 }));
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4291,7 +4163,7 @@ mod tests {
                     Int(3),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -4300,8 +4172,7 @@ mod tests {
                     int a = sizeof(([ "a": 1, 'b': 2, 3: ({ 4, 5, 6 }), 0: 0 ]));
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut mapping = HashMap::new();
@@ -4327,7 +4198,7 @@ mod tests {
                     Int(4),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
 
             #[test]
@@ -4367,21 +4238,19 @@ mod tests {
                     ..Default::default()
                 };
 
-                let mut cell_key = QCellOwner::new();
-                let vm_upvalues = cell_key.cell(GcBank::default());
+                                let vm_upvalues = RwLock::new(GcBank::default());
                 let object_space = ObjectSpace::default();
                 let (tx, _) = mpsc::channel(128);
-                let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
                 let task = Task::<20>::initialize_program(
                     program,
                     config,
-                    cell_key.cell(object_space),
+                    RwLock::new(object_space),
                     Memory::default(),
                     Arc::new(vm_upvalues),
                     call_outs,
                     tx,
-                    &mut cell_key,
                 )
                 .expect("failed to initialize");
 
@@ -4389,7 +4258,7 @@ mod tests {
 
                 let expected = vec![Int(0), String("Hello, world!".into()), Int(13)];
 
-                BareVal::assert_vec_equal(&expected, registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, registers);
             }
         }
 
@@ -4407,8 +4276,7 @@ mod tests {
                     }
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let registers = snapshot_registers(code, &mut cell_key);
+                                let registers = snapshot_registers(code);
 
                 let expected = vec![
                     Int(0),
@@ -4422,7 +4290,7 @@ mod tests {
                     Int(0),
                 ];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4435,13 +4303,12 @@ mod tests {
                     string foo = "lolwut";
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), String("lolwut".into())];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
 
@@ -4455,13 +4322,12 @@ mod tests {
                     mixed b = 0 ^ a;
                 "##};
 
-                let mut cell_key = QCellOwner::new();
-                let task = run_prog(code, &mut cell_key);
+                                let task = run_prog(code);
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(20), Int(0), Int(20)];
 
-                BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+                BareVal::assert_vec_equal(&expected, &registers);
             }
         }
     }
@@ -4479,21 +4345,19 @@ mod tests {
                 }
             "##};
 
-            let mut cell_key = QCellOwner::new();
-            let vm_upvalues = cell_key.cell(GcBank::default());
-            let (program, _, _) = compile_prog(code, &mut cell_key);
+                        let vm_upvalues = RwLock::new(GcBank::default());
+            let (program, _, _) = compile_prog(code);
             let (tx, _) = mpsc::channel(128);
-            let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+            let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
             let r = Task::<20>::initialize_program(
                 program,
                 Config::default(),
-                cell_key.cell(ObjectSpace::default()),
+                RwLock::new(ObjectSpace::default()),
                 Memory::default(),
                 vm_upvalues,
                 call_outs,
                 tx,
-                &mut cell_key,
             );
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
@@ -4501,8 +4365,7 @@ mod tests {
 
         #[test]
         fn errors_on_too_long_evaluation() {
-            let mut cell_key = QCellOwner::new();
-            let code = indoc! { r##"
+                        let code = indoc! { r##"
                 void create() {
                     while(1) {}
                 }
@@ -4512,21 +4375,19 @@ mod tests {
                 .max_task_instructions(10_usize)
                 .build()
                 .unwrap();
-            let (program, _, _) = compile_prog(code, &mut cell_key);
-            let mut cell_key = QCellOwner::new();
-            let vm_upvalues = cell_key.cell(GcBank::default());
+            let (program, _, _) = compile_prog(code);
+                        let vm_upvalues = RwLock::new(GcBank::default());
             let (tx, _) = mpsc::channel(128);
-            let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+            let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
             let r = Task::<20>::initialize_program(
                 program,
                 config,
-                cell_key.cell(ObjectSpace::default()),
+                RwLock::new(ObjectSpace::default()),
                 Memory::default(),
                 Arc::new(vm_upvalues),
                 call_outs,
                 tx,
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -4549,8 +4410,7 @@ mod tests {
                 int k = inc();
             "##};
 
-            let mut cell_key = QCellOwner::new();
-            let task = run_prog(code, &mut cell_key);
+                        let task = run_prog(code);
             let registers = task.popped_frame.unwrap().registers;
 
             let expected = vec![
@@ -4561,10 +4421,10 @@ mod tests {
                 Int(1),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers, &cell_key);
+            BareVal::assert_vec_equal(&expected, &registers);
 
             let proc = task.context.process();
-            let proc = proc.ro(&cell_key);
+            let proc = proc.read();
 
             let expected = vec![
                 Int(2),
@@ -4572,7 +4432,7 @@ mod tests {
                 Int(0),
                 Int(1),
             ];
-            BareVal::assert_vec_equal(&expected, &proc.globals, &cell_key);
+            BareVal::assert_vec_equal(&expected, &proc.globals);
         }
     }
 
@@ -4584,15 +4444,14 @@ mod tests {
         where
             T: Into<BareVal> + Clone,
         {
-            let mut cell_key = QCellOwner::new();
-            let mut task = run_prog(code, &mut cell_key);
+                        let mut task = run_prog(code);
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
 
             let frame = snapshot.pop().unwrap();
 
-            let frame_vars = frame.local_variables(&cell_key);
+            let frame_vars = frame.local_variables();
 
             for (k, v) in vars {
                 let v: BareVal = v.clone().into();
@@ -4603,11 +4462,11 @@ mod tests {
                 assert!(
                     found
                         .iter()
-                        .any(|local| v.equal_to_lpc_ref(&local.value, &cell_key)),
+                        .any(|local| v.equal_to_lpc_ref(&local.value)),
                     "key: {k}, value: {v}, found: {:?}",
                     found
                         .iter()
-                        .map(|v| v.value.with_key(&cell_key))
+                        .map(|v| v.value)
                         .collect::<Vec<_>>()
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
@@ -4618,8 +4477,7 @@ mod tests {
         where
             T: Into<BareVal> + Clone,
         {
-            let mut cell_key = QCellOwner::new();
-            let mut task = run_prog(code, &mut cell_key);
+                        let mut task = run_prog(code);
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4628,19 +4486,19 @@ mod tests {
 
             assert_eq!(
                 upvalues.len(),
-                frame.vm_upvalues.ro(&cell_key).len(),
+                frame.vm_upvalues.read().len(),
                 "frame upvalues: {:?}\nvm upvalues: {:?}",
                 upvalues
                     .iter()
                     .map(|i| i.clone().into())
                     .collect::<Vec<BareVal>>(),
-                frame.vm_upvalues.ro(&cell_key).iter().collect::<Vec<_>>()
+                frame.vm_upvalues.read().iter().collect::<Vec<_>>()
             );
 
-            let vm_upvalues = frame.vm_upvalues.ro(&cell_key);
+            let vm_upvalues = frame.vm_upvalues.read();
             for (i, v) in upvalues.iter().enumerate() {
                 let v: BareVal = v.clone().into();
-                v.assert_equal(&vm_upvalues[i], &cell_key);
+                v.assert_equal(&vm_upvalues[i]);
             }
         }
 
@@ -4648,8 +4506,7 @@ mod tests {
         where
             T: Into<Register> + Copy,
         {
-            let mut cell_key = QCellOwner::new();
-            let mut task = run_prog(code, &mut cell_key);
+                        let mut task = run_prog(code);
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4925,8 +4782,7 @@ mod tests {
 
         #[test]
         fn test_gc_is_accurate() {
-            let mut cell_key = QCellOwner::new();
-            let code = indoc! { r##"
+                        let code = indoc! { r##"
                 int k = 0;
 
                 void create() {
@@ -4946,19 +4802,19 @@ mod tests {
                 }
             "##};
 
-            let task = run_prog(code, &mut cell_key);
+            let task = run_prog(code);
             let ctx = &task.context;
-            assert!(!ctx.upvalues().ro(&cell_key).is_empty());
+            assert!(!ctx.upvalues().read().is_empty());
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
-            task.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            task.mark(&mut marked, &mut processed).unwrap();
             ctx.upvalues()
-                .rw(&mut cell_key)
+                .write()
                 .keyless_sweep(&marked)
                 .unwrap();
 
-            assert!(ctx.upvalues().ro(&cell_key).is_empty());
+            assert!(ctx.upvalues().read().is_empty());
         }
     }
 }

@@ -1,5 +1,4 @@
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
@@ -7,8 +6,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 /// This will cancel both upcoming and repeating call outs.
 pub fn remove_call_out<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
@@ -19,9 +17,12 @@ pub fn remove_call_out<const N: usize>(
         )));
     }
 
-    let call_outs = context.call_outs().rw(cell_key);
-    let ret = call_outs
-        .remove(idx as usize)
+    let removed = {
+        let mut call_outs = context.call_outs().write();
+        call_outs.remove(idx as usize)
+    };
+
+    let ret = removed
         .map(|call_out| {
             call_out
                 .time_remaining()
@@ -54,7 +55,7 @@ mod tests {
 
     #[test]
     fn test_removes_task() {
-        let mut cell_key = QCellOwner::new();
+
 
         let code = r##"
             void create() {
@@ -69,20 +70,20 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let (program, _, _) = compile_prog(code);
+        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
         let result = Task::<10>::initialize_program(
             program,
             Config::default(),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(ObjectSpace::default()),
             Memory::default(),
-            cell_key.cell(GcBank::default()),
+            RwLock::new(GcBank::default()),
             call_outs.clone(),
             tx,
             &mut cell_key,
         );
 
         assert!(result.is_ok());
-        assert!(call_outs.ro(&cell_key).is_empty());
+        assert!(call_outs.read().is_empty());
     }
 }

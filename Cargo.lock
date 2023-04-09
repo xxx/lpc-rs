@@ -102,6 +102,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e97ce7de6cf12de5d7226c73f5ba9811622f4db3a5b91b55c53e987e5f91cba"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.13",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -782,6 +793,7 @@ checksum = "23342abe12aba583913b2e62f22225ff9c950774065e4bfb61a19cd9770fec40"
 dependencies = [
  "futures-channel",
  "futures-core",
+ "futures-executor",
  "futures-io",
  "futures-sink",
  "futures-task",
@@ -805,10 +817,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bca583b7e26f571124fe5b7561d49cb2868d79116cfa0eefce955557c6fee8c"
 
 [[package]]
+name = "futures-executor"
+version = "0.3.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccecee823288125bd88b4d7f565c9e58e41858e47ab72e8ea2d64e93624386e0"
+dependencies = [
+ "futures-core",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
 name = "futures-io"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fff74096e71ed47f8e023204cfd0aa1289cd54ae5430a9523be060cdb849964"
+
+[[package]]
+name = "futures-macro"
+version = "0.3.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89ca545a94061b6365f2c7355b4b32bd20df3ff95f02da9329b34ccc3bd6ee72"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.13",
+]
 
 [[package]]
 name = "futures-sink"
@@ -828,11 +862,16 @@ version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26b01e40b772d54cf6c6d721c1d1abd0647a0106a12ecaa1c186273392a69533"
 dependencies = [
+ "futures-channel",
  "futures-core",
+ "futures-io",
+ "futures-macro",
  "futures-sink",
  "futures-task",
+ "memchr",
  "pin-project-lite",
  "pin-utils",
+ "slab",
 ]
 
 [[package]]
@@ -1158,6 +1197,7 @@ name = "lpc-rs"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "async-recursion",
  "auto_impl",
  "beaver",
  "bit-set",
@@ -1172,6 +1212,7 @@ dependencies = [
  "factori",
  "fake",
  "fs-err",
+ "futures",
  "hash_hasher",
  "if_chain",
  "indexmap",
@@ -1191,7 +1232,6 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "phf",
- "qcell",
  "readonly",
  "regex",
  "rmp-serde",
@@ -1242,7 +1282,6 @@ dependencies = [
  "if_chain",
  "lpc-rs",
  "lpc-rs-utils",
- "qcell",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1263,6 +1302,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -1293,7 +1333,6 @@ dependencies = [
  "lpc-rs",
  "lpc-rs-core",
  "lpc-rs-utils",
- "qcell",
  "tokio",
  "ustr",
 ]
@@ -1689,15 +1728,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "qcell"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76babcf954d92eee717a7c9bfc4921d91dfbf2124d9bfb6ed1b0b3d0c47361e3"
-dependencies = [
- "once_cell",
 ]
 
 [[package]]

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use factori::factori;
-use qcell::QCellOwner;
 use ustr::ustr;
 
 use crate::interpreter::{

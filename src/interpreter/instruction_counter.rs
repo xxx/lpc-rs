@@ -1,6 +1,4 @@
-use std::cell::Cell;
-
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{Result};
 use lpc_rs_utils::config::Config;
 
 /// A struct to encapsulate counting instructions, and erroring in the case of

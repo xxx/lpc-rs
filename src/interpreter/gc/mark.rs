@@ -1,5 +1,4 @@
 use bit_set::BitSet;
-use qcell::QCellOwner;
 
 /// A trait for marking objects that contain references that could be
 /// garbage-collected.
@@ -20,6 +19,5 @@ pub trait Mark {
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> lpc_rs_errors::Result<()>;
 }

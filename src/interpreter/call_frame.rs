@@ -1,5 +1,4 @@
 use std::{
-    cell::Cell,
     fmt,
     fmt::{Debug, Display, Formatter},
     sync::Arc,
@@ -8,11 +7,11 @@ use std::{
 use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
+use parking_lot::RwLock;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use qcell::{QCell, QCellOwner};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -22,7 +21,6 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         process::Process,
     },
-    util::{qcell_debug, qcell_process_debug},
 };
 
 /// A representation of a local variable name and value.
@@ -46,9 +44,8 @@ impl LocalVariable {
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct CallFrame {
     /// A pointer to the process that owns the function being called
-    #[educe(Debug(method = "qcell_process_debug"))]
     #[builder(setter(into))]
-    pub process: Arc<QCell<Process>>,
+    pub process: Arc<RwLock<Process>>,
 
     /// The function that this frame is a call to.
     #[builder(setter(into))]
@@ -79,9 +76,8 @@ pub struct CallFrame {
     pub upvalue_ptrs: Vec<Register>,
 
     /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
-    #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    pub vm_upvalues: Arc<QCell<GcRefBank>>,
+    pub vm_upvalues: Arc<RwLock<GcRefBank>>,
 
     /// This object's unique ID, for garbage collection purposes
     #[builder(default)]
@@ -104,11 +100,10 @@ impl CallFrame {
         function: Arc<ProgramFunction>,
         called_with_num_args: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
-        vm_upvalues: Arc<QCell<GcRefBank>>,
-        cell_key: &mut QCellOwner,
-    ) -> Self
+        vm_upvalues: Arc<RwLock<GcRefBank>>,
+            ) -> Self
     where
-        P: Into<Arc<QCell<Process>>>,
+        P: Into<Arc<RwLock<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = std::cmp::max(function.arity().num_args, called_with_num_args)
@@ -129,7 +124,7 @@ impl CallFrame {
             unique_id: UniqueId::new(),
         };
 
-        instance.populate_upvalues(cell_key);
+        instance.populate_upvalues();
 
         instance
     }
@@ -153,11 +148,10 @@ impl CallFrame {
         called_with_num_args: usize,
         arg_capacity: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
-        vm_upvalues: Arc<QCell<GcRefBank>>,
-        cell_key: &mut QCellOwner,
-    ) -> Self
+        vm_upvalues: Arc<RwLock<GcRefBank>>,
+            ) -> Self
     where
-        P: Into<Arc<QCell<Process>>>,
+        P: Into<Arc<RwLock<Process>>>,
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
@@ -167,7 +161,6 @@ impl CallFrame {
                 called_with_num_args,
                 upvalue_ptrs,
                 vm_upvalues,
-                cell_key,
             )
         }
     }
@@ -176,7 +169,7 @@ impl CallFrame {
     /// Returns the index in the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues` array where the
     ///   newly-populated upvalues will be stored
     #[instrument(skip_all)]
-    fn populate_upvalues(&mut self, cell_key: &mut QCellOwner) {
+    fn populate_upvalues(&mut self) {
         let num_upvalues = self.function.num_upvalues;
 
         trace!("populating upvalues: {}", num_upvalues);
@@ -184,7 +177,7 @@ impl CallFrame {
             return;
         }
 
-        let upvalues = self.vm_upvalues.rw(cell_key);
+        let mut upvalues = self.vm_upvalues.write();
 
         // Reserve space in the proc for the actual values
         upvalues.reserve(num_upvalues);
@@ -204,21 +197,20 @@ impl CallFrame {
         &mut self,
         location: RegisterVariant,
         lpc_ref: LpcRef,
-        cell_key: &mut QCellOwner,
-    ) {
+            ) {
         match location {
             RegisterVariant::Local(reg) => {
                 self.registers[reg] = lpc_ref;
             }
             RegisterVariant::Global(reg) => {
-                let proc = self.process.rw(cell_key);
+                let mut proc = self.process.write();
                 proc.globals[reg] = lpc_ref;
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalue_ptrs;
                 let idx = upvalues[reg.index()];
 
-                let upvalues = self.vm_upvalues.rw(cell_key);
+                let mut upvalues = self.vm_upvalues.write();
                 upvalues[idx] = lpc_ref;
             }
         }
@@ -226,7 +218,7 @@ impl CallFrame {
 
     /// Convenience to return a list of the local variables in this frame.
     /// Intended for debugging and testing.
-    pub fn local_variables(&self, cell_key: &QCellOwner) -> Vec<LocalVariable> {
+    pub fn local_variables(&self) -> Vec<LocalVariable> {
         self.function
             .local_variables
             .iter()
@@ -238,12 +230,12 @@ impl CallFrame {
 
                 let lpc_ref = match loc {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                    RegisterVariant::Global(reg) => self.process.ro(cell_key).globals[reg].clone(),
+                    RegisterVariant::Global(reg) => self.process.read().globals[reg].clone(),
                     RegisterVariant::Upvalue(ptr_reg) => {
                         let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index()];
 
-                        self.vm_upvalues.ro(cell_key)[data_reg].clone()
+                        self.vm_upvalues.read()[data_reg].clone()
                     }
                 };
 
@@ -323,12 +315,11 @@ impl CallFrame {
 }
 
 impl Mark for CallFrame {
-    #[instrument(skip(self, cell_key))]
+    #[instrument(skip(self))]
     fn mark(
         &self,
         marked: &mut BitSet,
         processed: &mut BitSet,
-        cell_key: &QCellOwner,
     ) -> Result<()> {
         trace!("marking call frame {}", self.unique_id);
         if !processed.insert(*self.unique_id.as_ref()) {
@@ -342,7 +333,7 @@ impl Mark for CallFrame {
         marked.extend(ptrs);
 
         for lpc_ref in self.registers.iter() {
-            lpc_ref.mark(marked, processed, cell_key)?;
+            lpc_ref.mark(marked, processed)?;
         }
 
         Ok(())
@@ -368,7 +359,7 @@ mod tests {
 
     #[test]
     fn new_sets_up_registers() {
-        let mut cell_key = QCellOwner::new();
+
         let process = Process::default();
 
         let prototype = FunctionPrototypeBuilder::default()
@@ -380,10 +371,10 @@ mod tests {
             .unwrap();
 
         let fs = ProgramFunction::new(prototype, 7);
-        let vm_upvalues = cell_key.cell(GcBank::default());
+        let vm_upvalues = RwLock::new(GcBank::default());
 
         let frame = CallFrame::new(
-            cell_key.cell(process),
+            RwLock::new(process),
             Arc::new(fs),
             4,
             None,
@@ -400,7 +391,7 @@ mod tests {
 
         #[test]
         fn sets_up_registers_if_greater_max_is_passed() {
-            let mut cell_key = QCellOwner::new();
+
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -412,10 +403,10 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = cell_key.cell(GcBank::default());
+            let vm_upvalues = RwLock::new(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
-                cell_key.cell(process),
+                RwLock::new(process),
                 Arc::new(fs),
                 4,
                 30,
@@ -430,7 +421,7 @@ mod tests {
 
         #[test]
         fn sets_up_registers_if_lesser_max_is_passed() {
-            let mut cell_key = QCellOwner::new();
+
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -442,10 +433,10 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = cell_key.cell(GcBank::default());
+            let vm_upvalues = RwLock::new(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
-                cell_key.cell(process),
+                RwLock::new(process),
                 Arc::new(fs),
                 4,
                 2,
@@ -465,7 +456,7 @@ mod tests {
 
         #[test]
         fn populates_upvalues() {
-            let mut cell_key = QCellOwner::new();
+
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -488,9 +479,9 @@ mod tests {
             pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
 
-            let vm_upvalues = Arc::new(cell_key.cell(GcBank::default()));
+            let vm_upvalues = Arc::new(RwLock::new(GcBank::default()));
             let frame = CallFrame::new(
-                cell_key.cell(process),
+                RwLock::new(process),
                 Arc::new(pf),
                 0,
                 None,
@@ -499,7 +490,7 @@ mod tests {
             );
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
-            assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 2);
+            assert_eq!(frame.vm_upvalues.read().len(), 2);
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
@@ -537,7 +528,7 @@ mod tests {
                 frame.upvalue_ptrs,
                 vec![Register(2), Register(3), Register(4)]
             );
-            assert_eq!(frame.vm_upvalues.ro(&cell_key).len(), 5);
+            assert_eq!(frame.vm_upvalues.read().len(), 5);
         }
     }
 
@@ -546,7 +537,7 @@ mod tests {
 
         #[test]
         fn test_mark() {
-            let cell_key = QCellOwner::new();
+
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -557,10 +548,10 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = cell_key.cell(GcBank::<LpcRef>::default());
+            let vm_upvalues = RwLock::new(GcBank::<LpcRef>::default());
 
             let frame = CallFrameBuilder::default()
-                .process(cell_key.cell(process))
+                .process(RwLock::new(process))
                 .function(Arc::new(fs))
                 .vm_upvalues(vm_upvalues)
                 .upvalue_ptrs(vec![Register(2), Register(5)])
@@ -570,7 +561,7 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
 
-            frame.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            frame.mark(&mut marked, &mut processed).unwrap();
 
             assert_eq!(marked.len(), 2);
             assert!(marked.contains(5));
@@ -581,7 +572,7 @@ mod tests {
 
             marked.clear();
 
-            frame.mark(&mut marked, &mut processed, &cell_key).unwrap();
+            frame.mark(&mut marked, &mut processed).unwrap();
 
             assert_eq!(marked.len(), 0); // still empty because we already processed the frame
         }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::interpreter::{
     efun::{efun_context::EfunContext, query_call_out::call_out_array_ref},
@@ -12,8 +11,7 @@ use crate::interpreter::{
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub fn query_call_outs<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let owner = match context.resolve_local_register(1_usize) {
         LpcRef::Object(object) => {
             let LpcValue::Object(process) = &*object.read() else {
@@ -27,7 +25,7 @@ pub fn query_call_outs<const N: usize>(
 
     let vec = context
         .call_outs()
-        .ro(cell_key)
+        .read()
         .queue()
         .iter()
         .filter_map(|(_idx, call_out)| {
@@ -63,7 +61,7 @@ mod tests {
 
     #[test]
     fn test_query_call_out() {
-        let mut cell_key = QCellOwner::new();
+
 
         let code = r##"
             mixed create() {
@@ -84,14 +82,14 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let (program, _, _) = compile_prog(code);
+        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
         let task = Task::<10>::initialize_program(
             program,
             Config::default(),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(ObjectSpace::default()),
             Memory::default(),
-            cell_key.cell(GcBank::default()),
+            RwLock::new(GcBank::default()),
             call_outs,
             tx,
             &mut cell_key,

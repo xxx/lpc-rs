@@ -1,16 +1,14 @@
 use lpc_rs_errors::{LpcError, Result};
-use qcell::QCellOwner;
 
-use crate::{interpreter::efun::efun_context::EfunContext, util::keyable::Keyable};
+use crate::{interpreter::efun::efun_context::EfunContext};
 
 /// `throw`, intentionally throw an error. Can be caught by `catch`.
 pub fn throw<const N: usize>(
     context: &mut EfunContext<N>,
-    cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
-    return Err(LpcError::new(arg.with_key(cell_key).to_string())
+    return Err(LpcError::new(arg.to_string())
         .with_span(context.frame().current_debug_span()));
 }
 
@@ -30,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_throw() {
-        let mut cell_key = QCellOwner::new();
+
 
         let code = r##"
             void create() {
@@ -39,14 +37,14 @@ mod tests {
         "##;
 
         let (tx, _) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code, &mut cell_key);
+        let (program, _, _) = compile_prog(code);
         let result = Task::<10>::initialize_program(
             program,
             Config::default(),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(ObjectSpace::default()),
             Memory::default(),
-            cell_key.cell(GcBank::default()),
-            cell_key.cell(CallOuts::new(tx.clone())),
+            RwLock::new(GcBank::default()),
+            RwLock::new(CallOuts::new(tx.clone())),
             tx,
             &mut cell_key,
         );

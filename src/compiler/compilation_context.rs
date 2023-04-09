@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use derive_builder::Builder;
-use educe::Educe;
 use indexmap::IndexMap;
+use parking_lot::RwLock;
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
@@ -12,22 +12,19 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
-use qcell::{QCell, QCellOwner};
 use string_interner::StringInterner;
 use ustr::Ustr;
 
 use crate::{
     compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
-    util::qcell_process_option_debug,
 };
 
 /// A big, fat state object to store data created at various stages of
 /// compilation. A single one of these will be used for loading/compiling a
 /// single file (files `#include`d in that file will share this state object
 /// when they are compiled, as well.) Inherited files will have their own.
-#[derive(Educe, Builder)]
-#[educe(Debug)]
+#[derive(Debug, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct CompilationContext {
     /// The name of the main file being compiled.
@@ -86,8 +83,7 @@ pub struct CompilationContext {
     pub num_init_registers: usize,
 
     /// Pointer to the simul efuns
-    #[educe(Debug(method = "qcell_process_option_debug"))]
-    pub simul_efuns: Option<Arc<QCell<Process>>>,
+    pub simul_efuns: Option<Arc<RwLock<Process>>>,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
@@ -145,7 +141,6 @@ impl CompilationContext {
         &self,
         name: T,
         namespace: &CallNamespace,
-        cell_key: &QCellOwner,
     ) -> Option<FunctionLike>
     where
         T: AsRef<str>,
@@ -164,7 +159,7 @@ impl CompilationContext {
                     self.simul_efuns
                         .as_ref()
                         .and_then(|rc| {
-                            rc.ro(cell_key)
+                            rc.read()
                                 .as_ref()
                                 .lookup_function(nm)
                                 .map(|f| FunctionLike::from(f.clone()))
@@ -217,7 +212,6 @@ impl CompilationContext {
         &self,
         name: &str,
         namespace: &CallNamespace,
-        cell_key: &QCellOwner,
     ) -> bool {
         if !self.valid_namespace(namespace) {
             return false;
@@ -231,7 +225,7 @@ impl CompilationContext {
             return self
                 .simul_efuns
                 .as_ref()
-                .map(|rc| rc.ro(cell_key).as_ref().contains_function(name))
+                .map(|rc| rc.read().as_ref().contains_function(name))
                 .unwrap_or(false)
                 || EFUN_PROTOTYPES.contains_key(name);
             // return EFUN_PROTOTYPES.contains_key(name);
@@ -323,7 +317,6 @@ mod tests {
     #[test]
     #[allow(clippy::bool_assert_comparison)]
     fn test_lookups() {
-        let cell_key = QCellOwner::new();
         let mut context = CompilationContext::default();
         let mut inherited = Program::default();
         let mut named_inherit = Program::default();
@@ -364,7 +357,7 @@ mod tests {
 
         context.inherit_names.insert("my_named_inherit".into(), 0);
 
-        let proc = cell_key.cell(Process::new(simul_efuns));
+        let proc = RwLock::new(Process::new(simul_efuns));
         context.simul_efuns = Some(proc.into());
         // lookup_function
 
@@ -449,7 +442,7 @@ mod tests {
         assert_eq!(
             // gets from the inherited parent
             context
-                .lookup_function_complete("hello_friends", &CallNamespace::Local, &cell_key)
+                .lookup_function_complete("hello_friends", &CallNamespace::Local)
                 .unwrap()
                 .prototype(),
             &inherited_proto.prototype
@@ -458,7 +451,7 @@ mod tests {
         assert_eq!(
             // gets the local version
             context
-                .lookup_function_complete("foo", &CallNamespace::Local, &cell_key)
+                .lookup_function_complete("foo", &CallNamespace::Local)
                 .unwrap()
                 .prototype(),
             &proto
@@ -467,7 +460,7 @@ mod tests {
         assert_eq!(
             // gets the parent version
             context
-                .lookup_function_complete("foo", &CallNamespace::Parent, &cell_key)
+                .lookup_function_complete("foo", &CallNamespace::Parent)
                 .unwrap()
                 .prototype(),
             &overridden.prototype
@@ -476,7 +469,7 @@ mod tests {
         assert_eq!(
             // gets the more local overridden version
             context
-                .lookup_function_complete("this_object", &CallNamespace::Local, &cell_key)
+                .lookup_function_complete("this_object", &CallNamespace::Local)
                 .unwrap()
                 .prototype(),
             &efun_override
@@ -488,7 +481,6 @@ mod tests {
                 .lookup_function_complete(
                     "this_object",
                     &CallNamespace::Named("efun".into()),
-                    &cell_key
                 )
                 .unwrap()
                 .prototype(),
@@ -501,7 +493,6 @@ mod tests {
                 .lookup_function_complete(
                     "foo",
                     &CallNamespace::Named("my_named_inherit".into()),
-                    &cell_key
                 )
                 .unwrap()
                 .prototype(),
@@ -513,7 +504,6 @@ mod tests {
             context.lookup_function_complete(
                 "dump",
                 &CallNamespace::Named("my_named_inherit".into()),
-                &cell_key
             ),
             None
         );
@@ -523,21 +513,20 @@ mod tests {
             context.lookup_function_complete(
                 "this_object",
                 &CallNamespace::Named("blargh".into()),
-                &cell_key
             ),
             None
         );
 
         assert_eq!(
             // not defined
-            context.lookup_function_complete("bar", &CallNamespace::Local, &cell_key),
+            context.lookup_function_complete("bar", &CallNamespace::Local),
             None
         );
 
         assert_eq!(
             // efun
             context
-                .lookup_function_complete("dump", &CallNamespace::Local, &cell_key)
+                .lookup_function_complete("dump", &CallNamespace::Local)
                 .unwrap()
                 .prototype(),
             EFUN_PROTOTYPES.get("dump").unwrap()
@@ -546,7 +535,7 @@ mod tests {
         assert_eq!(
             // efun
             context
-                .lookup_function_complete("simul_efun", &CallNamespace::Local, &cell_key)
+                .lookup_function_complete("simul_efun", &CallNamespace::Local)
                 .unwrap()
                 .prototype(),
             &simul_efun.prototype
@@ -554,13 +543,13 @@ mod tests {
 
         assert_eq!(
             // not through parent
-            context.lookup_function_complete("dump", &CallNamespace::Parent, &cell_key),
+            context.lookup_function_complete("dump", &CallNamespace::Parent),
             None
         );
 
         assert_eq!(
             // not through parent
-            context.lookup_function_complete("simul_efun", &CallNamespace::Parent, &cell_key),
+            context.lookup_function_complete("simul_efun", &CallNamespace::Parent),
             None
         );
 
@@ -647,25 +636,25 @@ mod tests {
 
         assert_eq!(
             // gets from the inherited parent
-            context.contains_function_complete("hello_friends", &CallNamespace::Local, &cell_key),
+            context.contains_function_complete("hello_friends", &CallNamespace::Local),
             true
         );
 
         assert_eq!(
             // gets the local version
-            context.contains_function_complete("foo", &CallNamespace::Local, &cell_key),
+            context.contains_function_complete("foo", &CallNamespace::Local),
             true
         );
 
         assert_eq!(
             // gets the parent version
-            context.contains_function_complete("foo", &CallNamespace::Parent, &cell_key),
+            context.contains_function_complete("foo", &CallNamespace::Parent),
             true
         );
 
         assert_eq!(
             // gets the more local overridden version
-            context.contains_function_complete("this_object", &CallNamespace::Local, &cell_key),
+            context.contains_function_complete("this_object", &CallNamespace::Local),
             true
         );
 
@@ -674,7 +663,6 @@ mod tests {
             context.contains_function_complete(
                 "this_object",
                 &CallNamespace::Named("efun".into()),
-                &cell_key
             ),
             true
         );
@@ -684,7 +672,6 @@ mod tests {
             context.contains_function_complete(
                 "foo",
                 &CallNamespace::Named("my_named_inherit".into()),
-                &cell_key,
             ),
             true
         );
@@ -694,7 +681,6 @@ mod tests {
             context.contains_function_complete(
                 "dump",
                 &CallNamespace::Named("my_named_inherit".into()),
-                &cell_key,
             ),
             false
         );
@@ -704,37 +690,36 @@ mod tests {
             context.contains_function_complete(
                 "this_object",
                 &CallNamespace::Named("blargh".into()),
-                &cell_key
             ),
             false
         );
 
         assert_eq!(
             // not defined
-            context.contains_function_complete("bar", &CallNamespace::Local, &cell_key),
+            context.contains_function_complete("bar", &CallNamespace::Local),
             false
         );
 
         assert_eq!(
             // efun
-            context.contains_function_complete("dump", &CallNamespace::Local, &cell_key),
+            context.contains_function_complete("dump", &CallNamespace::Local),
             true
         );
 
         assert_eq!(
             // efun
-            context.contains_function_complete("simul_efun", &CallNamespace::Local, &cell_key),
+            context.contains_function_complete("simul_efun", &CallNamespace::Local),
             true
         );
 
         assert_eq!(
             // not through parent
-            context.contains_function_complete("dump", &CallNamespace::Parent, &cell_key),
+            context.contains_function_complete("dump", &CallNamespace::Parent),
             false
         );
 
         assert_eq!(
-            context.contains_function_complete("simul_efun", &CallNamespace::Parent, &cell_key),
+            context.contains_function_complete("simul_efun", &CallNamespace::Parent),
             false
         );
     }

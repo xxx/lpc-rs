@@ -5,7 +5,6 @@ use std::{
 
 use itertools::Itertools;
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::compiler::{
     ast::{
@@ -29,9 +28,8 @@ impl AstNodeTrait for ProgramNode {
     fn visit(
         &mut self,
         tree_walker: &mut impl TreeWalker,
-        cell_key: &mut QCellOwner,
-    ) -> Result<()> {
-        tree_walker.visit_program(self, cell_key)
+            ) -> Result<()> {
+        tree_walker.visit_program(self)
     }
 }
 

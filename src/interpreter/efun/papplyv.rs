@@ -1,13 +1,11 @@
 use lpc_rs_errors::Result;
-use qcell::QCellOwner;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue};
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
 pub fn papplyv<const N: usize>(
     context: &mut EfunContext<N>,
-    _cell_key: &mut QCellOwner,
-) -> Result<()> {
+    ) -> Result<()> {
     let LpcRef::Function(f) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
@@ -52,7 +50,7 @@ mod tests {
 
     #[test]
     fn test_papplyv() {
-        let mut cell_key = QCellOwner::new();
+
 
         let code = r##"
             function create() {
@@ -61,14 +59,14 @@ mod tests {
         "##;
 
         let (tx, _) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        let (program, _, _) = compile_prog(code);
+        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
         let result = Task::<5>::initialize_program(
             program,
             Config::default(),
-            cell_key.cell(ObjectSpace::default()),
+            RwLock::new(ObjectSpace::default()),
             Memory::default(),
-            cell_key.cell(GcBank::default()),
+            RwLock::new(GcBank::default()),
             call_outs,
             tx,
             &mut cell_key,

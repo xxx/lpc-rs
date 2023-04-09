@@ -4,10 +4,9 @@ use std::{
     sync::Arc,
 };
 
-use educe::Educe;
 use indexmap::IndexMap;
+use parking_lot::RwLock;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
-use qcell::QCell;
 
 use crate::{
     interpreter::{
@@ -18,20 +17,18 @@ use crate::{
         lpc_string::LpcString,
         process::Process,
     },
-    util::qcell_debug,
 };
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
-#[derive(Educe, Clone)]
-#[educe(Debug)]
+#[derive(Debug, Clone)]
 pub enum LpcValue {
     Float(LpcFloat),
     Int(LpcInt),
     String(LpcString),
     Array(LpcArray),
     Mapping(LpcMapping),
-    Object(#[educe(Debug(method = "qcell_debug"))] Arc<QCell<Process>>),
+    Object(Arc<RwLock<Process>>),
     Function(FunctionPtr),
 }
 
@@ -87,8 +84,7 @@ impl Display for LpcValue {
             LpcValue::String(x) => write!(f, "\"{x}\""),
             LpcValue::Array(x) => write!(f, "{x}"),
             LpcValue::Mapping(x) => write!(f, "{x}"),
-            LpcValue::Object(_x) => write!(f, "< object (QCell data) >"),
-            // LpcValue::Object(x) => write!(f, "< {} >", x.read()),
+            LpcValue::Object(x) => write!(f, "< {} >", x.read()),
             LpcValue::Function(x) => write!(f, "{x}"),
         }
     }
@@ -148,8 +144,8 @@ impl<T> From<IndexMap<HashedLpcRef, LpcRef, T>> for LpcValue {
     }
 }
 
-impl From<Arc<QCell<Process>>> for LpcValue {
-    fn from(o: Arc<QCell<Process>>) -> Self {
+impl From<Arc<RwLock<Process>>> for LpcValue {
+    fn from(o: Arc<RwLock<Process>>) -> Self {
         Self::Object(o)
     }
 }
