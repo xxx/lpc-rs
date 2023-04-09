@@ -38,7 +38,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _) = tokio::sync::mpsc::channel();
+        let (tx, _) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code, &mut cell_key);
         let result = Task::<10>::initialize_program(
             program,

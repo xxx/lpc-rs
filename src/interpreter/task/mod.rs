@@ -2063,12 +2063,12 @@ mod tests {
         collections::HashMap,
         fmt::Formatter,
         hash::{Hash, Hasher},
-        sync::mpsc,
     };
 
     use indoc::indoc;
     use lpc_rs_core::{LpcFloat, LpcInt};
     use lpc_rs_utils::config::ConfigBuilder;
+    use tokio::sync::mpsc;
 
     use super::*;
     use crate::{
@@ -2760,7 +2760,7 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let object_space = ObjectSpace::default();
                 let upvalues = GcBank::default();
-                let (tx, _) = mpsc::channel();
+                let (tx, _) = mpsc::channel(128);
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let (program, config, process) = compile_prog(code, &mut cell_key);
@@ -3436,7 +3436,7 @@ mod tests {
 
                 let mut cell_key = QCellOwner::new();
                 let (program, _, _) = compile_prog(code, &mut cell_key);
-                let (tx, _) = mpsc::channel();
+                let (tx, _) = mpsc::channel(128);
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let r = Task::<10>::initialize_program(
@@ -3494,7 +3494,7 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let vm_upvalues = cell_key.cell(GcBank::default());
                 let (program, _, _) = compile_prog(code, &mut cell_key);
-                let (tx, _) = mpsc::channel();
+                let (tx, _) = mpsc::channel(128);
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let r = Task::<20>::initialize_program(
@@ -4371,7 +4371,7 @@ mod tests {
                 let mut cell_key = QCellOwner::new();
                 let vm_upvalues = cell_key.cell(GcBank::default());
                 let object_space = ObjectSpace::default();
-                let (tx, _) = mpsc::channel();
+                let (tx, _) = mpsc::channel(128);
                 let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
                 let task = Task::<20>::initialize_program(
@@ -4483,7 +4483,7 @@ mod tests {
             let mut cell_key = QCellOwner::new();
             let vm_upvalues = cell_key.cell(GcBank::default());
             let (program, _, _) = compile_prog(code, &mut cell_key);
-            let (tx, _) = mpsc::channel();
+            let (tx, _) = mpsc::channel(128);
             let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
             let r = Task::<20>::initialize_program(
@@ -4516,7 +4516,7 @@ mod tests {
             let (program, _, _) = compile_prog(code, &mut cell_key);
             let mut cell_key = QCellOwner::new();
             let vm_upvalues = cell_key.cell(GcBank::default());
-            let (tx, _) = mpsc::channel();
+            let (tx, _) = mpsc::channel(128);
             let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
             let r = Task::<20>::initialize_program(

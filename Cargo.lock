@@ -1192,10 +1192,10 @@ dependencies = [
  "phf",
  "qcell",
  "readonly",
- "refpool",
  "regex",
  "rmp-serde",
  "serde",
+ "shared_arena",
  "slab",
  "stable-vec",
  "string-interner",
@@ -1293,6 +1293,7 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-utils",
  "qcell",
+ "tokio",
  "ustr",
 ]
 
@@ -1791,12 +1792,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "refpool"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "369e86b80fa7dc8c561dd9613a5bf25c59d2d3073cd66c47fd9e39802f0ecb58"
-
-[[package]]
 name = "regex"
 version = "1.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1953,6 +1948,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "shared_arena"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "453bd8f0fe0f0d13eb13988c314a8bb5c2f8a44960a021e5fdae1c3798804274"
+dependencies = [
+ "static_assertions",
 ]
 
 [[package]]

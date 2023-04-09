@@ -135,7 +135,7 @@ mod tests {
     ) -> TaskContext {
         let process = Process::new(program);
 
-        let (tx, _) = tokio::sync::mpsc::channel();
+        let (tx, _) = tokio::sync::mpsc::channel(128);
         TaskContext::new(
             config,
             cell_key.cell(process),

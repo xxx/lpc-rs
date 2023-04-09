@@ -130,8 +130,7 @@ impl Mark for Process {
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, sync::Arc};
-
-    use refpool::{Pool, PoolRef};
+    use shared_arena::Arena;
 
     use super::*;
     use crate::{
@@ -166,7 +165,7 @@ mod tests {
     #[test]
     fn test_mark() {
         let cell_key = QCellOwner::new();
-        let pool = Pool::new(5);
+        let pool = Arena::with_capacity(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
         let lpc_ref = value_to_ref!(LpcValue::Array(array), &pool);

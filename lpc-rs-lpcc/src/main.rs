@@ -51,7 +51,7 @@ fn main() {
     let lpc_path = LpcPath::new_server(&args.filename);
 
     let mut cell_key = QCellOwner::new();
-    let (tx, _rx) = tokio::sync::mpsc::channel();
+    let (tx, _rx) = tokio::sync::mpsc::channel(1024);
     let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
 
     let upvalues = cell_key.cell(GcBank::default());

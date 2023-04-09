@@ -245,8 +245,8 @@ mod tests {
     use std::cell::RefCell;
 
     use factori::create;
+    use shared_arena::Arena;
     use lpc_rs_core::register::Register;
-    use refpool::{Pool, PoolRef};
 
     use super::*;
     use crate::{test_support::factories::*, value_to_ref};
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn test_mark() {
         let cell_key = QCellOwner::new();
-        let pool = Pool::new(5);
+        let pool = Arena::with_capacity(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
         let ptr_id = *ptr.unique_id.as_ref();

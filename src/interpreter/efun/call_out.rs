@@ -114,7 +114,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _) = tokio::sync::mpsc::channel();
+        let (tx, _) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code, &mut cell_key);
         let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
         let result = Task::<10>::initialize_program(
@@ -136,35 +136,36 @@ mod tests {
 
     #[test]
     fn test_enqueues_task() {
-        let mut cell_key = QCellOwner::new();
-
-        let code = r##"
-            void create() {
-                call_out(&call_out_test(), 0.001);
-            }
-
-            void call_out_test() {
-                dump("foobar");
-            }
-        "##;
-
-        let (tx, rx) = tokio::sync::mpsc::channel();
-        let (program, _, _) = compile_prog(code, &mut cell_key);
-        let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
-        let result = Task::<5>::initialize_program(
-            program,
-            Config::default(),
-            cell_key.cell(ObjectSpace::default()),
-            Memory::default(),
-            cell_key.cell(GcBank::default()),
-            call_outs,
-            tx,
-            &mut cell_key,
-        );
-
-        assert!(result.is_ok());
-
-        let msg = rx.recv().unwrap();
-        assert_eq!(msg, VmOp::PrioritizeCallOut(0));
+        todo!("fix this up for tokio");
+        // let mut cell_key = QCellOwner::new();
+        //
+        // let code = r##"
+        //     void create() {
+        //         call_out(&call_out_test(), 0.001);
+        //     }
+        //
+        //     void call_out_test() {
+        //         dump("foobar");
+        //     }
+        // "##;
+        //
+        // let (tx, rx) = tokio::sync::mpsc::channel(128);
+        // let (program, _, _) = compile_prog(code, &mut cell_key);
+        // let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
+        // let result = Task::<5>::initialize_program(
+        //     program,
+        //     Config::default(),
+        //     cell_key.cell(ObjectSpace::default()),
+        //     Memory::default(),
+        //     cell_key.cell(GcBank::default()),
+        //     call_outs,
+        //     tx,
+        //     &mut cell_key,
+        // );
+        //
+        // assert!(result.is_ok());
+        //
+        // let msg = rx.recv().unwrap();
+        // assert_eq!(msg, VmOp::PrioritizeCallOut(0));
     }
 }
