@@ -1,4 +1,5 @@
 use std::{rc::Rc};
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
@@ -18,7 +19,7 @@ use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::
 pub struct CallOut {
     /// The process where `call_out` was called from.
     #[educe(Debug(ignore))]
-    process: Rc<QCell<Process>>,
+    process: Arc<QCell<Process>>,
 
     /// The reference to the function that will be run.
     pub func_ref: LpcRef,
@@ -67,7 +68,7 @@ impl CallOut {
 
     /// Get the process that owns this call out
     #[inline]
-    pub fn process(&self) -> &Rc<QCell<Process>> {
+    pub fn process(&self) -> &Arc<QCell<Process>> {
         &self.process
     }
 }
@@ -141,7 +142,7 @@ impl CallOuts {
     /// Schedule a [`CallOut`] to be run after a given delay
     pub fn schedule_task(
         &mut self,
-        process: Rc<QCell<Process>>,
+        process: Arc<QCell<Process>>,
         func_ref: LpcRef,
         delay: Duration,
         repeat: Option<Duration>,

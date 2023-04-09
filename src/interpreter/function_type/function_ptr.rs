@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     fmt::{Display, Formatter},
     hash::Hasher,
-    rc::Weak,
+    sync::Weak,
 };
 
 use bit_set::BitSet;
@@ -186,7 +186,7 @@ impl<'a> Keyable<'a> for FunctionPtr {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     use factori::create;
 
@@ -198,7 +198,7 @@ mod tests {
         let cell_key = QCellOwner::new();
         let mut ptr = create!(
             FunctionPtr,
-            owner: Rc::downgrade(&Rc::new(cell_key.cell(Process::default()))),
+            owner: Arc::downgrade(&Arc::new(cell_key.cell(Process::default()))),
         );
 
         ptr.upvalue_ptrs.push(Register(3));

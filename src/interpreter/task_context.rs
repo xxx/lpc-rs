@@ -32,7 +32,7 @@ pub struct TaskContext {
     /// called in this [`Task`](crate::interpreter::task::Task).
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    process: Rc<QCell<Process>>,
+    process: Arc<QCell<Process>>,
 
     /// The global [`ObjectSpace`]
     #[educe(Debug(method = "qcell_debug"))]
@@ -42,7 +42,7 @@ pub struct TaskContext {
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(default, setter(strip_option))]
-    simul_efuns: Option<Rc<QCell<Process>>>,
+    simul_efuns: Option<Arc<QCell<Process>>>,
 
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
@@ -102,7 +102,7 @@ impl TaskContext {
     ) -> Self
     where
         C: Into<Arc<Config>>,
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
         O: Into<Rc<QCell<ObjectSpace>>>,
         M: Into<Rc<Memory>>,
         U: Into<Rc<QCell<GcRefBank>>>,
@@ -133,7 +133,7 @@ impl TaskContext {
     /// Set the process for an existing TaskContext
     pub fn with_process<P>(mut self, process: P) -> Self
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
     {
         self.process = process.into();
 
@@ -142,7 +142,7 @@ impl TaskContext {
 
     /// Lookup the process with the passed path.
     #[inline]
-    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Rc<QCell<Process>>>
+    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Arc<QCell<Process>>>
     where
         T: AsRef<str>,
     {
@@ -154,7 +154,7 @@ impl TaskContext {
     #[inline]
     pub fn insert_process<P>(&self, process: P, cell_key: &mut QCellOwner)
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
     {
         ObjectSpace::insert_process(&self.object_space, process, cell_key)
         // let process = process.into();
@@ -169,7 +169,7 @@ impl TaskContext {
         &self,
         program: Rc<Program>,
         cell_key: &mut QCellOwner,
-    ) -> Rc<QCell<Process>> {
+    ) -> Arc<QCell<Process>> {
         ObjectSpace::insert_clone(
             &self.object_space,
             program,
@@ -221,14 +221,14 @@ impl TaskContext {
 
     /// Return the current pointer to the simul_efuns, if any
     #[inline]
-    pub fn simul_efuns(&self) -> Option<Rc<QCell<Process>>> {
+    pub fn simul_efuns(&self) -> Option<Arc<QCell<Process>>> {
         self.simul_efuns.clone()
     }
 
     /// Return the [`Process`] that the task roots from.
     /// This *does not* change over the life of the task.
     #[inline]
-    pub fn process(&self) -> Rc<QCell<Process>> {
+    pub fn process(&self) -> Arc<QCell<Process>> {
         self.process.clone()
     }
 

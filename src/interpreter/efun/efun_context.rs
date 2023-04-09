@@ -60,7 +60,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
-            pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Rc<QCell<Process>>;
+            pub fn insert_clone(&self, program: Rc<Program>, cell_key: &mut QCellOwner) -> Arc<QCell<Process>>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
@@ -141,7 +141,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Lookup the process with the passed path.
     #[inline]
-    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Rc<QCell<Process>>>
+    pub fn lookup_process<T>(&self, path: T, cell_key: &QCellOwner) -> Option<Arc<QCell<Process>>>
     where
         T: AsRef<str>,
     {
@@ -156,7 +156,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get a reference to the [`Process`] that contains the call to this efun
     #[inline]
-    pub fn process(&self) -> &Rc<QCell<Process>> {
+    pub fn process(&self) -> &Arc<QCell<Process>> {
         &self.frame().process
     }
 
@@ -165,7 +165,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn insert_process<P>(&self, process: P, cell_key: &mut QCellOwner)
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
     {
         self.task_context.insert_process(process, cell_key);
     }

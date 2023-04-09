@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use factori::factori;
 use qcell::QCellOwner;
@@ -12,7 +13,7 @@ use crate::interpreter::{
 
 factori!(FunctionPtr, {
     default {
-        owner = Rc::downgrade(&Rc::new(QCellOwner::new().cell(Process::default()))),
+        owner = Arc::downgrade(&Arc::new(QCellOwner::new().cell(Process::default()))),
         address = FunctionAddress::Efun(ustr("dump")),
         // arity = FunctionArity::default(),
         partial_args = vec![],

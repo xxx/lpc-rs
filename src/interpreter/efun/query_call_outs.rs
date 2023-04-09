@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 use qcell::QCellOwner;
@@ -31,7 +32,7 @@ pub fn query_call_outs<const N: usize>(
         .queue()
         .iter()
         .filter_map(|(_idx, call_out)| {
-            if Rc::ptr_eq(call_out.process(), &owner) {
+            if Arc::ptr_eq(call_out.process(), &owner) {
                 Some(call_out_array_ref(context, call_out).unwrap())
             } else {
                 None

@@ -112,7 +112,7 @@ pub fn compose<const N: usize>(
     let pf = COMPOSE_EXECUTOR.clone();
 
     let ptr = FunctionPtr {
-        owner: Rc::downgrade(&context.frame().process),
+        owner: Arc::downgrade(&context.frame().process),
         address: FunctionAddress::Local(context.frame().process.clone(), pf),
         partial_args: vec![Some(a), Some(b)],
         call_other: false,

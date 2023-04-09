@@ -26,7 +26,7 @@ const OBJECT_SPACE_SIZE: usize = 100_000;
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
     #[educe(Debug(method = "processes_debug"))]
-    processes: HashMap<String, Rc<QCell<Process>>>,
+    processes: HashMap<String, Arc<QCell<Process>>>,
 
     /// How many clones have been created so far?
     clone_count: usize,
@@ -36,7 +36,7 @@ pub struct ObjectSpace {
 }
 
 fn processes_debug(
-    processes: &HashMap<String, Rc<QCell<Process>>>,
+    processes: &HashMap<String, Arc<QCell<Process>>>,
     f: &mut Formatter<'_>,
 ) -> std::fmt::Result {
     write!(f, "{}", processes.keys().join(", "))
@@ -72,8 +72,8 @@ impl ObjectSpace {
     // /// added, the new will overwrite the old in the table.
     // /// Storage keys are the in-game filename
     // pub fn insert_master(&mut self, program: Program, cell_key: &QCellOwner) ->
-    // Rc<QCell<Process>> {     let new = Process::new(program);
-    //     let process: Rc<QCell<Process>> = cell_key.cell(new).into();
+    // Arc<QCell<Process>> {     let new = Process::new(program);
+    //     let process: Arc<QCell<Process>> = cell_key.cell(new).into();
     //     let name = self.prepare_filename(&process, &cell_key);
     //     self.insert_process_directly(name, process.clone());
     //     process
@@ -84,7 +84,7 @@ impl ObjectSpace {
         space_cell: &Rc<QCell<Self>>,
         program: Rc<Program>,
         cell_key: &mut QCellOwner,
-    ) -> Rc<QCell<Process>> {
+    ) -> Arc<QCell<Process>> {
         let clone = {
             let object_space = space_cell.ro(cell_key);
             Process::new_clone(program, object_space.clone_count)
@@ -92,7 +92,7 @@ impl ObjectSpace {
 
         let name = space_cell.ro(cell_key).prepare_filename(&clone);
 
-        let process: Rc<QCell<Process>> = cell_key.cell(clone).into();
+        let process: Arc<QCell<Process>> = cell_key.cell(clone).into();
 
         let space = space_cell.rw(cell_key);
         space.clone_count += 1;
@@ -104,7 +104,7 @@ impl ObjectSpace {
     /// local filename.
     pub fn insert_process<P>(space_cell: &Rc<QCell<Self>>, process: P, cell_key: &mut QCellOwner)
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
     {
         let process = process.into();
         let space = space_cell.ro(cell_key);
@@ -127,14 +127,14 @@ impl ObjectSpace {
     #[inline]
     fn insert_process_directly<P, S>(&mut self, name: S, process: P)
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
         S: Into<String>,
     {
         self.processes.insert(name.into(), process.into());
     }
 
     /// Lookup a process from its path.
-    pub fn lookup<T>(&self, path: T) -> Option<&Rc<QCell<Process>>>
+    pub fn lookup<T>(&self, path: T) -> Option<&Arc<QCell<Process>>>
     where
         T: AsRef<str>,
     {

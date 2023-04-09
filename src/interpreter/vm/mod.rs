@@ -322,7 +322,7 @@ impl Vm {
                         // TODO: prototypes should be in Rcs so this clone is cheap
                         let pf = ProgramFunction::new(prototype.clone(), 0);
 
-                        (Rc::new(self.cell_key.cell(Process::default())), Arc::new(pf), args)
+                        (Arc::new(self.cell_key.cell(Process::default())), Arc::new(pf), args)
                     }
                 }
             }

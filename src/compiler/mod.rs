@@ -85,7 +85,7 @@ pub struct Compiler {
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]
     #[educe(Debug(method = "qcell_process_option_debug"))]
-    simul_efuns: Option<Rc<QCell<Process>>>,
+    simul_efuns: Option<Arc<QCell<Process>>>,
 }
 
 impl Compiler {

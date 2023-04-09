@@ -56,7 +56,7 @@ use crate::{
 };
 
 // this is just to shut clippy up
-type ProcessFunctionPair = (Rc<QCell<Process>>, Arc<ProgramFunction>);
+type ProcessFunctionPair = (Arc<QCell<Process>>, Arc<ProgramFunction>);
 
 macro_rules! pop_frame {
     ($task:expr) => {{
@@ -271,7 +271,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             function.clone()
         };
-        let process: Rc<QCell<Process>> = cell_key.cell(Process::new(program)).into();
+        let process: Arc<QCell<Process>> = cell_key.cell(Process::new(program)).into();
         let context = TaskContext::new(
             config,
             process.clone(),
@@ -325,7 +325,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
     pub fn eval_function(
         &mut self,
-        process: Rc<QCell<Process>>,
+        process: Arc<QCell<Process>>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
         cell_key: &mut QCellOwner,
@@ -338,7 +338,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
     pub fn prepare_function_call(
         &mut self,
-        process: Rc<QCell<Process>>,
+        process: Arc<QCell<Process>>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
         cell_key: &mut QCellOwner,
@@ -1015,7 +1015,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn prepare_new_call_frame(
         &mut self,
         cell_key: &mut QCellOwner,
-        process: Rc<QCell<Process>>,
+        process: Arc<QCell<Process>>,
         func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
         let num_args = self.args.len();
@@ -1103,7 +1103,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
             if !pf.public()
                 && !pf.is_closure()
-                && (ptr.call_other || !Rc::ptr_eq(&self.context.process(), receiver))
+                && (ptr.call_other || !Arc::ptr_eq(&self.context.process(), receiver))
             {
                 return set_loc!(self, Register(0).as_local(), NULL, cell_key);
             }
@@ -1597,7 +1597,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let frame = self.stack.current_frame()?;
         let fp = FunctionPtr {
-            owner: Rc::downgrade(&frame.process),
+            owner: Arc::downgrade(&frame.process),
             address,
             partial_args,
             call_other,
@@ -1858,7 +1858,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         name: &LpcString,
         context: &TaskContext,
         cell_key: &QCellOwner,
-    ) -> Option<Rc<QCell<Process>>> {
+    ) -> Option<Arc<QCell<Process>>> {
         let process = match receiver_ref {
             LpcRef::String(s) => {
                 let r = s.borrow();

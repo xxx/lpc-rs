@@ -76,10 +76,10 @@ fn compile_simul_efuns(config: &Arc<Config>, cell_key: &mut QCellOwner) -> Progr
 pub fn compile_prog(
     code: &str,
     cell_key: &mut QCellOwner,
-) -> (Program, Arc<Config>, Rc<QCell<Process>>) {
+) -> (Program, Arc<Config>, Arc<QCell<Process>>) {
     let config = Arc::new(test_config());
     let simul_efuns = compile_simul_efuns(&config, cell_key);
-    let se_proc = Rc::new(cell_key.cell(Process::new(simul_efuns)));
+    let se_proc = Arc::new(cell_key.cell(Process::new(simul_efuns)));
 
     let compiler = CompilerBuilder::default()
         .config(config.clone())

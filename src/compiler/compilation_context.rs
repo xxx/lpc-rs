@@ -87,7 +87,7 @@ pub struct CompilationContext {
 
     /// Pointer to the simul efuns
     #[educe(Debug(method = "qcell_process_option_debug"))]
-    pub simul_efuns: Option<Rc<QCell<Process>>>,
+    pub simul_efuns: Option<Arc<QCell<Process>>>,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.

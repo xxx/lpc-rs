@@ -22,7 +22,7 @@ use crate::{
 pub enum FunctionAddress {
     /// The function being called is located in an object.
     Local(
-        #[educe(Debug(method = "qcell_process_debug"))] Rc<QCell<Process>>,
+        #[educe(Debug(method = "qcell_process_debug"))] Arc<QCell<Process>>,
         Arc<ProgramFunction>,
     ),
 

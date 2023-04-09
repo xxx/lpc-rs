@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
     rc::Rc,
 };
+use std::sync::Arc;
 
 use educe::Educe;
 use indexmap::IndexMap;
@@ -31,7 +32,7 @@ pub enum LpcValue {
     String(LpcString),
     Array(LpcArray),
     Mapping(LpcMapping),
-    Object(#[educe(Debug(method = "qcell_debug"))] Rc<QCell<Process>>),
+    Object(#[educe(Debug(method = "qcell_debug"))] Arc<QCell<Process>>),
     Function(FunctionPtr),
 }
 
@@ -148,8 +149,8 @@ impl<T> From<IndexMap<HashedLpcRef, LpcRef, T>> for LpcValue {
     }
 }
 
-impl From<Rc<QCell<Process>>> for LpcValue {
-    fn from(o: Rc<QCell<Process>>) -> Self {
+impl From<Arc<QCell<Process>>> for LpcValue {
+    fn from(o: Arc<QCell<Process>>) -> Self {
         Self::Object(o)
     }
 }
@@ -171,7 +172,7 @@ impl PartialEq for LpcValue {
                 x.keys().collect::<Vec<_>>() == y.keys().collect::<Vec<_>>()
                     && x.values().collect::<Vec<_>>() == y.values().collect::<Vec<_>>()
             }
-            (LpcValue::Object(x), LpcValue::Object(y)) => Rc::ptr_eq(x, y),
+            (LpcValue::Object(x), LpcValue::Object(y)) => Arc::ptr_eq(x, y),
             _ => false,
         }
     }

@@ -49,7 +49,7 @@ pub struct CallFrame {
     /// A pointer to the process that owns the function being called
     #[educe(Debug(method = "qcell_process_debug"))]
     #[builder(setter(into))]
-    pub process: Rc<QCell<Process>>,
+    pub process: Arc<QCell<Process>>,
 
     /// The function that this frame is a call to.
     #[builder(setter(into))]
@@ -109,7 +109,7 @@ impl CallFrame {
         cell_key: &mut QCellOwner,
     ) -> Self
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = std::cmp::max(function.arity().num_args, called_with_num_args)
@@ -158,7 +158,7 @@ impl CallFrame {
         cell_key: &mut QCellOwner,
     ) -> Self
     where
-        P: Into<Rc<QCell<Process>>>,
+        P: Into<Arc<QCell<Process>>>,
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),

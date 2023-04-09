@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
@@ -19,7 +20,7 @@ fn load_master<const N: usize>(
     context: &mut EfunContext<N>,
     path: &str,
     cell_key: &mut QCellOwner,
-) -> Result<Rc<QCell<Process>>> {
+) -> Result<Arc<QCell<Process>>> {
     let full_path = LpcPath::new_in_game(
         path,
         context.in_game_cwd(cell_key),
@@ -40,7 +41,7 @@ fn load_master<const N: usize>(
                     let Some(prog_function) = prog.initializer.clone() else {
                         return Err(LpcError::new("Init function not found on master?"));
                     };
-                    let process: Rc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
+                    let process: Arc<QCell<Process>> = cell_key.cell(Process::new(prog)).into();
                     context.insert_process(process.clone(), cell_key);
 
                     let new_context = context.clone_task_context().with_process(process.clone());
