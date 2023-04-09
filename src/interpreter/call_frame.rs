@@ -64,7 +64,7 @@ pub struct CallFrame {
     #[builder(default)]
     pub registers: RefBank,
 
-    /// Track where the pc is pointing in this frame's function's instructions.
+    /// Track where the program counter is pointing in this frame's function's instructions.
     #[builder(default, setter(into))]
     pc: Cell<usize>,
 

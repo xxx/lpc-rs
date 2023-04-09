@@ -18,56 +18,56 @@ use crate::{
     util::{get_simul_efuns, qcell_debug},
 };
 
-/// A struct to carry context during a single function's evaluation.
+/// A struct to carry context during the evaluation of a single [`Task`]
 #[derive(Educe, Clone, Builder)]
 #[educe(Debug)]
 pub struct TaskContext {
     /// The [`Config`] that's in use for the
     /// [`Task`](crate::interpreter::task::Task).
     #[builder(setter(into))]
-    config: Arc<Config>,
+    pub config: Arc<Config>,
 
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    process: Arc<QCell<Process>>,
+    pub process: Arc<QCell<Process>>,
 
     /// The global [`ObjectSpace`]
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    object_space: Arc<QCell<ObjectSpace>>,
+    pub object_space: Arc<QCell<ObjectSpace>>,
 
     /// Direct pointer to the simul efuns
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(default, setter(strip_option))]
-    simul_efuns: Option<Arc<QCell<Process>>>,
+    pub simul_efuns: Option<Arc<QCell<Process>>>,
 
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    vm_upvalues: Arc<QCell<GcRefBank>>,
+    pub vm_upvalues: Arc<QCell<GcRefBank>>,
 
     /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
     #[educe(Debug(method = "qcell_debug"))]
     #[builder(setter(into))]
-    call_outs: Arc<QCell<CallOuts>>,
+    pub call_outs: Arc<QCell<CallOuts>>,
 
     /// The tx channel to send messages back to the [`Vm`](crate::interpreter::vm::Vm).
-    tx: Sender<VmOp>,
+    pub tx: Sender<VmOp>,
 
     /// A pointer to a memory pool to allocate new values from
     #[builder(default, setter(into))]
-    memory: Arc<Memory>,
+    pub memory: Arc<Memory>,
 
     /// A counter, to ensure that too-long-evaluations do not occur
     #[builder(default)]
-    instruction_counter: InstructionCounter,
+    pub instruction_counter: InstructionCounter,
 
     /// The final result of the original function that was called
     #[builder(default)]
-    result: OnceCell<LpcRef>,
+    pub result: OnceCell<LpcRef>,
 }
 
 impl TaskContext {
