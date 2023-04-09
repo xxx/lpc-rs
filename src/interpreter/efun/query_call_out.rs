@@ -72,7 +72,7 @@ pub fn call_out_array_ref<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    
     use std::sync::Arc;
 
     use if_chain::if_chain;

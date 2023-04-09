@@ -3,7 +3,6 @@ use std::{
     fmt::Formatter,
     hash::Hasher,
     path::Path,
-    rc::Rc,
     sync::{
         Arc,
     },

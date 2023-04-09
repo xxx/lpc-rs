@@ -157,7 +157,7 @@ pub fn dump<const N: usize>(context: &mut EfunContext<N>, cell_key: &mut QCellOw
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    
     use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;

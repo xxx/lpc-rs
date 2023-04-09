@@ -1,6 +1,6 @@
 mod support;
 
-use std::rc::Rc;
+
 use std::sync::Arc;
 
 use claim::assert_err;

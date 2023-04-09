@@ -2,7 +2,6 @@ use std::{
     cell::Cell,
     fmt,
     fmt::{Debug, Display, Formatter},
-    rc::Rc,
     sync::Arc,
 };
 

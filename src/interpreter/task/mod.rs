@@ -4,7 +4,6 @@ pub mod task_state;
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
-    rc::Rc,
     sync::{Arc},
 };
 

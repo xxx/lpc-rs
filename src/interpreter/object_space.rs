@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher, rc::Rc};
+use std::{cmp::Ordering, collections::HashMap, fmt::Formatter, hash::Hasher};
 use std::sync::Arc;
 
 use bit_set::BitSet;

@@ -3,7 +3,6 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display, Formatter},
     path::Path,
-    rc::Rc,
 };
 use std::sync::Arc;
 

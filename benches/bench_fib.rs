@@ -1,4 +1,5 @@
-use std::rc::Rc;
+
+use std::sync::Arc;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lpc_rs::{
@@ -32,11 +33,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .compile_string("~/my_file.c", code, &mut cell_key)
         .expect("Failed to compile.");
 
-    let program = Rc::new(program);
-    let upvalues = Rc::new(cell_key.cell(GcRefBank::default()));
-    let (tx, _) = tokio::sync::mpsc::channel();
-    let call_outs = Rc::new(cell_key.cell(CallOuts::new(tx.clone())));
-    let memory = Rc::new(Memory::default());
+    let program = Arc::new(program);
+    let upvalues = Arc::new(cell_key.cell(GcRefBank::default()));
+    let (tx, _) = tokio::sync::mpsc::channel(1024);
+    let call_outs = Arc::new(cell_key.cell(CallOuts::new(tx.clone())));
+    let memory = Arc::new(Memory::default());
 
     c.bench_function("fib 20", |b| {
         b.iter(|| {

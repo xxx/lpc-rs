@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, rc::Rc, sync::Arc};
+use std::{collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use codegen::{

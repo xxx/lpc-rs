@@ -1,4 +1,4 @@
-use std::rc::Rc;
+
 use std::sync::Arc;
 
 use lpc_rs_errors::Result;
@@ -49,7 +49,7 @@ pub fn query_call_outs<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    
 
     use if_chain::if_chain;
     use lpc_rs_utils::config::Config;

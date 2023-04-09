@@ -1,4 +1,4 @@
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf};
 use std::sync::Arc;
 
 use delegate::delegate;

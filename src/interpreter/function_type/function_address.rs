@@ -2,7 +2,6 @@ use std::{
     cmp::Ordering,
     fmt::{Display, Formatter},
     hash::Hasher,
-    rc::Rc,
     sync::Arc,
 };
 

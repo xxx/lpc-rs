@@ -38,7 +38,7 @@ pub fn remove_call_out<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    
     use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;

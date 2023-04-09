@@ -1,6 +1,6 @@
 pub mod keyable;
 
-use std::{fmt::Formatter, rc::Rc};
+use std::{fmt::Formatter};
 use std::sync::Arc;
 
 use lpc_rs_utils::config::Config;

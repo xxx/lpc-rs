@@ -1,4 +1,4 @@
-use std::{rc::Rc};
+
 use std::sync::Arc;
 
 use bit_set::BitSet;
@@ -152,6 +152,7 @@ impl CallOuts {
         let date = Utc::now() + delay;
         let guard = self.timer.schedule(date, repeat, move || {
             // This needs to run as fast as possible, and not fail.
+            // TODO: this needs to be awaited
             let _ = tx.send(VmOp::PrioritizeCallOut(index));
         });
 

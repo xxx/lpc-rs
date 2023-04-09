@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Debug, path::PathBuf, rc::Rc};
+use std::{borrow::Cow, fmt::Debug, path::PathBuf};
 use std::sync::Arc;
 
 use delegate::delegate;
