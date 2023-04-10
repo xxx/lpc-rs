@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
-use delegate::delegate;
 
+use delegate::delegate;
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
@@ -10,9 +10,9 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, memory::Memory,
-        object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
-        instruction_counter::InstructionCounter,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, instruction_counter::InstructionCounter,
+        lpc_ref::LpcRef, memory::Memory, object_space::ObjectSpace, process::Process,
+        program::Program, vm::vm_op::VmOp,
     },
     util::get_simul_efuns,
 };

@@ -7,10 +7,12 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    signal,
+    sync::mpsc::{Receiver, Sender},
+};
 use tracing::{instrument, trace};
 use vm_op::VmOp;
-use tokio::signal;
 
 use crate::{
     compile_time_config::{MAX_CALL_STACK_SIZE, VM_CHANNEL_CAPACITY},

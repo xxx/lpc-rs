@@ -87,10 +87,7 @@ pub fn get_location<const N: usize>(
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[instrument(skip(frame))]
 #[inline]
-pub fn get_location_in_frame(
-    frame: &CallFrame,
-    location: RegisterVariant,
-) -> Result<Cow<LpcRef>> {
+pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Result<Cow<LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -2327,8 +2324,14 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
-                assert_eq!(String("file_name_override".into()), *values.get("this_one").unwrap());
-                assert_eq!(String("/std/object#0".into()), *values.get("efun_one").unwrap());
+                assert_eq!(
+                    String("file_name_override".into()),
+                    *values.get("this_one").unwrap()
+                );
+                assert_eq!(
+                    String("/std/object#0".into()),
+                    *values.get("efun_one").unwrap()
+                );
             }
 
             #[tokio::test]
@@ -4278,6 +4281,7 @@ mod tests {
 
     mod test_limits {
         use lpc_rs_utils::config::ConfigBuilder;
+
         use super::*;
 
         #[tokio::test]
@@ -4322,7 +4326,7 @@ mod tests {
                 .build()
                 .unwrap();
             let (program, _, _) = compile_prog(code);
-                        let vm_upvalues = RwLock::new(GcBank::default());
+            let vm_upvalues = RwLock::new(GcBank::default());
             let (tx, _rx) = mpsc::channel(128);
             let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
@@ -4334,7 +4338,8 @@ mod tests {
                 Arc::new(vm_upvalues),
                 call_outs,
                 tx,
-            ).await;
+            )
+            .await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),

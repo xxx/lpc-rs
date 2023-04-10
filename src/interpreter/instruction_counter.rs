@@ -1,4 +1,5 @@
 use std::sync::atomic::AtomicUsize;
+
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 
@@ -21,7 +22,9 @@ impl InstructionCounter {
 
     /// Increment the counter by `amount`
     pub fn increment(&self, amount: usize) -> Result<usize> {
-        let old_val = self.count.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
+        let old_val = self
+            .count
+            .fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
         let new_val = old_val + amount;
         // We check the limit here to avoid running multiple atomic operations
         self.eval_limit(new_val)?;
@@ -33,7 +36,8 @@ impl InstructionCounter {
     pub fn set(&self, new_val: usize) -> Result<usize> {
         self.eval_limit(new_val)?;
 
-        self.count.store(new_val, std::sync::atomic::Ordering::Relaxed);
+        self.count
+            .store(new_val, std::sync::atomic::Ordering::Relaxed);
 
         Ok(new_val)
     }

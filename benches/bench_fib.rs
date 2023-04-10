@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use parking_lot::RwLock;
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{
@@ -10,6 +9,7 @@ use lpc_rs::{
     },
 };
 use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let code = r#"
@@ -47,7 +47,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 upvalues.clone(),
                 call_outs.clone(),
                 tx.clone(),
-            ).await;
+            )
+            .await;
         })
     });
 }
