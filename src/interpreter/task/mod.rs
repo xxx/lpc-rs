@@ -295,10 +295,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
-        let function = f.into();
         let process = self.context.process();
 
-        self.eval_function(process, function, args).await
+        self.eval_function(process, f, args).await
     }
 
     /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
@@ -325,7 +324,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
-    // #[async_recursion]
     pub async fn prepare_function_call(
         &mut self,
         process: Arc<RwLock<Process>>,
@@ -1370,7 +1368,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 .clone();
 
                             if function.public() {
-                                task.eval(function, &args).await?;
+                                task.eval(function, args).await?;
                                 // task_context.increment_instruction_count(
                                 //     task.context.instruction_count(),
                                 // )?;

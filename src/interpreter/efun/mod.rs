@@ -25,7 +25,7 @@ use lpc_rs_function_support::function_prototype::{
     FunctionKind, FunctionPrototype, FunctionPrototypeBuilder,
 };
 use once_cell::sync::Lazy;
-use phf::phf_map;
+
 use futures::future::BoxFuture;
 
 use crate::interpreter::efun::efun_context::EfunContext;
@@ -85,7 +85,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
         THIS_OBJECT => this_object::this_object(efun_context).await,
         THROW => throw::throw(efun_context).await,
-        _ => return Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
+        _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
     }
 }
 

@@ -104,7 +104,7 @@ impl ObjectSpace {
     {
         let process = process.into();
         let space = space_cell.read();
-        let name = space.prepare_filename(&*process.read());
+        let name = space.prepare_filename(&process.read());
 
         let mut space = space_cell.write();
         space.insert_process_directly(name, process);

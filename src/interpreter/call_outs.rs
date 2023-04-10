@@ -140,10 +140,10 @@ impl CallOuts {
     /// Schedule a [`CallOut`] to be run after a given delay
     pub fn schedule_task(
         &mut self,
-        process: Arc<RwLock<Process>>,
-        func_ref: LpcRef,
-        delay: Duration,
-        repeat: Option<Duration>,
+        _process: Arc<RwLock<Process>>,
+        _func_ref: LpcRef,
+        _delay: Duration,
+        _repeat: Option<Duration>,
     ) -> Result<usize> {
         todo!("update this to immediately spawn a task that sleeps for the correct duration, then immediately runs");
         // let index = self.queue.next_push_index();

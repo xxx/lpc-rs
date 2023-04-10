@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use delegate::delegate;
+
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
@@ -83,7 +83,7 @@ impl TaskContext {
         let object_space = object_space.into();
         let simul_efuns = {
             let space = object_space.read();
-            get_simul_efuns(&config, &*space)
+            get_simul_efuns(&config, &space)
         };
 
         Self {

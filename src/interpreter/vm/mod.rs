@@ -270,7 +270,7 @@ impl Vm {
                         ));
                     },
                     FunctionAddress::SimulEfun(name) => {
-                        let Some(simul_efuns) = get_simul_efuns(&self.config, &*self.object_space.read()) else {
+                        let Some(simul_efuns) = get_simul_efuns(&self.config, &self.object_space.read()) else {
                             return Err(LpcError::new_bug(
                                 "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
                             ));
@@ -443,7 +443,7 @@ impl Vm {
         let object_space = self.object_space.read();
         let compiler = CompilerBuilder::default()
             .config(self.config.clone())
-            .simul_efuns(get_simul_efuns(&self.config, &*object_space))
+            .simul_efuns(get_simul_efuns(&self.config, &object_space))
             .build()?;
         f(compiler)
     }
