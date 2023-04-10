@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use parking_lot::RwLock;
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{
@@ -34,9 +35,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let (tx, _rx) = tokio::sync::mpsc::channel(1024);
     let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     let memory = Arc::new(Memory::default());
+    let runtime = tokio::runtime::Runtime::new().unwrap();
 
     c.bench_function("fib 20", |b| {
-        b.iter(|| {
+        b.to_async(&runtime).iter(|| async {
             let _ = Task::<64>::initialize_program(
                 program.clone(),
                 black_box(Config::default()),
@@ -45,8 +47,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 upvalues.clone(),
                 call_outs.clone(),
                 tx.clone(),
-                &mut cell_key,
-            );
+            ).await;
         })
     });
 }
