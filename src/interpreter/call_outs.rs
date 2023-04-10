@@ -7,8 +7,9 @@ use educe::Educe;
 use parking_lot::RwLock;
 use lpc_rs_errors::Result;
 use stable_vec::StableVec;
-use timer::{Guard};
 use tokio::sync::mpsc::Sender;
+use tokio::task::JoinHandle;
+use tokio::time::{Instant};
 
 use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::vm_op::VmOp};
 
@@ -30,9 +31,9 @@ pub struct CallOut {
     next_run: DateTime<Utc>,
 
     /// The RAII object that determines if the callback runs, or not.
-    /// If the [`Guard`](Guard) is dropped, the callback will not run.
+    /// If the [`JoinHandle`] is dropped, the callback will not run.
     #[educe(Debug(ignore))]
-    _guard: Guard,
+    _handle: JoinHandle<()>,
 }
 
 impl CallOut {
@@ -45,7 +46,7 @@ impl CallOut {
     /// Update the next run time, if relevant
     pub fn refresh(&mut self) {
         if let Some(repeat) = self.repeat_duration {
-            self.next_run = chrono::Utc::now() + repeat;
+            self.next_run = Utc::now() + repeat;
         }
     }
 
@@ -57,7 +58,7 @@ impl CallOut {
     /// How much time is left until this call out runs?
     /// If the call out has already run and will not repeat, this will return `None`.
     pub fn time_remaining(&self) -> Option<Duration> {
-        let now = chrono::Utc::now();
+        let now = Utc::now();
         if now > self.next_run {
             None
         } else {
@@ -92,10 +93,6 @@ pub struct CallOuts {
 
     /// A channel to talk to the [`Vm`](crate::interpreter::vm::Vm)
     tx: Sender<VmOp>,
-
-    // /// stored timer object
-    // #[educe(Debug(ignore))]
-    // timer: Timer,
 }
 
 impl CallOuts {
@@ -104,7 +101,6 @@ impl CallOuts {
         Self {
             queue: StableVec::with_capacity(64),
             tx,
-            // timer: Timer::new(),
         }
     }
 
@@ -140,30 +136,56 @@ impl CallOuts {
     /// Schedule a [`CallOut`] to be run after a given delay
     pub fn schedule_task(
         &mut self,
-        _process: Arc<RwLock<Process>>,
-        _func_ref: LpcRef,
-        _delay: Duration,
-        _repeat: Option<Duration>,
+        process: Arc<RwLock<Process>>,
+        func_ref: LpcRef,
+        delay: Duration,
+        repeat: Option<Duration>,
     ) -> Result<usize> {
-        todo!("update this to immediately spawn a task that sleeps for the correct duration, then immediately runs");
-        // let index = self.queue.next_push_index();
-        // let tx = self.tx.clone();
-        // let date = Utc::now() + delay;
-        // let guard = self.timer.schedule(date, repeat, move || {
-        //     // This needs to run as fast as possible, and not fail.
-        //     // TODO: this needs to be awaited
-        //     let _ = tx.send(VmOp::PrioritizeCallOut(index));
-        // });
-        //
-        // self.queue.push(CallOut {
-        //     process,
-        //     func_ref,
-        //     repeat_duration: repeat,
-        //     next_run: date,
-        //     _guard: guard,
-        // });
-        //
-        // Ok(index)
+        let index = self.queue.next_push_index();
+        let tx = self.tx.clone();
+
+        if repeat.is_none() || repeat.unwrap().is_zero() {
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(delay.to_std().unwrap()).await;
+                let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
+            });
+
+            self.queue.push(CallOut {
+                process,
+                func_ref,
+                repeat_duration: None,
+                next_run: Utc::now() + delay,
+                _handle: handle,
+            });
+        } else {
+            let start = if delay.num_milliseconds() <= 0 {
+                Instant::now()
+            } else {
+                Instant::now() + delay.to_std().unwrap()
+            };
+
+            let handle = tokio::spawn(async move {
+                let mut i = tokio::time::interval_at(
+                    start,
+                    repeat.unwrap().to_std().unwrap(),
+                );
+
+                loop {
+                    i.tick().await;
+                    let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
+                }
+            });
+
+            self.queue.push(CallOut {
+                process,
+                func_ref,
+                repeat_duration: repeat,
+                next_run: Utc::now() + delay,
+                _handle: handle,
+            });
+        };
+
+        Ok(index)
     }
 }
 

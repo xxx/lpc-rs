@@ -1240,7 +1240,6 @@ dependencies = [
  "slab",
  "stable-vec",
  "string-interner",
- "timer",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2153,15 +2152,6 @@ dependencies = [
  "libc",
  "wasi 0.10.0+wasi-snapshot-preview1",
  "winapi",
-]
-
-[[package]]
-name = "timer"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31d42176308937165701f50638db1c31586f183f1aab416268216577aec7306b"
-dependencies = [
- "chrono",
 ]
 
 [[package]]

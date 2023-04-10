@@ -31,13 +31,11 @@ use crate::{
         program::Program,
         task::{Task},
         task_context::TaskContext,
-        vm::task_queue::TaskQueue,
     },
     try_extract_value,
     util::{get_simul_efuns},
 };
 
-pub mod task_queue;
 pub mod vm_op;
 
 #[derive(Debug)]
@@ -63,9 +61,6 @@ pub struct Vm {
 
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
-
-    /// The queue for [`Task`]s.
-    pub task_queue: TaskQueue,
 }
 
 impl Vm {
@@ -85,7 +80,6 @@ impl Vm {
             call_outs: Arc::new(call_outs),
             rx,
             tx,
-            task_queue: TaskQueue::new(),
         }
     }
 
@@ -96,9 +90,7 @@ impl Vm {
     pub async fn boot(&mut self) -> Result<()> {
         self.bootstrap().await?;
 
-        self.run().await;
-
-        Ok(())
+        self.run().await
     }
 
     /// Load and initialize the master object and simul_efuns.
@@ -121,105 +113,24 @@ impl Vm {
     /// Assumes `bootstrap()` has already been called.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> Result<()> {
+        println!("running");
         loop {
-            // Run some code for a bit
-            println!("looping");
             tokio::select! {
                 Some(op) = self.rx.recv() => {
-                    trace!(?op, "Received VmOp");
-
                     match op {
                         VmOp::PrioritizeCallOut(idx) => {
                             self.op_prioritize_call_out(idx).await?;
                         }
                         VmOp::TaskComplete(task_id) => {
-                            println!("task {task_id} complete");
+                            // println!("task {task_id} complete");
                             // self.op_task_complete(task_id)?;
-                        }
+                        },
+                        VmOp::TaskError(task_id, error) => {
+                            error.emit_diagnostics();
+                        },
                     }
                 }
-
-                // Some(task) = self.task_queue.current_mut() => {
-                //     trace!("ready to run task {:?}", task);
-                //     tokio::spawn(async move {
-                //         trace!("about to resume");
-                //         task.resume().await
-                //     });
-                //     // match task.resume(&mut self.cell_key) {
-                //     //     Ok(()) => match task.state {
-                //     //         TaskState::Complete | TaskState::Error => {
-                //     //             self.task_queue.finish_current();
-                //     //         }
-                //     //         TaskState::Paused => {
-                //     //             self.task_queue.switch_to_next();
-                //     //         }
-                //     //         TaskState::New | TaskState::Running => {
-                //     //             error!(
-                //     //                 "Task {} returned from resume() in an invalid state: {}",
-                //     //                 task.id, task.state
-                //     //             );
-                //     //             self.task_queue.switch_to_next();
-                //     //         }
-                //     //     },
-                //     //     Err(e) => {
-                //     //         e.emit_diagnostics();
-                //     //         self.task_queue.finish_current();
-                //     //     }
-                //     // }
-                // },
-
-                // _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
             }
-
-            // if let Some(task) = self.task_queue.current_mut() {
-            //     match task.resume(&mut self.cell_key) {
-            //         Ok(()) => match task.state {
-            //             TaskState::Complete | TaskState::Error => {
-            //                 self.task_queue.finish_current();
-            //             }
-            //             TaskState::Paused => {
-            //                 self.task_queue.switch_to_next();
-            //             }
-            //             TaskState::New | TaskState::Running => {
-            //                 error!(
-            //                     "Task {} returned from resume() in an invalid state: {}",
-            //                     task.id, task.state
-            //                 );
-            //                 self.task_queue.switch_to_next();
-            //             }
-            //         },
-            //         Err(e) => {
-            //             e.emit_diagnostics();
-            //             self.task_queue.finish_current();
-            //         }
-            //     }
-            // }
-
-            // Check for bus messages
-            // match self.rx.recv() {
-            //     Ok(op) => {
-            //         trace!(?op, "Received VmOp");
-            //
-            //         match op {
-            //             VmOp::PrioritizeCallOut(idx) => {
-            //                 self.op_prioritize_call_out(idx)?;
-            //             } /* VmOp::Yield => {
-            //                *     self.op_yield_task()?;
-            //                * }
-            //                * VmOp::FinishTask(task_id) => {
-            //                *     self.op_finish_task()?;
-            //                * } */
-            //         }
-            //     }
-            //     Err(e) => {
-            //         if e == RecvTimeoutError::Timeout {
-            //             // No messages
-            //         } else {
-            //             // Something went wrong
-            //             panic!("Error receiving from channel: {}", e);
-            //         }
-            //     }
-            // }
         };
 
         Ok(())
@@ -319,29 +230,18 @@ impl Vm {
         let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
 
         task.prepare_function_call(process, function, &args).await?;
+        let tx = self.tx.clone();
 
-        self.task_queue.push(task);
+        tokio::spawn(async move {
+            let id = task.id;
+            let r = task.resume().await;
+            if r.is_err() {
+                let _ = tx.send(VmOp::TaskError(id, r.unwrap_err())).await;
+            }
+        });
 
         Ok(true)
     }
-
-    // /// Handler for [`VmOp::Yield`].
-    // /// Yield the current task, and switch to the next one in the queue.
-    // #[inline]
-    // pub fn op_yield_task(&mut self) -> Result<()> {
-    //     self.task_queue.switch_to_next();
-    //
-    //     Ok(())
-    // }
-    //
-    // /// Handler for [`VmOp::Finish`].
-    // /// Finish the current task, and switch to the next one in the queue.
-    // #[inline]
-    // pub fn op_finish_task(&mut self) -> Result<()> {
-    //     self.task_queue.finish_current();
-    //
-    //     Ok(())
-    // }
 
     /// Initialize the simulated efuns file, if it is configured.
     ///

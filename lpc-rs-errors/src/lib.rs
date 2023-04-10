@@ -4,11 +4,13 @@ use std::{
     fs::OpenOptions,
     result,
 };
+use std::hash::{Hash, Hasher};
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
+use codespan_reporting::diagnostic::LabelStyle;
 use derive_builder::UninitializedFieldError;
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -20,14 +22,15 @@ pub mod file_stream;
 pub mod lazy_files;
 pub mod span;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+// TODO: replace this with Diagnostic::Severity
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LpcErrorSeverity {
     Warning,
     Error,
     Bug,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LpcError {
     /// The main message to be printed out
     message: String,
@@ -281,6 +284,26 @@ impl From<&LpcError> for Diagnostic<usize> {
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for LpcError {
     fn from(e: tokio::sync::mpsc::error::SendError<T>) -> Self {
         Self::new(e.to_string())
+    }
+}
+
+impl Hash for LpcError {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.message.hash(state);
+        self.severity.hash(state);
+        self.span.hash(state);
+        self.labels.iter().for_each(|l| {
+            match l.style {
+                LabelStyle::Primary => 0,
+                LabelStyle::Secondary => 1,
+            }.hash(state);
+            l.file_id.hash(state);
+            l.range.hash(state);
+            l.message.hash(state);
+        });
+        self.notes.hash(state);
+        self.additional_errors.hash(state);
+        self.stack_trace.hash(state);
     }
 }
 
