@@ -169,7 +169,7 @@ impl Mark for ObjectSpace {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, sync::Arc};
+    use std::{sync::Arc};
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;

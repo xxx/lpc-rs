@@ -2061,7 +2061,7 @@ mod tests {
 
     use indoc::indoc;
     use lpc_rs_core::{LpcFloat, LpcInt};
-    use lpc_rs_utils::config::ConfigBuilder;
+    
     use tokio::sync::mpsc;
 
     use super::*;
@@ -2134,7 +2134,7 @@ mod tests {
                     let a = extract_value!(&*xb, LpcValue::Array);
                     let array = a
                         .iter()
-                        .map(|item| BareVal::from_lpc_ref(item))
+                        .map(BareVal::from_lpc_ref)
                         .collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
@@ -2164,7 +2164,7 @@ mod tests {
                     let args = fp
                         .partial_args
                         .iter()
-                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(r)))
+                        .map(|item| item.as_ref().map(BareVal::from_lpc_ref))
                         .collect::<Vec<_>>();
 
                     BareVal::Function(fp.name().into(), args)

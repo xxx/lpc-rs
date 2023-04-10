@@ -121,11 +121,11 @@ impl Vm {
                         VmOp::PrioritizeCallOut(idx) => {
                             self.op_prioritize_call_out(idx).await?;
                         }
-                        VmOp::TaskComplete(task_id) => {
+                        VmOp::TaskComplete(_task_id) => {
                             // println!("task {task_id} complete");
                             // self.op_task_complete(task_id)?;
                         },
-                        VmOp::TaskError(task_id, error) => {
+                        VmOp::TaskError(_task_id, error) => {
                             error.emit_diagnostics();
                         },
                     }

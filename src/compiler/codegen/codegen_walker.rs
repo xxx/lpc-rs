@@ -3365,7 +3365,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_call_other() {
 
-            let mut check = |code: &str, expected: &[Instruction]| {
+            let check = |code: &str, expected: &[Instruction]| {
                 let wrapped = format!("void create() {{ {}; }}", code);
                 let (prog, _, _) = compile_prog(&wrapped);
 
@@ -3419,7 +3419,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_sizeof() {
 
-            let mut check = |code: &str, expected: &[Instruction]| {
+            let check = |code: &str, expected: &[Instruction]| {
                 let wrapped = format!("void create() {{ {}; }}", code);
                 let (prog, _, _) = compile_prog(&wrapped);
 

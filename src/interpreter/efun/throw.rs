@@ -17,7 +17,7 @@ mod tests {
     use parking_lot::RwLock;
     use lpc_rs_utils::config::Config;
 
-    use super::*;
+    
     use crate::{
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
