@@ -9,8 +9,8 @@ use crate::interpreter::{
 };
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
-pub fn query_call_outs<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn query_call_outs<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let owner = match context.resolve_local_register(1_usize) {
         LpcRef::Object(object) => {

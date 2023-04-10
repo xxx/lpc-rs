@@ -4,8 +4,8 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_value::LpcValue};
 
 /// `this_object`, an efun for returning a reference to the object it was called
 /// within.
-pub fn this_object<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn this_object<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let proc = context.frame().process.clone();
 

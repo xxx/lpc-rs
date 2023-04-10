@@ -93,15 +93,10 @@ impl Vm {
     ///
     /// This method will load the master object and simul_efun file, add
     /// the master object to the object space, and then start the main loop.
-    ///
-    /// # Arguments
-    ///
-    /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
-    ///                in the system. Don't lose this key.
     pub async fn boot(&mut self) -> Result<()> {
-        self.bootstrap()?;
+        self.bootstrap().await?;
 
-        self.run().await?;
+        self.run().await;
 
         Ok(())
     }
@@ -111,23 +106,19 @@ impl Vm {
     /// # Returns
     /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
     /// * `Err(LpcError)` - If there was an error.
-    pub fn bootstrap(&mut self) -> Result<TaskContext> {
-        if let Some(Err(e)) = self.initialize_simul_efuns() {
+    pub async fn bootstrap(&mut self) -> Result<TaskContext> {
+        if let Some(Err(e)) = self.initialize_simul_efuns().await {
             e.emit_diagnostics();
             return Err(e);
         }
 
         let master_path =
             LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
-        self.initialize_file(&master_path)
+        self.initialize_file(&master_path).await
     }
 
     /// Run the [`Vm`]'s main loop.
     /// Assumes `bootstrap()` has already been called.
-    /// # Arguments
-    ///
-    /// * `cell_key` - The [`QCellOwner`] that will be used to create _all_ [`QCell`]s
-    ///                in the system.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> Result<()> {
         loop {
@@ -139,7 +130,7 @@ impl Vm {
 
                     match op {
                         VmOp::PrioritizeCallOut(idx) => {
-                            self.op_prioritize_call_out(idx)?;
+                            self.op_prioritize_call_out(idx).await?;
                         }
                         VmOp::TaskComplete(task_id) => {
                             println!("task {task_id} complete");
@@ -148,34 +139,34 @@ impl Vm {
                     }
                 }
 
-                Some(task) = async {self.task_queue.current_mut()} => {
-                    trace!("ready to run task {:?}", task);
-                    tokio::spawn(async move {
-                        trace!("about to resume");
-                        task.resume().await
-                    });
-                    // match task.resume(&mut self.cell_key) {
-                    //     Ok(()) => match task.state {
-                    //         TaskState::Complete | TaskState::Error => {
-                    //             self.task_queue.finish_current();
-                    //         }
-                    //         TaskState::Paused => {
-                    //             self.task_queue.switch_to_next();
-                    //         }
-                    //         TaskState::New | TaskState::Running => {
-                    //             error!(
-                    //                 "Task {} returned from resume() in an invalid state: {}",
-                    //                 task.id, task.state
-                    //             );
-                    //             self.task_queue.switch_to_next();
-                    //         }
-                    //     },
-                    //     Err(e) => {
-                    //         e.emit_diagnostics();
-                    //         self.task_queue.finish_current();
-                    //     }
-                    // }
-                },
+                // Some(task) = self.task_queue.current_mut() => {
+                //     trace!("ready to run task {:?}", task);
+                //     tokio::spawn(async move {
+                //         trace!("about to resume");
+                //         task.resume().await
+                //     });
+                //     // match task.resume(&mut self.cell_key) {
+                //     //     Ok(()) => match task.state {
+                //     //         TaskState::Complete | TaskState::Error => {
+                //     //             self.task_queue.finish_current();
+                //     //         }
+                //     //         TaskState::Paused => {
+                //     //             self.task_queue.switch_to_next();
+                //     //         }
+                //     //         TaskState::New | TaskState::Running => {
+                //     //             error!(
+                //     //                 "Task {} returned from resume() in an invalid state: {}",
+                //     //                 task.id, task.state
+                //     //             );
+                //     //             self.task_queue.switch_to_next();
+                //     //         }
+                //     //     },
+                //     //     Err(e) => {
+                //     //         e.emit_diagnostics();
+                //     //         self.task_queue.finish_current();
+                //     //     }
+                //     // }
+                // },
 
                 // _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
             }
@@ -229,7 +220,9 @@ impl Vm {
             //         }
             //     }
             // }
-        }
+        };
+
+        Ok(())
     }
 
     /// Handler for [`VmOp::PrioritizeCallOut`].
@@ -237,14 +230,13 @@ impl Vm {
     /// # Arguments
     ///
     /// * `idx` - The index of the call out to run
-    /// * `cell_key` - The [`QCellOwner`] that will be used to access [`QCell`]s
     ///
     /// # Returns
     ///
     /// * `Ok(true))` - If the call out was prioritized successfully
     /// * `Ok(false)` - If the call out was not found (e.g. has been removed)
     /// * `Err(LpcError)` - If there was an error prioritizing the call out
-    fn op_prioritize_call_out(&mut self, idx: usize) -> Result<bool> {
+    async fn op_prioritize_call_out(&mut self, idx: usize) -> Result<bool> {
         if self.call_outs.read().get(idx).is_none() {
             return Ok(false);
         }
@@ -252,7 +244,8 @@ impl Vm {
         let repeating: bool;
 
         let (process, function, args) = if_chain! {
-            let call_out = self.call_outs.read().get(idx).unwrap();
+            let b = self.call_outs.read();
+            let call_out = b.get(idx).unwrap();
             if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
                 repeating = call_out.is_repeating();
@@ -283,7 +276,8 @@ impl Vm {
                             ));
                         };
 
-                        let Some(function) = simul_efuns.read().program.lookup_function(name) else {
+                        let b = simul_efuns.read();
+                        let Some(function) = b.program.lookup_function(name) else {
                             return Err(LpcError::new(format!("call to unknown simul_efun `{name}`")));
                         };
 
@@ -324,7 +318,7 @@ impl Vm {
 
         let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
 
-        task.prepare_function_call(process, function, &args)?;
+        task.prepare_function_call(process, function, &args).await?;
 
         self.task_queue.push(task);
 
@@ -356,13 +350,13 @@ impl Vm {
     /// * `Some(Ok(TaskContext))` - The [`TaskContext`] for the simul_efun file
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
-    pub fn initialize_simul_efuns(&mut self) -> Option<Result<TaskContext>> {
+    pub async fn initialize_simul_efuns(&mut self) -> Option<Result<TaskContext>> {
         let Some(path) = &self.config.simul_efun_file else {
             return None
         };
 
         let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
-        Some(self.initialize_file(&simul_efun_path))
+        Some(self.initialize_file(&simul_efun_path).await)
     }
 
     /// Do a full garbage collection cycle.
@@ -379,13 +373,15 @@ impl Vm {
     }
 
     /// Compile and initialize code from the passed file.
-    fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
+    async fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
 
-        self.with_compiler(|compiler| {
+        let program = self.with_compiler(|compiler| {
             compiler.compile_in_game_file(filename, None)
-        })
-        .and_then(|program| async { self.create_and_initialize_task(program).await })
+        })?;
+
+        self.create_and_initialize_task(program)
+        .await
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -400,7 +396,6 @@ impl Vm {
     /// * `code` - The code to compile and initialize
     /// * `filename` - The filename to assign to the code. It's assumed to be an in-game path,
     ///                with [`lib_dir`](Config) as the root.
-    /// * `cell_key` - The [`QCellOwner`] that will be used to create any necessary [`QCell`]s
     ///
     /// # Returns
     ///
@@ -422,7 +417,7 @@ impl Vm {
     /// );
     /// assert!(vm.object_space.ro(&vm.cell_key).lookup("/test").is_some());
     /// ```
-    pub fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
+    pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
     where
         P: AsRef<Path>,
         S: AsRef<str>,
@@ -430,8 +425,10 @@ impl Vm {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
-        self.with_compiler(|compiler| compiler.compile_string(lpc_path, code))
-            .and_then(|program| async { self.create_and_initialize_task(program).await })
+        let prog = self.with_compiler(|compiler| compiler.compile_string(lpc_path, code))?;
+
+        self.create_and_initialize_task(prog)
+            .await
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
@@ -506,7 +503,8 @@ mod tests {
     use crate::test_support::test_config;
 
     #[test]
-    fn test_gc() {
+    #[tokio::test]
+    async fn test_gc() {
         let mut vm = Vm::new(test_config());
         let storage = indoc! { r#"
             function *storage = ({});
@@ -544,6 +542,7 @@ mod tests {
 
         let ctx1 = vm
             .initialize_string(storage, "storage")
+            .await
             .map_err(|e| {
                 e.emit_diagnostics();
                 e
@@ -551,6 +550,7 @@ mod tests {
             .unwrap();
         let _ctx2 = vm
             .initialize_string(runner, "runner")
+            .await
             .map_err(|e| {
                 e.emit_diagnostics();
                 e

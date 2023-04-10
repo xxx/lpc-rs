@@ -4,8 +4,8 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `remove_call_out`, an efun for removing a call out.
 /// This will cancel both upcoming and repeating call outs.
-pub fn remove_call_out<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn remove_call_out<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));

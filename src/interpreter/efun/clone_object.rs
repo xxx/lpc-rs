@@ -66,11 +66,14 @@ pub async fn clone_object<const N: usize>(
     let arg = context.resolve_local_register(1_usize);
 
     if let LpcRef::String(s) = arg {
-        let r = s.read();
-        let path = try_extract_value!(*r, LpcValue::String);
-        let path = path.to_str();
+        let path = {
+            let r = s.read();
+            let path = try_extract_value!(*r, LpcValue::String);
+            // TODO: is there any way to avoid this clone? Added due to async
+            path.to_string()
+        };
 
-        let master = load_master(context, path).await?;
+        let master = load_master(context, &path).await?;
 
         {
             let borrowed = master.read();
@@ -130,7 +133,6 @@ mod tests {
     fn task_context_fixture(
         program: Program,
         config: Arc<Config>,
-        cell_key: &QCellOwner,
     ) -> TaskContext {
         let process = Process::new(program);
 
@@ -143,7 +145,6 @@ mod tests {
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx,
-            cell_key,
         )
     }
 

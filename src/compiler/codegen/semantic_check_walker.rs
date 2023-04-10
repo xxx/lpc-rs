@@ -819,13 +819,12 @@ mod tests {
             )
             .expect("failed to parse");
 
-        let context = apply_walker!(ScopeWalker, program, context, cell_key, false);
-        let context = apply_walker!(DefaultParamsWalker, program, context, cell_key, false);
+        let context = apply_walker!(ScopeWalker, program, context, false);
+        let context = apply_walker!(DefaultParamsWalker, program, context, false);
         Ok(apply_walker!(
             SemanticCheckWalker,
             program,
             context,
-            cell_key,
             false
         ))
     }

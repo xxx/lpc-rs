@@ -164,7 +164,7 @@ impl LpcRef {
     }
 
     /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
-    /// wrapped in QCells.
+    /// wrapped in RwLocks.
     pub fn binary_op<F, T>(
         left: &RwLock<Self>,
         right: &RwLock<Self>,
@@ -556,10 +556,10 @@ impl Default for LpcRef {
     }
 }
 
-/// A structure that contains a pre-calculated hash, as LpcRef requires access
-/// to [`QCell`]s to calculate the hash.
-#[derive(Clone, Debug)]
+// TODO: this shouldn't be necessary anymore, but maybe keep it to reduce contention?
+/// A structure that contains a pre-calculated hash.
 #[readonly::make]
+#[derive(Debug, Clone)]
 pub struct HashedLpcRef {
     pub hash: u64,
     pub value: LpcRef,

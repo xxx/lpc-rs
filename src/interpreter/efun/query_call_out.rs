@@ -6,8 +6,8 @@ use crate::interpreter::{
 };
 
 /// `query_call_out`, an efun for returning information about a single call out.
-pub fn query_call_out<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn query_call_out<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
@@ -19,15 +19,16 @@ pub fn query_call_out<const N: usize>(
         )));
     }
 
-    match context.call_outs().read().get(idx as usize) {
+    let result = match context.call_outs().read().get(idx as usize) {
         Some(call_out) => {
-            let result = call_out_array_ref(context, call_out)?;
-            context.return_efun_result(result);
+            call_out_array_ref(context, call_out)?
         }
         None => {
-            context.return_efun_result(LpcRef::Int(0));
+            LpcRef::Int(0)
         }
-    }
+    };
+
+    context.return_efun_result(result);
 
     Ok(())
 }

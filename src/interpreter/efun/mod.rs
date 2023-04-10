@@ -26,11 +26,13 @@ use lpc_rs_function_support::function_prototype::{
 };
 use once_cell::sync::Lazy;
 use phf::phf_map;
+use futures::future::BoxFuture;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
+pub type AsyncEfun<const N: usize> = Box<dyn Send + Sync + for<'a> Fn(&'a mut EfunContext<N>) -> BoxFuture<'a, Result<()>>>;
 
 pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
@@ -48,23 +50,46 @@ pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THROW: &str = "throw";
 
-/// A blanket to get a compile-time constant map of efuns regardless of stack size.
-pub trait HasEfuns<const STACKSIZE: usize> {
-    const EFUNS: phf::Map<&'static str, Efun<STACKSIZE>> = phf_map! {
-        "call_out" => call_out::call_out as Efun<STACKSIZE>,
-        "clone_object" => clone_object::clone_object,
-        "compose" => compose::compose as Efun<STACKSIZE>,
-        "debug" => debug::debug as Efun<STACKSIZE>,
-        "dump" => dump::dump as Efun<STACKSIZE>,
-        "file_name" => file_name::file_name as Efun<STACKSIZE>,
-        "papplyv" => papplyv::papplyv as Efun<STACKSIZE>,
-        "query_call_out" => query_call_out::query_call_out as Efun<STACKSIZE>,
-        "query_call_outs" => query_call_outs::query_call_outs as Efun<STACKSIZE>,
-        "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
-        "this_object" => this_object::this_object as Efun<STACKSIZE>,
-        "throw" => throw::throw as Efun<STACKSIZE>,
-    };
+// /// A blanket to get a compile-time constant map of efuns regardless of stack size.
+// pub trait HasEfuns<const STACKSIZE: usize> {
+//     const EFUNS: phf::Map<&'static str, AsyncEfun<STACKSIZE>> = phf_map! {
+//         "call_out" => call_out::call_out as Efun<STACKSIZE>,
+//         "clone_object" => clone_object::clone_object,
+//         "compose" => compose::compose as Efun<STACKSIZE>,
+//         "debug" => debug::debug as Efun<STACKSIZE>,
+//         "dump" => dump::dump as Efun<STACKSIZE>,
+//         "file_name" => file_name::file_name as Efun<STACKSIZE>,
+//         "papplyv" => papplyv::papplyv as Efun<STACKSIZE>,
+//         "query_call_out" => query_call_out::query_call_out as Efun<STACKSIZE>,
+//         "query_call_outs" => query_call_outs::query_call_outs as Efun<STACKSIZE>,
+//         "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
+//         "this_object" => this_object::this_object as Efun<STACKSIZE>,
+//         "throw" => throw::throw as Efun<STACKSIZE>,
+//     };
+// }
+
+pub async fn call_efun<const STACKSIZE: usize>(
+    efun_name: &str,
+    efun_context: &mut EfunContext<'_, STACKSIZE>,
+) -> Result<()> {
+    match efun_name {
+        CALL_OUT => call_out::call_out(efun_context).await,
+        CLONE_OBJECT => clone_object::clone_object(efun_context).await,
+        COMPOSE => compose::compose(efun_context).await,
+        DEBUG => debug::debug(efun_context).await,
+        DUMP => dump::dump(efun_context).await,
+        FILE_NAME => file_name::file_name(efun_context).await,
+        PAPPLYV => papplyv::papplyv(efun_context).await,
+        QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
+        QUERY_CALL_OUTS => query_call_outs::query_call_outs(efun_context).await,
+        REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
+        THIS_OBJECT => this_object::this_object(efun_context).await,
+        THROW => throw::throw(efun_context).await,
+        _ => return Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
+    }
 }
+
+
 
 /// Global static mapping of all efun names to their prototype.
 /// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun) indexes into this map,

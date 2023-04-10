@@ -3,8 +3,8 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::{interpreter::efun::efun_context::EfunContext};
 
 /// `throw`, intentionally throw an error. Can be caught by `catch`.
-pub fn throw<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn throw<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 

@@ -8,8 +8,8 @@ use crate::{
 
 /// `file_name`, an efun for returning the full path and clone number of an
 /// object
-pub fn file_name<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn file_name<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1_usize);
     let value = match lpc_ref {

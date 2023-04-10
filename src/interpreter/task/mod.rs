@@ -34,7 +34,7 @@ use crate::{
         call_frame::CallFrame,
         call_outs::CallOuts,
         call_stack::CallStack,
-        efun::{efun_context::EfunContext, Efun, HasEfuns, EFUN_PROTOTYPES},
+        efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
@@ -50,6 +50,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::interpreter::efun::call_efun;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Arc<RwLock<Process>>, Arc<ProgramFunction>);
@@ -136,7 +137,7 @@ where
         RegisterVariant::Global(reg) => {
             let frame = stack.current_frame()?;
 
-            let proc = frame.process.write();
+            let mut proc = frame.process.write();
             func(&mut proc.globals[reg])
         }
         RegisterVariant::Upvalue(reg) => {
@@ -293,10 +294,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     #[async_recursion]
-    pub async fn eval<F>(&mut self, f: F, args: &[LpcRef]) -> Result<()>
-    where
-        F: Into<Arc<ProgramFunction>> + Send,
-    {
+    pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
         let function = f.into();
         let process = self.context.process();
 
@@ -314,19 +312,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// # Returns
     ///
     /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
+    #[async_recursion]
     pub async fn eval_function(
         &mut self,
         process: Arc<RwLock<Process>>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
     ) -> Result<()> {
-        self.prepare_function_call(process, f, args)?;
+        self.prepare_function_call(process, f, args).await?;
 
         self.resume().await
     }
 
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
-    pub fn prepare_function_call(
+    // #[async_recursion]
+    pub async fn prepare_function_call(
         &mut self,
         process: Arc<RwLock<Process>>,
         f: Arc<ProgramFunction>,
@@ -348,14 +348,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
     #[instrument(skip_all)]
+    #[async_recursion]
     pub async fn resume(&mut self) -> Result<()> {
         self.state = TaskState::Running;
 
-        let f = &self.stack.current_frame()?.function;
+        let f = &self.stack.current_frame()?.function.clone();
         if f.prototype.is_efun() {
-            let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(f.name()).unwrap();
             // call the efun, then we're done with this Task
-            self.prepare_and_call_efun(efun)?;
+            self.prepare_and_call_efun(f.name()).await?;
             debug_assert!(self.stack.is_empty());
             self.state = TaskState::Complete;
         } else {
@@ -394,6 +394,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// A [`Result`], with a boolean indicating whether we are at the end of input
     #[instrument(skip_all)]
     #[inline]
+    #[async_recursion]
     async fn eval_one_instruction(&mut self) -> Result<bool> {
         if self.stack.is_empty() {
             self.state = TaskState::Complete;
@@ -457,23 +458,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
-                let (pf, efun) = {
+                let (pf, name) = {
                     let (name, prototype) = EFUN_PROTOTYPES.get_index(name_idx).unwrap();
                     // TODO: get rid of this clone. The efun Functions should be cached.
                     let pf = ProgramFunction::new(prototype.clone(), 0);
-                    let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(name).unwrap();
 
-                    (pf, efun)
+                    (pf, name)
                 };
 
                 let new_frame = self.prepare_new_call_frame(process, pf.into())?;
 
                 self.stack.push(new_frame)?;
 
-                self.prepare_and_call_efun(efun)?;
+                self.prepare_and_call_efun(name).await?;
             }
             Instruction::CallFp(location) => {
-                self.handle_call_fp(location)?;
+                self.handle_call_fp(location).await?;
             }
             Instruction::CallOther(receiver, name) => {
                 self.handle_call_other(receiver, name).await?;
@@ -1034,7 +1034,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_call_fp(
+    async fn handle_call_fp(
         &mut self,
         location: RegisterVariant,
     ) -> Result<()> {
@@ -1052,10 +1052,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        // TODO: reduce the amount of time this borrow is live
-        //       This might be ok because functions are only borrowed immutably at this time.
-        let borrowed = func.read();
-        let ptr = try_extract_value!(*borrowed, LpcValue::Function);
+        let ptr = {
+            let borrowed = func.read();
+            // TODO: this clone sucks.
+            try_extract_value!(*borrowed, LpcValue::Function).clone()
+        };
 
         trace!("Calling function ptr: {}", ptr);
 
@@ -1079,7 +1080,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
-        let Some((proc, function)) = self.extract_process_and_function(ptr)? else {
+        let Some((proc, function)) = self.extract_process_and_function(&ptr)? else {
             return Ok(())
         };
 
@@ -1135,49 +1136,51 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut from_slice_index = 0;
         let mut next_index = 1;
-        let b = func.read();
-        let ptr = try_extract_value!(&*b, LpcValue::Function);
-        let arg_locations = match &ptr.address {
-            FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-            FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
-            FunctionAddress::SimulEfun(_) => Cow::Borrowed(&function.arg_locations),
-        };
+        {
+            let b = func.read();
+            let ptr = try_extract_value!(&*b, LpcValue::Function);
+            let arg_locations = match &ptr.address {
+                FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
+                FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
+                FunctionAddress::SimulEfun(_) => Cow::Borrowed(&function.arg_locations),
+            };
 
-        for i in 0..max_arg_length {
-            let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
-                // This should only be reached by variables that will go
-                // into an ellipsis function's argv.
-                Register(next_index).as_local()
-            });
+            for i in 0..max_arg_length {
+                let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
+                    // This should only be reached by variables that will go
+                    // into an ellipsis function's argv.
+                    Register(next_index).as_local()
+                });
 
-            if let RegisterVariant::Local(r) = target_location {
-                next_index = r.index() + 1;
-            }
+                if let RegisterVariant::Local(r) = target_location {
+                    next_index = r.index() + 1;
+                }
 
-            if let Some(Some(lpc_ref)) = partial_args.get(i) {
-                // if a partially-applied arg is present, use it
-                type_check_and_assign_location(
-                    self,
-                    &mut new_frame,
-                    target_location,
-                    lpc_ref.clone(),
-                    i,
-                )?;
-            } else if let Some(location) = from_slice.get(from_slice_index) {
-                // check if the user passed an argument, which will
-                // fill in the next hole in the partial arguments, or
-                // append to the end
+                if let Some(Some(lpc_ref)) = partial_args.get(i) {
+                    // if a partially-applied arg is present, use it
+                    type_check_and_assign_location(
+                        self,
+                        &mut new_frame,
+                        target_location,
+                        lpc_ref.clone(),
+                        i,
+                    )?;
+                } else if let Some(location) = from_slice.get(from_slice_index) {
+                    // check if the user passed an argument, which will
+                    // fill in the next hole in the partial arguments, or
+                    // append to the end
 
-                let lpc_ref = get_loc!(self, *location)?;
-                type_check_and_assign_location(
-                    self,
-                    &mut new_frame,
-                    target_location,
-                    lpc_ref.into_owned(),
-                    i,
-                )?;
+                    let lpc_ref = get_loc!(self, *location)?;
+                    type_check_and_assign_location(
+                        self,
+                        &mut new_frame,
+                        target_location,
+                        lpc_ref.into_owned(),
+                        i,
+                    )?;
 
-                from_slice_index += 1;
+                    from_slice_index += 1;
+                }
             }
         }
 
@@ -1185,8 +1188,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.stack.push(new_frame)?;
 
         if function_is_efun {
-            let efun = *<Self as HasEfuns<STACKSIZE>>::EFUNS.get(pf.name()).unwrap();
-            self.prepare_and_call_efun(efun)?;
+            self.prepare_and_call_efun(pf.name()).await?;
         }
 
         Ok(())
@@ -1196,7 +1198,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn extract_process_and_function(
         &mut self,
         ptr: &FunctionPtr,
-        // task_context: &TaskContext,
     ) -> Result<Option<ProcessFunctionPair>> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
@@ -1219,7 +1220,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let frame = self.stack.current_frame_mut()?;
                     frame.registers[0] = NULL;
                     return Ok(None);
-                    // return Err(self.runtime_error(format!("call to unknown function `{name}`")));
                 };
 
                 pair
@@ -1239,7 +1239,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(self.runtime_bug("simul_efun called without simul_efuns"));
                 };
 
-                let Some(function) = simul_efuns.read().program.lookup_function(name) else {
+                let se = simul_efuns.read();
+                let Some(function) = se.program.lookup_function(name) else {
                     return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
                 };
 
@@ -1275,17 +1276,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    fn prepare_and_call_efun(
+    async fn prepare_and_call_efun<S>(
         &mut self,
-        efun: Efun<STACKSIZE>,
-    ) -> Result<()> {
+        name: S,
+    ) -> Result<()>
+    where
+        S: AsRef<str>,
+    {
         let mut ctx = EfunContext::new(
             &mut self.stack,
             &self.context,
             self.context.memory().clone(),
         );
 
-        efun(&mut ctx)?;
+        call_efun(name.as_ref(), &mut ctx).await?;
 
         #[cfg(test)]
         {
@@ -1301,6 +1305,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
+    #[async_recursion]
     async fn handle_call_other(
         &mut self,
         receiver: RegisterVariant,
@@ -1321,8 +1326,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 );
                 return Err(self.runtime_error(str));
             };
-            let borrowed = pool_ref.read();
-            let function_name = try_extract_value!(*borrowed, LpcValue::String);
+
+            let function_name = {
+                let borrowed = pool_ref.read();
+                // TODO: get rid of this clone
+                try_extract_value!(*borrowed, LpcValue::String).clone()
+            };
 
             trace!(
                 "Calling call_other: {}->{function_name}",
@@ -1331,15 +1340,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             // An inner helper function to actually calculate the result, for easy re-use
             // when using `call_other` with arrays and mappings.
-            async fn resolve_result(
+            #[async_recursion]
+            async fn resolve_result<T>(
                 receiver_ref: &LpcRef,
-                function_name: &LpcString,
+                function_name: T,
                 args: &[LpcRef],
                 task_context: &TaskContext,
-            ) -> Result<LpcRef> {
+            ) -> Result<LpcRef>
+            where
+                T: AsRef<str> + Send
+            {
                 let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
                     receiver_ref,
-                    function_name,
+                    function_name.as_ref(),
                     task_context,
                 );
 
@@ -1354,15 +1367,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let function = receiver
                                 .read()
                                 .as_ref()
-                                .lookup_function(function_name)
+                                .lookup_function(function_name.as_ref())
                                 .unwrap()
                                 .clone();
 
                             if function.public() {
-                                task.eval(function, args).await?;
-                                task_context.increment_instruction_count(
-                                    task.context.instruction_count(),
-                                )?;
+                                // TODO: remove this clone
+                                task.eval(function, &args.clone()).await?;
+                                // task_context.increment_instruction_count(
+                                //     task.context.instruction_count(),
+                                // )?;
 
                                 let Some(r) = task.context.into_result() else {
                                     return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
@@ -1390,41 +1404,60 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    resolve_result(receiver_ref, function_name, &args, &self.context).await?
+                    // TODO: get rid of this clone
+                    resolve_result(receiver_ref, &function_name, &args, &self.context).await?
                 }
                 LpcRef::Array(r) => {
-                    let b = r.read();
-                    let array = try_extract_value!(*b, LpcValue::Array);
-
+                    let array = {
+                        let b = r.read();
+                        // TODO: get rid of this clone
+                        try_extract_value!(*b, LpcValue::Array).clone()
+                    };
                     let futures = array
                         .iter()
-                        .map(|lpc_ref| async {
-                            resolve_result(lpc_ref, function_name, &args, &self.context)
-                                .await
-                                .unwrap_or(NULL)
+                        .cloned()
+                        .map(|lpc_ref| {
+                            let fname = function_name.clone();
+                            let args = args.clone();
+                            let ctx = &self.context;
+
+                            async move {
+                                resolve_result(&lpc_ref, fname.as_ref(), args.as_ref(), ctx)
+                                    .await
+                                    .unwrap_or(NULL)
+                            }
                         });
 
                     let array_value = join_all(futures).await.into();
                     self.context.memory().value_to_ref(array_value)
                 }
                 LpcRef::Mapping(m) => {
-                    let b = m.read();
-                    let map = try_extract_value!(*b, LpcValue::Mapping);
+                    let map = {
+                        let b = m.read();
+                        // TODO: get rid of this clone
+                        try_extract_value!(*b, LpcValue::Mapping).clone()
+                    };
 
                     let futures = map
                         .iter()
-                        .map(|(key_ref, value_ref)| async {
-                            (
-                                key_ref.clone(),
-                                resolve_result(
-                                    value_ref,
-                                    function_name,
-                                    &args,
-                                    &self.context,
+                        .map(|(key_ref, value_ref)| {
+                            let function_name = function_name.clone();
+                            let args = args.clone();
+                            let ctx = &self.context;
+
+                            async move {
+                                (
+                                    key_ref.clone(),
+                                    resolve_result(
+                                        value_ref,
+                                        &function_name,
+                                        &args,
+                                        ctx,
+                                    )
+                                        .await
+                                        .unwrap_or(NULL),
                                 )
-                                    .await
-                                    .unwrap_or(NULL),
-                            )
+                            }
                         });
 
                     let with_results = join_all(futures)
@@ -1506,16 +1539,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
 
-                let borrowed_proc = process.read();
-                let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
-                    return Err(self.runtime_error(format!(
-                        "Unable to find function `{}` in local process `{}`.",
-                        func_name,
-                        process.read().filename()
-                    )));
+                let func = {
+                    let borrowed_proc = process.read();
+                    let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
+                        return Err(self.runtime_error(format!(
+                            "Unable to find function `{}` in local process `{}`.",
+                            func_name,
+                            process.read().filename()
+                        )));
+                    };
+
+                    func.clone()
                 };
 
-                let func = func.clone();
                 FunctionAddress::Local(process, func)
             }
             FunctionReceiver::Var(location) => {
@@ -1526,16 +1562,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let process = try_extract_value!(*b, LpcValue::Object);
                         let process = process.clone();
 
-                        let borrowed_proc = process.read();
-                        let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
-                            return Err(self.runtime_error(format!(
-                                "Unable to find function `{}` in remote process `{}`.",
-                                func_name,
-                                process.read().filename()
-                            )));
-                        };
+                        let func = {
+                            let borrowed_proc = process.read();
+                            let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
+                                return Err(self.runtime_error(format!(
+                                    "Unable to find function `{}` in remote process `{}`.",
+                                    func_name,
+                                    process.read().filename()
+                                )));
+                            };
 
-                        let func = func.clone();
+                            func.clone()
+                        };
                         FunctionAddress::Local(process, func)
                     }
                     LpcRef::String(_) => {
@@ -1814,11 +1852,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn resolve_call_other_receiver(
+    fn resolve_call_other_receiver<T>(
         receiver_ref: &LpcRef,
-        name: &LpcString,
+        name: T,
         context: &TaskContext,
-    ) -> Option<Arc<RwLock<Process>>> {
+    ) -> Option<Arc<RwLock<Process>>>
+    where
+        T: AsRef<str>
+    {
         let process = match receiver_ref {
             LpcRef::String(s) => {
                 let r = s.read();
@@ -2011,8 +2052,6 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
         self.stack.mark(marked, processed)
     }
 }
-
-impl<const STACKSIZE: usize> HasEfuns<STACKSIZE> for Task<STACKSIZE> {}
 
 #[cfg(test)]
 mod tests {

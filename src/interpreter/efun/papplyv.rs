@@ -3,8 +3,8 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue};
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
-pub fn papplyv<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn papplyv<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let LpcRef::Function(f) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));

@@ -35,7 +35,7 @@ impl<const STACKSIZE: usize> TaskQueue<STACKSIZE> {
 
     /// Get a mutable reference to the current [`Task`]
     #[inline]
-    pub fn current_mut(&mut self) -> Option<&mut Task<STACKSIZE>> {
+    pub async fn current_mut(&mut self) -> Option<&mut Task<STACKSIZE>> {
         self.ready.front_mut()
     }
 

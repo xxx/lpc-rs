@@ -11,8 +11,8 @@ use crate::{
 };
 
 /// `call_out`, an efun for calling a function at some future point in time
-pub fn call_out<const N: usize>(
-    context: &mut EfunContext<N>,
+pub async fn call_out<const N: usize>(
+    context: &mut EfunContext<'_, N>,
     ) -> Result<()> {
     let func_ref = context.resolve_local_register(1_usize);
 
@@ -61,8 +61,10 @@ pub fn call_out<const N: usize>(
     };
 
     let process = context.frame().process.clone();
-    let mut call_outs = context.call_outs().write();
-    let index = call_outs.schedule_task(process, func_ref, duration, repeat)?;
+    let index = {
+        let mut call_outs = context.call_outs().write();
+        call_outs.schedule_task(process, func_ref, duration, repeat)?
+    };
 
     // TODO: limit the max number of call outs so we don't overflow this
     let result = LpcRef::Int(index as i64);
@@ -137,7 +139,6 @@ mod tests {
     #[should_panic]
     fn test_enqueues_task() {
         todo!("fix this up for tokio");
-        // let mut cell_key = QCellOwner::new();
         //
         // let code = r##"
         //     void create() {

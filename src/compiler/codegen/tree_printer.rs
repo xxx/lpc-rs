@@ -47,12 +47,11 @@ use crate::compiler::{
 /// ///
 /// let prog = "int main() { int b = 123; return b; }";
 /// let lexer = LexWrapper::new(prog);
-/// let mut cell_key = QCellOwner::new();
 /// let mut program_node = lpc_parser::ProgramParser::new()
 ///     .parse(&mut CompilationContext::default(), lexer)
 ///     .unwrap();
 /// let mut walker = TreePrinter::new();
-/// walker.visit_program(&mut program_node);
+/// walker.visit_program(&mut program_node).expect("error walking the tree");
 /// ```
 #[derive(Debug)]
 pub struct TreePrinter {

@@ -136,7 +136,6 @@ impl<'a> Program {
     /// "#;
     ///
     /// let compiler = Compiler::default();
-    /// let mut cell_key = QCellOwner::new();
     /// let program = compiler
     ///     .compile_string("~/my_file.c", code)
     ///     .expect("Failed to compile.");
