@@ -113,7 +113,6 @@ impl Vm {
     /// Assumes `bootstrap()` has already been called.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> Result<()> {
-        println!("running");
         loop {
             tokio::select! {
                 Some(op) = self.rx.recv() => {
