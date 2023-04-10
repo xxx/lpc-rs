@@ -2510,7 +2510,7 @@ mod tests {
     #[test]
     fn test_visit_array_populates_the_instructions() {
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
 
         let mut arr = ArrayNode::new(vec![
             ExpressionNode::from(123),
@@ -2672,7 +2672,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_ints() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::Int(IntNode::new(666))),
@@ -2759,7 +2759,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_strings() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::String(StringNode::new("foo"))),
@@ -2797,7 +2797,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_arrays() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -2861,7 +2861,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_slices() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
                 l: Box::new(ExpressionNode::from(vec![ExpressionNode::from(123)])),
@@ -2897,7 +2897,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_andand_expressions() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
             let mut node = BinaryOpNode {
@@ -2928,7 +2928,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_oror_expressions() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
             let mut node = BinaryOpNode {
@@ -2962,7 +2962,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_function_composition() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
             let mut node = BinaryOpNode {
@@ -3308,7 +3308,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_local_calls() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             let call = "mixed m = local_function(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
@@ -3327,7 +3327,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_efuns() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             let call = "mixed m = dump(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
@@ -3346,7 +3346,7 @@ mod tests {
         #[test]
         fn populates_the_instructions_for_simul_efuns() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             let call = "mixed m = simul_efun(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
@@ -3635,7 +3635,7 @@ mod tests {
         #[test]
         fn copies_non_void_efun_results() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             let call = r#"mixed m = clone_object("/foo.c");"#;
             let mut node = get_call_node(call, &mut walker.context);
 
@@ -3658,7 +3658,7 @@ mod tests {
         #[test]
         fn does_not_copy_void_efun_results() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             let call = r#"mixed m = dump("lkajsdflkajsdf");"#;
             let mut node = get_call_node(call, &mut walker.context);
 
@@ -3718,7 +3718,7 @@ mod tests {
 
 
             // do a stupid dance to get the efuns into the context
-            let walker = default_walker(&mut cell_key);
+            let walker = default_walker();
 
             let mut ctx = walker.into_context();
             let mut node = get_call_node(call, &mut ctx);
@@ -3806,7 +3806,7 @@ mod tests {
     #[test]
     fn test_visit_comma_expression_populates_the_instructions() {
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
 
         let mut expr = CommaExpressionNode::new(vec![
             ExpressionNode::from(123),
@@ -3918,7 +3918,6 @@ mod tests {
 
             let mut walker = compile(
                 "function f = (: [int i, int j = 666, float d = 3.54] i * j :);",
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -4269,7 +4268,7 @@ mod tests {
         #[test]
         fn test_populates_the_instructions() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
             let mut node = DoWhileNode {
@@ -4508,7 +4507,7 @@ mod tests {
                 span: None,
             };
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.visit_function_ptr(&mut node).unwrap();
 
             let expected = vec![
@@ -4534,7 +4533,7 @@ mod tests {
                 span: None,
             };
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.visit_function_ptr(&mut node).unwrap();
 
             let expected = vec![
@@ -4559,7 +4558,7 @@ mod tests {
         fn test_populates_the_instructions() {
 
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
             let mut node = IfNode {
@@ -4612,7 +4611,7 @@ mod tests {
     #[test]
     fn test_visit_int_populates_the_instructions() {
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
 
         let mut tree = IntNode::new(666);
         let mut tree0 = IntNode::new(0);
@@ -4763,7 +4762,7 @@ mod tests {
     #[test]
     fn visit_return_populates_the_instructions() {
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
 
         let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
         let _ = walker.visit_return(&mut node);
@@ -4781,7 +4780,7 @@ mod tests {
 
         /* === */
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
         let mut node = ReturnNode::new(None);
         let _ = walker.visit_return(&mut node);
 
@@ -4793,7 +4792,7 @@ mod tests {
     #[test]
     fn test_visit_string_populates_the_instructions() {
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
         let mut node = StringNode::new("marf");
         let mut node2 = StringNode::new("tacos");
         let mut node3 = StringNode::new("marf");
@@ -4938,7 +4937,7 @@ mod tests {
         use super::*;
 
         fn setup(op: UnaryOperation, is_post: bool) -> CodegenWalker {
-            let mut walker = default_walker(cell_key);
+            let mut walker = default_walker();
             let mut node = UnaryOpNode {
                 op,
                 expr: Box::new(ExpressionNode::from(666)),
@@ -5264,7 +5263,6 @@ mod tests {
                 LpcType::Mapping(false),
                 ExpressionNode::Mapping(MappingNode::new(pairs, None)),
                 &mut walker,
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -5303,7 +5301,6 @@ mod tests {
                 LpcType::Int(false),
                 ExpressionNode::Int(IntNode::new(123)),
                 &mut walker,
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -5335,7 +5332,6 @@ mod tests {
                 LpcType::Float(false),
                 ExpressionNode::Float(FloatNode::new(123.0)),
                 &mut walker,
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -5370,7 +5366,6 @@ mod tests {
                 LpcType::Int(true),
                 ExpressionNode::String(StringNode::new("foo")),
                 &mut walker,
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -5402,7 +5397,6 @@ mod tests {
                 LpcType::Int(true),
                 ExpressionNode::Array(ArrayNode::new(vec![ExpressionNode::from(1234)])),
                 &mut walker,
-                &mut cell_key,
             );
 
             assert_eq!(
@@ -5614,7 +5608,7 @@ mod tests {
         #[test]
         fn test_populates_the_instructions() {
 
-            let mut walker = default_walker(&mut cell_key);
+            let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
             let mut node = WhileNode {
@@ -5851,7 +5845,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mut walker = default_walker(&mut cell_key);
+        let mut walker = default_walker();
         walker.context.inherits.push(parent);
         walker.context.strings = strings.iter().cloned().collect();
 

@@ -379,7 +379,6 @@ mod tests {
             4,
             None,
             vm_upvalues.into(),
-            &mut cell_key,
         );
 
         assert_eq!(frame.registers.len(), 12);
@@ -412,7 +411,6 @@ mod tests {
                 30,
                 None,
                 vm_upvalues.into(),
-                &mut cell_key,
             );
 
             assert_eq!(frame.registers.len(), 38);
@@ -442,7 +440,6 @@ mod tests {
                 2,
                 None,
                 vm_upvalues.into(),
-                &mut cell_key,
             );
 
             assert_eq!(frame.registers.len(), 12);
@@ -486,7 +483,6 @@ mod tests {
                 0,
                 None,
                 vm_upvalues.clone(),
-                &mut cell_key,
             );
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
@@ -522,7 +518,6 @@ mod tests {
                 0,
                 None,
                 vm_upvalues,
-                &mut cell_key,
             );
             assert_eq!(
                 frame.upvalue_ptrs,

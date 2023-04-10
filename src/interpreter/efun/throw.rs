@@ -14,7 +14,7 @@ pub async fn throw<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-
+    use parking_lot::RwLock;
     use lpc_rs_utils::config::Config;
 
     use super::*;
@@ -26,10 +26,8 @@ mod tests {
         test_support::compile_prog,
     };
 
-    #[test]
-    fn test_throw() {
-
-
+    #[tokio::test]
+    async fn test_throw() {
         let code = r##"
             void create() {
                 throw("foo bar baz error!");
@@ -46,8 +44,7 @@ mod tests {
             RwLock::new(GcBank::default()),
             RwLock::new(CallOuts::new(tx.clone())),
             tx,
-            &mut cell_key,
-        );
+        ).await;
 
         assert_eq!(result.unwrap_err().to_string(), "\"foo bar baz error!\"");
     }

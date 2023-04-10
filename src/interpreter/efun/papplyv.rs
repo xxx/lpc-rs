@@ -36,6 +36,7 @@ pub async fn papplyv<const N: usize>(
 mod tests {
 
     use std::sync::Arc;
+    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
 
@@ -48,10 +49,8 @@ mod tests {
         test_support::compile_prog,
     };
 
-    #[test]
-    fn test_papplyv() {
-
-
+    #[tokio::test]
+    async fn test_papplyv() {
         let code = r##"
             function create() {
                 return papplyv(dump, ({ "foo", "bar" }));
@@ -69,8 +68,7 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs,
             tx,
-            &mut cell_key,
-        );
+        ).await;
 
         let b = result.unwrap();
         let r = b.result().unwrap();

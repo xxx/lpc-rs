@@ -127,7 +127,8 @@ impl Mark for Process {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, sync::Arc};
+    use std::{sync::Arc};
+    use parking_lot::RwLock;
 
     use shared_arena::SharedArena;
 

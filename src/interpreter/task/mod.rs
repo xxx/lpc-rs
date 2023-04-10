@@ -383,10 +383,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Evaluate the instruction at the current value of the program counter.
     /// This is the main interpretation function for the VM.
     ///
-    /// # Arguments
-    ///
-    /// `task_context` - the [`TaskContext`] that will be used for this evaluation.
-    ///
     /// # Returns
     ///
     /// A [`Result`], with a boolean indicating whether we are at the end of input
@@ -1133,6 +1129,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut from_slice_index = 0;
         let mut next_index = 1;
         {
+            // This read() needs to be dropped before the `await`.
             let b = func.read();
             let ptr = try_extract_value!(&*b, LpcValue::Function);
             let arg_locations = match &ptr.address {
@@ -2158,7 +2155,7 @@ mod tests {
                 LpcRef::Object(x) => {
                     let xb = x.read();
                     let o = extract_value!(&*xb, LpcValue::Object);
-                    let filename = o.ro().filename().into_owned();
+                    let filename = o.read().filename().into_owned();
                     BareVal::Object(filename)
                 }
                 LpcRef::Function(x) => {
@@ -2198,7 +2195,7 @@ mod tests {
     }
 
     impl PartialEq<&LpcRef> for BareVal {
-        fn eq(&self, lpc_ref: &LpcRef) -> bool {
+        fn eq(&self, lpc_ref: &&LpcRef) -> bool {
             &BareVal::from_lpc_ref(lpc_ref) == self
         }
     }
@@ -2262,8 +2259,8 @@ mod tests {
         use super::*;
         use crate::interpreter::{bank::RefBank, task::tests::BareVal::*};
 
-        fn snapshot_registers(code: &str) -> RefBank {
-            let mut task = run_prog(code);
+        async fn snapshot_registers(code: &str) -> RefBank {
+            let mut task = run_prog(code).await;
             let mut stack = task.snapshots.pop().unwrap();
 
             // The top of the stack in the snapshot is the object initialization frame,
@@ -2277,12 +2274,12 @@ mod tests {
         mod test_aconst {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed *a = ({ 12, 4.3, "hello", ({ 1, 2, 3 }) });
                 "##};
-                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2309,14 +2306,14 @@ mod tests {
         mod test_and {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 15 & 27;
                     mixed b = 0 & a;
                 "##};
 
-                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(11), Int(0), Int(0)];
@@ -2328,15 +2325,15 @@ mod tests {
         mod test_andand {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 123 && 333;
                     mixed b = 0;
                     mixed c = b && a;
                 "##};
 
-                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(333), Int(333), Int(0), Int(0)];
@@ -2348,15 +2345,15 @@ mod tests {
         mod test_bitwise_not {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     int a = ~0;
                     int b = 7;
                     int c = ~b;
                 "##};
 
-                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(-1), Int(7), Int(-8)];
@@ -2368,14 +2365,14 @@ mod tests {
         mod test_call {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = tacos();
                     int tacos() { return 666; }
                 "##};
 
-                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(666), Int(666)];
@@ -2383,8 +2380,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn calls_correct_function() {
+            #[tokio::test]
+            async fn calls_correct_function() {
                 let code = indoc! { r##"
                     inherit "/std/object";
                     mixed mine = public_function();
@@ -2395,7 +2392,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let proc = ctx.process();
@@ -2407,8 +2404,8 @@ mod tests {
                     .assert_equal(values.get("parents").unwrap());
             }
 
-            #[test]
-            fn calls_correct_function_with_efuns() {
+            #[tokio::test]
+            async fn calls_correct_function_with_efuns() {
                 let code = indoc! { r##"
                     object ob = clone_object("/std/object");
                     mixed this_one = file_name(ob);
@@ -2419,7 +2416,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let proc = ctx.process();
@@ -2434,14 +2431,14 @@ mod tests {
                 );
             }
 
-            #[test]
-            fn calls_correct_function_with_simul_efuns() {
+            #[tokio::test]
+            async fn calls_correct_function_with_simul_efuns() {
                 // this is deprecated behavior that emits a warning, but probably won't ever be removed completely.
                 let code = indoc! { r##"
                     string this_one = simul_efun("marf");
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let proc = ctx.process();
@@ -2455,13 +2452,13 @@ mod tests {
         mod test_call_efun {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = this_object();
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Object("/my_file".into()), Object("/my_file".into())];
@@ -2473,13 +2470,13 @@ mod tests {
         mod test_call_simul_efun {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = simul_efun("marf");
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2498,15 +2495,15 @@ mod tests {
 
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     function q = tacos;
                     int a = q(666);
                     int tacos(int j) { return j + 1; }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2519,8 +2516,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_partial_applications() {
+            #[tokio::test]
+            async fn stores_the_value_for_partial_applications() {
                 let code = indoc! { r##"
                     function q = &tacos(, "adding some!");
                     int a = q(666, 4);
@@ -2529,7 +2526,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2547,8 +2544,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_partial_applications_with_no_added_args() {
+            #[tokio::test]
+            async fn stores_the_value_for_partial_applications_with_no_added_args() {
                 let code = indoc! { r##"
                     function q = &tacos("my_string!");
                     int a = q();
@@ -2557,7 +2554,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2570,8 +2567,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_partial_applications_with_default_arguments() {
+            #[tokio::test]
+            async fn stores_the_value_for_partial_applications_with_default_arguments() {
                 let code = indoc! { r##"
                     function q = &tacos(, "adding some!");
                     int a = q(666, 4);
@@ -2581,7 +2578,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2601,8 +2598,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_partial_applications_with_default_arguments_and_ellipsis() {
+            #[tokio::test]
+            async fn stores_the_value_for_partial_applications_with_default_arguments_and_ellipsis() {
                 let code = indoc! { r##"
                     function q = &tacos(, "adding some!", , 666, 123);
                     int a = q(42, 4, "should be in argv");
@@ -2614,7 +2611,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2642,8 +2639,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_dynamic_receivers() {
+            #[tokio::test]
+            async fn stores_the_value_for_dynamic_receivers() {
                 let code = indoc! { r##"
                     function q = &->name(, "awesome!");
 
@@ -2655,7 +2652,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2674,8 +2671,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn is_0_for_call_other_private_functions() {
+            #[tokio::test]
+            async fn is_0_for_call_other_private_functions() {
                 let code = indoc! { r##"
                     function q = &(this_object())->tacos(, "adding some!");
                     int a = q(666, 4);
@@ -2685,7 +2682,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2706,8 +2703,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn is_normal_call_for_local_private_functions() {
+            #[tokio::test]
+            async fn is_normal_call_for_local_private_functions() {
                 let code = indoc! { r##"
                     function q = tacos;
                     int a = q(4);
@@ -2716,7 +2713,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(4), Function("tacos".into(), vec![]), Int(4), Int(4)];
@@ -2724,8 +2721,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn checks_types() {
+            #[tokio::test]
+            async fn checks_types() {
                 let code = indoc! { r##"
                     function q = &tacos("foo");
                     int a = q();
@@ -2734,7 +2731,7 @@ mod tests {
                     }
                 "##};
 
-                                let object_space = ObjectSpace::default();
+                let object_space = ObjectSpace::default();
                 let upvalues = GcBank::default();
                 let (tx, _) = mpsc::channel(128);
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
@@ -2752,7 +2749,7 @@ mod tests {
                     vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
-                );
+                ).await;
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2782,7 +2779,7 @@ mod tests {
                     vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
-                );
+                ).await;
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2812,7 +2809,7 @@ mod tests {
                     vm_upvalues,
                     call_outs,
                     tx,
-                );
+                ).await;
 
                 assert_ok!(result);
             }
@@ -2821,14 +2818,14 @@ mod tests {
         mod test_call_other {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = this_object()->tacos();
                     int tacos() { return 666; }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2841,14 +2838,14 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, registers);
             }
 
-            #[test]
-            fn returns_0_for_private_functions() {
+            #[tokio::test]
+            async fn returns_0_for_private_functions() {
                 let code = indoc! { r##"
                     mixed q = this_object()->tacos();
                     private int tacos() { return 666; }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2861,14 +2858,14 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, registers);
             }
 
-            #[test]
-            fn returns_0_for_protected_functions() {
+            #[tokio::test]
+            async fn returns_0_for_protected_functions() {
                 let code = indoc! { r##"
                     mixed q = this_object()->tacos();
                     protected int tacos() { return 666; }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2885,8 +2882,8 @@ mod tests {
         mod test_catch {
             use super::*;
 
-            #[test]
-            fn stores_the_error_string() {
+            #[tokio::test]
+            async fn stores_the_error_string() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 0;
@@ -2896,7 +2893,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -2911,8 +2908,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_zero_when_no_error() {
+            #[tokio::test]
+            async fn stores_zero_when_no_error() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 5;
@@ -2922,7 +2919,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -2941,8 +2938,8 @@ mod tests {
         mod test_catch_end {
             use super::*;
 
-            #[test]
-            fn pops_the_catch_point() {
+            #[tokio::test]
+            async fn pops_the_catch_point() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 0;
@@ -2950,7 +2947,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
 
                 assert!(task.catch_points.is_empty());
             }
@@ -2959,8 +2956,8 @@ mod tests {
         mod test_dec {
             use super::*;
 
-            #[test]
-            fn stores_the_value_for_pre() {
+            #[tokio::test]
+            async fn stores_the_value_for_pre() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 0;
@@ -2970,21 +2967,21 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![Int(0), Int(-1), String("snapshot_stack".into()), Int(0)];
 
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_pre_when_global() {
+            #[tokio::test]
+            async fn stores_the_value_for_pre_when_global() {
                 let code = indoc! { r##"
                     int j = 5;
                     int k = --j;
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let expected = vec![Int(4), Int(4)];
@@ -2998,8 +2995,8 @@ mod tests {
                 );
             }
 
-            #[test]
-            fn stores_the_value_for_post() {
+            #[tokio::test]
+            async fn stores_the_value_for_post() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 0;
@@ -3009,7 +3006,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -3022,14 +3019,14 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_post_when_global() {
+            #[tokio::test]
+            async fn stores_the_value_for_post_when_global() {
                 let code = indoc! { r##"
                     int j = 5;
                     int k = j--;
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let expected = vec![Int(4), Int(5)];
@@ -3047,13 +3044,13 @@ mod tests {
         mod test_eq_eq {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 2 == 2;
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(2), Int(2), Int(1)];
@@ -3065,13 +3062,13 @@ mod tests {
         mod test_fconst {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     float π = 4.13;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Float(4.13.into())];
@@ -3083,13 +3080,13 @@ mod tests {
         mod test_functionptrconst {
             use super::*;
 
-            #[test]
-            fn stores_the_value_for_efuns() {
+            #[tokio::test]
+            async fn stores_the_value_for_efuns() {
                 let code = indoc! { r##"
                     function f = dump;
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Function("dump".to_string(), vec![])];
@@ -3097,13 +3094,13 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_simul_efuns() {
+            #[tokio::test]
+            async fn stores_the_value_for_simul_efuns() {
                 let code = indoc! { r##"
                     function f = simul_efun;
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Function("simul_efun".to_string(), vec![])];
@@ -3111,8 +3108,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_call_other() {
+            #[tokio::test]
+            async fn stores_the_value_for_call_other() {
                 let code = indoc! { r##"
                     function f = &(this_object())->tacco();
 
@@ -3121,7 +3118,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3133,8 +3130,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_with_args() {
+            #[tokio::test]
+            async fn stores_the_value_with_args() {
                 let code = indoc! { r##"
                     function f = &tacco(1, 666);
 
@@ -3143,7 +3140,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3156,8 +3153,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_with_partial_applications() {
+            #[tokio::test]
+            async fn stores_the_value_with_partial_applications() {
                 let code = indoc! { r##"
                     function f = &tacco(1, , , 42, );
 
@@ -3166,7 +3163,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3182,8 +3179,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_closures() {
+            #[tokio::test]
+            async fn stores_the_value_for_closures() {
                 let code = indoc! { r##"
                     function f = maker();
 
@@ -3193,7 +3190,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3208,15 +3205,15 @@ mod tests {
         mod test_gt {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 1200 > 1199;
                     mixed r = 1199 > 1200;
                     mixed s = 1200 > 1200;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3239,15 +3236,15 @@ mod tests {
         mod test_gte {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 1200 >= 1199;
                     mixed r = 1199 >= 1200;
                     mixed s = 1200 >= 1200;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3270,15 +3267,15 @@ mod tests {
         mod test_iadd {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     int q = 16 + 34;
                     int r = 12 + -4;
                     int s = q + r;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3296,13 +3293,13 @@ mod tests {
         mod test_iconst {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 666;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(666)];
@@ -3314,13 +3311,13 @@ mod tests {
         mod test_iconst0 {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 0;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(0)];
@@ -3332,13 +3329,13 @@ mod tests {
         mod test_iconst1 {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 1;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(1)];
@@ -3350,15 +3347,15 @@ mod tests {
         mod test_idiv {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 16 / 2;
                     mixed r = 12 / -4;
                     mixed s = q / r;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3372,8 +3369,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn errors_on_division_by_zero() {
+            #[tokio::test]
+            async fn errors_on_division_by_zero() {
                 let code = indoc! { r##"
                     mixed q = 5;
                     mixed r = 0;
@@ -3392,7 +3389,7 @@ mod tests {
                     Arc::new(RwLock::new(GcBank::default())),
                     call_outs,
                     tx,
-                );
+                ).await;
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3404,15 +3401,15 @@ mod tests {
         mod test_imod {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 16 % 7;
                     mixed r = 12 % -7;
                     mixed s = q % r;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3426,8 +3423,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn errors_on_division_by_zero() {
+            #[tokio::test]
+            async fn errors_on_division_by_zero() {
                 let code = indoc! { r##"
                     mixed q = 5;
                     mixed r = 0;
@@ -3447,7 +3444,7 @@ mod tests {
                     Arc::new(vm_upvalues),
                     call_outs,
                     tx,
-                );
+                ).await;
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3459,15 +3456,15 @@ mod tests {
         mod test_imul {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     int q = 16 * 2;
                     int r = 12 * -4;
                     int s = q * r;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(32), Int(-48), Int(-1536)];
@@ -3479,8 +3476,8 @@ mod tests {
         mod test_inc {
             use super::*;
 
-            #[test]
-            fn stores_the_value_for_pre() {
+            #[tokio::test]
+            async fn stores_the_value_for_pre() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 0;
@@ -3490,21 +3487,21 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![Int(0), Int(1), String("snapshot_stack".into()), Int(0)];
 
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_pre_when_global() {
+            #[tokio::test]
+            async fn stores_the_value_for_pre_when_global() {
                 let code = indoc! { r##"
                     int j = 0;
                     int k = ++j;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let expected = vec![Int(1), Int(1)];
@@ -3518,8 +3515,8 @@ mod tests {
                 );
             }
 
-            #[test]
-            fn stores_the_value_for_post() {
+            #[tokio::test]
+            async fn stores_the_value_for_post() {
                 let code = indoc! { r##"
                     void create() {
                         int j = 0;
@@ -3529,7 +3526,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -3542,14 +3539,14 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_post_when_global() {
+            #[tokio::test]
+            async fn stores_the_value_for_post_when_global() {
                 let code = indoc! { r##"
                     int j = 5;
                     int k = j++;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let expected = vec![Int(6), Int(5)];
@@ -3567,15 +3564,15 @@ mod tests {
         mod test_isub {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     int q = 16 - 2;
                     int r = 12 - -4;
                     int s = q - r;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(14), Int(16), Int(-2)];
@@ -3587,8 +3584,8 @@ mod tests {
         mod test_jmp {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     void create() {
                         mixed j;
@@ -3605,7 +3602,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -3626,8 +3623,8 @@ mod tests {
         mod test_jnz {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     void create() {
                         int j;
@@ -3641,7 +3638,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -3661,14 +3658,14 @@ mod tests {
         mod test_jz {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                             int i = 12;
                             int j = i > 12 ? 10 : 1000;
                         "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3688,14 +3685,14 @@ mod tests {
         mod test_load {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     int *i = ({ 1, 2, 3 });
                     int j = i[1];
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3715,15 +3712,15 @@ mod tests {
         mod test_lt {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 1200 < 1199;
                     mixed r = 1199 < 1200;
                     mixed s = 1200 < 1200;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3746,15 +3743,15 @@ mod tests {
         mod test_lte {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = 1200 <= 1199;
                     mixed r = 1199 <= 1200;
                     mixed s = 1200 <= 1200;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3777,8 +3774,8 @@ mod tests {
         mod test_mapconst {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed q = ([
                         "asdf": 123,
@@ -3786,7 +3783,7 @@ mod tests {
                     ]);
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut hashmap = HashMap::new();
@@ -3809,15 +3806,15 @@ mod tests {
         mod test_madd {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = "abc";
                     mixed b = 123;
                     mixed c = a + b;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3834,15 +3831,15 @@ mod tests {
         mod test_mmul {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = "abc";
                     mixed b = 4;
                     mixed c = a * b;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3859,14 +3856,14 @@ mod tests {
         mod test_msub {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = ({ 1, 1, 2, 3 });
                     mixed b = a - ({ 1 });
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3888,8 +3885,8 @@ mod tests {
         mod test_not {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = !2;
                     mixed b = !!4;
@@ -3899,7 +3896,7 @@ mod tests {
                     string f = !"asdf";
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3926,14 +3923,14 @@ mod tests {
         mod test_or {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 15 | 27;
                     mixed b = 0 | a;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(31), Int(0), Int(31)];
@@ -3945,15 +3942,15 @@ mod tests {
         mod test_oror {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 123 || 333;
                     mixed b = 0;
                     mixed c = b || a;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(123), Int(0), Int(0), Int(123)];
@@ -3965,8 +3962,8 @@ mod tests {
         mod test_populate_argv {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     void create() {
                         do_thing(1, 2, 3, "foo", ({ "bar", "baz", 4.13 }), ([ "a": 123 ]));
@@ -3978,7 +3975,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let mut mapping = HashMap::new();
                 mapping.insert(String("a".into()), Int(123));
@@ -4012,8 +4009,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn test_creates_empty_array() {
+            #[tokio::test]
+            async fn test_creates_empty_array() {
                 let code = indoc! { r##"
                     void create() {
                         function f = (: [int i = 69, ...] dump(i, argv); argv :);
@@ -4021,7 +4018,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let ctx = task.context;
                 Array(vec![]).assert_equal(ctx.result().unwrap());
             }
@@ -4030,8 +4027,8 @@ mod tests {
         mod test_populate_defaults {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     void create() {
                         do_thing(45, 34, 7.77);
@@ -4042,7 +4039,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let mut mapping = HashMap::new();
                 mapping.insert(String("a".into()), Int(123));
@@ -4071,13 +4068,13 @@ mod tests {
         mod test_range {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = ({ 1, 2, 3 })[1..];
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4098,14 +4095,14 @@ mod tests {
         mod test_regcopy {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 4;
                     mixed b = a;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(4)];
@@ -4117,13 +4114,13 @@ mod tests {
         mod test_ret {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     int create() { return 666; }
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4138,14 +4135,14 @@ mod tests {
         mod test_shl {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 12345 << 6;
                     mixed b = 0 << a;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(790080), Int(0), Int(0)];
@@ -4157,14 +4154,14 @@ mod tests {
         mod test_shr {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 12345 >> 6;
                     mixed b = 0 >> a;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(192), Int(0), Int(0)];
@@ -4185,13 +4182,13 @@ mod tests {
             use super::*;
             use crate::test_support::test_config;
 
-            #[test]
-            fn stores_the_value_for_arrays() {
+            #[tokio::test]
+            async fn stores_the_value_for_arrays() {
                 let code = indoc! { r##"
                     int a = sizeof(({ 1, 2, 3 }));
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4206,13 +4203,13 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_mappings() {
+            #[tokio::test]
+            async fn stores_the_value_for_mappings() {
                 let code = indoc! { r##"
                     int a = sizeof(([ "a": 1, 'b': 2, 3: ({ 4, 5, 6 }), 0: 0 ]));
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut mapping = HashMap::new();
@@ -4241,8 +4238,8 @@ mod tests {
                 BareVal::assert_vec_equal(&expected, &registers);
             }
 
-            #[test]
-            fn stores_the_value_for_strings() {
+            #[tokio::test]
+            async fn stores_the_value_for_strings() {
                 let config = Arc::new(test_config());
                 let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir));
 
@@ -4292,6 +4289,7 @@ mod tests {
                     call_outs,
                     tx,
                 )
+                .await
                 .expect("failed to initialize");
 
                 let registers = &task.stack.last().unwrap().registers;
@@ -4305,8 +4303,8 @@ mod tests {
         mod test_store {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     void create() {
                         mixed a = ({ 1, 2, 3 });
@@ -4316,7 +4314,7 @@ mod tests {
                     }
                 "##};
 
-                                let registers = snapshot_registers(code);
+                let registers = snapshot_registers(code).await;
 
                 let expected = vec![
                     Int(0),
@@ -4337,13 +4335,13 @@ mod tests {
         mod test_sconst {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     string foo = "lolwut";
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), String("lolwut".into())];
@@ -4355,14 +4353,14 @@ mod tests {
         mod test_xor {
             use super::*;
 
-            #[test]
-            fn stores_the_value() {
+            #[tokio::test]
+            async fn stores_the_value() {
                 let code = indoc! { r##"
                     mixed a = 15 ^ 27;
                     mixed b = 0 ^ a;
                 "##};
 
-                                let task = run_prog(code);
+                                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(20), Int(0), Int(20)];
@@ -4375,8 +4373,8 @@ mod tests {
     mod test_limits {
         use super::*;
 
-        #[test]
-        fn errors_on_stack_overflow() {
+        #[tokio::test]
+        async fn errors_on_stack_overflow() {
             let code = indoc! { r##"
                 int kab00m = marf();
 
@@ -4398,14 +4396,14 @@ mod tests {
                 vm_upvalues,
                 call_outs,
                 tx,
-            );
+            ).await;
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
         }
 
-        #[test]
-        fn errors_on_too_long_evaluation() {
-                        let code = indoc! { r##"
+        #[tokio::test]
+        async fn errors_on_too_long_evaluation() {
+            let code = indoc! { r##"
                 void create() {
                     while(1) {}
                 }
@@ -4428,7 +4426,7 @@ mod tests {
                 Arc::new(vm_upvalues),
                 call_outs,
                 tx,
-            );
+            ).await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -4441,8 +4439,8 @@ mod tests {
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 
-        #[test]
-        fn test_frame_globals() {
+        #[tokio::test]
+        async fn test_frame_globals() {
             let code = indoc! { r##"
                 int i = 0;
                 function inc = (: i++ :);
@@ -4450,7 +4448,7 @@ mod tests {
                 int k = inc();
             "##};
 
-                        let task = run_prog(code);
+                        let task = run_prog(code).await;
             let registers = task.popped_frame.unwrap().registers;
 
             let expected = vec![
@@ -4480,11 +4478,11 @@ mod tests {
         use super::*;
         use crate::interpreter::task::tests::BareVal::*;
 
-        fn check_local_vars<T>(code: &str, vars: &IndexMap<&str, T>)
+        async fn check_local_vars<T>(code: &str, vars: &IndexMap<&str, T>)
         where
             T: Into<BareVal> + Clone,
         {
-                        let mut task = run_prog(code);
+                        let mut task = run_prog(code).await;
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4506,18 +4504,18 @@ mod tests {
                     "key: {k}, value: {v}, found: {:?}",
                     found
                         .iter()
-                        .map(|v| v.value)
+                        .map(|v| &v.value)
                         .collect::<Vec<_>>()
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
             }
         }
 
-        fn check_vm_upvalues<T>(code: &str, upvalues: &[T])
+        async fn check_vm_upvalues<T>(code: &str, upvalues: &[T])
         where
             T: Into<BareVal> + Clone,
         {
-                        let mut task = run_prog(code);
+                        let mut task = run_prog(code).await;
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4542,11 +4540,11 @@ mod tests {
             }
         }
 
-        fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
+        async fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
         where
             T: Into<Register> + Copy,
         {
-                        let mut task = run_prog(code);
+                        let mut task = run_prog(code).await;
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4561,8 +4559,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn test_local_captures() {
+        #[tokio::test]
+        async fn test_local_captures() {
             let code = indoc! { r##"
                 void create() {
                     int i = 0;
@@ -4573,17 +4571,17 @@ mod tests {
             "##};
 
             let expected = vec![Int(2)];
-            check_vm_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected).await;
 
             let expected = vec![Register(0)];
-            check_frame_upvalue_ptrs(code, &expected);
+            check_frame_upvalue_ptrs(code, &expected).await;
 
             let expected: IndexMap<&str, BareVal> = IndexMap::new();
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
 
-        #[test]
-        fn test_shared_captures() {
+        #[tokio::test]
+        async fn test_shared_captures() {
             let code = indoc! { r##"
                 void create() {
                     int i = 0;
@@ -4601,11 +4599,11 @@ mod tests {
                 ("inc", Function("closure-0".to_string(), vec![])),
             ]);
 
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
 
-        #[test]
-        fn test_arg_captures() {
+        #[tokio::test]
+        async fn test_arg_captures() {
             let code = indoc! { r##"
                 void create() {
                     function add = make_adder(10);
@@ -4624,7 +4622,7 @@ mod tests {
             "##};
 
             let expected = vec![Int(10), Int(666)];
-            check_vm_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected).await;
 
             let expected = IndexMap::from([
                 ("j", Int(10)),
@@ -4635,11 +4633,11 @@ mod tests {
                 ("add", Function("closure-0".into(), vec![])),
                 ("add2", Function("closure-0".into(), vec![])),
             ]);
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
 
-        #[test]
-        fn test_higher_order() {
+        #[tokio::test]
+        async fn test_higher_order() {
             let code = indoc! { r##"
                 void create() {
                     function make_counter = make_make_counter(0);
@@ -4676,11 +4674,11 @@ mod tests {
                 ("counter3", Function("closure-0".into(), vec![])),
             ]);
 
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
 
-        #[test]
-        fn test_higher_order_with_implicit_vars() {
+        #[tokio::test]
+        async fn test_higher_order_with_implicit_vars() {
             let code = indoc! { r##"
                 void create() {
                     function make = make_maker();
@@ -4702,7 +4700,7 @@ mod tests {
             "##};
 
             let expected: Vec<BareVal> = vec![];
-            check_vm_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected).await;
 
             let expected = IndexMap::from([
                 ("c1", Int(0)),
@@ -4712,11 +4710,11 @@ mod tests {
                 ("made2", Function("closure-0".into(), vec![])),
             ]);
 
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
 
-        #[test]
-        fn test_higher_order_with_partial_application() {
+        #[tokio::test]
+        async fn test_higher_order_with_partial_application() {
             let code = indoc! { r##"
                 void create() {
                     function partial = &make_maker(,666);
@@ -4749,7 +4747,7 @@ mod tests {
                 Int(3),
                 Int(77),
             ];
-            check_vm_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected).await;
 
             let expected = IndexMap::from([
                 ("c1", String("hello666 1 2 -4".into())),
@@ -4763,11 +4761,11 @@ mod tests {
                 ("made2", Function("closure-1".into(), vec![])),
             ]);
 
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
 
-        #[test]
-        fn test_upvalued_ellipsis() {
+        #[tokio::test]
+        async fn test_upvalued_ellipsis() {
             let code = indoc! { r##"
                 void create() {
                     function partial = &make_maker(,666);
@@ -4798,7 +4796,7 @@ mod tests {
                 Array(vec![Int(123), Int(456)]),
                 Array(vec![String("world".into()), Int(77)]),
             ];
-            check_vm_upvalues(code, &expected);
+            check_vm_upvalues(code, &expected).await;
 
             let expected = IndexMap::from([
                 ("c1", Int(123)),
@@ -4812,7 +4810,7 @@ mod tests {
                 ("made2", Function("closure-1".into(), vec![])),
             ]);
 
-            check_local_vars(code, &expected);
+            check_local_vars(code, &expected).await;
         }
     }
 
@@ -4820,9 +4818,9 @@ mod tests {
         use super::*;
         use crate::interpreter::gc::sweep::KeylessSweep;
 
-        #[test]
-        fn test_gc_is_accurate() {
-                        let code = indoc! { r##"
+        #[tokio::test]
+        async fn test_gc_is_accurate() {
+            let code = indoc! { r##"
                 int k = 0;
 
                 void create() {
@@ -4842,7 +4840,7 @@ mod tests {
                 }
             "##};
 
-            let task = run_prog(code);
+            let task = run_prog(code).await;
             let ctx = &task.context;
             assert!(!ctx.upvalues().read().is_empty());
 

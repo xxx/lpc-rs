@@ -89,6 +89,7 @@ fn to_millis(x: LpcFloat) -> Duration {
 mod tests {
 
     use std::sync::Arc;
+    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
 
@@ -101,10 +102,8 @@ mod tests {
         test_support::compile_prog,
     };
 
-    #[test]
-    fn test_disallows_dynamic_receiver() {
-
-
+    #[tokio::test]
+    async fn test_disallows_dynamic_receiver() {
         let code = r##"
             void create() {
                 call_out(&->call_out_test(), 0.1);
@@ -126,8 +125,7 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs,
             tx,
-            &mut cell_key,
-        );
+        ).await;
 
         assert_eq!(
             result.unwrap_err().to_string(),

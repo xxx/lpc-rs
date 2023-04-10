@@ -41,6 +41,7 @@ pub async fn remove_call_out<const N: usize>(
 mod tests {
 
     use std::sync::Arc;
+    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
 
@@ -53,10 +54,8 @@ mod tests {
         test_support::compile_prog,
     };
 
-    #[test]
-    fn test_removes_task() {
-
-
+    #[tokio::test]
+    async fn test_removes_task() {
         let code = r##"
             void create() {
                 int id = call_out(call_out_test, 100);
@@ -80,8 +79,7 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs.clone(),
             tx,
-            &mut cell_key,
-        );
+        ).await;
 
         assert!(result.is_ok());
         assert!(call_outs.read().is_empty());

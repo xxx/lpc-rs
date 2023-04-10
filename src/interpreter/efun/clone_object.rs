@@ -144,8 +144,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn does_not_create_multiple_master_objects() {
+    #[tokio::test]
+    async fn does_not_create_multiple_master_objects() {
         let prog = indoc! { r#"
             object foo = clone_object("./example");
         "# };
@@ -155,19 +155,19 @@ mod tests {
         let context = task_context_fixture(program, config);
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[])
+        task.eval(func.clone(), &[]).await
             .expect("first task failed");
 
         let mut task = Task::<10>::new(context);
-        task.eval(func, &[])
+        task.eval(func, &[]).await
             .expect("second task failed");
 
         // procs are /example, /example#0, /example#1
         assert_eq!(task.context.object_space().read().len(), 3);
     }
 
-    #[test]
-    fn returns_error_if_no_clone() {
+    #[tokio::test]
+    async fn returns_error_if_no_clone() {
 
         let prog = indoc! { r#"
             object foo = clone_object("./no_clone.c");
@@ -179,7 +179,7 @@ mod tests {
         let context = task_context_fixture(program, config);
         let mut task = Task::<10>::new(context);
 
-        let result = task.eval(func, &[]);
+        let result = task.eval(func, &[]).await;
 
         assert_regex!(
             result.as_ref().unwrap_err().as_ref(),

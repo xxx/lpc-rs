@@ -185,7 +185,7 @@ impl PartialEq<Vec<LpcRef>> for LpcArray {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use parking_lot::RwLock;
 
     use factori::create;
     use lpc_rs_core::register::Register;

@@ -22,7 +22,6 @@ mod tests {
 
     #[test]
     fn test_get_simul_efuns() {
-
         let config = Config::default();
         let object_space = ObjectSpace::default();
         let simul_efuns = get_simul_efuns(&config, &object_space);
@@ -47,7 +46,7 @@ mod tests {
         ObjectSpace::insert_process(&space_cell, RwLock::new(proc));
 
         let object_space = space_cell.read();
-        let simul_efuns = get_simul_efuns(&config, object_space).unwrap();
+        let simul_efuns = get_simul_efuns(&config, &*object_space).unwrap();
         let borrowed = simul_efuns.read();
         assert_eq!(
             borrowed.as_ref().filename.to_string(),

@@ -402,7 +402,6 @@ mod tests {
     use super::*;
     use crate::test_support::test_config;
 
-    #[test]
     #[tokio::test]
     async fn test_gc() {
         let mut vm = Vm::new(test_config());

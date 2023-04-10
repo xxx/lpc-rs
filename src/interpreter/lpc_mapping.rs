@@ -145,7 +145,7 @@ impl PartialEq<IndexMap<HashedLpcRef, LpcRef>> for LpcMapping {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use parking_lot::RwLock;
 
     use factori::create;
     use lpc_rs_core::register::Register;

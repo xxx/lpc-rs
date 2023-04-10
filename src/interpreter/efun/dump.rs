@@ -170,8 +170,8 @@ mod tests {
             .expect("Failed to compile.")
     }
 
-    #[test]
-    fn does_not_crash_on_recursive_structures() {
+    #[tokio::test]
+    async fn does_not_crash_on_recursive_structures() {
 
         // arrays
         let code = r##"
@@ -192,7 +192,7 @@ mod tests {
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx.clone(),
-        );
+        ).await;
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -217,7 +217,7 @@ mod tests {
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx,
-        );
+        ).await;
 
         assert_eq!(
             result.unwrap_err().to_string(),
