@@ -402,8 +402,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(true);
         }
 
-        self.context.increment_instruction_count(1)?;
-
         let instruction = {
             let frame = match self.stack.current_frame_mut() {
                 Ok(x) => x,

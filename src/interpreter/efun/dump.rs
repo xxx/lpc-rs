@@ -27,7 +27,6 @@ fn format_ref<const N: usize>(
     recurse_level: usize,
 ) -> Result<String> {
     recursion_too_deep(recurse_level, context)?;
-    context.increment_instruction_count(1)?;
 
     match lpc_ref {
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
@@ -70,7 +69,6 @@ fn format_array<const N: usize>(
     recurse_level: usize,
 ) -> Result<String> {
     recursion_too_deep(recurse_level, context)?;
-    context.increment_instruction_count(arr.len())?;
 
     let mut result = format!("{:width$}({{\n", "", width = indent);
 
@@ -99,7 +97,6 @@ fn format_mapping<const N: usize>(
     recurse_level: usize,
 ) -> Result<String> {
     recursion_too_deep(recurse_level, context)?;
-    context.increment_instruction_count(map.len())?;
 
     let mut result = format!("{:width$}([\n", "", width = indent);
 
