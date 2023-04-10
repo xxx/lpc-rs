@@ -103,8 +103,10 @@ impl ObjectSpace {
         P: Into<Arc<RwLock<Process>>>,
     {
         let process = process.into();
-        let space = space_cell.read();
-        let name = space.prepare_filename(&process.read());
+        let name = {
+            let space = space_cell.read();
+            space.prepare_filename(&process.read())
+        };
 
         let mut space = space_cell.write();
         space.insert_process_directly(name, process);
