@@ -1,4 +1,5 @@
 use std::{path::PathBuf, sync::Arc};
+use delegate::delegate;
 
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
@@ -11,6 +12,7 @@ use crate::{
     interpreter::{
         call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, memory::Memory,
         object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
+        instruction_counter::InstructionCounter,
     },
     util::get_simul_efuns,
 };
@@ -52,12 +54,32 @@ pub struct TaskContext {
     #[builder(default, setter(into))]
     pub memory: Arc<Memory>,
 
+    /// A counter, to ensure that too-long-evaluations do not occur
+    #[builder(default)]
+    pub instruction_counter: InstructionCounter,
+
     /// The final result of the original function that was called
     #[builder(default)]
     pub result: OnceCell<LpcRef>,
 }
 
 impl TaskContext {
+    delegate! {
+        to self.instruction_counter {
+            /// Increment the current task instruction count, checking for too-long-evaluations
+            #[call(increment)]
+            pub fn increment_instruction_count(&self, amount: usize) -> Result<usize>;
+
+            /// Set the current task instruction count, checking for too-long-evaluations
+            #[call(set)]
+            pub fn set_instruction_count(&self, amount: usize) -> Result<usize>;
+
+            /// Get the current instruction count
+            #[call(count)]
+            pub fn instruction_count(&self) -> usize;
+        }
+    }
+
     /// Create a new [`TaskContext`]
     #[allow(clippy::too_many_arguments)]
     pub fn new<C, P, O, M, U, A>(
@@ -79,6 +101,7 @@ impl TaskContext {
     {
         let config = config.into();
         let object_space = object_space.into();
+        let instruction_counter = InstructionCounter::new_from_config(&config);
         let simul_efuns = {
             let space = object_space.read();
             get_simul_efuns(&config, &space)
@@ -89,6 +112,7 @@ impl TaskContext {
             process: process.into(),
             object_space,
             memory: memory.into(),
+            instruction_counter,
             result: OnceCell::new(),
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
@@ -124,9 +148,6 @@ impl TaskContext {
         P: Into<Arc<RwLock<Process>>>,
     {
         ObjectSpace::insert_process(&self.object_space, process)
-        // let process = process.into();
-
-        // self.object_space.rw(cell_key).insert_process(process);
     }
 
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,

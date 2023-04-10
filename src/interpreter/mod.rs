@@ -5,6 +5,7 @@ pub mod call_stack;
 pub mod efun;
 pub mod function_type;
 pub mod gc;
+pub mod instruction_counter;
 pub mod lpc_array;
 pub mod lpc_mapping;
 pub mod lpc_ref;
