@@ -17,7 +17,7 @@ use crate::{
     util::get_simul_efuns,
 };
 
-/// A struct to carry context during the evaluation of a single [`Task`]
+/// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
 #[derive(Debug, Clone, Builder)]
 pub struct TaskContext {
     /// The [`Config`] that's in use for the
