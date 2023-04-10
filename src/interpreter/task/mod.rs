@@ -75,10 +75,10 @@ macro_rules! pop_frame {
 
 /// Resolve any type RegisterVariant into an LpcRef, for the current frame
 #[inline]
-pub fn get_location<'a, const N: usize>(
-    stack: &'a CallStack<N>,
+pub fn get_location<const N: usize>(
+    stack: &CallStack<N>,
     location: RegisterVariant,
-) -> Result<Cow<'a, LpcRef>> {
+) -> Result<Cow<LpcRef>> {
     let frame = stack.current_frame()?;
 
     get_location_in_frame(frame, location)
