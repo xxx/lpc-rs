@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use parking_lot::RwLock;
 
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -48,7 +49,7 @@ where
         .expect("Failed to compile.")
 }
 
-pub fn run_prog_custom<P>(
+pub async fn run_prog_custom<P>(
     code: &str,
     path: P,
     config: Config,
@@ -57,7 +58,7 @@ where
     P: Into<LpcPath>,
 {
     let upvalues = RwLock::new(GcBank::default());
-    let (tx, _) = tokio::sync::mpsc::channel(128);
+    let (tx, _rx) = tokio::sync::mpsc::channel(128);
     let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     let program = compile_prog_custom(code, path, config);
 
@@ -69,14 +70,14 @@ where
         upvalues,
         call_outs,
         tx,
-        cell_key,
     )
+    .await
     .unwrap_or_else(|e| {
         e.emit_diagnostics();
         panic!("failed to initialize");
     })
 }
 
-pub fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
-    run_prog_custom(code, "/my_file.c", test_config())
+pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
+    run_prog_custom(code, "/my_file.c", test_config()).await
 }

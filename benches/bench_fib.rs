@@ -33,7 +33,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let program = Arc::new(program);
     let upvalues = Arc::new(RwLock::new(GcRefBank::default()));
-    let (tx, _) = tokio::sync::mpsc::channel(1024);
+    let (tx, _rx) = tokio::sync::mpsc::channel(1024);
     let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     let memory = Arc::new(Memory::default());
 

@@ -97,7 +97,7 @@ pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
 
     let object_space = ObjectSpace::default();
     let object_space: Arc<RwLock<ObjectSpace>> = RwLock::new(object_space).into();
-    let (tx, _) = tokio::sync::mpsc::channel(128);
+    let (tx, _rx) = tokio::sync::mpsc::channel(128);
     let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     ObjectSpace::insert_process(&object_space, se_proc);
 

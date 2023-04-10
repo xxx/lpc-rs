@@ -1332,6 +1332,7 @@ dependencies = [
  "lpc-rs",
  "lpc-rs-core",
  "lpc-rs-utils",
+ "parking_lot 0.12.1",
  "tokio",
  "ustr",
 ]

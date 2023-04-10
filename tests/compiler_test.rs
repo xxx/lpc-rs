@@ -9,7 +9,6 @@ use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     extract_value,
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
-    util::keyable::Keyable,
 };
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -38,7 +37,6 @@ fn default_compiler() -> Compiler {
 
 #[test]
 fn errors_on_max_inherit_depth() {
-
     let code = r#"inherit "/std/inherit_loop1";"#;
 
     let compiler = default_compiler();
@@ -47,9 +45,8 @@ fn errors_on_max_inherit_depth() {
     assert_err!(result, "maximum inheritance depth of 10 reached reached");
 }
 
-#[test]
-fn test_inheritance() {
-
+#[tokio::test]
+async fn test_inheritance() {
     let code = indoc! { r##"
         inherit "/parent";
 
@@ -62,7 +59,7 @@ fn test_inheritance() {
         }
     "## };
 
-    let task = run_prog(code);
+    let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
     let prog = &proc.read().program;
@@ -71,8 +68,8 @@ fn test_inheritance() {
     assert_eq!(prog.num_init_registers, 6);
 }
 
-#[test]
-fn test_dynamic_receiver() {
+#[tokio::test]
+async fn test_dynamic_receiver() {
 
     let code = indoc! { r##"
         void create() {
@@ -86,7 +83,7 @@ fn test_dynamic_receiver() {
         }
     "## };
 
-    let task = run_prog(code);
+    let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
     let prog = &proc.read().program;
@@ -95,8 +92,8 @@ fn test_dynamic_receiver() {
     assert_eq!(prog.num_init_registers, 1);
 }
 
-#[test]
-fn test_duffs_device() {
+#[tokio::test]
+async fn test_duffs_device() {
 
     let code = indoc! { r##"
         int *copy(int *array, int count) {
@@ -122,7 +119,7 @@ fn test_duffs_device() {
         mixed b = copy(a, 6);
     "## };
 
-    let task = run_prog(code);
+    let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
     let borrowed = proc.read();
@@ -134,7 +131,7 @@ fn test_duffs_device() {
         if let LpcValue::Array(arr) = &*b;
         then {
             assert_eq!(
-                &arr,
+                arr,
                 &[
                     LpcRef::Int(0),
                     LpcRef::Int(2),
@@ -144,7 +141,7 @@ fn test_duffs_device() {
                     LpcRef::Int(6),
                     LpcRef::Int(7),
                     LpcRef::Int(0),
-                ]
+                ].to_vec()
             );
         } else {
             panic!("expected array");
@@ -152,8 +149,8 @@ fn test_duffs_device() {
     }
 }
 
-#[test]
-fn test_closures() {
+#[tokio::test]
+async fn test_closures() {
 
     let code = indoc! { r##"
         function f = (:
@@ -172,7 +169,7 @@ fn test_closures() {
         }
     "## };
 
-    let task = run_prog(code);
+    let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
     let borrowed = proc.read();
@@ -188,8 +185,8 @@ fn test_closures() {
     );
 }
 
-#[test]
-fn test_multi_dimensional_arrays() {
+#[tokio::test]
+async fn test_multi_dimensional_arrays() {
 
     let code = indoc! { r##"
         int *a = ({ 1, 2, 3, 4, 5, 6, 7, 8 });
@@ -202,7 +199,7 @@ fn test_multi_dimensional_arrays() {
         string *x = arr[1][5][1..];
     "## };
 
-    let task = run_prog(code);
+    let task = run_prog(code).await;
     let ctx = task.context;
     let pr = ctx.process();
     let proc = pr.read();
@@ -233,8 +230,8 @@ fn test_multi_dimensional_arrays() {
     );
 }
 
-#[test]
-fn test_positional_vars_into_argv() {
+#[tokio::test]
+async fn test_positional_vars_into_argv() {
 
     let code = indoc! { r##"
         void create() {
@@ -243,13 +240,13 @@ fn test_positional_vars_into_argv() {
         }
     "## };
 
-    let task = run_prog(code);
+    let task = run_prog(code).await;
     let ctx = task.context;
     assert_eq!(&LpcRef::Int(777), ctx.result().unwrap());
 }
 
-#[test]
-fn test_inherited_create_called_when_not_overridden() {
+#[tokio::test]
+async fn test_inherited_create_called_when_not_overridden() {
     let mut vm = Vm::new(test_config());
     let grandparent = indoc! { r#"
         void create() {
@@ -279,6 +276,7 @@ fn test_inherited_create_called_when_not_overridden() {
 
     let _grandparent_ctx = vm
         .initialize_string(grandparent, "test_grandparent.c")
+        .await
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -286,6 +284,7 @@ fn test_inherited_create_called_when_not_overridden() {
         .unwrap();
     let _parent_ctx = vm
         .initialize_string(parent, "test_parent.c")
+        .await
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -293,6 +292,7 @@ fn test_inherited_create_called_when_not_overridden() {
         .unwrap();
     let _parent2_ctx = vm
         .initialize_string(parent, "test_parent2.c")
+        .await
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -300,6 +300,7 @@ fn test_inherited_create_called_when_not_overridden() {
         .unwrap();
     let child_ctx = vm
         .initialize_string(child, "test_child.c")
+        .await
         .map_err(|e| {
             e.emit_diagnostics();
             e
@@ -320,15 +321,15 @@ fn test_inherited_create_called_when_not_overridden() {
     assert_eq!(&inst[(inst.len() - 2)..], &expected);
 }
 
-#[test]
-fn test_calls_simul_efuns() {
+#[tokio::test]
+async fn test_calls_simul_efuns() {
     let config = test_config_builder()
         .simul_efun_file("/secure/simul_efuns.c")
         .build()
         .unwrap();
 
     let mut vm = Vm::new(config);
-    vm.initialize_simul_efuns()
+    vm.initialize_simul_efuns().await
         .expect("no simul efuns?")
         .expect("init error");
 
@@ -337,7 +338,7 @@ fn test_calls_simul_efuns() {
             simul_efun("cool!");
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c").unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"this is a simul_efun: cool!\"", val.to_string());
 
@@ -350,7 +351,7 @@ fn test_calls_simul_efuns() {
             simul_efun("cool!");
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c").unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"local simul_efun: cool!\"", val.to_string());
 
@@ -360,7 +361,7 @@ fn test_calls_simul_efuns() {
             f();
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c").unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"this is a simul_efun: pointed!\"", val.to_string());
 
@@ -374,7 +375,7 @@ fn test_calls_simul_efuns() {
             f();
         }
     "## };
-    let ctx = vm.initialize_string(code, "foo.c").unwrap();
+    let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
     assert_eq!("\"local simul_efun: pointed!\"", val.to_string());
 }

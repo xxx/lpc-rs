@@ -125,14 +125,15 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::vm::vm_op::VmOp;
 
     fn task_context_fixture(
         program: Program,
         config: Arc<Config>,
+        tx: tokio::sync::mpsc::Sender<VmOp>,
     ) -> TaskContext {
         let process = Process::new(program);
 
-        let (tx, _) = tokio::sync::mpsc::channel(128);
         TaskContext::new(
             config,
             RwLock::new(process),
@@ -150,9 +151,11 @@ mod tests {
             object foo = clone_object("./example");
         "# };
 
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+
         let (program, config, _) = compile_prog(prog);
         let func = program.initializer.clone().expect("no init found?");
-        let context = task_context_fixture(program, config);
+        let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
         task.eval(func.clone(), &[]).await
@@ -168,15 +171,15 @@ mod tests {
 
     #[tokio::test]
     async fn returns_error_if_no_clone() {
-
         let prog = indoc! { r#"
             object foo = clone_object("./no_clone.c");
         "# };
 
         let (program, config, _) = compile_prog(prog);
         let func = program.initializer.clone().expect("no init found?");
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
 
-        let context = task_context_fixture(program, config);
+        let context = task_context_fixture(program, config, tx);
         let mut task = Task::<10>::new(context);
 
         let result = task.eval(func, &[]).await;

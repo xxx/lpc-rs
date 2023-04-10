@@ -182,7 +182,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _) = tokio::sync::mpsc::channel(128);
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let program = compile_prog(code);
         let result = Task::<10>::initialize_program(
             program,

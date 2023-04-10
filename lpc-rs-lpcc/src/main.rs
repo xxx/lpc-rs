@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use parking_lot::RwLock;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
@@ -29,7 +30,8 @@ struct Args {
     config: Option<String>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
 
     let config_override = args.config;
@@ -66,8 +68,7 @@ fn main() {
                 upvalues,
                 call_outs,
                 tx,
-                &mut cell_key,
-            ) {
+            ).await {
                 e.emit_diagnostics();
             }
         }
