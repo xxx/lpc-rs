@@ -1372,8 +1372,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 .clone();
 
                             if function.public() {
-                                // TODO: remove this clone
-                                task.eval(function, &args.clone()).await?;
+                                task.eval(function, &args).await?;
                                 // task_context.increment_instruction_count(
                                 //     task.context.instruction_count(),
                                 // )?;
@@ -1413,11 +1412,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         // TODO: get rid of this clone
                         try_extract_value!(*b, LpcValue::Array).clone()
                     };
+                    let fname = Arc::new(function_name.clone());
+                    let args = Arc::new(args);
+
                     let futures = array
                         .iter()
                         .cloned()
                         .map(|lpc_ref| {
-                            let fname = function_name.clone();
+                            let fname = fname.clone();
                             let args = args.clone();
                             let ctx = &self.context;
 
@@ -1438,6 +1440,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         try_extract_value!(*b, LpcValue::Mapping).clone()
                     };
 
+                    let function_name = Arc::new(function_name.clone());
+                    let args = Arc::new(args);
+
                     let futures = map
                         .iter()
                         .map(|(key_ref, value_ref)| {
@@ -1450,7 +1455,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     key_ref.clone(),
                                     resolve_result(
                                         value_ref,
-                                        &function_name,
+                                        &*function_name,
                                         &args,
                                         ctx,
                                     )
